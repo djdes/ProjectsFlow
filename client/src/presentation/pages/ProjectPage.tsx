@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useProject } from '@/presentation/hooks/useProject';
 import { GitRepoSection } from '@/presentation/components/forms/GitRepoSection';
 import { RecentCommitsSection } from '@/presentation/components/github/RecentCommitsSection';
+import { KbSection } from '@/presentation/components/kb/KbSection';
 import type { ProjectStatus } from '@/domain/project/Project';
 
 const statusLabel: Record<ProjectStatus, string> = {
@@ -72,6 +73,8 @@ export function ProjectPage(): React.ReactElement {
       {data.gitRepoUrl && (
         <RecentCommitsSection projectId={data.id} gitRepoUrl={data.gitRepoUrl} />
       )}
+
+      <KbSection project={data} />
     </div>
   );
 }
