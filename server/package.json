@@ -17,6 +17,7 @@
     "cookie-parser": "^1.4.7",
     "drizzle-orm": "^0.38.3",
     "express": "^4.21.2",
+    "gray-matter": "^4.0.3",
     "mysql2": "^3.11.5",
     "zod": "^3.24.1"
   },
