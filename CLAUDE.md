@@ -8,53 +8,97 @@
 
 ## Контекст проекта
 
-- **Что это.** Лендинг `projectsflow.ru` — «История проектов». Список глав
-  тянется из MySQL по `/api/projects`, рендерится на клиенте (Vite + TS).
-- **Зачем.** Открытый архив инициатив команды с 2017 года.
+- **Что это.** Платформа управления проектами (сайты, ПО и т.д.). Multi-tenant SaaS
+  в планах; сейчас собираем поэтапно: Spec #1 — UI-скелет на моках, дальше — backend,
+  auth, multi-tenancy. Дизайн-доки лежат в [docs/superpowers/specs/](docs/superpowers/specs/).
 - **Где живёт.** FastPanel на VPS `projectsflow.ru` (Azure Ubuntu 24.04).
   Код приложения: `/var/www/projectsflow/data/www/projectsflow.ru/`.
-- **Статус.** В проде. nginx (FastPanel) проксирует домен → `127.0.0.1:4317`,
-  приложение крутится под PM2 (`projectsflow`).
+- **Статус.** В переходе: лендинг снесён, платформа строится в `client/` (UI) и `server/`
+  (backend появится в Spec #2). Прод-инфра не обновляется до завершения Spec #3 (auth).
 
-## Стек — без отклонений
+## Стек
 
 - **Node.js 22 LTS** (на сервере через nvm, см. `.nvmrc`).
-- **Express 4** + **mysql2/promise** на бэке. ESM, TypeScript.
-- **Vite + vanilla TypeScript** на фронте. Без React/Vue/Svelte —
-  это лендинг, фреймворк не нужен.
+- **Express 4** + **mysql2/promise** на бэке. ESM, TypeScript. (Сейчас бэк — пустой скелет.)
+- **Vite + React 19 + TypeScript + Tailwind + shadcn/ui** на фронте.
+  React-роутинг — `react-router-dom` v7. Состояние — React Context (без TanStack Query
+  до прихода HTTP-слоя в Spec #2).
 - **MariaDB 10.11** (совместима с MySQL 8). Кодировка `utf8mb4`.
 - **PM2** для процесса на сервере (`ecosystem.config.cjs`).
 - **nginx** (FastPanel, reverse proxy) проксирует домен → `127.0.0.1:4317`.
-  Express в проде сам раздаёт `client/dist`, поэтому nginx просто шлёт весь
-  трафик на порт.
 
-Не вводи новые языки/фреймворки без обсуждения. Если хочется PHP/Python —
-не надо, см. историю: пользователь явно просил «современный стек на Node».
+Next.js, NextAuth, RSC, Server Actions — **не используем**. Решение зафиксировано
+в брейншторме (см. `docs/superpowers/specs/2026-05-14-platform-ui-skeleton-design.md`,
+секция 1): чистая граница client↔server проще поддерживает Clean Architecture.
+
+## Архитектура client/ (Clean Architecture)
+
+Четыре слоя с **однонаправленными** зависимостями, плюс две поддерживающие папки:
+
+```
+client/src/
+├── domain/         ← entities, value objects. 0 deps на React/HTTP/DOM
+├── application/    ← ports (repository-interfaces) + use-cases. Зависит только от domain
+├── infrastructure/ ← адаптеры (mock, в будущем http) + DI-контейнер. Реализует порты
+├── presentation/   ← React: layout, pages, hooks, theme, app/routes. НЕ знает про конкретные адаптеры
+├── components/ui/  ← shadcn-примитивы (button, dropdown-menu и т.д.)
+├── lib/            ← shared утилиты (cn helper)
+└── styles/         ← globals.css (Tailwind + дизайн-токены)
+```
+
+Правила импорта (защищены `eslint-plugin-boundaries` в `client/eslint.config.js`):
+
+| Слой | Импортирует из |
+|---|---|
+| `domain` | — |
+| `application` | `domain` |
+| `infrastructure` | `domain`, `application` |
+| `presentation` | `domain`, `application`, `lib/`, `components/ui/` |
+
+`presentation` НЕ импортирует из `infrastructure/mock/*` или `infrastructure/http/*` напрямую —
+только через DI-контейнер `infrastructure/di/container.tsx` (единственный мост).
+Этот контекст устроен как singleton на уровне модуля.
+
+При добавлении новой фичи: сначала domain, потом application (порт + use-case),
+потом mock-реализация в infrastructure, потом UI. Не наоборот.
 
 ## Структура и где что менять
 
-- Новый проект в хронике → строка в `db/002_seed.sql` **или** `INSERT` в БД.
-  Поле `status`: `live` / `archived` / `in-progress` / `hidden` (последний — скрыть).
-- Схема меняется → новый файл `db/00N_*.sql`. Миграции идемпотентны и идут по алфавиту.
-- Стили — `client/src/styles.css`. Эстетика **editorial × constructivist**:
-  бумага `#f3ead3`, чернила `#0c0a08`, киноварь `#d94824`, Playfair + Manrope.
-  Не уходи в общий «AI-look» (Inter + лиловые градиенты — нет).
-- API → `server/src/index.ts`. Поля `Project` синхронизированы с `client/src/main.ts`.
+- Новый shadcn-компонент → `npx shadcn@latest add <name>` (положит в `client/src/components/ui/`).
+- Новая страница → компонент в `client/src/presentation/pages/`, маршрут в `presentation/app/routes.tsx`.
+- Новый use-case → класс в `client/src/application/<feature>/<UseCase>.ts`, передать в `container.tsx`.
+- Новый mock-репозиторий → реализует порт из `application/`, регистрируется в `container.tsx`.
+- Дизайн-токены (цвета, скругления) — CSS-переменные в `client/src/styles/globals.css`,
+  Tailwind-маппинг в `client/tailwind.config.ts`. Палитра: slate-нейтрали + один синий акцент.
+- Шрифты подключаются через `@fontsource-variable/*` в `main.tsx`, без CDN.
+- Миграции БД — новый файл `db/00N_*.sql` (append-only, MariaDB-совместимый синтаксис).
 
 ## Переменные окружения
 
 Файл `.env` (НЕ коммитим, шаблон — `.env.example`).
-На сервере и локально файл одинаковой формы, разные значения:
 
-| Переменная | Локально (с рабочей станции) | На сервере |
+| Переменная | Локально | На сервере |
 | --- | --- | --- |
 | `NODE_ENV` | `development` | `production` |
 | `PORT` | `4317` | `4317` |
 | `DB_HOST` / `DB_PORT` | `projectsflow.ru` / `3306` (если открыт remote TCP) | — |
-| `DB_SOCKET` | — | `/run/mysqld/mysqld.sock` (юзер ходит в БД только через сокет) |
+| `DB_SOCKET` | — | `/run/mysqld/mysqld.sock` |
 
-Если задан `DB_SOCKET` — код использует unix-сокет и игнорирует `DB_HOST/DB_PORT`.
-**Все значения кредов** — в [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 1.
+Если задан `DB_SOCKET` — код использует unix-сокет, игнорирует `DB_HOST/DB_PORT`.
+Боевые значения — в [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 1.
+
+## npm-скрипты (из корня)
+
+```bash
+npm run dev          # одновременно client (Vite :5173) + server (tsx :4317)
+npm run dev:client   # только Vite
+npm run dev:server   # только Express
+npm run build        # сборка обоих workspaces
+npm run typecheck    # tsc --noEmit в client/
+npm run lint         # eslint в client/
+npm run db:migrate   # node scripts/migrate.mjs
+npm run deploy       # node scripts/deploy.mjs
+```
 
 ## Деплой
 
@@ -62,46 +106,43 @@
 npm run deploy
 ```
 
-1. `npm run build` — собирает `client/dist` и `server/dist`.
-2. Пакует в `tar`, заливает на сервер через `pscp`.
-3. На сервере: распаковка, `npm install --omit=dev`, миграции, `pm2 startOrReload`.
-
-`.env` на сервере деплоем не трогается. Подробности и ручной деплой —
-в [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 4.
-
-**Автостарт PM2 после ребута** требует sudo и пока не настроен — см.
-ONBOARDING раздел 5. До этого после ребута: `pm2 resurrect`.
+Подробности — [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 4. **До завершения Spec #3
+(auth) на прод ничего не катим** — фронт без auth раскатывать нечем.
 
 ## SSH / Git / доступы
 
 Хост `projectsflow.ru`, юзер `projectsflow`. Порт `22` изнутри LAN, `50222` из интернета.
 Bare repo: `/var/www/projectsflow/data/git/projectsflow.git`, ветка `main`.
-Полные URL, пароли, варианты подключения — [docs/ONBOARDING.md](docs/ONBOARDING.md).
+Полные URL, пароли — [docs/ONBOARDING.md](docs/ONBOARDING.md).
 
-Workflow: фича → ветка → merge в `main` → `npm run deploy`.
+Workflow: фича → ветка → merge в `main` → `npm run deploy` (после Spec #3).
 
 ## Правила для AI-ассистентов
 
-1. **Не плодить файлы.** Это лендинг, не SaaS — `client/src/main.ts` сейчас рендерит
-   всё одной функцией, и это нормально. Не разбивай на компоненты без причины.
-2. **Не вводить React/Tailwind** без явной просьбы.
-3. **Не править nginx-конфиги** — этим занимается админ FastPanel.
-4. **Миграции — append-only.** Не редактируй уже выкаченные `db/0*_*.sql`,
+1. **Чистая архитектура — не ритуал.** Перед тем как добавить код в `presentation/`,
+   проверь: не нужно ли сначала ввести use-case в `application/`? Это бесплатно и
+   защищает от смешения слоёв. ESLint и так упадёт на нарушении импорта.
+2. **`presentation` НЕ импортирует из `infrastructure/mock/*` или `infrastructure/http/*`** —
+   только через `useContainer()`. Никогда не пиши `import { MockProjectRepository } from
+   '@/infrastructure/mock/...'` в компоненте.
+3. **shadcn-компоненты — наши, в `components/ui/`.** Можно править. Обновления опциональны.
+4. **Не править nginx-конфиги** — этим занимается админ FastPanel.
+5. **Миграции — append-only.** Не редактируй уже выкаченные `db/0*_*.sql`,
    делай новый файл. MariaDB не понимает `INSERT ... AS new ...` — только `VALUES(col)`.
-5. **`.env` — никогда не коммитим.** Шаблон — `.env.example`. Боевые значения
+6. **`.env` — никогда не коммитим.** Шаблон — `.env.example`. Боевые значения
    для людей — в `docs/ONBOARDING.md` (репо приватный).
-6. **Кириллица.** Все пользовательские строки — на русском. Технические комментарии
-   и переменные — на английском.
-7. **Стили.** Прежде чем тянуть новые шрифты/цвета, посмотри переменные в
-   `:root` в `styles.css`. Палитра намеренно ограничена.
+7. **Кириллица.** Все пользовательские строки — на русском. Технические комментарии,
+   код, переменные, типы — на английском.
+8. **Не вводить новые большие зависимости** (Next.js, NextAuth, TanStack Query, MUI,
+   Chakra и т.д.) без обсуждения. Текущий стек выбирался сознательно.
 
 ## Типовые проблемы
 
 | Симптом | Решение |
 | --- | --- |
-| `ERR_PACKAGE_PATH_NOT_EXPORTED` при сборке сервера | проверь, что у тебя Node 20+ (см. `.nvmrc`) |
-| `Access denied ... 'projectsflow'@'<ip>'` | remote MySQL TCP не открыт. Гоняй миграции с сервера (`npm run deploy` это делает сам). |
+| ESLint падает с `Dependency not allowed` | нарушено правило слоёв. См. секцию «Архитектура client/». |
+| `Cannot find module '@/...'` в TS | проверь `client/tsconfig.app.json` → `paths` и `client/vite.config.ts` → `resolve.alias`. |
 | `Access denied ... @'127.0.0.1'` на сервере | юзер ходит только через сокет — в `.env` нужен `DB_SOCKET=/run/mysqld/mysqld.sock`. |
 | PM2 не видит env-переменные | `ecosystem.config.cjs` использует `--env-file=.env`. Убедись, что `.env` лежит в `DEPLOY_PATH`. |
 | 502 от nginx | `pm2 ls` на сервере → если процесс мёртв, `pm2 logs projectsflow` покажет причину. |
-| curl-ом видишь чужой PHP-сайт | резолвишь на `127.0.0.1:443` (служебный listener). Публичный vhost на `192.168.33.3`. |
+| Тёмная тема мерцает белым на загрузке | проверь блокирующий FOUC-скрипт в `client/index.html` (выполняется до React). |

@@ -1,0 +1,166 @@
+import { useEffect, useState } from 'react';
+import { ExternalLink, GitCommit, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { GithubCommit } from '@/domain/github/GithubConnection';
+import { useContainer } from '@/infrastructure/di/container';
+import { useGithubConnection } from '@/presentation/hooks/GithubConnectionProvider';
+import { HttpError } from '@/lib/HttpError';
+
+type Props = {
+  projectId: string;
+  gitRepoUrl: string;
+};
+
+function shortSha(sha: string): string {
+  return sha.slice(0, 7);
+}
+
+function relativeTime(d: Date): string {
+  const diff = Date.now() - d.getTime();
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return `${sec}с назад`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} мин назад`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} ч назад`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day} дн назад`;
+  return d.toLocaleDateString('ru');
+}
+
+export function RecentCommitsSection({ projectId, gitRepoUrl }: Props): React.ReactElement {
+  const { githubRepository } = useContainer();
+  const { connection, loading: connLoading } = useGithubConnection();
+  const [commits, setCommits] = useState<GithubCommit[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isGithubUrl = /github\.com[/:]([^/\s]+)\/([^/\s.]+)/.test(gitRepoUrl);
+
+  const load = (): void => {
+    setLoading(true);
+    setError(null);
+    githubRepository
+      .listProjectCommits(projectId)
+      .then((c) => setCommits(c))
+      .catch((e: unknown) => {
+        if (e instanceof HttpError) {
+          if (e.status === 409) setError('Подключи GitHub чтобы видеть коммиты.');
+          else if (e.status === 422) setError('URL репозитория не выглядит как GitHub.');
+          else if (e.status === 502) setError('GitHub API вернул ошибку (возможно, репо приватный — нужны расширенные права).');
+          else setError(e.message);
+        } else {
+          setError('Не удалось загрузить коммиты.');
+        }
+      })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (connLoading || !connection || !isGithubUrl) return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connection, projectId, gitRepoUrl, isGithubUrl, connLoading]);
+
+  if (!isGithubUrl) {
+    return (
+      <Card>
+        <CardHeader className="flex-row items-center gap-2 space-y-0">
+          <GitCommit className="size-4 text-muted-foreground" />
+          <CardTitle className="text-base">Последние коммиты</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Отслеживание коммитов работает только для GitHub-репозиториев.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (connLoading) return <></>;
+
+  if (!connection) {
+    return (
+      <Card>
+        <CardHeader className="flex-row items-center gap-2 space-y-0">
+          <GitCommit className="size-4 text-muted-foreground" />
+          <CardTitle className="text-base">Последние коммиты</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Подключи GitHub-аккаунт, чтобы видеть коммиты. Кнопка в карточке выше.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+        <div className="flex items-center gap-2">
+          <GitCommit className="size-4 text-muted-foreground" />
+          <CardTitle className="text-base">Последние коммиты</CardTitle>
+        </div>
+        <Button variant="ghost" size="sm" onClick={load} disabled={loading} aria-label="Обновить">
+          <RefreshCw className={loading ? 'animate-spin' : undefined} />
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {loading && commits === null && (
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-10 animate-pulse rounded bg-muted" />
+            ))}
+          </div>
+        )}
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        {!loading && !error && commits !== null && commits.length === 0 && (
+          <p className="text-sm text-muted-foreground">В репозитории нет коммитов.</p>
+        )}
+
+        {commits !== null && commits.length > 0 && (
+          <ul className="space-y-2">
+            {commits.map((c) => (
+              <li key={c.sha} className="flex items-start gap-3 rounded-md p-2 hover:bg-muted/40">
+                {c.authorAvatarUrl ? (
+                  <img
+                    src={c.authorAvatarUrl}
+                    alt={c.authorName}
+                    className="mt-0.5 size-6 shrink-0 rounded-full"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="mt-0.5 size-6 shrink-0 rounded-full bg-muted" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{c.message.split('\n')[0]}</p>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-mono">{shortSha(c.sha)}</span>
+                    <span className="mx-1">·</span>
+                    {c.authorName}
+                    <span className="mx-1">·</span>
+                    {relativeTime(c.committedAt)}
+                  </p>
+                </div>
+                <a
+                  href={c.htmlUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                  aria-label="Открыть на GitHub"
+                >
+                  <ExternalLink className="size-4" />
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

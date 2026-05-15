@@ -1,0 +1,107 @@
+import type { NextFunction, Request, Response } from 'express';
+import { ZodError } from 'zod';
+import {
+  InvalidCredentialsError,
+  UserEmailAlreadyExistsError,
+  UserNotFoundError,
+} from '../../domain/user/errors.js';
+import {
+  ProjectNameAlreadyExistsError,
+  ProjectNameEmptyError,
+  ProjectNotFoundError,
+} from '../../domain/project/errors.js';
+import {
+  GithubApiError,
+  GithubIntegrationDisabledError,
+  GithubNotConnectedError,
+  GithubRepoUrlInvalidError,
+} from '../../domain/github/errors.js';
+
+type ErrorPayload = {
+  error: string;
+  message?: string;
+  details?: unknown;
+};
+
+export function errorHandler(
+  err: unknown,
+  _req: Request,
+  res: Response,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _next: NextFunction,
+): void {
+  if (err instanceof ZodError) {
+    res.status(400).json({
+      error: 'bad_request',
+      message: 'Validation failed',
+      details: err.issues,
+    } satisfies ErrorPayload);
+    return;
+  }
+
+  if (err instanceof UserEmailAlreadyExistsError) {
+    res.status(409).json({ error: 'email_taken', message: 'Email уже занят' });
+    return;
+  }
+
+  if (err instanceof InvalidCredentialsError) {
+    res.status(401).json({ error: 'invalid_credentials', message: 'Неверный email или пароль' });
+    return;
+  }
+
+  if (err instanceof UserNotFoundError) {
+    res.status(404).json({ error: 'user_not_found' });
+    return;
+  }
+
+  if (err instanceof ProjectNameAlreadyExistsError) {
+    res.status(409).json({ error: 'project_name_taken', message: 'Проект с таким именем уже есть' });
+    return;
+  }
+
+  if (err instanceof ProjectNameEmptyError) {
+    res.status(400).json({ error: 'project_name_empty', message: 'Введите название' });
+    return;
+  }
+
+  if (err instanceof ProjectNotFoundError) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
+  if (err instanceof GithubIntegrationDisabledError) {
+    res.status(503).json({
+      error: 'github_integration_disabled',
+      message: 'GitHub-интеграция не настроена администратором.',
+    });
+    return;
+  }
+
+  if (err instanceof GithubNotConnectedError) {
+    res.status(409).json({
+      error: 'github_not_connected',
+      message: 'Сначала подключи GitHub в профиле.',
+    });
+    return;
+  }
+
+  if (err instanceof GithubRepoUrlInvalidError) {
+    res.status(422).json({
+      error: 'github_repo_url_invalid',
+      message: 'Не удалось определить owner/repo из URL.',
+    });
+    return;
+  }
+
+  if (err instanceof GithubApiError) {
+    res.status(err.status === 401 ? 401 : 502).json({
+      error: 'github_api_error',
+      message: err.message,
+    });
+    return;
+  }
+
+  // Неизвестная ошибка — server-side лог, минимальный ответ клиенту.
+  console.error('[errorHandler] unhandled error:', err);
+  res.status(500).json({ error: 'internal_server_error' });
+}

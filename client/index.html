@@ -1,23 +1,27 @@
 <!doctype html>
 <html lang="ru">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0c0a08" />
-    <meta name="description" content="История проектов ProjectsFlow — архив инициатив, которые мы сделали с 2017 года. Хронология, контекст, итоги." />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,700;0,900;1,400&family=Manrope:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
-    <title>История проектов · ProjectsFlow</title>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ProjectsFlow</title>
+    <script>
+      // FOUC fix: применяем тему ДО React, чтобы не мерцать светлым на загрузке тёмной.
+      (function () {
+        try {
+          var t = localStorage.getItem('pf-theme') || 'system';
+          var dark =
+            t === 'dark' ||
+            (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.add(dark ? 'dark' : 'light');
+        } catch (_) {
+          /* localStorage недоступен — ничего страшного, останется light */
+        }
+      })();
+    </script>
   </head>
   <body>
-    <noscript>
-      <div style="padding:2rem;font-family:serif;background:#fff5e6;color:#0c0a08;">
-        Для просмотра истории включите JavaScript — лента подтягивается с сервера.
-      </div>
-    </noscript>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

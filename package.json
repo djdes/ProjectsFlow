@@ -2,20 +2,24 @@
   "name": "projectsflow",
   "version": "0.1.0",
   "private": true,
-  "description": "ProjectsFlow — лендинг 'История проектов'",
+  "description": "ProjectsFlow — платформа управления проектами",
   "type": "module",
   "workspaces": [
     "client",
     "server"
   ],
   "scripts": {
-    "dev": "concurrently -k -n client,server -c blue,green \"npm:dev -w client\" \"npm:dev -w server\"",
-    "build": "npm run build -w client && npm run build -w server",
+    "dev": "concurrently -k -n client,server -c blue,green \"npm:dev -w @projectsflow/client\" \"npm:dev -w @projectsflow/server\"",
+    "dev:client": "npm run dev -w @projectsflow/client",
+    "dev:server": "npm run dev -w @projectsflow/server",
+    "build": "npm run build -w @projectsflow/client",
+    "build:client": "npm run build -w @projectsflow/client",
+    "build:server": "npm run build -w @projectsflow/server",
+    "typecheck": "npm run typecheck -w @projectsflow/client",
+    "lint": "npm run lint -w @projectsflow/client",
     "start": "node server/dist/index.js",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
-    "db:seed": "node --env-file=.env scripts/seed.mjs",
-    "deploy": "node scripts/deploy.mjs",
-    "lint": "echo 'no linter configured'"
+    "deploy": "node scripts/deploy.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
