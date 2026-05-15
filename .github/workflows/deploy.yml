@@ -1,0 +1,82 @@
+name: Deploy to projectsflow.ru
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build client
+        run: npm run build:client
+
+      - name: Build server
+        run: npm run build:server
+
+      - name: Install sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y sshpass
+
+      - name: Pack release tarball
+        run: |
+          mkdir -p .deploy
+          tar \
+            --exclude=node_modules \
+            --exclude=.deploy \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=.env \
+            -czf .deploy/release.tar.gz \
+            server/dist client/dist db scripts \
+            package.json package-lock.json server/package.json \
+            ecosystem.config.cjs
+
+      - name: Upload tarball to server
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          sshpass -e scp \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -P ${{ secrets.SSH_PORT }} \
+            .deploy/release.tar.gz \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/release.tar.gz
+
+      - name: Extract, install, migrate, restart
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          sshpass -e ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -p ${{ secrets.SSH_PORT }} \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "set -e; cd ${{ secrets.DEPLOY_PATH }} && \
+             tar -xzf release.tar.gz && rm release.tar.gz && \
+             . ~/.nvm/nvm.sh && nvm use 22 >/dev/null && \
+             npm ci --omit=dev --no-audit --no-fund && \
+             node --env-file=.env scripts/migrate.mjs && \
+             pm2 startOrReload ecosystem.config.cjs && pm2 save"
