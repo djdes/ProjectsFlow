@@ -4,13 +4,16 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useKbTree } from '@/presentation/hooks/useKbTree';
+import { useKbDocument } from '@/presentation/hooks/useKbDocument';
 import { KbFileTree } from '@/presentation/components/kb/KbFileTree';
+import { KbDocumentViewer } from '@/presentation/components/kb/KbDocumentViewer';
 
 export function KbPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
   const { data: project, loading: projectLoading } = useProject(projectId ?? '');
   const { documents, loading: treeLoading, error: treeError } = useKbTree(projectId ?? '');
   const [activePath, setActivePath] = useState<string | null>(null);
+  const { document, loading: docLoading } = useKbDocument(projectId ?? '', activePath);
 
   if (projectLoading) return <div className="p-6">Загрузка…</div>;
   if (!project) return <div className="p-6">Проект не найден</div>;
@@ -47,11 +50,15 @@ export function KbPage(): React.ReactElement {
         )}
       </aside>
       <main className="overflow-y-auto p-6">
-        {activePath ? (
-          <p className="text-sm text-muted-foreground">Viewer для <code>{activePath}</code> — в следующем коммите.</p>
-        ) : (
-          <p className="text-sm text-muted-foreground">Выбери файл слева.</p>
+        {activePath && docLoading && <p className="text-sm text-muted-foreground">Загрузка…</p>}
+        {activePath && document && (
+          <KbDocumentViewer
+            document={document}
+            kbRepoFullName={project.kbRepoFullName!}
+            onEdit={() => { /* следующая задача */ }}
+          />
         )}
+        {!activePath && <p className="text-sm text-muted-foreground">Выбери файл слева.</p>}
       </main>
     </div>
   );
