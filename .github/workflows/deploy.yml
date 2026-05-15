@@ -75,6 +75,7 @@ jobs:
             -p ${{ secrets.SSH_PORT }} \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
             "set -e; cd ${{ secrets.DEPLOY_PATH }} && \
+             rm -rf db scripts server/dist client/dist && \
              tar -xzf release.tar.gz && rm release.tar.gz && \
              . ~/.nvm/nvm.sh && nvm use 22 >/dev/null && \
              npm ci --omit=dev --no-audit --no-fund && \
