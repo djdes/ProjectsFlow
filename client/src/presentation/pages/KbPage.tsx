@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { KbFileTree, FOLDER_TO_TYPE } from '@/presentation/components/kb/KbFileT
 import { KbDocumentViewer } from '@/presentation/components/kb/KbDocumentViewer';
 import { KbDocumentEditor } from '@/presentation/components/kb/KbDocumentEditor';
 import { NewKbDocumentDialog } from '@/presentation/components/kb/NewKbDocumentDialog';
+import { KbSearchBar } from '@/presentation/components/kb/KbSearchBar';
 
 export function KbPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -20,6 +21,19 @@ export function KbPage(): React.ReactElement {
 
   // Feature A: new file dialog
   const [newFileFolder, setNewFileFolder] = useState<string | null>(null);
+
+  // Feature C: search
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filtered = useMemo(() => {
+    if (!documents) return null;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return documents;
+    return documents.filter((d) => {
+      const title = (typeof d.frontmatter.title === 'string' ? d.frontmatter.title : '').toLowerCase();
+      return title.includes(q) || d.path.toLowerCase().includes(q);
+    });
+  }, [documents, searchQuery]);
 
   if (projectLoading) return <div className="p-6">Загрузка…</div>;
   if (!project) return <div className="p-6">Проект не найден</div>;
@@ -50,11 +64,12 @@ export function KbPage(): React.ReactElement {
           <p className="px-2 pb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
             {project.name} / KB
           </p>
+          <KbSearchBar value={searchQuery} onChange={setSearchQuery} />
           {treeLoading && <p className="px-2 text-sm text-muted-foreground">Загрузка дерева…</p>}
           {treeError && <p className="px-2 text-sm text-destructive">Не удалось загрузить дерево.</p>}
-          {documents && (
+          {filtered !== null && (
             <KbFileTree
-              documents={documents}
+              documents={filtered}
               activePath={activePath}
               onPick={(path) => { setActivePath(path); setEditing(false); }}
               onNewFile={(folder) => setNewFileFolder(folder)}
