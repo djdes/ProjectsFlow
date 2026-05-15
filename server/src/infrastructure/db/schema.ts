@@ -55,6 +55,7 @@ export const projects = mysqlTable(
     name: varchar('name', { length: 80 }).notNull(),
     status: mysqlEnum('status', ['active', 'paused', 'archived']).notNull().default('active'),
     gitRepoUrl: varchar('git_repo_url', { length: 500 }),
+    kbRepoFullName: varchar('kb_repo_full_name', { length: 255 }),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },

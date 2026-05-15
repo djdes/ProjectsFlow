@@ -7,6 +7,7 @@ export const seedProjects: Project[] = [
     name: 'Acme site',
     status: 'active',
     gitRepoUrl: null,
+    kbRepoFullName: null,
     createdAt: new Date('2025-01-15'),
   },
   {
@@ -14,6 +15,7 @@ export const seedProjects: Project[] = [
     name: 'Mobile app',
     status: 'active',
     gitRepoUrl: null,
+    kbRepoFullName: null,
     createdAt: new Date('2025-03-20'),
   },
   {
@@ -21,6 +23,7 @@ export const seedProjects: Project[] = [
     name: 'Internal CRM',
     status: 'paused',
     gitRepoUrl: null,
+    kbRepoFullName: null,
     createdAt: new Date('2024-11-02'),
   },
   {
@@ -28,6 +31,7 @@ export const seedProjects: Project[] = [
     name: 'Marketing pages',
     status: 'archived',
     gitRepoUrl: null,
+    kbRepoFullName: null,
     createdAt: new Date('2024-05-10'),
   },
 ];

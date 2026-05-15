@@ -5,5 +5,6 @@ export type Project = {
   readonly name: string;
   readonly status: ProjectStatus;
   readonly gitRepoUrl: string | null;
+  readonly kbRepoFullName: string | null;
   readonly createdAt: Date;
 };

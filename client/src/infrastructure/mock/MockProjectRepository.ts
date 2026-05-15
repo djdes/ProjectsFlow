@@ -38,6 +38,7 @@ export class MockProjectRepository implements ProjectRepository {
       name: input.name,
       status: 'active',
       gitRepoUrl: null,
+      kbRepoFullName: null,
       createdAt: new Date(),
     };
     // Новые проекты — наверху списка: user видит результат там, где он его ждёт
@@ -62,6 +63,7 @@ export class MockProjectRepository implements ProjectRepository {
       ...current,
       ...(patch.name !== undefined ? { name: patch.name } : {}),
       ...(patch.gitRepoUrl !== undefined ? { gitRepoUrl: patch.gitRepoUrl } : {}),
+      ...(patch.kbRepoFullName !== undefined ? { kbRepoFullName: patch.kbRepoFullName } : {}),
     };
     this.projects = this.projects.map((p) => (p.id === id ? next : p));
     return delay(next);

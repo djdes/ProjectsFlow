@@ -13,6 +13,7 @@ type ProjectDto = {
   name: string;
   status: ProjectStatus;
   gitRepoUrl: string | null;
+  kbRepoFullName: string | null;
   createdAt: string;
 };
 
@@ -22,6 +23,7 @@ function fromDto(dto: ProjectDto): Project {
     name: dto.name,
     status: dto.status,
     gitRepoUrl: dto.gitRepoUrl,
+    kbRepoFullName: dto.kbRepoFullName ?? null,
     createdAt: new Date(dto.createdAt),
   };
 }

@@ -8,6 +8,7 @@ export type CreateProjectInput = {
 export type UpdateProjectInput = {
   readonly name?: string;
   readonly gitRepoUrl?: string | null;
+  readonly kbRepoFullName?: string | null;
 };
 
 export interface ProjectRepository {
