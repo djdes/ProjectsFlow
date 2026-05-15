@@ -19,12 +19,20 @@ import type { PutSecret } from '../application/secrets/PutSecret.js';
 import type { GetSecret } from '../application/secrets/GetSecret.js';
 import type { DeleteSecret } from '../application/secrets/DeleteSecret.js';
 import type { ListSecretKeys } from '../application/secrets/ListSecretKeys.js';
+import type { InitKbRepo } from '../application/kb/InitKbRepo.js';
+import type { ConnectKbRepo } from '../application/kb/ConnectKbRepo.js';
+import type { DisconnectKb } from '../application/kb/DisconnectKb.js';
+import type { ListKbDocuments } from '../application/kb/ListKbDocuments.js';
+import type { GetKbDocument } from '../application/kb/GetKbDocument.js';
+import type { WriteKbDocument } from '../application/kb/WriteKbDocument.js';
+import type { DeleteKbDocument } from '../application/kb/DeleteKbDocument.js';
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './auth/routes.js';
 import { projectsRouter } from './projects/routes.js';
 import { githubRouter } from './integrations/github/routes.js';
 import { secretsRouter } from './secrets/routes.js';
+import { kbRouter } from './kb/routes.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
@@ -57,6 +65,15 @@ type AppDeps = {
     readonly deleteSecret: DeleteSecret;
     readonly listSecretKeys: ListSecretKeys;
   };
+  readonly kb: {
+    readonly initKbRepo: InitKbRepo;
+    readonly connectKbRepo: ConnectKbRepo;
+    readonly disconnectKb: DisconnectKb;
+    readonly listKbDocuments: ListKbDocuments;
+    readonly getKbDocument: GetKbDocument;
+    readonly writeKbDocument: WriteKbDocument;
+    readonly deleteKbDocument: DeleteKbDocument;
+  };
 };
 
 export function createApp(deps: AppDeps): Express {
@@ -87,6 +104,7 @@ export function createApp(deps: AppDeps): Express {
   app.use('/api/projects', projectsRouter(deps.projects));
   app.use('/api/integrations/github', githubRouter(deps.github));
   app.use('/api/secrets', secretsRouter(deps.secrets));
+  app.use('/api/projects/:projectId/kb', kbRouter(deps.kb));
 
   // 404 для неизвестных /api/*
   app.use('/api', (_req, res) => {

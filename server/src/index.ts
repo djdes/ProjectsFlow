@@ -23,6 +23,14 @@ import { PollDeviceFlow } from './application/github/PollDeviceFlow.js';
 import { DisconnectGithub } from './application/github/DisconnectGithub.js';
 import { ListUserRepos } from './application/github/ListUserRepos.js';
 import { ListProjectCommits } from './application/github/ListProjectCommits.js';
+import { GithubKbRepository } from './infrastructure/kb/GithubKbRepository.js';
+import { InitKbRepo } from './application/kb/InitKbRepo.js';
+import { ConnectKbRepo } from './application/kb/ConnectKbRepo.js';
+import { DisconnectKb } from './application/kb/DisconnectKb.js';
+import { ListKbDocuments } from './application/kb/ListKbDocuments.js';
+import { GetKbDocument } from './application/kb/GetKbDocument.js';
+import { WriteKbDocument } from './application/kb/WriteKbDocument.js';
+import { DeleteKbDocument } from './application/kb/DeleteKbDocument.js';
 import { AesGcmSecretCipher } from './infrastructure/crypto/AesGcmSecretCipher.js';
 import { DrizzleSecretsRepository } from './infrastructure/repositories/DrizzleSecretsRepository.js';
 import { PutSecret } from './application/secrets/PutSecret.js';
@@ -44,6 +52,7 @@ const githubTokenRepo = new DrizzleGithubTokenRepository(db);
 
 const githubApi = new FetchGithubApiClient(config.github.clientId);
 const deviceFlowStore = new DeviceFlowStore();
+const kbRepo = new GithubKbRepository(githubApi);
 
 let secretsCipher: AesGcmSecretCipher | null = null;
 try {
@@ -95,6 +104,15 @@ const app = createApp({
     getSecret: new GetSecret(secretsRepo, activeCipher),
     deleteSecret: new DeleteSecret(secretsRepo),
     listSecretKeys: new ListSecretKeys(secretsRepo),
+  },
+  kb: {
+    initKbRepo: new InitKbRepo({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
+    connectKbRepo: new ConnectKbRepo({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
+    disconnectKb: new DisconnectKb(projectRepo),
+    listKbDocuments: new ListKbDocuments({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
+    getKbDocument: new GetKbDocument({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
+    writeKbDocument: new WriteKbDocument({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
+    deleteKbDocument: new DeleteKbDocument({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
   },
   github: {
     startDeviceFlow: new StartDeviceFlow({
