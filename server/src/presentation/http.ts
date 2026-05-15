@@ -15,11 +15,16 @@ import type { PollDeviceFlow } from '../application/github/PollDeviceFlow.js';
 import type { DisconnectGithub } from '../application/github/DisconnectGithub.js';
 import type { ListUserRepos } from '../application/github/ListUserRepos.js';
 import type { GithubTokenRepository } from '../application/github/GithubTokenRepository.js';
+import type { PutSecret } from '../application/secrets/PutSecret.js';
+import type { GetSecret } from '../application/secrets/GetSecret.js';
+import type { DeleteSecret } from '../application/secrets/DeleteSecret.js';
+import type { ListSecretKeys } from '../application/secrets/ListSecretKeys.js';
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './auth/routes.js';
 import { projectsRouter } from './projects/routes.js';
 import { githubRouter } from './integrations/github/routes.js';
+import { secretsRouter } from './secrets/routes.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
@@ -45,6 +50,12 @@ type AppDeps = {
     readonly disconnectGithub: DisconnectGithub;
     readonly listUserRepos: ListUserRepos;
     readonly tokens: GithubTokenRepository;
+  };
+  readonly secrets: {
+    readonly putSecret: PutSecret;
+    readonly getSecret: GetSecret;
+    readonly deleteSecret: DeleteSecret;
+    readonly listSecretKeys: ListSecretKeys;
   };
 };
 
@@ -75,6 +86,7 @@ export function createApp(deps: AppDeps): Express {
 
   app.use('/api/projects', projectsRouter(deps.projects));
   app.use('/api/integrations/github', githubRouter(deps.github));
+  app.use('/api/secrets', secretsRouter(deps.secrets));
 
   // 404 для неизвестных /api/*
   app.use('/api', (_req, res) => {

@@ -23,6 +23,14 @@ import { PollDeviceFlow } from './application/github/PollDeviceFlow.js';
 import { DisconnectGithub } from './application/github/DisconnectGithub.js';
 import { ListUserRepos } from './application/github/ListUserRepos.js';
 import { ListProjectCommits } from './application/github/ListProjectCommits.js';
+import { AesGcmSecretCipher } from './infrastructure/crypto/AesGcmSecretCipher.js';
+import { DrizzleSecretsRepository } from './infrastructure/repositories/DrizzleSecretsRepository.js';
+import { PutSecret } from './application/secrets/PutSecret.js';
+import { GetSecret } from './application/secrets/GetSecret.js';
+import { DeleteSecret } from './application/secrets/DeleteSecret.js';
+import { ListSecretKeys } from './application/secrets/ListSecretKeys.js';
+import type { SecretsCipher } from './application/secrets/SecretsCipher.js';
+import { SecretsVaultDisabledError } from './domain/secrets/errors.js';
 import { createApp } from './presentation/http.js';
 import { config, sessionTtlMs } from './presentation/config.js';
 
@@ -36,6 +44,21 @@ const githubTokenRepo = new DrizzleGithubTokenRepository(db);
 
 const githubApi = new FetchGithubApiClient(config.github.clientId);
 const deviceFlowStore = new DeviceFlowStore();
+
+let secretsCipher: AesGcmSecretCipher | null = null;
+try {
+  secretsCipher = new AesGcmSecretCipher(config.secrets.masterKey);
+  console.log('[projectsflow] secrets vault: enabled');
+} catch {
+  console.warn('[projectsflow] secrets vault: DISABLED (set SECRETS_MASTER_KEY)');
+}
+
+const secretsRepo = new DrizzleSecretsRepository(db);
+const stubCipher: SecretsCipher = {
+  encrypt: () => { throw new SecretsVaultDisabledError(); },
+  decrypt: () => { throw new SecretsVaultDisabledError(); },
+};
+const activeCipher = secretsCipher ?? stubCipher;
 
 const authDeps = {
   users: userRepo,
@@ -66,6 +89,12 @@ const app = createApp({
       tokens: githubTokenRepo,
       api: githubApi,
     }),
+  },
+  secrets: {
+    putSecret: new PutSecret(secretsRepo, activeCipher),
+    getSecret: new GetSecret(secretsRepo, activeCipher),
+    deleteSecret: new DeleteSecret(secretsRepo),
+    listSecretKeys: new ListSecretKeys(secretsRepo),
   },
   github: {
     startDeviceFlow: new StartDeviceFlow({
