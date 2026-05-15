@@ -1,4 +1,4 @@
-import { FileWarning, Folder } from 'lucide-react';
+import { FileWarning, Folder, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { KbDocumentSummary } from '@/domain/kb/KbDocument';
 
@@ -6,16 +6,27 @@ type Props = {
   documents: KbDocumentSummary[];
   activePath: string | null;
   onPick: (path: string) => void;
+  /** Called when the user clicks "+" on a folder — passes the folder name */
+  onNewFile?: (folder: string) => void;
 };
 
 const FOLDER_ORDER = ['credentials', 'decisions', 'services', 'schemas', 'runbooks', 'notes'];
+
+export const FOLDER_TO_TYPE: Record<string, string> = {
+  credentials: 'credential',
+  decisions: 'decision',
+  services: 'service',
+  schemas: 'schema',
+  runbooks: 'runbook',
+  notes: 'note',
+};
 
 function folderOf(path: string): string {
   const idx = path.indexOf('/');
   return idx === -1 ? 'notes' : path.slice(0, idx);
 }
 
-export function KbFileTree({ documents, activePath, onPick }: Props): React.ReactElement {
+export function KbFileTree({ documents, activePath, onPick, onNewFile }: Props): React.ReactElement {
   const byFolder = new Map<string, KbDocumentSummary[]>();
   for (const d of documents) {
     const f = folderOf(d.path);
@@ -32,9 +43,19 @@ export function KbFileTree({ documents, activePath, onPick }: Props): React.Reac
         const items = byFolder.get(folder) ?? [];
         return (
           <div key={folder}>
-            <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] uppercase tracking-widest text-muted-foreground">
-              <Folder className="size-3" />
-              {folder}
+            <div className="group flex items-center gap-1.5 px-2 py-1 text-[11px] uppercase tracking-widest text-muted-foreground">
+              <Folder className="size-3 shrink-0" />
+              <span className="flex-1">{folder}</span>
+              {onNewFile && (
+                <button
+                  type="button"
+                  aria-label={`Создать заметку в ${folder}`}
+                  onClick={() => onNewFile(folder)}
+                  className="invisible rounded p-0.5 transition-colors hover:bg-muted hover:text-foreground group-hover:visible"
+                >
+                  <Plus className="size-3" />
+                </button>
+              )}
             </div>
             <ul className="space-y-0.5">
               {items.length === 0 && (
@@ -55,8 +76,10 @@ export function KbFileTree({ documents, activePath, onPick }: Props): React.Reac
                     >
                       <span className="flex-1 truncate">{title}</span>
                       {d.validationErrors.length > 0 && (
-                        <FileWarning className="size-3.5 shrink-0 text-amber-500"
-                          aria-label="invalid frontmatter" />
+                        <FileWarning
+                          className="size-3.5 shrink-0 text-amber-500"
+                          aria-label="invalid frontmatter"
+                        />
                       )}
                     </button>
                   </li>
