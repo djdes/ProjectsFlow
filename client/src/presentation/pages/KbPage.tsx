@@ -7,13 +7,15 @@ import { useKbTree } from '@/presentation/hooks/useKbTree';
 import { useKbDocument } from '@/presentation/hooks/useKbDocument';
 import { KbFileTree } from '@/presentation/components/kb/KbFileTree';
 import { KbDocumentViewer } from '@/presentation/components/kb/KbDocumentViewer';
+import { KbDocumentEditor } from '@/presentation/components/kb/KbDocumentEditor';
 
 export function KbPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
   const { data: project, loading: projectLoading } = useProject(projectId ?? '');
-  const { documents, loading: treeLoading, error: treeError } = useKbTree(projectId ?? '');
+  const { documents, loading: treeLoading, error: treeError, reload: reloadTree } = useKbTree(projectId ?? '');
   const [activePath, setActivePath] = useState<string | null>(null);
-  const { document, loading: docLoading } = useKbDocument(projectId ?? '', activePath);
+  const [editing, setEditing] = useState(false);
+  const { document, loading: docLoading, reload } = useKbDocument(projectId ?? '', activePath);
 
   if (projectLoading) return <div className="p-6">Загрузка…</div>;
   if (!project) return <div className="p-6">Проект не найден</div>;
@@ -46,18 +48,25 @@ export function KbPage(): React.ReactElement {
         {treeLoading && <p className="px-2 text-sm text-muted-foreground">Загрузка дерева…</p>}
         {treeError && <p className="px-2 text-sm text-destructive">Не удалось загрузить дерево.</p>}
         {documents && (
-          <KbFileTree documents={documents} activePath={activePath} onPick={setActivePath} />
+          <KbFileTree documents={documents} activePath={activePath} onPick={(path) => { setActivePath(path); setEditing(false); }} />
         )}
       </aside>
       <main className="overflow-y-auto p-6">
         {activePath && docLoading && <p className="text-sm text-muted-foreground">Загрузка…</p>}
-        {activePath && document && (
+        {activePath && document && (editing ? (
+          <KbDocumentEditor
+            projectId={projectId ?? ''}
+            document={document}
+            onCancel={() => setEditing(false)}
+            onSaved={() => { setEditing(false); reload(); reloadTree(); }}
+          />
+        ) : (
           <KbDocumentViewer
             document={document}
             kbRepoFullName={project.kbRepoFullName!}
-            onEdit={() => { /* следующая задача */ }}
+            onEdit={() => setEditing(true)}
           />
-        )}
+        ))}
         {!activePath && <p className="text-sm text-muted-foreground">Выбери файл слева.</p>}
       </main>
     </div>
