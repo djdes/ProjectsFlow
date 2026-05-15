@@ -75,6 +75,25 @@ export const userGithubTokens = mysqlTable('user_github_tokens', {
   updatedAt: updatedAtCol(),
 });
 
+export const secrets = mysqlTable(
+  'secrets',
+  {
+    id: char('id', { length: 36 }).primaryKey(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    secretKey: varchar('secret_key', { length: 500 }).notNull(),
+    encrypted: varchar('encrypted', { length: 2000 }).notNull(),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_secrets_user_key').on(t.userId, t.secretKey),
+    index('idx_secrets_user').on(t.userId),
+  ],
+);
+
+export type SecretRow = typeof secrets.$inferSelect;
+export type NewSecretRow = typeof secrets.$inferInsert;
+
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;
 export type UserGithubTokenRow = typeof userGithubTokens.$inferSelect;
