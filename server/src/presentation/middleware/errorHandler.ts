@@ -22,6 +22,13 @@ import {
   SecretNotFoundError,
   SecretsVaultDisabledError,
 } from '../../domain/secrets/errors.js';
+import {
+  FrontmatterInvalidError,
+  KbDocumentNotFoundError,
+  KbNotConnectedError,
+  KbRepoAlreadyConnectedError,
+  KbRepoConflictError,
+} from '../../domain/kb/errors.js';
 
 type ErrorPayload = {
   error: string;
@@ -125,6 +132,27 @@ export function errorHandler(
   if (err instanceof SecretCipherCorruptedError) {
     console.error('[errorHandler] secret cipher corrupted — master key changed?', err);
     res.status(500).json({ error: 'secret_cipher_corrupted' });
+    return;
+  }
+
+  if (err instanceof KbNotConnectedError) {
+    res.status(409).json({ error: 'kb_not_connected', message: 'У проекта нет привязанного KB-репо' });
+    return;
+  }
+  if (err instanceof KbRepoAlreadyConnectedError) {
+    res.status(409).json({ error: 'kb_already_connected' });
+    return;
+  }
+  if (err instanceof KbDocumentNotFoundError) {
+    res.status(404).json({ error: 'kb_doc_not_found' });
+    return;
+  }
+  if (err instanceof FrontmatterInvalidError) {
+    res.status(422).json({ error: 'frontmatter_invalid', details: err.errors });
+    return;
+  }
+  if (err instanceof KbRepoConflictError) {
+    res.status(409).json({ error: 'kb_conflict' });
     return;
   }
 
