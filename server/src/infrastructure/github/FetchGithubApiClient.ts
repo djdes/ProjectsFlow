@@ -1,11 +1,16 @@
 import type { GithubCommit, GithubRepoSummary } from '../../domain/github/GithubConnection.js';
 import { GithubApiError, GithubIntegrationDisabledError } from '../../domain/github/errors.js';
 import type {
+  CreateRepoInput,
+  CreateRepoResult,
   DeviceCodeResponse,
   DevicePollResult,
   GithubApiClient,
   GithubUserInfo,
   ListCommitsInput,
+  PutFileInput,
+  RepoFileContent,
+  RepoFileSummary,
 } from '../../application/github/GithubApiClient.js';
 
 const SCOPES = 'read:user public_repo';
@@ -164,5 +169,101 @@ export class FetchGithubApiClient implements GithubApiClient {
         pushedAt: r.pushed_at ? new Date(r.pushed_at) : null,
       }),
     );
+  }
+
+  async createRepo(accessToken: string, input: CreateRepoInput): Promise<CreateRepoResult> {
+    const res = await fetch('https://api.github.com/user/repos', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: input.name,
+        description: input.description,
+        private: input.privateRepo,
+        auto_init: input.autoInit,
+      }),
+    });
+    if (!res.ok) throw new GithubApiError(res.status, `createRepo failed: ${await res.text()}`);
+    const data = (await res.json()) as { full_name: string; html_url: string };
+    return { fullName: data.full_name, htmlUrl: data.html_url };
+  }
+
+  async repoExists(accessToken: string, fullName: string): Promise<boolean> {
+    const res = await fetch(`https://api.github.com/repos/${fullName}`, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/vnd.github+json' },
+    });
+    return res.status === 200;
+  }
+
+  async getRepoFile(accessToken: string, fullName: string, path: string): Promise<RepoFileContent | null> {
+    const res = await fetch(`https://api.github.com/repos/${fullName}/contents/${encodeURI(path)}`, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/vnd.github+json' },
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new GithubApiError(res.status, `getRepoFile failed: ${await res.text()}`);
+    const data = (await res.json()) as { path: string; sha: string; size: number; content: string; encoding: string };
+    if (data.encoding !== 'base64') throw new GithubApiError(500, `unexpected encoding ${data.encoding}`);
+    return {
+      path: data.path,
+      sha: data.sha,
+      size: data.size,
+      content: Buffer.from(data.content, 'base64').toString('utf8'),
+    };
+  }
+
+  async listRepoTree(accessToken: string, fullName: string, path = ''): Promise<RepoFileSummary[]> {
+    const url = path
+      ? `https://api.github.com/repos/${fullName}/contents/${encodeURI(path)}`
+      : `https://api.github.com/repos/${fullName}/contents`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/vnd.github+json' },
+    });
+    if (res.status === 404) return [];
+    if (!res.ok) throw new GithubApiError(res.status, `listRepoTree failed: ${await res.text()}`);
+    const data = (await res.json()) as Array<{ path: string; sha: string; type: string; size: number }>;
+    return data.map((d) => ({
+      path: d.path,
+      sha: d.sha,
+      type: d.type === 'dir' ? 'dir' : 'file',
+      size: d.size,
+    }));
+  }
+
+  async putRepoFile(input: PutFileInput): Promise<{ sha: string }> {
+    const body: Record<string, unknown> = {
+      message: input.message,
+      content: Buffer.from(input.content, 'utf8').toString('base64'),
+    };
+    if (input.sha) body.sha = input.sha;
+    const url = `https://api.github.com/repos/${input.owner}/${input.repo}/contents/${encodeURI(input.path)}`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (res.status === 409) throw new GithubApiError(409, 'sha conflict');
+    if (!res.ok) throw new GithubApiError(res.status, `putRepoFile failed: ${await res.text()}`);
+    const data = (await res.json()) as { content: { sha: string } };
+    return { sha: data.content.sha };
+  }
+
+  async deleteRepoFile(accessToken: string, fullName: string, path: string, sha: string, message: string): Promise<void> {
+    const res = await fetch(`https://api.github.com/repos/${fullName}/contents/${encodeURI(path)}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message, sha }),
+    });
+    if (!res.ok) throw new GithubApiError(res.status, `deleteRepoFile failed: ${await res.text()}`);
   }
 }
