@@ -3,6 +3,8 @@ import { HttpProjectRepository } from '@/infrastructure/http/HttpProjectReposito
 import { HttpUserRepository } from '@/infrastructure/http/HttpUserRepository';
 import { HttpAuthRepository } from '@/infrastructure/http/HttpAuthRepository';
 import { HttpGithubRepository } from '@/infrastructure/http/HttpGithubRepository';
+import { HttpKbRepository } from '@/infrastructure/http/HttpKbRepository';
+import { HttpSecretsRepository } from '@/infrastructure/http/HttpSecretsRepository';
 import { ListProjects } from '@/application/project/ListProjects';
 import { GetProject } from '@/application/project/GetProject';
 import { CreateProject } from '@/application/project/CreateProject';
@@ -11,6 +13,8 @@ import { GetCurrentUser } from '@/application/user/GetCurrentUser';
 import { UpdateProfile } from '@/application/user/UpdateProfile';
 import type { AuthRepository } from '@/application/auth/AuthRepository';
 import type { GithubRepository } from '@/application/github/GithubRepository';
+import type { KbRepository } from '@/application/kb/KbRepository';
+import type { SecretsRepository } from '@/application/secrets/SecretsRepository';
 
 type Container = {
   listProjects: ListProjects;
@@ -21,6 +25,8 @@ type Container = {
   updateProfile: UpdateProfile;
   authRepository: AuthRepository;
   githubRepository: GithubRepository;
+  kbRepository: KbRepository;
+  secretsRepository: SecretsRepository;
 };
 
 function buildContainer(): Container {
@@ -28,6 +34,8 @@ function buildContainer(): Container {
   const userRepo = new HttpUserRepository();
   const authRepo = new HttpAuthRepository();
   const githubRepo = new HttpGithubRepository();
+  const kbRepo = new HttpKbRepository();
+  const secretsRepo = new HttpSecretsRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -37,6 +45,8 @@ function buildContainer(): Container {
     updateProfile: new UpdateProfile(userRepo),
     authRepository: authRepo,
     githubRepository: githubRepo,
+    kbRepository: kbRepo,
+    secretsRepository: secretsRepo,
   };
 }
 
