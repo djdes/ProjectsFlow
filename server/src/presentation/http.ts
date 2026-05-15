@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express, { type Express } from 'express';
 import cookieParser from 'cookie-parser';
 import type { GetCurrentUser } from '../application/auth/GetCurrentUser.js';
@@ -110,6 +113,16 @@ export function createApp(deps: AppDeps): Express {
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'not_found' });
   });
+
+  // SPA: serve client/dist when present (prod). In dev Vite serves the client on :5173.
+  const moduleDir = dirname(fileURLToPath(import.meta.url));
+  const clientDist = resolve(moduleDir, '../../../client/dist');
+  if (existsSync(clientDist)) {
+    app.use(express.static(clientDist, { index: false }));
+    app.get('*', (_req, res) => {
+      res.sendFile(resolve(clientDist, 'index.html'));
+    });
+  }
 
   app.use(errorHandler);
 
