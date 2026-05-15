@@ -20,6 +20,149 @@ function isSecretRefKey(key: string): boolean {
   return key.endsWith('_ref');
 }
 
+// ---------------------------------------------------------------------------
+// Typed field detection
+// ---------------------------------------------------------------------------
+
+type FmFieldType = 'string' | 'number' | 'boolean' | 'array' | 'null' | 'unknown';
+
+function detectType(v: unknown): FmFieldType {
+  if (v === null) return 'null';
+  if (typeof v === 'string') return 'string';
+  if (typeof v === 'number') return 'number';
+  if (typeof v === 'boolean') return 'boolean';
+  if (Array.isArray(v)) return 'array';
+  return 'unknown'; // object etc. — render readonly JSON
+}
+
+// ---------------------------------------------------------------------------
+// Per-field component
+// ---------------------------------------------------------------------------
+
+type FieldProps = {
+  fieldKey: string;
+  value: unknown;
+  onChange: (value: unknown) => void;
+};
+
+function FmField({ fieldKey, value, onChange }: FieldProps): React.ReactElement {
+  // "activated null" — user clicked "Задать значение" on a null field
+  const [nullActivated, setNullActivated] = useState(false);
+
+  const type = detectType(value);
+
+  const id = `fm-${fieldKey}`;
+
+  if (type === 'boolean') {
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          id={id}
+          type="checkbox"
+          checked={value as boolean}
+          onChange={(e) => onChange(e.target.checked)}
+          className="size-4 rounded border"
+        />
+        <Label htmlFor={id}>{fieldKey}</Label>
+      </div>
+    );
+  }
+
+  if (type === 'number') {
+    return (
+      <div className="space-y-1.5">
+        <Label htmlFor={id}>{fieldKey}</Label>
+        <Input
+          id={id}
+          type="number"
+          value={value as number}
+          onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
+        />
+      </div>
+    );
+  }
+
+  if (type === 'array') {
+    const arr = value as unknown[];
+    return (
+      <div className="space-y-1.5">
+        <Label htmlFor={id}>{fieldKey} <span className="text-xs text-muted-foreground">(по одному на строку)</span></Label>
+        <textarea
+          id={id}
+          value={arr.join('\n')}
+          onChange={(e) =>
+            onChange(
+              e.target.value
+                .split('\n')
+                .map((s) => s.trim())
+                .filter(Boolean),
+            )
+          }
+          rows={Math.max(3, arr.length + 1)}
+          className="w-full rounded-md border bg-background p-3 text-sm"
+        />
+      </div>
+    );
+  }
+
+  if (type === 'null') {
+    if (!nullActivated) {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{fieldKey}: (пусто)</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 text-xs"
+            onClick={() => { setNullActivated(true); onChange(''); }}
+          >
+            Задать значение
+          </Button>
+        </div>
+      );
+    }
+    // Fallthrough to string input after activation
+    return (
+      <div className="space-y-1.5">
+        <Label htmlFor={id}>{fieldKey}</Label>
+        <Input
+          id={id}
+          autoFocus
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </div>
+    );
+  }
+
+  if (type === 'unknown') {
+    // Object or other — readonly JSON display
+    return (
+      <div className="space-y-1.5">
+        <Label>{fieldKey} <span className="text-xs text-amber-500">(объект — только чтение)</span></Label>
+        <pre className="rounded-md border bg-muted p-2 text-xs overflow-x-auto">{JSON.stringify(value, null, 2)}</pre>
+      </div>
+    );
+  }
+
+  // Default: string
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{fieldKey}</Label>
+      <Input
+        id={id}
+        value={typeof value === 'string' ? value : ''}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main editor
+// ---------------------------------------------------------------------------
+
 export function KbDocumentEditor({ projectId, document, onCancel, onSaved }: Props): React.ReactElement {
   const { kbRepository } = useContainer();
   const [fm, setFm] = useState<Record<string, unknown>>({ ...document.frontmatter });
@@ -76,17 +219,14 @@ export function KbDocumentEditor({ projectId, document, onCancel, onSaved }: Pro
                   fieldLabel={key}
                   vaultRef={String(value)}
                   editable
-                  onChange={() => { /* значение секрета меняется в БД, ref остаётся тот же */ }}
+                  onChange={() => { /* vault ref stays the same — value changes in DB */ }}
                 />
               ) : (
-                <div className="space-y-1.5">
-                  <Label htmlFor={`fm-${key}`}>{key}</Label>
-                  <Input
-                    id={`fm-${key}`}
-                    value={typeof value === 'string' ? value : JSON.stringify(value)}
-                    onChange={(e) => updateField(key, e.target.value)}
-                  />
-                </div>
+                <FmField
+                  fieldKey={key}
+                  value={value}
+                  onChange={(v) => updateField(key, v)}
+                />
               )}
             </div>
           ))}
