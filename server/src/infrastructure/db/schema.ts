@@ -24,7 +24,6 @@ export const users = mysqlTable(
   {
     id: id(),
     email: varchar('email', { length: 255 }).notNull(),
-    passwordHash: varchar('password_hash', { length: 255 }).notNull(),
     displayName: varchar('display_name', { length: 80 }).notNull(),
     avatarUrl: varchar('avatar_url', { length: 500 }),
     createdAt: createdAtCol(),
@@ -44,6 +43,23 @@ export const sessions = mysqlTable(
   (t) => [
     index('idx_sessions_user').on(t.userId),
     index('idx_sessions_expires').on(t.expiresAt),
+  ],
+);
+
+export const magicTokens = mysqlTable(
+  'magic_tokens',
+  {
+    id: id(),
+    email: varchar('email', { length: 255 }).notNull(),
+    tokenHash: char('token_hash', { length: 64 }).notNull(),
+    expiresAt: timestamp('expires_at').notNull(),
+    consumedAt: timestamp('consumed_at'),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_magic_tokens_hash').on(t.tokenHash),
+    index('idx_magic_tokens_email').on(t.email),
+    index('idx_magic_tokens_expires').on(t.expiresAt),
   ],
 );
 
@@ -103,3 +119,5 @@ export type SessionRow = typeof sessions.$inferSelect;
 export type NewSessionRow = typeof sessions.$inferInsert;
 export type ProjectRow = typeof projects.$inferSelect;
 export type NewProjectRow = typeof projects.$inferInsert;
+export type MagicTokenRow = typeof magicTokens.$inferSelect;
+export type NewMagicTokenRow = typeof magicTokens.$inferInsert;

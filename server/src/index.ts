@@ -1,16 +1,19 @@
 // Composition root: собираем зависимости + поднимаем HTTP-сервер.
 
 import { db, pool } from './infrastructure/db/index.js';
-import { Argon2PasswordHasher } from './infrastructure/crypto/Argon2PasswordHasher.js';
 import { idGenerator } from './infrastructure/id/idGenerator.js';
 import { DrizzleUserRepository } from './infrastructure/repositories/DrizzleUserRepository.js';
 import { DrizzleSessionRepository } from './infrastructure/repositories/DrizzleSessionRepository.js';
 import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleProjectRepository.js';
 import { DrizzleGithubTokenRepository } from './infrastructure/repositories/DrizzleGithubTokenRepository.js';
+import { DrizzleMagicTokenRepository } from './infrastructure/repositories/DrizzleMagicTokenRepository.js';
 import { FetchGithubApiClient } from './infrastructure/github/FetchGithubApiClient.js';
 import { DeviceFlowStore } from './infrastructure/github/DeviceFlowStore.js';
-import { Register } from './application/auth/Register.js';
-import { Login } from './application/auth/Login.js';
+import { NodemailerEmailSender } from './infrastructure/email/NodemailerEmailSender.js';
+import { ConsoleEmailSender } from './infrastructure/email/ConsoleEmailSender.js';
+import type { EmailSender } from './application/email/EmailSender.js';
+import { RequestMagicLink } from './application/auth/RequestMagicLink.js';
+import { ConsumeMagicLink } from './application/auth/ConsumeMagicLink.js';
 import { Logout } from './application/auth/Logout.js';
 import { GetCurrentUser } from './application/auth/GetCurrentUser.js';
 import { UpdateProfile } from './application/user/UpdateProfile.js';
@@ -41,19 +44,37 @@ import { ListSecretKeys } from './application/secrets/ListSecretKeys.js';
 import type { SecretsCipher } from './application/secrets/SecretsCipher.js';
 import { SecretsVaultDisabledError } from './domain/secrets/errors.js';
 import { createApp } from './presentation/http.js';
-import { config, sessionTtlMs } from './presentation/config.js';
+import {
+  config,
+  isProd,
+  magicRateLimitWindowMs,
+  magicTokenTtlMs,
+  sessionTtlMs,
+} from './presentation/config.js';
 
-const passwordHasher = new Argon2PasswordHasher();
 const now = (): Date => new Date();
 
 const userRepo = new DrizzleUserRepository(db);
 const sessionRepo = new DrizzleSessionRepository(db);
+const magicTokenRepo = new DrizzleMagicTokenRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const githubTokenRepo = new DrizzleGithubTokenRepository(db);
 
 const githubApi = new FetchGithubApiClient(config.github.clientId);
 const deviceFlowStore = new DeviceFlowStore();
 const kbRepo = new GithubKbRepository(githubApi);
+
+let emailSender: EmailSender;
+if (config.smtp) {
+  emailSender = new NodemailerEmailSender(config.smtp);
+  console.log(`[projectsflow] email: SMTP via ${config.smtp.host}:${config.smtp.port}`);
+} else {
+  if (isProd()) {
+    throw new Error('SMTP не настроен. В prod нужны SMTP_HOST/PORT/USER/PASS/FROM.');
+  }
+  emailSender = new ConsoleEmailSender();
+  console.warn('[projectsflow] email: ConsoleEmailSender (dev). Magic link напечатается в логе.');
+}
 
 let secretsCipher: AesGcmSecretCipher | null = null;
 try {
@@ -70,19 +91,27 @@ const stubCipher: SecretsCipher = {
 };
 const activeCipher = secretsCipher ?? stubCipher;
 
-const authDeps = {
-  users: userRepo,
-  sessions: sessionRepo,
-  passwordHasher,
-  idGen: idGenerator,
-  sessionTtlMs: sessionTtlMs(),
-  now,
-};
-
 const app = createApp({
   auth: {
-    register: new Register(authDeps),
-    login: new Login(authDeps),
+    requestMagicLink: new RequestMagicLink({
+      tokens: magicTokenRepo,
+      email: emailSender,
+      idGen: idGenerator,
+      now,
+      tokenTtlMs: magicTokenTtlMs(),
+      rateLimitWindowMs: magicRateLimitWindowMs(),
+      rateLimitMax: config.magic.rateLimitMax,
+      appUrl: config.appUrl,
+      fromName: config.brandName,
+    }),
+    consumeMagicLink: new ConsumeMagicLink({
+      tokens: magicTokenRepo,
+      users: userRepo,
+      sessions: sessionRepo,
+      idGen: idGenerator,
+      sessionTtlMs: sessionTtlMs(),
+      now,
+    }),
     logout: new Logout(sessionRepo),
     getCurrentUser: new GetCurrentUser({ users: userRepo, sessions: sessionRepo, now }),
   },
@@ -152,7 +181,6 @@ const server = app.listen(config.port, () => {
   );
 });
 
-// Грациозный shutdown — закрываем pool, иначе процесс висит.
 const shutdown = (signal: string): void => {
   console.log(`[projectsflow] received ${signal}, shutting down`);
   server.close(() => {

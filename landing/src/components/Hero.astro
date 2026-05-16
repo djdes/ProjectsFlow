@@ -1,0 +1,65 @@
+---
+import HeroScene from './HeroScene.tsx';
+import EmailForm from './EmailForm.tsx';
+---
+
+<section class="relative isolate overflow-hidden pt-32 pb-24 sm:pt-40 sm:pb-32">
+  <!-- 3D на бэкграунде, lazy-инициализируется при idle -->
+  <div class="pointer-events-none absolute inset-0 -z-10">
+    <div class="absolute inset-0 grid-bg"></div>
+
+    <!-- меш-блобы для глубины -->
+    <div
+      class="mesh-blob"
+      style="width: 520px; height: 520px; background: #1e3a8a; top: -10%; left: 50%; transform: translateX(-50%);"
+    >
+    </div>
+    <div
+      class="mesh-blob"
+      style="width: 380px; height: 380px; background: #312e81; top: 30%; right: -5%; opacity: 0.35;"
+    >
+    </div>
+    <div
+      class="mesh-blob"
+      style="width: 320px; height: 320px; background: #1d4ed8; top: 50%; left: -5%; opacity: 0.3;"
+    >
+    </div>
+
+    <!-- 3D-сцена занимает фон (не блокирует клики, pointer-events-none на родителе) -->
+    <div class="absolute inset-x-0 top-0 mx-auto h-[700px] max-w-3xl opacity-80">
+      <HeroScene client:idle />
+    </div>
+
+    <!-- vignette снизу для плавного перехода в Features -->
+    <div
+      class="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-b from-transparent to-ink-900"
+    >
+    </div>
+  </div>
+
+  <div class="relative mx-auto max-w-3xl px-6 text-center">
+    <span class="eyebrow animate-fade-up">
+      <span class="size-1.5 animate-pulse-soft rounded-full bg-accent-400"></span>
+      В разработке — early access
+    </span>
+
+    <h1
+      class="mt-7 text-balance text-4xl font-semibold leading-[1.05] tracking-tight text-gradient sm:text-6xl md:text-7xl animate-fade-up-delay-1"
+    >
+      Один источник правды
+      <br />
+      для каждого проекта
+    </h1>
+
+    <p
+      class="mx-auto mt-6 max-w-xl text-balance text-base leading-relaxed text-ink-200 sm:text-lg animate-fade-up-delay-2"
+    >
+      Документация, секреты, задачи и история коммитов — привязаны к проекту,
+      а не разбросаны по чатам, заметкам и Notion-вкладкам, которые ты больше не открываешь.
+    </p>
+
+    <div class="mx-auto mt-10 max-w-lg animate-fade-up-delay-3">
+      <EmailForm client:load size="lg" id="hero-email" />
+    </div>
+  </div>
+</section>

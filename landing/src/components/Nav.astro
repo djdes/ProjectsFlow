@@ -1,0 +1,31 @@
+---
+import Logo from './Logo.astro';
+
+const appUrl = import.meta.env.PUBLIC_APP_URL || 'http://localhost:5173';
+---
+
+<header class="absolute inset-x-0 top-0 z-30">
+  <nav class="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+    <Logo />
+    <div class="flex items-center gap-1 text-sm">
+      <a
+        href="#features"
+        class="hidden rounded-md px-3 py-1.5 text-ink-200 transition-colors hover:text-ink-50 sm:inline-block"
+      >
+        Возможности
+      </a>
+      <a
+        href="#how"
+        class="hidden rounded-md px-3 py-1.5 text-ink-200 transition-colors hover:text-ink-50 sm:inline-block"
+      >
+        Как это работает
+      </a>
+      <a
+        href={`${appUrl}/login`}
+        class="ml-2 rounded-md border border-white/10 bg-white/5 px-3.5 py-1.5 text-ink-50 transition-colors hover:bg-white/10"
+      >
+        Войти
+      </a>
+    </div>
+  </nav>
+</header>

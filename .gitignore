@@ -17,3 +17,5 @@ coverage/
 .parcel-cache/
 .pm2/
 .deploy/
+.astro/
+landing/.astro/

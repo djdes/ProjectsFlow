@@ -1,6 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { User } from '@/domain/user/User';
-import type { LoginInput, RegisterInput } from '@/application/auth/AuthRepository';
 import { useContainer } from '@/infrastructure/di/container';
 
 type AuthStatus = 'loading' | 'authenticated' | 'anonymous';
@@ -8,8 +7,8 @@ type AuthStatus = 'loading' | 'authenticated' | 'anonymous';
 type AuthContextValue = {
   status: AuthStatus;
   user: User | null;
-  login: (input: LoginInput) => Promise<void>;
-  register: (input: RegisterInput) => Promise<void>;
+  // Принимает уже залогиненного юзера (после consume magic link на /auth/magic/consume).
+  adoptUser: (user: User) => void;
   logout: () => Promise<void>;
   // Используется useUpdateProfile после успешного PATCH /auth/me
   applyUserUpdate: (next: User) => void;
@@ -22,7 +21,6 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [user, setUser] = useState<User | null>(null);
 
-  // На маунте — спрашиваем сервер «кто я?». 401 → anonymous, 200 → authenticated.
   useEffect(() => {
     let cancelled = false;
     authRepository
@@ -33,7 +31,6 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
         setStatus(u ? 'authenticated' : 'anonymous');
       })
       .catch((e: unknown) => {
-        // Сетевая ошибка — не валим UI, считаем anonymous. Юзер сможет потом залогиниться.
         console.error('[AuthProvider] /me failed:', e);
         if (!cancelled) {
           setUser(null);
@@ -53,14 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
   const value: AuthContextValue = {
     status,
     user,
-    login: async (input) => {
-      const u = await authRepository.login(input);
-      adoptUser(u);
-    },
-    register: async (input) => {
-      const u = await authRepository.register(input);
-      adoptUser(u);
-    },
+    adoptUser,
     logout: async () => {
       try {
         await authRepository.logout();

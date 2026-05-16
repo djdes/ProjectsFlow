@@ -1,22 +1,20 @@
 import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { AuthFormCard } from '@/presentation/auth/AuthFormCard';
-import { InvalidCredentialsError } from '@/domain/user/errors';
-
-type LocationState = { from?: string };
+import { useContainer } from '@/infrastructure/di/container';
+import { MagicLinkRateLimitedError } from '@/domain/user/errors';
 
 export function LoginPage(): React.ReactElement {
-  const { status, login } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const { status } = useAuth();
+  const { authRepository } = useContainer();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState<{ email: string; devUrl: string | null } | null>(null);
 
   if (status === 'authenticated') return <Navigate to="/" replace />;
 
@@ -25,28 +23,62 @@ export function LoginPage(): React.ReactElement {
     setSubmitting(true);
     setError(null);
     try {
-      await login({ email, password });
-      const target = (location.state as LocationState | null)?.from ?? '/';
-      navigate(target, { replace: true });
+      const { devMagicUrl } = await authRepository.requestMagicLink({ email });
+      setSent({ email, devUrl: devMagicUrl });
     } catch (err) {
-      if (err instanceof InvalidCredentialsError) {
-        setError('Неверный email или пароль');
+      if (err instanceof MagicLinkRateLimitedError) {
+        setError(`Слишком много запросов. Подожди ~${Math.ceil(err.retryAfterSeconds / 60)} мин.`);
       } else {
-        setError('Не удалось войти. Попробуй ещё раз.');
+        setError('Не удалось отправить ссылку. Попробуй ещё раз.');
       }
     } finally {
       setSubmitting(false);
     }
   };
 
+  if (sent) {
+    return (
+      <AuthFormCard
+        title="Проверь почту"
+        description={`Отправили ссылку на ${sent.email}. Открой её, чтобы войти.`}
+        footer={
+          <button
+            type="button"
+            className="font-medium text-primary hover:underline"
+            onClick={() => setSent(null)}
+          >
+            Указать другой email
+          </button>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Ссылка действует 15&nbsp;минут и работает один раз. Не пришла — загляни в спам.
+          </p>
+          {sent.devUrl && (
+            <div className="space-y-1.5 rounded-md border border-dashed border-border bg-muted/40 p-3 text-xs">
+              <p className="font-medium text-foreground">Dev: ссылка из лога</p>
+              <a
+                href={sent.devUrl}
+                className="break-all font-mono text-[11px] text-primary hover:underline"
+              >
+                {sent.devUrl}
+              </a>
+            </div>
+          )}
+        </div>
+      </AuthFormCard>
+    );
+  }
+
   return (
     <AuthFormCard
       title="Вход"
-      description="Войди в ProjectsFlow, чтобы открыть свои проекты."
+      description="Введи email — пришлём ссылку для входа. Без паролей."
       footer={
-        <>
-          Нет аккаунта? <Link to="/register" className="font-medium text-primary hover:underline">Зарегистрироваться</Link>
-        </>
+        <span>
+          Нет аккаунта? Просто введи email — мы создадим его автоматически.
+        </span>
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -62,20 +94,9 @@ export function LoginPage(): React.ReactElement {
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="password">Пароль</Label>
-          <Input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
         {error && <p className="text-xs text-destructive">{error}</p>}
         <Button type="submit" className="w-full" disabled={submitting}>
-          {submitting ? 'Входим…' : 'Войти'}
+          {submitting ? 'Отправляем…' : 'Прислать ссылку'}
         </Button>
       </form>
     </AuthFormCard>

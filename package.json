@@ -2,19 +2,22 @@
   "name": "projectsflow",
   "version": "0.1.0",
   "private": true,
-  "description": "ProjectsFlow — платформа управления проектами",
+  "description": "ProjectsFlow — платформа управления проектами + лендинг",
   "type": "module",
   "workspaces": [
     "client",
-    "server"
+    "server",
+    "landing"
   ],
   "scripts": {
-    "dev": "concurrently -k -n client,server -c blue,green \"npm:dev -w @projectsflow/client\" \"npm:dev -w @projectsflow/server\"",
+    "dev": "concurrently -k -n client,server,landing -c blue,green,magenta \"npm:dev -w @projectsflow/client\" \"npm:dev -w @projectsflow/server\" \"npm:dev -w @projectsflow/landing\"",
     "dev:client": "npm run dev -w @projectsflow/client",
     "dev:server": "npm run dev -w @projectsflow/server",
-    "build": "npm run build -w @projectsflow/client",
+    "dev:landing": "npm run dev -w @projectsflow/landing",
+    "build": "npm run build -w @projectsflow/client && npm run build -w @projectsflow/landing && npm run build -w @projectsflow/server",
     "build:client": "npm run build -w @projectsflow/client",
     "build:server": "npm run build -w @projectsflow/server",
+    "build:landing": "npm run build -w @projectsflow/landing",
     "typecheck": "npm run typecheck -w @projectsflow/client",
     "lint": "npm run lint -w @projectsflow/client",
     "start": "node server/dist/index.js",

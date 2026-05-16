@@ -1,34 +1,27 @@
-export class UserEmailAlreadyExistsError extends Error {
-  constructor(public readonly email: string) {
-    super(`Email ${email} уже занят`);
-    this.name = 'UserEmailAlreadyExistsError';
-  }
-}
-
 export class MagicTokenInvalidError extends Error {
   constructor() {
-    super('Ссылка недействительна');
+    super('Magic token is invalid');
     this.name = 'MagicTokenInvalidError';
   }
 }
 
 export class MagicTokenExpiredError extends Error {
   constructor() {
-    super('Срок действия ссылки истёк');
+    super('Magic token has expired');
     this.name = 'MagicTokenExpiredError';
   }
 }
 
 export class MagicTokenConsumedError extends Error {
   constructor() {
-    super('Ссылка уже была использована');
+    super('Magic token has already been used');
     this.name = 'MagicTokenConsumedError';
   }
 }
 
 export class MagicLinkRateLimitedError extends Error {
   constructor(public readonly retryAfterSeconds: number) {
-    super('Слишком много запросов');
+    super('Too many magic link requests for this email');
     this.name = 'MagicLinkRateLimitedError';
   }
 }

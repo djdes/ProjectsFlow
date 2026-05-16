@@ -1,0 +1,25 @@
+---
+import EmailForm from './EmailForm.tsx';
+---
+
+<section class="relative overflow-hidden border-t border-white/5 py-28">
+  <div
+    class="mesh-blob"
+    style="width: 700px; height: 700px; background: #1d4ed8; bottom: -50%; left: 50%; transform: translateX(-50%); opacity: 0.22;"
+  >
+  </div>
+
+  <div class="mx-auto max-w-2xl px-6 text-center">
+    <span class="eyebrow">Готов попробовать?</span>
+    <h2 class="mt-5 text-balance text-3xl font-semibold tracking-tight text-ink-50 sm:text-4xl">
+      Введи email — заведём аккаунт автоматически
+    </h2>
+    <p class="mx-auto mt-4 max-w-md text-balance text-sm leading-relaxed text-ink-200">
+      Не нужно придумывать пароль. Не нужно подтверждать email отдельно.
+      Открыл письмо, кликнул — внутри.
+    </p>
+    <div class="mx-auto mt-8 max-w-lg">
+      <EmailForm client:visible size="md" id="cta-email" />
+    </div>
+  </div>
+</section>

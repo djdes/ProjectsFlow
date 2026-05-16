@@ -1,19 +1,20 @@
 import type { User } from '@/domain/user/User';
 
-export type RegisterInput = {
+export type RequestMagicLinkInput = {
   readonly email: string;
-  readonly password: string;
-  readonly displayName: string;
 };
 
-export type LoginInput = {
-  readonly email: string;
-  readonly password: string;
+export type RequestMagicLinkResult = {
+  readonly devMagicUrl: string | null;
+};
+
+export type ConsumeMagicLinkInput = {
+  readonly token: string;
 };
 
 export interface AuthRepository {
-  register(input: RegisterInput): Promise<User>;
-  login(input: LoginInput): Promise<User>;
+  requestMagicLink(input: RequestMagicLinkInput): Promise<RequestMagicLinkResult>;
+  consumeMagicLink(input: ConsumeMagicLinkInput): Promise<User>;
   logout(): Promise<void>;
   getCurrentOrNull(): Promise<User | null>;
 }

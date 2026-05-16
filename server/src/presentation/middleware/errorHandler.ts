@@ -1,10 +1,12 @@
 import type { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
+import { UserEmailAlreadyExistsError, UserNotFoundError } from '../../domain/user/errors.js';
 import {
-  InvalidCredentialsError,
-  UserEmailAlreadyExistsError,
-  UserNotFoundError,
-} from '../../domain/user/errors.js';
+  MagicLinkRateLimitedError,
+  MagicTokenConsumedError,
+  MagicTokenExpiredError,
+  MagicTokenInvalidError,
+} from '../../domain/auth/errors.js';
 import {
   ProjectNameAlreadyExistsError,
   ProjectNameEmptyError,
@@ -52,18 +54,34 @@ export function errorHandler(
     return;
   }
 
-  if (err instanceof UserEmailAlreadyExistsError) {
-    res.status(409).json({ error: 'email_taken', message: 'Email уже занят' });
+  if (err instanceof MagicTokenInvalidError) {
+    res.status(400).json({ error: 'magic_token_invalid', message: 'Ссылка недействительна' });
     return;
   }
-
-  if (err instanceof InvalidCredentialsError) {
-    res.status(401).json({ error: 'invalid_credentials', message: 'Неверный email или пароль' });
+  if (err instanceof MagicTokenExpiredError) {
+    res.status(410).json({ error: 'magic_token_expired', message: 'Срок действия ссылки истёк' });
+    return;
+  }
+  if (err instanceof MagicTokenConsumedError) {
+    res.status(410).json({ error: 'magic_token_consumed', message: 'Ссылка уже была использована' });
+    return;
+  }
+  if (err instanceof MagicLinkRateLimitedError) {
+    res.status(429).json({
+      error: 'magic_link_rate_limited',
+      message: 'Слишком много запросов. Подожди и попробуй ещё раз.',
+      details: { retryAfterSeconds: err.retryAfterSeconds },
+    });
     return;
   }
 
   if (err instanceof UserNotFoundError) {
     res.status(404).json({ error: 'user_not_found' });
+    return;
+  }
+
+  if (err instanceof UserEmailAlreadyExistsError) {
+    res.status(409).json({ error: 'email_taken', message: 'Email уже занят' });
     return;
   }
 
@@ -107,7 +125,6 @@ export function errorHandler(
   }
 
   if (err instanceof GithubApiError) {
-    // Логируем upstream-ошибку — без логов отлаживать private-repo проблемы невозможно.
     console.error(`[github_api_error] status=${err.status} message=${err.message}`);
     res.status(err.status === 401 ? 401 : 502).json({
       error: 'github_api_error',
@@ -159,7 +176,6 @@ export function errorHandler(
     return;
   }
 
-  // Неизвестная ошибка — server-side лог, минимальный ответ клиенту.
   console.error('[errorHandler] unhandled error:', err);
   res.status(500).json({ error: 'internal_server_error' });
 }

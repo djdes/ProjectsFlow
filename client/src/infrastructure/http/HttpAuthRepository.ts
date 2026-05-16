@@ -1,12 +1,15 @@
 import type { User } from '@/domain/user/User';
 import {
-  InvalidCredentialsError,
-  UserEmailAlreadyExistsError,
+  MagicLinkRateLimitedError,
+  MagicTokenConsumedError,
+  MagicTokenExpiredError,
+  MagicTokenInvalidError,
 } from '@/domain/user/errors';
 import type {
   AuthRepository,
-  LoginInput,
-  RegisterInput,
+  ConsumeMagicLinkInput,
+  RequestMagicLinkInput,
+  RequestMagicLinkResult,
 } from '@/application/auth/AuthRepository';
 import { HttpError, httpClient } from './httpClient';
 
@@ -28,25 +31,32 @@ function fromDto(dto: UserDto): User {
 }
 
 export class HttpAuthRepository implements AuthRepository {
-  async register(input: RegisterInput): Promise<User> {
+  async requestMagicLink(input: RequestMagicLinkInput): Promise<RequestMagicLinkResult> {
     try {
-      const { user } = await httpClient.post<{ user: UserDto }>('/auth/register', input);
-      return fromDto(user);
+      const res = await httpClient.post<{ ok: true; devMagicUrl?: string }>(
+        '/auth/magic/request',
+        input,
+      );
+      return { devMagicUrl: res.devMagicUrl ?? null };
     } catch (err) {
-      if (err instanceof HttpError && err.status === 409) {
-        throw new UserEmailAlreadyExistsError(input.email);
+      if (err instanceof HttpError && err.status === 429) {
+        const retryAfter =
+          (err.body.details as { retryAfterSeconds?: number } | undefined)?.retryAfterSeconds ?? 60;
+        throw new MagicLinkRateLimitedError(retryAfter);
       }
       throw err;
     }
   }
 
-  async login(input: LoginInput): Promise<User> {
+  async consumeMagicLink(input: ConsumeMagicLinkInput): Promise<User> {
     try {
-      const { user } = await httpClient.post<{ user: UserDto }>('/auth/login', input);
+      const { user } = await httpClient.post<{ user: UserDto }>('/auth/magic/consume', input);
       return fromDto(user);
     } catch (err) {
-      if (err instanceof HttpError && err.status === 401) {
-        throw new InvalidCredentialsError();
+      if (err instanceof HttpError) {
+        if (err.body.error === 'magic_token_invalid') throw new MagicTokenInvalidError();
+        if (err.body.error === 'magic_token_expired') throw new MagicTokenExpiredError();
+        if (err.body.error === 'magic_token_consumed') throw new MagicTokenConsumedError();
       }
       throw err;
     }

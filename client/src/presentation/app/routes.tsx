@@ -6,12 +6,12 @@ import { KbPage } from '@/presentation/pages/KbPage';
 import { ProfilePage } from '@/presentation/pages/ProfilePage';
 import { NotFoundPage } from '@/presentation/pages/NotFoundPage';
 import { LoginPage } from '@/presentation/pages/LoginPage';
-import { RegisterPage } from '@/presentation/pages/RegisterPage';
+import { MagicConsumePage } from '@/presentation/pages/MagicConsumePage';
 import { ProtectedRoute } from '@/presentation/auth/ProtectedRoute';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
-  { path: '/register', element: <RegisterPage /> },
+  { path: '/auth/magic/consume', element: <MagicConsumePage /> },
   {
     path: '/',
     element: (

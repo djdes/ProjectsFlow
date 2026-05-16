@@ -3,9 +3,10 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Express } from 'express';
 import cookieParser from 'cookie-parser';
+import cors from 'cors';
 import type { GetCurrentUser } from '../application/auth/GetCurrentUser.js';
-import type { Register } from '../application/auth/Register.js';
-import type { Login } from '../application/auth/Login.js';
+import type { RequestMagicLink } from '../application/auth/RequestMagicLink.js';
+import type { ConsumeMagicLink } from '../application/auth/ConsumeMagicLink.js';
 import type { Logout } from '../application/auth/Logout.js';
 import type { UpdateProfile } from '../application/user/UpdateProfile.js';
 import type { ListProjects } from '../application/project/ListProjects.js';
@@ -37,12 +38,13 @@ import { projectsRouter } from './projects/routes.js';
 import { githubRouter } from './integrations/github/routes.js';
 import { secretsRouter } from './secrets/routes.js';
 import { kbRouter } from './kb/routes.js';
-import './types.js'; // глобальное расширение Express.Request
+import { config } from './config.js';
+import './types.js';
 
 type AppDeps = {
   readonly auth: {
-    readonly register: Register;
-    readonly login: Login;
+    readonly requestMagicLink: RequestMagicLink;
+    readonly consumeMagicLink: ConsumeMagicLink;
     readonly logout: Logout;
     readonly getCurrentUser: GetCurrentUser;
   };
@@ -85,11 +87,25 @@ export function createApp(deps: AppDeps): Express {
   const app = express();
 
   app.disable('x-powered-by');
+
+  if (config.cors.origins.length > 0) {
+    const allowed = new Set(config.cors.origins);
+    app.use(
+      cors({
+        origin: (origin, cb) => {
+          // Same-origin запросы (server-to-server, curl) приходят без Origin — пускаем.
+          if (!origin) return cb(null, true);
+          cb(null, allowed.has(origin));
+        },
+        credentials: true,
+        methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+      }),
+    );
+  }
+
   app.use(express.json({ limit: '256kb' }));
   app.use(cookieParser());
 
-  // Каждый запрос проходит через session-resolver. Не делает auth обязательным —
-  // только прикладывает req.user, если cookie валиден.
   app.use(sessionFromCookie(deps.auth.getCurrentUser));
 
   app.get('/api/health', (_req, res) => {
@@ -99,8 +115,8 @@ export function createApp(deps: AppDeps): Express {
   app.use(
     '/api/auth',
     authRouter({
-      register: deps.auth.register,
-      login: deps.auth.login,
+      requestMagicLink: deps.auth.requestMagicLink,
+      consumeMagicLink: deps.auth.consumeMagicLink,
       logout: deps.auth.logout,
       updateProfile: deps.user.updateProfile,
     }),
@@ -111,12 +127,14 @@ export function createApp(deps: AppDeps): Express {
   app.use('/api/secrets', secretsRouter(deps.secrets));
   app.use('/api/projects/:projectId/kb', kbRouter(deps.kb));
 
-  // 404 для неизвестных /api/*
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'not_found' });
   });
 
-  // SPA: serve client/dist when present (prod). In dev Vite serves the client on :5173.
+  // SPA fallback: пока nginx на app.projectsflow.ru не настроен с try_files,
+  // Express сам раздаёт client/dist + отдаёт index.html на все не-API маршруты
+  // (включая /auth/magic/consume — magic-link приземляется в React).
+  // Лендинг (projectsflow.ru) живёт отдельно, через nginx, сюда не попадает.
   const moduleDir = dirname(fileURLToPath(import.meta.url));
   const clientDist = resolve(moduleDir, '../../../client/dist');
   if (existsSync(clientDist)) {

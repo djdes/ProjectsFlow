@@ -125,64 +125,20 @@ function PersonalDataCard(): React.ReactElement {
 }
 
 function SecurityCard(): React.ReactElement {
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [confirm, setConfirm] = useState('');
-
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>): void => {
-    e.preventDefault();
-    toast('Backend для смены пароля будет добавлен в&nbsp;auth-спеке (Spec #3).');
-    setCurrent('');
-    setNext('');
-    setConfirm('');
-  };
-
   return (
     <Card>
       <CardHeader>
         <CardTitle>Безопасность</CardTitle>
         <CardDescription>
-          В&nbsp;этой спеке пароль не&nbsp;сохраняется — кнопка покажет toast.
+          Вход в&nbsp;ProjectsFlow — по&nbsp;ссылке из&nbsp;письма. Пароля у&nbsp;тебя нет —
+          и не&nbsp;нужен.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="currentPassword">Текущий пароль</Label>
-            <Input
-              id="currentPassword"
-              type="password"
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-              autoComplete="current-password"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="newPassword">Новый пароль</Label>
-            <Input
-              id="newPassword"
-              type="password"
-              value={next}
-              onChange={(e) => setNext(e.target.value)}
-              autoComplete="new-password"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Подтверждение</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              autoComplete="new-password"
-            />
-          </div>
-          <div className="flex justify-end">
-            <Button type="submit" variant="outline">
-              Сменить пароль
-            </Button>
-          </div>
-        </form>
+        <p className="text-sm text-muted-foreground">
+          Чтобы войти на&nbsp;другом устройстве — открой страницу входа и&nbsp;запроси новую ссылку
+          на&nbsp;этот email.
+        </p>
       </CardContent>
     </Card>
   );

@@ -1,17 +1,17 @@
 import { Router, type CookieOptions, type Request, type Response, type NextFunction } from 'express';
-import type { Register } from '../../application/auth/Register.js';
-import type { Login } from '../../application/auth/Login.js';
+import type { RequestMagicLink } from '../../application/auth/RequestMagicLink.js';
+import type { ConsumeMagicLink } from '../../application/auth/ConsumeMagicLink.js';
 import type { Logout } from '../../application/auth/Logout.js';
 import type { UpdateProfile } from '../../application/user/UpdateProfile.js';
 import type { User } from '../../domain/user/User.js';
 import type { Session } from '../../domain/session/Session.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { config, isProd, sessionTtlMs } from '../config.js';
-import { loginSchema, registerSchema, updateProfileSchema } from './schemas.js';
+import { consumeMagicLinkSchema, requestMagicLinkSchema, updateProfileSchema } from './schemas.js';
 
 type Deps = {
-  readonly register: Register;
-  readonly login: Login;
+  readonly requestMagicLink: RequestMagicLink;
+  readonly consumeMagicLink: ConsumeMagicLink;
   readonly logout: Logout;
   readonly updateProfile: UpdateProfile;
 };
@@ -23,6 +23,7 @@ function sessionCookieOptions(): CookieOptions {
     secure: isProd(),
     maxAge: sessionTtlMs(),
     path: '/',
+    domain: config.session.cookieDomain,
   };
 }
 
@@ -31,7 +32,10 @@ function setSessionCookie(res: Response, session: Session): void {
 }
 
 function clearSessionCookie(res: Response): void {
-  res.clearCookie(config.session.cookieName, { path: '/' });
+  res.clearCookie(config.session.cookieName, {
+    path: '/',
+    domain: config.session.cookieDomain,
+  });
 }
 
 function publicUser(user: User): Omit<User, 'createdAt'> & { createdAt: string } {
@@ -41,21 +45,22 @@ function publicUser(user: User): Omit<User, 'createdAt'> & { createdAt: string }
 export function authRouter(deps: Deps): Router {
   const router = Router();
 
-  router.post('/register', async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/magic/request', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const body = registerSchema.parse(req.body);
-      const { user, session } = await deps.register.execute(body);
-      setSessionCookie(res, session);
-      res.status(201).json({ user: publicUser(user) });
+      const body = requestMagicLinkSchema.parse(req.body);
+      const { url } = await deps.requestMagicLink.execute(body);
+      // В dev отдаём URL прямо в ответе — удобно тестировать без SMTP.
+      // В prod возвращаем только { ok: true }, чтобы не раскрывать факт существования email.
+      res.json(isProd() ? { ok: true } : { ok: true, devMagicUrl: url });
     } catch (e) {
       next(e);
     }
   });
 
-  router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/magic/consume', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const body = loginSchema.parse(req.body);
-      const { user, session } = await deps.login.execute(body);
+      const body = consumeMagicLinkSchema.parse(req.body);
+      const { user, session } = await deps.consumeMagicLink.execute(body);
       setSessionCookie(res, session);
       res.json({ user: publicUser(user) });
     } catch (e) {

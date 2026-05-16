@@ -1,0 +1,42 @@
+---
+const steps = [
+  {
+    n: '01',
+    title: 'Заводишь проект',
+    body: 'Имя, ссылка на репозиторий, опционально — статус. Никаких 20 полей в форме.',
+  },
+  {
+    n: '02',
+    title: 'Подключаешь GitHub и KB',
+    body: 'Device Flow для GitHub — без копипасты client_secret. KB живёт в твоём приватном репозитории.',
+  },
+  {
+    n: '03',
+    title: 'Документируешь и не теряешь',
+    body: 'Через полгода открываешь проект — видишь стек, секреты, последние коммиты, открытые задачи. Сразу.',
+  },
+];
+---
+
+<section id="how" class="relative border-t border-white/5 py-28">
+  <div class="mx-auto max-w-6xl px-6">
+    <div class="mx-auto max-w-2xl text-center">
+      <span class="eyebrow">Как это работает</span>
+      <h2 class="mt-5 text-balance text-3xl font-semibold tracking-tight text-ink-50 sm:text-5xl">
+        Три шага — и&nbsp;проект больше не&nbsp;«где-то в&nbsp;голове»
+      </h2>
+    </div>
+
+    <ol class="mt-16 grid gap-px overflow-hidden rounded-2xl bg-white/5 sm:grid-cols-3">
+      {
+        steps.map((s) => (
+          <li class="relative bg-ink-900 p-8">
+            <div class="font-mono text-xs tracking-widest text-accent-400">{s.n}</div>
+            <h3 class="mt-3 text-lg font-semibold tracking-tight text-ink-50">{s.title}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-ink-200">{s.body}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>
