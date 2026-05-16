@@ -14,6 +14,23 @@ import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import type { ParsedBulkPreview } from '@/application/kb/KbRepository';
+import { HttpError } from '@/lib/HttpError';
+
+type FrontmatterError = { code: string; message: string };
+
+// Достаём подробности из HttpError, чтобы юзер видел КОНКРЕТНУЮ причину
+// (например "credential_no_ref" — ни один чекбокс не отмечен) вместо общего
+// "frontmatter_invalid".
+function extractErrorMessage(e: unknown): string {
+  if (e instanceof HttpError) {
+    const details = e.body.details;
+    if (Array.isArray(details) && details.length > 0) {
+      return (details as FrontmatterError[]).map((d) => d.message).join('\n');
+    }
+    return e.body.message ?? e.body.error ?? e.message;
+  }
+  return (e as Error)?.message ?? 'Не удалось сохранить';
+}
 
 type Props = {
   open: boolean;
@@ -69,7 +86,7 @@ export function BulkCredentialDialog({
       for (const f of p.fields) overrides[f.key] = f.isSecret;
       setSecretOverrides(overrides);
     } catch (e) {
-      setError((e as Error).message ?? 'Не удалось распарсить');
+      setError(extractErrorMessage(e));
     } finally {
       setParsing(false);
     }
@@ -100,7 +117,7 @@ export function BulkCredentialDialog({
       onCreated(result.path);
       onOpenChange(false);
     } catch (e) {
-      setError((e as Error).message ?? 'Не удалось сохранить');
+      setError(extractErrorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -225,7 +242,7 @@ export function BulkCredentialDialog({
               </ul>
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="whitespace-pre-line text-sm text-destructive">{error}</p>}
 
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
@@ -240,7 +257,7 @@ export function BulkCredentialDialog({
         )}
 
         {!preview && error && (
-          <p className="text-sm text-destructive">{error}</p>
+          <p className="whitespace-pre-line text-sm text-destructive">{error}</p>
         )}
       </DialogContent>
     </Dialog>
