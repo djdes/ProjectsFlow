@@ -1,5 +1,6 @@
 import matter from 'gray-matter';
 import type { GithubApiClient } from '../../application/github/GithubApiClient.js';
+import { GithubApiError } from '../../domain/github/errors.js';
 import type {
   KbRepository,
   CreateKbRepoInput,
@@ -50,31 +51,56 @@ export class GithubKbRepository implements KbRepository {
   constructor(private readonly api: GithubApiClient) {}
 
   async createRepo(input: CreateKbRepoInput): Promise<CreateKbRepoResult> {
-    const result = await this.api.createRepo(input.accessToken, {
-      name: input.name,
-      description: input.description,
-      privateRepo: true,
-      autoInit: true,
+    // autoInit: false — пустой репо. initFolders отдельно пушит README.md.
+    // Если репо уже существует (от предыдущей неудачной попытки) — переиспользуем.
+    try {
+      const result = await this.api.createRepo(input.accessToken, {
+        name: input.name,
+        description: input.description,
+        privateRepo: true,
+        autoInit: false,
+      });
+      return { fullName: result.fullName };
+    } catch (err) {
+      if (err instanceof GithubApiError && err.status === 422 && /name already exists/i.test(err.message)) {
+        const me = await this.api.getAuthenticatedUser(input.accessToken);
+        return { fullName: `${me.login}/${input.name}` };
+      }
+      throw err;
+    }
+  }
+
+  // Идемпотентный апсёрт: GET существующий файл (для sha), затем PUT.
+  // На пустом репо GET вернёт null → PUT без sha (создание).
+  private async upsertFile(
+    accessToken: string,
+    owner: string,
+    repo: string,
+    path: string,
+    content: string,
+    message: string,
+  ): Promise<void> {
+    const existing = await this.api.getRepoFile(accessToken, `${owner}/${repo}`, path);
+    // Если контент уже совпадает — пропускаем, чтобы не плодить пустые коммиты.
+    if (existing && existing.content === content) return;
+    await this.api.putRepoFile({
+      accessToken, owner, repo, path, content, message,
+      sha: existing?.sha,
     });
-    return { fullName: result.fullName };
   }
 
   async initFolders(accessToken: string, fullName: string): Promise<void> {
     const { owner, repo } = parseFullName(fullName);
 
-    // Root README
-    await this.api.putRepoFile({
-      accessToken, owner, repo, path: 'README.md',
-      content: ROOT_README,
-      message: 'chore(kb): initial README',
-    });
+    await this.upsertFile(accessToken, owner, repo, 'README.md', ROOT_README, 'chore(kb): initial README');
 
     for (const folder of Object.values(KB_FOLDERS)) {
-      await this.api.putRepoFile({
-        accessToken, owner, repo, path: `${folder}/README.md`,
-        content: FOLDER_README_BODY(folder),
-        message: `chore(kb): init ${folder}/`,
-      });
+      await this.upsertFile(
+        accessToken, owner, repo,
+        `${folder}/README.md`,
+        FOLDER_README_BODY(folder),
+        `chore(kb): init ${folder}/`,
+      );
     }
   }
 
