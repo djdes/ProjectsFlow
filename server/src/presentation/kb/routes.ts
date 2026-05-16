@@ -134,6 +134,7 @@ export function kbRouter(deps: Deps): Router {
         userId: req.user!.id,
         rawText: body.rawText,
         fileSlugOverride: body.fileSlugOverride ?? null,
+        titleOverride: body.titleOverride ?? null,
         secretOverrides: body.secretOverrides ?? null,
       });
       res.status(201).json(result);

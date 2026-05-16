@@ -38,6 +38,7 @@ export function BulkCredentialDialog({
   const { kbRepository } = useContainer();
   const [rawText, setRawText] = useState('');
   const [preview, setPreview] = useState<ParsedBulkPreview | null>(null);
+  const [title, setTitle] = useState('');
   const [secretOverrides, setSecretOverrides] = useState<Record<string, boolean>>({});
   const [fileSlug, setFileSlug] = useState('');
   const [parsing, setParsing] = useState(false);
@@ -49,6 +50,7 @@ export function BulkCredentialDialog({
     if (!open) {
       setRawText('');
       setPreview(null);
+      setTitle('');
       setSecretOverrides({});
       setFileSlug('');
       setError(null);
@@ -61,6 +63,7 @@ export function BulkCredentialDialog({
     try {
       const p = await kbRepository.parseBulkCredential(projectId, rawText);
       setPreview(p);
+      setTitle(p.title);
       setFileSlug(p.suggestedFileSlug);
       const overrides: Record<string, boolean> = {};
       for (const f of p.fields) overrides[f.key] = f.isSecret;
@@ -85,6 +88,7 @@ export function BulkCredentialDialog({
       const result = await kbRepository.bulkCreateCredential(projectId, {
         rawText,
         fileSlugOverride: fileSlug.trim() || null,
+        titleOverride: title.trim() || null,
         secretOverrides,
       });
       toast.success(
@@ -157,9 +161,9 @@ export function BulkCredentialDialog({
                 <Label htmlFor="bulk-title">Title</Label>
                 <Input
                   id="bulk-title"
-                  value={preview.title}
-                  readOnly
-                  className="bg-muted"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="scanflow ПРОД"
                 />
               </div>
               <div className="space-y-1.5">

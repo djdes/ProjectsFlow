@@ -44,8 +44,27 @@ export type ParsedBulk = {
   readonly fields: readonly ParsedField[];
 };
 
+// Разделитель пары — `:` (yaml-style) ИЛИ `=` (env-style).
+// Жадно берём первое вхождение, чтобы двоеточия внутри значения (URL'ы) не путали парсинг.
+const KV_RE = /^([^:=]+)\s*[:=]\s*(.*)$/;
+
+function unquote(value: string): string {
+  if (
+    value.length >= 2 &&
+    ((value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'")))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
 export function parseBulkText(raw: string): ParsedBulk {
-  const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+  // Игнорируем пустые строки и .env-комментарии (#).
+  const lines = raw
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith('#'));
   if (lines.length === 0) {
     return { title: 'Без названия', kind: null, fields: [] };
   }
@@ -54,12 +73,16 @@ export function parseBulkText(raw: string): ParsedBulk {
   let kind: string | null = null;
   let startIdx = 0;
 
-  const firstMatch = lines[0]!.match(/^([^:]+):\s*(.*)$/);
+  const firstMatch = lines[0]!.match(KV_RE);
   if (firstMatch && firstMatch[2]!.trim().length > 0) {
     const candidateKind = firstMatch[1]!.trim();
-    const candidateTitle = firstMatch[2]!.trim();
-    // Эвристика: первый ключ короткий (≤20 символов, без пробелов) → это kind.
-    if (/^[A-Za-z0-9_-]{1,20}$/.test(candidateKind)) {
+    const candidateTitle = unquote(firstMatch[2]!.trim());
+    // Эвристика «первая строка = KIND: TITLE»:
+    // KIND — короткий буквенно-цифровой токен (≤10 символов, без `_`/`.`/пробелов),
+    // т.е. «SSH», «DB», «REDIS», но НЕ «SSH_HOST» (это уже env-style поле).
+    // Так env-блоки без явного заголовка не трактуются ошибочно.
+    const isKindLike = /^[A-Za-z][A-Za-z0-9-]{0,9}$/.test(candidateKind);
+    if (isKindLike) {
       kind = candidateKind.toLowerCase();
       title = candidateTitle;
       startIdx = 1;
@@ -68,10 +91,10 @@ export function parseBulkText(raw: string): ParsedBulk {
 
   const fields: ParsedField[] = [];
   for (let i = startIdx; i < lines.length; i++) {
-    const m = lines[i]!.match(/^([^:]+):\s*(.*)$/);
+    const m = lines[i]!.match(KV_RE);
     if (!m) continue;
     const rawKey = m[1]!.trim();
-    const value = m[2]!.trim();
+    const value = unquote(m[2]!.trim());
     if (value.length === 0) continue;
     const key = rawKey.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]+/g, '');
     if (key.length === 0) continue;
@@ -92,10 +115,13 @@ type Deps = {
 export type BulkCreateInput = {
   readonly projectId: string;
   readonly userId: string;
-  // Текст в формате "KEY: VALUE" по строке. Первая строка может быть "KIND: TITLE".
+  // Текст в формате "KEY: VALUE" или "KEY=VALUE" по строке.
+  // Первая строка может быть "KIND: TITLE" (короткий KIND — SSH/DB/REDIS — без подчёркиваний).
   readonly rawText: string;
   // Опционально: переопределить slug файла. По умолчанию — slugify(title).
   readonly fileSlugOverride: string | null;
+  // Опционально: переопределить title (для .env-блоков без явного заголовка).
+  readonly titleOverride: string | null;
   // Опционально: маска is-secret. Если передана — переопределяет эвристику.
   // key → isSecret. Используется когда client уже показал preview юзеру.
   readonly secretOverrides: Readonly<Record<string, boolean>> | null;
@@ -116,15 +142,18 @@ export class BulkCreateCredential {
     if (!project.kbRepoFullName) throw new KbNotConnectedError();
 
     const parsed = parseBulkText(input.rawText);
+    const finalTitle = input.titleOverride?.trim() || parsed.title;
 
     const projectSlug = slugify(project.name);
-    const fileSlug = input.fileSlugOverride?.trim() || slugify(parsed.title);
+    const fileSlug = input.fileSlugOverride?.trim() || slugify(finalTitle);
     if (fileSlug.length === 0) {
-      throw new FrontmatterInvalidError([{ code: 'title_missing', message: 'Из title не получилось сделать slug. Укажи fileSlugOverride.' }]);
+      throw new FrontmatterInvalidError([
+        { code: 'title_missing', message: 'Из title не получилось сделать slug. Укажи fileSlugOverride.' },
+      ]);
     }
 
     // Собираем frontmatter + список секретов для записи.
-    const fm: Record<string, unknown> = { type: 'credential', title: parsed.title };
+    const fm: Record<string, unknown> = { type: 'credential', title: finalTitle };
     if (parsed.kind) fm['kind'] = parsed.kind;
 
     const secretsToWrite: Array<{ key: string; value: string }> = [];

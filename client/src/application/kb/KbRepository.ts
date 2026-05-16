@@ -16,6 +16,7 @@ export type ParsedBulkPreview = {
 export type BulkCreateInput = {
   readonly rawText: string;
   readonly fileSlugOverride?: string | null;
+  readonly titleOverride?: string | null;
   readonly secretOverrides?: Readonly<Record<string, boolean>> | null;
 };
 

@@ -22,6 +22,9 @@ export const writeDocSchema = z.object({
 export const bulkCredentialSchema = z.object({
   rawText: z.string().min(1).max(20_000),
   fileSlugOverride: z.string().trim().min(1).max(80).nullable().optional(),
+  // Юзер может переопределить title из preview-стадии — нужно когда автодетекция
+  // не справилась (например, .env-блок без KIND:TITLE-заголовка) и title="Без названия".
+  titleOverride: z.string().trim().min(1).max(200).nullable().optional(),
   // optional: client-side preview позволяет переопределить эвристику секрет/не-секрет
   secretOverrides: z.record(z.boolean()).nullable().optional(),
 });
