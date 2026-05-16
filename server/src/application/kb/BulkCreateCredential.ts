@@ -81,7 +81,10 @@ export function parseBulkText(raw: string): ParsedBulk {
     // KIND — короткий буквенно-цифровой токен (≤10 символов, без `_`/`.`/пробелов),
     // т.е. «SSH», «DB», «REDIS», но НЕ «SSH_HOST» (это уже env-style поле).
     // Так env-блоки без явного заголовка не трактуются ошибочно.
-    const isKindLike = /^[A-Za-z][A-Za-z0-9-]{0,9}$/.test(candidateKind);
+    // KIND принимается только в ВЕРХНЕМ регистре: "SSH", "DB", "REDIS", "K8S".
+    // Иначе обычные поля вроде "Host: ..." и "User: ..." ошибочно трактуются
+    // как заголовок секции и съедают первую строку.
+    const isKindLike = /^[A-Z][A-Z0-9-]{0,9}$/.test(candidateKind);
     if (isKindLike) {
       kind = candidateKind.toLowerCase();
       title = candidateTitle;
