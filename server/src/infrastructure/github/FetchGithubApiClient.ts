@@ -13,7 +13,9 @@ import type {
   RepoFileSummary,
 } from '../../application/github/GithubApiClient.js';
 
-const SCOPES = 'read:user public_repo';
+// `repo` scope покрывает чтение/запись private + public репо — нужен для создания
+// private KB-репо. Включает в себя public_repo, отдельно его указывать не надо.
+const SCOPES = 'read:user repo';
 
 type DeviceCodeRawResponse = {
   device_code: string;
