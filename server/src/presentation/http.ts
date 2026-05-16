@@ -29,6 +29,7 @@ import type { ListKbDocuments } from '../application/kb/ListKbDocuments.js';
 import type { GetKbDocument } from '../application/kb/GetKbDocument.js';
 import type { WriteKbDocument } from '../application/kb/WriteKbDocument.js';
 import type { DeleteKbDocument } from '../application/kb/DeleteKbDocument.js';
+import type { BulkCreateCredential } from '../application/kb/BulkCreateCredential.js';
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './auth/routes.js';
@@ -76,6 +77,7 @@ type AppDeps = {
     readonly getKbDocument: GetKbDocument;
     readonly writeKbDocument: WriteKbDocument;
     readonly deleteKbDocument: DeleteKbDocument;
+    readonly bulkCreateCredential: BulkCreateCredential;
   };
 };
 

@@ -6,10 +6,12 @@ import type { ListKbDocuments } from '../../application/kb/ListKbDocuments.js';
 import type { GetKbDocument } from '../../application/kb/GetKbDocument.js';
 import type { WriteKbDocument } from '../../application/kb/WriteKbDocument.js';
 import type { DeleteKbDocument } from '../../application/kb/DeleteKbDocument.js';
+import type { BulkCreateCredential } from '../../application/kb/BulkCreateCredential.js';
+import { parseBulkText, slugify } from '../../application/kb/BulkCreateCredential.js';
 import type { KbDocument, KbDocumentSummary } from '../../domain/kb/KbDocument.js';
 import type { Frontmatter } from '../../domain/kb/Frontmatter.js';
 import { requireAuth } from '../middleware/requireAuth.js';
-import { connectKbSchema, writeDocSchema } from './schemas.js';
+import { bulkCredentialSchema, connectKbSchema, writeDocSchema } from './schemas.js';
 
 type Deps = {
   readonly initKbRepo: InitKbRepo;
@@ -19,6 +21,7 @@ type Deps = {
   readonly getKbDocument: GetKbDocument;
   readonly writeKbDocument: WriteKbDocument;
   readonly deleteKbDocument: DeleteKbDocument;
+  readonly bulkCreateCredential: BulkCreateCredential;
 };
 
 function summaryToDto(s: KbDocumentSummary) {
@@ -115,6 +118,41 @@ export function kbRouter(deps: Deps): Router {
       const path = (req.params as Record<string, string>)['0'] ?? '';
       await deps.deleteKbDocument.execute(projectId, req.user!.id, path);
       res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Bulk-create credential: paste-style "KEY: VALUE" текст → парсинг → vault для секретов
+  // + markdown в credentials/<slug>.md.
+  router.post('/credentials/bulk', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projectId = req.params['projectId'] as string;
+      const body = bulkCredentialSchema.parse(req.body);
+      const result = await deps.bulkCreateCredential.execute({
+        projectId,
+        userId: req.user!.id,
+        rawText: body.rawText,
+        fileSlugOverride: body.fileSlugOverride ?? null,
+        secretOverrides: body.secretOverrides ?? null,
+      });
+      res.status(201).json(result);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Preview-only endpoint: показать что мы распарсили, БЕЗ записи. Полезно для UI/CLI.
+  router.post('/credentials/parse', (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = bulkCredentialSchema.parse(req.body);
+      const parsed = parseBulkText(body.rawText);
+      res.json({
+        title: parsed.title,
+        kind: parsed.kind,
+        fields: parsed.fields,
+        suggestedFileSlug: slugify(parsed.title),
+      });
     } catch (e) {
       next(e);
     }

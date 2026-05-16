@@ -24,10 +24,17 @@ const urlOrNullSchema = z
   )
   .nullable();
 
+// "owner/repo" — формат GitHub full name.
+const kbRepoFullNameOrNullSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/, { message: 'Format: owner/repo' })
+  .nullable();
+
 export const updateProjectSchema = z
   .object({
     name: z.string().trim().min(1).max(80).optional(),
     gitRepoUrl: urlOrNullSchema.optional(),
+    kbRepoFullName: kbRepoFullNameOrNullSchema.optional(),
   })
   .refine((obj) => Object.keys(obj).length > 0, { message: 'Нечего обновлять' });
 

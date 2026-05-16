@@ -31,6 +31,7 @@ import { ListKbDocuments } from './application/kb/ListKbDocuments.js';
 import { GetKbDocument } from './application/kb/GetKbDocument.js';
 import { WriteKbDocument } from './application/kb/WriteKbDocument.js';
 import { DeleteKbDocument } from './application/kb/DeleteKbDocument.js';
+import { BulkCreateCredential } from './application/kb/BulkCreateCredential.js';
 import { AesGcmSecretCipher } from './infrastructure/crypto/AesGcmSecretCipher.js';
 import { DrizzleSecretsRepository } from './infrastructure/repositories/DrizzleSecretsRepository.js';
 import { PutSecret } from './application/secrets/PutSecret.js';
@@ -113,6 +114,13 @@ const app = createApp({
     getKbDocument: new GetKbDocument({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
     writeKbDocument: new WriteKbDocument({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
     deleteKbDocument: new DeleteKbDocument({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
+    bulkCreateCredential: new BulkCreateCredential({
+      projects: projectRepo,
+      tokens: githubTokenRepo,
+      kb: kbRepo,
+      secrets: secretsRepo,
+      cipher: activeCipher,
+    }),
   },
   github: {
     startDeviceFlow: new StartDeviceFlow({

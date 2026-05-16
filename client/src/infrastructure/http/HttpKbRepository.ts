@@ -1,5 +1,10 @@
 import type { Frontmatter, KbDocument, KbDocumentSummary } from '@/domain/kb/KbDocument';
-import type { KbRepository } from '@/application/kb/KbRepository';
+import type {
+  BulkCreateInput,
+  BulkCreateResult,
+  KbRepository,
+  ParsedBulkPreview,
+} from '@/application/kb/KbRepository';
 import { httpClient } from './httpClient';
 
 export class HttpKbRepository implements KbRepository {
@@ -24,13 +29,32 @@ export class HttpKbRepository implements KbRepository {
     );
     return document;
   }
-  async write(projectId: string, path: string, frontmatter: Frontmatter, body: string, sha: string | null): Promise<{ sha: string }> {
-    return httpClient.put<{ sha: string }>(
-      `/projects/${projectId}/kb/documents/${path}`,
-      { frontmatter, body, sha },
-    );
+  async write(
+    projectId: string,
+    path: string,
+    frontmatter: Frontmatter,
+    body: string,
+    sha: string | null,
+  ): Promise<{ sha: string }> {
+    return httpClient.put<{ sha: string }>(`/projects/${projectId}/kb/documents/${path}`, {
+      frontmatter,
+      body,
+      sha,
+    });
   }
   async delete(projectId: string, path: string): Promise<void> {
     await httpClient.delete<void>(`/projects/${projectId}/kb/documents/${path}`);
+  }
+  async parseBulkCredential(projectId: string, rawText: string): Promise<ParsedBulkPreview> {
+    return httpClient.post<ParsedBulkPreview>(
+      `/projects/${projectId}/kb/credentials/parse`,
+      { rawText },
+    );
+  }
+  async bulkCreateCredential(projectId: string, input: BulkCreateInput): Promise<BulkCreateResult> {
+    return httpClient.post<BulkCreateResult>(
+      `/projects/${projectId}/kb/credentials/bulk`,
+      input,
+    );
   }
 }

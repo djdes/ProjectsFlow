@@ -1,4 +1,4 @@
-import { FileWarning, Folder, Plus } from 'lucide-react';
+import { FileWarning, Folder, KeyRound, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { KbDocumentSummary } from '@/domain/kb/KbDocument';
 
@@ -8,6 +8,8 @@ type Props = {
   onPick: (path: string) => void;
   /** Called when the user clicks "+" on a folder — passes the folder name */
   onNewFile?: (folder: string) => void;
+  /** Quick bulk-create button — currently only credentials folder uses it. */
+  onBulkCreate?: (folder: string) => void;
 };
 
 const FOLDER_ORDER = ['credentials', 'decisions', 'services', 'schemas', 'runbooks', 'notes'];
@@ -26,7 +28,13 @@ function folderOf(path: string): string {
   return idx === -1 ? 'notes' : path.slice(0, idx);
 }
 
-export function KbFileTree({ documents, activePath, onPick, onNewFile }: Props): React.ReactElement {
+export function KbFileTree({
+  documents,
+  activePath,
+  onPick,
+  onNewFile,
+  onBulkCreate,
+}: Props): React.ReactElement {
   const byFolder = new Map<string, KbDocumentSummary[]>();
   for (const d of documents) {
     const f = folderOf(d.path);
@@ -46,6 +54,17 @@ export function KbFileTree({ documents, activePath, onPick, onNewFile }: Props):
             <div className="group flex items-center gap-1.5 px-2 py-1 text-[11px] uppercase tracking-widest text-muted-foreground">
               <Folder className="size-3 shrink-0" />
               <span className="flex-1">{folder}</span>
+              {onBulkCreate && folder === 'credentials' && (
+                <button
+                  type="button"
+                  aria-label="Быстрое создание credential"
+                  title="Быстрое создание credential (paste KEY:VALUE)"
+                  onClick={() => onBulkCreate(folder)}
+                  className="invisible rounded p-0.5 transition-colors hover:bg-muted hover:text-foreground group-hover:visible"
+                >
+                  <KeyRound className="size-3" />
+                </button>
+              )}
               {onNewFile && (
                 <button
                   type="button"

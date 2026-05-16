@@ -19,5 +19,13 @@ export const writeDocSchema = z.object({
   sha: z.string().nullable(),
 });
 
+export const bulkCredentialSchema = z.object({
+  rawText: z.string().min(1).max(20_000),
+  fileSlugOverride: z.string().trim().min(1).max(80).nullable().optional(),
+  // optional: client-side preview позволяет переопределить эвристику секрет/не-секрет
+  secretOverrides: z.record(z.boolean()).nullable().optional(),
+});
+
 export type ConnectKbBody = z.infer<typeof connectKbSchema>;
 export type WriteDocBody = z.infer<typeof writeDocSchema>;
+export type BulkCredentialBody = z.infer<typeof bulkCredentialSchema>;

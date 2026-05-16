@@ -9,6 +9,7 @@ import { KbFileTree, FOLDER_TO_TYPE } from '@/presentation/components/kb/KbFileT
 import { KbDocumentViewer } from '@/presentation/components/kb/KbDocumentViewer';
 import { KbDocumentEditor } from '@/presentation/components/kb/KbDocumentEditor';
 import { NewKbDocumentDialog } from '@/presentation/components/kb/NewKbDocumentDialog';
+import { BulkCredentialDialog } from '@/presentation/components/kb/BulkCredentialDialog';
 import { KbSearchBar } from '@/presentation/components/kb/KbSearchBar';
 
 export function KbPage(): React.ReactElement {
@@ -21,6 +22,9 @@ export function KbPage(): React.ReactElement {
 
   // Feature A: new file dialog
   const [newFileFolder, setNewFileFolder] = useState<string | null>(null);
+
+  // Bulk-create credentials
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   // Feature C: search
   const [searchQuery, setSearchQuery] = useState('');
@@ -73,6 +77,7 @@ export function KbPage(): React.ReactElement {
               activePath={activePath}
               onPick={(path) => { setActivePath(path); setEditing(false); }}
               onNewFile={(folder) => setNewFileFolder(folder)}
+              onBulkCreate={() => setBulkOpen(true)}
             />
           )}
         </aside>
@@ -112,6 +117,17 @@ export function KbPage(): React.ReactElement {
           }}
         />
       )}
+
+      <BulkCredentialDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        projectId={projectId ?? ''}
+        onCreated={(path) => {
+          reloadTree();
+          setActivePath(path);
+          setEditing(false);
+        }}
+      />
     </>
   );
 }
