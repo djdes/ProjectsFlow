@@ -128,6 +128,9 @@ export class FetchGithubApiClient implements GithubApiClient {
         Accept: 'application/vnd.github+json',
       },
     });
+    // GitHub отдаёт 409 "Git Repository is empty" для свежесозданных репо без коммитов.
+    // Это валидное состояние, не ошибка — возвращаем пустой массив.
+    if (res.status === 409) return [];
     if (!res.ok) throw new GithubApiError(res.status, `commits failed: ${await res.text()}`);
     const data = (await res.json()) as CommitRawResponse[];
     return data.map(
