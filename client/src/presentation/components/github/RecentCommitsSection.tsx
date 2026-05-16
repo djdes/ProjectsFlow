@@ -48,7 +48,15 @@ export function RecentCommitsSection({ projectId, gitRepoUrl }: Props): React.Re
         if (e instanceof HttpError) {
           if (e.status === 409) setError('Подключи GitHub чтобы видеть коммиты.');
           else if (e.status === 422) setError('URL репозитория не выглядит как GitHub.');
-          else if (e.status === 502) setError('GitHub API вернул ошибку (возможно, репо приватный — нужны расширенные права).');
+          else if (e.body.error === 'github_api_error') {
+            const upstream = (e.body.details as { upstreamStatus?: number } | undefined)?.upstreamStatus;
+            const hint =
+              upstream === 404 ? 'Репо не найден или у токена нет к нему доступа. Если репо приватный — переподключи GitHub чтобы обновить scope.' :
+              upstream === 401 ? 'GitHub-токен невалиден — переподключи GitHub.' :
+              upstream === 403 ? 'GitHub отказал в доступе (rate limit или token scope).' :
+              'GitHub API вернул ошибку.';
+            setError(`${hint} (HTTP ${upstream ?? '?'})\n${e.body.message ?? ''}`);
+          }
           else setError(e.message);
         } else {
           setError('Не удалось загрузить коммиты.');
@@ -117,7 +125,7 @@ export function RecentCommitsSection({ projectId, gitRepoUrl }: Props): React.Re
           </div>
         )}
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="whitespace-pre-line text-sm text-destructive">{error}</p>}
 
         {!loading && !error && commits !== null && commits.length === 0 && (
           <p className="text-sm text-muted-foreground">В репозитории нет коммитов.</p>

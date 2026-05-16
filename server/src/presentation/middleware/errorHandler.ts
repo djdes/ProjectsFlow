@@ -107,9 +107,12 @@ export function errorHandler(
   }
 
   if (err instanceof GithubApiError) {
+    // Логируем upstream-ошибку — без логов отлаживать private-repo проблемы невозможно.
+    console.error(`[github_api_error] status=${err.status} message=${err.message}`);
     res.status(err.status === 401 ? 401 : 502).json({
       error: 'github_api_error',
       message: err.message,
+      details: { upstreamStatus: err.status },
     });
     return;
   }
