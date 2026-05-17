@@ -1,8 +1,16 @@
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { BookOpen, ExternalLink } from 'lucide-react';
+import { BookOpen, ExternalLink, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
 import type { Project } from '@/domain/project/Project';
 import { useContainer } from '@/infrastructure/di/container';
@@ -12,14 +20,29 @@ import { ConnectKbDialog } from './ConnectKbDialog';
 
 type Props = { project: Project };
 
+// Имя репо предсказуемо: формирует сервер из project.name (slugify + prefix).
+// Тут показываем preview, чтобы юзер видел что именно появится у него в GitHub.
+function previewRepoName(projectName: string): string {
+  const slug = projectName
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9а-яё\s-]/gi, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `projectsflow-kb-${slug || 'project'}`;
+}
+
 export function KbSection({ project }: Props): React.ReactElement {
   const { kbRepository } = useContainer();
   const { submit: updateProject } = useUpdateProject();
   const { connection: githubConnection } = useGithubConnection();
   const [connectOpen, setConnectOpen] = useState(false);
+  const [confirmInitOpen, setConfirmInitOpen] = useState(false);
   const [initializing, setInitializing] = useState(false);
 
   const handleInit = async (): Promise<void> => {
+    setConfirmInitOpen(false);
     setInitializing(true);
     try {
       const { fullName } = await kbRepository.initRepo(project.id);
@@ -85,7 +108,7 @@ export function KbSection({ project }: Props): React.ReactElement {
                 База знаний — отдельный приватный GitHub-репо с операционными заметками проекта.
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={handleInit} disabled={initializing}>
+                <Button size="sm" onClick={() => setConfirmInitOpen(true)} disabled={initializing}>
                   {initializing ? 'Создаём…' : 'Создать KB-репо'}
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setConnectOpen(true)}>
@@ -103,6 +126,41 @@ export function KbSection({ project }: Props): React.ReactElement {
         projectId={project.id}
         onConnected={() => { /* useUpdateProject не нужен — мы тянем через project refresh */ }}
       />
+
+      <Dialog open={confirmInitOpen} onOpenChange={setConfirmInitOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="size-5 text-amber-500" />
+              Создать KB-репо в&nbsp;GitHub?
+            </DialogTitle>
+            <DialogDescription>
+              В твоём GitHub-аккаунте будет создан <strong>приватный репозиторий</strong>:
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-sm">
+              {githubConnection?.githubLogin ?? 'твой-аккаунт'} / {previewRepoName(project.name)}
+            </div>
+            <ul className="space-y-1.5 text-sm text-muted-foreground">
+              <li>• Внутри будет создана структура папок для KB</li>
+              <li>• Репо приватный — доступ только у тебя и у ProjectsFlow</li>
+              <li>• Можно удалить его на GitHub в любой момент (это разорвёт связь)</li>
+              <li>• Точное имя репо может отличаться (зависит от slug-генератора)</li>
+            </ul>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmInitOpen(false)}>
+              Отмена
+            </Button>
+            <Button onClick={handleInit} disabled={initializing}>
+              {initializing ? 'Создаём…' : 'Создать репо'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
