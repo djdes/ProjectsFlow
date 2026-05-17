@@ -34,6 +34,14 @@ import { DeleteKbDocument } from './application/kb/DeleteKbDocument.js';
 import { BulkCreateCredential } from './application/kb/BulkCreateCredential.js';
 import { DrizzleTaskRepository } from './infrastructure/repositories/DrizzleTaskRepository.js';
 import { DrizzleTaskCommitRepository } from './infrastructure/repositories/DrizzleTaskCommitRepository.js';
+import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
+import { Sha256AgentTokenHasher } from './infrastructure/crypto/Sha256AgentTokenHasher.js';
+import { CreateAgentToken } from './application/agent/CreateAgentToken.js';
+import { ListAgentTokens } from './application/agent/ListAgentTokens.js';
+import { RevokeAgentToken } from './application/agent/RevokeAgentToken.js';
+import { AuthenticateAgentToken } from './application/agent/AuthenticateAgentToken.js';
+import { GetAgentCredential } from './application/agent/GetAgentCredential.js';
+import { randomBytes } from 'node:crypto';
 import { ListTasks } from './application/task/ListTasks.js';
 import { CreateTask } from './application/task/CreateTask.js';
 import { UpdateTask } from './application/task/UpdateTask.js';
@@ -77,6 +85,8 @@ try {
 const secretsRepo = new DrizzleSecretsRepository(db);
 const taskRepo = new DrizzleTaskRepository(db);
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
+const agentTokenRepo = new DrizzleAgentTokenRepository(db);
+const agentTokenHasher = new Sha256AgentTokenHasher();
 const stubCipher: SecretsCipher = {
   encrypt: () => { throw new SecretsVaultDisabledError(); },
   decrypt: () => { throw new SecretsVaultDisabledError(); },
@@ -157,6 +167,31 @@ const { app, devProxyUpgrade } = createApp({
       tokens: githubTokenRepo,
       api: githubApi,
     }),
+  },
+  agent: {
+    createAgentToken: new CreateAgentToken({
+      tokens: agentTokenRepo,
+      hasher: agentTokenHasher,
+      idGen: idGenerator,
+      // 32-byte (256-bit) entropy — крипто-случайный токен hex 64 char'а.
+      randomToken: () => randomBytes(32).toString('hex'),
+    }),
+    listAgentTokens: new ListAgentTokens({ tokens: agentTokenRepo }),
+    revokeAgentToken: new RevokeAgentToken({ tokens: agentTokenRepo }),
+    authenticateAgentToken: new AuthenticateAgentToken({
+      tokens: agentTokenRepo,
+      hasher: agentTokenHasher,
+      users: userRepo,
+    }),
+    getAgentCredential: new GetAgentCredential({
+      projects: projectRepo,
+      tokens: githubTokenRepo,
+      kb: kbRepo,
+      getSecret: new GetSecret(secretsRepo, activeCipher),
+    }),
+    // Переиспользуем существующие use-cases для agent-эндпоинтов
+    listProjects: new ListProjects(projectRepo),
+    listKbDocuments: new ListKbDocuments({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
   },
   github: {
     startDeviceFlow: new StartDeviceFlow({

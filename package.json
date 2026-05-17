@@ -7,7 +7,8 @@
   "workspaces": [
     "client",
     "server",
-    "landing"
+    "landing",
+    "mcp-server"
   ],
   "scripts": {
     "dev": "concurrently -k -n client,server -c blue,green \"npm:dev -w @projectsflow/client\" \"npm:dev -w @projectsflow/server\"",

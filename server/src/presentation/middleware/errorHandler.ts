@@ -34,6 +34,11 @@ import {
   TaskNotFoundError,
   TaskTitleEmptyError,
 } from '../../domain/task/errors.js';
+import {
+  AgentTokenInvalidError,
+  AgentTokenNameEmptyError,
+  AgentTokenNotFoundError,
+} from '../../domain/agent/errors.js';
 
 type ErrorPayload = {
   error: string;
@@ -174,6 +179,19 @@ export function errorHandler(
   }
   if (err instanceof TaskCommitNotFoundError) {
     res.status(404).json({ error: 'task_commit_not_found' });
+    return;
+  }
+
+  if (err instanceof AgentTokenNameEmptyError) {
+    res.status(400).json({ error: 'agent_token_name_empty', message: 'Введите название токена' });
+    return;
+  }
+  if (err instanceof AgentTokenNotFoundError) {
+    res.status(404).json({ error: 'agent_token_not_found' });
+    return;
+  }
+  if (err instanceof AgentTokenInvalidError) {
+    res.status(401).json({ error: 'agent_token_invalid' });
     return;
   }
 

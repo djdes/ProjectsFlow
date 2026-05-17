@@ -1,0 +1,30 @@
+{
+  "name": "@projectsflow/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP-сервер для ProjectsFlow — даёт Claude Code доступ к credentials из vault'а проектов",
+  "private": false,
+  "type": "module",
+  "bin": {
+    "projectsflow-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

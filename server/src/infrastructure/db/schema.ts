@@ -142,6 +142,27 @@ export const taskCommits = mysqlTable(
 export type TaskCommitRow = typeof taskCommits.$inferSelect;
 export type NewTaskCommitRow = typeof taskCommits.$inferInsert;
 
+export const agentTokens = mysqlTable(
+  'agent_tokens',
+  {
+    id: id(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    name: varchar('name', { length: 120 }).notNull(),
+    tokenHash: varchar('token_hash', { length: 255 }).notNull(),
+    tokenPrefix: varchar('token_prefix', { length: 20 }).notNull(),
+    createdAt: createdAtCol(),
+    lastUsedAt: timestamp('last_used_at'),
+    revokedAt: timestamp('revoked_at'),
+  },
+  (t) => [
+    index('idx_agent_tokens_user').on(t.userId),
+    index('idx_agent_tokens_hash').on(t.tokenHash),
+  ],
+);
+
+export type AgentTokenRow = typeof agentTokens.$inferSelect;
+export type NewAgentTokenRow = typeof agentTokens.$inferInsert;
+
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;
 export type UserGithubTokenRow = typeof userGithubTokens.$inferSelect;

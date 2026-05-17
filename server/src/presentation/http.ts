@@ -43,6 +43,11 @@ import type { LinkCommit } from '../application/task/LinkCommit.js';
 import type { UnlinkCommit } from '../application/task/UnlinkCommit.js';
 import type { ListTaskCommits } from '../application/task/ListTaskCommits.js';
 import type { SyncTaskCommits } from '../application/task/SyncTaskCommits.js';
+import type { CreateAgentToken } from '../application/agent/CreateAgentToken.js';
+import type { ListAgentTokens } from '../application/agent/ListAgentTokens.js';
+import type { RevokeAgentToken } from '../application/agent/RevokeAgentToken.js';
+import type { AuthenticateAgentToken } from '../application/agent/AuthenticateAgentToken.js';
+import type { GetAgentCredential } from '../application/agent/GetAgentCredential.js';
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './auth/routes.js';
@@ -51,6 +56,8 @@ import { githubRouter } from './integrations/github/routes.js';
 import { secretsRouter } from './secrets/routes.js';
 import { kbRouter } from './kb/routes.js';
 import { tasksRouter } from './tasks/routes.js';
+import { agentTokensRouter } from './agent/tokensRoutes.js';
+import { agentApiRouter } from './agent/apiRoutes.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
@@ -104,6 +111,16 @@ type AppDeps = {
     readonly listTaskCommits: ListTaskCommits;
     readonly syncTaskCommits: SyncTaskCommits;
   };
+  readonly agent: {
+    readonly createAgentToken: CreateAgentToken;
+    readonly listAgentTokens: ListAgentTokens;
+    readonly revokeAgentToken: RevokeAgentToken;
+    readonly authenticateAgentToken: AuthenticateAgentToken;
+    readonly getAgentCredential: GetAgentCredential;
+    // Переиспользуемые порты для agent API
+    readonly listProjects: ListProjects;
+    readonly listKbDocuments: ListKbDocuments;
+  };
 };
 
 // Возвращаем не только app, но и upgrade-handler — index.ts вешает его на server
@@ -143,6 +160,26 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/secrets', secretsRouter(deps.secrets));
   app.use('/api/projects/:projectId/kb', kbRouter(deps.kb));
   app.use('/api/projects/:projectId/tasks', tasksRouter(deps.tasks));
+
+  // Agent tokens management (session-auth)
+  app.use(
+    '/api/agent/tokens',
+    agentTokensRouter({
+      create: deps.agent.createAgentToken,
+      list: deps.agent.listAgentTokens,
+      revoke: deps.agent.revokeAgentToken,
+    }),
+  );
+  // Agent API endpoints (Bearer-auth)
+  app.use(
+    '/api/agent',
+    agentApiRouter({
+      authenticate: deps.agent.authenticateAgentToken,
+      listProjects: deps.agent.listProjects,
+      listKbDocuments: deps.agent.listKbDocuments,
+      getCredential: deps.agent.getAgentCredential,
+    }),
+  );
 
   // 404 для неизвестных /api/*
   app.use('/api', (_req, res) => {
