@@ -24,6 +24,11 @@ const PORT = process.env.SSH_PORT_LOCAL ?? "22";
 const USER = req("SSH_USER");
 const PASS = req("SSH_PASSWORD");
 const TARGET = req("DEPLOY_PATH");
+// SSH host-key fingerprint для plink/pscp в -batch режиме. Без него на свежей
+// машине plink падает с "host key is not cached" (он не читает y/n с пайпа,
+// только с controlling terminal). Значение можно перепроверить через:
+//   ssh-keyscan -t ed25519 -p 22 projectsflow.ru | ssh-keygen -lf -
+const HOSTKEY = process.env.SSH_HOSTKEY ?? "SHA256:NwU1dGS29JAjs2K5LfEtu3DLFgg04yo7ZEA4iOGkM6E";
 
 const run = (cmd) => {
   console.log(`\n$ ${cmd}`);
@@ -31,10 +36,10 @@ const run = (cmd) => {
 };
 
 const ssh = (remoteCmd) =>
-  run(`plink -ssh -batch -P ${PORT} -pw "${PASS}" ${USER}@${HOST} "${remoteCmd.replace(/"/g, '\\"')}"`);
+  run(`plink -ssh -batch -hostkey ${HOSTKEY} -P ${PORT} -pw "${PASS}" ${USER}@${HOST} "${remoteCmd.replace(/"/g, '\\"')}"`);
 
 const scp = (local, remote) =>
-  run(`pscp -batch -P ${PORT} -pw "${PASS}" "${local}" ${USER}@${HOST}:"${remote}"`);
+  run(`pscp -batch -hostkey ${HOSTKEY} -P ${PORT} -pw "${PASS}" "${local}" ${USER}@${HOST}:"${remote}"`);
 
 console.log("→ 1/5  Build client + landing + server");
 run("npm run build");
@@ -44,9 +49,15 @@ const dist = resolve(root, ".deploy");
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
 const archive = resolve(dist, "release.tar.gz");
-// Используем tar из Git for Windows (есть в %ProgramFiles%\Git\usr\bin\tar.exe)
+// Используем tar из Git for Windows (есть в %ProgramFiles%\Git\usr\bin\tar.exe).
+// --force-local нужен чтобы GNU tar не интерпретировал "C:" в пути архива
+// как remote-host (формат host:path) — иначе деплой из git-bash валится.
+//
+// ВАЖНО: .env НЕ включаем — он на проде уже лежит с боевыми значениями
+// (DB_SOCKET, prod DB_PASSWORD, NODE_ENV=production). Если шиппить локальный
+// .env — затрёшь прод-кред и сломаешь подключение к БД. См. docs/ONBOARDING.md §4.
 run(
-  `tar --exclude=node_modules --exclude=.deploy --exclude=.git -czf "${archive}" server/dist client/dist landing/dist db scripts package.json server/package.json ecosystem.config.cjs .env`,
+  `tar --force-local --exclude=node_modules --exclude=.deploy --exclude=.git -czf "${archive}" server/dist client/dist landing/dist db scripts package.json server/package.json ecosystem.config.cjs`,
 );
 
 console.log("→ 3/5  Upload + extract");
