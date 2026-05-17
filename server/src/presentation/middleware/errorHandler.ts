@@ -29,6 +29,11 @@ import {
   KbRepoAlreadyConnectedError,
   KbRepoConflictError,
 } from '../../domain/kb/errors.js';
+import {
+  TaskCommitNotFoundError,
+  TaskNotFoundError,
+  TaskTitleEmptyError,
+} from '../../domain/task/errors.js';
 
 type ErrorPayload = {
   error: string;
@@ -156,6 +161,19 @@ export function errorHandler(
   }
   if (err instanceof KbRepoConflictError) {
     res.status(409).json({ error: 'kb_conflict' });
+    return;
+  }
+
+  if (err instanceof TaskNotFoundError) {
+    res.status(404).json({ error: 'task_not_found' });
+    return;
+  }
+  if (err instanceof TaskTitleEmptyError) {
+    res.status(400).json({ error: 'task_title_empty', message: 'Введите название задачи' });
+    return;
+  }
+  if (err instanceof TaskCommitNotFoundError) {
+    res.status(404).json({ error: 'task_commit_not_found' });
     return;
   }
 

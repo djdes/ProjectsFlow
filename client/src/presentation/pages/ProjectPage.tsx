@@ -1,10 +1,11 @@
 import { Link, useParams } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, LayoutGrid } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProject } from '@/presentation/hooks/useProject';
 import { GitRepoSection } from '@/presentation/components/forms/GitRepoSection';
 import { RecentCommitsSection } from '@/presentation/components/github/RecentCommitsSection';
 import { KbSection } from '@/presentation/components/kb/KbSection';
+import { EditableProjectTitle } from '@/presentation/components/project/EditableProjectTitle';
 import type { ProjectStatus } from '@/domain/project/Project';
 
 const statusLabel: Record<ProjectStatus, string> = {
@@ -62,9 +63,15 @@ export function ProjectPage(): React.ReactElement {
       </nav>
 
       <div className="space-y-3">
-        <h1 className="text-3xl font-semibold tracking-tight">{data.name}</h1>
-        <div className="flex flex-wrap gap-2">
+        <EditableProjectTitle projectId={data.id} name={data.name} />
+        <div className="flex flex-wrap items-center gap-2">
           <Badge>{statusLabel[data.status]}</Badge>
+          <Button asChild variant="outline" size="sm">
+            <Link to={`/projects/${data.id}/tasks`}>
+              <LayoutGrid className="size-4" />
+              Доска задач
+            </Link>
+          </Button>
         </div>
       </div>
 

@@ -1,0 +1,50 @@
+---
+import Logo from './Logo.astro';
+
+// Лендинг и SPA отдаются одним Express'ом в prod → относительные пути работают.
+// В dev (Astro :4321, Vite :5173) можно задать `PUBLIC_APP_URL=http://localhost:5173`.
+const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
+---
+
+<header class="absolute inset-x-0 top-0 z-30">
+  <nav class="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+    <Logo />
+    <div class="flex items-center gap-1 text-sm">
+      <a
+        href="#features"
+        class="hidden rounded-md px-3 py-1.5 text-ink-200 transition-colors hover:text-ink-50 sm:inline-block"
+      >
+        Возможности
+      </a>
+      <a
+        href="#how"
+        class="hidden rounded-md px-3 py-1.5 text-ink-200 transition-colors hover:text-ink-50 sm:inline-block"
+      >
+        Как это работает
+      </a>
+      {/* Anonymous-кнопки (показаны по умолчанию). data-auth-anon скрипт скроет если юзер авторизован. */}
+      <a
+        href={`${appBase}/login`}
+        data-auth-anon
+        class="ml-2 rounded-md px-3 py-1.5 text-ink-200 transition-colors hover:text-ink-50"
+      >
+        Войти
+      </a>
+      <a
+        href={`${appBase}/register`}
+        data-auth-anon
+        class="rounded-md border border-white/10 bg-white/5 px-3.5 py-1.5 text-ink-50 transition-colors hover:bg-white/10"
+      >
+        Создать аккаунт
+      </a>
+      {/* Authed-кнопка (скрыта изначально, показывается если /api/auth/me вернул 200). */}
+      <a
+        href={`${appBase}/`}
+        data-auth-authed
+        class="ml-2 hidden rounded-md border border-accent/30 bg-accent/15 px-3.5 py-1.5 font-medium text-ink-50 transition-colors hover:bg-accent/25"
+      >
+        Открыть приложение →
+      </a>
+    </div>
+  </nav>
+</header>

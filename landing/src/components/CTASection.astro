@@ -1,0 +1,25 @@
+---
+import AuthCta from './AuthCta.astro';
+---
+
+<section class="relative overflow-hidden py-28">
+  <div
+    class="mesh-blob"
+    style="width: 700px; height: 700px; background: #1d4ed8; bottom: -50%; left: 50%; transform: translateX(-50%); opacity: 0.22;"
+  >
+  </div>
+
+  <div class="mx-auto max-w-2xl px-6 text-center" data-reveal>
+    <span class="eyebrow">Готов попробовать?</span>
+    <h2 class="mt-5 text-balance text-3xl font-semibold tracking-tight text-ink-50 sm:text-4xl">
+      Собери всю работу по проекту в&nbsp;одном месте
+    </h2>
+    <p class="mx-auto mt-4 max-w-md text-balance text-sm leading-relaxed text-ink-200">
+      Создай аккаунт — займёт минуту. Дальше: подключи git-репо, заведи доску задач,
+      храни секреты в&nbsp;vault. Всё локально, всё под твоим контролем.
+    </p>
+    <div class="mx-auto mt-8 max-w-lg" data-reveal style="--reveal-delay: 200ms">
+      <AuthCta size="md" />
+    </div>
+  </div>
+</section>

@@ -5,6 +5,7 @@ import type {
   CreateRepoResult,
   DeviceCodeResponse,
   DevicePollResult,
+  GetCommitInput,
   GithubApiClient,
   GithubUserInfo,
   ListCommitsInput,
@@ -143,6 +144,26 @@ export class FetchGithubApiClient implements GithubApiClient {
         htmlUrl: c.html_url,
       }),
     );
+  }
+
+  async getCommit(accessToken: string, input: GetCommitInput): Promise<GithubCommit> {
+    const url = `https://api.github.com/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}/commits/${encodeURIComponent(input.sha)}`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github+json',
+      },
+    });
+    if (!res.ok) throw new GithubApiError(res.status, `get commit failed: ${await res.text()}`);
+    const c = (await res.json()) as CommitRawResponse;
+    return {
+      sha: c.sha,
+      message: c.commit.message,
+      authorName: c.commit.author.name,
+      authorAvatarUrl: c.author?.avatar_url ?? null,
+      committedAt: new Date(c.commit.author.date),
+      htmlUrl: c.html_url,
+    };
   }
 
   async listUserRepos(accessToken: string): Promise<GithubRepoSummary[]> {

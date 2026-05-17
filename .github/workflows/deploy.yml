@@ -34,6 +34,9 @@ jobs:
       - name: Build client
         run: npm run build:client
 
+      - name: Build landing
+        run: npm run build:landing
+
       - name: Build server
         run: npm run build:server
 
@@ -50,7 +53,7 @@ jobs:
             --exclude=.github \
             --exclude=.env \
             -czf .deploy/release.tar.gz \
-            server/dist client/dist db scripts \
+            server/dist client/dist landing/dist db scripts \
             package.json package-lock.json server/package.json \
             ecosystem.config.cjs
 
@@ -75,7 +78,7 @@ jobs:
             -p ${{ secrets.SSH_PORT }} \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
             "set -e; cd ${{ secrets.DEPLOY_PATH }} && \
-             rm -rf db scripts server/dist client/dist && \
+             rm -rf db scripts server/dist client/dist landing/dist && \
              tar -xzf release.tar.gz && rm release.tar.gz && \
              . ~/.nvm/nvm.sh && nvm use 22 >/dev/null && \
              npm ci --omit=dev --no-audit --no-fund && \

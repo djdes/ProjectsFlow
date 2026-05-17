@@ -1,0 +1,92 @@
+import { useCallback, useEffect, useState } from 'react';
+import { useContainer } from '@/infrastructure/di/container';
+import type { Task, TaskStatus } from '@/domain/task/Task';
+import type { MoveTaskInput } from '@/application/task/TaskRepository';
+
+type State = {
+  tasks: Task[];
+  loading: boolean;
+  error: string | null;
+};
+
+export type UseTasks = State & {
+  refetch: () => Promise<void>;
+  create: (input: { title: string; description: string | null; status: TaskStatus }) => Promise<void>;
+  update: (taskId: string, input: { title?: string; description?: string | null }) => Promise<void>;
+  // Оптимистично переставляет локально + летит на сервер. На фейле ревёртится из refetch'а.
+  move: (taskId: string, input: MoveTaskInput) => Promise<void>;
+  remove: (taskId: string) => Promise<void>;
+};
+
+export function useTasks(projectId: string): UseTasks {
+  const { taskRepository } = useContainer();
+  const [state, setState] = useState<State>({ tasks: [], loading: true, error: null });
+
+  const refetch = useCallback(async (): Promise<void> => {
+    setState((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const tasks = await taskRepository.list(projectId);
+      setState({ tasks, loading: false, error: null });
+    } catch (e) {
+      setState({ tasks: [], loading: false, error: (e as Error).message ?? 'Не удалось загрузить' });
+    }
+  }, [taskRepository, projectId]);
+
+  useEffect(() => {
+    void refetch();
+  }, [refetch]);
+
+  const create: UseTasks['create'] = async (input) => {
+    const task = await taskRepository.create(projectId, input);
+    setState((s) => ({ ...s, tasks: [...s.tasks, task] }));
+  };
+
+  const update: UseTasks['update'] = async (taskId, input) => {
+    const updated = await taskRepository.update(projectId, taskId, input);
+    setState((s) => ({ ...s, tasks: s.tasks.map((t) => (t.id === taskId ? updated : t)) }));
+  };
+
+  const move: UseTasks['move'] = async (taskId, input) => {
+    // Оптимистично: пересчитываем status и position локально ДО сетевого вызова.
+    // Position берём как midpoint между beforeTaskId/afterTaskId если они есть, иначе ±1024.
+    setState((s) => {
+      const task = s.tasks.find((t) => t.id === taskId);
+      if (!task) return s;
+      const beforePos = input.beforeTaskId
+        ? s.tasks.find((t) => t.id === input.beforeTaskId)?.position ?? null
+        : null;
+      const afterPos = input.afterTaskId
+        ? s.tasks.find((t) => t.id === input.afterTaskId)?.position ?? null
+        : null;
+      let newPos: number;
+      if (beforePos !== null && afterPos !== null) newPos = (beforePos + afterPos) / 2;
+      else if (beforePos !== null) newPos = beforePos + 1024;
+      else if (afterPos !== null) newPos = afterPos - 1024;
+      else {
+        // Колонка пустая — first item, любое значение.
+        newPos = 1024;
+      }
+      return {
+        ...s,
+        tasks: s.tasks.map((t) =>
+          t.id === taskId ? { ...t, status: input.targetStatus, position: newPos } : t,
+        ),
+      };
+    });
+    try {
+      const updated = await taskRepository.move(projectId, taskId, input);
+      setState((s) => ({ ...s, tasks: s.tasks.map((t) => (t.id === taskId ? updated : t)) }));
+    } catch (e) {
+      // Откатываемся через refetch — проще чем хранить старое состояние.
+      await refetch();
+      throw e;
+    }
+  };
+
+  const remove: UseTasks['remove'] = async (taskId) => {
+    await taskRepository.delete(projectId, taskId);
+    setState((s) => ({ ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }));
+  };
+
+  return { ...state, refetch, create, update, move, remove };
+}

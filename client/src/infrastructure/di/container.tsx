@@ -5,6 +5,7 @@ import { HttpAuthRepository } from '@/infrastructure/http/HttpAuthRepository';
 import { HttpGithubRepository } from '@/infrastructure/http/HttpGithubRepository';
 import { HttpKbRepository } from '@/infrastructure/http/HttpKbRepository';
 import { HttpSecretsRepository } from '@/infrastructure/http/HttpSecretsRepository';
+import { HttpTaskRepository } from '@/infrastructure/http/HttpTaskRepository';
 import { ListProjects } from '@/application/project/ListProjects';
 import { GetProject } from '@/application/project/GetProject';
 import { CreateProject } from '@/application/project/CreateProject';
@@ -15,6 +16,7 @@ import type { AuthRepository } from '@/application/auth/AuthRepository';
 import type { GithubRepository } from '@/application/github/GithubRepository';
 import type { KbRepository } from '@/application/kb/KbRepository';
 import type { SecretsRepository } from '@/application/secrets/SecretsRepository';
+import type { TaskRepository } from '@/application/task/TaskRepository';
 
 type Container = {
   listProjects: ListProjects;
@@ -27,6 +29,7 @@ type Container = {
   githubRepository: GithubRepository;
   kbRepository: KbRepository;
   secretsRepository: SecretsRepository;
+  taskRepository: TaskRepository;
 };
 
 function buildContainer(): Container {
@@ -36,6 +39,7 @@ function buildContainer(): Container {
   const githubRepo = new HttpGithubRepository();
   const kbRepo = new HttpKbRepository();
   const secretsRepo = new HttpSecretsRepository();
+  const taskRepo = new HttpTaskRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -47,6 +51,7 @@ function buildContainer(): Container {
     githubRepository: githubRepo,
     kbRepository: kbRepo,
     secretsRepository: secretsRepo,
+    taskRepository: taskRepo,
   };
 }
 

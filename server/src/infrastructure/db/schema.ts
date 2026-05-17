@@ -1,9 +1,11 @@
 import { sql } from 'drizzle-orm';
 import {
   char,
+  double,
   index,
   mysqlEnum,
   mysqlTable,
+  text,
   timestamp,
   uniqueIndex,
   varchar,
@@ -94,6 +96,51 @@ export const secrets = mysqlTable(
 
 export type SecretRow = typeof secrets.$inferSelect;
 export type NewSecretRow = typeof secrets.$inferInsert;
+
+export const tasks = mysqlTable(
+  'tasks',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    title: varchar('title', { length: 200 }).notNull(),
+    description: text('description'),
+    status: mysqlEnum('status', ['todo', 'in_progress', 'done']).notNull().default('todo'),
+    // Float-position для дешёвой вставки между двумя соседями — без массового UPDATE.
+    position: double('position').notNull().default(0),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    index('idx_tasks_project_status_position').on(t.projectId, t.status, t.position),
+    index('idx_tasks_project').on(t.projectId),
+  ],
+);
+
+export type TaskRow = typeof tasks.$inferSelect;
+export type NewTaskRow = typeof tasks.$inferInsert;
+
+export const taskCommits = mysqlTable(
+  'task_commits',
+  {
+    taskId: char('task_id', { length: 36 }).notNull(),
+    sha: varchar('sha', { length: 64 }).notNull(),
+    message: varchar('message', { length: 2000 }).notNull(),
+    authorName: varchar('author_name', { length: 200 }).notNull(),
+    authorAvatarUrl: varchar('author_avatar_url', { length: 500 }),
+    htmlUrl: varchar('html_url', { length: 500 }).notNull(),
+    committedAt: timestamp('committed_at').notNull(),
+    linkedAt: timestamp('linked_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    // Композитный PK (task_id, sha) объявляется через uniqueIndex — drizzle/mysql-core нет prima compositum API.
+    uniqueIndex('pk_task_commits').on(t.taskId, t.sha),
+    index('idx_task_commits_sha').on(t.sha),
+    index('idx_task_commits_task_committed').on(t.taskId, t.committedAt),
+  ],
+);
+
+export type TaskCommitRow = typeof taskCommits.$inferSelect;
+export type NewTaskCommitRow = typeof taskCommits.$inferInsert;
 
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;

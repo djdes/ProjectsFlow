@@ -1,8 +1,12 @@
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import express, { type Express } from 'express';
+import express, { type Express, type Request } from 'express';
 import cookieParser from 'cookie-parser';
+import {
+  createProxyMiddleware,
+  type RequestHandler as ProxyRequestHandler,
+} from 'http-proxy-middleware';
 import type { GetCurrentUser } from '../application/auth/GetCurrentUser.js';
 import type { Register } from '../application/auth/Register.js';
 import type { Login } from '../application/auth/Login.js';
@@ -30,6 +34,15 @@ import type { GetKbDocument } from '../application/kb/GetKbDocument.js';
 import type { WriteKbDocument } from '../application/kb/WriteKbDocument.js';
 import type { DeleteKbDocument } from '../application/kb/DeleteKbDocument.js';
 import type { BulkCreateCredential } from '../application/kb/BulkCreateCredential.js';
+import type { ListTasks } from '../application/task/ListTasks.js';
+import type { CreateTask } from '../application/task/CreateTask.js';
+import type { UpdateTask } from '../application/task/UpdateTask.js';
+import type { MoveTask } from '../application/task/MoveTask.js';
+import type { DeleteTask } from '../application/task/DeleteTask.js';
+import type { LinkCommit } from '../application/task/LinkCommit.js';
+import type { UnlinkCommit } from '../application/task/UnlinkCommit.js';
+import type { ListTaskCommits } from '../application/task/ListTaskCommits.js';
+import type { SyncTaskCommits } from '../application/task/SyncTaskCommits.js';
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './auth/routes.js';
@@ -37,6 +50,7 @@ import { projectsRouter } from './projects/routes.js';
 import { githubRouter } from './integrations/github/routes.js';
 import { secretsRouter } from './secrets/routes.js';
 import { kbRouter } from './kb/routes.js';
+import { tasksRouter } from './tasks/routes.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
@@ -79,9 +93,27 @@ type AppDeps = {
     readonly deleteKbDocument: DeleteKbDocument;
     readonly bulkCreateCredential: BulkCreateCredential;
   };
+  readonly tasks: {
+    readonly listTasks: ListTasks;
+    readonly createTask: CreateTask;
+    readonly updateTask: UpdateTask;
+    readonly moveTask: MoveTask;
+    readonly deleteTask: DeleteTask;
+    readonly linkCommit: LinkCommit;
+    readonly unlinkCommit: UnlinkCommit;
+    readonly listTaskCommits: ListTaskCommits;
+    readonly syncTaskCommits: SyncTaskCommits;
+  };
 };
 
-export function createApp(deps: AppDeps): Express {
+// Возвращаем не только app, но и upgrade-handler — index.ts вешает его на server
+// для HMR WebSocket'а Vite (без этого HMR через Express'овый dev-gateway не работает).
+export type CreatedApp = {
+  readonly app: Express;
+  readonly devProxyUpgrade: ProxyRequestHandler['upgrade'] | null;
+};
+
+export function createApp(deps: AppDeps): CreatedApp {
   const app = express();
 
   app.disable('x-powered-by');
@@ -110,23 +142,119 @@ export function createApp(deps: AppDeps): Express {
   app.use('/api/integrations/github', githubRouter(deps.github));
   app.use('/api/secrets', secretsRouter(deps.secrets));
   app.use('/api/projects/:projectId/kb', kbRouter(deps.kb));
+  app.use('/api/projects/:projectId/tasks', tasksRouter(deps.tasks));
 
   // 404 для неизвестных /api/*
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'not_found' });
   });
 
-  // SPA: serve client/dist when present (prod). In dev Vite serves the client on :5173.
+  // Static + SPA fallback.
+  // Prod: `/` отдаёт лендинг для неавторизованных, SPA для авторизованных. Остальные
+  //        пути (/login, /register, /projects/*, …) — всегда SPA из client/dist.
+  // Dev:   тот же роутинг, но SPA проксируется в Vite (:5173) для HMR. Лендинг — из
+  //        landing/dist статикой (он редко меняется; для HMR лендинга используй
+  //        `npm run dev:landing` отдельно).
   const moduleDir = dirname(fileURLToPath(import.meta.url));
   const clientDist = resolve(moduleDir, '../../../client/dist');
-  if (existsSync(clientDist)) {
-    app.use(express.static(clientDist, { index: false }));
-    app.get('*', (_req, res) => {
-      res.sendFile(resolve(clientDist, 'index.html'));
+  const landingDist = resolve(moduleDir, '../../../landing/dist');
+  const hasClient = existsSync(clientDist);
+  const hasLanding = existsSync(landingDist);
+  const isDev = process.env['NODE_ENV'] !== 'production';
+  const viteTarget = process.env['VITE_DEV_TARGET'] ?? 'http://localhost:5173';
+  const sessionCookieName = process.env['SESSION_COOKIE_NAME'] ?? 'pf_session';
+
+  // Dev-gateway: проксируем всё что относится к Vite (HMR, source modules) и SPA-routes
+  // на запущенный Vite-dev-server. Без этого фронт не доступен через Express в dev'е.
+  let viteProxy: ProxyRequestHandler | null = null;
+  if (isDev) {
+    viteProxy = createProxyMiddleware({
+      target: viteTarget,
+      changeOrigin: true,
+      ws: true,
+      logger: console,
+      on: {
+        proxyReq: (proxyReq) => {
+          // Vite 5+ режет module-script-load'ы по Sec-Fetch-Dest: script если запрос
+          // приходит с другого origin (наш Express на :4317 vs Vite на :5173) — это
+          // anti-XSSI protection (см. CVE-2025-30208). Поскольку у нас доверенный
+          // dev-gateway, убираем эти headers — Vite будет видеть запрос как same-origin
+          // и нормально отдаст модули.
+          proxyReq.removeHeader('Sec-Fetch-Dest');
+          proxyReq.removeHeader('Sec-Fetch-Site');
+          proxyReq.removeHeader('Sec-Fetch-Mode');
+          proxyReq.removeHeader('Sec-Fetch-User');
+        },
+      },
+    });
+    // Vite-internal paths — отдаём их в Vite БЕЗ стрипа префикса.
+    // app.use(prefix, mw) срезает prefix из req.url, поэтому Vite получал /client
+    // вместо /@vite/client и отдавал SPA-fallback HTML. Используем mount-less middleware
+    // с явной проверкой пути — req.url остаётся целым.
+    const viteProxyPaths = ['/@vite', '/@id', '/@react-refresh', '/@fs', '/src', '/node_modules'];
+    app.use((req, res, next) => {
+      if (viteProxyPaths.some((p) => req.url.startsWith(p))) {
+        viteProxy!(req, res, next);
+        return;
+      }
+      next();
     });
   }
 
+  // Лендинг — всегда статика (когда landing/dist есть). Лежит ДО SPA-static, чтобы
+  // его _astro/* ассеты резолвились первыми (у SPA в /assets/* — не конфликтует, но
+  // index.html шлёт лендинговский путь к чанкам).
+  if (hasLanding) app.use(express.static(landingDist, { index: false }));
+  // SPA static — только в prod (в dev статика приходит из Vite).
+  if (!isDev && hasClient) app.use(express.static(clientDist, { index: false }));
+
+  // Главный роутинг: cookie-based для `/`, остальные пути — SPA.
+  const isAuthed = (req: Request): boolean => Boolean(req.cookies?.[sessionCookieName]);
+
+  // /landing — всегда отдаёт лендинг (даже если юзер залогинен). Полезно для preview
+  // и показа лендинга без логаута.
+  if (hasLanding) {
+    app.get('/landing', (_req, res) => {
+      res.sendFile(resolve(landingDist, 'index.html'));
+    });
+  }
+
+  app.get('/', (req, res, next) => {
+    if (isAuthed(req)) {
+      // Авторизованный — отдаём SPA.
+      if (isDev && viteProxy) {
+        viteProxy(req, res, next);
+        return;
+      }
+      if (hasClient) {
+        res.sendFile(resolve(clientDist, 'index.html'));
+        return;
+      }
+    }
+    // Не авторизован (или нет client/dist) — лендинг.
+    if (hasLanding) {
+      res.sendFile(resolve(landingDist, 'index.html'));
+      return;
+    }
+    // Без лендинга и без SPA — fallback в SPA если он есть.
+    if (isDev && viteProxy) viteProxy(req, res, next);
+    else if (hasClient) res.sendFile(resolve(clientDist, 'index.html'));
+    else res.status(503).send('Frontend not available');
+  });
+
+  app.get('*', (req, res, next) => {
+    if (isDev && viteProxy) {
+      viteProxy(req, res, next);
+      return;
+    }
+    if (hasClient) {
+      res.sendFile(resolve(clientDist, 'index.html'));
+      return;
+    }
+    next();
+  });
+
   app.use(errorHandler);
 
-  return app;
+  return { app, devProxyUpgrade: viteProxy?.upgrade ?? null };
 }

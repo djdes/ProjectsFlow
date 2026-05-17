@@ -1,0 +1,11 @@
+---
+import Logo from './Logo.astro';
+const year = new Date().getFullYear();
+---
+
+<footer class="border-t border-white/5 py-10">
+  <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 sm:flex-row">
+    <Logo />
+    <p class="text-xs text-ink-400">© {year} ProjectsFlow. Сделано вручную.</p>
+  </div>
+</footer>

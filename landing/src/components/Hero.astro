@@ -1,0 +1,175 @@
+---
+import HeroScene from './HeroScene.tsx';
+// Кнопки auth здесь инлайн — нужны разные размеры/стили чем у AuthCta в CTASection.
+---
+
+<section class="relative isolate overflow-hidden min-h-[calc(100vh-1rem)]">
+  <!-- ambient layer: grid-bg + блобы. Самый дальний z. -->
+  <div class="pointer-events-none absolute inset-0 -z-20">
+    <div class="absolute inset-0 grid-bg"></div>
+
+    <div
+      class="mesh-blob mesh-blob--magnetic"
+      data-magnetic-blob
+      style="width: 520px; height: 520px; background: #1e3a8a; top: 10%; left: 50%; margin-left: -260px; opacity: 0.45;"
+    >
+    </div>
+    <div
+      class="mesh-blob"
+      style="width: 380px; height: 380px; background: #312e81; bottom: -5%; right: -5%; opacity: 0.3;"
+    >
+    </div>
+    <div
+      class="mesh-blob"
+      style="width: 320px; height: 320px; background: #1d4ed8; top: 50%; left: -10%; opacity: 0.22;"
+    >
+    </div>
+
+    <!-- vignette снизу для перехода в Features -->
+    <div class="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-b from-transparent to-ink-900"></div>
+  </div>
+
+  <!-- 3D-сцена на всю секцию. pointer-events-none чтобы не блокировать клики по тексту.
+       mask-image: канвас плавно затухает к нижнему краю, чтобы базовая платформа башни
+       не упиралась в жёсткий горизонтальный обрез где начинается следующая секция. -->
+  <div
+    class="pointer-events-none absolute inset-0 -z-10 hero-canvas-mask"
+  >
+    <HeroScene client:idle />
+  </div>
+
+  <!-- Soft left vignette — лёгкая тёмная маска, не "коробка". -->
+  <div
+    class="pointer-events-none absolute inset-y-0 left-0 -z-[5] hidden w-[60%] bg-gradient-to-r from-ink-900 via-ink-900/40 to-transparent lg:block"
+    aria-hidden="true"
+  ></div>
+
+  <!-- Контент-overlay. На lg текст шире (60% колонки), h1 в 2 строки. -->
+  <div class="relative mx-auto flex min-h-[inherit] max-w-7xl items-center px-6 py-20 sm:py-24">
+    <div class="relative w-full max-w-2xl lg:max-w-[60%]">
+      <span class="eyebrow animate-fade-up">
+        <span class="size-1.5 animate-pulse-soft rounded-full bg-accent-400"></span>
+        В разработке — early access
+      </span>
+
+      <!-- h1: две строки на lg+, font 4.5rem/5rem (вместо 5.5/6 — слишком ломалось по словам).
+           tracking-tight + leading-[0.95] для плотной композиции.
+           mix-blend-mode: screen — буквы поверх ярких бликов 3D осветляются, не "съедают" их. -->
+      <h1
+        class="mt-7 text-balance text-5xl font-semibold leading-[0.95] tracking-tight text-gradient sm:text-6xl lg:text-[4.5rem] xl:text-[5rem] animate-fade-up-delay-1"
+        style="mix-blend-mode: screen;"
+      >
+        Один источник правды
+        <br />
+        для каждого проекта
+      </h1>
+
+      <p
+        class="mt-7 max-w-md text-balance text-base leading-relaxed text-ink-200 sm:text-lg animate-fade-up-delay-2"
+      >
+        Документация, секреты, задачи и история коммитов — привязаны к проекту,
+        а не разбросаны по чатам и Notion-вкладкам.
+      </p>
+
+      <div class="mt-10 animate-fade-up-delay-3">
+        {/* Anonymous buttons (по умолчанию). Скрипт в BaseLayout заменит на "Открыть приложение"
+            если юзер уже залогинен. */}
+        <div data-auth-anon class="flex flex-wrap items-center gap-3">
+          <a
+            href="/register"
+            class="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-accent px-6 text-base font-semibold text-white shadow-glow transition-all hover:bg-accent-600 active:scale-[0.98]"
+          >
+            Создать аккаунт
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="size-4">
+              <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+          </a>
+          <a
+            href="/login"
+            class="inline-flex h-12 items-center justify-center rounded-lg px-5 text-base font-medium text-ink-200 transition-colors hover:text-ink-50"
+          >
+            Войти
+            <span class="ml-1 opacity-50">→</span>
+          </a>
+        </div>
+        {/* Authed CTA (скрыто изначально). */}
+        <div data-auth-authed class="hidden">
+          <a
+            href="/"
+            class="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-accent px-6 text-base font-semibold text-white shadow-glow transition-all hover:bg-accent-600 active:scale-[0.98]"
+          >
+            Открыть приложение
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="size-4">
+              <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+          </a>
+        </div>
+      </div>
+
+      <ul class="mt-10 grid max-w-md gap-2 text-[13px] text-ink-300 animate-fade-up-delay-3">
+        {
+          [
+            'KB в твоём GitHub-репозитории',
+            'Секреты AES-256, не в гитах',
+            'Канбан с привязкой к коммитам',
+            'Без подписок и облака',
+          ].map((item) => (
+            <li class="flex items-center gap-2">
+              <span class="size-1 rounded-full bg-accent-400/70" aria-hidden="true" />
+              <span>{item}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </div>
+
+  <!-- scroll-cue в нижней части секции -->
+  <div class="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center animate-fade-up-delay-3">
+    <div class="relative size-9 rounded-full border border-white/10 bg-white/[0.02] backdrop-blur-md">
+      <span class="absolute inset-0 grid place-items-center text-ink-300">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4 animate-bounce-slow">
+          <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </span>
+    </div>
+  </div>
+</section>
+
+<script>
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduceMotion) {
+    const blob = document.querySelector<HTMLElement>('[data-magnetic-blob]');
+    if (blob) {
+      const MAX_OFFSET = 80;
+      const update = (e: PointerEvent): void => {
+        const { innerWidth: w, innerHeight: h } = window;
+        const nx = (e.clientX / w) * 2 - 1;
+        const ny = (e.clientY / h) * 2 - 1;
+        blob.style.setProperty('--blob-x', `${nx * MAX_OFFSET}px`);
+        blob.style.setProperty('--blob-y', `${ny * MAX_OFFSET}px`);
+      };
+      window.addEventListener('pointermove', update, { passive: true });
+    }
+  }
+</script>
+
+<style>
+  /* Канвас 3D-сцены: плавное затухание opacity по нижнему краю через mask-image.
+     От 0..70% — полная видимость, 70..100% — fade to transparent. Так базовая
+     платформа башни мягко сливается с темнотой следующей секции, без обреза. */
+  .hero-canvas-mask {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      black 0%,
+      black 72%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      black 0%,
+      black 72%,
+      transparent 100%
+    );
+  }
+</style>

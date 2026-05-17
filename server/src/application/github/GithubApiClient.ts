@@ -62,6 +62,12 @@ export type ListCommitsInput = {
   readonly limit: number;
 };
 
+export type GetCommitInput = {
+  readonly owner: string;
+  readonly repo: string;
+  readonly sha: string;
+};
+
 export interface GithubApiClient {
   // OAuth Device Flow
   requestDeviceCode(): Promise<DeviceCodeResponse>;
@@ -70,6 +76,7 @@ export interface GithubApiClient {
   // Authenticated calls
   getAuthenticatedUser(accessToken: string): Promise<GithubUserInfo>;
   listRecentCommits(accessToken: string, input: ListCommitsInput): Promise<GithubCommit[]>;
+  getCommit(accessToken: string, input: GetCommitInput): Promise<GithubCommit>;
   // Все репозитории authenticated user (owner/member/collaborator), sort by pushed desc.
   listUserRepos(accessToken: string): Promise<GithubRepoSummary[]>;
 

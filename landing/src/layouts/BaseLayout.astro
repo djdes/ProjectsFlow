@@ -1,0 +1,85 @@
+---
+import '@fontsource-variable/inter';
+import '@/styles/globals.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = 'ProjectsFlow — живое досье на твои сайты и ПО',
+  description = 'Документация, секреты, задачи и история коммитов — привязаны к проекту, а не разбросаны по чатам.',
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#0a0b10" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href="https://projectsflow.ru/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:url" content="https://projectsflow.ru/" />
+
+    <title>{title}</title>
+  </head>
+  <body class="min-h-dvh bg-ink-900 text-ink-50">
+    <slot />
+
+    <script>
+      // Auth-aware UI: чекаем /api/auth/me — если 200, тоглим anonymous/authed элементы.
+      // На лендинге это нужно чтобы залогиненный юзер видел "Открыть приложение" вместо
+      // "Войти / Создать аккаунт". На несоответствующем status'е (401) скрипт ничего не
+      // делает — defaults уже anonymous.
+      (async () => {
+        try {
+          const res = await fetch('/api/auth/me', { credentials: 'include' });
+          if (!res.ok) return;
+          // Авторизован → скрываем anonymous-элементы, показываем authed.
+          document.querySelectorAll<HTMLElement>('[data-auth-anon]').forEach((el) => {
+            el.classList.add('hidden');
+          });
+          document.querySelectorAll<HTMLElement>('[data-auth-authed]').forEach((el) => {
+            el.classList.remove('hidden');
+            // У AuthCta используется flex/inline-flex — снимаем display:none через класс,
+            // но добавляем явно inline-flex чтобы кнопка не упала на новую строку.
+            if (el.tagName === 'A') el.classList.add('inline-flex');
+          });
+        } catch {
+          // Сеть недоступна или /api/auth/me не отдаёт — оставляем anonymous-defaults.
+        }
+      })();
+    </script>
+
+    <script>
+      // Глобальный scroll-reveal: вешает `.is-visible` когда элемент с `[data-reveal]`
+      // попадает в viewport. Один раз, без переключений обратно (не отвлекает при скролле наверх).
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!reduceMotion && 'IntersectionObserver' in window) {
+        const io = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (entry.isIntersecting) {
+                entry.target.classList.add('is-visible');
+                io.unobserve(entry.target);
+              }
+            }
+          },
+          { threshold: 0.12, rootMargin: '0px 0px -8% 0px' },
+        );
+        document.querySelectorAll('[data-reveal]').forEach((el) => io.observe(el));
+      } else {
+        // reduced motion / нет IntersectionObserver — сразу показываем всё.
+        document.querySelectorAll('[data-reveal]').forEach((el) => el.classList.add('is-visible'));
+      }
+    </script>
+  </body>
+</html>

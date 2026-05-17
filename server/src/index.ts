@@ -32,6 +32,17 @@ import { GetKbDocument } from './application/kb/GetKbDocument.js';
 import { WriteKbDocument } from './application/kb/WriteKbDocument.js';
 import { DeleteKbDocument } from './application/kb/DeleteKbDocument.js';
 import { BulkCreateCredential } from './application/kb/BulkCreateCredential.js';
+import { DrizzleTaskRepository } from './infrastructure/repositories/DrizzleTaskRepository.js';
+import { DrizzleTaskCommitRepository } from './infrastructure/repositories/DrizzleTaskCommitRepository.js';
+import { ListTasks } from './application/task/ListTasks.js';
+import { CreateTask } from './application/task/CreateTask.js';
+import { UpdateTask } from './application/task/UpdateTask.js';
+import { MoveTask } from './application/task/MoveTask.js';
+import { DeleteTask } from './application/task/DeleteTask.js';
+import { LinkCommit } from './application/task/LinkCommit.js';
+import { UnlinkCommit } from './application/task/UnlinkCommit.js';
+import { ListTaskCommits } from './application/task/ListTaskCommits.js';
+import { SyncTaskCommits } from './application/task/SyncTaskCommits.js';
 import { AesGcmSecretCipher } from './infrastructure/crypto/AesGcmSecretCipher.js';
 import { DrizzleSecretsRepository } from './infrastructure/repositories/DrizzleSecretsRepository.js';
 import { PutSecret } from './application/secrets/PutSecret.js';
@@ -64,6 +75,8 @@ try {
 }
 
 const secretsRepo = new DrizzleSecretsRepository(db);
+const taskRepo = new DrizzleTaskRepository(db);
+const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const stubCipher: SecretsCipher = {
   encrypt: () => { throw new SecretsVaultDisabledError(); },
   decrypt: () => { throw new SecretsVaultDisabledError(); },
@@ -79,7 +92,7 @@ const authDeps = {
   now,
 };
 
-const app = createApp({
+const { app, devProxyUpgrade } = createApp({
   auth: {
     register: new Register(authDeps),
     login: new Login(authDeps),
@@ -122,6 +135,29 @@ const app = createApp({
       cipher: activeCipher,
     }),
   },
+  tasks: {
+    listTasks: new ListTasks({ projects: projectRepo, tasks: taskRepo, taskCommits: taskCommitRepo }),
+    createTask: new CreateTask({ projects: projectRepo, tasks: taskRepo, idGen: idGenerator }),
+    updateTask: new UpdateTask({ projects: projectRepo, tasks: taskRepo }),
+    moveTask: new MoveTask({ projects: projectRepo, tasks: taskRepo }),
+    deleteTask: new DeleteTask({ projects: projectRepo, tasks: taskRepo }),
+    linkCommit: new LinkCommit({
+      projects: projectRepo,
+      tasks: taskRepo,
+      taskCommits: taskCommitRepo,
+      tokens: githubTokenRepo,
+      api: githubApi,
+    }),
+    unlinkCommit: new UnlinkCommit({ projects: projectRepo, tasks: taskRepo, taskCommits: taskCommitRepo }),
+    listTaskCommits: new ListTaskCommits({ projects: projectRepo, tasks: taskRepo, taskCommits: taskCommitRepo }),
+    syncTaskCommits: new SyncTaskCommits({
+      projects: projectRepo,
+      tasks: taskRepo,
+      taskCommits: taskCommitRepo,
+      tokens: githubTokenRepo,
+      api: githubApi,
+    }),
+  },
   github: {
     startDeviceFlow: new StartDeviceFlow({
       api: githubApi,
@@ -151,6 +187,13 @@ const server = app.listen(config.port, () => {
     `[projectsflow] github integration: ${config.github.clientId ? 'enabled' : 'DISABLED (no GITHUB_CLIENT_ID)'}`,
   );
 });
+
+// HMR-WebSocket: Vite-клиент конектится через тот же Express'овый origin.
+// Без этого hot-reload не работает через dev-gateway.
+if (devProxyUpgrade) {
+  server.on('upgrade', devProxyUpgrade);
+  console.log('[projectsflow] dev gateway: proxying SPA + HMR to Vite');
+}
 
 // Грациозный shutdown — закрываем pool, иначе процесс висит.
 const shutdown = (signal: string): void => {

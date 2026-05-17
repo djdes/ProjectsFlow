@@ -36,7 +36,7 @@ const ssh = (remoteCmd) =>
 const scp = (local, remote) =>
   run(`pscp -batch -P ${PORT} -pw "${PASS}" "${local}" ${USER}@${HOST}:"${remote}"`);
 
-console.log("→ 1/5  Build client + server");
+console.log("→ 1/5  Build client + landing + server");
 run("npm run build");
 
 console.log("→ 2/5  Pack tarball");
@@ -46,7 +46,7 @@ mkdirSync(dist, { recursive: true });
 const archive = resolve(dist, "release.tar.gz");
 // Используем tar из Git for Windows (есть в %ProgramFiles%\Git\usr\bin\tar.exe)
 run(
-  `tar --exclude=node_modules --exclude=.deploy --exclude=.git -czf "${archive}" server/dist client/dist db scripts package.json server/package.json ecosystem.config.cjs .env`,
+  `tar --exclude=node_modules --exclude=.deploy --exclude=.git -czf "${archive}" server/dist client/dist landing/dist db scripts package.json server/package.json ecosystem.config.cjs .env`,
 );
 
 console.log("→ 3/5  Upload + extract");

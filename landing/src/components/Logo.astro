@@ -1,0 +1,16 @@
+---
+interface Props {
+  class?: string;
+}
+const { class: className = '' } = Astro.props;
+---
+
+<a href="/" class={`inline-flex items-center gap-2 ${className}`}>
+  <span
+    class="grid size-7 place-items-center rounded-md bg-gradient-to-br from-accent-400 to-accent-600 text-[11px] font-bold text-white shadow-[0_4px_20px_-4px_rgba(59,130,246,0.6)]"
+    aria-hidden="true"
+  >
+    PF
+  </span>
+  <span class="text-sm font-semibold tracking-tight text-ink-50">ProjectsFlow</span>
+</a>

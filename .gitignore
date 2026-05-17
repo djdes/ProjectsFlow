@@ -6,6 +6,7 @@ build/
 .env
 .env.local
 .env.*.local
+.env.prod
 *.log
 npm-debug.log*
 .DS_Store
@@ -17,3 +18,9 @@ coverage/
 .parcel-cache/
 .pm2/
 .deploy/
+# Astro auto-generated types
+*/.astro/
+# Playwright session artifacts (created by MCP debug runs)
+.playwright-mcp/
+# Claude Code state
+.claude/

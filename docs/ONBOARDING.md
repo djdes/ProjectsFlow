@@ -89,27 +89,45 @@ npm run dev                   # Vite :5173, API :4317, /api проксирует
 
 Открыть <http://localhost:5173/>.
 
-`.env` для **локальной** разработки (если открыт удалённый TCP к БД):
+### Локальная БД
+
+**Правило: дев-машина НЕ ходит в прод-БД.** `.env` содержит только локальные
+значения, прод-кред живут в `.env.prod` (gitignored, для ad-hoc CLI) и в
+GitHub Actions secrets (для CI-деплоя).
+
+На дев-машине должен стоять локальный MySQL/MariaDB. У текущего разработчика —
+MySQL 9.6 на 127.0.0.1:3306, БД `projectsflow`, юзер `projectsflow` с правами
+только на эту БД. Версия дрифтует с прод (MariaDB 10.11) — на текущем стеке
+(utf8mb4, базовый SQL, без JSON) это работает, но для строгого соответствия —
+поставить MariaDB 10.11 в Docker.
+
+`.env` для локальной разработки:
 
 ```
 NODE_ENV=development
 PORT=4317
-DB_HOST=projectsflow.ru
+
+# DATABASE_URL приоритетнее DB_* (см. server/src/infrastructure/db/index.ts).
+DATABASE_URL=mysql://projectsflow:<LOCAL_PASSWORD>@127.0.0.1:3306/projectsflow
+
+# DB_* нужны для scripts/migrate.mjs (он не читает DATABASE_URL).
+DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=projectsflow
-DB_PASSWORD=DWjrfrE8QSLk6opq!
+DB_PASSWORD=<LOCAL_PASSWORD>
 DB_NAME=projectsflow
-DB_CONNECTION_LIMIT=10
-SSH_HOST=projectsflow.ru
-SSH_PORT_LOCAL=22
-SSH_PORT_REMOTE=50222
-SSH_USER=projectsflow
-SSH_PASSWORD=DWjrfrE8QSLk6opq!
-DEPLOY_PATH=/var/www/projectsflow/data/www/projectsflow.ru
-GIT_REMOTE_PATH=/var/www/projectsflow/data/git/projectsflow.git
+
+GITHUB_CLIENT_ID=Ov23liMlggU0i73dJ27a
+SECRETS_MASTER_KEY=<base64-32-bytes>
+SESSION_COOKIE_NAME=pf_session
+SESSION_TTL_DAYS=30
 ```
 
-Если TCP к БД недоступен — разрабатывай фронт на статике, а данные правь на сервере.
+Прогон миграций: `npm run db:migrate`. Применённые трекаются в таблице
+`_migrations`. Прод-миграции прогоняет CI на сервере (см. `.github/workflows/deploy.yml`).
+
+Если нужно подключиться к прод-БД руками с дев-машины — `.env.prod` содержит
+кред, гоняй mysql-клиент с явным `--host=projectsflow.ru`. Не подменяй `.env`.
 
 ---
 
