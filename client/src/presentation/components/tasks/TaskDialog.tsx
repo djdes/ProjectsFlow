@@ -1,4 +1,13 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react';
+import {
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type FormEvent,
+  type Ref,
+} from 'react';
 import { ImagePlus, Loader2, Trash2, X } from 'lucide-react';
 import {
   Dialog,
@@ -33,6 +42,32 @@ type Props = {
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
+// Извлекает image-файлы из ClipboardEvent. Возвращает пустой массив если ничего
+// подходящего нет — caller'у тогда нужно дать textarea/контролу обработать paste
+// как обычно (не делать preventDefault).
+function extractClipboardImages(clipboardData: DataTransfer | null): File[] {
+  if (!clipboardData) return [];
+  const out: File[] = [];
+  for (let i = 0; i < clipboardData.items.length; i++) {
+    const it = clipboardData.items[i];
+    if (it && it.kind === 'file') {
+      const file = it.getAsFile();
+      if (file && ACCEPTED_TYPES.includes(file.type)) out.push(file);
+    }
+  }
+  return out;
+}
+
+function filterValidImageFiles(files: FileList | File[]): File[] {
+  return Array.from(files).filter((f) => {
+    if (!ACCEPTED_TYPES.includes(f.type)) {
+      toast.error(`Тип файла "${f.type || 'неизвестный'}" не поддерживается — нужны картинки.`);
+      return false;
+    }
+    return true;
+  });
+}
+
 export function TaskDialog({
   state,
   onClose,
@@ -46,6 +81,9 @@ export function TaskDialog({
   // Pending-файлы при создании задачи. Берём File-объекты + Blob URL для превью,
   // после успешного create аплоадим их пачкой.
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  // В edit-режиме секция аттачей экспонирует addFiles через ref — чтобы paste-handler
+  // на форме (поймает Ctrl+V даже когда фокус в textarea) мог пнуть аплоад.
+  const attachmentsRef = useRef<AttachmentsHandle>(null);
 
   useEffect(() => {
     if (!state) return;
@@ -57,6 +95,31 @@ export function TaskDialog({
       return [];
     });
   }, [state]);
+
+  const addPendingFiles = (raw: FileList | File[]): void => {
+    const valid = filterValidImageFiles(raw);
+    if (valid.length === 0) return;
+    const additions: PendingFile[] = valid.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+    setPendingFiles((prev) => [...prev, ...additions]);
+  };
+
+  // Form-level paste handler — ловит Ctrl+V где угодно внутри формы (textarea, секция, пустое место).
+  // Если в буфере есть картинки — preventDefault (textarea не вставит binary-кашу) и роутим в нужную секцию.
+  // Если картинок нет — просто пускаем дефолтное поведение (текст ↦ в textarea).
+  const handleFormPaste = (e: ClipboardEvent<HTMLFormElement>): void => {
+    const files = extractClipboardImages(e.clipboardData);
+    if (files.length === 0) return;
+    e.preventDefault();
+    if (state?.mode === 'create') {
+      addPendingFiles(files);
+    } else if (state?.mode === 'edit') {
+      void attachmentsRef.current?.addFiles(files);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -80,7 +143,11 @@ export function TaskDialog({
           }
         }
         if (ok > 0) {
-          toast.success(ok === pendingFiles.length ? 'Картинки прикреплены' : `Прикреплено ${ok} из ${pendingFiles.length}`);
+          toast.success(
+            ok === pendingFiles.length
+              ? 'Картинки прикреплены'
+              : `Прикреплено ${ok} из ${pendingFiles.length}`,
+          );
           onCommitsChange?.();
         }
       }
@@ -109,13 +176,14 @@ export function TaskDialog({
           <DialogDescription>
             {state?.mode === 'edit'
               ? 'Опиши задачу, прикрепи скриншоты, привяжи коммиты.'
-              : 'Опиши задачу и при желании сразу прикрепи скриншоты.'}
+              : 'Опиши задачу и при желании сразу прикрепи скриншоты (Ctrl+V).'}
           </DialogDescription>
         </DialogHeader>
 
         <form
           id="task-dialog-form"
           onSubmit={handleSubmit}
+          onPaste={handleFormPaste}
           className="space-y-4 overflow-y-auto px-6 pb-4"
         >
           <div className="space-y-1.5">
@@ -127,7 +195,7 @@ export function TaskDialog({
               maxLength={5000}
               rows={6}
               autoFocus
-              placeholder="Что нужно сделать. Контекст, шаги, ссылки."
+              placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
               className="w-full rounded-md border bg-background p-2 text-sm"
             />
           </div>
@@ -136,6 +204,7 @@ export function TaskDialog({
           {state?.mode === 'edit' ? (
             <>
               <AttachmentsSection
+                ref={attachmentsRef}
                 projectId={state.task.projectId}
                 taskId={state.task.id}
                 onChange={() => onCommitsChange?.()}
@@ -145,7 +214,17 @@ export function TaskDialog({
               </div>
             </>
           ) : (
-            <PendingAttachmentsSection files={pendingFiles} onChange={setPendingFiles} />
+            <PendingAttachmentsSection
+              files={pendingFiles}
+              onAdd={addPendingFiles}
+              onRemove={(id) => {
+                setPendingFiles((prev) => {
+                  const target = prev.find((p) => p.id === id);
+                  if (target) URL.revokeObjectURL(target.previewUrl);
+                  return prev.filter((p) => p.id !== id);
+                });
+              }}
+            />
           )}
         </form>
 
@@ -164,67 +243,28 @@ export function TaskDialog({
 }
 
 // =========================================================
-// Pending-attachments — выбор файлов ДО создания задачи. Файлы держатся в state'е,
-// аплоад идёт после успешного create в TaskDialog.handleSubmit.
+// Pending-attachments — выбор файлов ДО создания задачи. Состояние и валидация
+// живут в TaskDialog (нужно зашерить с form-level paste-handler'ом); секция — чисто
+// презентационная: drag-drop + file-picker + рендер превью.
 // =========================================================
 
 type PendingFile = {
-  readonly id: string; // local-only id, чтобы можно было удалять без коллизий
+  readonly id: string;
   readonly file: File;
   readonly previewUrl: string;
 };
 
 function PendingAttachmentsSection({
   files,
-  onChange,
+  onAdd,
+  onRemove,
 }: {
   files: PendingFile[];
-  onChange: (next: PendingFile[] | ((prev: PendingFile[]) => PendingFile[])) => void;
+  onAdd: (files: File[]) => void;
+  onRemove: (id: string) => void;
 }): React.ReactElement {
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const addFiles = (raw: FileList | File[]): void => {
-    const valid = Array.from(raw).filter((f) => {
-      if (!ACCEPTED_TYPES.includes(f.type)) {
-        toast.error(`Тип файла "${f.type || 'неизвестный'}" не поддерживается — нужны картинки.`);
-        return false;
-      }
-      return true;
-    });
-    if (valid.length === 0) return;
-    const additions: PendingFile[] = valid.map((file) => ({
-      id: crypto.randomUUID(),
-      file,
-      previewUrl: URL.createObjectURL(file),
-    }));
-    onChange((prev) => [...prev, ...additions]);
-  };
-
-  const remove = (id: string): void => {
-    onChange((prev) => {
-      const target = prev.find((p) => p.id === id);
-      if (target) URL.revokeObjectURL(target.previewUrl);
-      return prev.filter((p) => p.id !== id);
-    });
-  };
-
-  const handlePaste = (e: ClipboardEvent<HTMLDivElement>): void => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    const collected: File[] = [];
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      if (it && it.kind === 'file') {
-        const file = it.getAsFile();
-        if (file && ACCEPTED_TYPES.includes(file.type)) collected.push(file);
-      }
-    }
-    if (collected.length > 0) {
-      e.preventDefault();
-      addFiles(collected);
-    }
-  };
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
@@ -238,18 +278,12 @@ function PendingAttachmentsSection({
     e.preventDefault();
     setDragActive(false);
     if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-      addFiles(e.dataTransfer.files);
+      onAdd(Array.from(e.dataTransfer.files));
     }
   };
 
   return (
-    <div
-      className="space-y-2"
-      onPaste={handlePaste}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
+    <div className="space-y-2" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       <div className="flex items-center justify-between">
         <Label>Картинки и скриншоты</Label>
         <Button
@@ -269,7 +303,7 @@ function PendingAttachmentsSection({
           multiple
           className="hidden"
           onChange={(e) => {
-            if (e.target.files) addFiles(e.target.files);
+            if (e.target.files) onAdd(Array.from(e.target.files));
             e.target.value = '';
           }}
         />
@@ -298,7 +332,7 @@ function PendingAttachmentsSection({
             </div>
             <button
               type="button"
-              onClick={() => remove(pf.id)}
+              onClick={() => onRemove(pf.id)}
               className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-destructive group-hover:opacity-100"
               aria-label="Убрать"
             >
@@ -308,7 +342,7 @@ function PendingAttachmentsSection({
         ))}
         {files.length === 0 && (
           <div className="col-span-3 grid place-items-center py-6 text-center text-xs text-muted-foreground">
-            Перетащи картинки сюда, вставь из&nbsp;буфера (Ctrl+V в&nbsp;этой области) или нажми «Прикрепить».
+            Перетащи картинки сюда, вставь из&nbsp;буфера (Ctrl+V) или нажми «Прикрепить».
             Они загрузятся после создания задачи.
           </div>
         )}
@@ -318,13 +352,22 @@ function PendingAttachmentsSection({
 }
 
 // =========================================================
-// Attachments — список + загрузка (file-picker / drag-drop / paste).
+// Attachments — список + загрузка для уже существующей задачи. ExposeFiles
+// через ref: form-level paste-handler в TaskDialog зовёт addFiles(files) когда
+// пользователь жмёт Ctrl+V где-то на форме (включая фокус в textarea).
 // =========================================================
+
+type AttachmentsHandle = {
+  addFiles: (files: FileList | File[]) => Promise<void>;
+};
+
 function AttachmentsSection({
+  ref,
   projectId,
   taskId,
   onChange,
 }: {
+  ref?: Ref<AttachmentsHandle>;
   projectId: string;
   taskId: string;
   onChange: () => void;
@@ -357,13 +400,7 @@ function AttachmentsSection({
   }, [projectId, taskId, taskRepository]);
 
   const uploadFiles = async (files: FileList | File[]): Promise<void> => {
-    const valid = Array.from(files).filter((f) => {
-      if (!ACCEPTED_TYPES.includes(f.type)) {
-        toast.error(`Тип файла "${f.type || 'неизвестный'}" не поддерживается — нужны картинки.`);
-        return false;
-      }
-      return true;
-    });
+    const valid = filterValidImageFiles(files);
     if (valid.length === 0) return;
     setUploadingCount((c) => c + valid.length);
     for (const file of valid) {
@@ -379,22 +416,7 @@ function AttachmentsSection({
     }
   };
 
-  const handlePaste = (e: ClipboardEvent<HTMLDivElement>): void => {
-    const clipboardItems = e.clipboardData?.items;
-    if (!clipboardItems) return;
-    const files: File[] = [];
-    for (let i = 0; i < clipboardItems.length; i++) {
-      const it = clipboardItems[i];
-      if (it && it.kind === 'file') {
-        const file = it.getAsFile();
-        if (file && ACCEPTED_TYPES.includes(file.type)) files.push(file);
-      }
-    }
-    if (files.length > 0) {
-      e.preventDefault();
-      void uploadFiles(files);
-    }
-  };
+  useImperativeHandle(ref, () => ({ addFiles: uploadFiles }));
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
@@ -424,13 +446,7 @@ function AttachmentsSection({
   };
 
   return (
-    <div
-      className="space-y-2"
-      onPaste={handlePaste}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
+    <div className="space-y-2" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       <div className="flex items-center justify-between">
         <Label>Картинки и скриншоты</Label>
         <Button
@@ -451,7 +467,6 @@ function AttachmentsSection({
           className="hidden"
           onChange={(e) => {
             if (e.target.files) void uploadFiles(e.target.files);
-            // сбрасываем чтобы повторно выбрать тот же файл работало
             e.target.value = '';
           }}
         />
@@ -512,7 +527,7 @@ function AttachmentsSection({
         ))}
         {items.length === 0 && uploadingCount === 0 && !loading && (
           <div className="col-span-3 grid place-items-center py-6 text-center text-xs text-muted-foreground">
-            Перетащи картинки сюда, вставь из&nbsp;буфера (Ctrl+V в&nbsp;этой области) или нажми «Прикрепить».
+            Перетащи картинки сюда, вставь из&nbsp;буфера (Ctrl+V) или нажми «Прикрепить».
           </div>
         )}
       </div>
