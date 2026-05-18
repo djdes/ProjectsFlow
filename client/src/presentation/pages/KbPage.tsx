@@ -106,7 +106,6 @@ export function KbPage(): React.ReactElement {
           open={newFileFolder !== null}
           onOpenChange={(o) => { if (!o) setNewFileFolder(null); }}
           projectId={projectId ?? ''}
-          projectName={project.name}
           folder={newFileFolder}
           typePreset={FOLDER_TO_TYPE[newFileFolder] ?? 'note'}
           onCreated={(path) => {
@@ -114,6 +113,10 @@ export function KbPage(): React.ReactElement {
             reloadTree();
             setActivePath(path);
             setEditing(false);
+          }}
+          onOpenBulk={() => {
+            setNewFileFolder(null);
+            setBulkOpen(true);
           }}
         />
       )}

@@ -17,12 +17,14 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
-  projectName: string;
   /** The folder where the document will be created (e.g. 'credentials', 'notes') */
   folder: string;
   /** Preset type derived from the folder */
   typePreset: string;
   onCreated: (path: string) => void;
+  // Опционально: открыть «Bulk add» — для credentials с паролями там нормальный UX
+  // (parse KEY:VALUE, секреты ↦ vault). Этот диалог же — просто пустая заметка.
+  onOpenBulk?: () => void;
 };
 
 function slugify(s: string): string {
@@ -34,25 +36,29 @@ function slugify(s: string): string {
     .replace(/^-|-$/g, '');
 }
 
+const PLACEHOLDER_BY_TYPE: Record<string, string> = {
+  credential: 'Например: Stripe API',
+  note: 'Например: Заметка о деплое',
+};
+
 export function NewKbDocumentDialog({
   open,
   onOpenChange,
   projectId,
-  projectName,
   folder,
   typePreset,
   onCreated,
+  onOpenBulk,
 }: Props): React.ReactElement {
   const { kbRepository } = useContainer();
   const [title, setTitle] = useState('');
   const [fileSlug, setFileSlug] = useState('');
   const [body, setBody] = useState('');
-  const [passwordRef, setPasswordRef] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isCredential = typePreset === 'credential';
-  const projectSlug = slugify(projectName);
+  const titlePlaceholder = PLACEHOLDER_BY_TYPE[typePreset] ?? 'Название заметки';
 
   // Reset form when dialog opens/closes
   useEffect(() => {
@@ -60,17 +66,9 @@ export function NewKbDocumentDialog({
       setTitle('');
       setFileSlug('');
       setBody('');
-      setPasswordRef('');
       setError(null);
     }
   }, [open]);
-
-  // Auto-update passwordRef when title or fileSlug changes (for credential type)
-  useEffect(() => {
-    if (!isCredential) return;
-    const slug = fileSlug.trim() || slugify(title);
-    setPasswordRef(`vault://${projectSlug}/${slug || 'password'}/password`);
-  }, [isCredential, title, fileSlug, projectSlug]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -89,11 +87,7 @@ export function NewKbDocumentDialog({
     }
 
     const path = `${folder}/${slug}.md`;
-
     const fm: Frontmatter = { type: typePreset, title: trimmedTitle };
-    if (isCredential) {
-      (fm as Record<string, unknown>).password_ref = passwordRef;
-    }
 
     setSaving(true);
     try {
@@ -114,6 +108,12 @@ export function NewKbDocumentDialog({
     }
   };
 
+  const handleSwitchToBulk = (): void => {
+    if (!onOpenBulk) return;
+    onOpenChange(false);
+    onOpenBulk();
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -121,12 +121,6 @@ export function NewKbDocumentDialog({
           <DialogTitle>Новая заметка в «{folder}»</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Type — read-only */}
-          <div className="space-y-1.5">
-            <Label>Тип</Label>
-            <Input value={typePreset} readOnly className="bg-muted text-muted-foreground" />
-          </div>
-
           {/* Title — required */}
           <div className="space-y-1.5">
             <Label htmlFor="new-kb-title">
@@ -137,7 +131,7 @@ export function NewKbDocumentDialog({
               autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Например: Stripe API keys"
+              placeholder={titlePlaceholder}
             />
           </div>
 
@@ -157,18 +151,6 @@ export function NewKbDocumentDialog({
             </div>
           </div>
 
-          {/* Credential-specific: password_ref */}
-          {isCredential && (
-            <div className="space-y-1.5">
-              <Label htmlFor="new-kb-password-ref">password_ref</Label>
-              <Input
-                id="new-kb-password-ref"
-                value={passwordRef}
-                onChange={(e) => setPasswordRef(e.target.value)}
-              />
-            </div>
-          )}
-
           {/* Body — optional textarea */}
           <div className="space-y-1.5">
             <Label htmlFor="new-kb-body">Содержимое (необязательно)</Label>
@@ -181,6 +163,22 @@ export function NewKbDocumentDialog({
               placeholder="Markdown-описание…"
             />
           </div>
+
+          {/* Подсказка для credentials: пароли через Bulk add, не сюда */}
+          {isCredential && onOpenBulk && (
+            <p className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              Нужен credential с&nbsp;паролем или несколькими полями?{' '}
+              <button
+                type="button"
+                onClick={handleSwitchToBulk}
+                className="font-medium text-primary hover:underline"
+              >
+                Используй «Bulk add»
+              </button>{' '}
+              — он сам распарсит пары <code className="font-mono">key: value</code> и&nbsp;спрячет
+              секреты в&nbsp;vault.
+            </p>
+          )}
 
           {error && <p className="text-xs text-destructive">{error}</p>}
 
