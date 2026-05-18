@@ -63,6 +63,43 @@ export type TaskWithAttachments = {
   attachments: TaskAttachmentWithData[];
 };
 
+export type CreateCredentialField = {
+  key: string;
+  value: string;
+  isSecret: boolean;
+};
+
+export type CreateCredentialInput = {
+  title: string;
+  kind?: string | null;
+  slug?: string | null;
+  fields: CreateCredentialField[];
+};
+
+export type CreateCredentialResult = {
+  path: string;
+  slug: string;
+  sha: string;
+  secretsWritten: string[];
+};
+
+export type CreateTaskInput = {
+  description: string;
+  status?: 'todo' | 'in_progress' | 'done';
+};
+
+export type WriteKbDocInput = {
+  path: string;
+  frontmatter: Record<string, unknown>;
+  body: string;
+  sha: string | null;
+};
+
+export type WriteKbDocResult = {
+  path: string;
+  sha: string;
+};
+
 export class ApiClient {
   constructor(private readonly config: AgentConfig) {}
 
@@ -151,6 +188,32 @@ export class ApiClient {
       { method: 'POST', body: { sha } },
     );
     return commit;
+  }
+
+  async createCredential(
+    projectId: string,
+    input: CreateCredentialInput,
+  ): Promise<CreateCredentialResult> {
+    const { credential } = await this.request<{ credential: CreateCredentialResult }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/credentials`,
+      { method: 'POST', body: input },
+    );
+    return credential;
+  }
+
+  async createTask(projectId: string, input: CreateTaskInput): Promise<Task> {
+    const { task } = await this.request<{ task: Task }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks`,
+      { method: 'POST', body: input },
+    );
+    return task;
+  }
+
+  async writeKbDocument(projectId: string, input: WriteKbDocInput): Promise<WriteKbDocResult> {
+    return this.request<WriteKbDocResult>(
+      `/agent/projects/${encodeURIComponent(projectId)}/kb/documents`,
+      { method: 'POST', body: input },
+    );
   }
 }
 

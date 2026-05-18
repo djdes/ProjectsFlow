@@ -53,6 +53,7 @@ claude mcp add --scope user projectsflow \
 | `pf_list_projects` | Список проектов юзера (id, name, hasKb, gitRepoUrl) |
 | `pf_list_credentials` | Список credential-файлов в проекте (slug, title, kind) |
 | `pf_get_credential` | Полный credential с резолвленными секретами (plaintext) |
+| `pf_create_credential` | Создание нового credential'а: structured fields с явным `isSecret` → frontmatter + vault |
 
 ### Kanban / задачи
 
@@ -60,8 +61,15 @@ claude mcp add --scope user projectsflow \
 |---|---|
 | `pf_list_tasks` | Список задач в проекте (id, title, description, status, position, commitCount, attachmentCount) |
 | `pf_get_task` | Полный task + все вложения inline. Картинки — как `image`-блоки (агент их видит), остальное — как embedded resources. Используется когда у задачи `attachmentCount > 0`. |
+| `pf_create_task` | Создать новую задачу (по умолчанию падает в TODO в конец колонки) |
 | `pf_move_task` | Перенести задачу на статус `todo` / `in_progress` / `done` (в конец колонки) |
 | `pf_link_commit_to_task` | Привязать SHA коммита к задаче — auto-transition `todo → in_progress` на первом коммите |
+
+### Произвольная запись в KB
+
+| Tool | Описание |
+|---|---|
+| `pf_write_kb_document` | Создать или обновить любой `.md` в KB-репо. Для credential'ов предпочитай `pf_create_credential` — он сам делит на vault/frontmatter. |
 
 ## Пример: deploy с credentials
 

@@ -4,28 +4,52 @@ import type { ListProjects } from '../../application/project/ListProjects.js';
 import type { ListKbDocuments } from '../../application/kb/ListKbDocuments.js';
 import type { GetAgentCredential } from '../../application/agent/GetAgentCredential.js';
 import type { GetAgentTask } from '../../application/agent/GetAgentTask.js';
+import type { CreateAgentCredential } from '../../application/agent/CreateAgentCredential.js';
 import type { AuthenticateAgentToken } from '../../application/agent/AuthenticateAgentToken.js';
 import type { ListTasks } from '../../application/task/ListTasks.js';
+import type { CreateTask } from '../../application/task/CreateTask.js';
 import type { MoveTask } from '../../application/task/MoveTask.js';
 import type { LinkCommit } from '../../application/task/LinkCommit.js';
+import type { WriteKbDocument } from '../../application/kb/WriteKbDocument.js';
+import type { Frontmatter } from '../../domain/kb/Frontmatter.js';
 import type { Project } from '../../domain/project/Project.js';
 import type { KbDocumentSummary } from '../../domain/kb/KbDocument.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import { requireAgentToken } from '../middleware/requireAgentToken.js';
-import { taskStatusSchema, linkCommitSchema } from '../tasks/schemas.js';
+import { taskStatusSchema, linkCommitSchema, createTaskSchema } from '../tasks/schemas.js';
+import { writeDocSchema } from '../kb/schemas.js';
 
 type Deps = {
   readonly authenticate: AuthenticateAgentToken;
   readonly listProjects: ListProjects;
   readonly listKbDocuments: ListKbDocuments;
   readonly getCredential: GetAgentCredential;
+  readonly createCredential: CreateAgentCredential;
   readonly listTasks: ListTasks;
   readonly getTask: GetAgentTask;
+  readonly createTask: CreateTask;
   readonly moveTask: MoveTask;
   readonly linkCommit: LinkCommit;
+  readonly writeKbDocument: WriteKbDocument;
 };
+
+const createCredentialSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  kind: z.string().trim().min(1).max(80).nullable().optional(),
+  slug: z.string().trim().min(1).max(80).nullable().optional(),
+  fields: z
+    .array(
+      z.object({
+        key: z.string().trim().min(1).max(80),
+        value: z.string().max(20_000),
+        isSecret: z.boolean(),
+      }),
+    )
+    .min(1, 'нужно хотя бы одно поле')
+    .max(50),
+});
 
 const moveTaskAgentSchema = z.object({
   targetStatus: taskStatusSchema,
@@ -116,6 +140,29 @@ export function agentApiRouter(deps: Deps): Router {
     },
   );
 
+  // Создание credential'а из агента: structured fields с явным isSecret.
+  // Секреты идут в vault (secrets-таблица), публичные поля — во frontmatter.
+  router.post(
+    '/projects/:projectId/credentials',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const body = createCredentialSchema.parse(req.body);
+        const result = await deps.createCredential.execute({
+          projectId,
+          userId: req.user!.id,
+          title: body.title,
+          kind: body.kind ?? null,
+          slug: body.slug ?? null,
+          fields: body.fields,
+        });
+        res.status(201).json({ credential: result });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
   // Список tasks в проекте — для LLM-judgment'а в Claude Code. Агент читает список,
   // сопоставляет с diff/commit-message и предлагает юзеру move/link.
   router.get(
@@ -125,6 +172,28 @@ export function agentApiRouter(deps: Deps): Router {
         const projectId = req.params['projectId'] as string;
         const list = await deps.listTasks.execute(projectId, req.user!.id);
         res.json({ tasks: list.map(taskToDto) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Создание task'а из агента. По умолчанию падает в TODO внизу колонки.
+  router.post(
+    '/projects/:projectId/tasks',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const body = createTaskSchema.parse(req.body);
+        const task = await deps.createTask.execute({
+          projectId,
+          ownerUserId: req.user!.id,
+          description: body.description,
+          status: body.status ?? 'todo',
+        });
+        // taskToDto ожидает Task с commitCount, но из CreateTask он не приходит — оборачиваем
+        // вручную с нулевым счётчиком; в БД у новой задачи коммитов нет по определению.
+        res.status(201).json({ task: taskToDto({ ...task, commitCount: 0 }) });
       } catch (e) {
         next(e);
       }
@@ -182,6 +251,29 @@ export function agentApiRouter(deps: Deps): Router {
           afterTaskId: null,
         });
         res.json({ task: taskToDto(task) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Запись произвольного KB-документа (create или update). Если sha=null —
+  // создаём новый файл; если sha передан — обновляем существующий (optimistic lock).
+  router.post(
+    '/projects/:projectId/kb/documents',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const body = writeDocSchema.parse(req.body);
+        const result = await deps.writeKbDocument.execute({
+          projectId,
+          userId: req.user!.id,
+          path: body.path,
+          frontmatter: body.frontmatter as Frontmatter,
+          body: body.body,
+          sha: body.sha,
+        });
+        res.status(201).json({ path: body.path, sha: result.sha });
       } catch (e) {
         next(e);
       }

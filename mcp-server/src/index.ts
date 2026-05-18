@@ -140,6 +140,114 @@ const TOOLS = [
     },
   },
   {
+    name: 'pf_create_credential',
+    description:
+      "Create a new credential in the project's KB-repo with structured fields. Each field " +
+      'has an explicit `isSecret` flag — secret fields land in the vault (encrypted secrets ' +
+      'table) and are referenced from the markdown frontmatter as `vault://`, public fields ' +
+      "live in the frontmatter directly. Use this when the user asks to save a token, " +
+      'password, API key, SSH credentials, or any other sensitive value into the project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        title: {
+          type: 'string',
+          description: 'Human-readable title shown in the UI list (e.g. "npm publish token")',
+        },
+        kind: {
+          type: 'string',
+          description:
+            "Optional credential kind/category for the UI badge: 'npm-token', 'ssh', " +
+            "'github-pat', 'database', etc. Lowercase, kebab-case preferred.",
+        },
+        slug: {
+          type: 'string',
+          description:
+            'Optional filename slug (without .md). Defaults to slugify(title). ' +
+            "Example: 'npm-publish' → credentials/npm-publish.md",
+        },
+        fields: {
+          type: 'array',
+          description: 'Credential fields. Mark secrets explicitly with isSecret=true.',
+          items: {
+            type: 'object',
+            properties: {
+              key: {
+                type: 'string',
+                description: "Field name (lowercase, snake_case), e.g. 'token', 'scope'",
+              },
+              value: { type: 'string', description: 'Field value (plaintext)' },
+              isSecret: {
+                type: 'boolean',
+                description: 'true → store in vault and reference via `vault://`',
+              },
+            },
+            required: ['key', 'value', 'isSecret'],
+            additionalProperties: false,
+          },
+          minItems: 1,
+        },
+      },
+      required: ['projectId', 'title', 'fields'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_create_task',
+    description:
+      'Create a new kanban task in the project. By default the task lands at the bottom of ' +
+      "the TODO column. Use this when the user asks to add a task / TODO / ticket to a project.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        description: {
+          type: 'string',
+          description: 'Task description (markdown). Required, 1-5000 chars.',
+        },
+        status: {
+          type: 'string',
+          enum: TASK_STATUS_VALUES,
+          description: "Initial column. Default: 'todo'.",
+        },
+      },
+      required: ['projectId', 'description'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_write_kb_document',
+    description:
+      "Create or update a Markdown document in the project's KB-repo. Path must end with " +
+      "`.md` (e.g. 'notes/architecture.md'). For new files pass sha=null; for updates pass " +
+      "the current sha returned by an earlier read (optimistic lock — server rejects with 409 " +
+      "if the file was modified meanwhile). Use this for general KB writes; for credentials " +
+      'specifically use pf_create_credential — it handles the vault/secret separation.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        path: {
+          type: 'string',
+          description: "Repo-relative path, must end with .md. Example: 'notes/setup.md'",
+        },
+        frontmatter: {
+          type: 'object',
+          description: 'YAML frontmatter as a JSON object',
+          additionalProperties: true,
+        },
+        body: { type: 'string', description: 'Markdown body (after frontmatter)' },
+        sha: {
+          type: ['string', 'null'],
+          description: 'Current sha for updates, null for new files',
+        },
+      },
+      required: ['projectId', 'path', 'frontmatter', 'body', 'sha'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pf_link_commit_to_task',
     description:
       'Link a git commit (by SHA) to a kanban task. The commit SHA must be reachable on ' +
@@ -184,13 +292,40 @@ const LinkCommitInput = z.object({
   taskId: z.string().min(1),
   sha: z.string().trim().regex(/^[0-9a-f]{7,40}$/i, 'Invalid commit SHA'),
 });
+const CreateCredentialInput = z.object({
+  projectId: z.string().min(1),
+  title: z.string().min(1),
+  kind: z.string().min(1).optional(),
+  slug: z.string().min(1).optional(),
+  fields: z
+    .array(
+      z.object({
+        key: z.string().min(1),
+        value: z.string(),
+        isSecret: z.boolean(),
+      }),
+    )
+    .min(1),
+});
+const CreateTaskInputZ = z.object({
+  projectId: z.string().min(1),
+  description: z.string().min(1),
+  status: z.enum(TASK_STATUS_VALUES).optional(),
+});
+const WriteKbDocInputZ = z.object({
+  projectId: z.string().min(1),
+  path: z.string().regex(/^[a-z0-9_./-]+\.md$/i, 'Path must end with .md'),
+  frontmatter: z.record(z.unknown()),
+  body: z.string(),
+  sha: z.string().nullable(),
+});
 
 async function main(): Promise<void> {
   const config = loadConfig();
   const api = new ApiClient(config);
 
   const server = new Server(
-    { name: 'projectsflow', version: '0.4.0' },
+    { name: 'projectsflow', version: '0.5.0' },
     { capabilities: { tools: {} } },
   );
 
@@ -263,6 +398,34 @@ async function main(): Promise<void> {
           const input = LinkCommitInput.parse(req.params.arguments ?? {});
           const commit = await api.linkCommitToTask(input.projectId, input.taskId, input.sha);
           return jsonResult(commit);
+        }
+        case 'pf_create_credential': {
+          const input = CreateCredentialInput.parse(req.params.arguments ?? {});
+          const credential = await api.createCredential(input.projectId, {
+            title: input.title,
+            kind: input.kind ?? null,
+            slug: input.slug ?? null,
+            fields: input.fields,
+          });
+          return jsonResult(credential);
+        }
+        case 'pf_create_task': {
+          const input = CreateTaskInputZ.parse(req.params.arguments ?? {});
+          const task = await api.createTask(input.projectId, {
+            description: input.description,
+            status: input.status,
+          });
+          return jsonResult(task);
+        }
+        case 'pf_write_kb_document': {
+          const input = WriteKbDocInputZ.parse(req.params.arguments ?? {});
+          const result = await api.writeKbDocument(input.projectId, {
+            path: input.path,
+            frontmatter: input.frontmatter,
+            body: input.body,
+            sha: input.sha,
+          });
+          return jsonResult(result);
         }
         default:
           return errorResult(`Unknown tool: ${name}`);

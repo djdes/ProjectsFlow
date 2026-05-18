@@ -44,6 +44,7 @@ import { RevokeAgentToken } from './application/agent/RevokeAgentToken.js';
 import { AuthenticateAgentToken } from './application/agent/AuthenticateAgentToken.js';
 import { GetAgentCredential } from './application/agent/GetAgentCredential.js';
 import { GetAgentTask } from './application/agent/GetAgentTask.js';
+import { CreateAgentCredential } from './application/agent/CreateAgentCredential.js';
 import { InMemoryAgentDeviceCodeStore } from './application/agent/AgentDeviceCodeStore.js';
 import { RequestAgentDeviceCode } from './application/agent/RequestAgentDeviceCode.js';
 import { ApproveAgentDeviceCode } from './application/agent/ApproveAgentDeviceCode.js';
@@ -245,6 +246,12 @@ const { app, devProxyUpgrade } = createApp({
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
     }),
+    createAgentCredential: new CreateAgentCredential({
+      projects: projectRepo,
+      tokens: githubTokenRepo,
+      kb: kbRepo,
+      secrets: secretsRepo,
+    }),
     // Переиспользуем существующие use-cases для agent-эндпоинтов
     listProjects: new ListProjects(projectRepo),
     listKbDocuments: new ListKbDocuments({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
@@ -254,6 +261,7 @@ const { app, devProxyUpgrade } = createApp({
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,
     }),
+    createTask: new CreateTask({ projects: projectRepo, tasks: taskRepo, idGen: idGenerator }),
     moveTask: new MoveTask({ projects: projectRepo, tasks: taskRepo }),
     linkCommit: new LinkCommit({
       projects: projectRepo,
@@ -261,6 +269,11 @@ const { app, devProxyUpgrade } = createApp({
       taskCommits: taskCommitRepo,
       tokens: githubTokenRepo,
       api: githubApi,
+    }),
+    writeKbDocument: new WriteKbDocument({
+      projects: projectRepo,
+      tokens: githubTokenRepo,
+      kb: kbRepo,
     }),
     requestDeviceCode: new RequestAgentDeviceCode({
       store: agentDeviceCodeStore,
