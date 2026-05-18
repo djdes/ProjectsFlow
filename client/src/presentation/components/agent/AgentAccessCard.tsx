@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Bot, Check, Copy, Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { Bot, Check, Copy, Loader2, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -42,26 +42,8 @@ export function AgentAccessCard(): React.ReactElement {
   const [tokens, setTokens] = useState<AgentToken[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
-  const [connecting, setConnecting] = useState(false);
   // Modal показа свежесозданного токена (plaintext доступен 1 раз).
   const [createdToken, setCreatedToken] = useState<string | null>(null);
-
-  // "Подключить Claude Code" — auto-создаёт токен с дефолтным именем,
-  // открывает диалог с двумя форматами (промпт + команда). Без отдельной формы ввода имени.
-  const handleQuickConnect = async (): Promise<void> => {
-    if (connecting) return;
-    setConnecting(true);
-    try {
-      const dateLabel = new Date().toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: '2-digit' });
-      const { token, plaintext } = await agentTokenRepository.create(`Claude Code · ${dateLabel}`);
-      setTokens((prev) => (prev ? [token, ...prev] : [token]));
-      setCreatedToken(plaintext);
-    } catch (e) {
-      toast.error(`Не удалось создать токен: ${(e as Error).message}`);
-    } finally {
-      setConnecting(false);
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -119,16 +101,10 @@ export function AgentAccessCard(): React.ReactElement {
               твоих проектов через API.
             </CardDescription>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={handleQuickConnect} disabled={connecting}>
-              {connecting ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-              Подключить Claude Code
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
-              <Plus className="size-4" />
-              Создать токен вручную
-            </Button>
-          </div>
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="size-4" />
+            Создать токен
+          </Button>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -199,8 +175,19 @@ function CreateTokenDialog({
   const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Пред-заполняем дефолтным именем "Claude Code · DD.MM.YY" — большинству юзеров
+  // подходит, можно просто Enter нажать. Кому нужно — стирает и пишет своё.
   useEffect(() => {
-    if (!open) setName('');
+    if (open) {
+      const dateLabel = new Date().toLocaleDateString('ru', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+      });
+      setName(`Claude Code · ${dateLabel}`);
+    } else {
+      setName('');
+    }
   }, [open]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
