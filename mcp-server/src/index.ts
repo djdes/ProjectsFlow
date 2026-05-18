@@ -167,7 +167,7 @@ async function main(): Promise<void> {
   const api = new ApiClient(config);
 
   const server = new Server(
-    { name: 'projectsflow', version: '0.2.0' },
+    { name: 'projectsflow', version: '0.3.0' },
     { capabilities: { tools: {} } },
   );
 
@@ -245,9 +245,47 @@ function errorResult(message: string): {
   };
 }
 
-main().catch((err) => {
-  // Ошибка на старте (config not found, etc.) — пишем в stderr и валим процесс с кодом 1.
-  // stdout не трогаем — он зарезервирован под MCP-протокол.
-  process.stderr.write(`projectsflow-mcp: fatal: ${(err as Error).message}\n`);
-  process.exit(1);
-});
+// Subcommand-роутинг. По умолчанию (без argv) — MCP-сервер на stdio. С аргументом
+// `setup` — интерактивный device-flow и запись agent.json. Это позволяет одному
+// `bin`'у обслуживать оба сценария без отдельных npm-пакетов.
+const subcommand = process.argv[2];
+
+if (subcommand === 'setup') {
+  // Динамический импорт — чтобы при обычном MCP-старте setup.js не загружался.
+  import('./setup.js')
+    .then(({ runSetup }) => runSetup())
+    .catch((err: Error) => {
+      process.stderr.write(`projectsflow-mcp setup: ${err.message}\n`);
+      process.exit(1);
+    });
+} else if (subcommand && subcommand !== '--') {
+  process.stderr.write(
+    `Unknown subcommand: ${subcommand}\n` +
+      `Usage:\n` +
+      `  projectsflow-mcp           — start MCP stdio server (used by Claude Code)\n` +
+      `  projectsflow-mcp setup     — interactive device-flow setup, writes agent.json\n`,
+  );
+  process.exit(2);
+} else {
+  main().catch((err) => {
+    // Ошибка на старте (config not found, etc.) — пишем в stderr и валим процесс с кодом 1.
+    // stdout не трогаем — он зарезервирован под MCP-протокол.
+    const msg = (err as Error).message;
+    process.stderr.write(`projectsflow-mcp: fatal: ${msg}\n`);
+    if (msg.toLowerCase().includes('config not found')) {
+      process.stderr.write(
+        `\n` +
+          `Looks like you haven't run setup yet. Try:\n` +
+          `  npx -y @projectsflow/mcp-server@latest setup\n` +
+          `\n` +
+          `Or set PROJECTSFLOW_API_URL and PROJECTSFLOW_AGENT_TOKEN env vars in your\n` +
+          `Claude Code MCP config:\n` +
+          `  claude mcp add --scope user projectsflow \\\n` +
+          `    -e PROJECTSFLOW_API_URL=https://projectsflow.ru/api \\\n` +
+          `    -e PROJECTSFLOW_AGENT_TOKEN=pfat_... \\\n` +
+          `    -- npx -y @projectsflow/mcp-server@latest\n`,
+      );
+    }
+    process.exit(1);
+  });
+}

@@ -3,33 +3,46 @@
 MCP-сервер для [ProjectsFlow](https://projectsflow.ru) — даёт Claude Code и другим
 MCP-клиентам доступ к credentials и kanban-задачам проектов.
 
-## Установка
+## Установка (рекомендуемый flow — device pairing, без копипасты токена)
+
+**Шаг 1:** запусти setup в терминале — он откроет браузер и попросит подтвердить подключение:
 
 ```bash
-# В Claude Code
-claude mcp add projectsflow npx -- -y @projectsflow/mcp-server
+npx -y @projectsflow/mcp-server@latest setup
 ```
 
-## Настройка
-
-Создай файл `~/.config/projectsflow/agent.json`:
-
-```json
-{
-  "apiUrl": "https://projectsflow.ru/api",
-  "token": "pfat_..."
-}
-```
-
-Токен генерируется в UI ProjectsFlow: **Профиль → Доступ для агентов → Создать токен**.
-Plaintext-значение токена показывается **один раз** при создании — сохрани сразу.
-
-Альтернатива (через env vars):
+Если ProjectsFlow живёт не на `projectsflow.ru`, передай свой apiUrl:
 
 ```bash
-export PROJECTSFLOW_API_URL="https://projectsflow.ru/api"
-export PROJECTSFLOW_AGENT_TOKEN="pfat_..."
+PROJECTSFLOW_API_URL=https://app.example.com/api npx -y @projectsflow/mcp-server@latest setup
 ```
+
+Setup:
+- выпишет на сервере pending device-code,
+- откроет страницу `/device?code=ABCD-1234` в браузере,
+- ты нажмёшь «Подключить» — agent-токен создаётся и автоматически сохраняется в `~/.config/projectsflow/agent.json`.
+
+**Шаг 2:** зарегистрируй MCP в Claude Code:
+
+```bash
+claude mcp add --scope user projectsflow -- npx -y @projectsflow/mcp-server@latest
+```
+
+`--scope user` делает MCP видимым во всех проектах Claude Code (без него — только в проекте, откуда запустил команду).
+
+## Альтернатива: env-vars без device flow
+
+Если хочешь обойтись без браузера — создай токен в UI **Профиль → Доступ для агентов → Создать токен вручную**,
+скопируй плейнтекст и передай его через `-e`:
+
+```bash
+claude mcp add --scope user projectsflow \
+  -e PROJECTSFLOW_API_URL=https://projectsflow.ru/api \
+  -e PROJECTSFLOW_AGENT_TOKEN=pfat_... \
+  -- npx -y @projectsflow/mcp-server@latest
+```
+
+Этот вариант не пишет `~/.config/projectsflow/agent.json` — токен живёт прямо в Claude Code конфиге.
 
 ## Инструменты
 

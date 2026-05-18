@@ -33,6 +33,12 @@ import {
   TaskTitleEmptyError,
 } from '../../domain/task/errors.js';
 import {
+  AgentDeviceCodeAlreadyApprovedError,
+  AgentDeviceCodeConsumedError,
+  AgentDeviceCodeDeniedError,
+  AgentDeviceCodeExpiredError,
+  AgentDeviceCodeNotFoundError,
+  AgentDeviceCodePendingError,
   AgentTokenInvalidError,
   AgentTokenNameEmptyError,
   AgentTokenNotFoundError,
@@ -178,6 +184,33 @@ export function errorHandler(
   }
   if (err instanceof AgentTokenInvalidError) {
     res.status(401).json({ error: 'agent_token_invalid' });
+    return;
+  }
+
+  // Device flow errors — статусы выровнены под OAuth 2.0 device authorization grant (RFC 8628).
+  // MCP-клиент по конкретному коду error в body решает: ждать ещё (pending) или показать ошибку.
+  if (err instanceof AgentDeviceCodePendingError) {
+    res.status(202).json({ error: 'authorization_pending' });
+    return;
+  }
+  if (err instanceof AgentDeviceCodeNotFoundError) {
+    res.status(404).json({ error: 'device_code_not_found', message: 'Код не найден' });
+    return;
+  }
+  if (err instanceof AgentDeviceCodeExpiredError) {
+    res.status(410).json({ error: 'expired_token', message: 'Срок действия кода истёк' });
+    return;
+  }
+  if (err instanceof AgentDeviceCodeConsumedError) {
+    res.status(410).json({ error: 'consumed_token', message: 'Код уже использован' });
+    return;
+  }
+  if (err instanceof AgentDeviceCodeDeniedError) {
+    res.status(403).json({ error: 'access_denied', message: 'Подключение отклонено' });
+    return;
+  }
+  if (err instanceof AgentDeviceCodeAlreadyApprovedError) {
+    res.status(409).json({ error: 'already_approved', message: 'Код уже approved' });
     return;
   }
 

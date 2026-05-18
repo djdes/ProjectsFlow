@@ -48,6 +48,10 @@ import type { ListAgentTokens } from '../application/agent/ListAgentTokens.js';
 import type { RevokeAgentToken } from '../application/agent/RevokeAgentToken.js';
 import type { AuthenticateAgentToken } from '../application/agent/AuthenticateAgentToken.js';
 import type { GetAgentCredential } from '../application/agent/GetAgentCredential.js';
+import type { RequestAgentDeviceCode } from '../application/agent/RequestAgentDeviceCode.js';
+import type { ApproveAgentDeviceCode } from '../application/agent/ApproveAgentDeviceCode.js';
+import type { PollAgentDeviceToken } from '../application/agent/PollAgentDeviceToken.js';
+import type { GetAgentDeviceCodeInfo } from '../application/agent/GetAgentDeviceCodeInfo.js';
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './auth/routes.js';
@@ -58,6 +62,7 @@ import { kbRouter } from './kb/routes.js';
 import { tasksRouter } from './tasks/routes.js';
 import { agentTokensRouter } from './agent/tokensRoutes.js';
 import { agentApiRouter } from './agent/apiRoutes.js';
+import { agentDeviceRouter } from './agent/deviceRoutes.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
@@ -117,6 +122,10 @@ type AppDeps = {
     readonly revokeAgentToken: RevokeAgentToken;
     readonly authenticateAgentToken: AuthenticateAgentToken;
     readonly getAgentCredential: GetAgentCredential;
+    readonly requestDeviceCode: RequestAgentDeviceCode;
+    readonly approveDeviceCode: ApproveAgentDeviceCode;
+    readonly pollDeviceToken: PollAgentDeviceToken;
+    readonly getDeviceCodeInfo: GetAgentDeviceCodeInfo;
     // Переиспользуемые порты для agent API
     readonly listProjects: ListProjects;
     readonly listKbDocuments: ListKbDocuments;
@@ -173,6 +182,18 @@ export function createApp(deps: AppDeps): CreatedApp {
       revoke: deps.agent.revokeAgentToken,
     }),
   );
+  // Agent device-flow endpoints (mixed anon + session-auth, см. deviceRoutes.ts).
+  // Маунт раньше agentApiRouter, чтобы /api/agent/device/* не проходил через Bearer-auth.
+  app.use(
+    '/api/agent/device',
+    agentDeviceRouter({
+      request: deps.agent.requestDeviceCode,
+      approve: deps.agent.approveDeviceCode,
+      poll: deps.agent.pollDeviceToken,
+      info: deps.agent.getDeviceCodeInfo,
+    }),
+  );
+
   // Agent API endpoints (Bearer-auth)
   app.use(
     '/api/agent',

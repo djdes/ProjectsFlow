@@ -7,6 +7,7 @@ import { HttpKbRepository } from '@/infrastructure/http/HttpKbRepository';
 import { HttpSecretsRepository } from '@/infrastructure/http/HttpSecretsRepository';
 import { HttpTaskRepository } from '@/infrastructure/http/HttpTaskRepository';
 import { HttpAgentTokenRepository } from '@/infrastructure/http/HttpAgentTokenRepository';
+import { HttpAgentDeviceRepository } from '@/infrastructure/http/HttpAgentDeviceRepository';
 import { ListProjects } from '@/application/project/ListProjects';
 import { GetProject } from '@/application/project/GetProject';
 import { CreateProject } from '@/application/project/CreateProject';
@@ -19,6 +20,7 @@ import type { KbRepository } from '@/application/kb/KbRepository';
 import type { SecretsRepository } from '@/application/secrets/SecretsRepository';
 import type { TaskRepository } from '@/application/task/TaskRepository';
 import type { AgentTokenRepository } from '@/application/agent/AgentTokenRepository';
+import type { AgentDeviceRepository } from '@/application/agent/AgentDeviceRepository';
 
 type Container = {
   listProjects: ListProjects;
@@ -33,6 +35,7 @@ type Container = {
   secretsRepository: SecretsRepository;
   taskRepository: TaskRepository;
   agentTokenRepository: AgentTokenRepository;
+  agentDeviceRepository: AgentDeviceRepository;
 };
 
 function buildContainer(): Container {
@@ -44,6 +47,7 @@ function buildContainer(): Container {
   const secretsRepo = new HttpSecretsRepository();
   const taskRepo = new HttpTaskRepository();
   const agentTokenRepo = new HttpAgentTokenRepository();
+  const agentDeviceRepo = new HttpAgentDeviceRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -57,6 +61,7 @@ function buildContainer(): Container {
     secretsRepository: secretsRepo,
     taskRepository: taskRepo,
     agentTokenRepository: agentTokenRepo,
+    agentDeviceRepository: agentDeviceRepo,
   };
 }
 

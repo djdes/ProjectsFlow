@@ -41,6 +41,11 @@ import { ListAgentTokens } from './application/agent/ListAgentTokens.js';
 import { RevokeAgentToken } from './application/agent/RevokeAgentToken.js';
 import { AuthenticateAgentToken } from './application/agent/AuthenticateAgentToken.js';
 import { GetAgentCredential } from './application/agent/GetAgentCredential.js';
+import { InMemoryAgentDeviceCodeStore } from './application/agent/AgentDeviceCodeStore.js';
+import { RequestAgentDeviceCode } from './application/agent/RequestAgentDeviceCode.js';
+import { ApproveAgentDeviceCode } from './application/agent/ApproveAgentDeviceCode.js';
+import { PollAgentDeviceToken } from './application/agent/PollAgentDeviceToken.js';
+import { GetAgentDeviceCodeInfo } from './application/agent/GetAgentDeviceCodeInfo.js';
 import { randomBytes } from 'node:crypto';
 import { ListTasks } from './application/task/ListTasks.js';
 import { CreateTask } from './application/task/CreateTask.js';
@@ -76,6 +81,17 @@ const taskRepo = new DrizzleTaskRepository(db);
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const agentTokenHasher = new Sha256AgentTokenHasher();
+const agentDeviceCodeStore = new InMemoryAgentDeviceCodeStore();
+
+// Periodic cleanup истёкших pending device-code'ов (10 min TTL → каждые 5 min достаточно).
+// Если процесс рестартится — все pending'и теряются, что норм: юзер просто запросит новый.
+setInterval(
+  () => {
+    const pruned = agentDeviceCodeStore.pruneExpired(new Date());
+    if (pruned > 0) console.log(`[projectsflow] device-code: pruned ${pruned} expired`);
+  },
+  5 * 60 * 1000,
+).unref();
 
 const authDeps = {
   users: userRepo,
@@ -184,6 +200,29 @@ const { app, devProxyUpgrade } = createApp({
       tokens: githubTokenRepo,
       api: githubApi,
     }),
+    requestDeviceCode: new RequestAgentDeviceCode({
+      store: agentDeviceCodeStore,
+      now,
+      ttlMs: 10 * 60 * 1000, // 10 min
+      intervalSec: 3,
+      // verificationBaseUrl: APP_URL (без '/api'), на проде https://projectsflow.ru.
+      // Используем env-vars напрямую — конфиг-объект тут не хочется захламлять,
+      // и значение нужно один раз на старте.
+      verificationBaseUrl:
+        process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? 'http://localhost:5173',
+    }),
+    approveDeviceCode: new ApproveAgentDeviceCode({
+      store: agentDeviceCodeStore,
+      createAgentToken: new CreateAgentToken({
+        tokens: agentTokenRepo,
+        hasher: agentTokenHasher,
+        idGen: idGenerator,
+        randomToken: () => randomBytes(32).toString('hex'),
+      }),
+      now,
+    }),
+    pollDeviceToken: new PollAgentDeviceToken({ store: agentDeviceCodeStore, now }),
+    getDeviceCodeInfo: new GetAgentDeviceCodeInfo({ store: agentDeviceCodeStore, now }),
   },
   github: {
     startDeviceFlow: new StartDeviceFlow({
