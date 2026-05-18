@@ -106,13 +106,12 @@ export function KanbanBoard({ projectId }: Props): React.ReactElement {
     }
   };
 
-  const handleDialogSubmit = async (input: { description: string }): Promise<void> => {
-    if (!dialog) return;
+  const handleDialogSubmit = async (input: { description: string }): Promise<Task> => {
+    if (!dialog) throw new Error('Dialog state missing');
     if (dialog.mode === 'create') {
-      await create({ ...input, status: dialog.status });
-    } else {
-      await update(dialog.task.id, input);
+      return create({ ...input, status: dialog.status });
     }
+    return update(dialog.task.id, input);
   };
 
   const handleDelete = async (task: Task): Promise<void> => {

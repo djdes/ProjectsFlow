@@ -11,8 +11,8 @@ type State = {
 
 export type UseTasks = State & {
   refetch: () => Promise<void>;
-  create: (input: { description: string; status: TaskStatus }) => Promise<void>;
-  update: (taskId: string, input: { description?: string }) => Promise<void>;
+  create: (input: { description: string; status: TaskStatus }) => Promise<Task>;
+  update: (taskId: string, input: { description?: string }) => Promise<Task>;
   // Оптимистично переставляет локально + летит на сервер. На фейле ревёртится из refetch'а.
   move: (taskId: string, input: MoveTaskInput) => Promise<void>;
   remove: (taskId: string) => Promise<void>;
@@ -39,11 +39,13 @@ export function useTasks(projectId: string): UseTasks {
   const create: UseTasks['create'] = async (input) => {
     const task = await taskRepository.create(projectId, input);
     setState((s) => ({ ...s, tasks: [...s.tasks, task] }));
+    return task;
   };
 
   const update: UseTasks['update'] = async (taskId, input) => {
     const updated = await taskRepository.update(projectId, taskId, input);
     setState((s) => ({ ...s, tasks: s.tasks.map((t) => (t.id === taskId ? updated : t)) }));
+    return updated;
   };
 
   const move: UseTasks['move'] = async (taskId, input) => {

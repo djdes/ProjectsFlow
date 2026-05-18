@@ -24,7 +24,9 @@ export type TaskDialogState =
 type Props = {
   state: TaskDialogState | null;
   onClose: () => void;
-  onSubmit: (input: { description: string }) => Promise<void>;
+  // Возвращает созданный/обновлённый task — нужен в create-режиме, чтобы зааплоадить
+  // pending-аттачи после получения task.id.
+  onSubmit: (input: { description: string }) => Promise<Task>;
   // Колбэк когда коммиты или аттачи у задачи поменялись — board перефетчит badge'и.
   onCommitsChange?: () => void;
 };
@@ -37,14 +39,23 @@ export function TaskDialog({
   onSubmit,
   onCommitsChange,
 }: Props): React.ReactElement {
+  const { taskRepository } = useContainer();
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Pending-файлы при создании задачи. Берём File-объекты + Blob URL для превью,
+  // после успешного create аплоадим их пачкой.
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
 
   useEffect(() => {
     if (!state) return;
     setDescription(state.mode === 'edit' ? state.task.description ?? '' : '');
     setError(null);
+    // При закрытии/смене диалога чистим pending — URL.revokeObjectURL для blob'ов.
+    setPendingFiles((prev) => {
+      prev.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+      return [];
+    });
   }, [state]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
@@ -56,7 +67,23 @@ export function TaskDialog({
     setSaving(true);
     setError(null);
     try {
-      await onSubmit({ description: description.trim() });
+      const task = await onSubmit({ description: description.trim() });
+      // Если в create-режиме копились картинки — аплоадим их в новосозданную задачу.
+      if (state?.mode === 'create' && pendingFiles.length > 0) {
+        let ok = 0;
+        for (const pf of pendingFiles) {
+          try {
+            await taskRepository.uploadAttachment(task.projectId, task.id, pf.file);
+            ok += 1;
+          } catch (err) {
+            toast.error(`Не удалось загрузить ${pf.file.name}: ${(err as Error).message}`);
+          }
+        }
+        if (ok > 0) {
+          toast.success(ok === pendingFiles.length ? 'Картинки прикреплены' : `Прикреплено ${ok} из ${pendingFiles.length}`);
+          onCommitsChange?.();
+        }
+      }
       onClose();
     } catch (err) {
       setError((err as Error).message ?? 'Не удалось сохранить');
@@ -82,7 +109,7 @@ export function TaskDialog({
           <DialogDescription>
             {state?.mode === 'edit'
               ? 'Опиши задачу, прикрепи скриншоты, привяжи коммиты.'
-              : 'Опиши задачу. Прикрепить скриншоты можно после создания.'}
+              : 'Опиши задачу и при желании сразу прикрепи скриншоты.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -106,7 +133,7 @@ export function TaskDialog({
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          {state?.mode === 'edit' && (
+          {state?.mode === 'edit' ? (
             <>
               <AttachmentsSection
                 projectId={state.task.projectId}
@@ -117,6 +144,8 @@ export function TaskDialog({
                 <TaskCommitsSection task={state.task} onChange={() => onCommitsChange?.()} />
               </div>
             </>
+          ) : (
+            <PendingAttachmentsSection files={pendingFiles} onChange={setPendingFiles} />
           )}
         </form>
 
@@ -131,6 +160,160 @@ export function TaskDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// =========================================================
+// Pending-attachments — выбор файлов ДО создания задачи. Файлы держатся в state'е,
+// аплоад идёт после успешного create в TaskDialog.handleSubmit.
+// =========================================================
+
+type PendingFile = {
+  readonly id: string; // local-only id, чтобы можно было удалять без коллизий
+  readonly file: File;
+  readonly previewUrl: string;
+};
+
+function PendingAttachmentsSection({
+  files,
+  onChange,
+}: {
+  files: PendingFile[];
+  onChange: (next: PendingFile[] | ((prev: PendingFile[]) => PendingFile[])) => void;
+}): React.ReactElement {
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const addFiles = (raw: FileList | File[]): void => {
+    const valid = Array.from(raw).filter((f) => {
+      if (!ACCEPTED_TYPES.includes(f.type)) {
+        toast.error(`Тип файла "${f.type || 'неизвестный'}" не поддерживается — нужны картинки.`);
+        return false;
+      }
+      return true;
+    });
+    if (valid.length === 0) return;
+    const additions: PendingFile[] = valid.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+    onChange((prev) => [...prev, ...additions]);
+  };
+
+  const remove = (id: string): void => {
+    onChange((prev) => {
+      const target = prev.find((p) => p.id === id);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((p) => p.id !== id);
+    });
+  };
+
+  const handlePaste = (e: ClipboardEvent<HTMLDivElement>): void => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const collected: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it && it.kind === 'file') {
+        const file = it.getAsFile();
+        if (file && ACCEPTED_TYPES.includes(file.type)) collected.push(file);
+      }
+    }
+    if (collected.length > 0) {
+      e.preventDefault();
+      addFiles(collected);
+    }
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+    setDragActive(true);
+  };
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+    setDragActive(false);
+  };
+  const handleDrop = (e: DragEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+    setDragActive(false);
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      addFiles(e.dataTransfer.files);
+    }
+  };
+
+  return (
+    <div
+      className="space-y-2"
+      onPaste={handlePaste}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <div className="flex items-center justify-between">
+        <Label>Картинки и скриншоты</Label>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <ImagePlus className="size-3.5" />
+          Прикрепить
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ACCEPTED_TYPES.join(',')}
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) addFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
+      </div>
+
+      <div
+        className={`grid grid-cols-3 gap-2 rounded-md border-2 border-dashed p-2 transition-colors ${
+          dragActive ? 'border-primary bg-primary/5' : 'border-border'
+        }`}
+      >
+        {files.map((pf) => (
+          <div
+            key={pf.id}
+            className="group relative aspect-square overflow-hidden rounded border bg-muted"
+          >
+            <img
+              src={pf.previewUrl}
+              alt={pf.file.name}
+              loading="lazy"
+              className="size-full object-cover"
+            />
+            <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity group-hover:opacity-100">
+              <p className="w-full truncate px-1.5 pb-1 text-left text-[10px] text-white">
+                {pf.file.name}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => remove(pf.id)}
+              className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-destructive group-hover:opacity-100"
+              aria-label="Убрать"
+            >
+              <Trash2 className="size-3" />
+            </button>
+          </div>
+        ))}
+        {files.length === 0 && (
+          <div className="col-span-3 grid place-items-center py-6 text-center text-xs text-muted-foreground">
+            Перетащи картинки сюда, вставь из&nbsp;буфера (Ctrl+V в&nbsp;этой области) или нажми «Прикрепить».
+            Они загрузятся после создания задачи.
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

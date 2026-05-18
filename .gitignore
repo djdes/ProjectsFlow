@@ -24,3 +24,6 @@ coverage/
 .playwright-mcp/
 # Claude Code state
 .claude/
+# Task attachments (картинки/скриншоты — хранятся на диске, не коммитим)
+uploads/
+*/uploads/
