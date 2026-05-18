@@ -5,15 +5,14 @@ export const TASK_STATUSES: readonly TaskStatus[] = ['todo', 'in_progress', 'don
 export type Task = {
   readonly id: string;
   readonly projectId: string;
-  readonly title: string;
   readonly description: string | null;
   readonly status: TaskStatus;
   readonly position: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
-  // Заполняется list-эндпоинтом (LEFT JOIN на task_commits). Для одиночных task-fetch'ей
-  // может отсутствовать — рассчитывается на 0.
+  // Заполняются list-эндпоинтом. Для одиночных task-fetch'ей могут отсутствовать.
   readonly commitCount?: number;
+  readonly attachmentCount?: number;
 };
 
 // Короткий ID задачи (первые 8 hex-символов UUID без дефисов) — для вставки в commit

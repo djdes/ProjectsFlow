@@ -11,8 +11,8 @@ type State = {
 
 export type UseTasks = State & {
   refetch: () => Promise<void>;
-  create: (input: { title: string; description: string | null; status: TaskStatus }) => Promise<void>;
-  update: (taskId: string, input: { title?: string; description?: string | null }) => Promise<void>;
+  create: (input: { description: string; status: TaskStatus }) => Promise<void>;
+  update: (taskId: string, input: { description?: string }) => Promise<void>;
   // Оптимистично переставляет локально + летит на сервер. На фейле ревёртится из refetch'а.
   move: (taskId: string, input: MoveTaskInput) => Promise<void>;
   remove: (taskId: string) => Promise<void>;

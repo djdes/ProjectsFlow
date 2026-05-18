@@ -34,6 +34,8 @@ import { DeleteKbDocument } from './application/kb/DeleteKbDocument.js';
 import { BulkCreateCredential } from './application/kb/BulkCreateCredential.js';
 import { DrizzleTaskRepository } from './infrastructure/repositories/DrizzleTaskRepository.js';
 import { DrizzleTaskCommitRepository } from './infrastructure/repositories/DrizzleTaskCommitRepository.js';
+import { DrizzleTaskAttachmentRepository } from './infrastructure/repositories/DrizzleTaskAttachmentRepository.js';
+import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
 import { Sha256AgentTokenHasher } from './infrastructure/crypto/Sha256AgentTokenHasher.js';
 import { CreateAgentToken } from './application/agent/CreateAgentToken.js';
@@ -56,6 +58,10 @@ import { LinkCommit } from './application/task/LinkCommit.js';
 import { UnlinkCommit } from './application/task/UnlinkCommit.js';
 import { ListTaskCommits } from './application/task/ListTaskCommits.js';
 import { SyncTaskCommits } from './application/task/SyncTaskCommits.js';
+import { UploadTaskAttachment } from './application/task/UploadTaskAttachment.js';
+import { DeleteTaskAttachment } from './application/task/DeleteTaskAttachment.js';
+import { ListTaskAttachments } from './application/task/ListTaskAttachments.js';
+import { GetTaskAttachment } from './application/task/GetTaskAttachment.js';
 import { DrizzleSecretsRepository } from './infrastructure/repositories/DrizzleSecretsRepository.js';
 import { PutSecret } from './application/secrets/PutSecret.js';
 import { GetSecret } from './application/secrets/GetSecret.js';
@@ -79,7 +85,19 @@ const kbRepo = new GithubKbRepository(githubApi);
 const secretsRepo = new DrizzleSecretsRepository(db);
 const taskRepo = new DrizzleTaskRepository(db);
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
+const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
+
+// Каталог с binary-аттачами. В dev: ./uploads (рядом с кодом), в prod: задаём
+// UPLOADS_DIR в .env (typically /var/www/.../uploads — снаружи tarball'а деплоя,
+// чтобы файлы переживали релизы).
+import { resolve as resolvePath } from 'node:path';
+const uploadsDir = resolvePath(process.env['UPLOADS_DIR'] ?? 'uploads');
+const attachmentStorage = new FileSystemAttachmentStorage(uploadsDir);
+console.log(`[projectsflow] attachments dir: ${uploadsDir}`);
+
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_ATTACHMENT_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 const agentTokenHasher = new Sha256AgentTokenHasher();
 const agentDeviceCodeStore = new InMemoryAgentDeviceCodeStore();
 
@@ -145,7 +163,12 @@ const { app, devProxyUpgrade } = createApp({
     }),
   },
   tasks: {
-    listTasks: new ListTasks({ projects: projectRepo, tasks: taskRepo, taskCommits: taskCommitRepo }),
+    listTasks: new ListTasks({
+      projects: projectRepo,
+      tasks: taskRepo,
+      taskCommits: taskCommitRepo,
+      attachments: taskAttachmentRepo,
+    }),
     createTask: new CreateTask({ projects: projectRepo, tasks: taskRepo, idGen: idGenerator }),
     updateTask: new UpdateTask({ projects: projectRepo, tasks: taskRepo }),
     moveTask: new MoveTask({ projects: projectRepo, tasks: taskRepo }),
@@ -166,6 +189,33 @@ const { app, devProxyUpgrade } = createApp({
       tokens: githubTokenRepo,
       api: githubApi,
     }),
+    uploadAttachment: new UploadTaskAttachment({
+      projects: projectRepo,
+      tasks: taskRepo,
+      attachments: taskAttachmentRepo,
+      storage: attachmentStorage,
+      idGen: idGenerator,
+      maxBytes: MAX_ATTACHMENT_BYTES,
+      allowedMimeTypes: ALLOWED_ATTACHMENT_MIME,
+    }),
+    deleteAttachment: new DeleteTaskAttachment({
+      projects: projectRepo,
+      tasks: taskRepo,
+      attachments: taskAttachmentRepo,
+      storage: attachmentStorage,
+    }),
+    listAttachments: new ListTaskAttachments({
+      projects: projectRepo,
+      tasks: taskRepo,
+      attachments: taskAttachmentRepo,
+    }),
+    getAttachment: new GetTaskAttachment({
+      projects: projectRepo,
+      tasks: taskRepo,
+      attachments: taskAttachmentRepo,
+      storage: attachmentStorage,
+    }),
+    maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
   },
   agent: {
     createAgentToken: new CreateAgentToken({
@@ -191,7 +241,12 @@ const { app, devProxyUpgrade } = createApp({
     // Переиспользуем существующие use-cases для agent-эндпоинтов
     listProjects: new ListProjects(projectRepo),
     listKbDocuments: new ListKbDocuments({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
-    listTasks: new ListTasks({ projects: projectRepo, tasks: taskRepo, taskCommits: taskCommitRepo }),
+    listTasks: new ListTasks({
+      projects: projectRepo,
+      tasks: taskRepo,
+      taskCommits: taskCommitRepo,
+      attachments: taskAttachmentRepo,
+    }),
     moveTask: new MoveTask({ projects: projectRepo, tasks: taskRepo }),
     linkCommit: new LinkCommit({
       projects: projectRepo,

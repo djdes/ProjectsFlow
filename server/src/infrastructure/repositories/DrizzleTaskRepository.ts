@@ -12,7 +12,6 @@ function toTask(row: TaskRow): Task {
   return {
     id: row.id,
     projectId: row.projectId,
-    title: row.title,
     description: row.description ?? null,
     status: row.status as TaskStatus,
     position: row.position,
@@ -42,7 +41,6 @@ export class DrizzleTaskRepository implements TaskRepository {
     await this.db.insert(tasks).values({
       id: input.id,
       projectId: input.projectId,
-      title: input.title,
       description: input.description,
       status: input.status,
       position: input.position,
@@ -53,8 +51,7 @@ export class DrizzleTaskRepository implements TaskRepository {
   }
 
   async update(taskId: string, patch: UpdateTaskPatch): Promise<Task | null> {
-    const set: Partial<Pick<TaskRow, 'title' | 'description' | 'status' | 'position'>> = {};
-    if (patch.title !== undefined) set.title = patch.title;
+    const set: Partial<Pick<TaskRow, 'description' | 'status' | 'position'>> = {};
     if (patch.description !== undefined) set.description = patch.description;
     if (patch.status !== undefined) set.status = patch.status;
     if (patch.position !== undefined) set.position = patch.position;
@@ -67,7 +64,6 @@ export class DrizzleTaskRepository implements TaskRepository {
 
   async delete(taskId: string): Promise<boolean> {
     const result = await this.db.delete(tasks).where(eq(tasks.id, taskId));
-    // mysql2 returns { affectedRows }
     const affected = (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
     return affected > 0;
   }

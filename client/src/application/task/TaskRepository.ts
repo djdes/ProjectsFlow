@@ -1,15 +1,14 @@
 import type { Task, TaskStatus } from '@/domain/task/Task';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
+import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 
 export type CreateTaskInput = {
-  readonly title: string;
-  readonly description: string | null;
+  readonly description: string;
   readonly status?: TaskStatus;
 };
 
 export type UpdateTaskInput = {
-  readonly title?: string;
-  readonly description?: string | null;
+  readonly description?: string;
 };
 
 export type MoveTaskInput = {
@@ -34,4 +33,7 @@ export interface TaskRepository {
   linkCommit(projectId: string, taskId: string, sha: string): Promise<TaskCommit>;
   unlinkCommit(projectId: string, taskId: string, sha: string): Promise<void>;
   syncCommits(projectId: string): Promise<SyncCommitsResult>;
+  listAttachments(projectId: string, taskId: string): Promise<TaskAttachment[]>;
+  uploadAttachment(projectId: string, taskId: string, file: File): Promise<TaskAttachment>;
+  deleteAttachment(projectId: string, taskId: string, attachmentId: string): Promise<void>;
 }

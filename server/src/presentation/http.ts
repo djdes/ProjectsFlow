@@ -43,6 +43,10 @@ import type { LinkCommit } from '../application/task/LinkCommit.js';
 import type { UnlinkCommit } from '../application/task/UnlinkCommit.js';
 import type { ListTaskCommits } from '../application/task/ListTaskCommits.js';
 import type { SyncTaskCommits } from '../application/task/SyncTaskCommits.js';
+import type { UploadTaskAttachment } from '../application/task/UploadTaskAttachment.js';
+import type { DeleteTaskAttachment } from '../application/task/DeleteTaskAttachment.js';
+import type { ListTaskAttachments } from '../application/task/ListTaskAttachments.js';
+import type { GetTaskAttachment } from '../application/task/GetTaskAttachment.js';
 import type { CreateAgentToken } from '../application/agent/CreateAgentToken.js';
 import type { ListAgentTokens } from '../application/agent/ListAgentTokens.js';
 import type { RevokeAgentToken } from '../application/agent/RevokeAgentToken.js';
@@ -60,6 +64,7 @@ import { githubRouter } from './integrations/github/routes.js';
 import { secretsRouter } from './secrets/routes.js';
 import { kbRouter } from './kb/routes.js';
 import { tasksRouter } from './tasks/routes.js';
+import { attachmentBinaryRouter } from './tasks/attachmentBinaryRoutes.js';
 import { agentTokensRouter } from './agent/tokensRoutes.js';
 import { agentApiRouter } from './agent/apiRoutes.js';
 import { agentDeviceRouter } from './agent/deviceRoutes.js';
@@ -115,6 +120,11 @@ type AppDeps = {
     readonly unlinkCommit: UnlinkCommit;
     readonly listTaskCommits: ListTaskCommits;
     readonly syncTaskCommits: SyncTaskCommits;
+    readonly uploadAttachment: UploadTaskAttachment;
+    readonly deleteAttachment: DeleteTaskAttachment;
+    readonly listAttachments: ListTaskAttachments;
+    readonly getAttachment: GetTaskAttachment;
+    readonly maxAttachmentBytes: number;
   };
   readonly agent: {
     readonly createAgentToken: CreateAgentToken;
@@ -172,6 +182,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/secrets', secretsRouter(deps.secrets));
   app.use('/api/projects/:projectId/kb', kbRouter(deps.kb));
   app.use('/api/projects/:projectId/tasks', tasksRouter(deps.tasks));
+  app.use('/api/attachments', attachmentBinaryRouter(deps.tasks));
 
   // Agent tokens management (session-auth)
   app.use(

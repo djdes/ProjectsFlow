@@ -3,15 +3,13 @@ import { z } from 'zod';
 export const taskStatusSchema = z.enum(['todo', 'in_progress', 'done']);
 
 export const createTaskSchema = z.object({
-  title: z.string().trim().min(1, 'Введите название').max(200),
-  description: z.string().trim().max(5000).nullable().optional(),
+  description: z.string().trim().min(1, 'Введите описание').max(5000),
   status: taskStatusSchema.optional(),
 });
 
 export const updateTaskSchema = z
   .object({
-    title: z.string().trim().min(1).max(200).optional(),
-    description: z.string().trim().max(5000).nullable().optional(),
+    description: z.string().trim().min(1).max(5000).optional(),
   })
   .refine((o) => Object.keys(o).length > 0, { message: 'Нечего обновлять' });
 

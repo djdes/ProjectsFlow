@@ -1,5 +1,6 @@
 import type { Task } from '@/domain/task/Task';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
+import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import type {
   CreateTaskInput,
   MoveTaskInput,
@@ -19,12 +20,20 @@ type CommitDto = Omit<TaskCommit, 'committedAt' | 'linkedAt'> & {
   linkedAt: string;
 };
 
+type AttachmentDto = Omit<TaskAttachment, 'uploadedAt'> & {
+  uploadedAt: string;
+};
+
 function fromDto(dto: TaskDto): Task {
   return { ...dto, createdAt: new Date(dto.createdAt), updatedAt: new Date(dto.updatedAt) };
 }
 
 function commitFromDto(dto: CommitDto): TaskCommit {
   return { ...dto, committedAt: new Date(dto.committedAt), linkedAt: new Date(dto.linkedAt) };
+}
+
+function attachmentFromDto(dto: AttachmentDto): TaskAttachment {
+  return { ...dto, uploadedAt: new Date(dto.uploadedAt) };
 }
 
 export class HttpTaskRepository implements TaskRepository {
@@ -74,5 +83,37 @@ export class HttpTaskRepository implements TaskRepository {
   }
   async syncCommits(projectId: string): Promise<SyncCommitsResult> {
     return httpClient.post<SyncCommitsResult>(`/projects/${projectId}/tasks/sync-commits`);
+  }
+  async listAttachments(projectId: string, taskId: string): Promise<TaskAttachment[]> {
+    const { attachments } = await httpClient.get<{ attachments: AttachmentDto[] }>(
+      `/projects/${projectId}/tasks/${taskId}/attachments`,
+    );
+    return attachments.map(attachmentFromDto);
+  }
+  async uploadAttachment(projectId: string, taskId: string, file: File): Promise<TaskAttachment> {
+    // multipart/form-data: httpClient рассчитан под JSON, поэтому пишем fetch вручную.
+    // credentials: 'include' нужен для cookie-сессии. Content-Type браузер выставит сам
+    // вместе с boundary — НЕ выставлять руками, иначе сервер не сможет распарсить.
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`/api/projects/${projectId}/tasks/${taskId}/attachments`, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    const text = await res.text();
+    const data = text
+      ? (JSON.parse(text) as { attachment?: AttachmentDto; error?: string; message?: string })
+      : null;
+    if (!res.ok || !data?.attachment) {
+      const msg = data?.message ?? data?.error ?? `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    return attachmentFromDto(data.attachment);
+  }
+  async deleteAttachment(projectId: string, taskId: string, attachmentId: string): Promise<void> {
+    await httpClient.delete<void>(
+      `/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}`,
+    );
   }
 }

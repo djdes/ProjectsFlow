@@ -5,7 +5,6 @@ export const TASK_STATUSES: readonly TaskStatus[] = ['todo', 'in_progress', 'don
 export type Task = {
   readonly id: string;
   readonly projectId: string;
-  readonly title: string;
   readonly description: string | null;
   readonly status: TaskStatus;
   readonly position: number;

@@ -106,10 +106,7 @@ export function KanbanBoard({ projectId }: Props): React.ReactElement {
     }
   };
 
-  const handleDialogSubmit = async (input: {
-    title: string;
-    description: string | null;
-  }): Promise<void> => {
+  const handleDialogSubmit = async (input: { description: string }): Promise<void> => {
     if (!dialog) return;
     if (dialog.mode === 'create') {
       await create({ ...input, status: dialog.status });
@@ -119,7 +116,10 @@ export function KanbanBoard({ projectId }: Props): React.ReactElement {
   };
 
   const handleDelete = async (task: Task): Promise<void> => {
-    if (!window.confirm(`Удалить задачу "${task.title}"?`)) return;
+    // Превью первой строки описания — чтобы было понятно что именно удаляешь.
+    const preview = (task.description ?? '').split('\n')[0]?.slice(0, 60) ?? '';
+    const label = preview.length > 0 ? `"${preview}${preview.length === 60 ? '…' : ''}"` : 'задачу';
+    if (!window.confirm(`Удалить ${label}?`)) return;
     try {
       await remove(task.id);
       toast.success('Задача удалена');

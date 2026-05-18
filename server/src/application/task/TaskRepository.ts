@@ -3,14 +3,12 @@ import type { Task, TaskStatus } from '../../domain/task/Task.js';
 export type CreateTaskInput = {
   readonly id: string;
   readonly projectId: string;
-  readonly title: string;
-  readonly description: string | null;
+  readonly description: string;
   readonly status: TaskStatus;
   readonly position: number;
 };
 
 export type UpdateTaskPatch = {
-  readonly title?: string;
   readonly description?: string | null;
   readonly status?: TaskStatus;
   readonly position?: number;

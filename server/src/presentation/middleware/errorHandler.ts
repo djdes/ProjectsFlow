@@ -28,9 +28,12 @@ import {
   KbRepoConflictError,
 } from '../../domain/kb/errors.js';
 import {
+  TaskAttachmentNotFoundError,
+  TaskAttachmentTooLargeError,
+  TaskAttachmentTypeNotAllowedError,
   TaskCommitNotFoundError,
+  TaskDescriptionEmptyError,
   TaskNotFoundError,
-  TaskTitleEmptyError,
 } from '../../domain/task/errors.js';
 import {
   AgentDeviceCodeAlreadyApprovedError,
@@ -165,12 +168,42 @@ export function errorHandler(
     res.status(404).json({ error: 'task_not_found' });
     return;
   }
-  if (err instanceof TaskTitleEmptyError) {
-    res.status(400).json({ error: 'task_title_empty', message: 'Введите название задачи' });
+  if (err instanceof TaskDescriptionEmptyError) {
+    res.status(400).json({ error: 'task_description_empty', message: 'Введите описание задачи' });
     return;
   }
   if (err instanceof TaskCommitNotFoundError) {
     res.status(404).json({ error: 'task_commit_not_found' });
+    return;
+  }
+  if (err instanceof TaskAttachmentNotFoundError) {
+    res.status(404).json({ error: 'task_attachment_not_found' });
+    return;
+  }
+  if (err instanceof TaskAttachmentTooLargeError) {
+    res.status(413).json({
+      error: 'task_attachment_too_large',
+      message: `Файл больше лимита (${Math.round(err.maxBytes / 1024 / 1024)} MB)`,
+    });
+    return;
+  }
+  if (err instanceof TaskAttachmentTypeNotAllowedError) {
+    res.status(415).json({
+      error: 'task_attachment_type_not_allowed',
+      message: 'Можно загружать только картинки (PNG, JPEG, WebP, GIF)',
+    });
+    return;
+  }
+
+  // multer-specific: MulterError имеет .code; LIMIT_FILE_SIZE превышен — отдадим 413.
+  // Лучше отлавливать по конструктору, но импортировать multer типы здесь не хочется
+  // (errorHandler не должен знать про multer). Code-сниффинг по duck-typing.
+  const maybeMulter = err as { name?: string; code?: string } | null;
+  if (maybeMulter?.name === 'MulterError' && maybeMulter.code === 'LIMIT_FILE_SIZE') {
+    res.status(413).json({
+      error: 'task_attachment_too_large',
+      message: 'Файл больше лимита',
+    });
     return;
   }
 

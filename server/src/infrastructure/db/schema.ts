@@ -3,6 +3,7 @@ import {
   char,
   double,
   index,
+  int,
   mysqlEnum,
   mysqlTable,
   text,
@@ -102,7 +103,6 @@ export const tasks = mysqlTable(
   {
     id: id(),
     projectId: char('project_id', { length: 36 }).notNull(),
-    title: varchar('title', { length: 200 }).notNull(),
     description: text('description'),
     status: mysqlEnum('status', ['todo', 'in_progress', 'done']).notNull().default('todo'),
     // Float-position для дешёвой вставки между двумя соседями — без массового UPDATE.
@@ -118,6 +118,23 @@ export const tasks = mysqlTable(
 
 export type TaskRow = typeof tasks.$inferSelect;
 export type NewTaskRow = typeof tasks.$inferInsert;
+
+export const taskAttachments = mysqlTable(
+  'task_attachments',
+  {
+    id: id(),
+    taskId: char('task_id', { length: 36 }).notNull(),
+    filename: varchar('filename', { length: 255 }).notNull(),
+    mimeType: varchar('mime_type', { length: 100 }).notNull(),
+    sizeBytes: int('size_bytes').notNull(),
+    storageKey: varchar('storage_key', { length: 500 }).notNull(),
+    uploadedAt: timestamp('uploaded_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [index('idx_task_attachments_task').on(t.taskId)],
+);
+
+export type TaskAttachmentRow = typeof taskAttachments.$inferSelect;
+export type NewTaskAttachmentRow = typeof taskAttachments.$inferInsert;
 
 export const taskCommits = mysqlTable(
   'task_commits',

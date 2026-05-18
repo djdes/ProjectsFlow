@@ -1,5 +1,5 @@
 import { ProjectNotFoundError } from '../../domain/project/errors.js';
-import { TaskTitleEmptyError } from '../../domain/task/errors.js';
+import { TaskDescriptionEmptyError } from '../../domain/task/errors.js';
 import type { Task, TaskStatus } from '../../domain/task/Task.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
@@ -13,8 +13,7 @@ type Deps = {
 export type CreateTaskCommand = {
   readonly projectId: string;
   readonly ownerUserId: string;
-  readonly title: string;
-  readonly description: string | null;
+  readonly description: string;
   // По умолчанию новая карточка падает в TODO внизу столбца.
   readonly status: TaskStatus;
 };
@@ -25,8 +24,8 @@ export class CreateTask {
   constructor(private readonly deps: Deps) {}
 
   async execute(input: CreateTaskCommand): Promise<Task> {
-    const title = input.title.trim();
-    if (title.length === 0) throw new TaskTitleEmptyError();
+    const description = input.description.trim();
+    if (description.length === 0) throw new TaskDescriptionEmptyError();
 
     const project = await this.deps.projects.getByIdForOwner(input.projectId, input.ownerUserId);
     if (!project) throw new ProjectNotFoundError();
@@ -38,8 +37,7 @@ export class CreateTask {
     return this.deps.tasks.create({
       id: this.deps.idGen(),
       projectId: input.projectId,
-      title,
-      description: input.description?.trim() || null,
+      description,
       status: input.status,
       position,
     });

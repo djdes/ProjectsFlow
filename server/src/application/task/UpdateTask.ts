@@ -1,5 +1,5 @@
 import { ProjectNotFoundError } from '../../domain/project/errors.js';
-import { TaskNotFoundError, TaskTitleEmptyError } from '../../domain/task/errors.js';
+import { TaskDescriptionEmptyError, TaskNotFoundError } from '../../domain/task/errors.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository, UpdateTaskPatch } from './TaskRepository.js';
@@ -13,8 +13,7 @@ export type UpdateTaskCommand = {
   readonly projectId: string;
   readonly ownerUserId: string;
   readonly taskId: string;
-  readonly title: string | undefined;
-  readonly description: string | null | undefined;
+  readonly description: string | undefined;
 };
 
 export class UpdateTask {
@@ -28,13 +27,10 @@ export class UpdateTask {
     if (!existing || existing.projectId !== input.projectId) throw new TaskNotFoundError(input.taskId);
 
     const patch: { -readonly [K in keyof UpdateTaskPatch]: UpdateTaskPatch[K] } = {};
-    if (input.title !== undefined) {
-      const trimmed = input.title.trim();
-      if (trimmed.length === 0) throw new TaskTitleEmptyError();
-      patch.title = trimmed;
-    }
     if (input.description !== undefined) {
-      patch.description = input.description?.trim() || null;
+      const trimmed = input.description.trim();
+      if (trimmed.length === 0) throw new TaskDescriptionEmptyError();
+      patch.description = trimmed;
     }
 
     const updated = await this.deps.tasks.update(input.taskId, patch);

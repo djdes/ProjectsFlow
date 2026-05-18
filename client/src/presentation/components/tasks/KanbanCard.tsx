@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
-import { GitCommit, GripVertical, Pencil, Trash2 } from 'lucide-react';
+import { GitCommit, GripVertical, ImageIcon, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Task } from '@/domain/task/Task';
 import { taskShortId } from '@/domain/task/Task';
@@ -52,10 +52,9 @@ export function KanbanCard({ task, onEdit, onDelete, preview = false }: Props): 
         <GripVertical className="size-4" />
       </button>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium leading-snug">{task.title}</p>
-        {task.description && (
-          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{task.description}</p>
-        )}
+        <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-snug">
+          {task.description ?? '—'}
+        </p>
         <div className="mt-2 flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
           <span className="font-mono normal-case tracking-normal opacity-60">
             [{taskShortId(task.id)}]
@@ -64,6 +63,12 @@ export function KanbanCard({ task, onEdit, onDelete, preview = false }: Props): 
             <span className="flex items-center gap-1 rounded-full bg-blue-500/15 px-1.5 py-0.5 text-blue-600 dark:bg-blue-400/15 dark:text-blue-400">
               <GitCommit className="size-2.5" />
               {task.commitCount}
+            </span>
+          )}
+          {(task.attachmentCount ?? 0) > 0 && (
+            <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-emerald-600 dark:bg-emerald-400/15 dark:text-emerald-400">
+              <ImageIcon className="size-2.5" />
+              {task.attachmentCount}
             </span>
           )}
         </div>
