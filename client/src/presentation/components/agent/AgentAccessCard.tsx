@@ -253,9 +253,12 @@ function NewTokenRevealDialog({
   // Команда для Claude Code: токен пробрасывается через -e (env vars),
   // конфиг-файл создавать не нужно. API URL берём из текущего origin —
   // подходит и для прода, и для devtunnel'а, и для localhost.
+  // `--scope user` чтобы MCP видно во всех проектах, а не только в том, откуда
+  // юзер запустил `claude mcp add`. `@latest` — чтобы npx не зацепился за стар-
+  // ший кеш при следующих публикациях.
   const apiUrl = typeof window !== 'undefined' ? `${window.location.origin}/api` : '';
   const mcpCommand = plaintext
-    ? `claude mcp add projectsflow -e PROJECTSFLOW_API_URL=${apiUrl} -e PROJECTSFLOW_AGENT_TOKEN=${plaintext} -- npx -y @projectsflow/mcp-server`
+    ? `claude mcp add --scope user projectsflow -e PROJECTSFLOW_API_URL=${apiUrl} -e PROJECTSFLOW_AGENT_TOKEN=${plaintext} -- npx -y @projectsflow/mcp-server@latest`
     : '';
 
   const handleCopy = async (): Promise<void> => {
