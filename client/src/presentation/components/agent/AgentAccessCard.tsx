@@ -42,9 +42,26 @@ export function AgentAccessCard(): React.ReactElement {
   const [tokens, setTokens] = useState<AgentToken[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
-  const [connectOpen, setConnectOpen] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   // Modal показа свежесозданного токена (plaintext доступен 1 раз).
   const [createdToken, setCreatedToken] = useState<string | null>(null);
+
+  // "Подключить Claude Code" — auto-создаёт токен с дефолтным именем,
+  // открывает диалог с двумя форматами (промпт + команда). Без отдельной формы ввода имени.
+  const handleQuickConnect = async (): Promise<void> => {
+    if (connecting) return;
+    setConnecting(true);
+    try {
+      const dateLabel = new Date().toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: '2-digit' });
+      const { token, plaintext } = await agentTokenRepository.create(`Claude Code · ${dateLabel}`);
+      setTokens((prev) => (prev ? [token, ...prev] : [token]));
+      setCreatedToken(plaintext);
+    } catch (e) {
+      toast.error(`Не удалось создать токен: ${(e as Error).message}`);
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -103,8 +120,8 @@ export function AgentAccessCard(): React.ReactElement {
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => setConnectOpen(true)}>
-              <Sparkles className="size-4" />
+            <Button size="sm" onClick={handleQuickConnect} disabled={connecting}>
+              {connecting ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
               Подключить Claude Code
             </Button>
             <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
@@ -161,120 +178,10 @@ export function AgentAccessCard(): React.ReactElement {
         plaintext={createdToken}
         onClose={() => setCreatedToken(null)}
       />
-
-      <ConnectClaudeCodeDialog open={connectOpen} onOpenChange={setConnectOpen} />
     </>
   );
 }
 
-// =========================================================
-// Диалог «Подключить Claude Code» — рекомендуемый flow через device-pairing.
-// Юзер копирует одну npx-команду, в терминале появляется код, юзер кликает
-// «Открыть страницу подтверждения» (которая редиректит на /device?code=…).
-// =========================================================
-function ConnectClaudeCodeDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}): React.ReactElement {
-  const [copied, setCopied] = useState(false);
-  // Команда запускает MCP в setup-mode — он сам сходит за device_code'ом и распечатает URL.
-  // `--scope user` через `npx -y @projectsflow/mcp-server@latest setup` НЕ делает MCP add'а
-  // (это отдельный шаг после успешного setup'а — печатается в инструкции).
-  const apiUrl = typeof window !== 'undefined' ? `${window.location.origin}/api` : '';
-  const setupCommand = `PROJECTSFLOW_API_URL=${apiUrl} npx -y @projectsflow/mcp-server@latest setup`;
-  const installCommand = `claude mcp add --scope user projectsflow -- npx -y @projectsflow/mcp-server@latest`;
-
-  useEffect(() => {
-    if (!open) setCopied(false);
-  }, [open]);
-
-  const handleCopy = async (text: string): Promise<void> => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      toast.success('Скопировано');
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error('Не удалось скопировать');
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Подключить Claude Code</DialogTitle>
-          <DialogDescription>
-            Двухшаговый сетап без копипасты токена: одна команда для setup'а, одна — для регистрации MCP.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-5">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="grid size-6 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                1
-              </span>
-              <p className="text-sm font-medium">Запусти setup в&nbsp;терминале</p>
-            </div>
-            <div className="relative">
-              <pre className="overflow-x-auto rounded-md border bg-muted px-3 py-2.5 pr-10 font-mono text-xs leading-relaxed">
-                {setupCommand}
-              </pre>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="absolute right-1 top-1 size-7"
-                onClick={() => handleCopy(setupCommand)}
-                aria-label="Скопировать"
-              >
-                {copied ? <Check className="size-4 text-emerald-500" /> : <Copy className="size-4" />}
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              MCP покажет код и&nbsp;ссылку — нажми на&nbsp;ссылку или открой
-              «<a className="text-primary hover:underline" href="/device" target="_blank" rel="noreferrer">/device</a>»
-              на этом домене. Подтверди — токен подтянется автоматически.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="grid size-6 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                2
-              </span>
-              <p className="text-sm font-medium">Зарегистрируй MCP в&nbsp;Claude Code</p>
-            </div>
-            <div className="relative">
-              <pre className="overflow-x-auto rounded-md border bg-muted px-3 py-2.5 pr-10 font-mono text-xs leading-relaxed">
-                {installCommand}
-              </pre>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="absolute right-1 top-1 size-7"
-                onClick={() => handleCopy(installCommand)}
-                aria-label="Скопировать"
-              >
-                <Copy className="size-4" />
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              <code className="rounded bg-muted px-1">--scope user</code> делает MCP видимым во&nbsp;всех проектах
-              Claude Code, а&nbsp;не&nbsp;только в&nbsp;текущем. После этого MCP-сервер прочитает токен из&nbsp;файла,
-              созданного на&nbsp;шаге&nbsp;1.
-            </p>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button onClick={() => onOpenChange(false)}>Готово</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // =========================================================
 // Диалог создания нового токена — спрашивает name.
@@ -358,46 +265,39 @@ function NewTokenRevealDialog({
   plaintext: string | null;
   onClose: () => void;
 }): React.ReactElement {
-  const [copied, setCopied] = useState(false);
-  const [cmdCopied, setCmdCopied] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!plaintext) {
-      setCopied(false);
-      setCmdCopied(false);
-    }
+    if (!plaintext) setCopiedKey(null);
   }, [plaintext]);
 
-  // Команда для Claude Code: токен пробрасывается через -e (env vars),
-  // конфиг-файл создавать не нужно. API URL берём из текущего origin —
-  // подходит и для прода, и для devtunnel'а, и для localhost.
-  // `--scope user` чтобы MCP видно во всех проектах, а не только в том, откуда
-  // юзер запустил `claude mcp add`. `@latest` — чтобы npx не зацепился за стар-
-  // ший кеш при следующих публикациях.
+  // Токен пробрасывается через -e (env vars), конфиг-файл создавать не нужно.
+  // API URL берём из current origin — подходит для прода, devtunnel и localhost.
+  // `--scope user` — MCP виден во всех проектах Claude Code.
+  // `@latest` — npx не зацепится за устаревший кеш при будущих публикациях.
   const apiUrl = typeof window !== 'undefined' ? `${window.location.origin}/api` : '';
-  const mcpCommand = plaintext
+  const installCommand = plaintext
     ? `claude mcp add --scope user projectsflow -e PROJECTSFLOW_API_URL=${apiUrl} -e PROJECTSFLOW_AGENT_TOKEN=${plaintext} -- npx -y @projectsflow/mcp-server@latest`
     : '';
+  const claudePrompt = plaintext
+    ? [
+        'Установи MCP-сервер ProjectsFlow в моём Claude Code. Запусти команду:',
+        '',
+        installCommand,
+        '',
+        'Подтверди bash-разрешение. После установки переоткрой чат и проверь,',
+        'что доступны 6 tool\'ов: pf_list_projects, pf_list_credentials,',
+        'pf_get_credential, pf_list_tasks, pf_move_task, pf_link_commit_to_task.',
+      ].join('\n')
+    : '';
 
-  const handleCopy = async (): Promise<void> => {
-    if (!plaintext) return;
+  const handleCopy = async (key: string, text: string, successMsg: string): Promise<void> => {
+    if (!text) return;
     try {
-      await navigator.clipboard.writeText(plaintext);
-      setCopied(true);
-      toast.success('Скопировано в буфер');
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error('Не удалось скопировать');
-    }
-  };
-
-  const handleCopyCommand = async (): Promise<void> => {
-    if (!mcpCommand) return;
-    try {
-      await navigator.clipboard.writeText(mcpCommand);
-      setCmdCopied(true);
-      toast.success('Команда скопирована');
-      setTimeout(() => setCmdCopied(false), 2000);
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      toast.success(successMsg);
+      setTimeout(() => setCopiedKey((cur) => (cur === key ? null : cur)), 2000);
     } catch {
       toast.error('Не удалось скопировать');
     }
@@ -405,57 +305,85 @@ function NewTokenRevealDialog({
 
   return (
     <Dialog open={plaintext !== null} onOpenChange={(o) => !o && onClose()}>
-      {/* max-w-xl шире (576px вместо 512px) чтобы длинный токен hash-style помещался лучше.
-          Сам токен оборачивается break-all — переносится по любому символу, без horizontal scroll. */}
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Токен создан</DialogTitle>
           <DialogDescription>
-            <strong>Скопируй токен сейчас</strong> — после закрытия этого окна он будет
-            недоступен. Если потеряешь, придётся создать новый.
+            Выбери способ подключения. Plaintext-токен ниже будет доступен только пока открыто это окно.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
             ⚠️ Этот токен даёт доступ ко всем твоим credentials. Не публикуй его, храни в надёжном месте.
           </div>
-          <div className="relative">
-            {/* break-all для hash-style токена — переносится по любому символу.
-                pr-10 оставляет место для copy-кнопки в верхнем правом углу. */}
-            <div className="break-all rounded-md border bg-muted px-3 py-2.5 pr-10 font-mono text-xs leading-relaxed">
-              {plaintext}
+
+          {/* Способ 1: промпт для Claude Code (рекомендуется) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">
+                Через Claude Code <span className="text-xs font-normal text-muted-foreground">— рекомендуется</span>
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5"
+                onClick={() => handleCopy('prompt', claudePrompt, 'Промпт скопирован')}
+              >
+                {copiedKey === 'prompt' ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                Скопировать промпт
+              </Button>
             </div>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="absolute right-1 top-1 size-7"
-              onClick={handleCopy}
-              aria-label="Скопировать"
-            >
-              {copied ? <Check className="size-4 text-emerald-500" /> : <Copy className="size-4" />}
-            </Button>
+            <pre className="max-h-48 overflow-y-auto break-all whitespace-pre-wrap rounded-md border bg-muted/40 px-3 py-2.5 font-mono text-[11px] leading-relaxed">
+              {claudePrompt}
+            </pre>
+            <p className="text-xs text-muted-foreground">
+              Вставь этот промпт в&nbsp;Claude Code (любой чат) — он сам выполнит установку и&nbsp;проверит результат.
+              Никакого терминала.
+            </p>
           </div>
-          <div className="space-y-1.5 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Подключение в Claude Code — одна команда:</p>
-            <div className="relative">
-              <div className="break-all rounded-md border bg-muted/40 px-3 py-2 pr-10 font-mono text-xs leading-relaxed">
-                {mcpCommand}
+
+          {/* Способ 2: команда для терминала */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">Через терминал (env-vars)</p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5"
+                onClick={() => handleCopy('cmd', installCommand, 'Команда скопирована')}
+              >
+                {copiedKey === 'cmd' ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                Скопировать команду
+              </Button>
+            </div>
+            <pre className="overflow-x-auto break-all whitespace-pre-wrap rounded-md border bg-muted/40 px-3 py-2.5 font-mono text-[11px] leading-relaxed">
+              {installCommand}
+            </pre>
+            <p className="text-xs text-muted-foreground">
+              Для тех кто работает в Cursor / Continue / Copilot CLI или предпочитает запускать самостоятельно.
+            </p>
+          </div>
+
+          {/* Полный token — на случай если нужно скопировать отдельно */}
+          <details className="rounded-md border bg-muted/20 px-3 py-2 text-xs">
+            <summary className="cursor-pointer select-none font-medium text-muted-foreground">
+              Показать токен отдельно
+            </summary>
+            <div className="relative mt-2">
+              <div className="break-all rounded bg-background px-2.5 py-1.5 pr-9 font-mono text-[11px]">
+                {plaintext}
               </div>
               <Button
                 size="icon"
                 variant="ghost"
-                className="absolute right-1 top-1 size-7"
-                onClick={handleCopyCommand}
-                aria-label="Скопировать команду"
+                className="absolute right-0.5 top-0.5 size-7"
+                onClick={() => handleCopy('token', plaintext ?? '', 'Токен скопирован')}
+                aria-label="Скопировать"
               >
-                {cmdCopied ? <Check className="size-4 text-emerald-500" /> : <Copy className="size-4" />}
+                {copiedKey === 'token' ? <Check className="size-4 text-emerald-500" /> : <Copy className="size-4" />}
               </Button>
             </div>
-            <p>
-              Токен передаётся через env-переменные Claude Code — конфиг-файл создавать
-              не&nbsp;нужно. Скопируй команду и&nbsp;вставь в&nbsp;терминал.
-            </p>
-          </div>
+          </details>
         </div>
         <DialogFooter>
           <Button onClick={onClose}>Закрыть</Button>
