@@ -77,7 +77,6 @@ export function SecretField({ fieldLabel, vaultRef, onChange, editable = false }
   return (
     <div className="space-y-1.5">
       <Label>{fieldLabel}</Label>
-      <p className="font-mono text-xs text-muted-foreground">{vaultRef}</p>
       {editing ? (
         <div className="flex items-center gap-2">
           <Input type="password" value={newValue} onChange={(e) => setNewValue(e.target.value)} autoFocus />
