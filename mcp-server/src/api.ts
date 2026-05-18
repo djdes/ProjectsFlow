@@ -49,6 +49,20 @@ export type TaskCommit = {
   linkedAt: string;
 };
 
+export type TaskAttachmentWithData = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedAt: string;
+  dataBase64: string;
+};
+
+export type TaskWithAttachments = {
+  task: Task;
+  attachments: TaskAttachmentWithData[];
+};
+
 export class ApiClient {
   constructor(private readonly config: AgentConfig) {}
 
@@ -107,6 +121,12 @@ export class ApiClient {
       `/agent/projects/${encodeURIComponent(projectId)}/tasks`,
     );
     return tasks;
+  }
+
+  async getTask(projectId: string, taskId: string): Promise<TaskWithAttachments> {
+    return this.request<TaskWithAttachments>(
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`,
+    );
   }
 
   async moveTask(

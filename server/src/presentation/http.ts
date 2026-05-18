@@ -52,6 +52,7 @@ import type { ListAgentTokens } from '../application/agent/ListAgentTokens.js';
 import type { RevokeAgentToken } from '../application/agent/RevokeAgentToken.js';
 import type { AuthenticateAgentToken } from '../application/agent/AuthenticateAgentToken.js';
 import type { GetAgentCredential } from '../application/agent/GetAgentCredential.js';
+import type { GetAgentTask } from '../application/agent/GetAgentTask.js';
 import type { RequestAgentDeviceCode } from '../application/agent/RequestAgentDeviceCode.js';
 import type { ApproveAgentDeviceCode } from '../application/agent/ApproveAgentDeviceCode.js';
 import type { PollAgentDeviceToken } from '../application/agent/PollAgentDeviceToken.js';
@@ -132,6 +133,7 @@ type AppDeps = {
     readonly revokeAgentToken: RevokeAgentToken;
     readonly authenticateAgentToken: AuthenticateAgentToken;
     readonly getAgentCredential: GetAgentCredential;
+    readonly getAgentTask: GetAgentTask;
     readonly requestDeviceCode: RequestAgentDeviceCode;
     readonly approveDeviceCode: ApproveAgentDeviceCode;
     readonly pollDeviceToken: PollAgentDeviceToken;
@@ -214,6 +216,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       listKbDocuments: deps.agent.listKbDocuments,
       getCredential: deps.agent.getAgentCredential,
       listTasks: deps.agent.listTasks,
+      getTask: deps.agent.getAgentTask,
       moveTask: deps.agent.moveTask,
       linkCommit: deps.agent.linkCommit,
     }),

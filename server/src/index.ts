@@ -43,6 +43,7 @@ import { ListAgentTokens } from './application/agent/ListAgentTokens.js';
 import { RevokeAgentToken } from './application/agent/RevokeAgentToken.js';
 import { AuthenticateAgentToken } from './application/agent/AuthenticateAgentToken.js';
 import { GetAgentCredential } from './application/agent/GetAgentCredential.js';
+import { GetAgentTask } from './application/agent/GetAgentTask.js';
 import { InMemoryAgentDeviceCodeStore } from './application/agent/AgentDeviceCodeStore.js';
 import { RequestAgentDeviceCode } from './application/agent/RequestAgentDeviceCode.js';
 import { ApproveAgentDeviceCode } from './application/agent/ApproveAgentDeviceCode.js';
@@ -237,6 +238,12 @@ const { app, devProxyUpgrade } = createApp({
       tokens: githubTokenRepo,
       kb: kbRepo,
       getSecret: new GetSecret(secretsRepo),
+    }),
+    getAgentTask: new GetAgentTask({
+      projects: projectRepo,
+      tasks: taskRepo,
+      attachments: taskAttachmentRepo,
+      storage: attachmentStorage,
     }),
     // Переиспользуем существующие use-cases для agent-эндпоинтов
     listProjects: new ListProjects(projectRepo),

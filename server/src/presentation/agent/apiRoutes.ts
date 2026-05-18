@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { ListProjects } from '../../application/project/ListProjects.js';
 import type { ListKbDocuments } from '../../application/kb/ListKbDocuments.js';
 import type { GetAgentCredential } from '../../application/agent/GetAgentCredential.js';
+import type { GetAgentTask } from '../../application/agent/GetAgentTask.js';
 import type { AuthenticateAgentToken } from '../../application/agent/AuthenticateAgentToken.js';
 import type { ListTasks } from '../../application/task/ListTasks.js';
 import type { MoveTask } from '../../application/task/MoveTask.js';
@@ -10,6 +11,7 @@ import type { LinkCommit } from '../../application/task/LinkCommit.js';
 import type { Project } from '../../domain/project/Project.js';
 import type { KbDocumentSummary } from '../../domain/kb/KbDocument.js';
 import type { Task } from '../../domain/task/Task.js';
+import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import { requireAgentToken } from '../middleware/requireAgentToken.js';
 import { taskStatusSchema, linkCommitSchema } from '../tasks/schemas.js';
@@ -20,6 +22,7 @@ type Deps = {
   readonly listKbDocuments: ListKbDocuments;
   readonly getCredential: GetAgentCredential;
   readonly listTasks: ListTasks;
+  readonly getTask: GetAgentTask;
   readonly moveTask: MoveTask;
   readonly linkCommit: LinkCommit;
 };
@@ -122,6 +125,38 @@ export function agentApiRouter(deps: Deps): Router {
         const projectId = req.params['projectId'] as string;
         const list = await deps.listTasks.execute(projectId, req.user!.id);
         res.json({ tasks: list.map(taskToDto) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Полный task с binary'ями всех аттачей в base64. Для pf_get_task tool'а —
+  // вызывается когда агенту нужно увидеть скрины/файлы, которые юзер прикрепил.
+  router.get(
+    '/projects/:projectId/tasks/:taskId',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const { task, attachments } = await deps.getTask.execute(
+          projectId,
+          req.user!.id,
+          taskId,
+        );
+        res.json({
+          task: taskToDto(task),
+          attachments: attachments.map(
+            (a: TaskAttachment & { data: Buffer }) => ({
+              id: a.id,
+              filename: a.filename,
+              mimeType: a.mimeType,
+              sizeBytes: a.sizeBytes,
+              uploadedAt: a.uploadedAt.toISOString(),
+              dataBase64: a.data.toString('base64'),
+            }),
+          ),
+        });
       } catch (e) {
         next(e);
       }

@@ -80,6 +80,25 @@ const TOOLS = [
     },
   },
   {
+    name: 'pf_get_task',
+    description:
+      'Fetch a single task with ALL its attachments inlined. Returns the task metadata as ' +
+      'text, then each attachment as a separate content block: images (image/*) as inline ' +
+      "`image` blocks (viewable directly), other files as embedded `resource` blocks. " +
+      "Use this whenever a task in pf_list_tasks has attachmentCount > 0 and you're about " +
+      'to work on it — the screenshots/files the user attached usually contain critical ' +
+      "context (mockups, error screenshots, reference docs) that's not in the description.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
+      },
+      required: ['projectId', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pf_list_tasks',
     description:
       "List kanban tasks in a project. Returns id, title, description, status " +
@@ -151,6 +170,10 @@ const GetCredentialInput = z.object({
   slug: z.string().min(1),
 });
 const ListTasksInput = z.object({ projectId: z.string().min(1) });
+const GetTaskInput = z.object({
+  projectId: z.string().min(1),
+  taskId: z.string().min(1),
+});
 const MoveTaskInput = z.object({
   projectId: z.string().min(1),
   taskId: z.string().min(1),
@@ -167,7 +190,7 @@ async function main(): Promise<void> {
   const api = new ApiClient(config);
 
   const server = new Server(
-    { name: 'projectsflow', version: '0.3.0' },
+    { name: 'projectsflow', version: '0.4.0' },
     { capabilities: { tools: {} } },
   );
 
@@ -195,6 +218,41 @@ async function main(): Promise<void> {
           const input = ListTasksInput.parse(req.params.arguments ?? {});
           const tasks = await api.listTasks(input.projectId);
           return jsonResult(tasks);
+        }
+        case 'pf_get_task': {
+          const input = GetTaskInput.parse(req.params.arguments ?? {});
+          const { task, attachments } = await api.getTask(input.projectId, input.taskId);
+          // Текстовый блок — task + attachment metadata (без base64-дублей).
+          const meta = {
+            task,
+            attachments: attachments.map((a) => ({
+              id: a.id,
+              filename: a.filename,
+              mimeType: a.mimeType,
+              sizeBytes: a.sizeBytes,
+              uploadedAt: a.uploadedAt,
+            })),
+          };
+          const content: ToolContent[] = [
+            { type: 'text', text: JSON.stringify(meta, null, 2) },
+          ];
+          // Бинари — image/* как `image`-блок (LLM видит картинку), остальное как
+          // `resource` с blob (Claude Code умеет читать embedded resources).
+          for (const a of attachments) {
+            if (a.mimeType.startsWith('image/')) {
+              content.push({ type: 'image', data: a.dataBase64, mimeType: a.mimeType });
+            } else {
+              content.push({
+                type: 'resource',
+                resource: {
+                  uri: `projectsflow://attachment/${a.id}`,
+                  mimeType: a.mimeType,
+                  blob: a.dataBase64,
+                },
+              });
+            }
+          }
+          return { content };
         }
         case 'pf_move_task': {
           const input = MoveTaskInput.parse(req.params.arguments ?? {});
@@ -227,9 +285,17 @@ async function main(): Promise<void> {
   // Сервер живёт пока жив stdio-канал от Claude Code. process.stdin закроется → сервер выйдет.
 }
 
-function jsonResult(data: unknown): {
-  content: { type: 'text'; text: string }[];
-} {
+// MCP content-block union — text/image/resource. SDK типизирует это структурно
+// (CallToolResult принимает массив с этими shapes), но нам удобнее иметь явный alias.
+type ToolContent =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: string; mimeType: string }
+  | {
+      type: 'resource';
+      resource: { uri: string; mimeType: string; blob: string };
+    };
+
+function jsonResult(data: unknown): { content: ToolContent[] } {
   return {
     content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
   };
