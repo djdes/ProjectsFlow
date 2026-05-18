@@ -117,6 +117,39 @@ Bare repo: `/var/www/projectsflow/data/git/projectsflow.git`, ветка `main`.
 
 Workflow: фича → ветка → merge в `main` → `npm run deploy` (после Spec #3).
 
+## Ритуал коммита: sync с kanban-задачами через MCP
+
+У ProjectsFlow есть свой MCP-сервер (`@projectsflow/mcp-server`) который даёт Claude Code
+доступ к kanban-задачам проекта. **Если этот MCP подключён** (`pf_list_projects` доступен в
+твоих tool'ах) — следуй ритуалу ниже, когда юзер просит «сделай и закоммить».
+
+**Перед `git commit`:**
+
+1. `pf_list_projects` → найди id текущего проекта (один раз за сессию; кешируй для себя).
+2. `pf_list_tasks {projectId}` → прочитай открытые задачи (`status: todo` или `in_progress`).
+3. Сопоставь staged diff + планируемый commit-message с заголовками/описаниями задач.
+   - Если в commit-message юзер написал явный ID (`Closes PF-…`, `Refs #…`) — уважай его абсолютно.
+   - Иначе — сам суди по содержанию.
+4. **Не делай move молча.** Если нашёл одного разумного кандидата — спроси юзера через
+   AskUserQuestion: «Похоже, это закрывает «\<title>» (id=\<short>). Привязать коммит и
+   перенести в done?». Если кандидатов несколько или ни одного — просто скажи что не нашёл
+   и коммить как обычно.
+
+**После `git push`:**
+
+5. `pf_link_commit_to_task {projectId, taskId, sha}` — server pull'ит коммит с GitHub и
+   делает snapshot. Auto-transitions `todo → in_progress` на первом коммите задачи —
+   отдельный `pf_move_task` для этого не нужен.
+6. Если юзер подтвердил «перенести в done» — `pf_move_task {projectId, taskId, targetStatus: 'done'}`.
+
+**Чего НЕ делай:**
+
+- Не зови `pf_link_commit_to_task` ДО `git push` — sha ещё не на GitHub, server вернёт 404 GithubApiError.
+- Не дёргай MCP-tool'ы для каждого мелкого fixup-коммита («typo», «format»). Один task ↔ один semantic-feature commit; для fixup'ов в той же фиче — просто коммить.
+- Не двигай задачи в `done` без явного подтверждения. `todo → in_progress` происходит автоматически по `pf_link_commit_to_task`; в `done` — только когда юзер сказал.
+
+См. `mcp-server/README.md` для полной справки по tool'ам.
+
 ## Правила для AI-ассистентов
 
 1. **Чистая архитектура — не ритуал.** Перед тем как добавить код в `presentation/`,
@@ -135,6 +168,8 @@ Workflow: фича → ветка → merge в `main` → `npm run deploy` (по
    код, переменные, типы — на английском.
 8. **Не вводить новые большие зависимости** (Next.js, NextAuth, TanStack Query, MUI,
    Chakra и т.д.) без обсуждения. Текущий стек выбирался сознательно.
+9. **Если есть ProjectsFlow MCP** — перед коммитом синкай с kanban-задачами по ритуалу
+   выше. Не молча: всегда подтверждай move у юзера через AskUserQuestion.
 
 ## Типовые проблемы
 

@@ -120,6 +120,9 @@ type AppDeps = {
     // Переиспользуемые порты для agent API
     readonly listProjects: ListProjects;
     readonly listKbDocuments: ListKbDocuments;
+    readonly listTasks: ListTasks;
+    readonly moveTask: MoveTask;
+    readonly linkCommit: LinkCommit;
   };
 };
 
@@ -178,6 +181,9 @@ export function createApp(deps: AppDeps): CreatedApp {
       listProjects: deps.agent.listProjects,
       listKbDocuments: deps.agent.listKbDocuments,
       getCredential: deps.agent.getAgentCredential,
+      listTasks: deps.agent.listTasks,
+      moveTask: deps.agent.moveTask,
+      linkCommit: deps.agent.linkCommit,
     }),
   );
 

@@ -24,16 +24,51 @@ export type ResolvedCredential = {
   fields: Record<string, string>;
 };
 
+export type TaskStatus = 'todo' | 'in_progress' | 'done';
+
+export type Task = {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+  commitCount?: number;
+};
+
+export type TaskCommit = {
+  taskId: string;
+  sha: string;
+  message: string;
+  authorName: string;
+  authorAvatarUrl: string | null;
+  htmlUrl: string;
+  committedAt: string;
+  linkedAt: string;
+};
+
 export class ApiClient {
   constructor(private readonly config: AgentConfig) {}
 
-  private async request<T>(path: string): Promise<T> {
-    const res = await fetch(`${this.config.apiUrl}${path}`, {
-      headers: {
-        Authorization: `Bearer ${this.config.token}`,
-        Accept: 'application/json',
-      },
-    });
+  private async request<T>(
+    path: string,
+    init?: { method?: string; body?: unknown },
+  ): Promise<T> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.config.token}`,
+      Accept: 'application/json',
+    };
+    const fetchInit: RequestInit = {
+      method: init?.method ?? 'GET',
+      headers,
+    };
+    if (init?.body !== undefined) {
+      headers['Content-Type'] = 'application/json';
+      fetchInit.body = JSON.stringify(init.body);
+    }
+    const res = await fetch(`${this.config.apiUrl}${path}`, fetchInit);
     if (!res.ok) {
       let detail: unknown = null;
       try {
@@ -43,6 +78,8 @@ export class ApiClient {
       }
       throw new ApiError(res.status, `HTTP ${res.status} from ${path}`, detail);
     }
+    // 204 — пустой ответ.
+    if (res.status === 204) return undefined as T;
     return res.json() as Promise<T>;
   }
 
@@ -63,6 +100,37 @@ export class ApiClient {
       `/agent/projects/${encodeURIComponent(projectId)}/credentials/${encodeURIComponent(slug)}`,
     );
     return credential;
+  }
+
+  async listTasks(projectId: string): Promise<Task[]> {
+    const { tasks } = await this.request<{ tasks: Task[] }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks`,
+    );
+    return tasks;
+  }
+
+  async moveTask(
+    projectId: string,
+    taskId: string,
+    targetStatus: TaskStatus,
+  ): Promise<Task> {
+    const { task } = await this.request<{ task: Task }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/move`,
+      { method: 'POST', body: { targetStatus } },
+    );
+    return task;
+  }
+
+  async linkCommitToTask(
+    projectId: string,
+    taskId: string,
+    sha: string,
+  ): Promise<TaskCommit> {
+    const { commit } = await this.request<{ commit: TaskCommit }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/commits`,
+      { method: 'POST', body: { sha } },
+    );
+    return commit;
   }
 }
 

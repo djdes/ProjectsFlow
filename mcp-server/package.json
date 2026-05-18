@@ -1,7 +1,7 @@
 {
   "name": "@projectsflow/mcp-server",
-  "version": "0.1.0",
-  "description": "MCP server for ProjectsFlow — gives Claude Code access to credentials stored in your project vault",
+  "version": "0.2.0",
+  "description": "MCP server for ProjectsFlow — gives Claude Code access to your project credentials and kanban tasks",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -9,7 +9,9 @@
     "claude-code",
     "projectsflow",
     "credentials",
-    "vault"
+    "vault",
+    "kanban",
+    "tasks"
   ],
   "homepage": "https://projectsflow.ru",
   "repository": {

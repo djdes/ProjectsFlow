@@ -175,6 +175,15 @@ const { app, devProxyUpgrade } = createApp({
     // Переиспользуем существующие use-cases для agent-эндпоинтов
     listProjects: new ListProjects(projectRepo),
     listKbDocuments: new ListKbDocuments({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
+    listTasks: new ListTasks({ projects: projectRepo, tasks: taskRepo, taskCommits: taskCommitRepo }),
+    moveTask: new MoveTask({ projects: projectRepo, tasks: taskRepo }),
+    linkCommit: new LinkCommit({
+      projects: projectRepo,
+      tasks: taskRepo,
+      taskCommits: taskCommitRepo,
+      tokens: githubTokenRepo,
+      api: githubApi,
+    }),
   },
   github: {
     startDeviceFlow: new StartDeviceFlow({
