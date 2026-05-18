@@ -51,14 +51,11 @@ import { LinkCommit } from './application/task/LinkCommit.js';
 import { UnlinkCommit } from './application/task/UnlinkCommit.js';
 import { ListTaskCommits } from './application/task/ListTaskCommits.js';
 import { SyncTaskCommits } from './application/task/SyncTaskCommits.js';
-import { AesGcmSecretCipher } from './infrastructure/crypto/AesGcmSecretCipher.js';
 import { DrizzleSecretsRepository } from './infrastructure/repositories/DrizzleSecretsRepository.js';
 import { PutSecret } from './application/secrets/PutSecret.js';
 import { GetSecret } from './application/secrets/GetSecret.js';
 import { DeleteSecret } from './application/secrets/DeleteSecret.js';
 import { ListSecretKeys } from './application/secrets/ListSecretKeys.js';
-import type { SecretsCipher } from './application/secrets/SecretsCipher.js';
-import { SecretsVaultDisabledError } from './domain/secrets/errors.js';
 import { createApp } from './presentation/http.js';
 import { config, sessionTtlMs } from './presentation/config.js';
 
@@ -74,24 +71,11 @@ const githubApi = new FetchGithubApiClient(config.github.clientId);
 const deviceFlowStore = new DeviceFlowStore();
 const kbRepo = new GithubKbRepository(githubApi);
 
-let secretsCipher: AesGcmSecretCipher | null = null;
-try {
-  secretsCipher = new AesGcmSecretCipher(config.secrets.masterKey);
-  console.log('[projectsflow] secrets vault: enabled');
-} catch {
-  console.warn('[projectsflow] secrets vault: DISABLED (set SECRETS_MASTER_KEY)');
-}
-
 const secretsRepo = new DrizzleSecretsRepository(db);
 const taskRepo = new DrizzleTaskRepository(db);
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const agentTokenHasher = new Sha256AgentTokenHasher();
-const stubCipher: SecretsCipher = {
-  encrypt: () => { throw new SecretsVaultDisabledError(); },
-  decrypt: () => { throw new SecretsVaultDisabledError(); },
-};
-const activeCipher = secretsCipher ?? stubCipher;
 
 const authDeps = {
   users: userRepo,
@@ -124,8 +108,8 @@ const { app, devProxyUpgrade } = createApp({
     }),
   },
   secrets: {
-    putSecret: new PutSecret(secretsRepo, activeCipher),
-    getSecret: new GetSecret(secretsRepo, activeCipher),
+    putSecret: new PutSecret(secretsRepo),
+    getSecret: new GetSecret(secretsRepo),
     deleteSecret: new DeleteSecret(secretsRepo),
     listSecretKeys: new ListSecretKeys(secretsRepo),
   },
@@ -142,7 +126,6 @@ const { app, devProxyUpgrade } = createApp({
       tokens: githubTokenRepo,
       kb: kbRepo,
       secrets: secretsRepo,
-      cipher: activeCipher,
     }),
   },
   tasks: {
@@ -187,7 +170,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       tokens: githubTokenRepo,
       kb: kbRepo,
-      getSecret: new GetSecret(secretsRepo, activeCipher),
+      getSecret: new GetSecret(secretsRepo),
     }),
     // Переиспользуем существующие use-cases для agent-эндпоинтов
     listProjects: new ListProjects(projectRepo),

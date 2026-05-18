@@ -118,10 +118,15 @@ DB_PASSWORD=<LOCAL_PASSWORD>
 DB_NAME=projectsflow
 
 GITHUB_CLIENT_ID=Ov23liMlggU0i73dJ27a
-SECRETS_MASTER_KEY=<base64-32-bytes>
 SESSION_COOKIE_NAME=pf_session
 SESSION_TTL_DAYS=30
 ```
+
+> Раньше тут был `SECRETS_MASTER_KEY` (AES-GCM для секретов в KB-credential'ах).
+> С миграции `006_secrets_drop_encryption.sql` секреты хранятся plaintext —
+> ключа больше нет. Причина: ключ жил в `.env`, потеря/перезапись делала
+> все credential'ы нерасшифровываемыми; для one-tenant платформы на собственном
+> VPS такой риск не оправдан.
 
 Прогон миграций: `npm run db:migrate`. Применённые трекаются в таблице
 `_migrations`. Прод-миграции прогоняет CI на сервере (см. `.github/workflows/deploy.yml`).

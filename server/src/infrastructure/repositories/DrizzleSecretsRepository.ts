@@ -6,7 +6,6 @@ import type {
   SecretsRepository,
   StoredSecret,
 } from '../../application/secrets/SecretsRepository.js';
-import type { SecretsCipher } from '../../application/secrets/SecretsCipher.js';
 
 function toStored(row: SecretRow): StoredSecret {
   return {
@@ -21,8 +20,7 @@ function toStored(row: SecretRow): StoredSecret {
 export class DrizzleSecretsRepository implements SecretsRepository {
   constructor(private readonly db: Database) {}
 
-  async upsert(userId: string, key: string, value: string, cipher: SecretsCipher): Promise<void> {
-    const enc = cipher.encrypt(value);
+  async upsert(userId: string, key: string, value: string): Promise<void> {
     const existing = await this.db
       .select()
       .from(secrets)
@@ -31,19 +29,19 @@ export class DrizzleSecretsRepository implements SecretsRepository {
     if (existing[0]) {
       await this.db
         .update(secrets)
-        .set({ encrypted: enc })
+        .set({ value })
         .where(and(eq(secrets.userId, userId), eq(secrets.secretKey, key)));
     } else {
       await this.db.insert(secrets).values({
         id: randomUUID(),
         userId,
         secretKey: key,
-        encrypted: enc,
+        value,
       });
     }
   }
 
-  async getValue(userId: string, key: string, cipher: SecretsCipher): Promise<string | null> {
+  async getValue(userId: string, key: string): Promise<string | null> {
     const rows = await this.db
       .select()
       .from(secrets)
@@ -51,7 +49,7 @@ export class DrizzleSecretsRepository implements SecretsRepository {
       .limit(1);
     const row = rows[0];
     if (!row) return null;
-    return cipher.decrypt(row.encrypted);
+    return row.value;
   }
 
   async delete(userId: string, key: string): Promise<boolean> {

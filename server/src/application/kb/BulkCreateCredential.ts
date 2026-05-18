@@ -7,7 +7,6 @@ import { FrontmatterInvalidError, KbNotConnectedError } from '../../domain/kb/er
 import type { KbRepository } from './KbRepository.js';
 import type { Frontmatter } from '../../domain/kb/Frontmatter.js';
 import { validateFrontmatter } from './FrontmatterValidator.js';
-import type { SecretsCipher } from '../secrets/SecretsCipher.js';
 import type { SecretsRepository } from '../secrets/SecretsRepository.js';
 
 // Слабый эвристический детектор «секретных» ключей. Триггерится по подстроке
@@ -112,7 +111,6 @@ type Deps = {
   readonly tokens: GithubTokenRepository;
   readonly kb: KbRepository;
   readonly secrets: SecretsRepository;
-  readonly cipher: SecretsCipher;
 };
 
 export type BulkCreateInput = {
@@ -177,7 +175,7 @@ export class BulkCreateCredential {
 
     // Сначала пишем секреты в vault (если что-то упадёт — не плодим файл с висящими ref'ами).
     for (const s of secretsToWrite) {
-      await this.deps.secrets.upsert(input.userId, s.key, s.value, this.deps.cipher);
+      await this.deps.secrets.upsert(input.userId, s.key, s.value);
     }
 
     // Потом — markdown-файл в KB-репо.

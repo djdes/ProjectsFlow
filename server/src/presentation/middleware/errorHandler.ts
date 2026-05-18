@@ -17,10 +17,8 @@ import {
   GithubRepoUrlInvalidError,
 } from '../../domain/github/errors.js';
 import {
-  SecretCipherCorruptedError,
   SecretKeyInvalidError,
   SecretNotFoundError,
-  SecretsVaultDisabledError,
 } from '../../domain/secrets/errors.js';
 import {
   FrontmatterInvalidError,
@@ -133,18 +131,6 @@ export function errorHandler(
   }
   if (err instanceof SecretKeyInvalidError) {
     res.status(400).json({ error: 'secret_key_invalid', message: err.message });
-    return;
-  }
-  if (err instanceof SecretsVaultDisabledError) {
-    res.status(503).json({
-      error: 'secrets_vault_disabled',
-      message: 'Secrets vault не настроен на сервере (нет SECRETS_MASTER_KEY).',
-    });
-    return;
-  }
-  if (err instanceof SecretCipherCorruptedError) {
-    console.error('[errorHandler] secret cipher corrupted — master key changed?', err);
-    res.status(500).json({ error: 'secret_cipher_corrupted' });
     return;
   }
 

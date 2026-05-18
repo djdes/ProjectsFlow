@@ -121,11 +121,6 @@ function CredentialFieldsCard({ fm }: { fm: KbDocument['frontmatter'] }): React.
               <li key={e.key} className="flex items-center gap-3 px-4 py-2">
                 <span className="w-40 shrink-0 font-mono text-xs text-muted-foreground">
                   {e.key}
-                  {e.isSecret && (
-                    <span className="ml-1 rounded bg-amber-500/15 px-1 text-[10px] uppercase tracking-widest text-amber-600 dark:text-amber-400">
-                      vault
-                    </span>
-                  )}
                 </span>
                 <span className="flex-1 break-all font-mono text-xs">
                   {e.isSecret ? (

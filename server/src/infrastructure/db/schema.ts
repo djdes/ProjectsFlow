@@ -84,7 +84,7 @@ export const secrets = mysqlTable(
     id: char('id', { length: 36 }).primaryKey(),
     userId: char('user_id', { length: 36 }).notNull(),
     secretKey: varchar('secret_key', { length: 500 }).notNull(),
-    encrypted: varchar('encrypted', { length: 2000 }).notNull(),
+    value: varchar('value', { length: 2000 }).notNull(),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
