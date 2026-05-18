@@ -99,6 +99,9 @@ function DeviceFlow({
   const [tokenName, setTokenName] = useState('Claude Code');
   const [submitting, setSubmitting] = useState(false);
   const [approved, setApproved] = useState(false);
+  // Снимаем "сейчас" один раз при маунте — useState lazy-init, чтобы react-hooks/purity
+  // не ругался на Date.now() в render. Достаточно для лейбла «~X мин», live-countdown не нужен.
+  const [mountedAt] = useState(() => Date.now());
 
   useEffect(() => {
     let cancelled = false;
@@ -209,7 +212,7 @@ function DeviceFlow({
     }
   };
 
-  const minutesLeft = Math.max(0, Math.round((info.expiresAt.getTime() - Date.now()) / 60000));
+  const minutesLeft = Math.max(0, Math.round((info.expiresAt.getTime() - mountedAt) / 60000));
 
   return (
     <CenteredCard
