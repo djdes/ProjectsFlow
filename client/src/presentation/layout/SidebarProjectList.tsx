@@ -73,13 +73,16 @@ export function SidebarProjectList(): React.ReactElement {
     );
   }
 
-  if (!data || data.length === 0) {
+  // Inbox-проект скрываем — он рендерится отдельным пунктом в Sidebar.
+  const visible = (data ?? []).filter((p) => !p.isInbox);
+
+  if (visible.length === 0) {
     return <p className="px-2 py-1.5 text-sm text-muted-foreground">Проектов пока нет.</p>;
   }
 
   return (
     <div className="space-y-0.5">
-      {data.map((p) => (
+      {visible.map((p) => (
         <SidebarProjectListItem key={p.id} project={p} />
       ))}
     </div>

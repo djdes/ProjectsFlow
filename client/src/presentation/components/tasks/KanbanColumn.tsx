@@ -12,6 +12,8 @@ type Props = {
   onCreate: (status: TaskStatus) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
+  // Прокидывается в KanbanCard — управляет видимостью short-id [xxxxxxxx].
+  showShortId?: boolean;
 };
 
 export function KanbanColumn({
@@ -21,6 +23,7 @@ export function KanbanColumn({
   onCreate,
   onEdit,
   onDelete,
+  showShortId = true,
 }: Props): React.ReactElement {
   // Droppable нужен чтобы можно было кинуть карточку в ПУСТУЮ колонку —
   // SortableContext один не реагирует на drop в empty list.
@@ -62,7 +65,13 @@ export function KanbanColumn({
           strategy={verticalListSortingStrategy}
         >
           {tasks.map((t) => (
-            <KanbanCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} />
+            <KanbanCard
+              key={t.id}
+              task={t}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              showShortId={showShortId}
+            />
           ))}
         </SortableContext>
         {tasks.length === 0 && (

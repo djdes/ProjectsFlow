@@ -14,7 +14,7 @@ export type CreateTaskCommand = {
   readonly projectId: string;
   readonly ownerUserId: string;
   readonly description: string;
-  // По умолчанию новая карточка падает в TODO внизу столбца.
+  // По умолчанию новая карточка добавляется в TODO наверх столбца.
   readonly status: TaskStatus;
 };
 
@@ -30,9 +30,10 @@ export class CreateTask {
     const project = await this.deps.projects.getByIdForOwner(input.projectId, input.ownerUserId);
     if (!project) throw new ProjectNotFoundError();
 
-    // Кладём в самый низ колонки: position = max + STEP.
+    // Кладём в самый верх колонки: position = min - STEP. Это даёт «свежее наверху»
+    // в обоих UI-режимах (kanban и list — оба сортируют по position по возрастанию).
     const bounds = await this.deps.tasks.getPositionBounds(input.projectId, input.status);
-    const position = bounds ? bounds.max + POSITION_STEP : POSITION_STEP;
+    const position = bounds ? bounds.min - POSITION_STEP : POSITION_STEP;
 
     return this.deps.tasks.create({
       id: this.deps.idGen(),

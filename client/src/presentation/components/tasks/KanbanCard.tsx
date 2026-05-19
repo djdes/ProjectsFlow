@@ -13,9 +13,18 @@ type Props = {
   // Когда true — рендерится для DragOverlay: без motion-layoutId (иначе конфликт двух
   // элементов с одинаковым id) и без sortable-хуков.
   preview?: boolean;
+  // Показывать short-id [xxxxxxxx] на карточке. Для inbox-проекта скрываем — там
+  // нет git-репо, привязка коммитов через `[short-id]` бессмысленна.
+  showShortId?: boolean;
 };
 
-export function KanbanCard({ task, onEdit, onDelete, preview = false }: Props): React.ReactElement {
+export function KanbanCard({
+  task,
+  onEdit,
+  onDelete,
+  preview = false,
+  showShortId = true,
+}: Props): React.ReactElement {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: 'task', task },
@@ -55,10 +64,13 @@ export function KanbanCard({ task, onEdit, onDelete, preview = false }: Props): 
         <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-snug">
           {task.description ?? '—'}
         </p>
+        {(showShortId || (task.commitCount ?? 0) > 0 || (task.attachmentCount ?? 0) > 0) && (
         <div className="mt-2 flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
-          <span className="font-mono normal-case tracking-normal opacity-60">
-            [{taskShortId(task.id)}]
-          </span>
+          {showShortId && (
+            <span className="font-mono normal-case tracking-normal opacity-60">
+              [{taskShortId(task.id)}]
+            </span>
+          )}
           {(task.commitCount ?? 0) > 0 && (
             <span className="flex items-center gap-1 rounded-full bg-blue-500/15 px-1.5 py-0.5 text-blue-600 dark:bg-blue-400/15 dark:text-blue-400">
               <GitCommit className="size-2.5" />
@@ -72,6 +84,7 @@ export function KanbanCard({ task, onEdit, onDelete, preview = false }: Props): 
             </span>
           )}
         </div>
+        )}
       </div>
       <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
         <Button

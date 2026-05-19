@@ -19,6 +19,9 @@ import { TaskDialog, type TaskDialogState } from './TaskDialog';
 
 type Props = {
   projectId: string;
+  // Если false — TaskDialog не показывает секцию коммитов. Для inbox-проекта так:
+  // у него нет git-репо, привязывать нечего.
+  showCommits?: boolean;
 };
 
 const COLUMN_LABELS: Record<TaskStatus, string> = {
@@ -34,7 +37,7 @@ function groupByStatus(tasks: Task[]): Record<TaskStatus, Task[]> {
   return out;
 }
 
-export function KanbanBoard({ projectId }: Props): React.ReactElement {
+export function KanbanBoard({ projectId, showCommits = true }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const [dialog, setDialog] = useState<TaskDialogState | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -158,6 +161,7 @@ export function KanbanBoard({ projectId }: Props): React.ReactElement {
               onCreate={(s) => setDialog({ mode: 'create', status: s })}
               onEdit={(t) => setDialog({ mode: 'edit', task: t })}
               onDelete={handleDelete}
+              showShortId={showCommits}
             />
           ))}
         </div>
@@ -168,6 +172,7 @@ export function KanbanBoard({ projectId }: Props): React.ReactElement {
               onEdit={() => undefined}
               onDelete={() => undefined}
               preview
+              showShortId={showCommits}
             />
           ) : null}
         </DragOverlay>
@@ -178,6 +183,7 @@ export function KanbanBoard({ projectId }: Props): React.ReactElement {
         onClose={() => setDialog(null)}
         onSubmit={handleDialogSubmit}
         onCommitsChange={() => void refetch()}
+        showCommits={showCommits}
       />
     </div>
   );

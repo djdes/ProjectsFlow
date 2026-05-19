@@ -38,6 +38,9 @@ type Props = {
   onSubmit: (input: { description: string }) => Promise<Task>;
   // Колбэк когда коммиты или аттачи у задачи поменялись — board перефетчит badge'и.
   onCommitsChange?: () => void;
+  // Показывать секцию коммитов в edit-режиме. Для inbox-проекта выключаем — у него
+  // нет git-репо, привязывать нечего.
+  showCommits?: boolean;
 };
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
@@ -73,6 +76,7 @@ export function TaskDialog({
   onClose,
   onSubmit,
   onCommitsChange,
+  showCommits = true,
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const [description, setDescription] = useState('');
@@ -167,7 +171,7 @@ export function TaskDialog({
         <DialogHeader className="px-6 pb-4 pt-6">
           <DialogTitle className="flex items-baseline gap-2">
             {state?.mode === 'edit' ? 'Задача' : 'Новая задача'}
-            {state?.mode === 'edit' && (
+            {state?.mode === 'edit' && showCommits && (
               <span className="font-mono text-xs text-muted-foreground">
                 [{taskShortId(state.task.id)}]
               </span>
@@ -175,7 +179,9 @@ export function TaskDialog({
           </DialogTitle>
           <DialogDescription>
             {state?.mode === 'edit'
-              ? 'Опиши задачу, прикрепи скриншоты, привяжи коммиты.'
+              ? showCommits
+                ? 'Опиши задачу, прикрепи скриншоты, привяжи коммиты.'
+                : 'Опиши задачу, прикрепи скриншоты.'
               : 'Опиши задачу и при желании сразу прикрепи скриншоты (Ctrl+V).'}
           </DialogDescription>
         </DialogHeader>
@@ -209,9 +215,11 @@ export function TaskDialog({
                 taskId={state.task.id}
                 onChange={() => onCommitsChange?.()}
               />
-              <div className="border-t pt-4">
-                <TaskCommitsSection task={state.task} onChange={() => onCommitsChange?.()} />
-              </div>
+              {showCommits && (
+                <div className="border-t pt-4">
+                  <TaskCommitsSection task={state.task} onChange={() => onCommitsChange?.()} />
+                </div>
+              )}
             </>
           ) : (
             <PendingAttachmentsSection
