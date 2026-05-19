@@ -7,5 +7,9 @@ export type Project = {
   readonly status: ProjectStatus;
   readonly gitRepoUrl: string | null;
   readonly kbRepoFullName: string | null;
+  // True для phantom-проекта «Входящие». На юзера ровно один такой; создаётся лениво
+  // через GetOrCreateInbox. Из обычных списков (sidebar, HomePage) клиент должен
+  // отфильтровать inbox-проекты — у них отдельная вкладка.
+  readonly isInbox: boolean;
   readonly createdAt: Date;
 };

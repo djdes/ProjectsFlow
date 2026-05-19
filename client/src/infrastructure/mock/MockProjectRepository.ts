@@ -28,6 +28,22 @@ export class MockProjectRepository implements ProjectRepository {
     return delay(this.projects.find((p) => p.id === id) ?? null);
   }
 
+  async getInbox(): Promise<Project> {
+    let inbox = this.projects.find((p) => p.isInbox);
+    if (inbox) return delay(inbox);
+    inbox = {
+      id: crypto.randomUUID(),
+      name: 'Входящие',
+      status: 'active',
+      gitRepoUrl: null,
+      kbRepoFullName: null,
+      isInbox: true,
+      createdAt: new Date(),
+    };
+    this.projects.unshift(inbox);
+    return delay(inbox);
+  }
+
   async create(input: CreateProjectInput): Promise<Project> {
     const normalized = normalizeName(input.name);
     const duplicate = this.projects.some((p) => normalizeName(p.name) === normalized);
@@ -39,6 +55,7 @@ export class MockProjectRepository implements ProjectRepository {
       status: 'active',
       gitRepoUrl: null,
       kbRepoFullName: null,
+      isInbox: false,
       createdAt: new Date(),
     };
     // Новые проекты — наверху списка: user видит результат там, где он его ждёт

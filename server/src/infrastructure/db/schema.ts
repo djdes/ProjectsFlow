@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   char,
   double,
   index,
@@ -59,10 +60,14 @@ export const projects = mysqlTable(
     status: mysqlEnum('status', ['active', 'paused', 'archived']).notNull().default('active'),
     gitRepoUrl: varchar('git_repo_url', { length: 500 }),
     kbRepoFullName: varchar('kb_repo_full_name', { length: 255 }),
+    // phantom-flag: «Входящие» — отдельная вкладка для задач без привязки к конкретному проекту.
+    // На юзера ровно одна inbox-запись (создаётся лениво через GetOrCreateInbox).
+    isInbox: boolean('is_inbox').notNull().default(false),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
   (t) => [
+    index('idx_projects_owner_inbox').on(t.ownerId, t.isInbox),
     uniqueIndex('uq_projects_owner_name').on(t.ownerId, t.name),
     index('idx_projects_owner').on(t.ownerId),
   ],

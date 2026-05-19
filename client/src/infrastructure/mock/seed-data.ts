@@ -8,6 +8,7 @@ export const seedProjects: Project[] = [
     status: 'active',
     gitRepoUrl: null,
     kbRepoFullName: null,
+    isInbox: false,
     createdAt: new Date('2025-01-15'),
   },
   {
@@ -16,6 +17,7 @@ export const seedProjects: Project[] = [
     status: 'active',
     gitRepoUrl: null,
     kbRepoFullName: null,
+    isInbox: false,
     createdAt: new Date('2025-03-20'),
   },
   {
@@ -24,6 +26,7 @@ export const seedProjects: Project[] = [
     status: 'paused',
     gitRepoUrl: null,
     kbRepoFullName: null,
+    isInbox: false,
     createdAt: new Date('2024-11-02'),
   },
   {
@@ -32,6 +35,7 @@ export const seedProjects: Project[] = [
     status: 'archived',
     gitRepoUrl: null,
     kbRepoFullName: null,
+    isInbox: false,
     createdAt: new Date('2024-05-10'),
   },
 ];

@@ -18,6 +18,7 @@ import { ListProjects } from './application/project/ListProjects.js';
 import { GetProject } from './application/project/GetProject.js';
 import { CreateProject } from './application/project/CreateProject.js';
 import { UpdateProject } from './application/project/UpdateProject.js';
+import { GetOrCreateInbox } from './application/project/GetOrCreateInbox.js';
 import { StartDeviceFlow } from './application/github/StartDeviceFlow.js';
 import { PollDeviceFlow } from './application/github/PollDeviceFlow.js';
 import { DisconnectGithub } from './application/github/DisconnectGithub.js';
@@ -142,6 +143,7 @@ const { app, devProxyUpgrade } = createApp({
       tokens: githubTokenRepo,
       api: githubApi,
     }),
+    getOrCreateInbox: new GetOrCreateInbox({ repo: projectRepo, idGen: idGenerator }),
   },
   secrets: {
     putSecret: new PutSecret(secretsRepo),

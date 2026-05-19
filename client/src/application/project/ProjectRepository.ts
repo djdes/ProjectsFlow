@@ -14,6 +14,8 @@ export type UpdateProjectInput = {
 export interface ProjectRepository {
   list(): Promise<Project[]>;
   getById(id: string): Promise<Project | null>;
+  // Inbox-проект юзера. Создаётся лениво при первом обращении на сервере.
+  getInbox(): Promise<Project>;
   create(input: CreateProjectInput): Promise<Project>;
   update(id: string, patch: UpdateProjectInput): Promise<Project>;
 }

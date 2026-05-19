@@ -16,6 +16,7 @@ import type { ListProjects } from '../application/project/ListProjects.js';
 import type { GetProject } from '../application/project/GetProject.js';
 import type { CreateProject } from '../application/project/CreateProject.js';
 import type { UpdateProject } from '../application/project/UpdateProject.js';
+import type { GetOrCreateInbox } from '../application/project/GetOrCreateInbox.js';
 import type { ListProjectCommits } from '../application/github/ListProjectCommits.js';
 import type { StartDeviceFlow } from '../application/github/StartDeviceFlow.js';
 import type { PollDeviceFlow } from '../application/github/PollDeviceFlow.js';
@@ -67,6 +68,7 @@ import { secretsRouter } from './secrets/routes.js';
 import { kbRouter } from './kb/routes.js';
 import { tasksRouter } from './tasks/routes.js';
 import { attachmentBinaryRouter } from './tasks/attachmentBinaryRoutes.js';
+import { inboxRouter } from './inbox/routes.js';
 import { agentTokensRouter } from './agent/tokensRoutes.js';
 import { agentApiRouter } from './agent/apiRoutes.js';
 import { agentDeviceRouter } from './agent/deviceRoutes.js';
@@ -88,6 +90,7 @@ type AppDeps = {
     readonly createProject: CreateProject;
     readonly updateProject: UpdateProject;
     readonly listProjectCommits: ListProjectCommits;
+    readonly getOrCreateInbox: GetOrCreateInbox;
   };
   readonly github: {
     readonly startDeviceFlow: StartDeviceFlow;
@@ -189,6 +192,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/projects/:projectId/kb', kbRouter(deps.kb));
   app.use('/api/projects/:projectId/tasks', tasksRouter(deps.tasks));
   app.use('/api/attachments', attachmentBinaryRouter(deps.tasks));
+  app.use('/api/inbox', inboxRouter({ getOrCreateInbox: deps.projects.getOrCreateInbox }));
 
   // Agent tokens management (session-auth)
   app.use(

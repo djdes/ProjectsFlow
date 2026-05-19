@@ -14,6 +14,7 @@ type ProjectDto = {
   status: ProjectStatus;
   gitRepoUrl: string | null;
   kbRepoFullName: string | null;
+  isInbox?: boolean;
   createdAt: string;
 };
 
@@ -24,6 +25,7 @@ function fromDto(dto: ProjectDto): Project {
     status: dto.status,
     gitRepoUrl: dto.gitRepoUrl,
     kbRepoFullName: dto.kbRepoFullName ?? null,
+    isInbox: dto.isInbox ?? false,
     createdAt: new Date(dto.createdAt),
   };
 }
@@ -42,6 +44,11 @@ export class HttpProjectRepository implements ProjectRepository {
       if (err instanceof HttpError && err.status === 404) return null;
       throw err;
     }
+  }
+
+  async getInbox(): Promise<Project> {
+    const { project } = await httpClient.get<{ project: ProjectDto }>('/inbox');
+    return fromDto(project);
   }
 
   async create(input: CreateProjectInput): Promise<Project> {

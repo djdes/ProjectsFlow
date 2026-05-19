@@ -17,6 +17,7 @@ function toProject(row: ProjectRow): Project {
     status: row.status as ProjectStatus,
     gitRepoUrl: row.gitRepoUrl ?? null,
     kbRepoFullName: row.kbRepoFullName ?? null,
+    isInbox: row.isInbox,
     createdAt: row.createdAt,
   };
 }
@@ -51,6 +52,16 @@ export class DrizzleProjectRepository implements ProjectRepository {
     return row ? toProject(row) : null;
   }
 
+  async findInboxByOwner(ownerId: string): Promise<Project | null> {
+    const rows = await this.db
+      .select()
+      .from(projects)
+      .where(and(eq(projects.ownerId, ownerId), eq(projects.isInbox, true)))
+      .limit(1);
+    const row = rows[0];
+    return row ? toProject(row) : null;
+  }
+
   async create(input: CreateProjectInput): Promise<Project> {
     try {
       await this.db.insert(projects).values({
@@ -59,6 +70,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
         name: input.name,
         status: 'active',
         gitRepoUrl: null,
+        isInbox: input.isInbox ?? false,
       });
     } catch (err) {
       if (isDuplicateKey(err)) throw new ProjectNameAlreadyExistsError(input.name);

@@ -15,6 +15,7 @@ import { UpdateProject } from '@/application/project/UpdateProject';
 import { GetCurrentUser } from '@/application/user/GetCurrentUser';
 import { UpdateProfile } from '@/application/user/UpdateProfile';
 import type { AuthRepository } from '@/application/auth/AuthRepository';
+import type { ProjectRepository } from '@/application/project/ProjectRepository';
 import type { GithubRepository } from '@/application/github/GithubRepository';
 import type { KbRepository } from '@/application/kb/KbRepository';
 import type { SecretsRepository } from '@/application/secrets/SecretsRepository';
@@ -29,6 +30,7 @@ type Container = {
   updateProject: UpdateProject;
   getCurrentUser: GetCurrentUser;
   updateProfile: UpdateProfile;
+  projectRepository: ProjectRepository;
   authRepository: AuthRepository;
   githubRepository: GithubRepository;
   kbRepository: KbRepository;
@@ -55,6 +57,7 @@ function buildContainer(): Container {
     updateProject: new UpdateProject(projectRepo),
     getCurrentUser: new GetCurrentUser(userRepo),
     updateProfile: new UpdateProfile(userRepo),
+    projectRepository: projectRepo,
     authRepository: authRepo,
     githubRepository: githubRepo,
     kbRepository: kbRepo,
