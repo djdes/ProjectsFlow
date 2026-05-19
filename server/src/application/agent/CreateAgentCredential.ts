@@ -1,5 +1,7 @@
 import matter from 'gray-matter';
+import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
+import { requireProjectAccess } from '../project/projectAccess.js';
 import type { GithubTokenRepository } from '../github/GithubTokenRepository.js';
 import type { KbRepository } from '../kb/KbRepository.js';
 import type { SecretsRepository } from '../secrets/SecretsRepository.js';
@@ -7,7 +9,6 @@ import type { Frontmatter } from '../../domain/kb/Frontmatter.js';
 import { validateFrontmatter } from '../kb/FrontmatterValidator.js';
 import { slugify } from '../kb/BulkCreateCredential.js';
 import { GithubNotConnectedError } from '../../domain/github/errors.js';
-import { ProjectNotFoundError } from '../../domain/project/errors.js';
 import { FrontmatterInvalidError, KbNotConnectedError } from '../../domain/kb/errors.js';
 
 // Agent-facing создание credential'а. В отличие от UI-flow (BulkCreateCredential
@@ -20,6 +21,7 @@ import { FrontmatterInvalidError, KbNotConnectedError } from '../../domain/kb/er
 
 type Deps = {
   readonly projects: ProjectRepository;
+  readonly members: ProjectMemberRepository;
   readonly tokens: GithubTokenRepository;
   readonly kb: KbRepository;
   readonly secrets: SecretsRepository;
@@ -61,8 +63,7 @@ export class CreateAgentCredential {
       ]);
     }
 
-    const project = await this.deps.projects.getByIdForOwner(input.projectId, input.userId);
-    if (!project) throw new ProjectNotFoundError();
+    const { project } = await requireProjectAccess(this.deps, input.projectId, input.userId, 'manage_kb');
     if (!project.kbRepoFullName) throw new KbNotConnectedError();
 
     const projectSlug = slugify(project.name);

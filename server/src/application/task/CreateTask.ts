@@ -1,11 +1,13 @@
-import { ProjectNotFoundError } from '../../domain/project/errors.js';
 import { TaskDescriptionEmptyError } from '../../domain/task/errors.js';
 import type { Task, TaskStatus } from '../../domain/task/Task.js';
+import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
+import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
+  readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly idGen: () => string;
 };
@@ -27,8 +29,7 @@ export class CreateTask {
     const description = input.description.trim();
     if (description.length === 0) throw new TaskDescriptionEmptyError();
 
-    const project = await this.deps.projects.getByIdForOwner(input.projectId, input.ownerUserId);
-    if (!project) throw new ProjectNotFoundError();
+    await requireProjectAccess(this.deps, input.projectId, input.ownerUserId, 'create_task');
 
     // Кладём в самый верх колонки: position = min - STEP. Это даёт «свежее наверху»
     // в обоих UI-режимах (kanban и list — оба сортируют по position по возрастанию).

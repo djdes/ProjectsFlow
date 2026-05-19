@@ -6,6 +6,8 @@ import { idGenerator } from './infrastructure/id/idGenerator.js';
 import { DrizzleUserRepository } from './infrastructure/repositories/DrizzleUserRepository.js';
 import { DrizzleSessionRepository } from './infrastructure/repositories/DrizzleSessionRepository.js';
 import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleProjectRepository.js';
+import { DrizzleProjectMemberRepository } from './infrastructure/repositories/DrizzleProjectMemberRepository.js';
+import { DrizzleProjectInviteRepository } from './infrastructure/repositories/DrizzleProjectInviteRepository.js';
 import { DrizzleGithubTokenRepository } from './infrastructure/repositories/DrizzleGithubTokenRepository.js';
 import { FetchGithubApiClient } from './infrastructure/github/FetchGithubApiClient.js';
 import { DeviceFlowStore } from './infrastructure/github/DeviceFlowStore.js';
@@ -19,6 +21,15 @@ import { GetProject } from './application/project/GetProject.js';
 import { CreateProject } from './application/project/CreateProject.js';
 import { UpdateProject } from './application/project/UpdateProject.js';
 import { GetOrCreateInbox } from './application/project/GetOrCreateInbox.js';
+import { ListProjectMembers } from './application/project/ListProjectMembers.js';
+import { RemoveProjectMember } from './application/project/RemoveProjectMember.js';
+import { UpdateProjectMemberRole } from './application/project/UpdateProjectMemberRole.js';
+import { TransferProjectOwnership } from './application/project/TransferProjectOwnership.js';
+import { CreateProjectInvite } from './application/project/CreateProjectInvite.js';
+import { ListProjectInvites } from './application/project/ListProjectInvites.js';
+import { DeleteProjectInvite } from './application/project/DeleteProjectInvite.js';
+import { GetInviteByToken } from './application/project/GetInviteByToken.js';
+import { AcceptProjectInvite } from './application/project/AcceptProjectInvite.js';
 import { StartDeviceFlow } from './application/github/StartDeviceFlow.js';
 import { PollDeviceFlow } from './application/github/PollDeviceFlow.js';
 import { DisconnectGithub } from './application/github/DisconnectGithub.js';
@@ -36,6 +47,7 @@ import { BulkCreateCredential } from './application/kb/BulkCreateCredential.js';
 import { DrizzleTaskRepository } from './infrastructure/repositories/DrizzleTaskRepository.js';
 import { DrizzleTaskCommitRepository } from './infrastructure/repositories/DrizzleTaskCommitRepository.js';
 import { DrizzleTaskAttachmentRepository } from './infrastructure/repositories/DrizzleTaskAttachmentRepository.js';
+import { DrizzleTaskCommentRepository } from './infrastructure/repositories/DrizzleTaskCommentRepository.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
 import { Sha256AgentTokenHasher } from './infrastructure/crypto/Sha256AgentTokenHasher.js';
@@ -65,6 +77,10 @@ import { UploadTaskAttachment } from './application/task/UploadTaskAttachment.js
 import { DeleteTaskAttachment } from './application/task/DeleteTaskAttachment.js';
 import { ListTaskAttachments } from './application/task/ListTaskAttachments.js';
 import { GetTaskAttachment } from './application/task/GetTaskAttachment.js';
+import { ListTaskComments } from './application/task/ListTaskComments.js';
+import { CreateTaskComment } from './application/task/CreateTaskComment.js';
+import { UpdateTaskComment } from './application/task/UpdateTaskComment.js';
+import { DeleteTaskComment } from './application/task/DeleteTaskComment.js';
 import { DrizzleSecretsRepository } from './infrastructure/repositories/DrizzleSecretsRepository.js';
 import { PutSecret } from './application/secrets/PutSecret.js';
 import { GetSecret } from './application/secrets/GetSecret.js';
@@ -79,6 +95,8 @@ const now = (): Date => new Date();
 const userRepo = new DrizzleUserRepository(db);
 const sessionRepo = new DrizzleSessionRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
+const projectMemberRepo = new DrizzleProjectMemberRepository(db);
+const projectInviteRepo = new DrizzleProjectInviteRepository(db);
 const githubTokenRepo = new DrizzleGithubTokenRepository(db);
 
 const githubApi = new FetchGithubApiClient(config.github.clientId);
@@ -89,6 +107,7 @@ const secretsRepo = new DrizzleSecretsRepository(db);
 const taskRepo = new DrizzleTaskRepository(db);
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
+const taskCommentRepo = new DrizzleTaskCommentRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 
 // Каталог с binary-аттачами. В dev: ./uploads (рядом с кодом), в prod: задаём
@@ -134,16 +153,69 @@ const { app, devProxyUpgrade } = createApp({
     updateProfile: new UpdateProfile(userRepo),
   },
   projects: {
-    listProjects: new ListProjects(projectRepo),
-    getProject: new GetProject(projectRepo),
-    createProject: new CreateProject({ repo: projectRepo, idGen: idGenerator }),
-    updateProject: new UpdateProject(projectRepo),
+    listProjects: new ListProjects(projectMemberRepo),
+    getProject: new GetProject({ projects: projectRepo, members: projectMemberRepo }),
+    createProject: new CreateProject({
+      repo: projectRepo,
+      members: projectMemberRepo,
+      idGen: idGenerator,
+    }),
+    updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo }),
     listProjectCommits: new ListProjectCommits({
       projects: projectRepo,
+      members: projectMemberRepo,
       tokens: githubTokenRepo,
       api: githubApi,
     }),
-    getOrCreateInbox: new GetOrCreateInbox({ repo: projectRepo, idGen: idGenerator }),
+    getOrCreateInbox: new GetOrCreateInbox({
+      repo: projectRepo,
+      members: projectMemberRepo,
+      idGen: idGenerator,
+    }),
+    listMembers: new ListProjectMembers({ projects: projectRepo, members: projectMemberRepo }),
+    removeMember: new RemoveProjectMember({ projects: projectRepo, members: projectMemberRepo }),
+    updateMemberRole: new UpdateProjectMemberRole({
+      projects: projectRepo,
+      members: projectMemberRepo,
+    }),
+    transferOwnership: new TransferProjectOwnership({
+      projects: projectRepo,
+      members: projectMemberRepo,
+    }),
+    createInvite: new CreateProjectInvite({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      invites: projectInviteRepo,
+      idGen: idGenerator,
+      randomToken: () => randomBytes(32).toString('hex'),
+      now,
+      ttlMs: 7 * 24 * 60 * 60 * 1000, // 7 дней (см. spec)
+    }),
+    listInvites: new ListProjectInvites({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      invites: projectInviteRepo,
+      now,
+    }),
+    deleteInvite: new DeleteProjectInvite({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      invites: projectInviteRepo,
+    }),
+    appUrl: process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? 'http://localhost:5173',
+  },
+  invites: {
+    getByToken: new GetInviteByToken({
+      invites: projectInviteRepo,
+      projects: projectRepo,
+      users: userRepo,
+      now,
+    }),
+    accept: new AcceptProjectInvite({
+      invites: projectInviteRepo,
+      members: projectMemberRepo,
+      now,
+    }),
   },
   secrets: {
     putSecret: new PutSecret(secretsRepo),
@@ -152,15 +224,46 @@ const { app, devProxyUpgrade } = createApp({
     listSecretKeys: new ListSecretKeys(secretsRepo),
   },
   kb: {
-    initKbRepo: new InitKbRepo({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
-    connectKbRepo: new ConnectKbRepo({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
-    disconnectKb: new DisconnectKb(projectRepo),
-    listKbDocuments: new ListKbDocuments({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
-    getKbDocument: new GetKbDocument({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
-    writeKbDocument: new WriteKbDocument({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
-    deleteKbDocument: new DeleteKbDocument({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
+    initKbRepo: new InitKbRepo({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tokens: githubTokenRepo,
+      kb: kbRepo,
+    }),
+    connectKbRepo: new ConnectKbRepo({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tokens: githubTokenRepo,
+      kb: kbRepo,
+    }),
+    disconnectKb: new DisconnectKb({ projects: projectRepo, members: projectMemberRepo }),
+    listKbDocuments: new ListKbDocuments({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tokens: githubTokenRepo,
+      kb: kbRepo,
+    }),
+    getKbDocument: new GetKbDocument({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tokens: githubTokenRepo,
+      kb: kbRepo,
+    }),
+    writeKbDocument: new WriteKbDocument({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tokens: githubTokenRepo,
+      kb: kbRepo,
+    }),
+    deleteKbDocument: new DeleteKbDocument({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tokens: githubTokenRepo,
+      kb: kbRepo,
+    }),
     bulkCreateCredential: new BulkCreateCredential({
       projects: projectRepo,
+      members: projectMemberRepo,
       tokens: githubTokenRepo,
       kb: kbRepo,
       secrets: secretsRepo,
@@ -169,25 +272,56 @@ const { app, devProxyUpgrade } = createApp({
   tasks: {
     listTasks: new ListTasks({
       projects: projectRepo,
+      members: projectMemberRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,
     }),
-    createTask: new CreateTask({ projects: projectRepo, tasks: taskRepo, idGen: idGenerator }),
-    updateTask: new UpdateTask({ projects: projectRepo, tasks: taskRepo }),
-    moveTask: new MoveTask({ projects: projectRepo, tasks: taskRepo }),
-    deleteTask: new DeleteTask({ projects: projectRepo, tasks: taskRepo }),
+    createTask: new CreateTask({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      idGen: idGenerator,
+    }),
+    updateTask: new UpdateTask({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+    }),
+    moveTask: new MoveTask({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+    }),
+    deleteTask: new DeleteTask({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      comments: taskCommentRepo,
+    }),
     linkCommit: new LinkCommit({
       projects: projectRepo,
+      members: projectMemberRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
       tokens: githubTokenRepo,
       api: githubApi,
     }),
-    unlinkCommit: new UnlinkCommit({ projects: projectRepo, tasks: taskRepo, taskCommits: taskCommitRepo }),
-    listTaskCommits: new ListTaskCommits({ projects: projectRepo, tasks: taskRepo, taskCommits: taskCommitRepo }),
+    unlinkCommit: new UnlinkCommit({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      taskCommits: taskCommitRepo,
+    }),
+    listTaskCommits: new ListTaskCommits({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      taskCommits: taskCommitRepo,
+    }),
     syncTaskCommits: new SyncTaskCommits({
       projects: projectRepo,
+      members: projectMemberRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
       tokens: githubTokenRepo,
@@ -195,6 +329,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
     uploadAttachment: new UploadTaskAttachment({
       projects: projectRepo,
+      members: projectMemberRepo,
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
@@ -204,20 +339,48 @@ const { app, devProxyUpgrade } = createApp({
     }),
     deleteAttachment: new DeleteTaskAttachment({
       projects: projectRepo,
+      members: projectMemberRepo,
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
     }),
     listAttachments: new ListTaskAttachments({
       projects: projectRepo,
+      members: projectMemberRepo,
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
     }),
     getAttachment: new GetTaskAttachment({
       projects: projectRepo,
+      members: projectMemberRepo,
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
+    }),
+    listComments: new ListTaskComments({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      comments: taskCommentRepo,
+    }),
+    createComment: new CreateTaskComment({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      comments: taskCommentRepo,
+      idGen: idGenerator,
+    }),
+    updateComment: new UpdateTaskComment({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      comments: taskCommentRepo,
+    }),
+    deleteComment: new DeleteTaskComment({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      comments: taskCommentRepo,
     }),
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
   },
@@ -238,35 +401,54 @@ const { app, devProxyUpgrade } = createApp({
     }),
     getAgentCredential: new GetAgentCredential({
       projects: projectRepo,
+      members: projectMemberRepo,
       tokens: githubTokenRepo,
       kb: kbRepo,
       getSecret: new GetSecret(secretsRepo),
     }),
     getAgentTask: new GetAgentTask({
       projects: projectRepo,
+      members: projectMemberRepo,
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
     }),
     createAgentCredential: new CreateAgentCredential({
       projects: projectRepo,
+      members: projectMemberRepo,
       tokens: githubTokenRepo,
       kb: kbRepo,
       secrets: secretsRepo,
     }),
     // Переиспользуем существующие use-cases для agent-эндпоинтов
-    listProjects: new ListProjects(projectRepo),
-    listKbDocuments: new ListKbDocuments({ projects: projectRepo, tokens: githubTokenRepo, kb: kbRepo }),
+    listProjects: new ListProjects(projectMemberRepo),
+    listKbDocuments: new ListKbDocuments({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tokens: githubTokenRepo,
+      kb: kbRepo,
+    }),
     listTasks: new ListTasks({
       projects: projectRepo,
+      members: projectMemberRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,
     }),
-    createTask: new CreateTask({ projects: projectRepo, tasks: taskRepo, idGen: idGenerator }),
-    moveTask: new MoveTask({ projects: projectRepo, tasks: taskRepo }),
+    createTask: new CreateTask({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      idGen: idGenerator,
+    }),
+    moveTask: new MoveTask({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+    }),
     linkCommit: new LinkCommit({
       projects: projectRepo,
+      members: projectMemberRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
       tokens: githubTokenRepo,
@@ -274,6 +456,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
     writeKbDocument: new WriteKbDocument({
       projects: projectRepo,
+      members: projectMemberRepo,
       tokens: githubTokenRepo,
       kb: kbRepo,
     }),

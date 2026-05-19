@@ -40,3 +40,28 @@ export const updateProjectSchema = z
 
 export type CreateProjectBody = z.infer<typeof createProjectSchema>;
 export type UpdateProjectBody = z.infer<typeof updateProjectSchema>;
+
+export const createInviteSchema = z.object({
+  role: z.enum(['editor', 'viewer']),
+  // Опциональный email — пометка «для кого». Пусто/null → не сохраняем.
+  email: z
+    .string()
+    .trim()
+    .email('Невалидный email')
+    .max(255)
+    .nullable()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null)),
+});
+
+export const updateMemberRoleSchema = z.object({
+  role: z.enum(['editor', 'viewer']),
+});
+
+export const transferOwnershipSchema = z.object({
+  toUserId: z.string().min(1),
+});
+
+export type CreateInviteBody = z.infer<typeof createInviteSchema>;
+export type UpdateMemberRoleBody = z.infer<typeof updateMemberRoleSchema>;
+export type TransferOwnershipBody = z.infer<typeof transferOwnershipSchema>;

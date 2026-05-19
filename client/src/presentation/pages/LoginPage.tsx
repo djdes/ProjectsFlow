@@ -18,7 +18,12 @@ export function LoginPage(): React.ReactElement {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (status === 'authenticated') return <Navigate to="/" replace />;
+  if (status === 'authenticated') {
+    // Если был state.from (например, пришёл с /invite/:token) — уважаем его,
+    // иначе на главную.
+    const target = (location.state as LocationState | null)?.from ?? '/';
+    return <Navigate to={target} replace />;
+  }
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();

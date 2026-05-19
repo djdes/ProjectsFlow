@@ -6,6 +6,7 @@ import { GitRepoSection } from '@/presentation/components/forms/GitRepoSection';
 import { RecentCommitsSection } from '@/presentation/components/github/RecentCommitsSection';
 import { KbSection } from '@/presentation/components/kb/KbSection';
 import { EditableProjectTitle } from '@/presentation/components/project/EditableProjectTitle';
+import { TeamSection } from '@/presentation/components/project/TeamSection';
 import type { ProjectStatus } from '@/domain/project/Project';
 
 const statusLabel: Record<ProjectStatus, string> = {
@@ -82,6 +83,8 @@ export function ProjectPage(): React.ReactElement {
       )}
 
       <KbSection project={data} />
+
+      <TeamSection project={data} />
     </div>
   );
 }

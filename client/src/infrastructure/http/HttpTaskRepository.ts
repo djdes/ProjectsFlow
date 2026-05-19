@@ -1,6 +1,7 @@
 import type { Task } from '@/domain/task/Task';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
+import type { TaskComment } from '@/domain/task/TaskComment';
 import type {
   CreateTaskInput,
   MoveTaskInput,
@@ -24,6 +25,11 @@ type AttachmentDto = Omit<TaskAttachment, 'uploadedAt'> & {
   uploadedAt: string;
 };
 
+type CommentDto = Omit<TaskComment, 'createdAt' | 'updatedAt'> & {
+  createdAt: string;
+  updatedAt: string;
+};
+
 function fromDto(dto: TaskDto): Task {
   return { ...dto, createdAt: new Date(dto.createdAt), updatedAt: new Date(dto.updatedAt) };
 }
@@ -34,6 +40,10 @@ function commitFromDto(dto: CommitDto): TaskCommit {
 
 function attachmentFromDto(dto: AttachmentDto): TaskAttachment {
   return { ...dto, uploadedAt: new Date(dto.uploadedAt) };
+}
+
+function commentFromDto(dto: CommentDto): TaskComment {
+  return { ...dto, createdAt: new Date(dto.createdAt), updatedAt: new Date(dto.updatedAt) };
 }
 
 export class HttpTaskRepository implements TaskRepository {
@@ -114,6 +124,36 @@ export class HttpTaskRepository implements TaskRepository {
   async deleteAttachment(projectId: string, taskId: string, attachmentId: string): Promise<void> {
     await httpClient.delete<void>(
       `/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}`,
+    );
+  }
+  async listComments(projectId: string, taskId: string): Promise<TaskComment[]> {
+    const { comments } = await httpClient.get<{ comments: CommentDto[] }>(
+      `/projects/${projectId}/tasks/${taskId}/comments`,
+    );
+    return comments.map(commentFromDto);
+  }
+  async createComment(projectId: string, taskId: string, body: string): Promise<TaskComment> {
+    const { comment } = await httpClient.post<{ comment: CommentDto }>(
+      `/projects/${projectId}/tasks/${taskId}/comments`,
+      { body },
+    );
+    return commentFromDto(comment);
+  }
+  async updateComment(
+    projectId: string,
+    taskId: string,
+    commentId: string,
+    body: string,
+  ): Promise<TaskComment> {
+    const { comment } = await httpClient.patch<{ comment: CommentDto }>(
+      `/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
+      { body },
+    );
+    return commentFromDto(comment);
+  }
+  async deleteComment(projectId: string, taskId: string, commentId: string): Promise<void> {
+    await httpClient.delete<void>(
+      `/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
     );
   }
 }

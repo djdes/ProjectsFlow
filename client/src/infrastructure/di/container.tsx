@@ -6,6 +6,7 @@ import { HttpGithubRepository } from '@/infrastructure/http/HttpGithubRepository
 import { HttpKbRepository } from '@/infrastructure/http/HttpKbRepository';
 import { HttpSecretsRepository } from '@/infrastructure/http/HttpSecretsRepository';
 import { HttpTaskRepository } from '@/infrastructure/http/HttpTaskRepository';
+import { HttpInviteRepository } from '@/infrastructure/http/HttpInviteRepository';
 import { HttpAgentTokenRepository } from '@/infrastructure/http/HttpAgentTokenRepository';
 import { HttpAgentDeviceRepository } from '@/infrastructure/http/HttpAgentDeviceRepository';
 import { ListProjects } from '@/application/project/ListProjects';
@@ -20,6 +21,7 @@ import type { GithubRepository } from '@/application/github/GithubRepository';
 import type { KbRepository } from '@/application/kb/KbRepository';
 import type { SecretsRepository } from '@/application/secrets/SecretsRepository';
 import type { TaskRepository } from '@/application/task/TaskRepository';
+import type { InviteRepository } from '@/application/project/InviteRepository';
 import type { AgentTokenRepository } from '@/application/agent/AgentTokenRepository';
 import type { AgentDeviceRepository } from '@/application/agent/AgentDeviceRepository';
 
@@ -36,6 +38,7 @@ type Container = {
   kbRepository: KbRepository;
   secretsRepository: SecretsRepository;
   taskRepository: TaskRepository;
+  inviteRepository: InviteRepository;
   agentTokenRepository: AgentTokenRepository;
   agentDeviceRepository: AgentDeviceRepository;
 };
@@ -48,6 +51,7 @@ function buildContainer(): Container {
   const kbRepo = new HttpKbRepository();
   const secretsRepo = new HttpSecretsRepository();
   const taskRepo = new HttpTaskRepository();
+  const inviteRepo = new HttpInviteRepository();
   const agentTokenRepo = new HttpAgentTokenRepository();
   const agentDeviceRepo = new HttpAgentDeviceRepository();
   return {
@@ -63,6 +67,7 @@ function buildContainer(): Container {
     kbRepository: kbRepo,
     secretsRepository: secretsRepo,
     taskRepository: taskRepo,
+    inviteRepository: inviteRepo,
     agentTokenRepository: agentTokenRepo,
     agentDeviceRepository: agentDeviceRepo,
   };

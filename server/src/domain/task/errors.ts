@@ -39,3 +39,17 @@ export class TaskAttachmentTypeNotAllowedError extends Error {
     this.name = 'TaskAttachmentTypeNotAllowedError';
   }
 }
+
+export class TaskCommentNotFoundError extends Error {
+  constructor(public readonly commentId: string) {
+    super(`Task comment not found: ${commentId}`);
+    this.name = 'TaskCommentNotFoundError';
+  }
+}
+
+export class TaskCommentBodyEmptyError extends Error {
+  constructor() {
+    super('Comment body must be non-empty');
+    this.name = 'TaskCommentBodyEmptyError';
+  }
+}

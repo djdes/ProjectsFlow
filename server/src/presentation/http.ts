@@ -17,6 +17,15 @@ import type { GetProject } from '../application/project/GetProject.js';
 import type { CreateProject } from '../application/project/CreateProject.js';
 import type { UpdateProject } from '../application/project/UpdateProject.js';
 import type { GetOrCreateInbox } from '../application/project/GetOrCreateInbox.js';
+import type { ListProjectMembers } from '../application/project/ListProjectMembers.js';
+import type { RemoveProjectMember } from '../application/project/RemoveProjectMember.js';
+import type { UpdateProjectMemberRole } from '../application/project/UpdateProjectMemberRole.js';
+import type { TransferProjectOwnership } from '../application/project/TransferProjectOwnership.js';
+import type { CreateProjectInvite } from '../application/project/CreateProjectInvite.js';
+import type { ListProjectInvites } from '../application/project/ListProjectInvites.js';
+import type { DeleteProjectInvite } from '../application/project/DeleteProjectInvite.js';
+import type { GetInviteByToken } from '../application/project/GetInviteByToken.js';
+import type { AcceptProjectInvite } from '../application/project/AcceptProjectInvite.js';
 import type { ListProjectCommits } from '../application/github/ListProjectCommits.js';
 import type { StartDeviceFlow } from '../application/github/StartDeviceFlow.js';
 import type { PollDeviceFlow } from '../application/github/PollDeviceFlow.js';
@@ -48,6 +57,10 @@ import type { UploadTaskAttachment } from '../application/task/UploadTaskAttachm
 import type { DeleteTaskAttachment } from '../application/task/DeleteTaskAttachment.js';
 import type { ListTaskAttachments } from '../application/task/ListTaskAttachments.js';
 import type { GetTaskAttachment } from '../application/task/GetTaskAttachment.js';
+import type { ListTaskComments } from '../application/task/ListTaskComments.js';
+import type { CreateTaskComment } from '../application/task/CreateTaskComment.js';
+import type { UpdateTaskComment } from '../application/task/UpdateTaskComment.js';
+import type { DeleteTaskComment } from '../application/task/DeleteTaskComment.js';
 import type { CreateAgentToken } from '../application/agent/CreateAgentToken.js';
 import type { ListAgentTokens } from '../application/agent/ListAgentTokens.js';
 import type { RevokeAgentToken } from '../application/agent/RevokeAgentToken.js';
@@ -69,6 +82,7 @@ import { kbRouter } from './kb/routes.js';
 import { tasksRouter } from './tasks/routes.js';
 import { attachmentBinaryRouter } from './tasks/attachmentBinaryRoutes.js';
 import { inboxRouter } from './inbox/routes.js';
+import { invitesRouter } from './invites/routes.js';
 import { agentTokensRouter } from './agent/tokensRoutes.js';
 import { agentApiRouter } from './agent/apiRoutes.js';
 import { agentDeviceRouter } from './agent/deviceRoutes.js';
@@ -91,6 +105,18 @@ type AppDeps = {
     readonly updateProject: UpdateProject;
     readonly listProjectCommits: ListProjectCommits;
     readonly getOrCreateInbox: GetOrCreateInbox;
+    readonly listMembers: ListProjectMembers;
+    readonly removeMember: RemoveProjectMember;
+    readonly updateMemberRole: UpdateProjectMemberRole;
+    readonly transferOwnership: TransferProjectOwnership;
+    readonly createInvite: CreateProjectInvite;
+    readonly listInvites: ListProjectInvites;
+    readonly deleteInvite: DeleteProjectInvite;
+    readonly appUrl: string;
+  };
+  readonly invites: {
+    readonly getByToken: GetInviteByToken;
+    readonly accept: AcceptProjectInvite;
   };
   readonly github: {
     readonly startDeviceFlow: StartDeviceFlow;
@@ -129,6 +155,10 @@ type AppDeps = {
     readonly deleteAttachment: DeleteTaskAttachment;
     readonly listAttachments: ListTaskAttachments;
     readonly getAttachment: GetTaskAttachment;
+    readonly listComments: ListTaskComments;
+    readonly createComment: CreateTaskComment;
+    readonly updateComment: UpdateTaskComment;
+    readonly deleteComment: DeleteTaskComment;
     readonly maxAttachmentBytes: number;
   };
   readonly agent: {
@@ -193,6 +223,11 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/projects/:projectId/tasks', tasksRouter(deps.tasks));
   app.use('/api/attachments', attachmentBinaryRouter(deps.tasks));
   app.use('/api/inbox', inboxRouter({ getOrCreateInbox: deps.projects.getOrCreateInbox }));
+  // Invites: GET — anon-доступ; POST /:token/accept — внутри router'а через requireAuth.
+  app.use('/api/invites', invitesRouter({
+    getByToken: deps.invites.getByToken,
+    accept: deps.invites.accept,
+  }));
 
   // Agent tokens management (session-auth)
   app.use(

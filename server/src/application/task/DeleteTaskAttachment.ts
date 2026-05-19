@@ -1,15 +1,17 @@
-import { ProjectNotFoundError } from '../../domain/project/errors.js';
 import {
   TaskAttachmentNotFoundError,
   TaskNotFoundError,
 } from '../../domain/task/errors.js';
+import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
+import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { AttachmentStorage } from './AttachmentStorage.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
+  readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly attachments: TaskAttachmentRepository;
   readonly storage: AttachmentStorage;
@@ -19,8 +21,7 @@ export class DeleteTaskAttachment {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, ownerUserId: string, taskId: string, attachmentId: string): Promise<void> {
-    const project = await this.deps.projects.getByIdForOwner(projectId, ownerUserId);
-    if (!project) throw new ProjectNotFoundError();
+    await requireProjectAccess(this.deps, projectId, ownerUserId, 'manage_attachments');
     const task = await this.deps.tasks.getById(taskId);
     if (!task || task.projectId !== projectId) throw new TaskNotFoundError(taskId);
     const att = await this.deps.attachments.getById(attachmentId);

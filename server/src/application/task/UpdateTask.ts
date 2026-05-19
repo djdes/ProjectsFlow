@@ -1,11 +1,13 @@
-import { ProjectNotFoundError } from '../../domain/project/errors.js';
 import { TaskDescriptionEmptyError, TaskNotFoundError } from '../../domain/task/errors.js';
 import type { Task } from '../../domain/task/Task.js';
+import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
+import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository, UpdateTaskPatch } from './TaskRepository.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
+  readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
 };
 
@@ -20,8 +22,7 @@ export class UpdateTask {
   constructor(private readonly deps: Deps) {}
 
   async execute(input: UpdateTaskCommand): Promise<Task> {
-    const project = await this.deps.projects.getByIdForOwner(input.projectId, input.ownerUserId);
-    if (!project) throw new ProjectNotFoundError();
+    await requireProjectAccess(this.deps, input.projectId, input.ownerUserId, 'update_task');
 
     const existing = await this.deps.tasks.getById(input.taskId);
     if (!existing || existing.projectId !== input.projectId) throw new TaskNotFoundError(input.taskId);

@@ -15,13 +15,16 @@ export type UpdateProjectInput = {
   readonly kbRepoFullName?: string | null;
 };
 
+// Multi-tenancy: проверка доступа НЕ внутри ProjectRepository — она в use-case'ах через
+// requireProjectAccess() (см. projectAccess.ts), которая лукапит membership + role.
+// Здесь только «сырая» БД.
 export interface ProjectRepository {
-  // Все методы scoped по ownerId — пользователь не видит чужих данных.
-  listByOwner(ownerId: string): Promise<Project[]>;
-  getByIdForOwner(id: string, ownerId: string): Promise<Project | null>;
+  // Сырой look-up без access-check'а. Use-case вызывает после requireProjectAccess.
+  getById(id: string): Promise<Project | null>;
   // Возвращает inbox-проект юзера если он есть. Не создаёт — для создания см. GetOrCreateInbox.
+  // Остаётся per-owner потому что inbox personal: 1 user = 1 inbox (см. spec секцию 7, решение 3).
   findInboxByOwner(ownerId: string): Promise<Project | null>;
   create(input: CreateProjectInput): Promise<Project>;
-  // Возвращает null если проект не найден / не принадлежит owner'у.
-  update(id: string, ownerId: string, patch: UpdateProjectInput): Promise<Project | null>;
+  // Без owner-фильтра: caller уже проверил доступ. Возвращает null если проект не найден.
+  update(id: string, patch: UpdateProjectInput): Promise<Project | null>;
 }

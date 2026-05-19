@@ -3,13 +3,15 @@ import {
   GithubNotConnectedError,
   GithubRepoUrlInvalidError,
 } from '../../domain/github/errors.js';
+import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
-import { ProjectNotFoundError } from '../../domain/project/errors.js';
+import { requireProjectAccess } from '../project/projectAccess.js';
 import type { GithubApiClient } from './GithubApiClient.js';
 import type { GithubTokenRepository } from './GithubTokenRepository.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
+  readonly members: ProjectMemberRepository;
   readonly tokens: GithubTokenRepository;
   readonly api: GithubApiClient;
 };
@@ -37,8 +39,7 @@ export class ListProjectCommits {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, ownerUserId: string, limit = DEFAULT_LIMIT): Promise<GithubCommit[]> {
-    const project = await this.deps.projects.getByIdForOwner(projectId, ownerUserId);
-    if (!project) throw new ProjectNotFoundError();
+    const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project');
     if (!project.gitRepoUrl) return [];
 
     const parsed = parseGithubOwnerRepo(project.gitRepoUrl);

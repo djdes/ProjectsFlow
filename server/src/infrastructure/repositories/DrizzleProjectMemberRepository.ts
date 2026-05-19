@@ -1,0 +1,126 @@
+import { and, asc, eq, sql } from 'drizzle-orm';
+import type { Database } from '../db/index.js';
+import {
+  projectMembers,
+  projects,
+  users,
+  type ProjectMemberRow,
+  type ProjectRow,
+  type UserRow,
+} from '../db/schema.js';
+import type {
+  ProjectMembership,
+  ProjectRole,
+} from '../../domain/project/ProjectMembership.js';
+import type { Project, ProjectStatus } from '../../domain/project/Project.js';
+import type { User } from '../../domain/user/User.js';
+import type {
+  AddMemberInput,
+  ProjectMemberRepository,
+  ProjectMemberWithUser,
+  ProjectWithRole,
+} from '../../application/project/ProjectMemberRepository.js';
+
+function toMembership(row: ProjectMemberRow): ProjectMembership {
+  return {
+    projectId: row.projectId,
+    userId: row.userId,
+    role: row.role,
+    joinedAt: row.joinedAt,
+  };
+}
+
+function toUser(row: UserRow): User {
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.displayName,
+    avatarUrl: row.avatarUrl ?? null,
+    createdAt: row.createdAt,
+  };
+}
+
+function toProject(row: ProjectRow): Project {
+  return {
+    id: row.id,
+    ownerId: row.ownerId,
+    name: row.name,
+    status: row.status as ProjectStatus,
+    gitRepoUrl: row.gitRepoUrl ?? null,
+    kbRepoFullName: row.kbRepoFullName ?? null,
+    isInbox: row.isInbox,
+    createdAt: row.createdAt,
+  };
+}
+
+export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
+  constructor(private readonly db: Database) {}
+
+  async findForProject(projectId: string, userId: string): Promise<ProjectMembership | null> {
+    const rows = await this.db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)))
+      .limit(1);
+    return rows[0] ? toMembership(rows[0]) : null;
+  }
+
+  async listByProject(projectId: string): Promise<ProjectMemberWithUser[]> {
+    const rows = await this.db
+      .select({ member: projectMembers, user: users })
+      .from(projectMembers)
+      .innerJoin(users, eq(users.id, projectMembers.userId))
+      .where(eq(projectMembers.projectId, projectId))
+      .orderBy(asc(projectMembers.joinedAt));
+    return rows.map((r) => ({ ...toMembership(r.member), user: toUser(r.user) }));
+  }
+
+  async listProjectsForUser(userId: string): Promise<ProjectWithRole[]> {
+    const rows = await this.db
+      .select({ project: projects, role: projectMembers.role })
+      .from(projectMembers)
+      .innerJoin(projects, eq(projects.id, projectMembers.projectId))
+      .where(eq(projectMembers.userId, userId))
+      .orderBy(asc(projects.createdAt));
+    return rows.map((r) => ({ ...toProject(r.project), role: r.role }));
+  }
+
+  async countOwners(projectId: string): Promise<number> {
+    const rows = await this.db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.role, 'owner')));
+    return Number(rows[0]?.count ?? 0);
+  }
+
+  async add(input: AddMemberInput): Promise<ProjectMembership> {
+    await this.db.insert(projectMembers).values({
+      projectId: input.projectId,
+      userId: input.userId,
+      role: input.role,
+    });
+    const fresh = await this.findForProject(input.projectId, input.userId);
+    if (!fresh) throw new Error('Failed to read back membership after insert');
+    return fresh;
+  }
+
+  async remove(projectId: string, userId: string): Promise<boolean> {
+    const result = await this.db
+      .delete(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+    const affected = (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
+    return affected > 0;
+  }
+
+  async updateRole(
+    projectId: string,
+    userId: string,
+    role: ProjectRole,
+  ): Promise<ProjectMembership | null> {
+    await this.db
+      .update(projectMembers)
+      .set({ role })
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+    return this.findForProject(projectId, userId);
+  }
+}

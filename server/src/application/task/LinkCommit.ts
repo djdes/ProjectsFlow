@@ -1,11 +1,12 @@
-import { ProjectNotFoundError } from '../../domain/project/errors.js';
 import { TaskNotFoundError } from '../../domain/task/errors.js';
 import {
   GithubNotConnectedError,
   GithubRepoUrlInvalidError,
 } from '../../domain/github/errors.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
+import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
+import { requireProjectAccess } from '../project/projectAccess.js';
 import type { GithubApiClient } from '../github/GithubApiClient.js';
 import type { GithubTokenRepository } from '../github/GithubTokenRepository.js';
 import { parseGithubOwnerRepo } from '../github/ListProjectCommits.js';
@@ -14,6 +15,7 @@ import type { TaskCommitRepository } from './TaskCommitRepository.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
+  readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly taskCommits: TaskCommitRepository;
   readonly tokens: GithubTokenRepository;
@@ -31,8 +33,12 @@ export class LinkCommit {
   constructor(private readonly deps: Deps) {}
 
   async execute(input: LinkCommitCommand): Promise<TaskCommit> {
-    const project = await this.deps.projects.getByIdForOwner(input.projectId, input.ownerUserId);
-    if (!project) throw new ProjectNotFoundError();
+    const { project } = await requireProjectAccess(
+      this.deps,
+      input.projectId,
+      input.ownerUserId,
+      'link_commit',
+    );
     if (!project.gitRepoUrl) throw new GithubRepoUrlInvalidError('');
 
     const task = await this.deps.tasks.getById(input.taskId);

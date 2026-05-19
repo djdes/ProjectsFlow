@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { projects, type ProjectRow } from '../db/schema.js';
 import type { Project, ProjectStatus } from '../../domain/project/Project.js';
@@ -33,21 +33,8 @@ function isDuplicateKey(err: unknown): boolean {
 export class DrizzleProjectRepository implements ProjectRepository {
   constructor(private readonly db: Database) {}
 
-  async listByOwner(ownerId: string): Promise<Project[]> {
-    const rows = await this.db
-      .select()
-      .from(projects)
-      .where(eq(projects.ownerId, ownerId))
-      .orderBy(desc(projects.createdAt), asc(projects.id));
-    return rows.map(toProject);
-  }
-
-  async getByIdForOwner(id: string, ownerId: string): Promise<Project | null> {
-    const rows = await this.db
-      .select()
-      .from(projects)
-      .where(and(eq(projects.id, id), eq(projects.ownerId, ownerId)))
-      .limit(1);
+  async getById(id: string): Promise<Project | null> {
+    const rows = await this.db.select().from(projects).where(eq(projects.id, id)).limit(1);
     const row = rows[0];
     return row ? toProject(row) : null;
   }
@@ -82,7 +69,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
     return toProject(row);
   }
 
-  async update(id: string, ownerId: string, patch: UpdateProjectInput): Promise<Project | null> {
+  async update(id: string, patch: UpdateProjectInput): Promise<Project | null> {
     // Собираем set-объект только из реально переданных полей.
     // undefined = поле не указано клиентом (не трогаем), null = очистить.
     const set: Partial<Pick<ProjectRow, 'name' | 'gitRepoUrl' | 'kbRepoFullName'>> = {};
@@ -92,16 +79,13 @@ export class DrizzleProjectRepository implements ProjectRepository {
 
     if (Object.keys(set).length > 0) {
       try {
-        await this.db
-          .update(projects)
-          .set(set)
-          .where(and(eq(projects.id, id), eq(projects.ownerId, ownerId)));
+        await this.db.update(projects).set(set).where(eq(projects.id, id));
       } catch (err) {
         if (isDuplicateKey(err)) throw new ProjectNameAlreadyExistsError(patch.name ?? '');
         throw err;
       }
     }
 
-    return this.getByIdForOwner(id, ownerId);
+    return this.getById(id);
   }
 }

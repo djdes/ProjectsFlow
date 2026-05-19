@@ -1,12 +1,17 @@
+import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
-import { ProjectNotFoundError } from '../../domain/project/errors.js';
+import { requireProjectAccess } from '../project/projectAccess.js';
+
+type Deps = {
+  readonly projects: ProjectRepository;
+  readonly members: ProjectMemberRepository;
+};
 
 export class DisconnectKb {
-  constructor(private readonly projects: ProjectRepository) {}
+  constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, ownerUserId: string): Promise<void> {
-    const project = await this.projects.getByIdForOwner(projectId, ownerUserId);
-    if (!project) throw new ProjectNotFoundError();
-    await this.projects.update(projectId, ownerUserId, { kbRepoFullName: null });
+    await requireProjectAccess(this.deps, projectId, ownerUserId, 'manage_kb');
+    await this.deps.projects.update(projectId, { kbRepoFullName: null });
   }
 }

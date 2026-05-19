@@ -12,11 +12,23 @@ import type { SyncTaskCommits } from '../../application/task/SyncTaskCommits.js'
 import type { UploadTaskAttachment } from '../../application/task/UploadTaskAttachment.js';
 import type { DeleteTaskAttachment } from '../../application/task/DeleteTaskAttachment.js';
 import type { ListTaskAttachments } from '../../application/task/ListTaskAttachments.js';
+import type { ListTaskComments } from '../../application/task/ListTaskComments.js';
+import type { CreateTaskComment } from '../../application/task/CreateTaskComment.js';
+import type { UpdateTaskComment } from '../../application/task/UpdateTaskComment.js';
+import type { DeleteTaskComment } from '../../application/task/DeleteTaskComment.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
+import type { TaskComment } from '../../domain/task/TaskComment.js';
 import { requireAuth } from '../middleware/requireAuth.js';
-import { createTaskSchema, linkCommitSchema, moveTaskSchema, updateTaskSchema } from './schemas.js';
+import {
+  createTaskCommentSchema,
+  createTaskSchema,
+  linkCommitSchema,
+  moveTaskSchema,
+  updateTaskCommentSchema,
+  updateTaskSchema,
+} from './schemas.js';
 
 type Deps = {
   readonly listTasks: ListTasks;
@@ -31,6 +43,10 @@ type Deps = {
   readonly uploadAttachment: UploadTaskAttachment;
   readonly deleteAttachment: DeleteTaskAttachment;
   readonly listAttachments: ListTaskAttachments;
+  readonly listComments: ListTaskComments;
+  readonly createComment: CreateTaskComment;
+  readonly updateComment: UpdateTaskComment;
+  readonly deleteComment: DeleteTaskComment;
   readonly maxAttachmentBytes: number;
 };
 
@@ -65,6 +81,15 @@ type AttachmentDto = Omit<TaskAttachment, 'uploadedAt' | 'storageKey'> & {
   uploadedAt: string;
   url: string;
 };
+
+type CommentDto = Omit<TaskComment, 'createdAt' | 'updatedAt'> & {
+  createdAt: string;
+  updatedAt: string;
+};
+
+function commentToDto(c: TaskComment): CommentDto {
+  return { ...c, createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt.toISOString() };
+}
 
 function attachmentToDto(att: TaskAttachment): AttachmentDto {
   // storageKey не отдаём наружу — клиент работает только через /api/attachments/:id.
@@ -260,6 +285,72 @@ export function tasksRouter(deps: Deps): Router {
         const taskId = req.params['taskId'] as string;
         const attachmentId = req.params['attachmentId'] as string;
         await deps.deleteAttachment.execute(projectId, req.user!.id, taskId, attachmentId);
+        res.status(204).end();
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Comments
+  router.get('/:taskId/comments', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projectId = req.params['projectId'] as string;
+      const taskId = req.params['taskId'] as string;
+      const list = await deps.listComments.execute(projectId, req.user!.id, taskId);
+      res.json({ comments: list.map(commentToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/:taskId/comments', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projectId = req.params['projectId'] as string;
+      const taskId = req.params['taskId'] as string;
+      const body = createTaskCommentSchema.parse(req.body);
+      const comment = await deps.createComment.execute({
+        projectId,
+        ownerUserId: req.user!.id,
+        taskId,
+        body: body.body,
+      });
+      res.status(201).json({ comment: commentToDto(comment) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.patch(
+    '/:taskId/comments/:commentId',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const commentId = req.params['commentId'] as string;
+        const body = updateTaskCommentSchema.parse(req.body);
+        const comment = await deps.updateComment.execute({
+          projectId,
+          ownerUserId: req.user!.id,
+          taskId,
+          commentId,
+          body: body.body,
+        });
+        res.json({ comment: commentToDto(comment) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  router.delete(
+    '/:taskId/comments/:commentId',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const commentId = req.params['commentId'] as string;
+        await deps.deleteComment.execute(projectId, req.user!.id, taskId, commentId);
         res.status(204).end();
       } catch (e) {
         next(e);

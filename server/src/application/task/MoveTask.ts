@@ -1,11 +1,13 @@
-import { ProjectNotFoundError } from '../../domain/project/errors.js';
 import { TaskNotFoundError } from '../../domain/task/errors.js';
 import type { Task, TaskStatus } from '../../domain/task/Task.js';
+import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
+import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
+  readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
 };
 
@@ -28,8 +30,7 @@ export class MoveTask {
   constructor(private readonly deps: Deps) {}
 
   async execute(input: MoveTaskCommand): Promise<Task> {
-    const project = await this.deps.projects.getByIdForOwner(input.projectId, input.ownerUserId);
-    if (!project) throw new ProjectNotFoundError();
+    await requireProjectAccess(this.deps, input.projectId, input.ownerUserId, 'move_task');
 
     const task = await this.deps.tasks.getById(input.taskId);
     if (!task || task.projectId !== input.projectId) throw new TaskNotFoundError(input.taskId);

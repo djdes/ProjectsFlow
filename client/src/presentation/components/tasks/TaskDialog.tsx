@@ -6,9 +6,10 @@ import {
   type ClipboardEvent,
   type DragEvent,
   type FormEvent,
+  type KeyboardEvent,
   type Ref,
 } from 'react';
-import { ImagePlus, Loader2, Trash2, X } from 'lucide-react';
+import { ImagePlus, Loader2, Pencil, Send, Trash2, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -20,10 +21,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
+import { cn } from '@/lib/utils';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Task } from '@/domain/task/Task';
-import { taskShortId } from '@/domain/task/Task';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
+import type { TaskComment } from '@/domain/task/TaskComment';
 import { useContainer } from '@/infrastructure/di/container';
+import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { getInitials } from '@/presentation/layout/projectIcons';
 import { TaskCommitsSection } from './TaskCommitsSection';
 
 export type TaskDialogState =
@@ -41,6 +46,8 @@ type Props = {
   // Показывать секцию коммитов в edit-режиме. Для inbox-проекта выключаем — у него
   // нет git-репо, привязывать нечего.
   showCommits?: boolean;
+  // Имя проекта — рисуем в шапке диалога как контекстный заголовок. В inbox не передаём.
+  projectName?: string;
 };
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
@@ -77,8 +84,12 @@ export function TaskDialog({
   onSubmit,
   onCommitsChange,
   showCommits = true,
+  projectName,
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
+  // В create-mode description редактируется обычной textarea на форме; в edit-mode
+  // компонент TaskDescriptionEditor самостоятельно фетчит/сохраняет через taskRepository,
+  // а это локальное состояние используется только в create-режиме (submit формы).
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,23 +178,22 @@ export function TaskDialog({
     <Dialog open={state !== null} onOpenChange={(open) => !open && onClose()}>
       {/* max-h + grid с прижатыми header/footer и скроллом в body — чтоб длинные секции
           (особенно коммиты + пикер) не выезжали за viewport. */}
-      <DialogContent className="grid max-h-[90vh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-lg">
-        <DialogHeader className="px-6 pb-4 pt-6">
-          <DialogTitle className="flex items-baseline gap-2">
+      <DialogContent className="grid max-h-[90vh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        <DialogHeader className="px-6 pb-2 pt-4">
+          {/* Title/Description обязаны существовать для a11y (Radix), но визуально не нужны.
+              Видимый контент шапки — название проекта (контекст «к какому проекту таска»). */}
+          <DialogTitle className="sr-only">
             {state?.mode === 'edit' ? 'Задача' : 'Новая задача'}
-            {state?.mode === 'edit' && showCommits && (
-              <span className="font-mono text-xs text-muted-foreground">
-                [{taskShortId(state.task.id)}]
-              </span>
-            )}
+            {projectName ? ` · ${projectName}` : ''}
           </DialogTitle>
-          <DialogDescription>
-            {state?.mode === 'edit'
-              ? showCommits
-                ? 'Опиши задачу, прикрепи скриншоты, привяжи коммиты.'
-                : 'Опиши задачу, прикрепи скриншоты.'
-              : 'Опиши задачу и при желании сразу прикрепи скриншоты (Ctrl+V).'}
+          <DialogDescription className="sr-only">
+            {state?.mode === 'edit' ? 'Редактирование задачи' : 'Создание новой задачи'}
           </DialogDescription>
+          {projectName && (
+            <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {projectName}
+            </span>
+          )}
         </DialogHeader>
 
         <form
@@ -192,8 +202,15 @@ export function TaskDialog({
           onPaste={handleFormPaste}
           className="space-y-4 overflow-y-auto px-6 pb-4"
         >
-          <div className="space-y-1.5">
-            <Label htmlFor="task-desc">Описание</Label>
+          {state?.mode === 'edit' ? (
+            <TaskDescriptionEditor
+              key={state.task.id}
+              projectId={state.task.projectId}
+              taskId={state.task.id}
+              initialDescription={state.task.description ?? ''}
+              onSaved={() => onCommitsChange?.()}
+            />
+          ) : (
             <textarea
               id="task-desc"
               value={description}
@@ -204,7 +221,7 @@ export function TaskDialog({
               placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
               className="w-full rounded-md border bg-background p-2 text-sm"
             />
-          </div>
+          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           {state?.mode === 'edit' ? (
@@ -215,6 +232,9 @@ export function TaskDialog({
                 taskId={state.task.id}
                 onChange={() => onCommitsChange?.()}
               />
+              <div className="border-t pt-4">
+                <TaskCommentsSection projectId={state.task.projectId} taskId={state.task.id} />
+              </div>
               {showCommits && (
                 <div className="border-t pt-4">
                   <TaskCommitsSection task={state.task} onChange={() => onCommitsChange?.()} />
@@ -237,13 +257,21 @@ export function TaskDialog({
         </form>
 
         <DialogFooter className="border-t bg-background px-6 py-4">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Отмена
-          </Button>
-          <Button type="submit" form="task-dialog-form" disabled={saving}>
-            {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-            {state?.mode === 'edit' ? 'Сохранить' : 'Создать'}
-          </Button>
+          {state?.mode === 'edit' ? (
+            <Button type="button" variant="ghost" onClick={onClose}>
+              Закрыть
+            </Button>
+          ) : (
+            <>
+              <Button type="button" variant="ghost" onClick={onClose}>
+                Отмена
+              </Button>
+              <Button type="submit" form="task-dialog-form" disabled={saving}>
+                {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+                Создать
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -542,6 +570,426 @@ function AttachmentsSection({
 
       <ImagePreviewDialog attachment={preview} onClose={() => setPreview(null)} />
     </div>
+  );
+}
+
+// =========================================================
+// Inline-edit описания задачи. По дефолту — статичный текст; клик → textarea, autofocus,
+// курсор в конец. Сохраняем на blur (если изменилось) или Ctrl/Cmd+Enter; Esc — отмена.
+// =========================================================
+
+function TaskDescriptionEditor({
+  projectId,
+  taskId,
+  initialDescription,
+  onSaved,
+}: {
+  projectId: string;
+  taskId: string;
+  initialDescription: string;
+  onSaved: () => void;
+}): React.ReactElement {
+  const { taskRepository } = useContainer();
+  const [description, setDescription] = useState(initialDescription);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(initialDescription);
+  const [saving, setSaving] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Если родитель открыл другой task — синхронизируем initial внутрь.
+  useEffect(() => {
+    setDescription(initialDescription);
+    setDraft(initialDescription);
+    setEditing(false);
+  }, [initialDescription, taskId]);
+
+  useEffect(() => {
+    if (editing && textareaRef.current) {
+      const el = textareaRef.current;
+      el.focus();
+      // Курсор в конец — стандартный UX «продолжить писать».
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  }, [editing]);
+
+  const enterEdit = (): void => {
+    setDraft(description);
+    setEditing(true);
+  };
+
+  const save = async (): Promise<void> => {
+    const trimmed = draft.trim();
+    if (trimmed.length === 0) {
+      toast.error('Описание не может быть пустым');
+      setDraft(description);
+      setEditing(false);
+      return;
+    }
+    if (trimmed === description.trim()) {
+      // Изменений нет — просто свернуться.
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await taskRepository.update(projectId, taskId, { description: trimmed });
+      setDescription(updated.description ?? '');
+      setDraft(updated.description ?? '');
+      setEditing(false);
+      onSaved();
+    } catch (e) {
+      toast.error(`Не удалось сохранить: ${(e as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancel = (): void => {
+    setDraft(description);
+    setEditing(false);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
+      return;
+    }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      void save();
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="space-y-1">
+        {/* Сетка из border+padding+leading должна 1-в-1 совпадать с display-режимом ниже,
+            иначе текст «прыгает» вверх/вниз при переключении. */}
+        <textarea
+          ref={textareaRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => void save()}
+          onKeyDown={handleKeyDown}
+          maxLength={5000}
+          rows={6}
+          disabled={saving}
+          className="block w-full resize-none rounded-md border border-transparent bg-transparent p-2 text-sm leading-snug focus:outline-none disabled:opacity-50"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Ctrl+Enter — сохранить, Esc — отменить. {saving && '…'}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={enterEdit}
+      className={cn(
+        // p-2 + border 1px + text-sm + leading-snug — те же что у textarea выше.
+        'group flex w-full items-start gap-2 rounded-md border border-dashed border-transparent p-2 text-left text-sm leading-snug transition-colors hover:border-border hover:bg-muted/30',
+      )}
+      aria-label="Редактировать описание"
+    >
+      <span
+        className={cn(
+          'min-w-0 flex-1 whitespace-pre-wrap break-words',
+          description.trim().length === 0 && 'italic text-muted-foreground',
+        )}
+      >
+        {description.trim().length > 0 ? description : 'Нажми, чтобы добавить описание…'}
+      </span>
+      <Pencil
+        aria-hidden
+        className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100"
+      />
+    </button>
+  );
+}
+
+// =========================================================
+// Comments — список + inline-edit + удаление + бокс «новый комментарий». Старые сверху,
+// новые снизу (chat-style). Каждое сообщение — клик по тексту → textarea для редактирования.
+// =========================================================
+
+function TaskCommentsSection({
+  projectId,
+  taskId,
+}: {
+  projectId: string;
+  taskId: string;
+}): React.ReactElement {
+  const { taskRepository } = useContainer();
+  const [comments, setComments] = useState<TaskComment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newBody, setNewBody] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    taskRepository
+      .listComments(projectId, taskId)
+      .then((list) => {
+        if (!cancelled) setComments(list);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) toast.error(`Не удалось загрузить комментарии: ${(e as Error).message}`);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, taskId, taskRepository]);
+
+  const submit = async (): Promise<void> => {
+    const trimmed = newBody.trim();
+    if (trimmed.length === 0 || submitting) return;
+    setSubmitting(true);
+    try {
+      const created = await taskRepository.createComment(projectId, taskId, trimmed);
+      setComments((prev) => [...prev, created]);
+      setNewBody('');
+    } catch (e) {
+      toast.error(`Не удалось отправить: ${(e as Error).message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpdated = (updated: TaskComment): void => {
+    setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+  };
+
+  const handleDeleted = (id: string): void => {
+    setComments((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const handleNewKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void submit();
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Label>Комментарии</Label>
+        {!loading && comments.length > 0 && (
+          <span className="text-xs text-muted-foreground">{comments.length}</span>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          <div className="h-12 animate-pulse rounded-md bg-muted" />
+          <div className="h-12 animate-pulse rounded-md bg-muted" />
+        </div>
+      ) : comments.length > 0 ? (
+        <ul className="space-y-2">
+          {comments.map((c) => (
+            <CommentItem
+              key={c.id}
+              projectId={projectId}
+              taskId={taskId}
+              comment={c}
+              onUpdated={handleUpdated}
+              onDeleted={handleDeleted}
+            />
+          ))}
+        </ul>
+      ) : null}
+
+      <div className="relative rounded-md border bg-card transition-colors focus-within:border-foreground/30">
+        <textarea
+          value={newBody}
+          onChange={(e) => setNewBody(e.target.value)}
+          onKeyDown={handleNewKeyDown}
+          rows={2}
+          disabled={submitting}
+          placeholder="Написать комментарий…"
+          className="block w-full resize-none rounded-md bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="absolute right-1.5 top-1.5 size-7"
+          onClick={() => void submit()}
+          disabled={submitting || newBody.trim().length === 0}
+          aria-label="Отправить"
+        >
+          {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const COMMENT_TIME_FORMATTER = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+function formatCommentTime(date: Date): string {
+  return COMMENT_TIME_FORMATTER.format(date);
+}
+
+function CommentItem({
+  projectId,
+  taskId,
+  comment,
+  onUpdated,
+  onDeleted,
+}: {
+  projectId: string;
+  taskId: string;
+  comment: TaskComment;
+  onUpdated: (updated: TaskComment) => void;
+  onDeleted: (id: string) => void;
+}): React.ReactElement {
+  const { taskRepository } = useContainer();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(comment.body);
+  const [saving, setSaving] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editing && textareaRef.current) {
+      const el = textareaRef.current;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  }, [editing]);
+
+  const enterEdit = (): void => {
+    setDraft(comment.body);
+    setEditing(true);
+  };
+  const cancel = (): void => {
+    setDraft(comment.body);
+    setEditing(false);
+  };
+
+  const save = async (): Promise<void> => {
+    const trimmed = draft.trim();
+    if (trimmed.length === 0) {
+      toast.error('Комментарий не может быть пустым');
+      return;
+    }
+    if (trimmed === comment.body.trim()) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await taskRepository.updateComment(projectId, taskId, comment.id, trimmed);
+      onUpdated(updated);
+      setEditing(false);
+    } catch (e) {
+      toast.error(`Не удалось сохранить: ${(e as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (): Promise<void> => {
+    if (!window.confirm('Удалить комментарий?')) return;
+    try {
+      await taskRepository.deleteComment(projectId, taskId, comment.id);
+      onDeleted(comment.id);
+    } catch (e) {
+      toast.error(`Не удалось удалить: ${(e as Error).message}`);
+    }
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
+      return;
+    }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      void save();
+    }
+  };
+
+  const isEdited = comment.updatedAt.getTime() - comment.createdAt.getTime() > 1500;
+  // Single-tenant: автор комментария — всегда текущий юзер (см. MEMORY: 1 user = 1 tenant).
+  // Если когда-нибудь появится multi-tenancy, нужно резолвить юзера по comment.ownerUserId.
+  const { user } = useCurrentUser();
+  const displayName = user?.displayName ?? '—';
+  const initials = getInitials(displayName);
+
+  return (
+    <li className="group flex items-start gap-2.5 py-1">
+      <Avatar className="size-7 shrink-0">
+        {user?.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={displayName} /> : null}
+        <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
+      </Avatar>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <span className="truncate text-xs font-medium">{displayName}</span>
+          <span className="text-[11px] text-muted-foreground">
+            {formatCommentTime(comment.createdAt)}
+            {isEdited && <span className="ml-1 opacity-70">· изменён</span>}
+          </span>
+          <div className="ml-auto flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              onClick={enterEdit}
+              aria-label="Редактировать"
+            >
+              <Pencil className="size-3" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-6 text-destructive hover:text-destructive"
+              onClick={() => void remove()}
+              aria-label="Удалить"
+            >
+              <Trash2 className="size-3" />
+            </Button>
+          </div>
+        </div>
+        {editing ? (
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => void save()}
+            onKeyDown={handleKeyDown}
+            maxLength={10000}
+            rows={2}
+            disabled={saving}
+            className="mt-0.5 block w-full resize-none bg-transparent p-0 text-sm leading-snug focus:outline-none disabled:opacity-50"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={enterEdit}
+            className="mt-0.5 block w-full cursor-text whitespace-pre-wrap break-words text-left text-sm leading-snug"
+            aria-label="Редактировать комментарий"
+          >
+            {comment.body}
+          </button>
+        )}
+      </div>
+    </li>
   );
 }
 

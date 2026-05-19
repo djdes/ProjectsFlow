@@ -1,9 +1,10 @@
-import { ProjectNotFoundError } from '../../domain/project/errors.js';
 import {
   GithubNotConnectedError,
   GithubRepoUrlInvalidError,
 } from '../../domain/github/errors.js';
+import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
+import { requireProjectAccess } from '../project/projectAccess.js';
 import type { GithubApiClient } from '../github/GithubApiClient.js';
 import type { GithubTokenRepository } from '../github/GithubTokenRepository.js';
 import { parseGithubOwnerRepo } from '../github/ListProjectCommits.js';
@@ -12,6 +13,7 @@ import type { TaskCommitRepository } from './TaskCommitRepository.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
+  readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly taskCommits: TaskCommitRepository;
   readonly tokens: GithubTokenRepository;
@@ -46,8 +48,7 @@ export class SyncTaskCommits {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, ownerUserId: string): Promise<SyncResult> {
-    const project = await this.deps.projects.getByIdForOwner(projectId, ownerUserId);
-    if (!project) throw new ProjectNotFoundError();
+    const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'link_commit');
     if (!project.gitRepoUrl) throw new GithubRepoUrlInvalidError('');
     const parsed = parseGithubOwnerRepo(project.gitRepoUrl);
     if (!parsed) throw new GithubRepoUrlInvalidError(project.gitRepoUrl);

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,16 +7,22 @@ import { useAuth } from '@/presentation/auth/AuthProvider';
 import { AuthFormCard } from '@/presentation/auth/AuthFormCard';
 import { UserEmailAlreadyExistsError } from '@/domain/user/errors';
 
+type LocationState = { from?: string };
+
 export function RegisterPage(): React.ReactElement {
   const { status, register } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (status === 'authenticated') return <Navigate to="/" replace />;
+  if (status === 'authenticated') {
+    const target = (location.state as LocationState | null)?.from ?? '/';
+    return <Navigate to={target} replace />;
+  }
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -28,7 +34,8 @@ export function RegisterPage(): React.ReactElement {
     setError(null);
     try {
       await register({ email, displayName, password });
-      navigate('/', { replace: true });
+      const target = (location.state as LocationState | null)?.from ?? '/';
+      navigate(target, { replace: true });
     } catch (err) {
       if (err instanceof UserEmailAlreadyExistsError) {
         setError('Email уже занят');

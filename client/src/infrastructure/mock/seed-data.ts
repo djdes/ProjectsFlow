@@ -9,6 +9,7 @@ export const seedProjects: Project[] = [
     gitRepoUrl: null,
     kbRepoFullName: null,
     isInbox: false,
+    role: 'owner',
     createdAt: new Date('2025-01-15'),
   },
   {
@@ -18,6 +19,7 @@ export const seedProjects: Project[] = [
     gitRepoUrl: null,
     kbRepoFullName: null,
     isInbox: false,
+    role: 'owner',
     createdAt: new Date('2025-03-20'),
   },
   {
@@ -27,6 +29,7 @@ export const seedProjects: Project[] = [
     gitRepoUrl: null,
     kbRepoFullName: null,
     isInbox: false,
+    role: 'owner',
     createdAt: new Date('2024-11-02'),
   },
   {
@@ -36,6 +39,7 @@ export const seedProjects: Project[] = [
     gitRepoUrl: null,
     kbRepoFullName: null,
     isInbox: false,
+    role: 'owner',
     createdAt: new Date('2024-05-10'),
   },
 ];

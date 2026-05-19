@@ -1,13 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
+  MeasuringStrategy,
   PointerSensor,
+  defaultDropAnimationSideEffects,
   useSensor,
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
+  type DropAnimation,
 } from '@dnd-kit/core';
+import { motion } from 'motion/react';
 import { toast } from '@/components/ui/sonner';
 import type { Task, TaskStatus } from '@/domain/task/Task';
 import { TASK_STATUSES } from '@/domain/task/Task';
@@ -22,12 +26,38 @@ type Props = {
   // Если false — TaskDialog не показывает секцию коммитов. Для inbox-проекта так:
   // у него нет git-репо, привязывать нечего.
   showCommits?: boolean;
+  // Имя проекта — пробрасывается в TaskDialog как контекстный заголовок. В inbox не передаём.
+  projectName?: string;
 };
 
 const COLUMN_LABELS: Record<TaskStatus, string> = {
   todo: 'TODO',
   in_progress: 'В работе',
   done: 'Готово',
+};
+
+// Длительность drop-анимации в ms. Используется и dnd-kit'ом для position-lerp'а оверлея,
+// и motion'ом для exit-анимации rotate/scale у обёртки preview — они должны быть равны.
+const DROP_DURATION_MS = 320;
+const DROP_EASING_BEZIER = [0.32, 0.72, 0, 1] as const; // Apple smooth-spring, без длинного хвоста
+
+// Drop-анимация: «приземление» карточки в новый слот.
+// opacity у active === стартовое значение source-card (см. KanbanCard: isDragging → opacity-30),
+// затем side-effect плавно возвращает к 1.
+const DROP_ANIMATION: DropAnimation = {
+  duration: DROP_DURATION_MS,
+  easing: `cubic-bezier(${DROP_EASING_BEZIER.join(', ')})`,
+  sideEffects: defaultDropAnimationSideEffects({
+    styles: {
+      active: { opacity: '0.3' },
+    },
+  }),
+};
+
+// Always-measuring: dnd-kit перемеряет контейнеры при каждом drag-кадре, не только при
+// стартe. Это убирает рывки когда карточки в reflow меняют свои размеры/позиции.
+const MEASURING_CONFIG = {
+  droppable: { strategy: MeasuringStrategy.Always },
 };
 
 function groupByStatus(tasks: Task[]): Record<TaskStatus, Task[]> {
@@ -37,10 +67,15 @@ function groupByStatus(tasks: Task[]): Record<TaskStatus, Task[]> {
   return out;
 }
 
-export function KanbanBoard({ projectId, showCommits = true }: Props): React.ReactElement {
+export function KanbanBoard({ projectId, showCommits = true, projectName }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const [dialog, setDialog] = useState<TaskDialogState | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  // 'lifted' — карточка приподнята (rotate+scale), 'settled' — лерпит обратно к identity.
+  // Меняем на 'settled' в момент drop'а и держим activeId до конца drop-анимации, чтобы
+  // motion успел синхронно с position-lerp'ом dnd-kit'а распрямить наклон.
+  const [previewPhase, setPreviewPhase] = useState<'lifted' | 'settled'>('settled');
+  const dropTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Чувствительность: 5px минимум до старта drag — иначе одиночный клик ловится как drag.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -49,11 +84,25 @@ export function KanbanBoard({ projectId, showCommits = true }: Props): React.Rea
   const activeTask = activeId ? tasks.find((t) => t.id === activeId) ?? null : null;
 
   const handleDragStart = (e: DragStartEvent): void => {
+    // Если drop-таймер ещё висит от предыдущего перетаскивания — гасим, иначе он позже
+    // обнулит activeId уже нового drag'а.
+    if (dropTimerRef.current) {
+      clearTimeout(dropTimerRef.current);
+      dropTimerRef.current = null;
+    }
     setActiveId(String(e.active.id));
+    setPreviewPhase('lifted');
   };
 
   const handleDragEnd = async (e: DragEndEvent): Promise<void> => {
-    setActiveId(null);
+    // 1) motion начинает лерпить rotate/scale обратно к identity.
+    setPreviewPhase('settled');
+    // 2) activeId держим живым ровно до конца drop-анимации — DragOverlay в это время
+    //    рендерит motion.div, и тот успевает доехать до rotate:0.
+    dropTimerRef.current = setTimeout(() => {
+      setActiveId(null);
+      dropTimerRef.current = null;
+    }, DROP_DURATION_MS);
     const { active, over } = e;
     if (!over) return;
 
@@ -150,7 +199,12 @@ export function KanbanBoard({ projectId, showCommits = true }: Props): React.Rea
   return (
     <div className="space-y-6">
       <PipelinePanel tasks={tasks} />
-      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <DndContext
+        sensors={sensors}
+        measuring={MEASURING_CONFIG}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
         <div className="flex gap-4 overflow-x-auto pb-4">
           {TASK_STATUSES.map((status) => (
             <KanbanColumn
@@ -165,15 +219,30 @@ export function KanbanBoard({ projectId, showCommits = true }: Props): React.Rea
             />
           ))}
         </div>
-        <DragOverlay>
+        <DragOverlay dropAnimation={DROP_ANIMATION}>
           {activeTask ? (
-            <KanbanCard
-              task={activeTask}
-              onEdit={() => undefined}
-              onDelete={() => undefined}
-              preview
-              showShortId={showCommits}
-            />
+            // Tilt + scale живут на motion-обёртке, а не на CSS карточки — иначе оверлей
+            // приземляется в позицию, но наклон ещё «висит» (CSS-трансформа запечена
+            // в snapshot DragOverlay). previewPhase переключается на 'settled' в момент
+            // drop'а, motion лерпит rotate/scale к identity синхронно с position-lerp'ом.
+            <motion.div
+              initial={false}
+              animate={
+                previewPhase === 'lifted'
+                  ? { rotate: 2, scale: 1.04 }
+                  : { rotate: 0, scale: 1 }
+              }
+              transition={{ duration: DROP_DURATION_MS / 1000, ease: DROP_EASING_BEZIER }}
+              style={{ transformOrigin: 'center' }}
+            >
+              <KanbanCard
+                task={activeTask}
+                onEdit={() => undefined}
+                onDelete={() => undefined}
+                preview
+                showShortId={showCommits}
+              />
+            </motion.div>
           ) : null}
         </DragOverlay>
       </DndContext>
@@ -184,6 +253,7 @@ export function KanbanBoard({ projectId, showCommits = true }: Props): React.Rea
         onSubmit={handleDialogSubmit}
         onCommitsChange={() => void refetch()}
         showCommits={showCommits}
+        projectName={projectName}
       />
     </div>
   );

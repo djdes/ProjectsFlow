@@ -1,13 +1,16 @@
 import type { Project } from '../../domain/project/Project.js';
+import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
 
 type Deps = {
   readonly repo: ProjectRepository;
+  readonly members: ProjectMemberRepository;
   readonly idGen: () => string;
 };
 
 // Лениво находит или создаёт inbox-проект пользователя. Идемпотентно: если уже есть —
-// возвращает существующий; иначе создаёт с name='Входящие' и isInbox=true.
+// возвращает существующий; иначе создаёт с name='Входящие' и isInbox=true + сразу
+// добавляет owner-membership (без этого никакие task-use-case'ы не пройдут access-check).
 // Используется одним endpoint'ом GET /api/inbox.
 //
 // Имя 'Входящие' формально может конфликтовать с обычным проектом юзера с таким же name'ом
@@ -21,17 +24,19 @@ export class GetOrCreateInbox {
     if (existing) return existing;
 
     const name = await this.pickAvailableName(ownerId);
-    return this.deps.repo.create({
+    const project = await this.deps.repo.create({
       id: this.deps.idGen(),
       ownerId,
       name,
       isInbox: true,
     });
+    await this.deps.members.add({ projectId: project.id, userId: ownerId, role: 'owner' });
+    return project;
   }
 
   private async pickAvailableName(ownerId: string): Promise<string> {
     const candidates = ['Входящие', 'Входящие (системный)', 'Входящие (inbox)'];
-    const list = await this.deps.repo.listByOwner(ownerId);
+    const list = await this.deps.members.listProjectsForUser(ownerId);
     const taken = new Set(list.map((p) => p.name));
     const free = candidates.find((c) => !taken.has(c));
     if (free) return free;

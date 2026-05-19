@@ -24,7 +24,19 @@ export const linkCommitSchema = z.object({
   sha: z.string().trim().regex(/^[0-9a-f]{7,40}$/i, { message: 'Невалидный SHA коммита' }),
 });
 
+// Лимит 10000 символов — на пару порядков больше типичного комментария, но защищает
+// от случайной вставки гигантского лога.
+export const createTaskCommentSchema = z.object({
+  body: z.string().trim().min(1, 'Введите текст комментария').max(10000),
+});
+
+export const updateTaskCommentSchema = z.object({
+  body: z.string().trim().min(1, 'Введите текст комментария').max(10000),
+});
+
 export type CreateTaskBody = z.infer<typeof createTaskSchema>;
 export type UpdateTaskBody = z.infer<typeof updateTaskSchema>;
 export type MoveTaskBody = z.infer<typeof moveTaskSchema>;
 export type LinkCommitBody = z.infer<typeof linkCommitSchema>;
+export type CreateTaskCommentBody = z.infer<typeof createTaskCommentSchema>;
+export type UpdateTaskCommentBody = z.infer<typeof updateTaskCommentSchema>;

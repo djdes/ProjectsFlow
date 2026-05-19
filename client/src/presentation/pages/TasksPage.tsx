@@ -87,7 +87,7 @@ export function TasksPage(): React.ReactElement {
         </p>
       )}
 
-      <KanbanBoard key={refreshKey} projectId={data.id} />
+      <KanbanBoard key={refreshKey} projectId={data.id} projectName={data.name} />
     </div>
   );
 }

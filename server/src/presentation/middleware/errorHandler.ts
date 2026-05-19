@@ -6,6 +6,12 @@ import {
   UserNotFoundError,
 } from '../../domain/user/errors.js';
 import {
+  CannotInviteToInboxError,
+  CannotRemoveSelfAsLastOwnerError,
+  InsufficientProjectRoleError,
+  ProjectInviteAlreadyUsedError,
+  ProjectInviteExpiredError,
+  ProjectInviteNotFoundError,
   ProjectNameAlreadyExistsError,
   ProjectNameEmptyError,
   ProjectNotFoundError,
@@ -31,6 +37,8 @@ import {
   TaskAttachmentNotFoundError,
   TaskAttachmentTooLargeError,
   TaskAttachmentTypeNotAllowedError,
+  TaskCommentBodyEmptyError,
+  TaskCommentNotFoundError,
   TaskCommitNotFoundError,
   TaskDescriptionEmptyError,
   TaskNotFoundError,
@@ -96,6 +104,42 @@ export function errorHandler(
 
   if (err instanceof ProjectNotFoundError) {
     res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
+  if (err instanceof InsufficientProjectRoleError) {
+    res.status(403).json({
+      error: 'insufficient_role',
+      message: 'Недостаточно прав в проекте',
+      details: { role: err.haveRole, action: err.requiredAction },
+    });
+    return;
+  }
+
+  if (err instanceof ProjectInviteNotFoundError) {
+    res.status(404).json({ error: 'invite_not_found', message: 'Приглашение не найдено' });
+    return;
+  }
+  if (err instanceof ProjectInviteExpiredError) {
+    res.status(410).json({ error: 'invite_expired', message: 'Срок действия приглашения истёк' });
+    return;
+  }
+  if (err instanceof ProjectInviteAlreadyUsedError) {
+    res.status(410).json({ error: 'invite_used', message: 'Это приглашение уже использовано' });
+    return;
+  }
+  if (err instanceof CannotInviteToInboxError) {
+    res.status(409).json({
+      error: 'cannot_invite_to_inbox',
+      message: 'Во «Входящие» нельзя приглашать — это личное пространство',
+    });
+    return;
+  }
+  if (err instanceof CannotRemoveSelfAsLastOwnerError) {
+    res.status(409).json({
+      error: 'last_owner',
+      message: 'Нельзя удалить или понизить себя как единственного владельца',
+    });
     return;
   }
 
@@ -192,6 +236,14 @@ export function errorHandler(
       error: 'task_attachment_type_not_allowed',
       message: 'Можно загружать только картинки (PNG, JPEG, WebP, GIF)',
     });
+    return;
+  }
+  if (err instanceof TaskCommentNotFoundError) {
+    res.status(404).json({ error: 'task_comment_not_found' });
+    return;
+  }
+  if (err instanceof TaskCommentBodyEmptyError) {
+    res.status(400).json({ error: 'task_comment_body_empty', message: 'Введите текст комментария' });
     return;
   }
 

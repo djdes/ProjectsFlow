@@ -1,17 +1,19 @@
-import { ProjectNotFoundError } from '../../domain/project/errors.js';
 import {
   TaskAttachmentTooLargeError,
   TaskAttachmentTypeNotAllowedError,
   TaskNotFoundError,
 } from '../../domain/task/errors.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
+import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
+import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { AttachmentStorage } from './AttachmentStorage.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
+  readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly attachments: TaskAttachmentRepository;
   readonly storage: AttachmentStorage;
@@ -49,8 +51,12 @@ export class UploadTaskAttachment {
       throw new TaskAttachmentTypeNotAllowedError(input.mimeType);
     }
 
-    const project = await this.deps.projects.getByIdForOwner(input.projectId, input.ownerUserId);
-    if (!project) throw new ProjectNotFoundError();
+    await requireProjectAccess(
+      this.deps,
+      input.projectId,
+      input.ownerUserId,
+      'manage_attachments',
+    );
     const task = await this.deps.tasks.getById(input.taskId);
     if (!task || task.projectId !== input.projectId) throw new TaskNotFoundError(input.taskId);
 

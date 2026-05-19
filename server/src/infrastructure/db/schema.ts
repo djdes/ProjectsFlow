@@ -55,6 +55,8 @@ export const projects = mysqlTable(
   'projects',
   {
     id: id(),
+    // owner_id остаётся как кеш «кто создал» для backward-compat и отката. Реальный
+    // доступ-чек идёт через project_members (см. spec фазу P4 — финальный дроп колонки).
     ownerId: fkUserId('owner_id'),
     name: varchar('name', { length: 80 }).notNull(),
     status: mysqlEnum('status', ['active', 'paused', 'archived']).notNull().default('active'),
@@ -72,6 +74,49 @@ export const projects = mysqlTable(
     index('idx_projects_owner').on(t.ownerId),
   ],
 );
+
+// Multi-tenancy: участники проекта + их роли. См. spec
+// docs/superpowers/specs/2026-05-19-multi-tenant-projects-design.md.
+export const projectMembers = mysqlTable(
+  'project_members',
+  {
+    projectId: char('project_id', { length: 36 }).notNull(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    role: mysqlEnum('role', ['owner', 'editor', 'viewer']).notNull(),
+    joinedAt: timestamp('joined_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    uniqueIndex('pk_project_members').on(t.projectId, t.userId),
+    index('idx_project_members_user').on(t.userId),
+  ],
+);
+
+export type ProjectMemberRow = typeof projectMembers.$inferSelect;
+export type NewProjectMemberRow = typeof projectMembers.$inferInsert;
+
+export const projectInvites = mysqlTable(
+  'project_invites',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    role: mysqlEnum('role', ['editor', 'viewer']).notNull(),
+    token: char('token', { length: 64 }).notNull(),
+    email: varchar('email', { length: 255 }),
+    expiresAt: timestamp('expires_at').notNull(),
+    acceptedAt: timestamp('accepted_at'),
+    acceptedByUserId: char('accepted_by_user_id', { length: 36 }),
+    createdByUserId: char('created_by_user_id', { length: 36 }).notNull(),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_invites_token').on(t.token),
+    index('idx_invites_project').on(t.projectId),
+    index('idx_invites_expires').on(t.expiresAt),
+  ],
+);
+
+export type ProjectInviteRow = typeof projectInvites.$inferSelect;
+export type NewProjectInviteRow = typeof projectInvites.$inferInsert;
 
 export const userGithubTokens = mysqlTable('user_github_tokens', {
   // user_id — и FK и PK: у одного юзера ровно один (или ноль) connected GitHub.
@@ -140,6 +185,22 @@ export const taskAttachments = mysqlTable(
 
 export type TaskAttachmentRow = typeof taskAttachments.$inferSelect;
 export type NewTaskAttachmentRow = typeof taskAttachments.$inferInsert;
+
+export const taskComments = mysqlTable(
+  'task_comments',
+  {
+    id: id(),
+    taskId: char('task_id', { length: 36 }).notNull(),
+    ownerUserId: char('owner_user_id', { length: 36 }).notNull(),
+    body: text('body').notNull(),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [index('idx_task_comments_task_created').on(t.taskId, t.createdAt)],
+);
+
+export type TaskCommentRow = typeof taskComments.$inferSelect;
+export type NewTaskCommentRow = typeof taskComments.$inferInsert;
 
 export const taskCommits = mysqlTable(
   'task_commits',
