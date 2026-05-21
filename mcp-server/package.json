@@ -1,6 +1,6 @@
 {
   "name": "@projectsflow/mcp-server",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "MCP server for ProjectsFlow — gives Claude Code access to your project credentials and kanban tasks",
   "keywords": [
     "mcp",

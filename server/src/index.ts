@@ -424,6 +424,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
+      comments: taskCommentRepo,
       storage: attachmentStorage,
     }),
     createAgentCredential: new CreateAgentCredential({
@@ -452,6 +453,14 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
+      idGen: idGenerator,
+    }),
+    createComment: new CreateTaskComment({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      comments: taskCommentRepo,
+      notifications: notificationRepo,
       idGen: idGenerator,
     }),
     moveTask: new MoveTask({

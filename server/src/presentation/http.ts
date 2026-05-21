@@ -189,6 +189,7 @@ type AppDeps = {
     readonly listKbDocuments: ListKbDocuments;
     readonly listTasks: ListTasks;
     readonly createTask: CreateTask;
+    readonly createComment: CreateTaskComment;
     readonly moveTask: MoveTask;
     readonly linkCommit: LinkCommit;
     readonly writeKbDocument: WriteKbDocument;
@@ -274,6 +275,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       listTasks: deps.agent.listTasks,
       getTask: deps.agent.getAgentTask,
       createTask: deps.agent.createTask,
+      createComment: deps.agent.createComment,
       moveTask: deps.agent.moveTask,
       linkCommit: deps.agent.linkCommit,
       writeKbDocument: deps.agent.writeKbDocument,

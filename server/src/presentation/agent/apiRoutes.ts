@@ -8,6 +8,7 @@ import type { CreateAgentCredential } from '../../application/agent/CreateAgentC
 import type { AuthenticateAgentToken } from '../../application/agent/AuthenticateAgentToken.js';
 import type { ListTasks } from '../../application/task/ListTasks.js';
 import type { CreateTask } from '../../application/task/CreateTask.js';
+import type { CreateTaskComment } from '../../application/task/CreateTaskComment.js';
 import type { MoveTask } from '../../application/task/MoveTask.js';
 import type { LinkCommit } from '../../application/task/LinkCommit.js';
 import type { WriteKbDocument } from '../../application/kb/WriteKbDocument.js';
@@ -16,9 +17,15 @@ import type { Project } from '../../domain/project/Project.js';
 import type { KbDocumentSummary } from '../../domain/kb/KbDocument.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
+import type { TaskComment } from '../../domain/task/TaskComment.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import { requireAgentToken } from '../middleware/requireAgentToken.js';
-import { taskStatusSchema, linkCommitSchema, createTaskSchema } from '../tasks/schemas.js';
+import {
+  taskStatusSchema,
+  linkCommitSchema,
+  createTaskSchema,
+  createTaskCommentSchema,
+} from '../tasks/schemas.js';
 import { writeDocSchema } from '../kb/schemas.js';
 
 type Deps = {
@@ -30,6 +37,7 @@ type Deps = {
   readonly listTasks: ListTasks;
   readonly getTask: GetAgentTask;
   readonly createTask: CreateTask;
+  readonly createComment: CreateTaskComment;
   readonly moveTask: MoveTask;
   readonly linkCommit: LinkCommit;
   readonly writeKbDocument: WriteKbDocument;
@@ -76,6 +84,15 @@ type CommitDto = Omit<TaskCommit, 'committedAt' | 'linkedAt'> & {
 
 function commitToDto(c: TaskCommit): CommitDto {
   return { ...c, committedAt: c.committedAt.toISOString(), linkedAt: c.linkedAt.toISOString() };
+}
+
+type CommentDto = Omit<TaskComment, 'createdAt' | 'updatedAt'> & {
+  createdAt: string;
+  updatedAt: string;
+};
+
+function commentToDto(c: TaskComment): CommentDto {
+  return { ...c, createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt.toISOString() };
 }
 
 // Endpoints для agents (MCP-сервер). Авторизация через Bearer-токен.
@@ -200,15 +217,16 @@ export function agentApiRouter(deps: Deps): Router {
     },
   );
 
-  // Полный task с binary'ями всех аттачей в base64. Для pf_get_task tool'а —
-  // вызывается когда агенту нужно увидеть скрины/файлы, которые юзер прикрепил.
+  // Полный task с binary'ями всех аттачей в base64 + список комментариев. Для
+  // pf_get_task tool'а — вызывается когда агенту нужно увидеть скрины/файлы и
+  // прочитать предыдущее обсуждение задачи. Comments по порядку (старые сверху).
   router.get(
     '/projects/:projectId/tasks/:taskId',
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const projectId = req.params['projectId'] as string;
         const taskId = req.params['taskId'] as string;
-        const { task, attachments } = await deps.getTask.execute(
+        const { task, attachments, comments } = await deps.getTask.execute(
           projectId,
           req.user!.id,
           taskId,
@@ -225,7 +243,33 @@ export function agentApiRouter(deps: Deps): Router {
               dataBase64: a.data.toString('base64'),
             }),
           ),
+          comments: comments.map(commentToDto),
         });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Создание комментария к задаче из агента. Используется чтобы LLM оставляла
+  // прогресс-апдейты по ходу работы: «начал», «обнаружил блокер», «PR открыт».
+  // Mentions через @displayName парсятся существующим CreateTaskComment use-case'ом
+  // и шлют notifications упомянутым юзерам. Comment author = owner текущего
+  // agent-токена — т.е. под именем юзера, выпустившего токен.
+  router.post(
+    '/projects/:projectId/tasks/:taskId/comments',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const body = createTaskCommentSchema.parse(req.body);
+        const comment = await deps.createComment.execute({
+          projectId,
+          ownerUserId: req.user!.id,
+          taskId,
+          body: body.body,
+        });
+        res.status(201).json({ comment: commentToDto(comment) });
       } catch (e) {
         next(e);
       }

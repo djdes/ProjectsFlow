@@ -58,9 +58,19 @@ export type TaskAttachmentWithData = {
   dataBase64: string;
 };
 
+export type TaskComment = {
+  id: string;
+  taskId: string;
+  ownerUserId: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type TaskWithAttachments = {
   task: Task;
   attachments: TaskAttachmentWithData[];
+  comments: TaskComment[];
 };
 
 export type CreateCredentialField = {
@@ -207,6 +217,18 @@ export class ApiClient {
       { method: 'POST', body: input },
     );
     return task;
+  }
+
+  async createTaskComment(
+    projectId: string,
+    taskId: string,
+    body: string,
+  ): Promise<TaskComment> {
+    const { comment } = await this.request<{ comment: TaskComment }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/comments`,
+      { method: 'POST', body: { body } },
+    );
+    return comment;
   }
 
   async writeKbDocument(projectId: string, input: WriteKbDocInput): Promise<WriteKbDocResult> {

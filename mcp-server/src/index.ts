@@ -82,12 +82,13 @@ const TOOLS = [
   {
     name: 'pf_get_task',
     description:
-      'Fetch a single task with ALL its attachments inlined. Returns the task metadata as ' +
-      'text, then each attachment as a separate content block: images (image/*) as inline ' +
-      "`image` blocks (viewable directly), other files as embedded `resource` blocks. " +
-      "Use this whenever a task in pf_list_tasks has attachmentCount > 0 and you're about " +
-      'to work on it — the screenshots/files the user attached usually contain critical ' +
-      "context (mockups, error screenshots, reference docs) that's not in the description.",
+      'Fetch a single task with ALL its attachments inlined AND the full thread of comments. ' +
+      'Returns the task metadata + comments as text, then each attachment as a separate ' +
+      'content block: images (image/*) as inline `image` blocks (viewable directly), other ' +
+      'files as embedded `resource` blocks. Comments are ordered oldest-first (like a chat). ' +
+      "Use this whenever you're about to work on a task — even if attachmentCount is 0, " +
+      'the comments thread often carries clarifications, prior agent attempts, or user ' +
+      'follow-ups that change the scope.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -95,6 +96,29 @@ const TOOLS = [
         taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
       },
       required: ['projectId', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_create_task_comment',
+    description:
+      'Post a comment to a kanban task. Use this to leave progress updates as you work: ' +
+      '"starting", "found blocker X", "approach: Y", "PR opened — N". The comment author ' +
+      "will be the user that issued the agent token. Mentions via `@displayName` are parsed " +
+      'server-side and trigger notifications. Markdown is allowed in the body. Recommended ' +
+      'cadence: one comment when picking up a task, one per significant decision/blocker, ' +
+      'one at completion. Avoid noisy "still working" pings — those add no signal.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
+        body: {
+          type: 'string',
+          description: 'Comment body (markdown). 1-10000 chars after trim.',
+        },
+      },
+      required: ['projectId', 'taskId', 'body'],
       additionalProperties: false,
     },
   },
@@ -320,13 +344,18 @@ const WriteKbDocInputZ = z.object({
   body: z.string(),
   sha: z.string().nullable(),
 });
+const CreateTaskCommentInputZ = z.object({
+  projectId: z.string().min(1),
+  taskId: z.string().min(1),
+  body: z.string().trim().min(1).max(10_000),
+});
 
 async function main(): Promise<void> {
   const config = loadConfig();
   const api = new ApiClient(config);
 
   const server = new Server(
-    { name: 'projectsflow', version: '0.5.0' },
+    { name: 'projectsflow', version: '0.6.0' },
     { capabilities: { tools: {} } },
   );
 
@@ -357,8 +386,11 @@ async function main(): Promise<void> {
         }
         case 'pf_get_task': {
           const input = GetTaskInput.parse(req.params.arguments ?? {});
-          const { task, attachments } = await api.getTask(input.projectId, input.taskId);
-          // Текстовый блок — task + attachment metadata (без base64-дублей).
+          const { task, attachments, comments } = await api.getTask(
+            input.projectId,
+            input.taskId,
+          );
+          // Текстовый блок — task + attachment metadata + comments thread (без base64-дублей).
           const meta = {
             task,
             attachments: attachments.map((a) => ({
@@ -368,6 +400,7 @@ async function main(): Promise<void> {
               sizeBytes: a.sizeBytes,
               uploadedAt: a.uploadedAt,
             })),
+            comments,
           };
           const content: ToolContent[] = [
             { type: 'text', text: JSON.stringify(meta, null, 2) },
@@ -417,6 +450,15 @@ async function main(): Promise<void> {
             status: input.status,
           });
           return jsonResult(task);
+        }
+        case 'pf_create_task_comment': {
+          const input = CreateTaskCommentInputZ.parse(req.params.arguments ?? {});
+          const comment = await api.createTaskComment(
+            input.projectId,
+            input.taskId,
+            input.body,
+          );
+          return jsonResult(comment);
         }
         case 'pf_write_kb_document': {
           const input = WriteKbDocInputZ.parse(req.params.arguments ?? {});
