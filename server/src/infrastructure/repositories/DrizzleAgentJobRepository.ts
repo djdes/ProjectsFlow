@@ -1,14 +1,15 @@
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import type { AgentJob, AgentJobStatus } from '../../domain/agent/AgentJob.js';
 import type {
   AgentJobRepository,
   CompleteAgentJobInput,
   NewAgentJobInput,
+  PendingAgentJob,
 } from '../../application/agent/AgentJobRepository.js';
 import { ACTIVE_AGENT_JOB_STATUSES } from '../../domain/agent/AgentJob.js';
 import { idGenerator } from '../id/idGenerator.js';
-import { agentJobs, tasks, type AgentJobRow } from '../db/schema.js';
+import { agentJobs, projectMembers, projects, tasks, type AgentJobRow } from '../db/schema.js';
 
 export class DrizzleAgentJobRepository implements AgentJobRepository {
   constructor(private readonly db: Database) {}
@@ -78,11 +79,54 @@ export class DrizzleAgentJobRepository implements AgentJobRepository {
     return rows.map(rowToJob);
   }
 
-  // Runner methods used in Plan B. In Plan A — stubs with correct signature.
+  // Runner methods (Plan B).
 
-  async claimNext(_globalCap: number, _runnerPid: number): Promise<AgentJob | null> {
-    // TODO Plan B: SELECT ... FOR UPDATE SKIP LOCKED + check global cap + per-project mutex
-    return null;
+  async listPendingForUser(userId: string, limit: number): Promise<PendingAgentJob[]> {
+    // JOIN: agent_jobs → projects → project_members WHERE pm.user_id=? AND aj.status='queued'
+    const rows = await this.db
+      .select({
+        jobId: agentJobs.id,
+        projectId: agentJobs.projectId,
+        taskId: agentJobs.taskId,
+        createdAt: agentJobs.createdAt,
+        projectName: projects.name,
+        gitRepoUrl: projects.gitRepoUrl,
+        taskDescription: tasks.description,
+      })
+      .from(agentJobs)
+      .innerJoin(projects, eq(agentJobs.projectId, projects.id))
+      .innerJoin(tasks, eq(agentJobs.taskId, tasks.id))
+      .innerJoin(projectMembers, eq(projectMembers.projectId, agentJobs.projectId))
+      .where(and(
+        eq(agentJobs.status, 'queued'),
+        eq(projectMembers.userId, userId),
+      ))
+      .orderBy(asc(agentJobs.createdAt))
+      .limit(limit);
+    return rows.map((r) => ({
+      id: r.jobId,
+      projectId: r.projectId,
+      projectName: r.projectName,
+      gitRepoUrl: r.gitRepoUrl ?? null,
+      taskId: r.taskId,
+      taskDescription: r.taskDescription ?? null,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  async claimById(jobId: string): Promise<AgentJob | null> {
+    const result = await this.db
+      .update(agentJobs)
+      .set({
+        status: 'running',
+        claimedAt: sql`CURRENT_TIMESTAMP`,
+        startedAt: sql`CURRENT_TIMESTAMP`,
+      })
+      .where(and(eq(agentJobs.id, jobId), eq(agentJobs.status, 'queued')));
+    const affected = (result as unknown as { rowsAffected?: number; affectedRows?: number })
+      .rowsAffected ?? (result as unknown as { affectedRows?: number }).affectedRows ?? 0;
+    if (affected === 0) return null;
+    return this.findById(jobId);
   }
 
   async markStarted(id: string): Promise<void> {

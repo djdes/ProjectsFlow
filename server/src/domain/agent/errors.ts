@@ -90,3 +90,17 @@ export class TaskMissingDescriptionError extends Error {
     this.name = 'TaskMissingDescriptionError';
   }
 }
+
+export class AgentJobAlreadyClaimedError extends Error {
+  constructor(jobId: string) {
+    super(`Agent job ${jobId} is already claimed by another session`);
+    this.name = 'AgentJobAlreadyClaimedError';
+  }
+}
+
+export class AgentJobNotInRunningStateError extends Error {
+  constructor(jobId: string, currentStatus: string) {
+    super(`Agent job ${jobId} cannot be completed - current status: ${currentStatus}`);
+    this.name = 'AgentJobNotInRunningStateError';
+  }
+}
