@@ -8,22 +8,29 @@ import type {
 } from '../../application/agent/AgentJobRepository.js';
 import { ACTIVE_AGENT_JOB_STATUSES } from '../../domain/agent/AgentJob.js';
 import { idGenerator } from '../id/idGenerator.js';
-import { agentJobs, type AgentJobRow } from '../db/schema.js';
+import { agentJobs, tasks, type AgentJobRow } from '../db/schema.js';
 
 export class DrizzleAgentJobRepository implements AgentJobRepository {
   constructor(private readonly db: Database) {}
 
-  async create(input: NewAgentJobInput): Promise<AgentJob> {
+  async createForDelegation(input: NewAgentJobInput): Promise<AgentJob> {
     const id = idGenerator();
-    await this.db.insert(agentJobs).values({
-      id,
-      projectId: input.projectId,
-      taskId: input.taskId,
-      createdBy: input.createdBy,
-      status: 'queued',
+    return this.db.transaction(async (tx) => {
+      await tx
+        .update(tasks)
+        .set({ delegatedToAgent: true })
+        .where(eq(tasks.id, input.taskId));
+      await tx.insert(agentJobs).values({
+        id,
+        projectId: input.projectId,
+        taskId: input.taskId,
+        createdBy: input.createdBy,
+        status: 'queued',
+      });
+      const [row] = await tx.select().from(agentJobs).where(eq(agentJobs.id, id)).limit(1);
+      if (!row) throw new Error(`agent_jobs row ${id} disappeared after insert`);
+      return rowToJob(row);
     });
-    const row = await this.requireRow(id);
-    return rowToJob(row);
   }
 
   async findById(id: string): Promise<AgentJob | null> {
@@ -73,7 +80,7 @@ export class DrizzleAgentJobRepository implements AgentJobRepository {
 
   // Runner methods used in Plan B. In Plan A — stubs with correct signature.
 
-  async claimNext(): Promise<AgentJob | null> {
+  async claimNext(_globalCap: number, _runnerPid: number): Promise<AgentJob | null> {
     // TODO Plan B: SELECT ... FOR UPDATE SKIP LOCKED + check global cap + per-project mutex
     return null;
   }
@@ -81,7 +88,7 @@ export class DrizzleAgentJobRepository implements AgentJobRepository {
   async markStarted(id: string): Promise<void> {
     await this.db
       .update(agentJobs)
-      .set({ startedAt: sql`CURRENT_TIMESTAMP` })
+      .set({ status: 'running', startedAt: sql`CURRENT_TIMESTAMP` })
       .where(eq(agentJobs.id, id));
   }
 
@@ -109,11 +116,6 @@ export class DrizzleAgentJobRepository implements AgentJobRepository {
       .where(eq(agentJobs.id, id));
   }
 
-  private async requireRow(id: string): Promise<AgentJobRow> {
-    const [row] = await this.db.select().from(agentJobs).where(eq(agentJobs.id, id)).limit(1);
-    if (!row) throw new Error(`agent_jobs row ${id} disappeared after insert`);
-    return row;
-  }
 }
 
 function rowToJob(row: AgentJobRow): AgentJob {

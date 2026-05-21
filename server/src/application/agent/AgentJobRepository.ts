@@ -14,7 +14,12 @@ export type CompleteAgentJobInput = {
 };
 
 export type AgentJobRepository = {
-  create(input: NewAgentJobInput): Promise<AgentJob>;
+  /**
+   * Атомарно создаёт agent-job И ставит `tasks.delegated_to_agent = true`
+   * для соответствующей задачи. Обе операции в одной DB-транзакции.
+   * Используется EnqueueAgentJob use-case'ом.
+   */
+  createForDelegation(input: NewAgentJobInput): Promise<AgentJob>;
   findById(id: string): Promise<AgentJob | null>;
   findActiveByTaskId(taskId: string): Promise<AgentJob | null>;
   /**

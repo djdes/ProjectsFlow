@@ -22,5 +22,10 @@ export interface TaskRepository {
   delete(taskId: string): Promise<boolean>;
   // Возвращает min/max позицию в колонке — для расчёта новой position при insert "сверху" / "снизу".
   getPositionBounds(projectId: string, status: TaskStatus): Promise<{ min: number; max: number } | null>;
+  /**
+   * Sticky-флаг «отдано агенту». В Plan A ставится транзакционно через
+   * AgentJobRepository.createForDelegation. Этот метод оставлен для будущего
+   * re-queue flow в Plan B (при failed → автоматически снова в очередь).
+   */
   setDelegatedToAgent(taskId: string, value: boolean): Promise<void>;
 }
