@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useContainer } from '@/infrastructure/di/container';
 import type { Task, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
+import { useAgentJobPolling } from './useAgentJobPolling';
 
 type State = {
   tasks: Task[];
@@ -35,6 +36,8 @@ export function useTasks(projectId: string): UseTasks {
   useEffect(() => {
     void refetch();
   }, [refetch]);
+
+  useAgentJobPolling(state.tasks, () => void refetch());
 
   const create: UseTasks['create'] = async (input) => {
     const task = await taskRepository.create(projectId, input);

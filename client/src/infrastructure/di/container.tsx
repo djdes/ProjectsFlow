@@ -10,6 +10,9 @@ import { HttpInviteRepository } from '@/infrastructure/http/HttpInviteRepository
 import { HttpNotificationRepository } from '@/infrastructure/http/HttpNotificationRepository';
 import { HttpAgentTokenRepository } from '@/infrastructure/http/HttpAgentTokenRepository';
 import { HttpAgentDeviceRepository } from '@/infrastructure/http/HttpAgentDeviceRepository';
+import { HttpAgentJobRepository } from '@/infrastructure/http/HttpAgentJobRepository';
+import { EnqueueAgentJob } from '@/application/agentJob/EnqueueAgentJob';
+import { CancelAgentJob } from '@/application/agentJob/CancelAgentJob';
 import { ListProjects } from '@/application/project/ListProjects';
 import { GetProject } from '@/application/project/GetProject';
 import { CreateProject } from '@/application/project/CreateProject';
@@ -44,6 +47,8 @@ type Container = {
   notificationRepository: NotificationRepository;
   agentTokenRepository: AgentTokenRepository;
   agentDeviceRepository: AgentDeviceRepository;
+  enqueueAgentJob: EnqueueAgentJob;
+  cancelAgentJob: CancelAgentJob;
 };
 
 function buildContainer(): Container {
@@ -58,6 +63,7 @@ function buildContainer(): Container {
   const notificationRepo = new HttpNotificationRepository();
   const agentTokenRepo = new HttpAgentTokenRepository();
   const agentDeviceRepo = new HttpAgentDeviceRepository();
+  const agentJobRepo = new HttpAgentJobRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -75,6 +81,8 @@ function buildContainer(): Container {
     notificationRepository: notificationRepo,
     agentTokenRepository: agentTokenRepo,
     agentDeviceRepository: agentDeviceRepo,
+    enqueueAgentJob: new EnqueueAgentJob(agentJobRepo),
+    cancelAgentJob: new CancelAgentJob(agentJobRepo),
   };
 }
 
