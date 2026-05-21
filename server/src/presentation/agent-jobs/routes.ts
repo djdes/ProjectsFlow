@@ -4,24 +4,13 @@ import type { CancelAgentJob } from '../../application/agent/CancelAgentJob.js';
 import type { ListAgentJobsForProject } from '../../application/agent/ListAgentJobsForProject.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { cancelAgentJobBodySchema } from './schemas.js';
-import type { AgentJob } from '../../domain/agent/AgentJob.js';
+import { agentJobToDto } from './dto.js';
 
 type Deps = {
   readonly enqueueAgentJob: EnqueueAgentJob;
   readonly cancelAgentJob: CancelAgentJob;
   readonly listAgentJobsForProject: ListAgentJobsForProject;
 };
-
-export function agentJobToDto(j: AgentJob) {
-  return {
-    ...j,
-    claimedAt: j.claimedAt?.toISOString() ?? null,
-    startedAt: j.startedAt?.toISOString() ?? null,
-    finishedAt: j.finishedAt?.toISOString() ?? null,
-    createdAt: j.createdAt.toISOString(),
-    updatedAt: j.updatedAt.toISOString(),
-  };
-}
 
 export function buildAgentJobsRouter(deps: Deps): Router {
   const r = Router({ mergeParams: true });
