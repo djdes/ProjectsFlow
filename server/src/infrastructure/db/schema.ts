@@ -285,7 +285,7 @@ export const agentJobs = mysqlTable(
     prUrl: varchar('pr_url', { length: 500 }),
     branchName: varchar('branch_name', { length: 200 }),
     runnerPid: int('runner_pid'),
-    createdBy: char('created_by', { length: 36 }).notNull(),
+    createdBy: fkUserId('created_by'),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },

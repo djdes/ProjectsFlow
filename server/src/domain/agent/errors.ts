@@ -72,7 +72,7 @@ export class AgentJobNotFoundError extends Error {
 
 export class AgentJobNotCancellableError extends Error {
   constructor(jobId: string, currentStatus: string) {
-    super(`Agent job ${jobId} cannot be cancelled — current status: ${currentStatus}`);
+    super(`Agent job ${jobId} cannot be cancelled - current status: ${currentStatus}`);
     this.name = 'AgentJobNotCancellableError';
   }
 }
@@ -86,7 +86,7 @@ export class TaskAlreadyHasActiveAgentJobError extends Error {
 
 export class TaskMissingDescriptionError extends Error {
   constructor(taskId: string) {
-    super(`Task ${taskId} has no description — nothing to delegate to agent`);
+    super(`Task ${taskId} has no description - nothing to delegate to agent`);
     this.name = 'TaskMissingDescriptionError';
   }
 }
