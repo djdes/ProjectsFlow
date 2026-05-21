@@ -24,7 +24,9 @@ export type ProjectAction =
   | 'manage_attachments'
   | 'invite_member'
   | 'remove_member'
-  | 'transfer_ownership';
+  | 'transfer_ownership'
+  | 'delegate_task_to_agent'
+  | 'cancel_agent_job';
 
 const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   read_project: 'viewer',
@@ -44,6 +46,8 @@ const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   invite_member: 'owner',
   remove_member: 'owner',
   transfer_ownership: 'owner',
+  delegate_task_to_agent: 'editor',
+  cancel_agent_job: 'editor',
 };
 
 const ROLE_LEVEL: Record<ProjectRole, number> = { viewer: 0, editor: 1, owner: 2 };
