@@ -62,3 +62,31 @@ export class AgentDeviceCodeAlreadyApprovedError extends Error {
     this.name = 'AgentDeviceCodeAlreadyApprovedError';
   }
 }
+
+export class AgentJobNotFoundError extends Error {
+  constructor(jobId: string) {
+    super(`Agent job ${jobId} not found`);
+    this.name = 'AgentJobNotFoundError';
+  }
+}
+
+export class AgentJobNotCancellableError extends Error {
+  constructor(jobId: string, currentStatus: string) {
+    super(`Agent job ${jobId} cannot be cancelled — current status: ${currentStatus}`);
+    this.name = 'AgentJobNotCancellableError';
+  }
+}
+
+export class TaskAlreadyHasActiveAgentJobError extends Error {
+  constructor(taskId: string) {
+    super(`Task ${taskId} already has an active agent job`);
+    this.name = 'TaskAlreadyHasActiveAgentJobError';
+  }
+}
+
+export class TaskMissingDescriptionError extends Error {
+  constructor(taskId: string) {
+    super(`Task ${taskId} has no description — nothing to delegate to agent`);
+    this.name = 'TaskMissingDescriptionError';
+  }
+}
