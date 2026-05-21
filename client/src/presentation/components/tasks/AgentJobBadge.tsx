@@ -2,6 +2,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import type { AgentJob } from '@/domain/agentJob/AgentJob';
 import { Bot } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from '@/components/ui/sonner';
 
 type Props = {
   job: AgentJob;
@@ -38,6 +39,8 @@ export function AgentJobBadge({ job, projectId, onChanged }: Props): React.React
     try {
       await cancelAgentJob.execute(projectId, job.id);
       onChanged();
+    } catch (err) {
+      toast.error('Не удалось отменить', { description: (err as Error).message });
     } finally {
       setBusy(false);
     }
