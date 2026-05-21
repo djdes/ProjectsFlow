@@ -1,9 +1,18 @@
-# Spec: Kanban Agent Runner — авто-выполнение TODO-задач через headless Claude
+# Spec: Kanban Agent Runner — авто-выполнение TODO-задач через Claude Code /loop
 
 **Дата:** 2026-05-21
-**Статус:** Утверждён (брейншторм), готов к плану реализации
-**Зависит от:** Текущий MCP-сервер (`@projectsflow/mcp-server`), Spec #5 (Multi-tenant projects)
-**Открывает дорогу для:** GitHub-PR-агенты на чужих репо, scheduled-агенты (cron-задачи), agent-marketplace
+**Статус:** Утверждён (брейншторм + revision), готов к плану реализации Plan B
+**Зависит от:** Текущий MCP-сервер (`@projectsflow/mcp-server`), Spec #5 (Multi-tenant projects), Plan A backend (`agent_jobs` schema + UI кнопка)
+**Открывает дорогу для:** Scheduled-агенты (cron), cost-tracking, multi-step задачи
+
+> **Архитектурный пивот 2026-05-21.** Изначально (первая версия этой спеки) Plan B описывал
+> отдельный PM2-daemon на VPS, который через `spawn claude -p` исполнял бы задачи.
+> После cost-analysis (Anthropic API ≈ $30–300/мес активного использования) и обнаружения
+> что Anthropic ToS запрещает использовать Pro/Max-подписку для headless processes,
+> архитектура переписана на **client-side /loop**: юзер локально открывает Claude Code,
+> запускает `/loop` slash-команду, сессия идёт через OAuth-подписку (подписка legitimate
+> потому что Claude Code — interactive). Daemon-вариант сохранён в git-истории как rejected
+> alternative.
 
 ---
 
@@ -11,455 +20,391 @@
 
 ### Зачем сейчас
 
-У нас уже есть MCP-сервер, который даёт Claude Code доступ к kanban-задачам через tool'ы `pf_list_tasks`/`pf_link_commit_to_task` и т.д. Но **триггер у этого flow всегда юзер** — он сидит в Claude Code, говорит «возьми задачу X», Claude её делает.
+У нас уже есть MCP-сервер, который даёт Claude Code доступ к kanban-задачам через
+tool'ы `pf_list_tasks` / `pf_get_task` / `pf_link_commit_to_task` / `pf_create_task_comment`.
+Но **триггер у этого flow всегда юзер** — он сидит в Claude Code, говорит «возьми задачу X»,
+Claude её делает.
 
-Хочется обратной стороны: юзер кладёт задачу в TODO, ставит флаг «отдать агенту», уходит пить кофе. На сервере крутится daemon, который:
-1. Получает webhook о флаге.
-2. Берёт задачу в работу (claim).
-3. Запускает headless Claude (`claude -p`) в изолированном worktree.
-4. Claude через MCP читает задачу, делает изменения, открывает PR.
-5. Юзер видит PR в GitHub и результат на доске.
+Хочется обратной стороны: юзер кладёт задачу в TODO, ставит флаг «отдать агенту», уходит
+пить кофе. На стороне юзера крутится Claude Code сессия с `/loop`, которая:
+1. Опрашивает MCP — есть ли pending agent-job'ы?
+2. Если есть — атомарно claim'ит одну, помечает running.
+3. Через MCP читает task, делает изменения в локальной копии репо, создаёт PR на GitHub.
+4. Помечает job done (с pr_url) или failed.
+5. Юзер видит PR в GitHub и зелёный бейдж на доске.
 
-Это первый шаг к тому, что ProjectsFlow становится не только местом хранения задач, а оркестратором их выполнения. Сейчас делаем минимальную, безопасную версию — отдельный worker-процесс, PR-only, без auto-merge, с глобальным cap'ом по параллелизму.
+Эта спека описывает **Plan B v2 — /loop architecture**. Plan A (backend foundation: схема
+БД, UI-кнопка, agent_jobs очередь, endpoints для enqueue/cancel/list) уже сделан и
+описан в `docs/superpowers/plans/2026-05-21-kanban-agent-runner-backend.md`.
 
 ### Что ВНУТРИ scope
 
-**Модель задачи для агента:**
-- Новое булево поле `tasks.delegated_to_agent` (default `false`). Поднимается через UI «Отдать агенту» в TODO-карточке.
-- Флаг **не меняет** видимый статус задачи — она остаётся в TODO до того, как агент claim'ит её.
-- При claim'е daemon переводит `todo → in_progress` через существующий use-case `MoveTask`.
+**Plan A — уже сделано (отдельный план):**
+- Колонка `tasks.delegated_to_agent` (sticky-флаг).
+- Таблица `agent_jobs (id, project_id, task_id, status, attempt, claimed_at, started_at, finished_at, error, pr_url, branch_name, runner_pid, created_by, created_at, updated_at)`.
+- UI: кнопка «Отдать агенту» на TODO-карточке + `AgentJobBadge` со статусом + polling `/api/projects/:id/tasks` каждые 5s пока есть active job.
+- HTTP endpoints (session-cookie): POST `/agent` enqueue, DELETE `/agent-jobs/:id` cancel, GET `/agent-jobs` list. Расширение GET `/tasks` inline `agentJob`.
+- Permissions: `delegate_task_to_agent`, `cancel_agent_job` actions (`editor+`).
+- `EnqueueAgentJob.execute` атомарно ставит `delegated_to_agent=true` + insert `agent_jobs` в одной транзакции.
 
-**Новая таблица очереди:**
-- `agent_jobs (id, project_id, task_id, status, attempt, claimed_at, started_at, finished_at, error, pr_url, runner_pid, created_at, updated_at)`.
-- `status` enum: `queued`, `running`, `succeeded`, `failed`, `cancelled`.
-- Per-project mutex: SQL `WHERE project_id=? AND status='running'` при claim'е → если есть, ждём.
-- Global cap: `WHERE status='running'` < N (config) перед claim'ом.
+**Plan B v2 — новое (эта спека):**
 
-**Daemon (runner-процесс):**
-- Отдельный PM2-процесс `projectsflow-runner` внутри того же `server/` workspace'а.
-- Один и тот же бинарник может быть запущен как `node server/dist/index.js` (API) или `node server/dist/runner.js` (worker). Общий DI-контейнер, общая Drizzle-схема, общий `.env`.
-- В цикле: poll БД на `queued`-job'ы (через LISTEN/NOTIFY нет — MariaDB не умеет; обычный SELECT раз в N секунд). Plus event-driven wakeup: webhook кладёт job в БД И посылает SIGUSR1 / HTTP-сигнал на runner-процесс для немедленного pickup'а. Бэкап через poll спасает если signal потерян.
+**Новые MCP-tool'ы** (в `@projectsflow/mcp-server`):
+- `pf_list_pending_agent_jobs` — top-N queued job'ов по всем проектам юзера. Каждая job содержит
+  `{id, projectId, projectName, taskId, taskDescription, createdAt, gitRepoUrl}`. Сортировка по
+  `createdAt` asc. Используется агентом в /loop-промпте, чтобы выбрать что подхватить.
+- `pf_claim_agent_job(jobId)` — атомарный pickup: UPDATE `agent_jobs` SET status='running', runner_pid=NULL, claimed_at=NOW() WHERE id=? AND status='queued'. Возвращает обновлённый job. Если уже claim'нута (status≠queued) — 409 Conflict с описанием.
+- `pf_complete_agent_job(jobId, ok, prUrl?, error?, branchName?)` — финализация. `ok=true` → status='succeeded', `pr_url` заполнен. `ok=false` → status='failed', error заполнен. Так же UPDATE'ит `finished_at`.
 
-**Webhook flow:**
-- POST `/api/agent/jobs` (внутренний endpoint, требует session-cookie юзера + role `editor+` на проекте). Принимает `{projectId, taskId}`. Кладёт в `agent_jobs (status=queued)`, посылает сигнал runner'у.
-- Backward-compat: HTTP внутри одного процесса. Никаких HMAC и cross-host webhook'ов в v1.
-- Cancel: DELETE `/api/agent/jobs/:id`. Если `status=queued` → ставит `cancelled`. Если `status=running` → SIGTERM по `runner_pid`, ждёт graceful shutdown, ставит `cancelled`.
+**Новые server endpoints** (под `requireAgentToken`):
+- GET `/api/agent/pending-agent-jobs?limit=10`
+- POST `/api/agent/agent-jobs/:jobId/claim`
+- POST `/api/agent/agent-jobs/:jobId/complete` с body `{ok: boolean, prUrl?: string, error?: string, branchName?: string}`
 
-**Runner exec:**
-- Для каждой job:
-  1. `git worktree add /var/www/projectsflow/agent-workspaces/<job_id> <branch_name>` — изолированная копия репо.
-  2. Branch name: `agent/<short_task_id>-<slugified-first-line-of-desc>`.
-  3. `cd` в worktree, экспорт env: `PROJECTSFLOW_AGENT_TOKEN`, `ANTHROPIC_API_KEY`, `GH_TOKEN`.
-  4. `claude -p "<system + task prompt>" --permission-mode acceptEdits --output-format stream-json` с timeout (config, default 30 мин).
-  5. После выхода Claude: проверить `git status` — есть ли коммиты в branch?
-     - Да → `git push origin <branch>`, `gh pr create --title "..." --body "..." --draft`, записать `pr_url` в job.
-     - Нет → job → `failed` с причиной "no changes".
-  6. `git worktree remove --force` (cleanup).
-- Stdout/stderr Claude → файл `/var/log/projectsflow-runner/<job_id>.log`. Job в БД хранит только tail (последние 4KB) в поле `error` при `failed`.
+**Slash-command** в `~/.claude/commands/check-agent-queue.md` (либо в `~/.claude/projects/<repo>/commands/`) — markdown-файл с детальным промптом «что делать на каждом /loop-тике». В нём Claude инструктируется:
+1. Вызвать `pf_list_pending_agent_jobs`. Если пусто — сразу выйти ("ничего не делать"), не тратить tool-budget.
+2. Если есть кандидаты — выбрать первый, вызвать `pf_claim_agent_job(id)`. Если 409 — пропустить.
+3. Через `pf_get_task(projectId, taskId)` получить полный контекст (description, attachments, comments thread).
+4. Сделать `git fetch origin && git switch -c agent/<short-id>-<slug>` в локальной копии репо (агент должен заранее иметь это репо клонированным локально).
+5. Реализовать задачу. Commit с осмысленным сообщением. Если задача требует уточнения — НЕ коммитить, вызвать `pf_create_task_comment` с описанием blocker'а + `pf_complete_agent_job(jobId, ok=false, error="needs clarification")`.
+6. `git push origin <branch>` + `gh pr create --draft --title "..." --body "..."`.
+7. `pf_create_task_comment(jobId task, "PR #N открыт — <url>")`.
+8. `pf_complete_agent_job(jobId, ok=true, prUrl=<url>, branchName=<branch>)`.
+9. Выйти. Следующий /loop-тик подхватит следующую job (если есть).
 
-**Permission policy:**
-- Только `editor+` member проекта может отдать задачу агенту. Owner может ограничить ещё сильнее в настройках проекта позже (out of scope v1).
-- Webhook endpoint требует session-cookie. Никаких agent-token'ов на этом маршруте — только люди.
+**Запуск (юзер):**
+```
+/loop 10m /check-agent-queue
+```
 
-**UI:**
-- В KanbanCard для задач со `status='todo'`: dropdown-menu item «Отдать агенту» (иконка робота).
-- При наличии активной job (`status` ∈ `queued`/`running`) на этой задаче: бейдж «🤖 в очереди» / «🤖 работает» вместо кнопки, плюс ссылка «Открыть лог» (если running) и «Отменить».
-- При `succeeded`: бейдж «🤖 PR #N» — ссылка на pr_url. Бейдж висит на карточке до её перехода в `done`.
-- Опрос статуса — простой polling раз в 5s через `GET /api/projects/:id/tasks` (расширяем endpoint, чтобы возвращал `agentJob` summary inline). React Query не используем (стек), пока через `useEffect + setInterval`.
+Это значит: каждые 10 минут Claude Code посылает себе промпт `/check-agent-queue`. /loop живёт пока открыт терминал.
 
 ### Что СНАРУЖИ scope (следующие спеки)
 
 | Тема | Куда |
 |---|---|
 | Auto-merge PR на основе CI | Отдельная — нужна интеграция с GitHub Actions, политика approval |
-| Multi-step задачи (план → подтверждение → exec) | Отдельная, в v1 агент идёт от описания до PR одним shot'ом |
-| Stream Claude-вывод в UI в реальном времени | Отдельная — SSE-эндпоинт + парсинг stream-json |
-| Запуск агента на чужом репо (не GitHub) | Отдельная — нужна абстракция над PR-провайдером (GitLab, Bitbucket) |
-| Cost-tracking и budget-лимиты на проект | Отдельная — нужна биллинг-инфра |
+| Multi-step задачи (план → подтверждение → exec) | Отдельная, в v1 агент идёт от описания до PR одним thread'ом |
+| Streaming прогресса агента в UI в реальном времени | Отдельная — потребует SSE-канал |
+| Запуск агента на чужом репо (не GitHub) | Отдельная — нужна абстракция над PR-провайдером |
+| Cost-tracking и budget-лимиты | Отдельная — нужна метрика «токенов на job» которая в /loop не очевидна, потому что подписка |
 | Retry политика для `failed` | Отдельная — в v1 только manual retry (юзер опять жмёт «Отдать агенту») |
-| Scheduled-agents (cron) | Отдельная |
-| Agent-marketplace, шаблоны промптов | Сильно позже |
-| HMAC-webhook от внешних систем | Сильно позже — пока всё внутри одного процесса |
+| Scheduled-agents (cron) | Отдельная — нужно перевести на server-side scheduler |
+| Headless server runner (вернуть PM2-daemon если понадобится) | Отдельная — теоретическая возможность, не делаем сейчас |
+| Multi-user execution (per-user agent identity) | Отдельная — нужна модель «агент работает от имени юзера X» с per-user токенами |
 
 ---
 
 ## 2. Изменения схемы БД
 
-### 2.1 Миграция 014_agent_jobs.sql
+**Никаких новых миграций в Plan B v2.** Plan A уже добавил `agent_jobs` (миграция 014) и `tasks.delegated_to_agent` (миграция 015). /loop-архитектура работает на той же схеме.
 
-```sql
--- Очередь и история задач для kanban-agent runner'а.
-
-CREATE TABLE agent_jobs (
-  id            CHAR(36)     NOT NULL,
-  project_id    CHAR(36)     NOT NULL,
-  task_id       CHAR(36)     NOT NULL,
-  status        ENUM('queued','running','succeeded','failed','cancelled') NOT NULL DEFAULT 'queued',
-  attempt       INT          NOT NULL DEFAULT 1,
-  claimed_at    TIMESTAMP    NULL,
-  started_at    TIMESTAMP    NULL,
-  finished_at   TIMESTAMP    NULL,
-  error         TEXT         NULL,
-  pr_url        VARCHAR(500) NULL,
-  branch_name   VARCHAR(200) NULL,
-  runner_pid    INT          NULL,
-  created_by    CHAR(36)     NOT NULL,
-  created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  KEY idx_agent_jobs_status (status),
-  KEY idx_agent_jobs_project_status (project_id, status),
-  KEY idx_agent_jobs_task (task_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-```
-
-`branch_name` хранится отдельно — нужен для cancel-flow (надо удалить ветку при abort'е) и для UI.
-
-`runner_pid` — для SIGTERM при cancel'е. NULL у `queued`-job'ов.
-
-`created_by` — `users.id`, для аудита «кто отдал агенту».
-
-### 2.2 Миграция 015_task_delegated_to_agent.sql
-
-```sql
-ALTER TABLE tasks
-  ADD COLUMN delegated_to_agent BOOLEAN NOT NULL DEFAULT FALSE;
-```
-
-Поле sticky — не сбрасывается после завершения job'а. UI ориентируется на наличие активной job в `agent_jobs` (статус `queued`/`running`), а не на этот флаг. Зачем тогда поле? — для будущего: если захотим, чтобы «отданная агенту» задача re-queue'илась автоматически при отказе CI, мы будем смотреть на флаг.
-
-В v1 можно его и не использовать, ставить только при создании job'а — но добавляем сразу, чтобы не было ещё одной миграции через неделю.
+Поле `runner_pid` в `agent_jobs` теряет смысл (нет процесса с PID на стороне сервера — есть только claim метка). Оставляем — может пригодиться для будущего headless-runner'а, и стоимость хранения нулевая.
 
 ---
 
 ## 3. Application-слой
 
-### 3.1 Domain
-
-```
-server/src/domain/agent/
-  AgentJob.ts          — entity
-  AgentJobStatus.ts    — type alias + AGENT_JOB_STATUSES const
-  errors.ts            — AgentJobNotFoundError, ProjectMutexError, GlobalCapReachedError
-```
-
-```ts
-// AgentJob.ts
-export type AgentJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
-
-export type AgentJob = {
-  readonly id: string;
-  readonly projectId: string;
-  readonly taskId: string;
-  readonly status: AgentJobStatus;
-  readonly attempt: number;
-  readonly claimedAt: Date | null;
-  readonly startedAt: Date | null;
-  readonly finishedAt: Date | null;
-  readonly error: string | null;
-  readonly prUrl: string | null;
-  readonly branchName: string | null;
-  readonly runnerPid: number | null;
-  readonly createdBy: string;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-};
-```
-
-### 3.2 Ports
+### 3.1 Новые use-cases
 
 ```
 server/src/application/agent/
-  AgentJobRepository.ts        — port
-  AgentRunnerSignal.ts         — port (wake-up runner process)
-  EnqueueAgentJob.ts           — use-case (called by webhook)
-  CancelAgentJob.ts            — use-case
-  ClaimNextAgentJob.ts         — use-case (called by runner loop)
-  MarkAgentJobStarted.ts       — use-case
-  CompleteAgentJob.ts          — use-case (success or failure)
-  ListAgentJobsForProject.ts   — use-case (for UI status polling)
+  ListPendingAgentJobs.ts       — port: возвращает queued jobs across all user's projects
+  ClaimAgentJob.ts              — атомарный claim
+  CompleteAgentJob.ts           — финализация (success или fail)
 ```
 
-**`AgentJobRepository` интерфейс:**
+`AgentJobRepository` port расширяется тремя методами:
+
 ```ts
 export type AgentJobRepository = {
-  create(input: NewAgentJob): Promise<AgentJob>;
-  findById(id: string): Promise<AgentJob | null>;
-  findActiveByTaskId(taskId: string): Promise<AgentJob | null>; // queued | running
-  listForProject(projectId: string, limit: number): Promise<AgentJob[]>;
+  ...existing methods (createForDelegation, findById, findActiveByTaskId, listForProject, cancel, ...),
+
   /**
-   * Атомарный claim: ищет самую старую queued-job, для которой:
-   *  - в её проекте нет job со status=running,
-   *  - глобально количество running < globalCap,
-   * переводит её в running, ставит claimed_at, runner_pid.
-   * Возвращает job или null если нет кандидата.
+   * Все queued job'ы по проектам, где юзер — member. Сортировка createdAt asc.
+   * Limit — для UI/MCP (≈10-50). Без агрегации с tasks/projects — это делает use-case.
    */
-  claimNext(globalCap: number, runnerPid: number): Promise<AgentJob | null>;
-  markStarted(id: string): Promise<void>;
-  complete(id: string, result: AgentJobResult): Promise<void>;
-  cancel(id: string, reason: string): Promise<void>;
+  listPendingForUser(userId: string, limit: number): Promise<AgentJob[]>;
+
+  /**
+   * Атомарный claim — UPDATE WHERE id=? AND status='queued' SET status='running'.
+   * Возвращает обновлённую job если apply удался (affected_rows=1), либо null
+   * (job уже claim'нута / отменена / не существует).
+   */
+  claimById(jobId: string): Promise<AgentJob | null>;
+
+  /**
+   * Уже существующий `complete` (был для daemon-сценария) — переиспользуем.
+   * Сигнатура неизменна.
+   */
 };
 ```
 
-Реализация `claimNext` через одну транзакцию + `SELECT ... FOR UPDATE SKIP LOCKED` (MariaDB 10.6+ умеет; у нас 10.11 — ок). Подзапросы внутри: считает running-job'ы глобально и для конкретного проекта.
+Старый `claimNext(globalCap, runnerPid)` метод (stub из Plan A) **удаляется** — в /loop-архитектуре не нужен.
 
-**`AgentRunnerSignal` интерфейс:**
-```ts
-export type AgentRunnerSignal = {
-  notifyJobEnqueued(): Promise<void>;
-};
-```
-
-Реализаций две:
-- `HttpAgentRunnerSignal` — POST на `http://127.0.0.1:<runner-port>/wake` (runner поднимает мини-HTTP).
-- `NoopAgentRunnerSignal` — для случая «runner отключён» (env-var `RUNNER_ENABLED=false`).
-
-Выбор в `infrastructure/di/container.ts` по env.
-
-### 3.3 Permissions
-
-Добавляем в `server/src/domain/project/permissions.ts`:
+### 3.2 ListPendingAgentJobs
 
 ```ts
-export type ProjectAction =
-  | ...existing...
-  | 'delegate_task_to_agent'
-  | 'cancel_agent_job';
-
-const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
-  ...existing...,
-  delegate_task_to_agent: 'editor',
-  cancel_agent_job: 'editor',
+type Deps = {
+  readonly members: ProjectMemberRepository;
+  readonly projects: ProjectRepository;
+  readonly tasks: TaskRepository;
+  readonly agentJobs: AgentJobRepository;
 };
+
+export type PendingAgentJobDto = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly gitRepoUrl: string | null;
+  readonly taskId: string;
+  readonly taskDescription: string | null;
+  readonly createdAt: Date;
+};
+
+export class ListPendingAgentJobs {
+  async execute(userId: string, limit: number): Promise<PendingAgentJobDto[]> {
+    const jobs = await this.deps.agentJobs.listPendingForUser(userId, limit);
+    // Repo-implementation сама делает JOIN'ы для project/task — иначе N+1 запросов.
+    // Use-case только обогащает domain объектами.
+    return jobs.map((j) => ({ ... })); // подробности зависят от того как repo вернёт
+  }
+}
 ```
+
+Permission-check: репозиторий сам фильтрует по project_members. Use-case дополнительно не проверяет — лишний раунд-трип.
+
+### 3.3 ClaimAgentJob
+
+```ts
+type Deps = {
+  readonly members: ProjectMemberRepository;
+  readonly agentJobs: AgentJobRepository;
+};
+
+export class ClaimAgentJob {
+  async execute(input: { userId: string; jobId: string }): Promise<AgentJob> {
+    // 1. Прочитать job чтобы знать projectId — нужно для permissions
+    const job = await this.deps.agentJobs.findById(input.jobId);
+    if (!job) throw new AgentJobNotFoundError(input.jobId);
+
+    // 2. Проверить что юзер — editor+ на этом проекте.
+    // КРИТИЧНО: проверка на момент claim'а, не enqueue'а — юзер мог быть удалён
+    // из проекта пока job стояла в очереди.
+    const membership = await this.deps.members.findForProject(job.projectId, input.userId);
+    if (!membership) throw new ProjectNotFoundError(job.projectId);
+    if (!can(membership.role, 'delegate_task_to_agent')) {
+      throw new InsufficientProjectRoleError(membership.role, 'delegate_task_to_agent');
+    }
+
+    // 3. Атомарный claim
+    const claimed = await this.deps.agentJobs.claimById(input.jobId);
+    if (!claimed) {
+      // race condition — кто-то другой захватил между findById и claimById
+      throw new AgentJobAlreadyClaimedError(input.jobId);
+    }
+    return claimed;
+  }
+}
+```
+
+Нужен новый domain-error `AgentJobAlreadyClaimedError` (HTTP 409).
+
+### 3.4 CompleteAgentJob
+
+```ts
+type Deps = {
+  readonly members: ProjectMemberRepository;
+  readonly agentJobs: AgentJobRepository;
+};
+
+export type CompleteAgentJobInput = {
+  readonly userId: string;
+  readonly jobId: string;
+  readonly ok: boolean;
+  readonly prUrl: string | null;
+  readonly error: string | null;
+  readonly branchName: string | null;
+};
+
+export class CompleteAgentJob {
+  async execute(input: CompleteAgentJobInput): Promise<void> {
+    const job = await this.deps.agentJobs.findById(input.jobId);
+    if (!job) throw new AgentJobNotFoundError(input.jobId);
+
+    const membership = await this.deps.members.findForProject(job.projectId, input.userId);
+    if (!membership) throw new ProjectNotFoundError(job.projectId);
+    if (!can(membership.role, 'delegate_task_to_agent')) {
+      throw new InsufficientProjectRoleError(membership.role, 'delegate_task_to_agent');
+    }
+
+    if (job.status !== 'running') {
+      throw new AgentJobNotInRunningStateError(input.jobId, job.status);
+    }
+
+    await this.deps.agentJobs.complete(input.jobId, {
+      status: input.ok ? 'succeeded' : 'failed',
+      error: input.error,
+      prUrl: input.prUrl,
+      branchName: input.branchName,
+    });
+  }
+}
+```
+
+Новый domain-error `AgentJobNotInRunningStateError` (HTTP 409).
+
+### 3.5 DrizzleAgentJobRepository: реализация новых методов
+
+```ts
+async listPendingForUser(userId: string, limit: number): Promise<AgentJob[]> {
+  // JOIN agent_jobs ↔ project_members WHERE pm.user_id=? AND aj.status='queued'
+  // ORDER BY aj.created_at ASC LIMIT ?
+  // Чтобы избежать N+1 в use-case'е — возвращаем сразу с project/task контекстом
+  // через JOIN. Возвращаемый тип нужно расширить либо отдельным типом
+  // PendingAgentJobRow с дополнительными полями.
+}
+
+async claimById(jobId: string): Promise<AgentJob | null> {
+  const result = await this.db
+    .update(agentJobs)
+    .set({ status: 'running', startedAt: sql`CURRENT_TIMESTAMP`, claimedAt: sql`CURRENT_TIMESTAMP` })
+    .where(and(eq(agentJobs.id, jobId), eq(agentJobs.status, 'queued')));
+  // affectedRows проверка зависит от Drizzle/mysql2 driver:
+  // если rows[0].affectedRows === 0 — не сделали claim
+  if ((result as any).rowsAffected === 0) return null;
+  return this.findById(jobId);
+}
+```
+
+Drizzle для MySQL возвращает `[rowsAffected, ...]` или `[ResultSetHeader]` в зависимости от версии — нужно проверить шаблон, который уже используется в репо.
 
 ---
 
-## 4. Runner-процесс
+## 4. Agent execution model (/loop)
 
-### 4.1 Структура
+### 4.1 Где запускается
+
+**На локальной машине юзера**, не на сервере. Юзер открывает Claude Code (desktop app или CLI) в директории своего проекта-консумента (или специальной директории-агрегатора, см. ниже), запускает:
 
 ```
-server/src/runner/
-  index.ts             — entry point (process.argv === 'runner')
-  loop.ts              — main loop: claim → exec → complete
-  exec.ts              — single-job executor (worktree + claude + push + PR)
-  signalServer.ts      — мини HTTP listener на 127.0.0.1, /wake endpoint
-  cancellation.ts      — registry inflight jobs → process refs (для SIGTERM)
-  prompt.ts            — system-prompt builder (читает task + проект-контекст)
-  logs.ts              — append-only лог-файлы в /var/log/projectsflow-runner/
+/loop 10m /check-agent-queue
 ```
 
-Entry point — отдельный bin внутри `server/`:
+`/loop` — superpowers skill, повторяет указанную команду каждые 10 минут.
+`/check-agent-queue` — кастомный slash-command, описанный ниже.
 
-```jsonc
-// server/package.json
-{
-  "scripts": {
-    "dev:server": "tsx watch src/index.ts",
-    "dev:runner": "tsx watch src/runner/index.ts",
-    ...
-  },
-  "bin": {
-    "projectsflow-server": "dist/index.js",
-    "projectsflow-runner": "dist/runner/index.js"
-  }
-}
+Сессия живёт пока открыт терминал. Закрытие = pause. Перезапуск возвращает с того же места — состояние сохраняется в `agent_jobs` БД.
+
+### 4.2 Где живёт код, который агент трогает
+
+Два варианта setup:
+
+**A) «Один репо на сессию»** — юзер сидит в `c:\www\ProjectsFlow\` и /loop работает только над job'ами этого репо. Простой, но не масштабируется на multi-project.
+
+**B) «Workspace-агрегатор»** — отдельная директория `~/agent-workspace/` содержит clone'ы всех репо, к которым может прикасаться агент:
 ```
-
-В `ecosystem.config.cjs` — два процесса: `projectsflow-api` и `projectsflow-runner`. Оба читают тот же `.env` (`--env-file=.env`).
-
-### 4.2 Main loop (упрощённо)
-
-```ts
-async function mainLoop() {
-  const runnerPid = process.pid;
-  signalServer.start({ onWake: () => loopTick.fire() });
-
-  while (!shuttingDown) {
-    await loopTick.waitOrTimeout(POLL_INTERVAL_MS); // 5s default + immediate on /wake
-
-    const job = await container.claimNextAgentJob.execute(runnerPid);
-    if (!job) continue;
-
-    // Fire-and-forget — параллельные job'ы пока global cap позволяет.
-    runJobInBackground(job).catch(logErr);
-  }
-
-  await waitForInflightJobs();
-}
+~/agent-workspace/
+  ProjectsFlow/        ← git clone https://github.com/djdes/ProjectsFlow
+  OrdersFlow/
+  Scanflow/
+  ...
 ```
+/loop запускается из `~/agent-workspace/`. Slash-command делает `cd <repoSlug>` исходя из `gitRepoUrl` job'ы. Масштабируется.
 
-### 4.3 Single-job executor (псевдокод)
+В v1 предпочитаем (B). Юзер заранее клонирует репо в `~/agent-workspace/`. Slash-command документирует это требование.
 
-```ts
-async function executeJob(job: AgentJob) {
-  const ctx = await prepareWorktree(job);            // git worktree add + branch
-  try {
-    await markStarted(job.id);
-    const exitCode = await runClaude(ctx, job);      // spawn claude -p ... with timeout
-    if (exitCode !== 0) throw new Error('Claude exited non-zero');
+### 4.3 check-agent-queue slash-command
 
-    const hasCommits = await hasCommitsAgainstMain(ctx.worktreePath, ctx.branch);
-    if (!hasCommits) throw new Error('No changes produced');
+Файл `~/.claude/commands/check-agent-queue.md` (или per-project) — markdown с инструкциями. Полный текст в [§ 9: Установка](#9-установка-локально-claude-code--workspace).
 
-    await gitPush(ctx);
-    const prUrl = await ghCreatePr(ctx, job);
-    await complete(job.id, { ok: true, prUrl, branchName: ctx.branch });
-  } catch (e) {
-    await complete(job.id, { ok: false, error: e.message, branchName: ctx.branch });
-  } finally {
-    await cleanupWorktree(ctx);
-  }
-}
-```
+Высокоуровневая структура:
+1. Полл pending jobs через MCP.
+2. Если пусто — exit без действий, не тратить tool-calls.
+3. Иначе — claim первой, прочитать task, реализовать в worktree, push, PR, complete.
+4. Между шагами — leave progress comments через `pf_create_task_comment` (ritual из CLAUDE.md).
 
-`runClaude` — `spawn('claude', ['-p', prompt, '--permission-mode', 'acceptEdits', '--output-format', 'stream-json'])`, со stdin закрытым, stdout/stderr → лог-файл, timeout через `AbortController`.
+### 4.4 Concurrency и race conditions
 
-### 4.4 Промпт
+**В рамках одной /loop-сессии:** последовательно — Claude обрабатывает один thread за раз, /loop ждёт его завершения перед следующим тиком.
 
-Билдер в `prompt.ts`:
+**Между двумя сессиями (юзер на ноуте + на десктопе):** атомарный `pf_claim_agent_job` через SQL `UPDATE WHERE status='queued'` защищает от двойного pickup'а. Один из двух получит 409, нормально пропустит.
 
-```ts
-export function buildAgentPrompt(input: { project: Project; task: Task; repoUrl: string }): string {
-  return `Ты автономный coding-агент. Тебе отдали задачу из ProjectsFlow.
+**Cancel в процессе работы:** юзер может перетащить кнопку «Отменить» в UI на job со status='running'. UI вызывает existing `CancelAgentJob` use-case → `agent_jobs.status='cancelled'`. Агент в /loop об этом узнает только если **сам периодически проверяет** через MCP (т.е. при следующем `pf_get_task` или явно через `pf_get_agent_job` если такой добавим). В v1 — **не митигируем**: агент может закончить работу и попытаться вызвать `pf_complete_agent_job`, который вернёт 409 (status не running). Агент должен это обработать как «cancelled — отбрасываем PR, чистим worktree».
 
-ПРОЕКТ: ${input.project.name}
-REPO: ${input.repoUrl}
-TASK ID: ${input.task.id}
+### 4.5 Promise/timeouts
 
-ОПИСАНИЕ ЗАДАЧИ:
-${input.task.description ?? '(пусто)'}
+Нет отдельного timeout на job — `/loop` сам ограничивает разумной паузой между тиками. Если задача затянулась на 30+ минут — это просто долгий ход внутри одной /loop-итерации, следующий тик не запустится пока этот не завершится.
 
-ИНСТРУКЦИИ:
-1. Прочитай задачу. Если она требует уточнения, которое нельзя получить из кода — заверши работу
-   без коммитов: "Cannot proceed without clarification: ...".
-2. Изучи репо. Используй MCP tool pf_get_task если у задачи attachmentCount > 0.
-3. Сделай минимально достаточные изменения. Никакого scope creep.
-4. Закоммить с осмысленным сообщением.
-5. НЕ пушь и НЕ открывай PR — runner сделает это сам после твоего выхода.
-
-ПРАВИЛА:
-- CLAUDE.md в репо — обязательно к прочтению. Следуй ему.
-- Не трогай файлы вне scope задачи.
-- Если есть тесты — запусти их перед коммитом. Не падают → коммить. Падают → не коммить, опиши проблему в задаче через pf_create_task (новая задача-followup).
-- Без --no-verify, без скрытия проблем.
-
-Когда закончишь — просто выйди (Ctrl-D / завершить турн без вопросов).`;
-}
-```
-
-`acceptEdits` permission-mode позволяет Claude'у Edit/Write без подтверждения, но НЕ позволяет destructive Bash — это намеренно. Push и PR делает не Claude, а runner.
-
-### 4.5 Cancellation
-
-`CancelAgentJob` use-case:
-- `status=queued` → просто `UPDATE ... SET status='cancelled'`. Runner проверит при claim'е и пропустит.
-- `status=running` → POST `/cancel/:job_id` на signalServer. signalServer находит inflight-process по job_id в registry, шлёт `SIGTERM`, ждёт до 10s graceful exit, потом `SIGKILL`. После — обычный `complete(id, { ok: false, error: 'cancelled by user' })`.
-
-Branch и worktree чистятся всегда в `finally`, push/PR не происходят если процесс убит до `gitPush`.
+Если хочется hard-cap на one-shot — slash-command может включать инструкцию «если не завершил за N минут — оставь comment и сдай как failed».
 
 ---
 
 ## 5. HTTP endpoints
 
-### 5.1 Внутренний agent-routes
+### 5.1 Существующие (из Plan A, под session-cookie)
 
-`server/src/presentation/agent-jobs/routes.ts`:
+POST   /api/projects/:projectId/tasks/:taskId/agent        — enqueue job
+DELETE /api/projects/:projectId/agent-jobs/:jobId          — cancel job
+GET    /api/projects/:projectId/agent-jobs                 — list project jobs
+GET    /api/projects/:projectId/tasks                       — теперь включает inline agentJob
+
+### 5.2 Новые (Plan B v2, под `requireAgentToken`)
 
 ```
-POST   /api/projects/:projectId/tasks/:taskId/agent      — enqueue job
-DELETE /api/projects/:projectId/agent-jobs/:jobId        — cancel job
-GET    /api/projects/:projectId/agent-jobs               — list (для UI)
-GET    /api/projects/:projectId/agent-jobs/:jobId        — детали + tail лога
-GET    /api/projects/:projectId/agent-jobs/:jobId/log    — full log (text/plain stream)
+GET    /api/agent/pending-agent-jobs?limit=10
+POST   /api/agent/agent-jobs/:jobId/claim
+POST   /api/agent/agent-jobs/:jobId/complete
 ```
 
-Все требуют session-cookie (existing `requireSession` middleware) + permissions check через `can(role, 'delegate_task_to_agent')`.
+`requireAgentToken` middleware устанавливает `req.user` из owner'а агент-токена. Все три endpoint'а используют его для permissions.
 
-Endpoint `/log` — последний tail из файла, для UI «открыть лог».
-
-### 5.2 Расширение `/api/projects/:id/tasks`
-
-Существующий endpoint начинает возвращать вложенный `agentJob` для задач с активной job'ой:
-
+**GET pending-agent-jobs:**
 ```jsonc
 {
-  "tasks": [
+  "jobs": [
     {
-      "id": "...",
-      "status": "todo",
-      "delegatedToAgent": true,
-      "agentJob": {
-        "id": "...",
-        "status": "running",
-        "prUrl": null,
-        "startedAt": "2026-05-21T10:00:00Z"
-      },
-      ...
+      "id": "uuid",
+      "projectId": "uuid",
+      "projectName": "ProjectsFlow",
+      "gitRepoUrl": "https://github.com/djdes/ProjectsFlow",
+      "taskId": "uuid",
+      "taskDescription": "...",
+      "createdAt": "2026-05-21T10:00:00Z"
     }
   ]
 }
 ```
 
-UI смотрит на наличие `agentJob` + его `status`, не на `delegatedToAgent` (флаг sticky, см. секцию 2.2).
+**POST claim:** 200 + `{job: AgentJobDto}` или 409 `{error: "agent_job_already_claimed", message: "..."}`.
+
+**POST complete:** body `{ok, prUrl?, error?, branchName?}` → 204 No Content. 409 если job не в running.
 
 ---
 
 ## 6. UI
 
-### 6.1 KanbanCard
+UI **не меняется** в Plan B v2 относительно Plan A. Badge показывает статусы из `agent_jobs.status` — тот же flow. PR-ссылка появляется когда агент вызвал `pf_complete_agent_job(ok=true, prUrl)`. Comments thread виден когда юзер открывает карточку (если есть TaskDialog с comment list).
 
-Новый dropdown-menu item «🤖 Отдать агенту» — только для:
-- `status === 'todo'`,
-- `agentJob` отсутствует или его `status` ∈ `succeeded`/`failed`/`cancelled`,
-- `can(currentRole, 'delegate_task_to_agent')`.
-
-Клик → POST на enqueue endpoint → onSuccess запускает polling tasks-листа (через `useTasks` invalidate).
-
-### 6.2 Badge на карточке при активной job
-
-Под description-текстом карточки:
-
-| `agentJob.status` | Бейдж | Действия |
-|---|---|---|
-| `queued` | «🤖 В очереди» (серый) | «Отменить» |
-| `running` | «🤖 Работает 12m» (синий, с тикающим таймером) | «Лог», «Отменить» |
-| `succeeded` | «🤖 PR #42» (зелёный, ссылка на pr_url) | «Лог» |
-| `failed` | «🤖 Ошибка» (красный, hover → tooltip с error) | «Лог», «Повторить» |
-| `cancelled` | «🤖 Отменено» (серый) | «Лог» |
-
-«Повторить» = новая job на ту же task. Бейдж `succeeded`/`failed` остаётся видимым до перехода задачи в `done` или ручного reset'а.
-
-### 6.3 Polling
-
-`useTasks` уже опрашивает endpoint при изменениях. Добавляем `setInterval(refetch, 5000)` если есть активные job'ы (`queued`/`running`) — иначе не опрашиваем. Раз есть активная — каждые 5s до её ухода в терминальный статус.
-
-### 6.4 Лог-просмотрщик
-
-Простой модал «Лог агента». Внутри `<pre>` с содержимым `/log` endpoint'а. Если job ещё `running` — добавляем `setInterval(refetch, 3000)`. Без подсветки, без парсинга stream-json — просто текст.
+Опционально (можно отложить): подсказка в UI «есть N pending agent-job'ов, запусти /loop в Claude Code чтобы они начали исполняться». Не блокирующая, просто nudge. Out of scope v1.
 
 ---
 
 ## 7. Конфигурация
 
-Новые env-переменные:
+**На сервере:** ничего нового. RUNNER_ENABLED и RUNNER_SIGNAL_URL из Plan A — **удаляем** (или оставляем как dead config — они ничего не делают). Daemon-based env-vars `RUNNER_GLOBAL_CAP`, `RUNNER_JOB_TIMEOUT_MS`, `CLAUDE_BIN`, `ANTHROPIC_API_KEY`, `GH_TOKEN`, `RUNNER_AGENT_TOKEN`, `RUNNER_WORKSPACE_DIR`, `RUNNER_LOG_DIR` — **не нужны на сервере** в этой архитектуре.
 
-| Переменная | Default | Назначение |
+**На локальной машине юзера** (где запускается /loop):
+
+| Что | Где | Зачем |
 |---|---|---|
-| `RUNNER_ENABLED` | `false` | Главный switch. На dev-машинах оставляем `false`, runner-процесс не стартует. |
-| `RUNNER_GLOBAL_CAP` | `2` | Сколько job'ов параллельно глобально. |
-| `RUNNER_POLL_INTERVAL_MS` | `5000` | Запасной poll-интервал на случай потерянного wake-сигнала. |
-| `RUNNER_SIGNAL_PORT` | `4318` | Порт мини-сигнал-сервера (localhost only). |
-| `RUNNER_JOB_TIMEOUT_MS` | `1800000` | 30 минут на одну job'у. |
-| `RUNNER_WORKSPACE_DIR` | `/var/www/projectsflow/agent-workspaces` | Где create'ятся worktree'и. |
-| `RUNNER_LOG_DIR` | `/var/log/projectsflow-runner` | Куда пишутся stdout/stderr Claude'а. |
-| `CLAUDE_BIN` | `claude` | Путь к Claude Code CLI. На сервере нужно установить отдельно (см. секцию 9). |
-| `GH_TOKEN` | — | GitHub PAT с правами `repo` для `gh pr create`. **REQUIRED** если `RUNNER_ENABLED=true`. |
-| `ANTHROPIC_API_KEY` | — | Для Claude headless. **REQUIRED** если `RUNNER_ENABLED=true`. |
-| `RUNNER_AGENT_TOKEN` | — | Существующий `pfat_…` agent-token для MCP. **REQUIRED**. |
+| MCP-token | `~/.config/projectsflow/agent.json` или ENV `PROJECTSFLOW_AGENT_TOKEN` | Аутентификация в наш бэкенд через MCP |
+| `gh` CLI auth | `gh auth login` (interactive, OAuth) | Создание PR через `gh pr create` |
+| Git auth | SSH key или `gh auth git-credential` | `git push` в GitHub |
+| Claude Code | взято с подпиской Pro/Max через `claude login` (OAuth) | API-кредиты для самой LLM |
+| Workspace | `~/agent-workspace/<repoSlug>/` с git clone каждого репо | Где агент делает изменения |
 
-В `.env.example` — все добавляем с пустыми значениями + комментариями.
+Юзер настраивает один раз — переживает рестарты компа.
 
 ---
 
@@ -467,43 +412,173 @@ UI смотрит на наличие `agentJob` + его `status`, не на `d
 
 ### Что может пойти не так
 
-1. **Агент пушит что-то ломающее в main.** Митигация: PR-only, никогда не push в `main` напрямую, PR создаётся в `--draft`-режиме, требуется ручной approval + merge.
-2. **Агент сжирает API-кредиты.** Митигация: timeout 30 мин на job, global cap = 2 параллельных, max ~120 job/день (если runner всегда занят).
-3. **Агент видит чужие проекты через MCP.** Митигация: `RUNNER_AGENT_TOKEN` принадлежит определённому юзеру. Если в `agent_jobs` лежит job на проект, к которому этот юзер не имеет доступа — нельзя его запускать. Бэкенд проверяет `can(role, 'read_project')` для `agent_jobs.created_by` на момент **claim'а**, не enqueue'а — потому что роли могут отозвать пока job в очереди.
-4. **Worktree-leak.** Митигация: cleanup в `finally`, плюс startup-задача runner'а: `git worktree prune` + `rm -rf` для всех старых workspaces.
-5. **Утечка секретов в логи.** Митигация: лог-файлы только локально, не в БД (БД хранит tail только при `failed`, max 4KB, проходит через redact-функцию по списку patterns: `pfat_*`, `gh*`, `sk-*`).
-6. **DoS через webhook.** Митигация: enqueue endpoint требует session-cookie + editor-role; rate-limit (existing middleware) 60 req/min/user.
+1. **Агент пушит что-то ломающее в `main`.** Митигация: slash-command инструктирует создавать только feature-branch и `gh pr create --draft`. PR требует ручного approval+merge. Никаких force-push.
+2. **Агент захватывает чужой PR / трогает чужие branch'и.** Митигация: slash-command всегда делает `git switch -c agent/<short-job-id>-<slug>` — уникальный branch на каждую job. Не трогает существующие.
+3. **Агент читает credentials из репо.** Митигация: репо не должен содержать секреты в plaintext (общее правило). Vault через MCP `pf_get_credential` — даёт plaintext, но только под Bearer-token того юзера который запустил /loop. Это **очень мощный токен** — кто получил MCP-token, получил доступ к vault.
+4. **MCP-token compromise.** Митигация: revoke в UI «Доступ для агентов». После revoke /loop падает с 401 на следующем тике, юзер видит ошибку.
+5. **Кто-то перехватил `gh` или GitHub SSH.** Митигация: стандартная — 2FA, hardware key. Не специфично для агента.
+6. **Агент-runaway: thread всё растёт, не завершается.** Митигация: подписка Pro/Max имеет rate-limit (5h cap на messages). Если /loop забивает rate — следующие тики просто не отработают, юзер увидит "rate limited" в Claude Code.
 
 ### Что НЕ митигируем в v1
 
-- **Агент-runaway**: Claude уходит в бесконечный цикл и зачем-то отправляет 50 запросов в минуту. Митигация частичная — timeout 30 мин. Жёсткий cap по токенам — отдельная спека (cost-tracking).
-- **GitHub API rate-limit**: при 2 параллельных агентах + 10 job/час это нерелевантно. Если упрёмся — увидим в логах, добавим backoff.
-- **Compromised agent-token**: revoke в UI, как для любого agent-token'а.
+- **Multi-user agent identity.** Все коммиты от identity того юзера, чей MCP-токен в /loop. Per-user runner — отдельная спека.
+- **Cost-cap.** Подписка фикс-плата, runaway не приведёт к биллинг-сюрпризу — только rate-limit'ы.
+- **Compromised local machine.** Если кто-то получил доступ к компу юзера — у них есть всё: SSH-keys, gh-credentials, MCP-token, открытая Claude Code сессия. Это не специфично для агента.
+- **Запуск /loop на чужой машине через RDP/SSH.** Если юзеру нужно — пусть запускает.
+
+### Кардинальная разница vs daemon-вариант (rejected)
+
+Daemon выполнял `claude -p` от системного юзера на VPS, что означало:
+- API key Anthropic в env-vars на сервере — реальный billing-аккаунт.
+- `GH_TOKEN` на сервере — PAT с правами repo.
+- Сервер компрометируется = всё это утекает.
+
+/loop же:
+- Использует **подписку юзера** (OAuth credentials в `~/.claude/`).
+- Использует **локальный `gh` auth** юзера.
+- Использует **локальный SSH** юзера.
+- Сервер ProjectsFlow знает только сам MCP-token (один из многих у юзера).
+
+То есть blast radius **на порядок меньше** — сервер не имеет ни Claude credentials, ни GitHub PAT, только координационную метаданные.
 
 ---
 
-## 9. Установка Claude CLI на сервере
+## 9. Установка (локально: Claude Code + workspace)
 
-Headless `claude` нужно установить отдельно от npm-зависимостей проекта (это desktop-приложение Anthropic):
+### 9.1 Pre-requisites
 
-```bash
-# на сервере, от юзера projectsflow
-curl -fsSL https://claude.ai/install.sh | sh
-# либо npm-вариант, если доступен
-npm install -g @anthropic-ai/claude-code
-claude --version  # проверить
-claude config set apiKey "$ANTHROPIC_API_KEY"  # авторизация через env-var
-```
+- Claude Code CLI или desktop app, залогинен через `claude login` (Pro/Max).
+- `gh` CLI, залогинен через `gh auth login`.
+- Git, SSH key в GitHub.
+- MCP-token ProjectsFlow в `~/.config/projectsflow/agent.json` (через `npx -y @projectsflow/mcp-server setup`) или env-vars.
 
-MCP `@projectsflow/mcp-server` устанавливается в global Claude config один раз:
+### 9.2 Workspace setup
 
 ```bash
-claude mcp add --scope user projectsflow -- npx -y @projectsflow/mcp-server@latest
+mkdir -p ~/agent-workspace && cd ~/agent-workspace
+gh repo clone djdes/ProjectsFlow
+gh repo clone djdes/OrdersFlow
+# ... все репо к которым может прикасаться агент
 ```
 
-Token MCP'а — это `RUNNER_AGENT_TOKEN`. Он лежит в `~/.config/projectsflow/agent.json` (см. `mcp-server/src/config.ts`).
+В каждом clone'е сделать `git config user.email "agent@<твой_email>"` и `git config user.name "<твоё имя> (agent)"` — чтобы коммиты от агента визуально отличались. Опционально.
 
-Этот шаг **не делает npm run deploy**. Отдельный документ в [docs/ONBOARDING.md](docs/ONBOARDING.md) — раздел «Установка runner'а» (создать в рамках реализации).
+### 9.3 Slash-command
+
+Создать `~/.claude/commands/check-agent-queue.md` со следующим содержимым:
+
+```markdown
+---
+description: Polls ProjectsFlow agent queue and executes one pending job
+---
+
+Ты — agent runner. Каждый раз когда я тебя зову, делай:
+
+## 1. Опрос
+
+Вызови `pf_list_pending_agent_jobs(limit=10)`.
+
+Если массив пустой — выходи сразу с одной строкой ответа:
+> Нет pending agent-job'ов. Жду следующего тика.
+
+НЕ делай больше никаких tool-calls, не пиши размышления — это пустой тик, не тратим budget.
+
+## 2. Pick & claim
+
+Если в массиве 1+ job'ов — возьми ПЕРВУЮ (она самая старая). Запиши `jobId`, `projectId`, `projectName`, `gitRepoUrl`, `taskId`, `taskDescription`.
+
+Вызови `pf_claim_agent_job(jobId)`.
+
+- Если вернулось 409 / "already claimed" — другая сессия захватила. Выходи с сообщением:
+  > Job <id> already claimed by another session. Skipping.
+
+- Если 200 — продолжай.
+
+Сразу же вызови `pf_create_task_comment(projectId, taskId, "🤖 Беру в работу. План: …")` с кратким планом подхода (1-3 строки).
+
+## 3. Read full context
+
+Вызови `pf_get_task(projectId, taskId)`. Прочитай:
+- `task.description` — что нужно сделать.
+- `attachments` — скриншоты/файлы. Картинки сразу видишь как image-блоки.
+- `comments` — прошлые обсуждения. Если в последних комментах юзер уточнял scope — учти.
+
+Если задача **неоднозначна** или требует решения которое нельзя принять самостоятельно:
+1. `pf_create_task_comment(projectId, taskId, "Не могу продолжить: <конкретный вопрос>. @<userDisplayName>")` — упомяни автора задачи, придёт notification.
+2. `pf_complete_agent_job(jobId, ok=false, error="needs clarification: <question>")`.
+3. Выйди.
+
+## 4. Implement
+
+Определи slug репозитория из `gitRepoUrl` (последний segment URL).
+
+```bash
+cd ~/agent-workspace/<repoSlug>
+git fetch origin
+git switch main && git pull --ff-only origin main
+git switch -c agent/<jobId-первые-8>-<slugify(description первые 40 chars)>
+```
+
+Прочитай `CLAUDE.md` в репо — обязательно. Следуй его правилам.
+
+Реализуй задачу:
+- Минимально достаточные изменения. Никакого scope creep.
+- Если есть тесты — запусти. Падают → не коммить, идём в Section 6 как failure.
+- Commit с осмысленным сообщением. Формат: `<type>(<scope>): <subject>` если репо так коммитит.
+
+## 5. Push & PR
+
+```bash
+git push origin <branch>
+gh pr create --draft \
+  --title "<task description первые ~60 chars>" \
+  --body "Closes agent job <jobId>.
+
+<task.description>
+
+Agent commit summary:
+- <bullet 1>
+- <bullet 2>"
+```
+
+Сохрани `prUrl` из stdout `gh pr create`.
+
+Вызови `pf_create_task_comment(projectId, taskId, "PR #<N> открыт: <prUrl>")`.
+
+Вызови `pf_complete_agent_job(jobId, ok=true, prUrl=<url>, branchName=<branch>)`.
+
+Выйди с сообщением:
+> ✅ Job <jobId> done. PR: <url>
+
+## 6. Failure path
+
+Если на любом шаге (4 или 5) что-то падает — commit failed, push failed, gh pr create failed:
+
+1. Постарайся понять причину из ошибки.
+2. Если можно retry в этом же thread'е — попробуй один раз.
+3. Если нет — откати: `git switch main && git branch -D agent/<branch>`.
+4. `pf_create_task_comment(projectId, taskId, "🤖 Не получилось: <одно-два предложения о причине>")`.
+5. `pf_complete_agent_job(jobId, ok=false, error="<message>", branchName=<branch_если_был>)`.
+6. Выйди.
+
+## Правила (повторно)
+
+- Один /loop-тик = одна job (или пустой тик).
+- НЕ трогай чужие branch'и или main directly.
+- НЕ force-push.
+- НЕ запускай агента на репо без CLAUDE.md или без описания задачи.
+- Comments на task — кратко, по делу.
+```
+
+### 9.4 Запуск
+
+```
+cd ~/agent-workspace
+claude
+> /loop 10m /check-agent-queue
+```
+
+`10m` — интервал между тиками. Меньше — частые проверки, больше burn rate подписки. Больше — медленнее реакция. **10–15 минут — sweet spot.**
 
 ---
 
@@ -511,40 +586,62 @@ Token MCP'а — это `RUNNER_AGENT_TOKEN`. Он лежит в `~/.config/proj
 
 Решить до выхода в P1:
 
-1. **Cancel-flow для PR**: если юзер отменяет job, который уже создал PR — надо ли закрывать PR через `gh pr close`? **Предложение**: да, закрываем + удаляем branch. Хочется чистоты.
-2. **Re-queue после failed**: пока ручной retry через UI. Достаточно? **Предложение**: да, в v1 без auto-retry.
-3. **Worktree-storage size**: каждый worktree — это копия репо, ~50-500MB. При 10 параллельных = 5GB. На VPS 40GB диска это ок? **Нужно проверить**: `df -h /var/www`. Если узко — лимит на cleanup-aggressive (`git worktree remove --force` сразу после job'а, не lazy).
-4. **Лог-ротация**: `/var/log/projectsflow-runner/*.log` будет копиться. **Предложение**: cron-задача `find ... -mtime +30 -delete` раз в сутки. Не в spec, добавляем в onboarding.
-5. **Concurrency двух runner-процессов**: если случайно запустим два runner'а (через PM2 `instances: 2`) — `SELECT FOR UPDATE SKIP LOCKED` спасёт от двойного claim'а, но `runner_pid` будет от одного из них. Cancel может промахнуться. **Решение**: явно прописать в PM2-конфиге `instances: 1`, exec_mode `fork`, не cluster.
-6. **Что если задача не имеет описания (`description IS NULL`)?** **Предложение**: enqueue endpoint отвечает 400 «нечего отдавать агенту, добавьте описание». В UI — кнопка disabled с tooltip'ом.
+1. **Workspace location.** Где юзеру держать `~/agent-workspace/`? Зависит от OS и привычек. **Предложение:** `$HOME/agent-workspace/` (или `%USERPROFILE%\agent-workspace\` на Windows). Документируем как convention.
+
+2. **Идентификация репо.** `gitRepoUrl` от `pf_list_pending_agent_jobs` приходит как полный URL. Slugify (например по last segment URL) на стороне slash-command'а или на стороне сервера? **Предложение:** на сервере — добавить поле `repoSlug` в DTO, чтобы slash-command'у не парсить URL.
+
+3. **`agent_jobs.runner_pid` field.** В /loop-архитектуре нет PID процесса (хотя у Claude Code есть PID, но он не нужен для cancel). **Предложение:** оставить колонку NULL для всех новых job'ов. Не удаляем — может вернёмся к daemon позже. Дополнительная миграция не нужна.
+
+4. **Re-queue после failed.** Юзер видит «Ошибка» badge с error message. Хочется ли кнопку «Повторить» в UI? **Предложение:** v1 — без auto-retry. Юзер вручную: кликает кнопку «Отдать агенту» ещё раз → создаётся новая job.
+
+5. **`/loop` rate против подписки.** Pro даёт ~45 msgs / 5h при средней нагрузке. `/loop 10m` = 30 тиков / 5h. Если каждый тик что-то делает (не «nothing to do») — каждый сжигает несколько msg-budget'ов. **Предложение:** в slash-command'е agressive «nothing to do» exit — выход после одного tool-call'а если queue пустая. Это снижает burn rate до 1 msg/тик в idle.
+
+6. **Concurrent /loop sessions (юзер на двух машинах).** Атомарный `claimById` решает race на стороне БД, но обе сессии будут polling'ить. **Предложение:** не митигируем — pure нагрузка на бэк (GET pending-agent-jobs) тривиальна.
+
+7. **Что если юзер удалил MCP-token пока агент работает?** Следующий MCP-call (например `pf_complete_agent_job`) вернёт 401. Агент должен это поймать и просто завершить thread с ошибкой. PR останется висеть на GitHub в draft — юзер закроет руками. **Предложение:** документируем как expected behavior.
 
 ---
 
 ## 11. Что ломается / migration impact
 
-- **API contract**: `/api/projects/:id/tasks` начинает возвращать дополнительное поле `agentJob` на task'ах. Существующие клиенты игнорируют unknown fields — не ломается.
-- **Drizzle schema**: добавляются 2 таблицы + 1 колонка. Drift-checker должен сразу подцепить.
-- **Permissions**: новые actions в `permissions.ts`. Полный TS-checking покажет если где-то забыли — TS-енам строгий.
-- **MCP-сервер**: **не меняется**. Runner использует те же `pf_*` tool'ы что и человек из Claude Code.
-- **Deploy**: новый PM2-процесс. `ecosystem.config.cjs` обновится. **Первый деплой после Spec — на проде**: `RUNNER_ENABLED=false`, всё работает как раньше, выкатываем миграции + код, потом отдельно опускаем env-flag в `true`.
+- **Никаких новых миграций в Plan B v2.** Все изменения — на коде + новые MCP-tool'ы.
+- **API contract:** новые endpoints под `/api/agent/*` — это **расширение** существующего agent-router'а, никакого breaking change.
+- **MCP-server major bump:** **0.6.0 → 0.7.0** (новые tools `pf_list_pending_agent_jobs`, `pf_claim_agent_job`, `pf_complete_agent_job`). Семантически это minor (additive), но удобно поднять как 0.7.0 для маркировки этапа.
+- **Plan A code:** `claimNext(globalCap, runnerPid)` stub в `DrizzleAgentJobRepository` и `AgentJobRepository` port — **удаляется**. В тех версиях Plan A где это `// TODO Plan B` — заменяется на новые методы `listPendingForUser` + `claimById`. Тесты Plan A не падают (там этот метод был stub'ом с null).
+- **Permissions:** существующие actions `delegate_task_to_agent` и `cancel_agent_job` переиспользуются. Никаких новых.
+- **Deploy:** новые endpoints + новые use-cases добавляются обычным `npm run deploy` (или GH Actions). Никаких новых PM2-процессов. Никакого RUNNER_ENABLED — этот env-var **удаляется** из `.env.example` (был добавлен в Plan A).
 
 ---
 
 ## 12. Чеклист P1 (минимальный e2e)
 
-Что должно работать после первой реализации, прежде чем выкатывать на прод:
+Что должно работать после Plan B v2:
 
-- [ ] Миграции 014 + 015 применяются на чистой БД без ошибок.
-- [ ] Кнопка «Отдать агенту» в UI создаёт `agent_jobs(status='queued')`.
-- [ ] Cancel queued-job переводит в `cancelled`, агент не подхватывает.
-- [ ] Запущенный runner-процесс (с `RUNNER_ENABLED=true`) клеймит queued-job в течение 5s.
-- [ ] Claude отрабатывает на простой задаче («измени README.md, добавь строку») → PR создаётся.
-- [ ] Job в БД переходит в `succeeded`, `pr_url` заполнен, UI показывает зелёный бейдж.
-- [ ] Cancel running-job убивает Claude-процесс, worktree удаляется, job → `cancelled`.
-- [ ] Job, превысивший timeout, переходит в `failed` с `error='timeout'`.
-- [ ] Permission-check: не-member проекта не может enqueue'ить job (403).
-- [ ] Permission-check: viewer не может enqueue'ить job (403).
-- [ ] Two concurrent jobs в разных проектах исполняются параллельно. Два в одном — последовательно.
-- [ ] Global cap = 1 → второй job ждёт первого.
+**Backend:**
+- [ ] Новые use-cases (`ListPendingAgentJobs`, `ClaimAgentJob`, `CompleteAgentJob`) компилируются.
+- [ ] `AgentJobRepository.claimById` атомарен — конкурентный claim'ит ровно один из двух запросов.
+- [ ] 3 новых endpoint'а отвечают корректно: GET pending → 200 list, POST claim → 200 или 409, POST complete → 204 или 409.
+- [ ] Permissions: agent-token не-member'а проекта получает 403 при claim/complete.
+- [ ] `RUNNER_ENABLED` и связанная dead config удалены из `.env.example` и `config.ts`.
 
-Только после прохождения чеклиста — деплой и `RUNNER_ENABLED=true` на проде.
+**MCP server (`@projectsflow/mcp-server` 0.7.0):**
+- [ ] 3 новых tool'а описаны в TOOLS массиве с правильным JSON-Schema.
+- [ ] Handler'ы парсят входные параметры через zod, дёргают `api.*` методы.
+- [ ] `api.ts` имеет соответствующие методы (listPendingAgentJobs, claimAgentJob, completeAgentJob).
+- [ ] `npm publish` опубликовал 0.7.0 в npm registry.
+
+**Slash-command:**
+- [ ] Файл `~/.claude/commands/check-agent-queue.md` собран (полная версия из § 9.3).
+- [ ] При запуске `/check-agent-queue` без pending — Claude выходит коротким сообщением.
+
+**E2E:**
+- [ ] Юзер создаёт задачу с описанием, жмёт «Отдать агенту» в UI — `agent_jobs` row появилась со status='queued'.
+- [ ] В отдельном терминале `/loop 10m /check-agent-queue` подхватывает её в течение 10 минут.
+- [ ] Claim атомарный — pf_claim_agent_job возвращает 409 при повторном вызове на ту же job.
+- [ ] Агент пишет comment «беру в работу» на task.
+- [ ] Агент работает в `~/agent-workspace/<repoSlug>/`, создаёт feature-branch, коммитит, push'ит, открывает draft-PR.
+- [ ] pf_complete_agent_job обновляет status='succeeded' с pr_url.
+- [ ] UI badge меняется с «В очереди» → «Работает» → «PR #N (зелёный)».
+- [ ] При cancel'е через UI на running-job — на следующем complete'е получаем 409, агент чисто завершается (откатывает worktree).
+
+Только после прохождения чеклиста — публикуем 0.7.0 на npm и пишем апдейт в `docs/ONBOARDING.md` про настройку локального workspace.
