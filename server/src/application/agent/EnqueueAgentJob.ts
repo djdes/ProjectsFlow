@@ -20,15 +20,15 @@ export type EnqueueAgentJobInput = {
   taskId: string;
 };
 
+type Deps = {
+  readonly members: ProjectMemberRepository;
+  readonly tasks: TaskRepository;
+  readonly agentJobs: AgentJobRepository;
+  readonly signal: AgentRunnerSignal;
+};
+
 export class EnqueueAgentJob {
-  constructor(
-    private readonly deps: {
-      members: ProjectMemberRepository;
-      tasks: TaskRepository;
-      agentJobs: AgentJobRepository;
-      signal: AgentRunnerSignal;
-    },
-  ) {}
+  constructor(private readonly deps: Deps) {}
 
   async execute(input: EnqueueAgentJobInput): Promise<AgentJob> {
     // 1. Permissions
@@ -51,9 +51,8 @@ export class EnqueueAgentJob {
     const existing = await this.deps.agentJobs.findActiveByTaskId(input.taskId);
     if (existing) throw new TaskAlreadyHasActiveAgentJobError(input.taskId);
 
-    // 4. Create job + sticky flag
-    await this.deps.tasks.setDelegatedToAgent(input.taskId, true);
-    const job = await this.deps.agentJobs.create({
+    // 4. Атомарно создаём job и ставим sticky-флаг delegated_to_agent
+    const job = await this.deps.agentJobs.createForDelegation({
       projectId: input.projectId,
       taskId: input.taskId,
       createdBy: input.userId,
