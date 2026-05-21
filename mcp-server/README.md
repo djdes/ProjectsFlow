@@ -65,6 +65,9 @@ claude mcp add --scope user projectsflow \
 | `pf_create_task_comment` | Оставить комментарий на задаче — для прогресс-апдейтов по ходу работы. Mentions `@displayName` парсятся сервером, рассылаются notifications. Author = owner agent-токена. |
 | `pf_move_task` | Перенести задачу на статус `todo` / `in_progress` / `done` (в конец колонки) |
 | `pf_link_commit_to_task` | Привязать SHA коммита к задаче — auto-transition `todo → in_progress` на первом коммите |
+| `pf_list_pending_agent_jobs` | Top-N queued agent-job'ов по всем проектам юзера. Для /loop-полла. |
+| `pf_claim_agent_job` | Атомарный pickup queued→running. 409 если race. |
+| `pf_complete_agent_job` | Финализация job: ok=true с prUrl или ok=false с error. |
 
 ### Произвольная запись в KB
 
