@@ -15,19 +15,17 @@ type Deps = {
   readonly agentJobs: AgentJobRepository;
 };
 
-export type CompleteAgentJobInput = {
-  readonly userId: string;
-  readonly jobId: string;
-  readonly ok: boolean;
-  readonly prUrl: string | null;
-  readonly error: string | null;
-  readonly branchName: string | null;
-};
-
 export class CompleteAgentJob {
   constructor(private readonly deps: Deps) {}
 
-  async execute(input: CompleteAgentJobInput): Promise<void> {
+  async execute(input: {
+    readonly userId: string;
+    readonly jobId: string;
+    readonly ok: boolean;
+    readonly prUrl: string | null;
+    readonly error: string | null;
+    readonly branchName: string | null;
+  }): Promise<void> {
     const job = await this.deps.agentJobs.findById(input.jobId);
     if (!job) throw new AgentJobNotFoundError(input.jobId);
 

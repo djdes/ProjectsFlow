@@ -129,13 +129,6 @@ export class DrizzleAgentJobRepository implements AgentJobRepository {
     return this.findById(jobId);
   }
 
-  async markStarted(id: string): Promise<void> {
-    await this.db
-      .update(agentJobs)
-      .set({ status: 'running', startedAt: sql`CURRENT_TIMESTAMP` })
-      .where(eq(agentJobs.id, id));
-  }
-
   async complete(id: string, result: CompleteAgentJobInput): Promise<void> {
     await this.db
       .update(agentJobs)

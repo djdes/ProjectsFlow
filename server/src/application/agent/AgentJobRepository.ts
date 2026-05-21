@@ -54,7 +54,6 @@ export type AgentJobRepository = {
    * либо null (уже claim'нута / отменена / не существует).
    */
   claimById(jobId: string): Promise<AgentJob | null>;
-  markStarted(id: string): Promise<void>;
   complete(id: string, result: CompleteAgentJobInput): Promise<void>;
   cancel(id: string, reason: string): Promise<void>;
 };
