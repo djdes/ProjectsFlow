@@ -235,6 +235,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
               onDelete={handleDelete}
               showShortId={showCommits}
               onQuickPromote={status === 'backlog' ? handleQuickPromote : undefined}
+              onTaskChanged={() => void refetch()}
             />
           ))}
         </div>

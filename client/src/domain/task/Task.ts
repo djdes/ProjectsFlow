@@ -1,3 +1,5 @@
+import type { AgentJob } from '../agentJob/AgentJob';
+
 export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'done';
 
 export const TASK_STATUSES: readonly TaskStatus[] = ['backlog', 'todo', 'in_progress', 'done'];
@@ -13,6 +15,8 @@ export type Task = {
   // Заполняются list-эндпоинтом. Для одиночных task-fetch'ей могут отсутствовать.
   readonly commitCount?: number;
   readonly attachmentCount?: number;
+  readonly delegatedToAgent: boolean;
+  readonly agentJob: AgentJob | null;
 };
 
 // Короткий ID задачи (первые 8 hex-символов UUID без дефисов) — для вставки в commit

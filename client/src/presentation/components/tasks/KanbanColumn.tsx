@@ -18,6 +18,8 @@ type Props = {
   // Если задан — на каждой карточке колонки появляется стрелка → для быстрого
   // перевода в TODO. Прокидывается KanbanBoard'ом только для backlog-колонки.
   onQuickPromote?: (task: Task) => void;
+  // Триггер refetch после изменения agent-job на карточке (enqueue / cancel).
+  onTaskChanged?: () => void;
 };
 
 export function KanbanColumn({
@@ -29,6 +31,7 @@ export function KanbanColumn({
   onDelete,
   showShortId = true,
   onQuickPromote,
+  onTaskChanged,
 }: Props): React.ReactElement {
   // Droppable нужен чтобы можно было кинуть карточку в ПУСТУЮ колонку —
   // SortableContext один не реагирует на drop в empty list.
@@ -79,6 +82,7 @@ export function KanbanColumn({
               onDelete={onDelete}
               showShortId={showShortId}
               onQuickPromote={onQuickPromote}
+              onTaskChanged={onTaskChanged}
             />
           ))}
         </SortableContext>

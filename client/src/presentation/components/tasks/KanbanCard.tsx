@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
 import { taskShortId } from '@/domain/task/Task';
+import { AgentJobBadge } from './AgentJobBadge';
+import { DelegateToAgentButton } from './DelegateToAgentButton';
 
 type Props = {
   task: Task;
@@ -20,6 +22,9 @@ type Props = {
   // Если задан — на карточке появится стрелка → справа, клик «промоутит» задачу
   // в TODO. Используется в backlog-колонке для быстрого triage без drag'а.
   onQuickPromote?: (task: Task) => void;
+  // Вызывается после изменения состояния agent-job (enqueue / cancel) — триггерит
+  // refetch tasks в родителе чтобы обновить бейдж.
+  onTaskChanged?: () => void;
 };
 
 // Кастомный transition для reflow соседей при drag. Out-quart — плавнее дефолтного
@@ -36,6 +41,7 @@ export function KanbanCard({
   preview = false,
   showShortId = true,
   onQuickPromote,
+  onTaskChanged,
 }: Props): React.ReactElement {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -130,6 +136,15 @@ export function KanbanCard({
               )}
             </div>
           )}
+          {task.agentJob && onTaskChanged && (
+            <div className="mt-2" onPointerDown={(e) => e.stopPropagation()}>
+              <AgentJobBadge
+                job={task.agentJob}
+                projectId={task.projectId}
+                onChanged={onTaskChanged}
+              />
+            </div>
+          )}
         </div>
         <div
           className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
@@ -150,6 +165,20 @@ export function KanbanCard({
               <ArrowRight className="size-3.5" />
             </Button>
           )}
+          {!preview &&
+            onTaskChanged &&
+            task.status === 'todo' &&
+            (!task.agentJob ||
+              task.agentJob.status === 'succeeded' ||
+              task.agentJob.status === 'failed' ||
+              task.agentJob.status === 'cancelled') && (
+              <DelegateToAgentButton
+                projectId={task.projectId}
+                taskId={task.id}
+                hasDescription={Boolean(task.description?.trim())}
+                onEnqueued={onTaskChanged}
+              />
+            )}
           <Button
             variant="ghost"
             size="icon"

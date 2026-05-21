@@ -11,9 +11,11 @@ import type {
 } from '@/application/task/TaskRepository';
 import { httpClient } from './httpClient';
 
-type TaskDto = Omit<Task, 'createdAt' | 'updatedAt'> & {
+type TaskDto = Omit<Task, 'createdAt' | 'updatedAt' | 'delegatedToAgent' | 'agentJob'> & {
   createdAt: string;
   updatedAt: string;
+  delegatedToAgent?: boolean;
+  agentJob?: import('@/domain/agentJob/AgentJob').AgentJob | null;
 };
 
 type CommitDto = Omit<TaskCommit, 'committedAt' | 'linkedAt'> & {
@@ -31,7 +33,13 @@ type CommentDto = Omit<TaskComment, 'createdAt' | 'updatedAt'> & {
 };
 
 function fromDto(dto: TaskDto): Task {
-  return { ...dto, createdAt: new Date(dto.createdAt), updatedAt: new Date(dto.updatedAt) };
+  return {
+    ...dto,
+    createdAt: new Date(dto.createdAt),
+    updatedAt: new Date(dto.updatedAt),
+    delegatedToAgent: dto.delegatedToAgent ?? false,
+    agentJob: dto.agentJob ?? null,
+  };
 }
 
 function commitFromDto(dto: CommitDto): TaskCommit {
