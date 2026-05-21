@@ -51,6 +51,12 @@ import { DrizzleTaskAttachmentRepository } from './infrastructure/repositories/D
 import { DrizzleTaskCommentRepository } from './infrastructure/repositories/DrizzleTaskCommentRepository.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
+import { DrizzleAgentJobRepository } from './infrastructure/repositories/DrizzleAgentJobRepository.js';
+import { NoopAgentRunnerSignal } from './infrastructure/agent/NoopAgentRunnerSignal.js';
+import { HttpAgentRunnerSignal } from './infrastructure/agent/HttpAgentRunnerSignal.js';
+import { EnqueueAgentJob } from './application/agent/EnqueueAgentJob.js';
+import { CancelAgentJob } from './application/agent/CancelAgentJob.js';
+import { ListAgentJobsForProject } from './application/agent/ListAgentJobsForProject.js';
 import { Sha256AgentTokenHasher } from './infrastructure/crypto/Sha256AgentTokenHasher.js';
 import { CreateAgentToken } from './application/agent/CreateAgentToken.js';
 import { ListAgentTokens } from './application/agent/ListAgentTokens.js';
@@ -115,6 +121,10 @@ const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
+const agentJobRepo = new DrizzleAgentJobRepository(db);
+const agentRunnerSignal = config.runner.enabled
+  ? new HttpAgentRunnerSignal(config.runner.signalUrl)
+  : new NoopAgentRunnerSignal();
 
 // Каталог с binary-аттачами. В dev: ./uploads (рядом с кодом), в prod: задаём
 // UPLOADS_DIR в .env (typically /var/www/.../uploads — снаружи tarball'а деплоя,
@@ -396,6 +406,7 @@ const { app, devProxyUpgrade } = createApp({
       comments: taskCommentRepo,
     }),
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
+    agentJobs: agentJobRepo,
   },
   agent: {
     createAgentToken: new CreateAgentToken({
@@ -505,6 +516,21 @@ const { app, devProxyUpgrade } = createApp({
     }),
     pollDeviceToken: new PollAgentDeviceToken({ store: agentDeviceCodeStore, now }),
     getDeviceCodeInfo: new GetAgentDeviceCodeInfo({ store: agentDeviceCodeStore, now }),
+    enqueueAgentJob: new EnqueueAgentJob({
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      agentJobs: agentJobRepo,
+      signal: agentRunnerSignal,
+    }),
+    cancelAgentJob: new CancelAgentJob({
+      members: projectMemberRepo,
+      agentJobs: agentJobRepo,
+    }),
+    listAgentJobsForProject: new ListAgentJobsForProject({
+      members: projectMemberRepo,
+      agentJobs: agentJobRepo,
+    }),
+    agentJobs: agentJobRepo,
   },
   github: {
     startDeviceFlow: new StartDeviceFlow({

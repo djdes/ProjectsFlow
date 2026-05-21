@@ -17,6 +17,10 @@ export const config = {
     // OAuth App Client ID. Если null — endpoints вернут 503 (integration disabled).
     clientId: process.env.GITHUB_CLIENT_ID ?? null,
   },
+  runner: {
+    enabled: process.env.RUNNER_ENABLED === 'true',
+    signalUrl: process.env.RUNNER_SIGNAL_URL ?? 'http://127.0.0.1:4318',
+  },
 } as const;
 
 export const isProd = (): boolean => config.nodeEnv === 'production';

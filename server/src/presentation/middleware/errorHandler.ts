@@ -50,9 +50,13 @@ import {
   AgentDeviceCodeExpiredError,
   AgentDeviceCodeNotFoundError,
   AgentDeviceCodePendingError,
+  AgentJobNotCancellableError,
+  AgentJobNotFoundError,
   AgentTokenInvalidError,
   AgentTokenNameEmptyError,
   AgentTokenNotFoundError,
+  TaskAlreadyHasActiveAgentJobError,
+  TaskMissingDescriptionError,
 } from '../../domain/agent/errors.js';
 
 type ErrorPayload = {
@@ -269,6 +273,23 @@ export function errorHandler(
   }
   if (err instanceof AgentTokenInvalidError) {
     res.status(401).json({ error: 'agent_token_invalid' });
+    return;
+  }
+
+  if (err instanceof AgentJobNotFoundError) {
+    res.status(404).json({ error: 'agent_job_not_found', message: err.message });
+    return;
+  }
+  if (err instanceof AgentJobNotCancellableError) {
+    res.status(409).json({ error: 'agent_job_not_cancellable', message: err.message });
+    return;
+  }
+  if (err instanceof TaskAlreadyHasActiveAgentJobError) {
+    res.status(409).json({ error: 'task_has_active_agent_job', message: err.message });
+    return;
+  }
+  if (err instanceof TaskMissingDescriptionError) {
+    res.status(400).json({ error: 'task_missing_description', message: err.message });
     return;
   }
 

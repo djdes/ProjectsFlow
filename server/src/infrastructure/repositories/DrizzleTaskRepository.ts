@@ -15,6 +15,7 @@ function toTask(row: TaskRow): Task {
     description: row.description ?? null,
     status: row.status as TaskStatus,
     position: row.position,
+    delegatedToAgent: row.delegatedToAgent,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

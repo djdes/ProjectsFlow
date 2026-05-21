@@ -20,7 +20,9 @@ import type { Task } from '../../domain/task/Task.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { TaskComment } from '../../domain/task/TaskComment.js';
+import type { AgentJobRepository } from '../../application/agent/AgentJobRepository.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { agentJobToDto } from '../agent-jobs/routes.js';
 import {
   createTaskCommentSchema,
   createTaskSchema,
@@ -48,6 +50,7 @@ type Deps = {
   readonly updateComment: UpdateTaskComment;
   readonly deleteComment: DeleteTaskComment;
   readonly maxAttachmentBytes: number;
+  readonly agentJobs: AgentJobRepository;
 };
 
 type TaskDto = Omit<Task, 'createdAt' | 'updatedAt'> & {
@@ -118,7 +121,13 @@ export function tasksRouter(deps: Deps): Router {
     try {
       const projectId = req.params['projectId'] as string;
       const list = await deps.listTasks.execute(projectId, req.user!.id);
-      res.json({ tasks: list.map(toDto) });
+      const activeJobs = await deps.agentJobs.findActiveByTaskIds(list.map((t) => t.id));
+      res.json({
+        tasks: list.map((t) => ({
+          ...toDto(t),
+          agentJob: activeJobs.get(t.id) ? agentJobToDto(activeJobs.get(t.id)!) : null,
+        })),
+      });
     } catch (e) {
       next(e);
     }
