@@ -12,7 +12,6 @@ import { TaskNotFoundError } from '../../domain/task/errors.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { AgentJobRepository } from './AgentJobRepository.js';
-import type { AgentRunnerSignal } from './AgentRunnerSignal.js';
 
 export type EnqueueAgentJobInput = {
   userId: string;
@@ -24,7 +23,6 @@ type Deps = {
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly agentJobs: AgentJobRepository;
-  readonly signal: AgentRunnerSignal;
 };
 
 export class EnqueueAgentJob {
@@ -56,11 +54,6 @@ export class EnqueueAgentJob {
       projectId: input.projectId,
       taskId: input.taskId,
       createdBy: input.userId,
-    });
-
-    // 5. Best-effort wake runner (Plan A: noop)
-    void this.deps.signal.notifyJobEnqueued().catch(() => {
-      // Signal — optimization. Polling in Plan B will catch up.
     });
 
     return job;

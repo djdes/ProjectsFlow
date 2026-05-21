@@ -79,6 +79,9 @@ import type { GetAgentDeviceCodeInfo } from '../application/agent/GetAgentDevice
 import type { EnqueueAgentJob } from '../application/agent/EnqueueAgentJob.js';
 import type { CancelAgentJob } from '../application/agent/CancelAgentJob.js';
 import type { ListAgentJobsForProject } from '../application/agent/ListAgentJobsForProject.js';
+import type { ListPendingAgentJobs } from '../application/agent/ListPendingAgentJobs.js';
+import type { ClaimAgentJob } from '../application/agent/ClaimAgentJob.js';
+import type { CompleteAgentJob } from '../application/agent/CompleteAgentJob.js';
 import type { AgentJobRepository } from '../application/agent/AgentJobRepository.js';
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -203,6 +206,9 @@ type AppDeps = {
     readonly enqueueAgentJob: EnqueueAgentJob;
     readonly cancelAgentJob: CancelAgentJob;
     readonly listAgentJobsForProject: ListAgentJobsForProject;
+    readonly listPendingAgentJobs: ListPendingAgentJobs;
+    readonly claimAgentJob: ClaimAgentJob;
+    readonly completeAgentJob: CompleteAgentJob;
     readonly agentJobs: AgentJobRepository;
   };
 };
@@ -290,6 +296,9 @@ export function createApp(deps: AppDeps): CreatedApp {
       moveTask: deps.agent.moveTask,
       linkCommit: deps.agent.linkCommit,
       writeKbDocument: deps.agent.writeKbDocument,
+      listPendingAgentJobs: deps.agent.listPendingAgentJobs,
+      claimAgentJob: deps.agent.claimAgentJob,
+      completeAgentJob: deps.agent.completeAgentJob,
     }),
   );
 

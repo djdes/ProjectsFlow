@@ -50,8 +50,10 @@ import {
   AgentDeviceCodeExpiredError,
   AgentDeviceCodeNotFoundError,
   AgentDeviceCodePendingError,
+  AgentJobAlreadyClaimedError,
   AgentJobNotCancellableError,
   AgentJobNotFoundError,
+  AgentJobNotInRunningStateError,
   AgentTokenInvalidError,
   AgentTokenNameEmptyError,
   AgentTokenNotFoundError,
@@ -282,6 +284,14 @@ export function errorHandler(
   }
   if (err instanceof AgentJobNotCancellableError) {
     res.status(409).json({ error: 'agent_job_not_cancellable', message: err.message });
+    return;
+  }
+  if (err instanceof AgentJobAlreadyClaimedError) {
+    res.status(409).json({ error: 'agent_job_already_claimed', message: err.message });
+    return;
+  }
+  if (err instanceof AgentJobNotInRunningStateError) {
+    res.status(409).json({ error: 'agent_job_not_in_running_state', message: err.message });
     return;
   }
   if (err instanceof TaskAlreadyHasActiveAgentJobError) {

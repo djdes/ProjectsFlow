@@ -12,6 +12,10 @@ import type { CreateTaskComment } from '../../application/task/CreateTaskComment
 import type { MoveTask } from '../../application/task/MoveTask.js';
 import type { LinkCommit } from '../../application/task/LinkCommit.js';
 import type { WriteKbDocument } from '../../application/kb/WriteKbDocument.js';
+import type { ListPendingAgentJobs } from '../../application/agent/ListPendingAgentJobs.js';
+import type { ClaimAgentJob } from '../../application/agent/ClaimAgentJob.js';
+import type { CompleteAgentJob } from '../../application/agent/CompleteAgentJob.js';
+import type { PendingAgentJob } from '../../application/agent/AgentJobRepository.js';
 import type { Frontmatter } from '../../domain/kb/Frontmatter.js';
 import type { Project } from '../../domain/project/Project.js';
 import type { KbDocumentSummary } from '../../domain/kb/KbDocument.js';
@@ -20,6 +24,7 @@ import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { TaskComment } from '../../domain/task/TaskComment.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import { requireAgentToken } from '../middleware/requireAgentToken.js';
+import { agentJobToDto } from '../agent-jobs/dto.js';
 import {
   taskStatusSchema,
   linkCommitSchema,
@@ -41,6 +46,9 @@ type Deps = {
   readonly moveTask: MoveTask;
   readonly linkCommit: LinkCommit;
   readonly writeKbDocument: WriteKbDocument;
+  readonly listPendingAgentJobs: ListPendingAgentJobs;
+  readonly claimAgentJob: ClaimAgentJob;
+  readonly completeAgentJob: CompleteAgentJob;
 };
 
 const createCredentialSchema = z.object({
@@ -94,6 +102,19 @@ type CommentDto = Omit<TaskComment, 'createdAt' | 'updatedAt'> & {
 function commentToDto(c: TaskComment): CommentDto {
   return { ...c, createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt.toISOString() };
 }
+
+type PendingAgentJobDto = Omit<PendingAgentJob, 'createdAt'> & { createdAt: string };
+
+function pendingAgentJobToDto(p: PendingAgentJob): PendingAgentJobDto {
+  return { ...p, createdAt: p.createdAt.toISOString() };
+}
+
+const completeAgentJobBodySchema = z.object({
+  ok: z.boolean(),
+  prUrl: z.string().url().nullable().optional(),
+  error: z.string().max(4000).nullable().optional(),
+  branchName: z.string().max(200).nullable().optional(),
+});
 
 // Endpoints для agents (MCP-сервер). Авторизация через Bearer-токен.
 export function agentApiRouter(deps: Deps): Router {
@@ -345,6 +366,54 @@ export function agentApiRouter(deps: Deps): Router {
       }
     },
   );
+
+  // Список queued job'ов пользователя по всем проектам — для /loop polling'а.
+  // Агент вызывает периодически чтобы найти и claim'нуть новую задачу.
+  router.get('/pending-agent-jobs', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const limitParam = req.query['limit'];
+      const limit = typeof limitParam === 'string' ? parseInt(limitParam, 10) : undefined;
+      const jobs = await deps.listPendingAgentJobs.execute({
+        userId: req.user!.id,
+        limit: Number.isFinite(limit) ? limit : undefined,
+      });
+      res.json({ jobs: jobs.map(pendingAgentJobToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Атомарный claim job'а: queued → running. Возвращает полный AgentJob.
+  // Если job уже claim'нута другой сессией — 409 agent_job_already_claimed.
+  router.post('/agent-jobs/:jobId/claim', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const jobId = req.params['jobId'] as string;
+      const job = await deps.claimAgentJob.execute({ userId: req.user!.id, jobId });
+      res.json({ job: agentJobToDto(job) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Завершение job'а: running → succeeded/failed. Тело: { ok, prUrl?, error?, branchName? }.
+  // Если job не в running-состоянии — 409 agent_job_not_in_running_state.
+  router.post('/agent-jobs/:jobId/complete', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const jobId = req.params['jobId'] as string;
+      const body = completeAgentJobBodySchema.parse(req.body);
+      await deps.completeAgentJob.execute({
+        userId: req.user!.id,
+        jobId,
+        ok: body.ok,
+        prUrl: body.prUrl ?? null,
+        error: body.error ?? null,
+        branchName: body.branchName ?? null,
+      });
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
 
   return router;
 }

@@ -52,11 +52,12 @@ import { DrizzleTaskCommentRepository } from './infrastructure/repositories/Driz
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
 import { DrizzleAgentJobRepository } from './infrastructure/repositories/DrizzleAgentJobRepository.js';
-import { NoopAgentRunnerSignal } from './infrastructure/agent/NoopAgentRunnerSignal.js';
-import { HttpAgentRunnerSignal } from './infrastructure/agent/HttpAgentRunnerSignal.js';
 import { EnqueueAgentJob } from './application/agent/EnqueueAgentJob.js';
 import { CancelAgentJob } from './application/agent/CancelAgentJob.js';
 import { ListAgentJobsForProject } from './application/agent/ListAgentJobsForProject.js';
+import { ListPendingAgentJobs } from './application/agent/ListPendingAgentJobs.js';
+import { ClaimAgentJob } from './application/agent/ClaimAgentJob.js';
+import { CompleteAgentJob } from './application/agent/CompleteAgentJob.js';
 import { Sha256AgentTokenHasher } from './infrastructure/crypto/Sha256AgentTokenHasher.js';
 import { CreateAgentToken } from './application/agent/CreateAgentToken.js';
 import { ListAgentTokens } from './application/agent/ListAgentTokens.js';
@@ -122,9 +123,6 @@ const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const agentJobRepo = new DrizzleAgentJobRepository(db);
-const agentRunnerSignal = config.runner.enabled
-  ? new HttpAgentRunnerSignal(config.runner.signalUrl)
-  : new NoopAgentRunnerSignal();
 
 // Каталог с binary-аттачами. В dev: ./uploads (рядом с кодом), в prod: задаём
 // UPLOADS_DIR в .env (typically /var/www/.../uploads — снаружи tarball'а деплоя,
@@ -520,7 +518,6 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       agentJobs: agentJobRepo,
-      signal: agentRunnerSignal,
     }),
     cancelAgentJob: new CancelAgentJob({
       members: projectMemberRepo,
@@ -530,6 +527,9 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       agentJobs: agentJobRepo,
     }),
+    listPendingAgentJobs: new ListPendingAgentJobs({ agentJobs: agentJobRepo }),
+    claimAgentJob: new ClaimAgentJob({ members: projectMemberRepo, agentJobs: agentJobRepo }),
+    completeAgentJob: new CompleteAgentJob({ members: projectMemberRepo, agentJobs: agentJobRepo }),
     agentJobs: agentJobRepo,
   },
   github: {
