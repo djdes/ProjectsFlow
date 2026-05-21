@@ -2,7 +2,7 @@
 -- Очередь и история agent-job'ов для kanban-agent runner'а.
 -- См. docs/superpowers/specs/2026-05-21-kanban-agent-runner-design.md
 
-CREATE TABLE agent_jobs (
+CREATE TABLE IF NOT EXISTS agent_jobs (
   id            CHAR(36)     NOT NULL,
   project_id    CHAR(36)     NOT NULL,
   task_id       CHAR(36)     NOT NULL,
