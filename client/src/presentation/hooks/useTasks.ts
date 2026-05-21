@@ -37,7 +37,7 @@ export function useTasks(projectId: string): UseTasks {
     void refetch();
   }, [refetch]);
 
-  useAgentJobPolling(state.tasks, () => void refetch());
+  useAgentJobPolling(state.tasks, refetch);
 
   const create: UseTasks['create'] = async (input) => {
     const task = await taskRepository.create(projectId, input);
