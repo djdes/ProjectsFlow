@@ -338,7 +338,8 @@ const TOOLS = [
       'error=<short reason>). Sets status to succeeded or failed, fills finished_at. If the ' +
       'job was cancelled by the user during your work, this call returns 409 ' +
       '"agent_job_not_in_running_state" - handle by cleaning up the local branch/worktree and ' +
-      'NOT pushing the PR.',
+      'NOT pushing the PR. Do NOT retry pf_complete_agent_job after a 409: the server has ' +
+      'already finalized the job.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -416,7 +417,7 @@ const ClaimAgentJobInput = z.object({
   jobId: z.string().min(1),
 });
 
-const CompleteAgentJobInputZ = z.object({
+const CompleteAgentJobInput = z.object({
   jobId: z.string().min(1),
   ok: z.boolean(),
   prUrl: z.string().url().nullable().optional(),
@@ -555,7 +556,7 @@ async function main(): Promise<void> {
           return jsonResult(job);
         }
         case 'pf_complete_agent_job': {
-          const input = CompleteAgentJobInputZ.parse(req.params.arguments ?? {});
+          const input = CompleteAgentJobInput.parse(req.params.arguments ?? {});
           await api.completeAgentJob(input.jobId, {
             ok: input.ok,
             prUrl: input.prUrl ?? null,
