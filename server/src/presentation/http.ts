@@ -76,6 +76,10 @@ import type { RequestAgentDeviceCode } from '../application/agent/RequestAgentDe
 import type { ApproveAgentDeviceCode } from '../application/agent/ApproveAgentDeviceCode.js';
 import type { PollAgentDeviceToken } from '../application/agent/PollAgentDeviceToken.js';
 import type { GetAgentDeviceCodeInfo } from '../application/agent/GetAgentDeviceCodeInfo.js';
+import type { EnqueueAgentJob } from '../application/agent/EnqueueAgentJob.js';
+import type { CancelAgentJob } from '../application/agent/CancelAgentJob.js';
+import type { ListAgentJobsForProject } from '../application/agent/ListAgentJobsForProject.js';
+import type { AgentJobRepository } from '../application/agent/AgentJobRepository.js';
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './auth/routes.js';
@@ -91,6 +95,7 @@ import { notificationsRouter } from './notifications/routes.js';
 import { agentTokensRouter } from './agent/tokensRoutes.js';
 import { agentApiRouter } from './agent/apiRoutes.js';
 import { agentDeviceRouter } from './agent/deviceRoutes.js';
+import { buildAgentJobsRouter } from './agent-jobs/routes.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
@@ -171,6 +176,7 @@ type AppDeps = {
     readonly updateComment: UpdateTaskComment;
     readonly deleteComment: DeleteTaskComment;
     readonly maxAttachmentBytes: number;
+    readonly agentJobs: AgentJobRepository;
   };
   readonly agent: {
     readonly createAgentToken: CreateAgentToken;
@@ -193,6 +199,11 @@ type AppDeps = {
     readonly moveTask: MoveTask;
     readonly linkCommit: LinkCommit;
     readonly writeKbDocument: WriteKbDocument;
+    // Agent jobs (kanban-agent-runner)
+    readonly enqueueAgentJob: EnqueueAgentJob;
+    readonly cancelAgentJob: CancelAgentJob;
+    readonly listAgentJobsForProject: ListAgentJobsForProject;
+    readonly agentJobs: AgentJobRepository;
   };
 };
 
@@ -279,6 +290,15 @@ export function createApp(deps: AppDeps): CreatedApp {
       moveTask: deps.agent.moveTask,
       linkCommit: deps.agent.linkCommit,
       writeKbDocument: deps.agent.writeKbDocument,
+    }),
+  );
+
+  app.use(
+    '/api',
+    buildAgentJobsRouter({
+      enqueueAgentJob: deps.agent.enqueueAgentJob,
+      cancelAgentJob: deps.agent.cancelAgentJob,
+      listAgentJobsForProject: deps.agent.listAgentJobsForProject,
     }),
   );
 

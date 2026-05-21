@@ -8,6 +8,7 @@ export type Task = {
   readonly description: string | null;
   readonly status: TaskStatus;
   readonly position: number;
+  readonly delegatedToAgent: boolean;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };
