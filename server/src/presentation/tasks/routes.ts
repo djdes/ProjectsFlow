@@ -22,7 +22,7 @@ import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { TaskComment } from '../../domain/task/TaskComment.js';
 import type { AgentJobRepository } from '../../application/agent/AgentJobRepository.js';
 import { requireAuth } from '../middleware/requireAuth.js';
-import { agentJobToDto } from '../agent-jobs/routes.js';
+import { agentJobToDto } from '../agent-jobs/dto.js';
 import {
   createTaskCommentSchema,
   createTaskSchema,
