@@ -5,6 +5,7 @@ import { ProjectPage } from '@/presentation/pages/ProjectPage';
 import { KbPage } from '@/presentation/pages/KbPage';
 import { TasksPage } from '@/presentation/pages/TasksPage';
 import { InboxPage } from '@/presentation/pages/InboxPage';
+import { NotificationsPage } from '@/presentation/pages/NotificationsPage';
 import { ProfilePage } from '@/presentation/pages/ProfilePage';
 import { NotFoundPage } from '@/presentation/pages/NotFoundPage';
 import { LoginPage } from '@/presentation/pages/LoginPage';
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <HomePage /> },
       { path: 'inbox', element: <InboxPage /> },
+      { path: 'notifications', element: <NotificationsPage /> },
       { path: 'projects/:projectId', element: <ProjectPage /> },
       { path: 'projects/:projectId/kb', element: <KbPage /> },
       { path: 'projects/:projectId/tasks', element: <TasksPage /> },

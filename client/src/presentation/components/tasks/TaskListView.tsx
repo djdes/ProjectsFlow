@@ -9,6 +9,7 @@ import { useTasks } from '@/presentation/hooks/useTasks';
 import { TaskDialog, type TaskDialogState } from './TaskDialog';
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
+  backlog: -1,
   todo: 0,
   in_progress: 1,
   done: 2,

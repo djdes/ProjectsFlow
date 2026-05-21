@@ -30,7 +30,7 @@ import { z } from 'zod';
 import { loadConfig } from './config.js';
 import { ApiClient, ApiError } from './api.js';
 
-const TASK_STATUS_VALUES = ['todo', 'in_progress', 'done'] as const;
+const TASK_STATUS_VALUES = ['backlog', 'todo', 'in_progress', 'done'] as const;
 
 const TOOLS = [
   {
@@ -102,10 +102,11 @@ const TOOLS = [
     name: 'pf_list_tasks',
     description:
       "List kanban tasks in a project. Returns id, title, description, status " +
-      "('todo' | 'in_progress' | 'done'), position, and commitCount. Use this BEFORE making " +
-      'a commit: read open tasks (todo + in_progress), match against your staged diff and ' +
-      'planned commit message, ask the user to confirm if you found a candidate, then ' +
-      'call pf_link_commit_to_task and (optionally) pf_move_task after `git push`.',
+      "('backlog' | 'todo' | 'in_progress' | 'done'), position, and commitCount. 'backlog' " +
+      'is the unnamed left-most column for raw triage items — users manually promote them ' +
+      'to TODO. Use this BEFORE making a commit: read open tasks (todo + in_progress), match ' +
+      'against your staged diff and planned commit message, ask the user to confirm if you ' +
+      'found a candidate, then call pf_link_commit_to_task and (optionally) pf_move_task after `git push`.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -132,7 +133,7 @@ const TOOLS = [
         targetStatus: {
           type: 'string',
           enum: TASK_STATUS_VALUES,
-          description: "Target column: 'todo', 'in_progress', or 'done'",
+          description: "Target column: 'backlog', 'todo', 'in_progress', or 'done'",
         },
       },
       required: ['projectId', 'taskId', 'targetStatus'],

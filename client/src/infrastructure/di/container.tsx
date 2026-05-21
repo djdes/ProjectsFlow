@@ -7,6 +7,7 @@ import { HttpKbRepository } from '@/infrastructure/http/HttpKbRepository';
 import { HttpSecretsRepository } from '@/infrastructure/http/HttpSecretsRepository';
 import { HttpTaskRepository } from '@/infrastructure/http/HttpTaskRepository';
 import { HttpInviteRepository } from '@/infrastructure/http/HttpInviteRepository';
+import { HttpNotificationRepository } from '@/infrastructure/http/HttpNotificationRepository';
 import { HttpAgentTokenRepository } from '@/infrastructure/http/HttpAgentTokenRepository';
 import { HttpAgentDeviceRepository } from '@/infrastructure/http/HttpAgentDeviceRepository';
 import { ListProjects } from '@/application/project/ListProjects';
@@ -22,6 +23,7 @@ import type { KbRepository } from '@/application/kb/KbRepository';
 import type { SecretsRepository } from '@/application/secrets/SecretsRepository';
 import type { TaskRepository } from '@/application/task/TaskRepository';
 import type { InviteRepository } from '@/application/project/InviteRepository';
+import type { NotificationRepository } from '@/application/notifications/NotificationRepository';
 import type { AgentTokenRepository } from '@/application/agent/AgentTokenRepository';
 import type { AgentDeviceRepository } from '@/application/agent/AgentDeviceRepository';
 
@@ -39,6 +41,7 @@ type Container = {
   secretsRepository: SecretsRepository;
   taskRepository: TaskRepository;
   inviteRepository: InviteRepository;
+  notificationRepository: NotificationRepository;
   agentTokenRepository: AgentTokenRepository;
   agentDeviceRepository: AgentDeviceRepository;
 };
@@ -52,6 +55,7 @@ function buildContainer(): Container {
   const secretsRepo = new HttpSecretsRepository();
   const taskRepo = new HttpTaskRepository();
   const inviteRepo = new HttpInviteRepository();
+  const notificationRepo = new HttpNotificationRepository();
   const agentTokenRepo = new HttpAgentTokenRepository();
   const agentDeviceRepo = new HttpAgentDeviceRepository();
   return {
@@ -68,6 +72,7 @@ function buildContainer(): Container {
     secretsRepository: secretsRepo,
     taskRepository: taskRepo,
     inviteRepository: inviteRepo,
+    notificationRepository: notificationRepo,
     agentTokenRepository: agentTokenRepo,
     agentDeviceRepository: agentDeviceRepo,
   };

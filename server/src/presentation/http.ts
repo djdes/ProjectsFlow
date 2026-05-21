@@ -61,6 +61,10 @@ import type { ListTaskComments } from '../application/task/ListTaskComments.js';
 import type { CreateTaskComment } from '../application/task/CreateTaskComment.js';
 import type { UpdateTaskComment } from '../application/task/UpdateTaskComment.js';
 import type { DeleteTaskComment } from '../application/task/DeleteTaskComment.js';
+import type { ListNotifications } from '../application/notifications/ListNotifications.js';
+import type { CountUnreadNotifications } from '../application/notifications/CountUnreadNotifications.js';
+import type { MarkNotificationRead } from '../application/notifications/MarkNotificationRead.js';
+import type { MarkAllNotificationsRead } from '../application/notifications/MarkAllNotificationsRead.js';
 import type { CreateAgentToken } from '../application/agent/CreateAgentToken.js';
 import type { ListAgentTokens } from '../application/agent/ListAgentTokens.js';
 import type { RevokeAgentToken } from '../application/agent/RevokeAgentToken.js';
@@ -83,6 +87,7 @@ import { tasksRouter } from './tasks/routes.js';
 import { attachmentBinaryRouter } from './tasks/attachmentBinaryRoutes.js';
 import { inboxRouter } from './inbox/routes.js';
 import { invitesRouter } from './invites/routes.js';
+import { notificationsRouter } from './notifications/routes.js';
 import { agentTokensRouter } from './agent/tokensRoutes.js';
 import { agentApiRouter } from './agent/apiRoutes.js';
 import { agentDeviceRouter } from './agent/deviceRoutes.js';
@@ -117,6 +122,12 @@ type AppDeps = {
   readonly invites: {
     readonly getByToken: GetInviteByToken;
     readonly accept: AcceptProjectInvite;
+  };
+  readonly notifications: {
+    readonly list: ListNotifications;
+    readonly countUnread: CountUnreadNotifications;
+    readonly markRead: MarkNotificationRead;
+    readonly markAllRead: MarkAllNotificationsRead;
   };
   readonly github: {
     readonly startDeviceFlow: StartDeviceFlow;
@@ -228,6 +239,7 @@ export function createApp(deps: AppDeps): CreatedApp {
     getByToken: deps.invites.getByToken,
     accept: deps.invites.accept,
   }));
+  app.use('/api/notifications', notificationsRouter(deps.notifications));
 
   // Agent tokens management (session-auth)
   app.use(

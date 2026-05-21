@@ -8,6 +8,7 @@ import { DrizzleSessionRepository } from './infrastructure/repositories/DrizzleS
 import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleProjectRepository.js';
 import { DrizzleProjectMemberRepository } from './infrastructure/repositories/DrizzleProjectMemberRepository.js';
 import { DrizzleProjectInviteRepository } from './infrastructure/repositories/DrizzleProjectInviteRepository.js';
+import { DrizzleNotificationRepository } from './infrastructure/repositories/DrizzleNotificationRepository.js';
 import { DrizzleGithubTokenRepository } from './infrastructure/repositories/DrizzleGithubTokenRepository.js';
 import { FetchGithubApiClient } from './infrastructure/github/FetchGithubApiClient.js';
 import { DeviceFlowStore } from './infrastructure/github/DeviceFlowStore.js';
@@ -81,6 +82,10 @@ import { ListTaskComments } from './application/task/ListTaskComments.js';
 import { CreateTaskComment } from './application/task/CreateTaskComment.js';
 import { UpdateTaskComment } from './application/task/UpdateTaskComment.js';
 import { DeleteTaskComment } from './application/task/DeleteTaskComment.js';
+import { ListNotifications } from './application/notifications/ListNotifications.js';
+import { CountUnreadNotifications } from './application/notifications/CountUnreadNotifications.js';
+import { MarkNotificationRead } from './application/notifications/MarkNotificationRead.js';
+import { MarkAllNotificationsRead } from './application/notifications/MarkAllNotificationsRead.js';
 import { DrizzleSecretsRepository } from './infrastructure/repositories/DrizzleSecretsRepository.js';
 import { PutSecret } from './application/secrets/PutSecret.js';
 import { GetSecret } from './application/secrets/GetSecret.js';
@@ -97,6 +102,7 @@ const sessionRepo = new DrizzleSessionRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const projectMemberRepo = new DrizzleProjectMemberRepository(db);
 const projectInviteRepo = new DrizzleProjectInviteRepository(db);
+const notificationRepo = new DrizzleNotificationRepository(db);
 const githubTokenRepo = new DrizzleGithubTokenRepository(db);
 
 const githubApi = new FetchGithubApiClient(config.github.clientId);
@@ -203,6 +209,12 @@ const { app, devProxyUpgrade } = createApp({
       invites: projectInviteRepo,
     }),
     appUrl: process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? 'http://localhost:5173',
+  },
+  notifications: {
+    list: new ListNotifications({ repo: notificationRepo }),
+    countUnread: new CountUnreadNotifications({ repo: notificationRepo }),
+    markRead: new MarkNotificationRead({ repo: notificationRepo, now }),
+    markAllRead: new MarkAllNotificationsRead({ repo: notificationRepo, now }),
   },
   invites: {
     getByToken: new GetInviteByToken({
@@ -368,6 +380,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
+      notifications: notificationRepo,
       idGen: idGenerator,
     }),
     updateComment: new UpdateTaskComment({

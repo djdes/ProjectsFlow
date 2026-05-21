@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
-import { GitCommit, ImageIcon, Trash2 } from 'lucide-react';
+import { ArrowRight, GitCommit, ImageIcon, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
@@ -17,6 +17,9 @@ type Props = {
   // Показывать short-id [xxxxxxxx] на карточке. Для inbox-проекта скрываем — там
   // нет git-репо, привязка коммитов через `[short-id]` бессмысленна.
   showShortId?: boolean;
+  // Если задан — на карточке появится стрелка → справа, клик «промоутит» задачу
+  // в TODO. Используется в backlog-колонке для быстрого triage без drag'а.
+  onQuickPromote?: (task: Task) => void;
 };
 
 // Кастомный transition для reflow соседей при drag. Out-quart — плавнее дефолтного
@@ -32,6 +35,7 @@ export function KanbanCard({
   onDelete,
   preview = false,
   showShortId = true,
+  onQuickPromote,
 }: Props): React.ReactElement {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -77,8 +81,15 @@ export function KanbanCard({
           // Базовый transition только для тех свойств, которые меняем CSS-ом —
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
           'transition-[box-shadow,border-color,opacity] duration-150 ease-out',
-          'hover:border-foreground/20 hover:shadow-md',
+          'hover:shadow-md',
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+          // Status-аcent: TODO — пульсирующее янтарное неоновое «дыхание». Сообщает
+          // «эта задача ждёт, чтобы её взяли в работу». Анимируется box-shadow
+          // (composited на GPU, без layout-reflow). Остальные статусы — нейтральный
+          // border-color (foreground/20 на hover).
+          !preview && task.status === 'todo'
+            ? 'border-amber-500/60 animate-todo-glow hover:border-amber-500/80'
+            : !preview && 'hover:border-foreground/20',
           preview
             ? // Карточка в DragOverlay: «приподнятый» вид — мощная тень, ring, выраженная
               // граница. Tilt/scale делаем НЕ здесь, а на motion-обёртке в KanbanBoard —
@@ -89,7 +100,7 @@ export function KanbanCard({
               // grabbing включается только когда юзер реально потащил (isDragging ниже).
               'cursor-pointer',
           // Оригинал на месте, пока тащим preview — делаем призрачным и меняем курсор
-          // на grabbing (юзер визуально таскает оверлей, но если случайно нависнет на
+          // на grabbing (юзер визуально taskает оверлей, но если случайно нависнет на
           // оригинале — курсор не сбивается обратно на pointer).
           isDragging && !preview && 'cursor-grabbing opacity-30',
         )}
@@ -124,6 +135,21 @@ export function KanbanCard({
           className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
           onPointerDown={stopDrag}
         >
+          {onQuickPromote && !preview && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 cursor-pointer text-muted-foreground hover:text-foreground"
+              onClick={(e) => {
+                e.stopPropagation();
+                onQuickPromote(task);
+              }}
+              aria-label="Перенести в TODO"
+              title="Перенести в TODO"
+            >
+              <ArrowRight className="size-3.5" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"

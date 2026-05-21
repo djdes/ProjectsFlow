@@ -7,6 +7,7 @@ import { KanbanCard } from './KanbanCard';
 
 type Props = {
   status: TaskStatus;
+  // Пустая строка ⇒ хедер без названия (backlog-колонка). Счётчик и `+` остаются.
   label: string;
   tasks: Task[];
   onCreate: (status: TaskStatus) => void;
@@ -14,6 +15,9 @@ type Props = {
   onDelete: (task: Task) => void;
   // Прокидывается в KanbanCard — управляет видимостью short-id [xxxxxxxx].
   showShortId?: boolean;
+  // Если задан — на каждой карточке колонки появляется стрелка → для быстрого
+  // перевода в TODO. Прокидывается KanbanBoard'ом только для backlog-колонки.
+  onQuickPromote?: (task: Task) => void;
 };
 
 export function KanbanColumn({
@@ -24,6 +28,7 @@ export function KanbanColumn({
   onEdit,
   onDelete,
   showShortId = true,
+  onQuickPromote,
 }: Props): React.ReactElement {
   // Droppable нужен чтобы можно было кинуть карточку в ПУСТУЮ колонку —
   // SortableContext один не реагирует на drop в empty list.
@@ -36,9 +41,11 @@ export function KanbanColumn({
     <div className="flex w-72 shrink-0 flex-col rounded-lg border bg-muted/30">
       <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
         <div className="flex items-center gap-2">
-          <h3 className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            {label}
-          </h3>
+          {label.length > 0 && (
+            <h3 className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              {label}
+            </h3>
+          )}
           <span className="rounded-full bg-background px-1.5 py-0.5 text-xs text-muted-foreground">
             {tasks.length}
           </span>
@@ -71,6 +78,7 @@ export function KanbanColumn({
               onEdit={onEdit}
               onDelete={onDelete}
               showShortId={showShortId}
+              onQuickPromote={onQuickPromote}
             />
           ))}
         </SortableContext>

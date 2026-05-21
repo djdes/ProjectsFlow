@@ -36,15 +36,20 @@ type Stats = {
 };
 
 function computeStats(tasks: Task[]): Stats {
+  // Backlog в пайплайн не входит: это «сырьё» до triage, проценту готовности оно не
+  // принадлежит. Когда юзер промоутит задачу стрелочкой → в TODO — она появляется
+  // в total и тянет процент вниз; это и есть желаемое поведение.
   let todo = 0;
   let inProgress = 0;
   let done = 0;
+  let total = 0;
   for (const t of tasks) {
+    if (t.status === 'backlog') continue;
+    total++;
     if (t.status === 'todo') todo++;
     else if (t.status === 'in_progress') inProgress++;
     else done++;
   }
-  const total = tasks.length;
   const donePercent = total > 0 ? (done / total) * 100 : 0;
   const inProgressPercent = total > 0 ? (inProgress / total) * 100 : 0;
   return { todo, inProgress, done, total, donePercent, inProgressPercent };

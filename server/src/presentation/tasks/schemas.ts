@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const taskStatusSchema = z.enum(['todo', 'in_progress', 'done']);
+export const taskStatusSchema = z.enum(['backlog', 'todo', 'in_progress', 'done']);
 
 export const createTaskSchema = z.object({
   description: z.string().trim().min(1, 'Введите описание').max(5000),

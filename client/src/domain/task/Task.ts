@@ -1,6 +1,6 @@
-export type TaskStatus = 'todo' | 'in_progress' | 'done';
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'done';
 
-export const TASK_STATUSES: readonly TaskStatus[] = ['todo', 'in_progress', 'done'];
+export const TASK_STATUSES: readonly TaskStatus[] = ['backlog', 'todo', 'in_progress', 'done'];
 
 export type Task = {
   readonly id: string;

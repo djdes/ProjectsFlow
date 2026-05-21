@@ -5,6 +5,7 @@ import {
   double,
   index,
   int,
+  json,
   mysqlEnum,
   mysqlTable,
   text,
@@ -118,6 +119,26 @@ export const projectInvites = mysqlTable(
 export type ProjectInviteRow = typeof projectInvites.$inferSelect;
 export type NewProjectInviteRow = typeof projectInvites.$inferInsert;
 
+// In-app уведомления (см. миграцию 012). type+payload — гибкая полиморфная структура.
+export const notifications = mysqlTable(
+  'notifications',
+  {
+    id: id(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    type: varchar('type', { length: 50 }).notNull(),
+    payload: json('payload').notNull(),
+    readAt: timestamp('read_at'),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    index('idx_notifications_user_created').on(t.userId, t.createdAt),
+    index('idx_notifications_user_unread').on(t.userId, t.readAt),
+  ],
+);
+
+export type NotificationRow = typeof notifications.$inferSelect;
+export type NewNotificationRow = typeof notifications.$inferInsert;
+
 export const userGithubTokens = mysqlTable('user_github_tokens', {
   // user_id — и FK и PK: у одного юзера ровно один (или ноль) connected GitHub.
   userId: char('user_id', { length: 36 }).primaryKey(),
@@ -154,7 +175,7 @@ export const tasks = mysqlTable(
     id: id(),
     projectId: char('project_id', { length: 36 }).notNull(),
     description: text('description'),
-    status: mysqlEnum('status', ['todo', 'in_progress', 'done']).notNull().default('todo'),
+    status: mysqlEnum('status', ['backlog', 'todo', 'in_progress', 'done']).notNull().default('todo'),
     // Float-position для дешёвой вставки между двумя соседями — без массового UPDATE.
     position: double('position').notNull().default(0),
     createdAt: createdAtCol(),

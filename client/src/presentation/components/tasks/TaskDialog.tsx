@@ -26,6 +26,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Task } from '@/domain/task/Task';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import type { TaskComment } from '@/domain/task/TaskComment';
+import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { getInitials } from '@/presentation/layout/projectIcons';
@@ -219,7 +220,7 @@ export function TaskDialog({
               rows={6}
               autoFocus
               placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
-              className="w-full rounded-md border bg-background p-2 text-sm"
+              className="block w-full resize-none rounded-md border bg-background p-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:border-foreground/30 focus:outline-none"
             />
           )}
           {error && <p className="text-sm text-destructive">{error}</p>}
@@ -722,11 +723,12 @@ function TaskCommentsSection({
   projectId: string;
   taskId: string;
 }): React.ReactElement {
-  const { taskRepository } = useContainer();
+  const { taskRepository, projectRepository } = useContainer();
   const [comments, setComments] = useState<TaskComment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newBody, setNewBody] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  // members используются для @-mention пикера. Грузим вместе с комментариями.
+  // Ошибка load'а members не блокирует комментарии (degrade gracefully — без пикера).
+  const [members, setMembers] = useState<ProjectMember[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -742,25 +744,18 @@ function TaskCommentsSection({
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    projectRepository
+      .listMembers(projectId)
+      .then((list) => {
+        if (!cancelled) setMembers(list);
+      })
+      .catch(() => {
+        /* tolerate — без members просто не показываем пикер */
+      });
     return () => {
       cancelled = true;
     };
-  }, [projectId, taskId, taskRepository]);
-
-  const submit = async (): Promise<void> => {
-    const trimmed = newBody.trim();
-    if (trimmed.length === 0 || submitting) return;
-    setSubmitting(true);
-    try {
-      const created = await taskRepository.createComment(projectId, taskId, trimmed);
-      setComments((prev) => [...prev, created]);
-      setNewBody('');
-    } catch (e) {
-      toast.error(`Не удалось отправить: ${(e as Error).message}`);
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  }, [projectId, taskId, taskRepository, projectRepository]);
 
   const handleUpdated = (updated: TaskComment): void => {
     setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
@@ -770,11 +765,8 @@ function TaskCommentsSection({
     setComments((prev) => prev.filter((c) => c.id !== id));
   };
 
-  const handleNewKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      void submit();
-    }
+  const handleCreated = (created: TaskComment): void => {
+    setComments((prev) => [...prev, created]);
   };
 
   return (
@@ -806,28 +798,237 @@ function TaskCommentsSection({
         </ul>
       ) : null}
 
-      <div className="relative rounded-md border bg-card transition-colors focus-within:border-foreground/30">
-        <textarea
-          value={newBody}
-          onChange={(e) => setNewBody(e.target.value)}
-          onKeyDown={handleNewKeyDown}
-          rows={2}
-          disabled={submitting}
-          placeholder="Написать комментарий…"
-          className="block w-full resize-none rounded-md bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+      <CommentComposer
+        projectId={projectId}
+        taskId={taskId}
+        members={members}
+        onCreated={handleCreated}
+      />
+    </div>
+  );
+}
+
+// =========================================================
+// New-comment composer. Textarea + @-mention picker (popover с участниками команды).
+// Триггер пикера — символ `@` на границе слова (старт строки, после пробела или \n).
+// На select подставляет `@<DisplayName> `, server потом распарсит mention'ы и зарегает
+// notification'ы для тех, кого зовут.
+// =========================================================
+
+type MentionState = {
+  // Индекс символа `@` в textarea (включительно).
+  start: number;
+  // Текст после @ до курсора (может содержать пробелы — display name многоscлoвный).
+  query: string;
+};
+
+function CommentComposer({
+  projectId,
+  taskId,
+  members,
+  onCreated,
+}: {
+  projectId: string;
+  taskId: string;
+  members: readonly ProjectMember[];
+  onCreated: (created: TaskComment) => void;
+}): React.ReactElement {
+  const { taskRepository } = useContainer();
+  const { user: currentUser } = useCurrentUser();
+  const [body, setBody] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [mention, setMention] = useState<MentionState | null>(null);
+  const [pickerIndex, setPickerIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Кандидаты в пикере — кто угодно из команды кроме автора. Фильтруем по includes
+  // (case-insensitive) — display name'ы могут содержать пробелы.
+  const candidates = members
+    .filter((m) => m.userId !== currentUser?.id)
+    .filter((m) =>
+      mention
+        ? m.user.displayName.toLowerCase().includes(mention.query.toLowerCase())
+        : true,
+    );
+
+  // Сбрасываем active-индекс при смене query.
+  useEffect(() => {
+    setPickerIndex(0);
+  }, [mention?.query]);
+
+  const detectMention = (text: string, cursor: number): MentionState | null => {
+    const before = text.slice(0, cursor);
+    const lastAt = before.lastIndexOf('@');
+    if (lastAt === -1) return null;
+    // @ должен стоять на границе слова — иначе email'ы (`user@gmail.com`) триггерили бы пикер.
+    const charBefore = lastAt === 0 ? ' ' : before[lastAt - 1];
+    if (charBefore !== ' ' && charBefore !== '\n' && charBefore !== '\t') return null;
+    const query = before.slice(lastAt + 1);
+    // Newline в query → пикер закрываем (юзер ушёл на новую строку).
+    if (query.includes('\n')) return null;
+    // Длинный query без матчей — нет смысла держать пикер открытым.
+    if (query.length > 50) return null;
+    return { start: lastAt, query };
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>): void => {
+    setBody(e.target.value);
+    setMention(detectMention(e.target.value, e.target.selectionStart));
+  };
+
+  const handleSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>): void => {
+    const target = e.currentTarget;
+    setMention(detectMention(body, target.selectionStart));
+  };
+
+  const insertMention = (member: ProjectMember): void => {
+    if (!mention) return;
+    const before = body.slice(0, mention.start);
+    const after = body.slice(mention.start + 1 + mention.query.length);
+    const insertion = `@${member.user.displayName} `;
+    const newBody = before + insertion + after;
+    setBody(newBody);
+    setMention(null);
+    // Возвращаем фокус и ставим курсор сразу после вставки.
+    const newCursor = before.length + insertion.length;
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (ta) {
+        ta.focus();
+        ta.setSelectionRange(newCursor, newCursor);
+      }
+    });
+  };
+
+  const submit = async (): Promise<void> => {
+    const trimmed = body.trim();
+    if (trimmed.length === 0 || submitting) return;
+    setSubmitting(true);
+    try {
+      const created = await taskRepository.createComment(projectId, taskId, trimmed);
+      onCreated(created);
+      setBody('');
+      setMention(null);
+    } catch (e) {
+      toast.error(`Не удалось отправить: ${(e as Error).message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (mention && candidates.length > 0) {
+      // Когда пикер открыт, перехватываем стрелки/Enter/Esc для навигации.
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setPickerIndex((i) => (i + 1) % candidates.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setPickerIndex((i) => (i - 1 + candidates.length) % candidates.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const selected = candidates[pickerIndex];
+        if (selected) insertMention(selected);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMention(null);
+        return;
+      }
+    }
+
+    // Обычная отправка по Enter (без Shift).
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void submit();
+    }
+  };
+
+  const showPicker = mention !== null && candidates.length > 0;
+
+  return (
+    <div className="relative rounded-md border bg-card transition-colors focus-within:border-foreground/30">
+      <textarea
+        ref={textareaRef}
+        value={body}
+        onChange={handleChange}
+        onSelect={handleSelect}
+        onKeyDown={handleKeyDown}
+        rows={2}
+        disabled={submitting}
+        placeholder="Написать комментарий…"
+        className="block w-full resize-none rounded-md bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="absolute right-1.5 top-1.5 size-7"
+        onClick={() => void submit()}
+        disabled={submitting || body.trim().length === 0}
+        aria-label="Отправить"
+      >
+        {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+      </Button>
+
+      {showPicker && (
+        <MentionPicker
+          candidates={candidates}
+          activeIndex={pickerIndex}
+          onSelect={insertMention}
+          onHoverIndex={setPickerIndex}
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="absolute right-1.5 top-1.5 size-7"
-          onClick={() => void submit()}
-          disabled={submitting || newBody.trim().length === 0}
-          aria-label="Отправить"
-        >
-          {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-        </Button>
-      </div>
+      )}
+    </div>
+  );
+}
+
+function MentionPicker({
+  candidates,
+  activeIndex,
+  onSelect,
+  onHoverIndex,
+}: {
+  candidates: readonly ProjectMember[];
+  activeIndex: number;
+  onSelect: (m: ProjectMember) => void;
+  onHoverIndex: (i: number) => void;
+}): React.ReactElement {
+  return (
+    <div className="absolute bottom-full left-0 z-10 mb-1 w-64 overflow-hidden rounded-md border bg-popover shadow-md">
+      <ul className="max-h-56 overflow-y-auto py-1 text-sm">
+        {candidates.map((m, i) => (
+          <li key={m.userId}>
+            <button
+              type="button"
+              onClick={() => onSelect(m)}
+              onMouseEnter={() => onHoverIndex(i)}
+              // mousedown — чтобы клик не успел снять фокус с textarea до того, как
+              // мы вставим mention (иначе textarea теряет selection и cursor-restore сломан).
+              onMouseDown={(e) => e.preventDefault()}
+              className={cn(
+                'flex w-full items-center gap-2 px-2 py-1.5 text-left',
+                i === activeIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/60',
+              )}
+            >
+              <Avatar className="size-6 shrink-0">
+                {m.user.avatarUrl ? (
+                  <AvatarImage src={m.user.avatarUrl} alt={m.user.displayName} />
+                ) : null}
+                <AvatarFallback className="text-[10px]">
+                  {getInitials(m.user.displayName)}
+                </AvatarFallback>
+              </Avatar>
+              <span className="truncate">{m.user.displayName}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

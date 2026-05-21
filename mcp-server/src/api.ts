@@ -24,7 +24,7 @@ export type ResolvedCredential = {
   fields: Record<string, string>;
 };
 
-export type TaskStatus = 'todo' | 'in_progress' | 'done';
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'done';
 
 export type Task = {
   id: string;
@@ -85,7 +85,7 @@ export type CreateCredentialResult = {
 
 export type CreateTaskInput = {
   description: string;
-  status?: 'todo' | 'in_progress' | 'done';
+  status?: TaskStatus;
 };
 
 export type WriteKbDocInput = {

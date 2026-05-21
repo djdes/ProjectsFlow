@@ -31,6 +31,9 @@ type Props = {
 };
 
 const COLUMN_LABELS: Record<TaskStatus, string> = {
+  // Backlog — колонка слева для задач на triage / approval. Карточки в ней получают
+  // стрелку → для быстрого перевода в TODO без drag'а.
+  backlog: 'На подтверждении',
   todo: 'TODO',
   in_progress: 'В работе',
   done: 'Готово',
@@ -61,7 +64,7 @@ const MEASURING_CONFIG = {
 };
 
 function groupByStatus(tasks: Task[]): Record<TaskStatus, Task[]> {
-  const out: Record<TaskStatus, Task[]> = { todo: [], in_progress: [], done: [] };
+  const out: Record<TaskStatus, Task[]> = { backlog: [], todo: [], in_progress: [], done: [] };
   for (const t of tasks) out[t.status].push(t);
   for (const s of TASK_STATUSES) out[s].sort((a, b) => a.position - b.position);
   return out;
@@ -166,6 +169,21 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
     return update(dialog.task.id, input);
   };
 
+  const handleQuickPromote = async (task: Task): Promise<void> => {
+    // Кидаем в самый верх TODO: beforeTaskId=null + afterTaskId=первая карточка
+    // (или null если TODO пуст). Server'ный MoveTask посчитает position сам.
+    const todoFirst = grouped.todo[0] ?? null;
+    try {
+      await move(task.id, {
+        targetStatus: 'todo',
+        beforeTaskId: null,
+        afterTaskId: todoFirst?.id ?? null,
+      });
+    } catch (err) {
+      toast.error(`Не удалось перенести: ${(err as Error).message}`);
+    }
+  };
+
   const handleDelete = async (task: Task): Promise<void> => {
     // Превью первой строки описания — чтобы было понятно что именно удаляешь.
     const preview = (task.description ?? '').split('\n')[0]?.slice(0, 60) ?? '';
@@ -216,6 +234,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
               onEdit={(t) => setDialog({ mode: 'edit', task: t })}
               onDelete={handleDelete}
               showShortId={showCommits}
+              onQuickPromote={status === 'backlog' ? handleQuickPromote : undefined}
             />
           ))}
         </div>
