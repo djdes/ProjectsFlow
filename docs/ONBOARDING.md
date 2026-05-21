@@ -257,6 +257,84 @@ mysql -u projectsflow -p'DWjrfrE8QSLk6opq!' projectsflow
 
 ---
 
+## 6.5 Agent runner локально (/loop)
+
+ProjectsFlow умеет автоматически выполнять задачи через локальную Claude Code сессию.
+Юзер кликает «Отдать агенту» в UI, далее локальный `/loop` подхватывает job и делает PR.
+Архитектурное обоснование — `docs/superpowers/specs/2026-05-21-kanban-agent-runner-design.md`.
+
+### Pre-requisites
+
+- **Claude Code** (CLI или desktop), залогинен под Pro/Max подпиской: `claude login`.
+- **`gh` CLI:** `gh auth login`.
+- **Git + SSH key в GitHub** (если репо приватный — через SSH; либо `gh auth git-credential`).
+- **MCP-token ProjectsFlow:** `npx -y @projectsflow/mcp-server@latest setup` — один раз создаст
+  `~/.config/projectsflow/agent.json`.
+
+### Workspace
+
+Создай директорию-агрегатор и клонируй все репо к которым может прикасаться агент:
+
+```bash
+mkdir -p ~/agent-workspace && cd ~/agent-workspace
+gh repo clone djdes/ProjectsFlow
+gh repo clone djdes/OrdersFlow
+# ... и так далее
+```
+
+### Slash-command
+
+Положи в `~/.claude/commands/check-agent-queue.md` markdown-файл с детальным промптом для
+каждого /loop-тика. Полный canonical-текст — в spec
+[2026-05-21-kanban-agent-runner-design.md](superpowers/specs/2026-05-21-kanban-agent-runner-design.md)
+секция § 9.3. Файл **не коммитится в repo проекта** — он живёт в твоей домашней Claude Code-конфигурации.
+
+Этот же файл можно положить per-repo в `~/.claude/projects/<repoSlug>/commands/check-agent-queue.md` —
+тогда команда видна только при работе в этом репо.
+
+### Запуск
+
+```bash
+cd ~/agent-workspace
+claude
+> /loop 10m /check-agent-queue
+```
+
+`10m` — интервал между тиками. Меньше → быстрее реакция, но сжигается rate-limit подписки.
+**10–15 минут — sweet spot.** Закрытие терминала = pause. Открыл снова и запустил — продолжается
+с того же места (state в БД).
+
+### Что произойдёт
+
+Каждые 10 минут Claude:
+1. Вызовет `pf_list_pending_agent_jobs` — список queued агенту job'ов по всем доступным проектам.
+2. Если пусто — выйдет с одной строкой («ничего не делать»), не сжигая tool-budget.
+3. Если есть — `pf_claim_agent_job(jobId)` (атомарно, конкуренция между двумя /loop-сессиями
+   разрулится 409-ом на одной из них).
+4. Прочитает task через `pf_get_task` (включая attachments и comments thread).
+5. Сделает изменения в `~/agent-workspace/<repoSlug>/` — создаст branch, реализует, коммит.
+6. `git push` + `gh pr create --draft`.
+7. `pf_create_task_comment` со ссылкой на PR.
+8. `pf_complete_agent_job(jobId, ok=true, prUrl=...)`.
+9. Выйдет. Следующий тик повторится.
+
+### Cancel-flow
+
+Юзер может отменить через UI пока job в `queued` или `running`:
+- Queued → cancelled молча, /loop её не подхватит.
+- Running → /loop увидит 409 на `pf_complete_agent_job`, должен почистить локальный branch
+  и не пушить PR (slash-command это обрабатывает).
+
+### Что если что-то ломается
+
+- **MCP-token revoke'нут** → следующий tool-call упадёт с 401. Юзер видит ошибку в Claude
+  Code, переоткрывает токен через UI «Доступ для агентов».
+- **`gh` или git auth слетел** → Claude увидит ошибку, оставит comment в task'е через
+  `pf_create_task_comment` + `pf_complete_agent_job(ok=false, error=...)`.
+- **/loop сам по себе** не имеет здоровья: если Claude Code зависнет — Ctrl-C, перезапустить.
+
+---
+
 ## 7. Типовые проблемы
 
 | Симптом | Причина / решение |

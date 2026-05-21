@@ -150,6 +150,12 @@ Workflow: фича → ветка → merge в `main` → `npm run deploy` (по
 
 См. `mcp-server/README.md` для полной справки по tool'ам.
 
+**Agent-runner tools** (`pf_list_pending_agent_jobs`, `pf_claim_agent_job`,
+`pf_complete_agent_job`) — используются slash-командой `/check-agent-queue` через
+`/loop`-сессию (см. `docs/ONBOARDING.md` → § 6.5 «Agent runner локально»). Если ты
+**обычная** интерактивная сессия (не запущенная в /loop через slash-command'у) — НЕ
+трогай эти tool'ы. Они для автоматического agent runner'а, не для ручной работы.
+
 ## Комментирование задач по ходу разработки
 
 Когда работаешь над kanban-задачей через MCP (т.е. знаешь её `taskId`), оставляй
