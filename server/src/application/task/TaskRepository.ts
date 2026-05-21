@@ -22,4 +22,5 @@ export interface TaskRepository {
   delete(taskId: string): Promise<boolean>;
   // Возвращает min/max позицию в колонке — для расчёта новой position при insert "сверху" / "снизу".
   getPositionBounds(projectId: string, status: TaskStatus): Promise<{ min: number; max: number } | null>;
+  setDelegatedToAgent(taskId: string, value: boolean): Promise<void>;
 }

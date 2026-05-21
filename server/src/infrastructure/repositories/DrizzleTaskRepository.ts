@@ -80,4 +80,11 @@ export class DrizzleTaskRepository implements TaskRepository {
     if (!row || row.minPos === null || row.maxPos === null) return null;
     return { min: Number(row.minPos), max: Number(row.maxPos) };
   }
+
+  async setDelegatedToAgent(taskId: string, value: boolean): Promise<void> {
+    await this.db
+      .update(tasks)
+      .set({ delegatedToAgent: value })
+      .where(eq(tasks.id, taskId));
+  }
 }
