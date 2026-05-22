@@ -32,6 +32,8 @@ export interface ProjectRepository {
   getInbox(): Promise<Project>;
   create(input: CreateProjectInput): Promise<Project>;
   update(id: string, patch: UpdateProjectInput): Promise<Project>;
+  // Персональная пересортировка сайдбара: полный список id в желаемом порядке.
+  reorder(orderedIds: readonly string[]): Promise<void>;
 
   // Multi-tenancy: members + invites. Owner-only операции упадут 403 на сервере.
   listMembers(projectId: string): Promise<ProjectMember[]>;

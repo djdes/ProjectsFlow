@@ -3,6 +3,7 @@ import type { ListProjects, ProjectWithRole } from '../../application/project/Li
 import type { GetProject } from '../../application/project/GetProject.js';
 import type { CreateProject } from '../../application/project/CreateProject.js';
 import type { UpdateProject } from '../../application/project/UpdateProject.js';
+import type { ReorderProjects } from '../../application/project/ReorderProjects.js';
 import type { ListProjectMembers } from '../../application/project/ListProjectMembers.js';
 import type { RemoveProjectMember } from '../../application/project/RemoveProjectMember.js';
 import type { UpdateProjectMemberRole } from '../../application/project/UpdateProjectMemberRole.js';
@@ -23,6 +24,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import {
   createInviteSchema,
   createProjectSchema,
+  reorderProjectsSchema,
   transferOwnershipSchema,
   updateMemberRoleSchema,
   updateProjectSchema,
@@ -33,6 +35,7 @@ type Deps = {
   readonly getProject: GetProject;
   readonly createProject: CreateProject;
   readonly updateProject: UpdateProject;
+  readonly reorderProjects: ReorderProjects;
   readonly listProjectCommits: ListProjectCommits;
   readonly listMembers: ListProjectMembers;
   readonly removeMember: RemoveProjectMember;
@@ -46,6 +49,8 @@ type Deps = {
   readonly resolveJoinRequest: ResolveProjectJoinRequest;
   // Базовый URL приложения — нужен для формирования invite-URL'а в ответе на создание.
   readonly appUrl: string;
+  // Live-обновление: сигнал «проект изменился» всем участникам (SSE). Best-effort.
+  readonly notifyProjectChanged: (projectId: string) => void;
 };
 
 // Project всегда содержит role (для текущего юзера). На list-эндпоинте role приходит
@@ -148,6 +153,18 @@ export function projectsRouter(deps: Deps): Router {
     }
   });
 
+  // Персональная пересортировка проектов в сайдбаре. Регистрируем ДО '/:id', иначе
+  // 'reorder' матчится как id.
+  router.put('/reorder', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { orderedIds } = reorderProjectsSchema.parse(req.body);
+      await deps.reorderProjects.execute({ userId: req.user!.id, orderedIds });
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
   // Git-collision: есть ли чужой проект с тем же репо. Регистрируем ДО '/:id', иначе
   // 'git-collision' матчится как id.
   router.get('/git-collision', async (req: Request, res: Response, next: NextFunction) => {
@@ -222,6 +239,7 @@ export function projectsRouter(deps: Deps): Router {
         ownerId: req.user!.id,
         patch: body,
       });
+      deps.notifyProjectChanged(id);
       res.json({ project: toDto(project) });
     } catch (e) {
       next(e);

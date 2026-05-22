@@ -90,7 +90,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       .from(projectMembers)
       .innerJoin(projects, eq(projects.id, projectMembers.projectId))
       .where(eq(projectMembers.userId, userId))
-      .orderBy(asc(projects.createdAt));
+      .orderBy(asc(projectMembers.sortOrder), asc(projects.createdAt));
     return rows.map((r) => ({
       ...toProject(r.project),
       role: r.role,
@@ -136,5 +136,24 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       .set({ role })
       .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
     return this.findForProject(projectId, userId);
+  }
+
+  async reorderForUser(userId: string, orderedIds: readonly string[]): Promise<void> {
+    if (orderedIds.length === 0) return;
+    // Транзакция: все sort_order меняются атомарно. UPDATE скоупится по (projectId, userId),
+    // поэтому чужие membership'ы и id без membership'а просто не затрагиваются.
+    await this.db.transaction(async (tx) => {
+      for (let i = 0; i < orderedIds.length; i += 1) {
+        await tx
+          .update(projectMembers)
+          .set({ sortOrder: i })
+          .where(
+            and(
+              eq(projectMembers.projectId, orderedIds[i]!),
+              eq(projectMembers.userId, userId),
+            ),
+          );
+      }
+    });
   }
 }

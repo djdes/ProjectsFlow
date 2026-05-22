@@ -53,6 +53,17 @@ export class MockProjectRepository implements ProjectRepository {
     return delay(inbox);
   }
 
+  async reorder(orderedIds: readonly string[]): Promise<void> {
+    const byId = new Map(this.projects.map((p) => [p.id, p]));
+    const reordered = orderedIds
+      .map((id) => byId.get(id))
+      .filter((p): p is Project => p !== undefined);
+    const idSet = new Set(orderedIds);
+    const rest = this.projects.filter((p) => !idSet.has(p.id));
+    this.projects = [...reordered, ...rest];
+    await delay(undefined);
+  }
+
   async create(input: CreateProjectInput): Promise<Project> {
     const normalized = normalizeName(input.name);
     const duplicate = this.projects.some((p) => normalizeName(p.name) === normalized);

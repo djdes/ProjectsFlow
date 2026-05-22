@@ -38,8 +38,14 @@ export const updateProjectSchema = z
   })
   .refine((obj) => Object.keys(obj).length > 0, { message: 'Нечего обновлять' });
 
+// Персональная пересортировка: полный список id проектов в желаемом порядке.
+export const reorderProjectsSchema = z.object({
+  orderedIds: z.array(z.string().min(1)).min(1),
+});
+
 export type CreateProjectBody = z.infer<typeof createProjectSchema>;
 export type UpdateProjectBody = z.infer<typeof updateProjectSchema>;
+export type ReorderProjectsBody = z.infer<typeof reorderProjectsSchema>;
 
 export const createInviteSchema = z.object({
   role: z.enum(['editor', 'viewer']),

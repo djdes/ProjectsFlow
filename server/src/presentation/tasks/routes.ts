@@ -51,6 +51,9 @@ type Deps = {
   readonly deleteComment: DeleteTaskComment;
   readonly maxAttachmentBytes: number;
   readonly agentJobs: AgentJobRepository;
+  // Live-обновление: сигнал «в проекте изменились задачи» всем участникам (SSE).
+  // Best-effort, не блокирует ответ.
+  readonly notifyTaskChanged: (projectId: string) => void;
 };
 
 type TaskDto = Omit<Task, 'createdAt' | 'updatedAt'> & {
@@ -145,6 +148,7 @@ export function tasksRouter(deps: Deps): Router {
         description: body.description,
         status: body.status ?? 'todo',
       });
+      deps.notifyTaskChanged(projectId);
       res.status(201).json({ task: toDto(task) });
     } catch (e) {
       next(e);
@@ -162,6 +166,7 @@ export function tasksRouter(deps: Deps): Router {
         taskId,
         description: body.description,
       });
+      deps.notifyTaskChanged(projectId);
       res.json({ task: toDto(task) });
     } catch (e) {
       next(e);
@@ -181,6 +186,7 @@ export function tasksRouter(deps: Deps): Router {
         beforeTaskId: body.beforeTaskId,
         afterTaskId: body.afterTaskId,
       });
+      deps.notifyTaskChanged(projectId);
       res.json({ task: toDto(task) });
     } catch (e) {
       next(e);
@@ -192,6 +198,7 @@ export function tasksRouter(deps: Deps): Router {
       const projectId = req.params['projectId'] as string;
       const taskId = req.params['taskId'] as string;
       await deps.deleteTask.execute(projectId, req.user!.id, taskId);
+      deps.notifyTaskChanged(projectId);
       res.status(204).end();
     } catch (e) {
       next(e);
@@ -326,6 +333,7 @@ export function tasksRouter(deps: Deps): Router {
         taskId,
         body: body.body,
       });
+      deps.notifyTaskChanged(projectId);
       res.status(201).json({ comment: commentToDto(comment) });
     } catch (e) {
       next(e);
@@ -347,6 +355,7 @@ export function tasksRouter(deps: Deps): Router {
           commentId,
           body: body.body,
         });
+        deps.notifyTaskChanged(projectId);
         res.json({ comment: commentToDto(comment) });
       } catch (e) {
         next(e);
@@ -362,6 +371,7 @@ export function tasksRouter(deps: Deps): Router {
         const taskId = req.params['taskId'] as string;
         const commentId = req.params['commentId'] as string;
         await deps.deleteComment.execute(projectId, req.user!.id, taskId, commentId);
+        deps.notifyTaskChanged(projectId);
         res.status(204).end();
       } catch (e) {
         next(e);
