@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
 import { AppShell } from '@/presentation/layout/AppShell';
 import { HomePage } from '@/presentation/pages/HomePage';
 import { ProjectPage } from '@/presentation/pages/ProjectPage';
@@ -13,6 +13,13 @@ import { RegisterPage } from '@/presentation/pages/RegisterPage';
 import { DevicePage } from '@/presentation/pages/DevicePage';
 import { InvitePage } from '@/presentation/pages/InvitePage';
 import { ProtectedRoute } from '@/presentation/auth/ProtectedRoute';
+
+// Доска переехала с /projects/:id/tasks на /projects/:id. Старые ссылки
+// (например, из уведомлений) редиректим на новый «дом» проекта.
+function LegacyTasksRedirect(): React.ReactElement {
+  const { projectId } = useParams<{ projectId: string }>();
+  return <Navigate to={`/projects/${projectId}`} replace />;
+}
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -39,9 +46,13 @@ export const router = createBrowserRouter([
       { index: true, element: <HomePage /> },
       { path: 'inbox', element: <InboxPage /> },
       { path: 'notifications', element: <NotificationsPage /> },
-      { path: 'projects/:projectId', element: <ProjectPage /> },
+      // Доска задач — «дом» проекта: при входе сразу показываем kanban.
+      { path: 'projects/:projectId', element: <TasksPage /> },
+      // Обзор/настройки проекта (git, KB, команда) переехали на отдельный роут.
+      { path: 'projects/:projectId/overview', element: <ProjectPage /> },
       { path: 'projects/:projectId/kb', element: <KbPage /> },
-      { path: 'projects/:projectId/tasks', element: <TasksPage /> },
+      // Обратная совместимость со старыми ссылками на доску (напр. из уведомлений).
+      { path: 'projects/:projectId/tasks', element: <LegacyTasksRedirect /> },
       { path: 'profile', element: <ProfilePage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

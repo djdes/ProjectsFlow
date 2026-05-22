@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronRight, RefreshCw } from 'lucide-react';
+import { ChevronRight, RefreshCw, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { useProject } from '@/presentation/hooks/useProject';
@@ -65,19 +65,23 @@ export function TasksPage(): React.ReactElement {
           Проекты
         </Link>
         <ChevronRight className="size-4" />
-        <Link to={`/projects/${data.id}`} className="hover:text-foreground">
-          {data.name}
-        </Link>
-        <ChevronRight className="size-4" />
-        <span className="text-foreground">Задачи</span>
+        <span className="text-foreground">{data.name}</span>
       </nav>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-semibold tracking-tight">Задачи</h1>
-        <Button variant="outline" size="sm" onClick={sync} disabled={syncing || !data.gitRepoUrl}>
-          <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
-          Синхронизировать коммиты
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link to={`/projects/${data.id}/overview`}>
+              <Settings className="size-4" />
+              Обзор проекта
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" onClick={sync} disabled={syncing || !data.gitRepoUrl}>
+            <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
+            Синхронизировать коммиты
+          </Button>
+        </div>
       </div>
 
       {!data.gitRepoUrl && (

@@ -60,7 +60,11 @@ export function ProjectPage(): React.ReactElement {
           Проекты
         </Link>
         <ChevronRight className="size-4" />
-        <span className="text-foreground">{data.name}</span>
+        <Link to={`/projects/${data.id}`} className="hover:text-foreground">
+          {data.name}
+        </Link>
+        <ChevronRight className="size-4" />
+        <span className="text-foreground">Обзор</span>
       </nav>
 
       <div className="space-y-3">
@@ -68,7 +72,7 @@ export function ProjectPage(): React.ReactElement {
         <div className="flex flex-wrap items-center gap-2">
           <Badge>{statusLabel[data.status]}</Badge>
           <Button asChild variant="outline" size="sm">
-            <Link to={`/projects/${data.id}/tasks`}>
+            <Link to={`/projects/${data.id}`}>
               <LayoutGrid className="size-4" />
               Доска задач
             </Link>
