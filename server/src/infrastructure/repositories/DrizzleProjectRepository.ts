@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { projects, type ProjectRow } from '../db/schema.js';
 import type { Project, ProjectStatus } from '../../domain/project/Project.js';
@@ -87,5 +87,13 @@ export class DrizzleProjectRepository implements ProjectRepository {
     }
 
     return this.getById(id);
+  }
+
+  async listWithGitRepo(): Promise<Project[]> {
+    const rows = await this.db
+      .select()
+      .from(projects)
+      .where(isNotNull(projects.gitRepoUrl));
+    return rows.map(toProject);
   }
 }

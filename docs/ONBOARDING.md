@@ -257,6 +257,40 @@ mysql -u projectsflow -p'DWjrfrE8QSLk6opq!' projectsflow
 
 ---
 
+## 6.6 Коллаборация: email, real-time (SSE), root-admin
+
+Эти фичи добавлены вместе (приглашения по почте, live-уведомления, git-collision,
+admin-доступ). Нужны новые env-переменные (шаблон — `.env.example`):
+
+| Переменная | Назначение |
+| --- | --- |
+| `APP_URL` | Базовый URL для accept-ссылок в письмах (локально `http://localhost:5173`). |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | SMTP для invite-писем. Если `SMTP_HOST` пуст — письма логируются в консоль (dev-заглушка). |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Сид root-админа (`scripts/seed-admin.mjs`). |
+
+- **Root-admin.** Один пользователь с `users.is_admin=1` получает глобальный доступ ко
+  всем проектам (через admin-bypass в `requireProjectAccess`) + раздел `/admin`
+  (все проекты по владельцам, управление пользователями). Засидить/сбросить пароль:
+  ```bash
+  npm run db:migrate      # применит 016_users_is_admin + 017_project_join_requests
+  npm run db:seed-admin    # создаст/обновит ADMIN_EMAIL с is_admin=1 (идемпотентно)
+  ```
+- **SSE (live-уведомления).** Эндпоинт `GET /api/notifications/stream` держит
+  long-lived `text/event-stream`. **На проде nginx буферизует SSE по умолчанию** —
+  события копятся и не доходят. Нужен (делает админ FastPanel) для этого location:
+  ```nginx
+  location /api/notifications/stream {
+      proxy_pass http://127.0.0.1:4317;
+      proxy_buffering off;
+      proxy_cache off;
+      proxy_read_timeout 1h;
+  }
+  ```
+  В ответе уже стоит `X-Accel-Buffering: no` — если кастомный location не добавят,
+  это всё равно отключит буферизацию на стандартном проксировании.
+
+---
+
 ## 6.5 Agent runner локально (/loop)
 
 ProjectsFlow умеет автоматически выполнять задачи через локальную Claude Code сессию.

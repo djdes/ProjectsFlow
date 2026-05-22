@@ -23,6 +23,7 @@
     "lint": "npm run lint -w @projectsflow/client",
     "start": "node server/dist/index.js",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
+    "db:seed-admin": "node --env-file=.env scripts/seed-admin.mjs",
     "deploy": "node scripts/deploy.mjs"
   },
   "devDependencies": {

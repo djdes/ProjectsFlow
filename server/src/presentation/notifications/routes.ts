@@ -11,6 +11,8 @@ type Deps = {
   readonly countUnread: CountUnreadNotifications;
   readonly markRead: MarkNotificationRead;
   readonly markAllRead: MarkAllNotificationsRead;
+  // Подписка на real-time-доставку (SSE). Возвращает unsubscribe.
+  readonly subscribe: (userId: string, fn: (n: Notification) => void) => () => void;
 };
 
 type NotificationDto = Omit<Notification, 'createdAt' | 'readAt'> & {
@@ -44,6 +46,32 @@ export function notificationsRouter(deps: Deps): Router {
     } catch (e) {
       next(e);
     }
+  });
+
+  // SSE-поток real-time-уведомлений. Клиент (EventSource) держит коннект; при создании
+  // любого уведомления для этого юзера — push'им event 'notification'. X-Accel-Buffering:no
+  // отключает буферизацию nginx (иначе события копятся и не доходят сразу).
+  router.get('/stream', (req: Request, res: Response) => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    res.write('retry: 5000\n\n');
+
+    const send = (n: Notification): void => {
+      res.write(`event: notification\ndata: ${JSON.stringify(toDto(n))}\n\n`);
+    };
+    const unsubscribe = deps.subscribe(req.user!.id, send);
+
+    // Heartbeat — не даёт прокси/браузеру закрыть «молчащий» коннект.
+    const heartbeat = setInterval(() => res.write(': ping\n\n'), 25_000);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
   });
 
   router.get('/unread-count', async (req: Request, res: Response, next: NextFunction) => {

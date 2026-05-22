@@ -27,4 +27,7 @@ export interface ProjectRepository {
   create(input: CreateProjectInput): Promise<Project>;
   // Без owner-фильтра: caller уже проверил доступ. Возвращает null если проект не найден.
   update(id: string, patch: UpdateProjectInput): Promise<Project | null>;
+  // Все проекты с непустым git_repo_url. Нормализацию/фильтрацию делает use-case
+  // (CheckGitCollision) — он же контролирует cross-tenant-раскрытие.
+  listWithGitRepo(): Promise<Project[]>;
 }

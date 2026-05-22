@@ -7,18 +7,28 @@ import { TasksPage } from '@/presentation/pages/TasksPage';
 import { InboxPage } from '@/presentation/pages/InboxPage';
 import { NotificationsPage } from '@/presentation/pages/NotificationsPage';
 import { ProfilePage } from '@/presentation/pages/ProfilePage';
+import { AdminPage } from '@/presentation/pages/AdminPage';
 import { NotFoundPage } from '@/presentation/pages/NotFoundPage';
 import { LoginPage } from '@/presentation/pages/LoginPage';
 import { RegisterPage } from '@/presentation/pages/RegisterPage';
 import { DevicePage } from '@/presentation/pages/DevicePage';
 import { InvitePage } from '@/presentation/pages/InvitePage';
 import { ProtectedRoute } from '@/presentation/auth/ProtectedRoute';
+import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 
 // Доска переехала с /projects/:id/tasks на /projects/:id. Старые ссылки
 // (например, из уведомлений) редиректим на новый «дом» проекта.
 function LegacyTasksRedirect(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
   return <Navigate to={`/projects/${projectId}`} replace />;
+}
+
+// Гард admin-раздела: не-админа уводим на главную. Сервер всё равно отдаёт 403.
+function AdminOnly({ children }: { children: React.ReactElement }): React.ReactElement {
+  const { user, loading } = useCurrentUser();
+  if (loading) return <></>;
+  if (!user?.isAdmin) return <Navigate to="/" replace />;
+  return children;
 }
 
 export const router = createBrowserRouter([
@@ -54,6 +64,14 @@ export const router = createBrowserRouter([
       // Обратная совместимость со старыми ссылками на доску (напр. из уведомлений).
       { path: 'projects/:projectId/tasks', element: <LegacyTasksRedirect /> },
       { path: 'profile', element: <ProfilePage /> },
+      {
+        path: 'admin',
+        element: (
+          <AdminOnly>
+            <AdminPage />
+          </AdminOnly>
+        ),
+      },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

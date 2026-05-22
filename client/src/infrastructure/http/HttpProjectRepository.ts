@@ -5,6 +5,7 @@ import { ProjectNameAlreadyExistsError } from '@/domain/project/errors';
 import type {
   CreateInviteInput,
   CreateProjectInput,
+  GitCollision,
   ProjectRepository,
   UpdateProjectInput,
 } from '@/application/project/ProjectRepository';
@@ -19,6 +20,8 @@ type ProjectDto = {
   kbRepoFullName: string | null;
   isInbox?: boolean;
   role?: ProjectRole;
+  memberCount?: number;
+  taskCount?: number;
   createdAt: string;
 };
 
@@ -33,6 +36,8 @@ function fromDto(dto: ProjectDto): Project {
     // Legacy-fallback: до P3-релиза сервера role могло не быть в ответе. Дефолт 'owner'
     // — для single-tenant юзеров это и так было true, UI не сломается.
     role: dto.role ?? 'owner',
+    memberCount: dto.memberCount,
+    taskCount: dto.taskCount,
     createdAt: new Date(dto.createdAt),
   };
 }
@@ -180,5 +185,19 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async deleteInvite(projectId: string, inviteId: string): Promise<void> {
     await httpClient.delete<void>(`/projects/${projectId}/invites/${inviteId}`);
+  }
+
+  async checkGitCollision(gitRepoUrl: string): Promise<GitCollision> {
+    return httpClient.get<GitCollision>(
+      `/projects/git-collision?url=${encodeURIComponent(gitRepoUrl)}`,
+    );
+  }
+
+  async requestJoin(projectId: string): Promise<void> {
+    await httpClient.post<unknown>(`/projects/${projectId}/join-requests`);
+  }
+
+  async resolveJoinRequest(requestId: string, accept: boolean): Promise<void> {
+    await httpClient.post<unknown>(`/projects/join-requests/${requestId}/resolve`, { accept });
   }
 }

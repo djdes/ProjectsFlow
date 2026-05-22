@@ -8,7 +8,13 @@ import { cn } from '@/lib/utils';
 import type { Notification } from '@/domain/notifications/Notification';
 import { useContainer } from '@/infrastructure/di/container';
 import { useUnreadNotificationsCount } from '@/presentation/hooks/useUnreadNotificationsCount';
+import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { getInitials } from '@/presentation/layout/projectIcons';
+
+const roleLabel: Record<'editor' | 'viewer', string> = {
+  editor: 'редактор',
+  viewer: 'наблюдатель',
+};
 
 type FilterMode = 'all' | 'unread';
 
@@ -29,9 +35,10 @@ function relativeTime(date: Date): string {
 }
 
 export function NotificationsPage(): React.ReactElement {
-  const { notificationRepository } = useContainer();
+  const { notificationRepository, inviteRepository, projectRepository } = useContainer();
   const navigate = useNavigate();
   const { refresh: refreshBadge } = useUnreadNotificationsCount();
+  const { applyAppend } = useProjectsContext();
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterMode>('all');
@@ -89,8 +96,36 @@ export function NotificationsPage(): React.ReactElement {
     // Помечаем прочитанным + переходим на проект/задачу. Глубокий линк task→диалог
     // оставлен на потом — пока ведём на доску.
     await markRead(n);
-    if (n.payload.type === 'comment_mention') {
-      navigate(`/projects/${n.payload.projectId}/tasks`);
+    if (n.payload.type === 'comment_mention' || n.payload.type === 'join_request') {
+      navigate(`/projects/${n.payload.projectId}`);
+    }
+    // project_invite: переход — по кнопке «Принять» (handleAcceptInvite), не по строке.
+  };
+
+  const handleResolveJoin = async (n: Notification, accept: boolean): Promise<void> => {
+    if (n.payload.type !== 'join_request') return;
+    try {
+      await projectRepository.resolveJoinRequest(n.payload.joinRequestId, accept);
+      await markRead(n);
+      toast.success(accept ? 'Доступ предоставлен' : 'Запрос отклонён');
+    } catch (e) {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+    }
+  };
+
+  const handleAcceptInvite = async (n: Notification): Promise<void> => {
+    if (n.payload.type !== 'project_invite') return;
+    const { token, projectId } = n.payload;
+    try {
+      await inviteRepository.accept(token);
+      await markRead(n);
+      // Подтягиваем проект в список сайдбара без перезагрузки.
+      const project = await projectRepository.getById(projectId).catch(() => null);
+      if (project) applyAppend(project);
+      toast.success(`Вы присоединились к «${n.payload.projectName}»`);
+      navigate(`/projects/${projectId}`);
+    } catch (e) {
+      toast.error(`Не удалось принять приглашение: ${(e as Error).message}`);
     }
   };
 
@@ -130,7 +165,13 @@ export function NotificationsPage(): React.ReactElement {
       ) : (
         <ul className="divide-y overflow-hidden rounded-lg border bg-card">
           {items.map((n) => (
-            <NotificationRow key={n.id} n={n} onClick={() => void handleClick(n)} />
+            <NotificationRow
+              key={n.id}
+              n={n}
+              onClick={() => void handleClick(n)}
+              onAccept={() => void handleAcceptInvite(n)}
+              onResolveJoin={(accept) => void handleResolveJoin(n, accept)}
+            />
           ))}
         </ul>
       )}
@@ -204,9 +245,13 @@ function FilterButton({
 function NotificationRow({
   n,
   onClick,
+  onAccept,
+  onResolveJoin,
 }: {
   n: Notification;
   onClick: () => void;
+  onAccept: () => void;
+  onResolveJoin: (accept: boolean) => void;
 }): React.ReactElement {
   const isUnread = n.readAt === null;
   const payload = n.payload;
@@ -233,21 +278,77 @@ function NotificationRow({
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1 space-y-0.5">
-        <p className="text-sm leading-snug">
-          <span className="font-medium">{payload.actorDisplayName}</span> упомянул тебя в{' '}
-          <span className="font-medium">«{payload.projectName}»</span>
-          {payload.taskExcerpt && (
-            <>
-              {' · '}
-              <span className="italic text-muted-foreground">{payload.taskExcerpt}</span>
-            </>
-          )}
-        </p>
-        {payload.commentExcerpt && (
-          <p className="line-clamp-2 text-xs text-muted-foreground">
-            «{payload.commentExcerpt}»
-          </p>
+        {payload.type === 'comment_mention' && (
+          <>
+            <p className="text-sm leading-snug">
+              <span className="font-medium">{payload.actorDisplayName}</span> упомянул тебя в{' '}
+              <span className="font-medium">«{payload.projectName}»</span>
+              {payload.taskExcerpt && (
+                <>
+                  {' · '}
+                  <span className="italic text-muted-foreground">{payload.taskExcerpt}</span>
+                </>
+              )}
+            </p>
+            {payload.commentExcerpt && (
+              <p className="line-clamp-2 text-xs text-muted-foreground">
+                «{payload.commentExcerpt}»
+              </p>
+            )}
+          </>
         )}
+
+        {payload.type === 'project_invite' && (
+          <>
+            <p className="text-sm leading-snug">
+              <span className="font-medium">{payload.actorDisplayName}</span> приглашает вас в{' '}
+              <span className="font-medium">«{payload.projectName}»</span> как{' '}
+              {roleLabel[payload.role]}
+            </p>
+            <div className="pt-1">
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAccept();
+                }}
+              >
+                Принять
+              </Button>
+            </div>
+          </>
+        )}
+
+        {payload.type === 'join_request' && (
+          <>
+            <p className="text-sm leading-snug">
+              <span className="font-medium">{payload.requesterDisplayName}</span> просит доступ к
+              проекту <span className="font-medium">«{payload.projectName}»</span>
+            </p>
+            <div className="flex gap-2 pt-1">
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onResolveJoin(true);
+                }}
+              >
+                Принять
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onResolveJoin(false);
+                }}
+              >
+                Отклонить
+              </Button>
+            </div>
+          </>
+        )}
+
         <p className="text-[11px] text-muted-foreground">{relativeTime(n.createdAt)}</p>
       </div>
     </li>

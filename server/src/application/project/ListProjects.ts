@@ -1,10 +1,11 @@
-import type { Project } from '../../domain/project/Project.js';
-import type { ProjectRole } from '../../domain/project/ProjectMembership.js';
-import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
+import type {
+  ProjectMemberRepository,
+  ProjectWithRole,
+} from './ProjectMemberRepository.js';
 
 // Multi-tenancy: возвращаем все проекты в которых юзер состоит (owner / editor / viewer)
-// + его role, чтобы клиент мог рисовать бейдж рядом с названием.
-export type ProjectWithRole = Project & { readonly role: ProjectRole };
+// + его role + read-model счётчики (members/tasks). Единый источник типа — репозиторий.
+export type { ProjectWithRole };
 
 export class ListProjects {
   constructor(private readonly members: ProjectMemberRepository) {}

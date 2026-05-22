@@ -3,6 +3,8 @@ export type User = {
   readonly email: string;
   readonly displayName: string;
   readonly avatarUrl: string | null;
+  // Системный admin/root: глобальный доступ ко всем проектам + раздел управления.
+  readonly isAdmin: boolean;
   readonly createdAt: Date;
 };
 

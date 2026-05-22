@@ -32,6 +32,8 @@ export const users = mysqlTable(
     passwordHash: varchar('password_hash', { length: 255 }).notNull(),
     displayName: varchar('display_name', { length: 80 }).notNull(),
     avatarUrl: varchar('avatar_url', { length: 500 }),
+    // Системный admin/root: глобальный доступ ко всем проектам + раздел управления.
+    isAdmin: boolean('is_admin').notNull().default(false),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -118,6 +120,29 @@ export const projectInvites = mysqlTable(
 
 export type ProjectInviteRow = typeof projectInvites.$inferSelect;
 export type NewProjectInviteRow = typeof projectInvites.$inferInsert;
+
+// Заявки на вступление по совпадению git-репо (см. миграцию 017).
+export const projectJoinRequests = mysqlTable(
+  'project_join_requests',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    requesterUserId: char('requester_user_id', { length: 36 }).notNull(),
+    gitRepoUrl: varchar('git_repo_url', { length: 500 }).notNull(),
+    status: mysqlEnum('status', ['pending', 'accepted', 'declined']).notNull().default('pending'),
+    createdAt: createdAtCol(),
+    resolvedAt: timestamp('resolved_at'),
+    resolvedByUserId: char('resolved_by_user_id', { length: 36 }),
+  },
+  (t) => [
+    uniqueIndex('uq_join_req_project_requester').on(t.projectId, t.requesterUserId),
+    index('idx_join_req_project').on(t.projectId),
+    index('idx_join_req_requester').on(t.requesterUserId),
+  ],
+);
+
+export type ProjectJoinRequestRow = typeof projectJoinRequests.$inferSelect;
+export type NewProjectJoinRequestRow = typeof projectJoinRequests.$inferInsert;
 
 // In-app уведомления (см. миграцию 012). type+payload — гибкая полиморфная структура.
 export const notifications = mysqlTable(

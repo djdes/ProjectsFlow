@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { Users } from 'lucide-react';
 import { useProjects } from '@/presentation/hooks/useProjects';
 import { cn } from '@/lib/utils';
 import { defaultProjectIcon as ProjectIcon } from './projectIcons';
@@ -32,6 +33,22 @@ function SidebarProjectListItem({ project }: { project: Project }): React.ReactE
           )}
           <ProjectIcon className="size-4 shrink-0 text-muted-foreground" />
           <span className="flex-1 truncate">{project.name}</span>
+          {(project.memberCount ?? 0) > 1 && (
+            <Users
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-label="Совместный проект"
+            >
+              <title>Совместный проект</title>
+            </Users>
+          )}
+          {(project.taskCount ?? 0) > 0 && (
+            <span
+              className="shrink-0 rounded-full bg-muted px-1.5 text-[11px] leading-5 tabular-nums text-muted-foreground"
+              aria-label={`Задач: ${project.taskCount}`}
+            >
+              {project.taskCount}
+            </span>
+          )}
           {project.status !== 'archived' && (
             <span
               className={cn('size-1.5 shrink-0 rounded-full', statusDotColor[project.status])}

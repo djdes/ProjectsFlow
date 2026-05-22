@@ -16,10 +16,36 @@ export type CommentMentionPayload = {
   readonly actorDisplayName: string;
 };
 
-// Будущие типы добавятся сюда:
-// export type TaskAssignedPayload = { type: 'task_assigned'; ... };
-// и т.д. NotificationPayload = CommentMentionPayload | TaskAssignedPayload | ...
-export type NotificationPayload = CommentMentionPayload;
+// Приглашение в проект. Создаётся при invite на email уже зарегистрированного юзера —
+// он видит уведомление с кнопкой «Принять» (token ведёт на /invite/:token).
+export type ProjectInvitePayload = {
+  readonly type: 'project_invite';
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly role: 'editor' | 'viewer';
+  readonly inviteId: string;
+  readonly token: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
+// Запрос на вступление по совпадению git-репо. Прилетает владельцу проекта; он решает,
+// пускать ли заявителя. Подтверждение добавляет заявителя в project_members.
+export type JoinRequestPayload = {
+  readonly type: 'join_request';
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly joinRequestId: string;
+  readonly requesterUserId: string;
+  readonly requesterDisplayName: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
+export type NotificationPayload =
+  | CommentMentionPayload
+  | ProjectInvitePayload
+  | JoinRequestPayload;
 
 export type Notification = {
   readonly id: string;

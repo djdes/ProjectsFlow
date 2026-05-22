@@ -10,6 +10,9 @@ import type { TransferProjectOwnership } from '../../application/project/Transfe
 import type { CreateProjectInvite } from '../../application/project/CreateProjectInvite.js';
 import type { ListProjectInvites } from '../../application/project/ListProjectInvites.js';
 import type { DeleteProjectInvite } from '../../application/project/DeleteProjectInvite.js';
+import type { CheckGitCollision } from '../../application/project/CheckGitCollision.js';
+import type { RequestProjectJoin } from '../../application/project/RequestProjectJoin.js';
+import type { ResolveProjectJoinRequest } from '../../application/project/ResolveProjectJoinRequest.js';
 import type { ProjectMemberWithUser } from '../../application/project/ProjectMemberRepository.js';
 import type { ListProjectCommits } from '../../application/github/ListProjectCommits.js';
 import { ProjectNotFoundError } from '../../domain/project/errors.js';
@@ -38,6 +41,9 @@ type Deps = {
   readonly createInvite: CreateProjectInvite;
   readonly listInvites: ListProjectInvites;
   readonly deleteInvite: DeleteProjectInvite;
+  readonly checkGitCollision: CheckGitCollision;
+  readonly requestJoin: RequestProjectJoin;
+  readonly resolveJoinRequest: ResolveProjectJoinRequest;
   // Базовый URL приложения — нужен для формирования invite-URL'а в ответе на создание.
   readonly appUrl: string;
 };
@@ -49,6 +55,9 @@ type Deps = {
 type ProjectDto = Omit<Project, 'createdAt'> & {
   createdAt: string;
   role: 'owner' | 'editor' | 'viewer';
+  // Только на list-эндпоинте (приходят из ProjectWithRole); на get/create/update — undefined.
+  memberCount?: number;
+  taskCount?: number;
 };
 
 function toDto(project: ProjectWithRole | Project, fallbackRole: 'owner' | 'editor' | 'viewer' = 'owner'): ProjectDto {
@@ -138,6 +147,34 @@ export function projectsRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  // Git-collision: есть ли чужой проект с тем же репо. Регистрируем ДО '/:id', иначе
+  // 'git-collision' матчится как id.
+  router.get('/git-collision', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const url = typeof req.query['url'] === 'string' ? req.query['url'] : '';
+      const result = await deps.checkGitCollision.execute(req.user!.id, url);
+      res.json(result);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Разрешение заявки на вступление (owner/admin). 3-сегментный путь — не клешится с '/:id'.
+  router.post(
+    '/join-requests/:requestId/resolve',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const requestId = req.params['requestId'];
+        if (typeof requestId !== 'string') throw new ProjectNotFoundError();
+        const accept = req.body?.accept === true;
+        const result = await deps.resolveJoinRequest.execute(requestId, req.user!.id, accept);
+        res.json(result);
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -309,6 +346,18 @@ export function projectsRouter(deps: Deps): Router {
       }
     },
   );
+
+  // Join-requests: заявитель просится в проект (по совпадению git-репо).
+  router.post('/:id/join-requests', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const result = await deps.requestJoin.execute(req.user!.id, id);
+      res.status(201).json(result);
+    } catch (e) {
+      next(e);
+    }
+  });
 
   return router;
 }

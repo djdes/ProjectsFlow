@@ -49,4 +49,5 @@ export const seedUser: User = {
   email: 'oleg@projectsflow.ru',
   displayName: 'Oleg',
   avatarUrl: null,
+  isAdmin: false,
 };

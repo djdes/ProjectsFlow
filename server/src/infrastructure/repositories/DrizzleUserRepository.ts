@@ -14,6 +14,7 @@ function toUser(row: UserRow): User {
     email: row.email,
     displayName: row.displayName,
     avatarUrl: row.avatarUrl ?? null,
+    isAdmin: row.isAdmin,
     createdAt: row.createdAt,
   };
 }

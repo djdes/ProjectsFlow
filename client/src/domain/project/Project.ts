@@ -14,5 +14,9 @@ export type Project = {
   // Multi-tenancy: роль ТЕКУЩЕГО юзера в проекте (для owner = создатель, для editor/viewer
   // — пришёл через invite). UI рисует бейдж + блокирует кнопки на основе этого поля.
   readonly role: ProjectRole;
+  // Read-model счётчики для sidebar. Приходят только из list-эндпоинта (на get/create —
+  // отсутствуют). memberCount > 1 ⇒ совместный проект (иконка участников).
+  readonly memberCount?: number;
+  readonly taskCount?: number;
   readonly createdAt: Date;
 };

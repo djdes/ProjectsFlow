@@ -4,6 +4,7 @@ import type { ProjectInvite } from '@/domain/project/ProjectInvite';
 import { ProjectNameAlreadyExistsError } from '@/domain/project/errors';
 import type {
   CreateInviteInput,
+  GitCollision,
   ProjectRepository,
   CreateProjectInput,
   UpdateProjectInput,
@@ -128,6 +129,17 @@ export class MockProjectRepository implements ProjectRepository {
   deleteInvite(projectId: string, inviteId: string): Promise<void> {
     return Promise.reject(
       new Error(`Mock.deleteInvite(${projectId}, ${inviteId}): not implemented`),
+    );
+  }
+  checkGitCollision(): Promise<GitCollision> {
+    return Promise.resolve({ exists: false });
+  }
+  requestJoin(projectId: string): Promise<void> {
+    return Promise.reject(new Error(`Mock.requestJoin(${projectId}): not implemented`));
+  }
+  resolveJoinRequest(requestId: string, accept: boolean): Promise<void> {
+    return Promise.reject(
+      new Error(`Mock.resolveJoinRequest(${requestId}, ${accept}): not implemented`),
     );
   }
 }

@@ -4,14 +4,19 @@ import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { NewProjectDialogProvider } from '@/presentation/components/forms/NewProjectDialogProvider';
+import { GlobalSearchProvider } from '@/presentation/components/search/GlobalSearchProvider';
 import { ProjectsProvider } from '@/presentation/hooks/ProjectsProvider';
 import { GithubConnectionProvider } from '@/presentation/hooks/GithubConnectionProvider';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
+import { useNotificationStream } from '@/presentation/hooks/useNotificationStream';
 import { Sidebar } from './Sidebar';
 
 export function AppShell(): React.ReactElement {
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // SSE real-time-уведомления (toast + мгновенный бейдж). Только для authenticated-сессии,
+  // которой и является AppShell (рендерится внутри ProtectedRoute).
+  useNotificationStream();
 
   // ProjectsProvider — внутри ProtectedRoute (этот компонент рендерится только для authenticated),
   // поэтому не делает 401-запросов когда пользователь не залогинен.
@@ -19,6 +24,7 @@ export function AppShell(): React.ReactElement {
     <ProjectsProvider>
       <GithubConnectionProvider>
         <NewProjectDialogProvider>
+        <GlobalSearchProvider>
         {isDesktop ? (
           <div className="grid h-dvh grid-cols-[260px_1fr] bg-background text-foreground">
             <Sidebar />
@@ -51,6 +57,7 @@ export function AppShell(): React.ReactElement {
             </Sheet>
           </div>
         )}
+        </GlobalSearchProvider>
         </NewProjectDialogProvider>
       </GithubConnectionProvider>
     </ProjectsProvider>
