@@ -296,6 +296,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,
+      comments: taskCommentRepo,
     }),
     createTask: new CreateTask({
       projects: projectRepo,
@@ -457,6 +458,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,
+      comments: taskCommentRepo,
     }),
     createTask: new CreateTask({
       projects: projectRepo,

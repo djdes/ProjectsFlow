@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, count, eq, inArray } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { taskComments, type TaskCommentRow } from '../db/schema.js';
 import type { TaskComment } from '../../domain/task/TaskComment.js';
@@ -69,5 +69,17 @@ export class DrizzleTaskCommentRepository implements TaskCommentRepository {
   async deleteByTask(taskId: string): Promise<number> {
     const result = await this.db.delete(taskComments).where(eq(taskComments.taskId, taskId));
     return (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
+  }
+
+  async countsByTasks(taskIds: readonly string[]): Promise<ReadonlyMap<string, number>> {
+    if (taskIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ taskId: taskComments.taskId, n: count() })
+      .from(taskComments)
+      .where(inArray(taskComments.taskId, [...taskIds]))
+      .groupBy(taskComments.taskId);
+    const m = new Map<string, number>();
+    for (const r of rows) m.set(r.taskId, Number(r.n));
+    return m;
   }
 }

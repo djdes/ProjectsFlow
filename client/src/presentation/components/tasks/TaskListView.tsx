@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent } from 'react';
-import { GitCommit, ImageIcon, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { GitCommit, ImageIcon, Loader2, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
@@ -174,7 +174,10 @@ function TaskListRow({
   onDelete: () => void;
 }): React.ReactElement {
   const isDone = task.status === 'done';
-  const hasBadges = (task.commitCount ?? 0) > 0 || (task.attachmentCount ?? 0) > 0;
+  const hasBadges =
+    (task.commitCount ?? 0) > 0 ||
+    (task.attachmentCount ?? 0) > 0 ||
+    (task.commentCount ?? 0) > 0;
 
   return (
     <li
@@ -205,6 +208,12 @@ function TaskListRow({
               <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-emerald-600 dark:bg-emerald-400/15 dark:text-emerald-400">
                 <ImageIcon className="size-2.5" />
                 {task.attachmentCount}
+              </span>
+            )}
+            {(task.commentCount ?? 0) > 0 && (
+              <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-violet-600 dark:bg-violet-400/15 dark:text-violet-400">
+                <MessageSquare className="size-2.5" />
+                {task.commentCount}
               </span>
             )}
           </div>

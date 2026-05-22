@@ -75,9 +75,10 @@ type TaskDto = Omit<Task, 'createdAt' | 'updatedAt'> & {
   createdAt: string;
   updatedAt: string;
   commitCount?: number;
+  commentCount?: number;
 };
 
-function taskToDto(t: Task & { commitCount?: number }): TaskDto {
+function taskToDto(t: Task & { commitCount?: number; commentCount?: number }): TaskDto {
   return {
     ...t,
     createdAt: t.createdAt.toISOString(),

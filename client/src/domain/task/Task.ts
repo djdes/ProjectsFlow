@@ -15,6 +15,7 @@ export type Task = {
   // Заполняются list-эндпоинтом. Для одиночных task-fetch'ей могут отсутствовать.
   readonly commitCount?: number;
   readonly attachmentCount?: number;
+  readonly commentCount?: number;
   readonly delegatedToAgent: boolean;
   readonly agentJob: AgentJob | null;
 };

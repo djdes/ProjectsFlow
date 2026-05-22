@@ -21,4 +21,6 @@ export interface TaskCommentRepository {
   delete(commentId: string): Promise<boolean>;
   // Чистка при удалении задачи — чтоб не оставались висячие comment-строки.
   deleteByTask(taskId: string): Promise<number>;
+  // Кол-во комментариев по каждой задаче — для бейджа в списке задач.
+  countsByTasks(taskIds: readonly string[]): Promise<ReadonlyMap<string, number>>;
 }

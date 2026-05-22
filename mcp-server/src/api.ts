@@ -36,6 +36,7 @@ export type Task = {
   createdAt: string;
   updatedAt: string;
   commitCount?: number;
+  commentCount?: number;
 };
 
 export type TaskCommit = {

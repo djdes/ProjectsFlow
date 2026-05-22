@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
-import { ArrowRight, GitCommit, ImageIcon, Trash2 } from 'lucide-react';
+import { ArrowRight, GitCommit, ImageIcon, MessageSquare, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
@@ -115,7 +115,10 @@ export function KanbanCard({
           <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-snug">
             {task.description ?? '—'}
           </p>
-          {(showShortId || (task.commitCount ?? 0) > 0 || (task.attachmentCount ?? 0) > 0) && (
+          {(showShortId ||
+            (task.commitCount ?? 0) > 0 ||
+            (task.attachmentCount ?? 0) > 0 ||
+            (task.commentCount ?? 0) > 0) && (
             <div className="mt-2 flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
               {showShortId && (
                 <span className="font-mono normal-case tracking-normal opacity-60">
@@ -132,6 +135,12 @@ export function KanbanCard({
                 <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-emerald-600 dark:bg-emerald-400/15 dark:text-emerald-400">
                   <ImageIcon className="size-2.5" />
                   {task.attachmentCount}
+                </span>
+              )}
+              {(task.commentCount ?? 0) > 0 && (
+                <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-violet-600 dark:bg-violet-400/15 dark:text-violet-400">
+                  <MessageSquare className="size-2.5" />
+                  {task.commentCount}
                 </span>
               )}
             </div>

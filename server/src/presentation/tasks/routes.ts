@@ -58,6 +58,7 @@ type TaskDto = Omit<Task, 'createdAt' | 'updatedAt'> & {
   updatedAt: string;
   commitCount?: number;
   attachmentCount?: number;
+  commentCount?: number;
 };
 
 function toDto(t: Task | TaskWithCounts): TaskDto {
@@ -68,6 +69,7 @@ function toDto(t: Task | TaskWithCounts): TaskDto {
   };
   if ('commitCount' in t) base.commitCount = t.commitCount;
   if ('attachmentCount' in t) base.attachmentCount = t.attachmentCount;
+  if ('commentCount' in t) base.commentCount = t.commentCount;
   return base;
 }
 

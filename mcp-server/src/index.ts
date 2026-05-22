@@ -126,7 +126,8 @@ const TOOLS = [
     name: 'pf_list_tasks',
     description:
       "List kanban tasks in a project. Returns id, title, description, status " +
-      "('backlog' | 'todo' | 'in_progress' | 'done'), position, and commitCount. 'backlog' " +
+      "('backlog' | 'todo' | 'in_progress' | 'done'), position, commitCount, and commentCount " +
+      '(>0 means the task already has a discussion thread — read it via pf_get_task). \'backlog\' ' +
       'is the unnamed left-most column for raw triage items — users manually promote them ' +
       'to TODO. Use this BEFORE making a commit: read open tasks (todo + in_progress), match ' +
       'against your staged diff and planned commit message, ask the user to confirm if you ' +

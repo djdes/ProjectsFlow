@@ -5,6 +5,7 @@ import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
+import type { TaskCommentRepository } from './TaskCommentRepository.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -12,11 +13,13 @@ type Deps = {
   readonly tasks: TaskRepository;
   readonly taskCommits: TaskCommitRepository;
   readonly attachments: TaskAttachmentRepository;
+  readonly comments: TaskCommentRepository;
 };
 
 export type TaskWithCounts = Task & {
   readonly commitCount: number;
   readonly attachmentCount: number;
+  readonly commentCount: number;
 };
 
 export class ListTasks {
@@ -28,10 +31,12 @@ export class ListTasks {
     const ids = tasks.map((t) => t.id);
     const commitCounts = await this.deps.taskCommits.countsByTasks(ids);
     const attachmentCounts = await this.deps.attachments.countsByTasks(ids);
+    const commentCounts = await this.deps.comments.countsByTasks(ids);
     return tasks.map((t) => ({
       ...t,
       commitCount: commitCounts.get(t.id) ?? 0,
       attachmentCount: attachmentCounts.get(t.id) ?? 0,
+      commentCount: commentCounts.get(t.id) ?? 0,
     }));
   }
 }
