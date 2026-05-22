@@ -365,6 +365,58 @@ const TOOLS = [
     },
   },
   {
+    name: 'pf_check_repo_usage',
+    description:
+      'PRIVATE check whether a git repository is already connected to a project. Returns ' +
+      "ownership ('none' = nobody uses it; 'self' = you already have it; 'other' = it belongs " +
+      'to a DIFFERENT user) and, only when other, an opaque requestTarget token. This NEVER ' +
+      "reveals the other project's name, id, owner or count — privacy by design. Call this " +
+      'before creating a project that connects an existing repo: if ownership=other, offer the ' +
+      'user to request shared access via pf_request_repo_access.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        gitRepoUrl: { type: 'string', description: 'Git repo URL (https or git@…); normalized server-side' },
+      },
+      required: ['gitRepoUrl'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_request_repo_access',
+    description:
+      'Request shared access to a repository that belongs to another user (pass the requestTarget ' +
+      'from pf_check_repo_usage). Notifies the project owner(s); the API does NOT grant access — ' +
+      'the owner approves on the site. Idempotent (repeating does not spam). Returns status ' +
+      "('pending' | 'already_requested' | 'approved' | 'denied') and a requestId.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        gitRepoUrl: { type: 'string', description: 'Same git repo URL passed to pf_check_repo_usage' },
+        requestTarget: { type: 'string', description: 'Opaque token from pf_check_repo_usage (ownership=other)' },
+        message: { type: 'string', description: 'Optional note to the owner' },
+      },
+      required: ['gitRepoUrl', 'requestTarget'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_create_local_kb',
+    description:
+      'Create a LOCAL knowledge base for a project (stored in ProjectsFlow, no git repo needed). ' +
+      'Use right after pf_create_project when the user has no GitHub KB but wants to save ' +
+      'credentials/notes immediately. After this, pf_create_credential / pf_list_credentials / ' +
+      'pf_get_credential work for the project. Optional — skip if the project already has a KB.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects / pf_create_project)' },
+      },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pf_list_pending_agent_jobs',
     description:
       'List queued agent-jobs across ALL projects the current user is a member of, oldest first. ' +
@@ -503,6 +555,18 @@ const CreateTaskCommentInputZ = z.object({
   body: z.string().trim().min(1).max(10_000),
 });
 
+const CheckRepoUsageInput = z.object({
+  gitRepoUrl: z.string().min(1),
+});
+const RequestRepoAccessInput = z.object({
+  gitRepoUrl: z.string().min(1),
+  requestTarget: z.string().min(1),
+  message: z.string().max(2000).optional(),
+});
+const CreateLocalKbInput = z.object({
+  projectId: z.string().min(1),
+});
+
 const ListPendingAgentJobsInput = z.object({
   limit: z.number().int().min(1).max(50).optional(),
 });
@@ -524,7 +588,7 @@ async function main(): Promise<void> {
   const api = new ApiClient(config);
 
   const server = new Server(
-    { name: 'projectsflow', version: '0.8.0' },
+    { name: 'projectsflow', version: '0.9.0' },
     { capabilities: { tools: {} } },
   );
 
@@ -655,6 +719,25 @@ async function main(): Promise<void> {
             sha: input.sha,
           });
           return jsonResult(result);
+        }
+        case 'pf_check_repo_usage': {
+          const input = CheckRepoUsageInput.parse(req.params.arguments ?? {});
+          const result = await api.checkRepoUsage(input.gitRepoUrl);
+          return jsonResult(result);
+        }
+        case 'pf_request_repo_access': {
+          const input = RequestRepoAccessInput.parse(req.params.arguments ?? {});
+          const result = await api.requestRepoAccess({
+            gitRepoUrl: input.gitRepoUrl,
+            requestTarget: input.requestTarget,
+            message: input.message,
+          });
+          return jsonResult(result);
+        }
+        case 'pf_create_local_kb': {
+          const input = CreateLocalKbInput.parse(req.params.arguments ?? {});
+          await api.createLocalKb(input.projectId);
+          return jsonResult({ ok: true });
         }
         case 'pf_list_pending_agent_jobs': {
           const input = ListPendingAgentJobsInput.parse(req.params.arguments ?? {});

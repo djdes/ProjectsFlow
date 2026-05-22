@@ -5,6 +5,14 @@ export class AgentTokenNotFoundError extends Error {
   }
 }
 
+// requestTarget не соответствует gitRepoUrl (или подделан/устарел).
+export class RequestTargetStaleError extends Error {
+  constructor() {
+    super('requestTarget does not match gitRepoUrl');
+    this.name = 'RequestTargetStaleError';
+  }
+}
+
 export class AgentTokenInvalidError extends Error {
   constructor() {
     super('Agent token invalid or revoked');

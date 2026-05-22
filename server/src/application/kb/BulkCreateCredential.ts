@@ -2,10 +2,8 @@ import matter from 'gray-matter';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
-import type { GithubTokenRepository } from '../github/GithubTokenRepository.js';
-import { GithubNotConnectedError } from '../../domain/github/errors.js';
 import { FrontmatterInvalidError, KbNotConnectedError } from '../../domain/kb/errors.js';
-import type { KbRepository } from './KbRepository.js';
+import type { ProjectKbStore } from './ProjectKbStore.js';
 import type { Frontmatter } from '../../domain/kb/Frontmatter.js';
 import { validateFrontmatter } from './FrontmatterValidator.js';
 import type { SecretsRepository } from '../secrets/SecretsRepository.js';
@@ -110,8 +108,7 @@ export function parseBulkText(raw: string): ParsedBulk {
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
-  readonly tokens: GithubTokenRepository;
-  readonly kb: KbRepository;
+  readonly kb: ProjectKbStore;
   readonly secrets: SecretsRepository;
 };
 
@@ -141,7 +138,7 @@ export class BulkCreateCredential {
 
   async execute(input: BulkCreateInput): Promise<BulkCreateResult> {
     const { project } = await requireProjectAccess(this.deps, input.projectId, input.userId, 'manage_kb');
-    if (!project.kbRepoFullName) throw new KbNotConnectedError();
+    if (project.kbKind === 'none') throw new KbNotConnectedError();
 
     const parsed = parseBulkText(input.rawText);
     const finalTitle = input.titleOverride?.trim() || parsed.title;
@@ -180,15 +177,10 @@ export class BulkCreateCredential {
       await this.deps.secrets.upsert(project.id, s.key, s.value, input.userId);
     }
 
-    // Потом — markdown-файл в KB-репо (под аккаунтом владельца проекта).
-    const token = await this.deps.tokens.getWithTokenByUserId(project.ownerId);
-    if (!token) throw new GithubNotConnectedError();
-
+    // Потом — markdown-документ в KB (github или local — решает DispatchingKbStore).
     const content = matter.stringify('', fm);
     const path = `credentials/${fileSlug}.md`;
-    const { sha } = await this.deps.kb.write({
-      accessToken: token.accessToken,
-      fullName: project.kbRepoFullName,
+    const { sha } = await this.deps.kb.write(project, {
       path,
       content,
       message: `chore(kb): bulk-create credential ${fileSlug}`,

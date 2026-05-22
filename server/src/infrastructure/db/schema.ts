@@ -72,6 +72,8 @@ export const projects = mysqlTable(
     // phantom-flag: «Входящие» — отдельная вкладка для задач без привязки к конкретному проекту.
     // На юзера ровно одна inbox-запись (создаётся лениво через GetOrCreateInbox).
     isInbox: boolean('is_inbox').notNull().default(false),
+    // Тип Базы знаний: none / github / local (KB без git-репо).
+    kbKind: mysqlEnum('kb_kind', ['none', 'github', 'local']).notNull().default('none'),
     // Видимость финансов: 'owner' (по умолчанию) — только владелец/admin; 'members' — все участники.
     financeVisibility: mysqlEnum('finance_visibility', ['owner', 'members']).notNull().default('owner'),
     createdAt: createdAtCol(),
@@ -405,6 +407,26 @@ export const projectIncomes = mysqlTable(
   },
   (t) => [index('idx_incomes_project').on(t.projectId)],
 );
+
+// Локальная База знаний (kb_kind='local'): markdown-документы проекта в БД.
+export const kbDocuments = mysqlTable(
+  'kb_documents',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    path: varchar('path', { length: 500 }).notNull(),
+    content: text('content').notNull(),
+    sha: char('sha', { length: 64 }).notNull(),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_kb_doc_project_path').on(t.projectId, t.path),
+    index('idx_kb_doc_project').on(t.projectId),
+  ],
+);
+
+export type KbDocumentRow = typeof kbDocuments.$inferSelect;
 
 export type EmployeeRow = typeof employees.$inferSelect;
 export type ProjectEmployeeAssignmentRow = typeof projectEmployeeAssignments.$inferSelect;

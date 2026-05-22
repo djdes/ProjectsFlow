@@ -170,6 +170,22 @@ export type CompleteAgentJobInput = {
   branchName?: string | null;
 };
 
+export type RepoUsageResult = {
+  ownership: 'none' | 'self' | 'other';
+  requestTarget: string | null;
+};
+
+export type RepoAccessRequestInput = {
+  gitRepoUrl: string;
+  requestTarget: string;
+  message?: string;
+};
+
+export type RepoAccessResult = {
+  status: 'pending' | 'already_requested' | 'approved' | 'denied';
+  requestId: string | null;
+};
+
 export class ApiClient {
   constructor(private readonly config: AgentConfig) {}
 
@@ -338,6 +354,26 @@ export class ApiClient {
     await this.request<void>(
       `/agent/agent-jobs/${encodeURIComponent(jobId)}/complete`,
       { method: 'POST', body: input },
+    );
+  }
+
+  async checkRepoUsage(gitRepoUrl: string): Promise<RepoUsageResult> {
+    return this.request<RepoUsageResult>(
+      `/agent/repo-usage?gitRepoUrl=${encodeURIComponent(gitRepoUrl)}`,
+    );
+  }
+
+  async requestRepoAccess(input: RepoAccessRequestInput): Promise<RepoAccessResult> {
+    return this.request<RepoAccessResult>('/agent/repo-access-requests', {
+      method: 'POST',
+      body: input,
+    });
+  }
+
+  async createLocalKb(projectId: string): Promise<void> {
+    await this.request<void>(
+      `/agent/projects/${encodeURIComponent(projectId)}/kb/init-local`,
+      { method: 'POST', body: {} },
     );
   }
 }

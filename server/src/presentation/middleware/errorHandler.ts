@@ -57,6 +57,7 @@ import {
   AgentTokenInvalidError,
   AgentTokenNameEmptyError,
   AgentTokenNotFoundError,
+  RequestTargetStaleError,
   TaskAlreadyHasActiveAgentJobError,
   TaskMissingDescriptionError,
 } from '../../domain/agent/errors.js';
@@ -332,6 +333,11 @@ export function errorHandler(
   }
   if (err instanceof AgentDeviceCodeAlreadyApprovedError) {
     res.status(409).json({ error: 'already_approved', message: 'Код уже approved' });
+    return;
+  }
+
+  if (err instanceof RequestTargetStaleError) {
+    res.status(400).json({ error: 'request_target_stale', message: 'requestTarget устарел или не соответствует репозиторию' });
     return;
   }
 

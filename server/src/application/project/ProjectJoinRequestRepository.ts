@@ -15,6 +15,11 @@ export interface ProjectJoinRequestRepository {
   create(input: CreateJoinRequestInput): Promise<ProjectJoinRequest>;
   getById(id: string): Promise<ProjectJoinRequest | null>;
   findPending(projectId: string, requesterUserId: string): Promise<ProjectJoinRequest | null>;
+  // Заявка для пары (проект, заявитель) в ЛЮБОМ статусе (UNIQUE → не более одной).
+  findByProjectAndRequester(
+    projectId: string,
+    requesterUserId: string,
+  ): Promise<ProjectJoinRequest | null>;
   resolve(
     id: string,
     status: Exclude<JoinRequestStatus, 'pending'>,

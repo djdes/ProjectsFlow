@@ -52,6 +52,14 @@ import { DisconnectGithub } from './application/github/DisconnectGithub.js';
 import { ListUserRepos } from './application/github/ListUserRepos.js';
 import { ListProjectCommits } from './application/github/ListProjectCommits.js';
 import { GithubKbRepository } from './infrastructure/kb/GithubKbRepository.js';
+import { GithubKbBackend } from './infrastructure/kb/GithubKbBackend.js';
+import { LocalKbBackend } from './infrastructure/kb/LocalKbBackend.js';
+import { DispatchingKbStore } from './infrastructure/kb/DispatchingKbStore.js';
+import { DrizzleKbDocumentRepository } from './infrastructure/repositories/DrizzleKbDocumentRepository.js';
+import { InitLocalKb } from './application/kb/InitLocalKb.js';
+import { CheckRepoUsage } from './application/agent/CheckRepoUsage.js';
+import { RequestRepoAccess } from './application/agent/RequestRepoAccess.js';
+import { InMemoryRateLimiter } from './infrastructure/ratelimit/InMemoryRateLimiter.js';
 import { InitKbRepo } from './application/kb/InitKbRepo.js';
 import { ConnectKbRepo } from './application/kb/ConnectKbRepo.js';
 import { DisconnectKb } from './application/kb/DisconnectKb.js';
@@ -178,6 +186,7 @@ const appBaseUrl =
 const githubApi = new FetchGithubApiClient(config.github.clientId);
 const deviceFlowStore = new DeviceFlowStore();
 const kbRepo = new GithubKbRepository(githubApi);
+const kbDocumentRepo = new DrizzleKbDocumentRepository(db);
 
 const secretsRepo = new DrizzleSecretsRepository(db);
 const taskRepo = new DrizzleTaskRepository(db);
@@ -191,6 +200,20 @@ const projectJoinRequestRepo = new DrizzleProjectJoinRequestRepository(db);
 const adminRepo = new DrizzleAdminRepository(db);
 const employeeRepo = new DrizzleEmployeeRepository(db);
 const projectFinanceRepo = new DrizzleProjectFinanceRepository(db);
+
+// KB-store: единый фасад, выбирающий github↔local-бэкенд по project.kbKind.
+const kbStore = new DispatchingKbStore({
+  github: new GithubKbBackend({ kb: kbRepo, tokens: githubTokenRepo }),
+  local: new LocalKbBackend({ docs: kbDocumentRepo, idGen: idGenerator }),
+});
+
+// In-memory rate-limiter для agent repo-usage / repo-access-requests.
+const agentRateLimiter = new InMemoryRateLimiter();
+setInterval(() => agentRateLimiter.pruneExpired(), 10 * 60 * 1000).unref();
+
+// Секрет для непрозрачного requestTarget (HMAC). Отдельный env → fallback на vault-ключ.
+const repoAccessSecret =
+  process.env['REPO_ACCESS_HMAC_SECRET'] ?? process.env['SECRETS_MASTER_KEY'] ?? 'dev-repo-access-secret';
 
 // Рассылка email-оповещений команде по активности проекта (с учётом пер-участниковых
 // настроек и источника team/mcp). Используется роутами fire-and-forget.
@@ -402,35 +425,31 @@ const { app, devProxyUpgrade } = createApp({
       kb: kbRepo,
     }),
     disconnectKb: new DisconnectKb({ projects: projectRepo, members: projectMemberRepo }),
+    initLocalKb: new InitLocalKb({ projects: projectRepo, members: projectMemberRepo }),
     listKbDocuments: new ListKbDocuments({
       projects: projectRepo,
       members: projectMemberRepo,
-      tokens: githubTokenRepo,
-      kb: kbRepo,
+      kb: kbStore,
     }),
     getKbDocument: new GetKbDocument({
       projects: projectRepo,
       members: projectMemberRepo,
-      tokens: githubTokenRepo,
-      kb: kbRepo,
+      kb: kbStore,
     }),
     writeKbDocument: new WriteKbDocument({
       projects: projectRepo,
       members: projectMemberRepo,
-      tokens: githubTokenRepo,
-      kb: kbRepo,
+      kb: kbStore,
     }),
     deleteKbDocument: new DeleteKbDocument({
       projects: projectRepo,
       members: projectMemberRepo,
-      tokens: githubTokenRepo,
-      kb: kbRepo,
+      kb: kbStore,
     }),
     bulkCreateCredential: new BulkCreateCredential({
       projects: projectRepo,
       members: projectMemberRepo,
-      tokens: githubTokenRepo,
-      kb: kbRepo,
+      kb: kbStore,
       secrets: secretsRepo,
     }),
   },
@@ -571,8 +590,7 @@ const { app, devProxyUpgrade } = createApp({
     getAgentCredential: new GetAgentCredential({
       projects: projectRepo,
       members: projectMemberRepo,
-      tokens: githubTokenRepo,
-      kb: kbRepo,
+      kb: kbStore,
       secrets: secretsRepo,
     }),
     getAgentTask: new GetAgentTask({
@@ -586,8 +604,7 @@ const { app, devProxyUpgrade } = createApp({
     createAgentCredential: new CreateAgentCredential({
       projects: projectRepo,
       members: projectMemberRepo,
-      tokens: githubTokenRepo,
-      kb: kbRepo,
+      kb: kbStore,
       secrets: secretsRepo,
     }),
     // Переиспользуем существующие use-cases для agent-эндпоинтов
@@ -607,8 +624,7 @@ const { app, devProxyUpgrade } = createApp({
     listKbDocuments: new ListKbDocuments({
       projects: projectRepo,
       members: projectMemberRepo,
-      tokens: githubTokenRepo,
-      kb: kbRepo,
+      kb: kbStore,
     }),
     listTasks: new ListTasks({
       projects: projectRepo,
@@ -648,8 +664,7 @@ const { app, devProxyUpgrade } = createApp({
     writeKbDocument: new WriteKbDocument({
       projects: projectRepo,
       members: projectMemberRepo,
-      tokens: githubTokenRepo,
-      kb: kbRepo,
+      kb: kbStore,
     }),
     requestDeviceCode: new RequestAgentDeviceCode({
       store: agentDeviceCodeStore,
@@ -691,6 +706,24 @@ const { app, devProxyUpgrade } = createApp({
     claimAgentJob: new ClaimAgentJob({ members: projectMemberRepo, agentJobs: agentJobRepo }),
     completeAgentJob: new CompleteAgentJob({ members: projectMemberRepo, agentJobs: agentJobRepo }),
     agentJobs: agentJobRepo,
+    checkRepoUsage: new CheckRepoUsage({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tokenSecret: repoAccessSecret,
+    }),
+    requestRepoAccess: new RequestRepoAccess({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      joinRequests: projectJoinRequestRepo,
+      users: userRepo,
+      notifications: notificationRepo,
+      email: emailSender,
+      idGen: idGenerator,
+      appUrl: appBaseUrl,
+      tokenSecret: repoAccessSecret,
+    }),
+    initLocalKb: new InitLocalKb({ projects: projectRepo, members: projectMemberRepo }),
+    rateLimiter: agentRateLimiter,
   },
   github: {
     startDeviceFlow: new StartDeviceFlow({

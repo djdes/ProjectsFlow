@@ -28,6 +28,8 @@ export type BulkCreateResult = {
 
 export interface KbRepository {
   initRepo(projectId: string): Promise<{ fullName: string }>;
+  // Локальная KB (без git): помечает проект kbKind='local'.
+  initLocal(projectId: string): Promise<void>;
   connectRepo(projectId: string, fullName: string): Promise<void>;
   disconnect(projectId: string): Promise<void>;
   list(projectId: string): Promise<KbDocumentSummary[]>;
