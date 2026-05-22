@@ -267,6 +267,19 @@ type AppDeps = {
     readonly checkRepoUsage: CheckRepoUsage;
     readonly requestRepoAccess: RequestRepoAccess;
     readonly initLocalKb: InitLocalKb;
+    // Расширенный набор agent-операций (MCP 0.10): чтение/удаление KB, правка/удаление
+    // задач, коммиты, проект/участники/поиск, финансы.
+    readonly updateTask: UpdateTask;
+    readonly deleteTask: DeleteTask;
+    readonly listTaskCommits: ListTaskCommits;
+    readonly syncTaskCommits: SyncTaskCommits;
+    readonly searchTasks: SearchTasks;
+    readonly getProject: GetProject;
+    readonly listProjectMembers: ListProjectMembers;
+    readonly getKbDocument: GetKbDocument;
+    readonly deleteKbDocument: DeleteKbDocument;
+    readonly getProjectFinance: GetProjectFinance;
+    readonly manageProjectFinance: ManageProjectFinance;
     readonly rateLimiter: InMemoryRateLimiter;
   };
 };
@@ -379,6 +392,17 @@ export function createApp(deps: AppDeps): CreatedApp {
       checkRepoUsage: deps.agent.checkRepoUsage,
       requestRepoAccess: deps.agent.requestRepoAccess,
       initLocalKb: deps.agent.initLocalKb,
+      updateTask: deps.agent.updateTask,
+      deleteTask: deps.agent.deleteTask,
+      listTaskCommits: deps.agent.listTaskCommits,
+      syncTaskCommits: deps.agent.syncTaskCommits,
+      searchTasks: deps.agent.searchTasks,
+      getProject: deps.agent.getProject,
+      listProjectMembers: deps.agent.listProjectMembers,
+      getKbDocument: deps.agent.getKbDocument,
+      deleteKbDocument: deps.agent.deleteKbDocument,
+      getProjectFinance: deps.agent.getProjectFinance,
+      manageProjectFinance: deps.agent.manageProjectFinance,
       rateLimiter: deps.agent.rateLimiter,
       notifier: deps.notifications.projectNotifier,
     }),

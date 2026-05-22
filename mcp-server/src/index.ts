@@ -6,14 +6,35 @@
 // проектами, credential-vault и kanban-задачами:
 //
 //   - pf_list_projects         — список проектов юзера
+//   - pf_get_project           — метаданные одного проекта
 //   - pf_list_user_repos       — GitHub-репозитории юзера (для подбора перед созданием)
 //   - pf_create_project        — создать проект (+ опционально завести/привязать git-репо)
 //   - pf_update_project        — переименовать проект / привязать git-репо
+//   - pf_list_members          — состав команды проекта
 //   - pf_list_credentials      — список credential-файлов в проекте
 //   - pf_get_credential        — полный credential с резолвленными секретами
+//   - pf_create_credential     — создать credential (секреты в vault)
+//   - pf_create_local_kb       — локальная KB без git
+//   - pf_list_kb_documents     — все KB-доки проекта
+//   - pf_read_kb_document      — прочитать KB-док целиком
+//   - pf_write_kb_document     — создать/обновить KB-док
+//   - pf_delete_kb_document    — удалить KB-док (необратимо)
 //   - pf_list_tasks            — список kanban-задач в проекте
+//   - pf_get_task              — задача с вложениями и тредом комментариев
+//   - pf_create_task           — создать задачу
+//   - pf_update_task           — изменить описание задачи
+//   - pf_delete_task           — удалить задачу (необратимо)
 //   - pf_move_task             — перенести задачу на другой статус
+//   - pf_search_tasks          — глобальный поиск по задачам
+//   - pf_create_task_comment   — комментарий к задаче
 //   - pf_link_commit_to_task   — привязать коммит к задаче
+//   - pf_list_commits          — коммиты задачи
+//   - pf_sync_commits          — авто-привязка коммитов по [short-id]
+//   - pf_get_finance           — P&L-сводка проекта
+//   - pf_add_expense           — добавить расход
+//   - pf_add_income            — добавить доход
+//   - pf_check_repo_usage      — приватная проверка занятости репо
+//   - pf_request_repo_access   — запрос общего доступа к репо
 //
 // Установка в Claude Code:
 //   claude mcp add projectsflow npx -- -y @projectsflow/mcp-server
@@ -475,6 +496,215 @@ const TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'pf_get_project',
+    description:
+      'Fetch metadata for a single project: id, name, status, hasKb, gitRepoUrl. Returns ' +
+      '404 if the current user is not a member. Use when you have a project id and need its ' +
+      'current details (e.g. to check whether a git repo or KB is attached).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+      },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_list_members',
+    description:
+      "List a project's team members. Returns userId, displayName, email, role " +
+      "('owner' | 'editor' | 'viewer'), isAdmin and joinedAt for each. Use to see who is on " +
+      'the project — e.g. before @mentioning someone in a task comment.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+      },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_search_tasks',
+    description:
+      'Full-text search across kanban tasks. Scope: tasks in projects the current user is a ' +
+      'member of (admins search all projects). Returns taskId, projectId, projectName, status ' +
+      'and an excerpt. Query must be at least 2 chars. Use to find a task across projects ' +
+      'when you do not know which project it lives in.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query (min 2 chars)' },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_list_kb_documents',
+    description:
+      "List ALL Markdown documents in a project's Knowledge Base (not just credentials). " +
+      'Returns path, title, kind, frontmatter and sha for each. Use to discover what is in ' +
+      'the KB before reading a specific doc with pf_read_kb_document.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+      },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_read_kb_document',
+    description:
+      'Read a single KB document in full: path, frontmatter, body (markdown), and sha. ' +
+      'Use the sha with pf_write_kb_document to update the doc safely (optimistic lock). ' +
+      'For credentials prefer pf_get_credential (it resolves vault secrets).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        path: { type: 'string', description: "Repo-relative path ending in .md, e.g. 'notes/setup.md'" },
+      },
+      required: ['projectId', 'path'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_delete_kb_document',
+    description:
+      'Delete a KB document by path. IRREVERSIBLE — the file is removed from the KB. ' +
+      'Requires editor+ role. Use only when the user explicitly asks to delete a KB note/doc.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        path: { type: 'string', description: "Repo-relative path ending in .md to delete" },
+      },
+      required: ['projectId', 'path'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_update_task',
+    description:
+      "Update a task's description (markdown). Requires editor+ role. Returns the updated task. " +
+      'Use to edit task text — e.g. to expand a terse TODO into a full spec, or fix a typo.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
+        description: { type: 'string', description: 'New task description (markdown), 1-10000 chars' },
+      },
+      required: ['projectId', 'taskId', 'description'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_delete_task',
+    description:
+      'Delete a kanban task. IRREVERSIBLE — the task and its comments are removed. Requires ' +
+      'editor+ role. Use only when the user explicitly asks to delete a task.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
+      },
+      required: ['projectId', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_list_commits',
+    description:
+      'List git commits linked to a task. Returns sha, message, authorName, htmlUrl, ' +
+      'committedAt and linkedAt for each. Use to see what work has already been attributed ' +
+      'to a task.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
+      },
+      required: ['projectId', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_sync_commits',
+    description:
+      "Scan the project's recent GitHub commits and auto-link them to tasks by the [short-id] " +
+      'marker in each commit message (the 8-char task id prefix). Auto-transitions todo→in_progress ' +
+      'on first link. Returns counts: linkedCount, autoTransitionedCount, scannedCount. Requires ' +
+      'a connected git repo and GitHub. Use to backfill commit links after pushing several commits.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+      },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_get_finance',
+    description:
+      'Get a project P&L summary: labor cost, other expenses, income, total expense, profit ' +
+      'and margin. Amounts are returned in BOTH rubles (*Rubles, for readability) and kopecks ' +
+      '(*Kopecks, exact). Includes line items (labor assignments, expenses, incomes). Visible to ' +
+      "the owner always; to other members only if finance visibility is set to 'members' " +
+      '(otherwise the API returns 403).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+      },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_add_expense',
+    description:
+      'Add an expense to a project (owner only). amountRubles is in RUBLES (e.g. 1500.50). ' +
+      "category is a short tag like 'ads', 'infra', 'tools', 'other'. incurredOn is an optional " +
+      'YYYY-MM-DD date (defaults to today). Returns the created expense.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        amountRubles: { type: 'number', description: 'Amount in rubles (non-negative)' },
+        category: { type: 'string', description: "Expense category, e.g. 'ads', 'infra', 'tools', 'other'" },
+        description: { type: 'string', description: 'Optional free-text note' },
+        incurredOn: { type: 'string', description: 'Optional date YYYY-MM-DD (default today)' },
+      },
+      required: ['projectId', 'amountRubles', 'category'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_add_income',
+    description:
+      'Add an income entry to a project (owner only). amountRubles is in RUBLES. source is an ' +
+      'optional label (e.g. client name). receivedOn is an optional YYYY-MM-DD date (defaults ' +
+      'to today). Returns the created income.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        amountRubles: { type: 'number', description: 'Amount in rubles (non-negative)' },
+        source: { type: 'string', description: 'Optional income source label' },
+        receivedOn: { type: 'string', description: 'Optional date YYYY-MM-DD (default today)' },
+      },
+      required: ['projectId', 'amountRubles'],
+      additionalProperties: false,
+    },
+  },
 ];
 
 // Input schemas для validation (zod вместо ручного парсинга).
@@ -583,12 +813,55 @@ const CompleteAgentJobInput = z.object({
   branchName: z.string().max(200).nullable().optional(),
 });
 
+const GetProjectInput = z.object({ projectId: z.string().min(1) });
+const ListMembersInput = z.object({ projectId: z.string().min(1) });
+const SearchTasksInput = z.object({ query: z.string().trim().min(2).max(200) });
+const ListKbDocumentsInput = z.object({ projectId: z.string().min(1) });
+const KbPathRegex = /^[a-z0-9_./-]+\.md$/i;
+const ReadKbDocumentInput = z.object({
+  projectId: z.string().min(1),
+  path: z.string().regex(KbPathRegex, 'Path must end with .md'),
+});
+const DeleteKbDocumentInput = z.object({
+  projectId: z.string().min(1),
+  path: z.string().regex(KbPathRegex, 'Path must end with .md'),
+});
+const UpdateTaskInputZ = z.object({
+  projectId: z.string().min(1),
+  taskId: z.string().min(1),
+  description: z.string().trim().min(1).max(10_000),
+});
+const DeleteTaskInputZ = z.object({
+  projectId: z.string().min(1),
+  taskId: z.string().min(1),
+});
+const ListCommitsInput = z.object({
+  projectId: z.string().min(1),
+  taskId: z.string().min(1),
+});
+const SyncCommitsInput = z.object({ projectId: z.string().min(1) });
+const IsoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+const GetFinanceInput = z.object({ projectId: z.string().min(1) });
+const AddExpenseInputZ = z.object({
+  projectId: z.string().min(1),
+  amountRubles: z.number().nonnegative(),
+  category: z.string().trim().min(1).max(80),
+  description: z.string().max(2000).optional(),
+  incurredOn: z.string().regex(IsoDateRegex, 'Date must be YYYY-MM-DD').optional(),
+});
+const AddIncomeInputZ = z.object({
+  projectId: z.string().min(1),
+  amountRubles: z.number().nonnegative(),
+  source: z.string().max(200).optional(),
+  receivedOn: z.string().regex(IsoDateRegex, 'Date must be YYYY-MM-DD').optional(),
+});
+
 async function main(): Promise<void> {
   const config = loadConfig();
   const api = new ApiClient(config);
 
   const server = new Server(
-    { name: 'projectsflow', version: '0.9.0' },
+    { name: 'projectsflow', version: '0.10.0' },
     { capabilities: { tools: {} } },
   );
 
@@ -758,6 +1031,80 @@ async function main(): Promise<void> {
             branchName: input.branchName ?? null,
           });
           return jsonResult({ ok: true });
+        }
+        case 'pf_get_project': {
+          const input = GetProjectInput.parse(req.params.arguments ?? {});
+          const project = await api.getProject(input.projectId);
+          return jsonResult(project);
+        }
+        case 'pf_list_members': {
+          const input = ListMembersInput.parse(req.params.arguments ?? {});
+          const members = await api.listMembers(input.projectId);
+          return jsonResult(members);
+        }
+        case 'pf_search_tasks': {
+          const input = SearchTasksInput.parse(req.params.arguments ?? {});
+          const results = await api.searchTasks(input.query);
+          return jsonResult(results);
+        }
+        case 'pf_list_kb_documents': {
+          const input = ListKbDocumentsInput.parse(req.params.arguments ?? {});
+          const documents = await api.listKbDocuments(input.projectId);
+          return jsonResult(documents);
+        }
+        case 'pf_read_kb_document': {
+          const input = ReadKbDocumentInput.parse(req.params.arguments ?? {});
+          const document = await api.readKbDocument(input.projectId, input.path);
+          return jsonResult(document);
+        }
+        case 'pf_delete_kb_document': {
+          const input = DeleteKbDocumentInput.parse(req.params.arguments ?? {});
+          await api.deleteKbDocument(input.projectId, input.path);
+          return jsonResult({ ok: true });
+        }
+        case 'pf_update_task': {
+          const input = UpdateTaskInputZ.parse(req.params.arguments ?? {});
+          const task = await api.updateTask(input.projectId, input.taskId, input.description);
+          return jsonResult(task);
+        }
+        case 'pf_delete_task': {
+          const input = DeleteTaskInputZ.parse(req.params.arguments ?? {});
+          await api.deleteTask(input.projectId, input.taskId);
+          return jsonResult({ ok: true });
+        }
+        case 'pf_list_commits': {
+          const input = ListCommitsInput.parse(req.params.arguments ?? {});
+          const commits = await api.listCommits(input.projectId, input.taskId);
+          return jsonResult(commits);
+        }
+        case 'pf_sync_commits': {
+          const input = SyncCommitsInput.parse(req.params.arguments ?? {});
+          const result = await api.syncCommits(input.projectId);
+          return jsonResult(result);
+        }
+        case 'pf_get_finance': {
+          const input = GetFinanceInput.parse(req.params.arguments ?? {});
+          const finance = await api.getFinance(input.projectId);
+          return jsonResult(finance);
+        }
+        case 'pf_add_expense': {
+          const input = AddExpenseInputZ.parse(req.params.arguments ?? {});
+          const expense = await api.addExpense(input.projectId, {
+            amountRubles: input.amountRubles,
+            category: input.category,
+            description: input.description,
+            incurredOn: input.incurredOn,
+          });
+          return jsonResult(expense);
+        }
+        case 'pf_add_income': {
+          const input = AddIncomeInputZ.parse(req.params.arguments ?? {});
+          const income = await api.addIncome(input.projectId, {
+            amountRubles: input.amountRubles,
+            source: input.source,
+            receivedOn: input.receivedOn,
+          });
+          return jsonResult(income);
         }
         default:
           return errorResult(`Unknown tool: ${name}`);

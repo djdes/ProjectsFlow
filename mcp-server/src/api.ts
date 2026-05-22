@@ -186,6 +186,121 @@ export type RepoAccessResult = {
   requestId: string | null;
 };
 
+export type ProjectMember = {
+  userId: string;
+  displayName: string;
+  email: string;
+  role: 'owner' | 'editor' | 'viewer';
+  isAdmin: boolean;
+  joinedAt: string;
+};
+
+export type KbDocumentSummary = {
+  path: string;
+  title: string | null;
+  kind: string | null;
+  frontmatter: Record<string, unknown>;
+  sha: string | null;
+};
+
+export type KbDocument = {
+  path: string;
+  frontmatter: Record<string, unknown>;
+  body: string;
+  sha: string | null;
+};
+
+export type TaskSearchResult = {
+  taskId: string;
+  projectId: string;
+  projectName: string;
+  status: TaskStatus;
+  excerpt: string;
+};
+
+export type SyncCommitsResult = {
+  linkedCount: number;
+  autoTransitionedCount: number;
+  scannedCount: number;
+};
+
+// Финансовая сводка. Сервер отдаёт суммы в копейках; обёртка добавляет рублёвые
+// поля сводки (kopecks/100) для удобства агента, сохраняя копейки для точности.
+export type FinanceLaborLine = {
+  assignmentId: string;
+  employeeId: string;
+  employeeName: string;
+  monthlySalaryKopecks: number;
+  allocationPercent: number;
+  startedAt: string;
+  endedAt: string | null;
+  costKopecks: number;
+};
+
+export type FinanceExpense = {
+  id: string;
+  amountKopecks: number;
+  category: string;
+  description: string | null;
+  incurredOn: string;
+};
+
+export type FinanceIncome = {
+  id: string;
+  amountKopecks: number;
+  source: string | null;
+  receivedOn: string;
+};
+
+export type ProjectFinance = {
+  laborTotalKopecks: number;
+  otherExpensesTotalKopecks: number;
+  incomeTotalKopecks: number;
+  expenseTotalKopecks: number;
+  profitKopecks: number;
+  marginPercent: number | null;
+  labor: FinanceLaborLine[];
+  expenses: FinanceExpense[];
+  incomes: FinanceIncome[];
+};
+
+// Сводка с рублёвыми полями, добавленными обёрткой (см. getFinance).
+export type ProjectFinanceWithRubles = ProjectFinance & {
+  laborTotalRubles: number;
+  otherExpensesTotalRubles: number;
+  incomeTotalRubles: number;
+  expenseTotalRubles: number;
+  profitRubles: number;
+};
+
+export type AddExpenseInput = {
+  amountRubles: number;
+  category: string;
+  description?: string;
+  incurredOn?: string;
+};
+
+export type AddIncomeInput = {
+  amountRubles: number;
+  source?: string;
+  receivedOn?: string;
+};
+
+export type ExpenseResult = {
+  id: string;
+  amountKopecks: number;
+  category: string;
+  description: string | null;
+  incurredOn: string;
+};
+
+export type IncomeResult = {
+  id: string;
+  amountKopecks: number;
+  source: string | null;
+  receivedOn: string;
+};
+
 export class ApiClient {
   constructor(private readonly config: AgentConfig) {}
 
@@ -375,6 +490,108 @@ export class ApiClient {
       `/agent/projects/${encodeURIComponent(projectId)}/kb/init-local`,
       { method: 'POST', body: {} },
     );
+  }
+
+  async getProject(projectId: string): Promise<Project> {
+    const { project } = await this.request<{ project: Project }>(
+      `/agent/projects/${encodeURIComponent(projectId)}`,
+    );
+    return project;
+  }
+
+  async listMembers(projectId: string): Promise<ProjectMember[]> {
+    const { members } = await this.request<{ members: ProjectMember[] }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/members`,
+    );
+    return members;
+  }
+
+  async searchTasks(query: string): Promise<TaskSearchResult[]> {
+    const { results } = await this.request<{ results: TaskSearchResult[] }>(
+      `/agent/search/tasks?q=${encodeURIComponent(query)}`,
+    );
+    return results;
+  }
+
+  async listKbDocuments(projectId: string): Promise<KbDocumentSummary[]> {
+    const { documents } = await this.request<{ documents: KbDocumentSummary[] }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/kb/documents`,
+    );
+    return documents;
+  }
+
+  async readKbDocument(projectId: string, path: string): Promise<KbDocument> {
+    const { document } = await this.request<{ document: KbDocument }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/kb/document?path=${encodeURIComponent(path)}`,
+    );
+    return document;
+  }
+
+  async deleteKbDocument(projectId: string, path: string): Promise<void> {
+    await this.request<void>(
+      `/agent/projects/${encodeURIComponent(projectId)}/kb/document?path=${encodeURIComponent(path)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async updateTask(projectId: string, taskId: string, description: string): Promise<Task> {
+    const { task } = await this.request<{ task: Task }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`,
+      { method: 'PATCH', body: { description } },
+    );
+    return task;
+  }
+
+  async deleteTask(projectId: string, taskId: string): Promise<void> {
+    await this.request<void>(
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async listCommits(projectId: string, taskId: string): Promise<TaskCommit[]> {
+    const { commits } = await this.request<{ commits: TaskCommit[] }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/commits`,
+    );
+    return commits;
+  }
+
+  async syncCommits(projectId: string): Promise<SyncCommitsResult> {
+    return this.request<SyncCommitsResult>(
+      `/agent/projects/${encodeURIComponent(projectId)}/sync-commits`,
+      { method: 'POST', body: {} },
+    );
+  }
+
+  async getFinance(projectId: string): Promise<ProjectFinanceWithRubles> {
+    const { finance } = await this.request<{ finance: ProjectFinance }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/finance`,
+    );
+    // Обёртка добавляет рублёвые суммы сводки (копейки/100), сохраняя *Kopecks.
+    return {
+      ...finance,
+      laborTotalRubles: finance.laborTotalKopecks / 100,
+      otherExpensesTotalRubles: finance.otherExpensesTotalKopecks / 100,
+      incomeTotalRubles: finance.incomeTotalKopecks / 100,
+      expenseTotalRubles: finance.expenseTotalKopecks / 100,
+      profitRubles: finance.profitKopecks / 100,
+    };
+  }
+
+  async addExpense(projectId: string, input: AddExpenseInput): Promise<ExpenseResult> {
+    const { expense } = await this.request<{ expense: ExpenseResult }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/finance/expenses`,
+      { method: 'POST', body: input },
+    );
+    return expense;
+  }
+
+  async addIncome(projectId: string, input: AddIncomeInput): Promise<IncomeResult> {
+    const { income } = await this.request<{ income: IncomeResult }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/finance/incomes`,
+      { method: 'POST', body: input },
+    );
+    return income;
   }
 }
 
