@@ -13,6 +13,7 @@ export type UpdateProjectInput = {
   readonly name?: string;
   readonly gitRepoUrl?: string | null;
   readonly kbRepoFullName?: string | null;
+  readonly kbKind?: 'none' | 'github' | 'local';
   readonly financeVisibility?: 'owner' | 'members';
 };
 

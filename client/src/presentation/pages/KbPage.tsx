@@ -41,7 +41,7 @@ export function KbPage(): React.ReactElement {
 
   if (projectLoading) return <div className="p-6">Загрузка…</div>;
   if (!project) return <div className="p-6">Проект не найден</div>;
-  if (!project.kbRepoFullName) {
+  if (project.kbKind === 'none') {
     return (
       <div className="grid h-full place-items-center p-6">
         <div className="max-w-md space-y-3 text-center">

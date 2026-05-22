@@ -47,6 +47,7 @@ export class MockProjectRepository implements ProjectRepository {
       kbRepoFullName: null,
       isInbox: true,
       role: 'owner',
+      kbKind: 'none',
       financeVisibility: 'owner',
       createdAt: new Date(),
     };
@@ -86,6 +87,7 @@ export class MockProjectRepository implements ProjectRepository {
       kbRepoFullName: null,
       isInbox: false,
       role: 'owner',
+      kbKind: 'none',
       financeVisibility: 'owner',
       createdAt: new Date(),
     };

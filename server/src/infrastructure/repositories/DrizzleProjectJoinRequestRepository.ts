@@ -71,6 +71,23 @@ export class DrizzleProjectJoinRequestRepository implements ProjectJoinRequestRe
     return rows[0] ? toJoinRequest(rows[0]) : null;
   }
 
+  async findByProjectAndRequester(
+    projectId: string,
+    requesterUserId: string,
+  ): Promise<ProjectJoinRequest | null> {
+    const rows = await this.db
+      .select()
+      .from(projectJoinRequests)
+      .where(
+        and(
+          eq(projectJoinRequests.projectId, projectId),
+          eq(projectJoinRequests.requesterUserId, requesterUserId),
+        ),
+      )
+      .limit(1);
+    return rows[0] ? toJoinRequest(rows[0]) : null;
+  }
+
   async resolve(
     id: string,
     status: Exclude<JoinRequestStatus, 'pending'>,

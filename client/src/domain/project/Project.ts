@@ -4,12 +4,16 @@ export type ProjectStatus = 'active' | 'paused' | 'archived';
 
 export type FinanceVisibility = 'owner' | 'members';
 
+export type KbKind = 'none' | 'github' | 'local';
+
 export type Project = {
   readonly id: string;
   readonly name: string;
   readonly status: ProjectStatus;
   readonly gitRepoUrl: string | null;
   readonly kbRepoFullName: string | null;
+  // Тип Базы знаний: none / github / local. Индикатор «есть KB» = kbKind !== 'none'.
+  readonly kbKind: KbKind;
   // True для phantom-проекта «Входящие». Из обычных списков (sidebar, HomePage) такие
   // проекты надо фильтровать — у них отдельная вкладка /inbox.
   readonly isInbox: boolean;

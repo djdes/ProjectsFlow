@@ -12,6 +12,6 @@ export class DisconnectKb {
 
   async execute(projectId: string, ownerUserId: string): Promise<void> {
     await requireProjectAccess(this.deps, projectId, ownerUserId, 'manage_kb');
-    await this.deps.projects.update(projectId, { kbRepoFullName: null });
+    await this.deps.projects.update(projectId, { kbRepoFullName: null, kbKind: 'none' });
   }
 }

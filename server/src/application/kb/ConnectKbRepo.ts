@@ -18,7 +18,7 @@ export class ConnectKbRepo {
 
   async execute(projectId: string, ownerUserId: string, fullName: string): Promise<void> {
     const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'manage_kb');
-    if (project.kbRepoFullName) throw new KbRepoAlreadyConnectedError();
+    if (project.kbKind !== 'none') throw new KbRepoAlreadyConnectedError();
 
     // KB-репо привязываем под аккаунтом владельца проекта — тогда все участники
     // читают его одним (владельца) токеном. См. фикс общих кредов.
@@ -28,6 +28,6 @@ export class ConnectKbRepo {
     const exists = await this.deps.kb.exists(token.accessToken, fullName);
     if (!exists) throw new KbDocumentNotFoundError(fullName);
 
-    await this.deps.projects.update(projectId, { kbRepoFullName: fullName });
+    await this.deps.projects.update(projectId, { kbRepoFullName: fullName, kbKind: 'github' });
   }
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { BookOpen, ExternalLink, AlertTriangle } from 'lucide-react';
+import { BookOpen, ExternalLink, AlertTriangle, HardDrive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -15,13 +15,13 @@ import { toast } from '@/components/ui/sonner';
 import type { Project } from '@/domain/project/Project';
 import { useContainer } from '@/infrastructure/di/container';
 import { useUpdateProject } from '@/presentation/hooks/useUpdateProject';
+import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useGithubConnection } from '@/presentation/hooks/GithubConnectionProvider';
 import { ConnectKbDialog } from './ConnectKbDialog';
 
 type Props = { project: Project };
 
 // Имя репо предсказуемо: формирует сервер из project.name (slugify + prefix).
-// Тут показываем preview, чтобы юзер видел что именно появится у него в GitHub.
 function previewRepoName(projectName: string): string {
   const slug = projectName
     .toLowerCase()
@@ -34,12 +34,14 @@ function previewRepoName(projectName: string): string {
 }
 
 export function KbSection({ project }: Props): React.ReactElement {
-  const { kbRepository } = useContainer();
+  const { kbRepository, projectRepository } = useContainer();
   const { submit: updateProject } = useUpdateProject();
+  const { applyReplace } = useProjectsContext();
   const { connection: githubConnection } = useGithubConnection();
   const [connectOpen, setConnectOpen] = useState(false);
   const [confirmInitOpen, setConfirmInitOpen] = useState(false);
   const [initializing, setInitializing] = useState(false);
+  const [initingLocal, setInitingLocal] = useState(false);
 
   const handleInit = async (): Promise<void> => {
     setConfirmInitOpen(false);
@@ -55,15 +57,33 @@ export function KbSection({ project }: Props): React.ReactElement {
     }
   };
 
+  const handleInitLocal = async (): Promise<void> => {
+    setInitingLocal(true);
+    try {
+      await kbRepository.initLocal(project.id);
+      // init-local не возвращает проект — подтягиваем свежий и обновляем список.
+      const fresh = await projectRepository.getById(project.id);
+      if (fresh) applyReplace(fresh);
+      toast.success('Локальная база знаний создана');
+    } catch (err) {
+      toast.error((err as Error).message ?? 'Не удалось создать локальную базу');
+    } finally {
+      setInitingLocal(false);
+    }
+  };
+
   const handleDisconnect = async (): Promise<void> => {
     try {
       await kbRepository.disconnect(project.id);
-      await updateProject(project.id, { kbRepoFullName: null });
+      const fresh = await projectRepository.getById(project.id);
+      if (fresh) applyReplace(fresh);
       toast.success('KB отключён от проекта');
     } catch {
       toast.error('Не удалось отключить KB');
     }
   };
+
+  const hasKb = project.kbKind !== 'none';
 
   return (
     <>
@@ -73,47 +93,67 @@ export function KbSection({ project }: Props): React.ReactElement {
           <CardTitle className="text-base">База знаний</CardTitle>
         </CardHeader>
         <CardContent>
-          {project.kbRepoFullName ? (
+          {hasKb ? (
             <div className="space-y-3">
-              <a
-                href={`https://github.com/${project.kbRepoFullName}`}
-                target="_blank" rel="noreferrer noopener"
-                className="inline-flex items-center gap-1.5 break-all font-mono text-sm text-primary hover:underline"
-              >
-                {project.kbRepoFullName}
-                <ExternalLink className="size-3.5 shrink-0" />
-              </a>
+              {project.kbKind === 'github' && project.kbRepoFullName ? (
+                <a
+                  href={`https://github.com/${project.kbRepoFullName}`}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex items-center gap-1.5 break-all font-mono text-sm text-primary hover:underline"
+                >
+                  {project.kbRepoFullName}
+                  <ExternalLink className="size-3.5 shrink-0" />
+                </a>
+              ) : (
+                <p className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <HardDrive className="size-4" /> Локальная база (без Git)
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 <Button asChild size="sm">
                   <RouterLink to={`/projects/${project.id}/kb`}>Открыть KB</RouterLink>
                 </Button>
-                <Button variant="ghost" size="sm" onClick={handleDisconnect}
-                  className="text-muted-foreground hover:text-destructive">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDisconnect}
+                  className="text-muted-foreground hover:text-destructive"
+                >
                   Отключить
                 </Button>
               </div>
             </div>
-          ) : !githubConnection ? (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Чтобы создать KB-репо, подключи GitHub-аккаунт в профиле.
-              </p>
-              <Button asChild variant="outline" size="sm">
-                <RouterLink to="/profile">Перейти в профиль</RouterLink>
-              </Button>
-            </div>
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                База знаний — отдельный приватный GitHub-репо с операционными заметками проекта.
+                База знаний хранит операционные заметки и креды проекта. Можно завести локальную
+                (в ProjectsFlow, без Git) или приватный GitHub-репо.
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => setConfirmInitOpen(true)} disabled={initializing}>
-                  {initializing ? 'Создаём…' : 'Создать KB-репо'}
+                <Button size="sm" onClick={() => void handleInitLocal()} disabled={initingLocal}>
+                  <HardDrive className="size-4" />
+                  {initingLocal ? 'Создаём…' : 'Локальная база (без Git)'}
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setConnectOpen(true)}>
-                  Подключить существующий
-                </Button>
+                {githubConnection ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setConfirmInitOpen(true)}
+                      disabled={initializing}
+                    >
+                      {initializing ? 'Создаём…' : 'Создать KB-репо'}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setConnectOpen(true)}>
+                      Подключить существующий
+                    </Button>
+                  </>
+                ) : (
+                  <Button asChild variant="ghost" size="sm">
+                    <RouterLink to="/profile">Подключить GitHub для KB-репо</RouterLink>
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -124,7 +164,11 @@ export function KbSection({ project }: Props): React.ReactElement {
         open={connectOpen}
         onOpenChange={setConnectOpen}
         projectId={project.id}
-        onConnected={() => { /* useUpdateProject не нужен — мы тянем через project refresh */ }}
+        onConnected={() => {
+          void projectRepository.getById(project.id).then((p) => {
+            if (p) applyReplace(p);
+          });
+        }}
       />
 
       <Dialog open={confirmInitOpen} onOpenChange={setConfirmInitOpen}>

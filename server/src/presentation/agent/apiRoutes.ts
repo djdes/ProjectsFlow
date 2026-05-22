@@ -20,6 +20,11 @@ import type { WriteKbDocument } from '../../application/kb/WriteKbDocument.js';
 import type { ListPendingAgentJobs } from '../../application/agent/ListPendingAgentJobs.js';
 import type { ClaimAgentJob } from '../../application/agent/ClaimAgentJob.js';
 import type { CompleteAgentJob } from '../../application/agent/CompleteAgentJob.js';
+import type { CheckRepoUsage } from '../../application/agent/CheckRepoUsage.js';
+import type { RequestRepoAccess } from '../../application/agent/RequestRepoAccess.js';
+import type { InitLocalKb } from '../../application/kb/InitLocalKb.js';
+import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemoryRateLimiter.js';
+import { normalizeGitUrl } from '../../application/project/gitUrl.js';
 import type { PendingAgentJob } from '../../application/agent/AgentJobRepository.js';
 import type { Frontmatter } from '../../domain/kb/Frontmatter.js';
 import type { Project } from '../../domain/project/Project.js';
@@ -57,6 +62,10 @@ type Deps = {
   readonly listPendingAgentJobs: ListPendingAgentJobs;
   readonly claimAgentJob: ClaimAgentJob;
   readonly completeAgentJob: CompleteAgentJob;
+  readonly checkRepoUsage: CheckRepoUsage;
+  readonly requestRepoAccess: RequestRepoAccess;
+  readonly initLocalKb: InitLocalKb;
+  readonly rateLimiter: InMemoryRateLimiter;
   // Email-оповещения команде (источник 'mcp' — действия агента). Fire-and-forget.
   readonly notifier: ProjectNotificationService;
 };
@@ -79,6 +88,12 @@ const createCredentialSchema = z.object({
 
 const moveTaskAgentSchema = z.object({
   targetStatus: taskStatusSchema,
+});
+
+const repoAccessRequestSchema = z.object({
+  gitRepoUrl: z.string().trim().min(1).max(500),
+  requestTarget: z.string().trim().min(1).max(200),
+  message: z.string().max(2000).optional(),
 });
 
 type TaskDto = Omit<Task, 'createdAt' | 'updatedAt'> & {
@@ -166,7 +181,7 @@ function projectToAgentDto(p: Project): ProjectDto {
     id: p.id,
     name: p.name,
     status: p.status,
-    hasKb: p.kbRepoFullName !== null,
+    hasKb: p.kbKind !== 'none',
     gitRepoUrl: p.gitRepoUrl,
   };
 }
@@ -204,7 +219,7 @@ export function agentApiRouter(deps: Deps): Router {
           id: p.id,
           name: p.name,
           status: p.status,
-          hasKb: p.kbRepoFullName !== null,
+          hasKb: p.kbKind !== 'none',
           gitRepoUrl: p.gitRepoUrl,
         })),
       });
@@ -540,6 +555,57 @@ export function agentApiRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  // Приватная проверка занятости git-репо. Ответ не раскрывает чужие проекты/владельцев —
+  // только ownership + непрозрачный requestTarget (при ownership=other). Rate-limit 30/мин.
+  router.get('/repo-usage', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!deps.rateLimiter.hit(`repo-usage:${req.user!.id}`, 30, 60_000)) {
+        res.status(429).json({ error: 'rate_limited', message: 'Слишком много проверок, попробуйте позже' });
+        return;
+      }
+      const url = typeof req.query['gitRepoUrl'] === 'string' ? req.query['gitRepoUrl'] : '';
+      const result = await deps.checkRepoUsage.execute(req.user!.id, url);
+      res.json(result);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Запрос общего доступа к репо. Создаёт join-request чужому владельцу + уведомляет.
+  // Идемпотентно; доступ выдаёт владелец на сайте. Анти-абьюз: 10 новых запросов/репо/сутки.
+  router.post('/repo-access-requests', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = repoAccessRequestSchema.parse(req.body);
+      const dailyKey = `repo-access:${req.user!.id}:${normalizeGitUrl(body.gitRepoUrl)}`;
+      if (!deps.rateLimiter.hit(dailyKey, 10, 24 * 60 * 60_000)) {
+        res.status(429).json({ error: 'rate_limited', message: 'Превышен суточный лимит запросов по этому репо' });
+        return;
+      }
+      const result = await deps.requestRepoAccess.execute(
+        req.user!.id,
+        body.gitRepoUrl,
+        body.requestTarget,
+      );
+      res.json(result);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Создание ЛОКАЛЬНОЙ базы знаний проекта (без git-репо) — чтобы агент сразу сидил креды.
+  router.post(
+    '/projects/:projectId/kb/init-local',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        await deps.initLocalKb.execute(projectId, req.user!.id);
+        res.status(201).json({ ok: true });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   return router;
 }

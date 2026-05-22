@@ -11,6 +11,9 @@ export class HttpKbRepository implements KbRepository {
   async initRepo(projectId: string): Promise<{ fullName: string }> {
     return httpClient.post<{ fullName: string }>(`/projects/${projectId}/kb/init`);
   }
+  async initLocal(projectId: string): Promise<void> {
+    await httpClient.post<void>(`/projects/${projectId}/kb/init-local`);
+  }
   async connectRepo(projectId: string, fullName: string): Promise<void> {
     await httpClient.post<void>(`/projects/${projectId}/kb/connect`, { fullName });
   }

@@ -42,6 +42,10 @@ import type { GetSecret } from '../application/secrets/GetSecret.js';
 import type { DeleteSecret } from '../application/secrets/DeleteSecret.js';
 import type { ListSecretKeys } from '../application/secrets/ListSecretKeys.js';
 import type { InitKbRepo } from '../application/kb/InitKbRepo.js';
+import type { InitLocalKb } from '../application/kb/InitLocalKb.js';
+import type { CheckRepoUsage } from '../application/agent/CheckRepoUsage.js';
+import type { RequestRepoAccess } from '../application/agent/RequestRepoAccess.js';
+import type { InMemoryRateLimiter } from '../infrastructure/ratelimit/InMemoryRateLimiter.js';
 import type { ConnectKbRepo } from '../application/kb/ConnectKbRepo.js';
 import type { DisconnectKb } from '../application/kb/DisconnectKb.js';
 import type { ListKbDocuments } from '../application/kb/ListKbDocuments.js';
@@ -199,6 +203,7 @@ type AppDeps = {
     readonly initKbRepo: InitKbRepo;
     readonly connectKbRepo: ConnectKbRepo;
     readonly disconnectKb: DisconnectKb;
+    readonly initLocalKb: InitLocalKb;
     readonly listKbDocuments: ListKbDocuments;
     readonly getKbDocument: GetKbDocument;
     readonly writeKbDocument: WriteKbDocument;
@@ -259,6 +264,10 @@ type AppDeps = {
     readonly claimAgentJob: ClaimAgentJob;
     readonly completeAgentJob: CompleteAgentJob;
     readonly agentJobs: AgentJobRepository;
+    readonly checkRepoUsage: CheckRepoUsage;
+    readonly requestRepoAccess: RequestRepoAccess;
+    readonly initLocalKb: InitLocalKb;
+    readonly rateLimiter: InMemoryRateLimiter;
   };
 };
 
@@ -367,6 +376,10 @@ export function createApp(deps: AppDeps): CreatedApp {
       listPendingAgentJobs: deps.agent.listPendingAgentJobs,
       claimAgentJob: deps.agent.claimAgentJob,
       completeAgentJob: deps.agent.completeAgentJob,
+      checkRepoUsage: deps.agent.checkRepoUsage,
+      requestRepoAccess: deps.agent.requestRepoAccess,
+      initLocalKb: deps.agent.initLocalKb,
+      rateLimiter: deps.agent.rateLimiter,
       notifier: deps.notifications.projectNotifier,
     }),
   );

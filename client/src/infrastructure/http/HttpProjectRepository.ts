@@ -23,6 +23,7 @@ type ProjectDto = {
   role?: ProjectRole;
   memberCount?: number;
   taskCount?: number;
+  kbKind?: 'none' | 'github' | 'local';
   financeVisibility?: 'owner' | 'members';
   createdAt: string;
 };
@@ -34,6 +35,7 @@ function fromDto(dto: ProjectDto): Project {
     status: dto.status,
     gitRepoUrl: dto.gitRepoUrl,
     kbRepoFullName: dto.kbRepoFullName ?? null,
+    kbKind: dto.kbKind ?? (dto.kbRepoFullName ? 'github' : 'none'),
     isInbox: dto.isInbox ?? false,
     // Legacy-fallback: до P3-релиза сервера role могло не быть в ответе. Дефолт 'owner'
     // — для single-tenant юзеров это и так было true, UI не сломается.

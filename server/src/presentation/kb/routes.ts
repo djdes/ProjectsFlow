@@ -2,6 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import type { InitKbRepo } from '../../application/kb/InitKbRepo.js';
 import type { ConnectKbRepo } from '../../application/kb/ConnectKbRepo.js';
 import type { DisconnectKb } from '../../application/kb/DisconnectKb.js';
+import type { InitLocalKb } from '../../application/kb/InitLocalKb.js';
 import type { ListKbDocuments } from '../../application/kb/ListKbDocuments.js';
 import type { GetKbDocument } from '../../application/kb/GetKbDocument.js';
 import type { WriteKbDocument } from '../../application/kb/WriteKbDocument.js';
@@ -17,6 +18,7 @@ type Deps = {
   readonly initKbRepo: InitKbRepo;
   readonly connectKbRepo: ConnectKbRepo;
   readonly disconnectKb: DisconnectKb;
+  readonly initLocalKb: InitLocalKb;
   readonly listKbDocuments: ListKbDocuments;
   readonly getKbDocument: GetKbDocument;
   readonly writeKbDocument: WriteKbDocument;
@@ -46,6 +48,17 @@ export function kbRouter(deps: Deps): Router {
       const projectId = req.params['projectId'] as string;
       const result = await deps.initKbRepo.execute(projectId, req.user!.id);
       res.status(201).json(result);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Локальная KB (без git): помечаем проект kbKind='local'.
+  router.post('/init-local', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projectId = req.params['projectId'] as string;
+      await deps.initLocalKb.execute(projectId, req.user!.id);
+      res.status(201).json({ ok: true });
     } catch (e) {
       next(e);
     }

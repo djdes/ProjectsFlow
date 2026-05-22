@@ -2,6 +2,9 @@ export type ProjectStatus = 'active' | 'paused' | 'archived';
 
 export type FinanceVisibility = 'owner' | 'members';
 
+// Где живёт База знаний проекта: нет / GitHub-репо / локально (в БД, без git).
+export type KbKind = 'none' | 'github' | 'local';
+
 export type Project = {
   readonly id: string;
   readonly ownerId: string;
@@ -9,6 +12,8 @@ export type Project = {
   readonly status: ProjectStatus;
   readonly gitRepoUrl: string | null;
   readonly kbRepoFullName: string | null;
+  // Тип Базы знаний: none / github / local. Заменяет «kbRepoFullName !== null» как индикатор.
+  readonly kbKind: KbKind;
   // Кто видит финансы проекта: 'owner' (по умолчанию) или 'members' (все участники).
   readonly financeVisibility: FinanceVisibility;
   // True для phantom-проекта «Входящие». На юзера ровно один такой; создаётся лениво
