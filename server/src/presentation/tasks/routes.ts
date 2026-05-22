@@ -23,6 +23,7 @@ import type { TaskComment } from '../../domain/task/TaskComment.js';
 import type { AgentJobRepository } from '../../application/agent/AgentJobRepository.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { agentJobToDto } from '../agent-jobs/dto.js';
+import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
 import {
   createTaskCommentSchema,
   createTaskSchema,
@@ -54,6 +55,8 @@ type Deps = {
   // Live-обновление: сигнал «в проекте изменились задачи» всем участникам (SSE).
   // Best-effort, не блокирует ответ.
   readonly notifyTaskChanged: (projectId: string) => void;
+  // Email-оповещения команде (источник 'team' — действия человека). Fire-and-forget.
+  readonly notifier: ProjectNotificationService;
 };
 
 type TaskDto = Omit<Task, 'createdAt' | 'updatedAt'> & {
@@ -93,10 +96,16 @@ type AttachmentDto = Omit<TaskAttachment, 'uploadedAt' | 'storageKey'> & {
 type CommentDto = Omit<TaskComment, 'createdAt' | 'updatedAt'> & {
   createdAt: string;
   updatedAt: string;
+  attachments?: AttachmentDto[];
 };
 
-function commentToDto(c: TaskComment): CommentDto {
-  return { ...c, createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt.toISOString() };
+function commentToDto(c: TaskComment & { attachments?: TaskAttachment[] }): CommentDto {
+  return {
+    ...c,
+    createdAt: c.createdAt.toISOString(),
+    updatedAt: c.updatedAt.toISOString(),
+    attachments: c.attachments ? c.attachments.map(attachmentToDto) : undefined,
+  };
 }
 
 function attachmentToDto(att: TaskAttachment): AttachmentDto {
@@ -149,6 +158,7 @@ export function tasksRouter(deps: Deps): Router {
         status: body.status ?? 'todo',
       });
       deps.notifyTaskChanged(projectId);
+      void deps.notifier.onTaskCreated(projectId, req.user!.id, task, 'team').catch(() => {});
       res.status(201).json({ task: toDto(task) });
     } catch (e) {
       next(e);
@@ -187,6 +197,9 @@ export function tasksRouter(deps: Deps): Router {
         afterTaskId: body.afterTaskId,
       });
       deps.notifyTaskChanged(projectId);
+      if (body.targetStatus === 'done') {
+        void deps.notifier.onTaskDone(projectId, req.user!.id, task, 'team').catch(() => {});
+      }
       res.json({ task: toDto(task) });
     } catch (e) {
       next(e);
@@ -227,6 +240,7 @@ export function tasksRouter(deps: Deps): Router {
         taskId,
         sha: body.sha,
       });
+      void deps.notifier.onCommitLinked(projectId, req.user!.id, taskId, 'team').catch(() => {});
       res.status(201).json({ commit: commitToDto(commit) });
     } catch (e) {
       next(e);
@@ -334,6 +348,7 @@ export function tasksRouter(deps: Deps): Router {
         body: body.body,
       });
       deps.notifyTaskChanged(projectId);
+      void deps.notifier.onComment(projectId, req.user!.id, taskId, body.body, 'team').catch(() => {});
       res.status(201).json({ comment: commentToDto(comment) });
     } catch (e) {
       next(e);
@@ -372,6 +387,52 @@ export function tasksRouter(deps: Deps): Router {
         const commentId = req.params['commentId'] as string;
         await deps.deleteComment.execute(projectId, req.user!.id, taskId, commentId);
         deps.notifyTaskChanged(projectId);
+        res.status(204).end();
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Comment attachments — переиспользуют uploadAttachment с commentId. Бинарь отдаётся
+  // тем же /api/attachments/:id (auth через task→project).
+  router.post(
+    '/:taskId/comments/:commentId/attachments',
+    upload.single('file'),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const commentId = req.params['commentId'] as string;
+        const file = req.file;
+        if (!file) {
+          res.status(400).json({ error: 'no_file', message: 'Файл не приложен' });
+          return;
+        }
+        const att = await deps.uploadAttachment.execute({
+          projectId,
+          ownerUserId: req.user!.id,
+          taskId,
+          commentId,
+          filename: file.originalname,
+          mimeType: file.mimetype,
+          data: file.buffer,
+        });
+        res.status(201).json({ attachment: attachmentToDto(att) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  router.delete(
+    '/:taskId/comments/:commentId/attachments/:attachmentId',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const attachmentId = req.params['attachmentId'] as string;
+        await deps.deleteAttachment.execute(projectId, req.user!.id, taskId, attachmentId);
         res.status(204).end();
       } catch (e) {
         next(e);

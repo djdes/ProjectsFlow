@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   DndContext,
   DragOverlay,
@@ -87,6 +88,21 @@ function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStat
 export function KanbanBoard({ projectId, showCommits = true, projectName }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const [dialog, setDialog] = useState<TaskDialogState | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Deep-link из email-кнопки: ?task=<id> открывает диалог задачи (один раз после загрузки).
+  const deepLinkedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkedRef.current || loading) return;
+    const taskId = searchParams.get('task');
+    if (!taskId) return;
+    deepLinkedRef.current = true;
+    const task = tasks.find((t) => t.id === taskId);
+    if (task) setDialog({ mode: 'edit', task });
+    // Чистим query, чтобы повторное открытие/refetch не дёргали диалог.
+    const next = new URLSearchParams(searchParams);
+    next.delete('task');
+    setSearchParams(next, { replace: true });
+  }, [loading, tasks, searchParams, setSearchParams]);
   const [activeId, setActiveId] = useState<string | null>(null);
   // 'lifted' — карточка приподнята (rotate+scale), 'settled' — лерпит обратно к identity.
   // Меняем на 'settled' в момент drop'а и держим activeId до конца drop-анимации, чтобы

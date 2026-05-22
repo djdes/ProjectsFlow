@@ -1,3 +1,5 @@
+import type { TaskAttachment } from './TaskAttachment';
+
 export type TaskComment = {
   readonly id: string;
   readonly taskId: string;
@@ -5,4 +7,6 @@ export type TaskComment = {
   readonly body: string;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  // Вложения комментария (на list-эндпоинте). На create — пусто (грузятся отдельно).
+  readonly attachments: TaskAttachment[];
 };

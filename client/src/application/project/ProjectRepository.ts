@@ -1,6 +1,7 @@
 import type { Project } from '@/domain/project/Project';
 import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
 import type { ProjectInvite, ProjectInviteRole } from '@/domain/project/ProjectInvite';
+import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 
 export type CreateProjectInput = {
   readonly name: string;
@@ -53,4 +54,8 @@ export interface ProjectRepository {
   checkGitCollision(gitRepoUrl: string): Promise<GitCollision>;
   requestJoin(projectId: string): Promise<void>;
   resolveJoinRequest(requestId: string, accept: boolean): Promise<void>;
+
+  // Пер-участниковые настройки email-оповещений (свои, по проекту).
+  getNotificationPrefs(projectId: string): Promise<NotificationPrefs>;
+  setNotificationPrefs(projectId: string, prefs: NotificationPrefs): Promise<NotificationPrefs>;
 }

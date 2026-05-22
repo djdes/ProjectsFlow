@@ -1,9 +1,12 @@
 import type { ProjectMembership, ProjectRole } from '../../domain/project/ProjectMembership.js';
 import type { Project } from '../../domain/project/Project.js';
 import type { User } from '../../domain/user/User.js';
+import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
 
 export type ProjectMemberWithUser = ProjectMembership & {
   readonly user: User;
+  // Пер-участниковые настройки email-оповещений (NULL = дефолты). Нужны рассылке.
+  readonly notificationPrefs: NotificationPrefs | null;
 };
 
 export type ProjectWithRole = Project & {
@@ -41,4 +44,12 @@ export interface ProjectMemberRepository {
   // порядок; sort_order проставляется по индексу. id, по которым у юзера нет membership,
   // игнорируются (UPDATE по (projectId,userId) просто не затронет строк).
   reorderForUser(userId: string, orderedIds: readonly string[]): Promise<void>;
+
+  // Пер-участниковые настройки email-оповещений (NULL = дефолты).
+  getNotificationPrefs(projectId: string, userId: string): Promise<NotificationPrefs | null>;
+  setNotificationPrefs(
+    projectId: string,
+    userId: string,
+    prefs: NotificationPrefs,
+  ): Promise<void>;
 }

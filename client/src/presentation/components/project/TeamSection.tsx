@@ -20,6 +20,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { InviteDialog } from './InviteDialog';
+import { NotificationPrefsCard } from './NotificationPrefsCard';
 
 const ROLE_LABEL: Record<ProjectRole, string> = {
   owner: 'владелец',
@@ -315,6 +316,8 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
           </ul>
         </div>
       )}
+
+      <NotificationPrefsCard projectId={project.id} />
 
       <InviteDialog
         projectId={project.id}

@@ -16,6 +16,7 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/mysql-core';
+import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
 
 // id-длина 36 = UUID v4 в строковой форме (8-4-4-4-12).
 const id = () => char('id', { length: 36 }).primaryKey();
@@ -94,6 +95,8 @@ export const projectMembers = mysqlTable(
     joinedAt: timestamp('joined_at').notNull().default(sql`CURRENT_TIMESTAMP`),
     // Персональный порядок проекта в сайдбаре этого юзера. См. db/023.
     sortOrder: int('sort_order').notNull().default(0),
+    // Пер-участниковые настройки email-оповещений (матрица тип×источник). NULL = дефолты. См. db/024.
+    notificationPrefs: json('notification_prefs').$type<NotificationPrefs | null>(),
   },
   (t) => [
     uniqueIndex('pk_project_members').on(t.projectId, t.userId),
@@ -232,13 +235,18 @@ export const taskAttachments = mysqlTable(
   {
     id: id(),
     taskId: char('task_id', { length: 36 }).notNull(),
+    // NULL = вложение задачи; заполнен = вложение комментария. См. db/025.
+    commentId: char('comment_id', { length: 36 }),
     filename: varchar('filename', { length: 255 }).notNull(),
     mimeType: varchar('mime_type', { length: 100 }).notNull(),
     sizeBytes: int('size_bytes').notNull(),
     storageKey: varchar('storage_key', { length: 500 }).notNull(),
     uploadedAt: timestamp('uploaded_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   },
-  (t) => [index('idx_task_attachments_task').on(t.taskId)],
+  (t) => [
+    index('idx_task_attachments_task').on(t.taskId),
+    index('idx_task_attachments_comment').on(t.commentId),
+  ],
 );
 
 export type TaskAttachmentRow = typeof taskAttachments.$inferSelect;

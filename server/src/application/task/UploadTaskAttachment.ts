@@ -1,8 +1,4 @@
-import {
-  TaskAttachmentTooLargeError,
-  TaskAttachmentTypeNotAllowedError,
-  TaskNotFoundError,
-} from '../../domain/task/errors.js';
+import { TaskAttachmentTooLargeError, TaskNotFoundError } from '../../domain/task/errors.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
@@ -19,7 +15,6 @@ type Deps = {
   readonly storage: AttachmentStorage;
   readonly idGen: () => string;
   readonly maxBytes: number;
-  readonly allowedMimeTypes: ReadonlySet<string>;
 };
 
 export type UploadTaskAttachmentCommand = {
@@ -29,16 +24,18 @@ export type UploadTaskAttachmentCommand = {
   readonly filename: string;
   readonly mimeType: string;
   readonly data: Buffer;
+  // Если задан — вложение принадлежит комментарию (а не самой задаче).
+  readonly commentId?: string;
 };
 
-// Деривим расширение по MIME, не доверяя клиентскому filename
-// (он может прийти как "screenshot" без расширения).
-const MIME_TO_EXT: Record<string, string> = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/webp': 'webp',
-  'image/gif': 'gif',
-};
+// Расширение из исходного имени файла (любой тип разрешён). Безопасное: только буквы/цифры,
+// иначе fallback. Используется лишь для storageKey на диске; mimeType хранится отдельно.
+function extFromFilename(filename: string): string {
+  const dot = filename.lastIndexOf('.');
+  if (dot < 0 || dot === filename.length - 1) return 'bin';
+  const ext = filename.slice(dot + 1).toLowerCase();
+  return /^[a-z0-9]{1,12}$/.test(ext) ? ext : 'bin';
+}
 
 export class UploadTaskAttachment {
   constructor(private readonly deps: Deps) {}
@@ -46,9 +43,6 @@ export class UploadTaskAttachment {
   async execute(input: UploadTaskAttachmentCommand): Promise<TaskAttachment> {
     if (input.data.byteLength > this.deps.maxBytes) {
       throw new TaskAttachmentTooLargeError(input.data.byteLength, this.deps.maxBytes);
-    }
-    if (!this.deps.allowedMimeTypes.has(input.mimeType)) {
-      throw new TaskAttachmentTypeNotAllowedError(input.mimeType);
     }
 
     await requireProjectAccess(
@@ -61,14 +55,17 @@ export class UploadTaskAttachment {
     if (!task || task.projectId !== input.projectId) throw new TaskNotFoundError(input.taskId);
 
     const id = this.deps.idGen();
-    const ext = MIME_TO_EXT[input.mimeType] ?? 'bin';
-    const storageKey = `tasks/${input.taskId}/${id}.${ext}`;
+    const ext = extFromFilename(input.filename);
+    const storageKey = input.commentId
+      ? `comments/${input.commentId}/${id}.${ext}`
+      : `tasks/${input.taskId}/${id}.${ext}`;
 
     await this.deps.storage.put({ storageKey, data: input.data, mimeType: input.mimeType });
 
     return this.deps.attachments.create({
       id,
       taskId: input.taskId,
+      commentId: input.commentId ?? null,
       filename: input.filename.slice(0, 255),
       mimeType: input.mimeType,
       sizeBytes: input.data.byteLength,

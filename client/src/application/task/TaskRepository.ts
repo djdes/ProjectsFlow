@@ -37,6 +37,18 @@ export interface TaskRepository {
   listAttachments(projectId: string, taskId: string): Promise<TaskAttachment[]>;
   uploadAttachment(projectId: string, taskId: string, file: File): Promise<TaskAttachment>;
   deleteAttachment(projectId: string, taskId: string, attachmentId: string): Promise<void>;
+  uploadCommentAttachment(
+    projectId: string,
+    taskId: string,
+    commentId: string,
+    file: File,
+  ): Promise<TaskAttachment>;
+  deleteCommentAttachment(
+    projectId: string,
+    taskId: string,
+    commentId: string,
+    attachmentId: string,
+  ): Promise<void>;
   listComments(projectId: string, taskId: string): Promise<TaskComment[]>;
   createComment(projectId: string, taskId: string, body: string): Promise<TaskComment>;
   updateComment(

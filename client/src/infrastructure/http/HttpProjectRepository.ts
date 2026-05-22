@@ -9,6 +9,7 @@ import type {
   ProjectRepository,
   UpdateProjectInput,
 } from '@/application/project/ProjectRepository';
+import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 import { HttpError, httpClient } from './httpClient';
 
 type ProjectDto = {
@@ -149,6 +150,24 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async reorder(orderedIds: readonly string[]): Promise<void> {
     await httpClient.put<void>('/projects/reorder', { orderedIds });
+  }
+
+  async getNotificationPrefs(projectId: string): Promise<NotificationPrefs> {
+    const { prefs } = await httpClient.get<{ prefs: NotificationPrefs }>(
+      `/projects/${projectId}/notification-prefs`,
+    );
+    return prefs;
+  }
+
+  async setNotificationPrefs(
+    projectId: string,
+    prefs: NotificationPrefs,
+  ): Promise<NotificationPrefs> {
+    const { prefs: saved } = await httpClient.put<{ prefs: NotificationPrefs }>(
+      `/projects/${projectId}/notification-prefs`,
+      { prefs },
+    );
+    return saved;
   }
 
   async listMembers(projectId: string): Promise<ProjectMember[]> {

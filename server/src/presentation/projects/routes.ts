@@ -14,7 +14,11 @@ import type { DeleteProjectInvite } from '../../application/project/DeleteProjec
 import type { CheckGitCollision } from '../../application/project/CheckGitCollision.js';
 import type { RequestProjectJoin } from '../../application/project/RequestProjectJoin.js';
 import type { ResolveProjectJoinRequest } from '../../application/project/ResolveProjectJoinRequest.js';
-import type { ProjectMemberWithUser } from '../../application/project/ProjectMemberRepository.js';
+import type {
+  ProjectMemberRepository,
+  ProjectMemberWithUser,
+} from '../../application/project/ProjectMemberRepository.js';
+import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
 import type { ListProjectCommits } from '../../application/github/ListProjectCommits.js';
 import { ProjectNotFoundError } from '../../domain/project/errors.js';
 import type { Project } from '../../domain/project/Project.js';
@@ -24,6 +28,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import {
   createInviteSchema,
   createProjectSchema,
+  notificationPrefsSchema,
   reorderProjectsSchema,
   transferOwnershipSchema,
   updateMemberRoleSchema,
@@ -51,6 +56,9 @@ type Deps = {
   readonly appUrl: string;
   // Live-обновление: сигнал «проект изменился» всем участникам (SSE). Best-effort.
   readonly notifyProjectChanged: (projectId: string) => void;
+  // Email-оповещения команде (изменения состава) + чтение/запись пер-участниковых настроек.
+  readonly notifier: ProjectNotificationService;
+  readonly members: ProjectMemberRepository;
 };
 
 // Project всегда содержит role (для текущего юзера). На list-эндпоинте role приходит
@@ -246,6 +254,41 @@ export function projectsRouter(deps: Deps): Router {
     }
   });
 
+  // Notification prefs (свои) -------------------------------------------------
+  // Доступ — быть участником проекта; каждый управляет только своими настройками.
+  router.get(
+    '/:id/notification-prefs',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params.id;
+        if (typeof id !== 'string') throw new ProjectNotFoundError();
+        const membership = await deps.members.findForProject(id, req.user!.id);
+        if (!membership) throw new ProjectNotFoundError();
+        const prefs = await deps.members.getNotificationPrefs(id, req.user!.id);
+        res.json({ prefs: prefs ?? {} });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  router.put(
+    '/:id/notification-prefs',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params.id;
+        if (typeof id !== 'string') throw new ProjectNotFoundError();
+        const membership = await deps.members.findForProject(id, req.user!.id);
+        if (!membership) throw new ProjectNotFoundError();
+        const prefs = notificationPrefsSchema.parse(req.body?.prefs ?? req.body);
+        await deps.members.setNotificationPrefs(id, req.user!.id, prefs);
+        res.json({ prefs });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
   // Members ---------------------------------------------------------------
   router.get('/:id/members', async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -272,6 +315,9 @@ export function projectsRouter(deps: Deps): Router {
           targetUserId: userId,
           role: body.role,
         });
+        void deps.notifier
+          .onMemberChanged(id, req.user!.id, `изменил роль участника на «${body.role}»`, 'team')
+          .catch(() => {});
         res.json({
           membership: {
             projectId: updated.projectId,
@@ -311,6 +357,9 @@ export function projectsRouter(deps: Deps): Router {
         actorUserId: req.user!.id,
         toUserId: body.toUserId,
       });
+      void deps.notifier
+        .onMemberChanged(id, req.user!.id, 'передал владение проектом', 'team')
+        .catch(() => {});
       res.status(204).end();
     } catch (e) {
       next(e);
