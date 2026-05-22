@@ -1,6 +1,8 @@
 export type TaskAttachment = {
   readonly id: string;
   readonly taskId: string;
+  // NULL — вложение самой задачи; иначе — вложение комментария.
+  readonly commentId: string | null;
   readonly filename: string;
   readonly mimeType: string;
   readonly sizeBytes: number;

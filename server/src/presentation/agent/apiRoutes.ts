@@ -1,6 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import type { ListProjects } from '../../application/project/ListProjects.js';
+import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
 import type { CreateProjectWithGit } from '../../application/project/CreateProjectWithGit.js';
 import type { UpdateProject } from '../../application/project/UpdateProject.js';
 import type { ListUserRepos } from '../../application/github/ListUserRepos.js';
@@ -56,6 +57,8 @@ type Deps = {
   readonly listPendingAgentJobs: ListPendingAgentJobs;
   readonly claimAgentJob: ClaimAgentJob;
   readonly completeAgentJob: CompleteAgentJob;
+  // Email-оповещения команде (источник 'mcp' — действия агента). Fire-and-forget.
+  readonly notifier: ProjectNotificationService;
 };
 
 const createCredentialSchema = z.object({
@@ -343,6 +346,7 @@ export function agentApiRouter(deps: Deps): Router {
           description: body.description,
           status: body.status ?? 'todo',
         });
+        void deps.notifier.onTaskCreated(projectId, req.user!.id, task, 'mcp').catch(() => {});
         // taskToDto ожидает Task с commitCount, но из CreateTask он не приходит — оборачиваем
         // вручную с нулевым счётчиком; в БД у новой задачи коммитов нет по определению.
         res.status(201).json({ task: taskToDto({ ...task, commitCount: 0 }) });
@@ -404,6 +408,7 @@ export function agentApiRouter(deps: Deps): Router {
           taskId,
           body: body.body,
         });
+        void deps.notifier.onComment(projectId, req.user!.id, taskId, body.body, 'mcp').catch(() => {});
         res.status(201).json({ comment: commentToDto(comment) });
       } catch (e) {
         next(e);
@@ -429,6 +434,9 @@ export function agentApiRouter(deps: Deps): Router {
           beforeTaskId: null,
           afterTaskId: null,
         });
+        if (body.targetStatus === 'done') {
+          void deps.notifier.onTaskDone(projectId, req.user!.id, task, 'mcp').catch(() => {});
+        }
         res.json({ task: taskToDto(task) });
       } catch (e) {
         next(e);
@@ -452,6 +460,9 @@ export function agentApiRouter(deps: Deps): Router {
           body: body.body,
           sha: body.sha,
         });
+        void deps.notifier
+          .onKbUpdated(projectId, req.user!.id, body.path, 'mcp')
+          .catch(() => {});
         res.status(201).json({ path: body.path, sha: result.sha });
       } catch (e) {
         next(e);
@@ -474,6 +485,7 @@ export function agentApiRouter(deps: Deps): Router {
           taskId,
           sha: body.sha,
         });
+        void deps.notifier.onCommitLinked(projectId, req.user!.id, taskId, 'mcp').catch(() => {});
         res.status(201).json({ commit: commitToDto(commit) });
       } catch (e) {
         next(e);

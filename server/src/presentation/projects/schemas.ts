@@ -43,6 +43,22 @@ export const reorderProjectsSchema = z.object({
   orderedIds: z.array(z.string().min(1)).min(1),
 });
 
+// Пер-участниковые настройки оповещений: карта тип→{team,mcp}. Ключи валидируем как
+// известные типы; неизвестные отсекаем (passthrough off).
+const NOTIF_EVENT_TYPES = [
+  'task_created',
+  'task_done',
+  'comment_created',
+  'member_changed',
+  'commit_linked',
+  'kb_updated',
+] as const;
+
+export const notificationPrefsSchema = z.record(
+  z.enum(NOTIF_EVENT_TYPES),
+  z.object({ team: z.boolean(), mcp: z.boolean() }),
+);
+
 export type CreateProjectBody = z.infer<typeof createProjectSchema>;
 export type UpdateProjectBody = z.infer<typeof updateProjectSchema>;
 export type ReorderProjectsBody = z.infer<typeof reorderProjectsSchema>;

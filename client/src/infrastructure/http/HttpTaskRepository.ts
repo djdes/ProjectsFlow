@@ -27,9 +27,10 @@ type AttachmentDto = Omit<TaskAttachment, 'uploadedAt'> & {
   uploadedAt: string;
 };
 
-type CommentDto = Omit<TaskComment, 'createdAt' | 'updatedAt'> & {
+type CommentDto = Omit<TaskComment, 'createdAt' | 'updatedAt' | 'attachments'> & {
   createdAt: string;
   updatedAt: string;
+  attachments?: AttachmentDto[];
 };
 
 function fromDto(dto: TaskDto): Task {
@@ -50,8 +51,30 @@ function attachmentFromDto(dto: AttachmentDto): TaskAttachment {
   return { ...dto, uploadedAt: new Date(dto.uploadedAt) };
 }
 
+// multipart/form-data upload: httpClient рассчитан под JSON, поэтому fetch вручную.
+// credentials:'include' для cookie-сессии. Content-Type браузер выставит сам с boundary.
+async function uploadFile(url: string, file: File): Promise<TaskAttachment> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(url, { method: 'POST', credentials: 'include', body: form });
+  const text = await res.text();
+  const data = text
+    ? (JSON.parse(text) as { attachment?: AttachmentDto; error?: string; message?: string })
+    : null;
+  if (!res.ok || !data?.attachment) {
+    const msg = data?.message ?? data?.error ?? `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return attachmentFromDto(data.attachment);
+}
+
 function commentFromDto(dto: CommentDto): TaskComment {
-  return { ...dto, createdAt: new Date(dto.createdAt), updatedAt: new Date(dto.updatedAt) };
+  return {
+    ...dto,
+    createdAt: new Date(dto.createdAt),
+    updatedAt: new Date(dto.updatedAt),
+    attachments: (dto.attachments ?? []).map(attachmentFromDto),
+  };
 }
 
 export class HttpTaskRepository implements TaskRepository {
@@ -109,29 +132,32 @@ export class HttpTaskRepository implements TaskRepository {
     return attachments.map(attachmentFromDto);
   }
   async uploadAttachment(projectId: string, taskId: string, file: File): Promise<TaskAttachment> {
-    // multipart/form-data: httpClient рассчитан под JSON, поэтому пишем fetch вручную.
-    // credentials: 'include' нужен для cookie-сессии. Content-Type браузер выставит сам
-    // вместе с boundary — НЕ выставлять руками, иначе сервер не сможет распарсить.
-    const form = new FormData();
-    form.append('file', file);
-    const res = await fetch(`/api/projects/${projectId}/tasks/${taskId}/attachments`, {
-      method: 'POST',
-      credentials: 'include',
-      body: form,
-    });
-    const text = await res.text();
-    const data = text
-      ? (JSON.parse(text) as { attachment?: AttachmentDto; error?: string; message?: string })
-      : null;
-    if (!res.ok || !data?.attachment) {
-      const msg = data?.message ?? data?.error ?? `HTTP ${res.status}`;
-      throw new Error(msg);
-    }
-    return attachmentFromDto(data.attachment);
+    return uploadFile(`/api/projects/${projectId}/tasks/${taskId}/attachments`, file);
   }
   async deleteAttachment(projectId: string, taskId: string, attachmentId: string): Promise<void> {
     await httpClient.delete<void>(
       `/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}`,
+    );
+  }
+  async uploadCommentAttachment(
+    projectId: string,
+    taskId: string,
+    commentId: string,
+    file: File,
+  ): Promise<TaskAttachment> {
+    return uploadFile(
+      `/api/projects/${projectId}/tasks/${taskId}/comments/${commentId}/attachments`,
+      file,
+    );
+  }
+  async deleteCommentAttachment(
+    projectId: string,
+    taskId: string,
+    commentId: string,
+    attachmentId: string,
+  ): Promise<void> {
+    await httpClient.delete<void>(
+      `/projects/${projectId}/tasks/${taskId}/comments/${commentId}/attachments/${attachmentId}`,
     );
   }
   async listComments(projectId: string, taskId: string): Promise<TaskComment[]> {

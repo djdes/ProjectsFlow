@@ -73,6 +73,7 @@ import type { MarkNotificationRead } from '../application/notifications/MarkNoti
 import type { MarkAllNotificationsRead } from '../application/notifications/MarkAllNotificationsRead.js';
 import type { Notification as NotificationEntity } from '../domain/notifications/Notification.js';
 import type { RealtimeEvent } from '../domain/realtime/RealtimeEvent.js';
+import type { ProjectNotificationService } from '../application/notifications/ProjectNotificationService.js';
 import type { ListAllProjects } from '../application/admin/ListAllProjects.js';
 import type { ListAllUsers } from '../application/admin/ListAllUsers.js';
 import type { UpdateUserAsAdmin } from '../application/admin/UpdateUserAsAdmin.js';
@@ -97,6 +98,7 @@ import type { ListPendingAgentJobs } from '../application/agent/ListPendingAgent
 import type { ClaimAgentJob } from '../application/agent/ClaimAgentJob.js';
 import type { CompleteAgentJob } from '../application/agent/CompleteAgentJob.js';
 import type { AgentJobRepository } from '../application/agent/AgentJobRepository.js';
+import type { ProjectMemberRepository } from '../application/project/ProjectMemberRepository.js';
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './auth/routes.js';
@@ -149,6 +151,7 @@ type AppDeps = {
     readonly resolveJoinRequest: ResolveProjectJoinRequest;
     readonly appUrl: string;
     readonly notifyProjectChanged: (projectId: string) => void;
+    readonly members: ProjectMemberRepository;
   };
   readonly invites: {
     readonly getByToken: GetInviteByToken;
@@ -177,6 +180,7 @@ type AppDeps = {
       userId: string,
       fn: (e: RealtimeEvent) => void,
     ) => () => void;
+    readonly projectNotifier: ProjectNotificationService;
   };
   readonly github: {
     readonly startDeviceFlow: StartDeviceFlow;
@@ -290,11 +294,17 @@ export function createApp(deps: AppDeps): CreatedApp {
     }),
   );
 
-  app.use('/api/projects', projectsRouter(deps.projects));
+  app.use(
+    '/api/projects',
+    projectsRouter({ ...deps.projects, notifier: deps.notifications.projectNotifier }),
+  );
   app.use('/api/integrations/github', githubRouter(deps.github));
   app.use('/api/projects/:projectId/secrets', secretsRouter(deps.secrets));
   app.use('/api/projects/:projectId/kb', kbRouter(deps.kb));
-  app.use('/api/projects/:projectId/tasks', tasksRouter(deps.tasks));
+  app.use(
+    '/api/projects/:projectId/tasks',
+    tasksRouter({ ...deps.tasks, notifier: deps.notifications.projectNotifier }),
+  );
   app.use('/api/search', searchRouter(deps.search));
   app.use('/api/admin', adminRouter(deps.admin));
   app.use('/api/employees', employeesRouter({ manage: deps.finance.manageEmployees }));
@@ -357,6 +367,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       listPendingAgentJobs: deps.agent.listPendingAgentJobs,
       claimAgentJob: deps.agent.claimAgentJob,
       completeAgentJob: deps.agent.completeAgentJob,
+      notifier: deps.notifications.projectNotifier,
     }),
   );
 

@@ -9,6 +9,7 @@ import type {
   CreateProjectInput,
   UpdateProjectInput,
 } from '@/application/project/ProjectRepository';
+import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 import { seedProjects } from './seed-data';
 
 const LATENCY_MS = 120;
@@ -51,6 +52,14 @@ export class MockProjectRepository implements ProjectRepository {
     };
     this.projects.unshift(inbox);
     return delay(inbox);
+  }
+
+  async getNotificationPrefs(): Promise<NotificationPrefs> {
+    return delay({});
+  }
+
+  async setNotificationPrefs(_projectId: string, prefs: NotificationPrefs): Promise<NotificationPrefs> {
+    return delay(prefs);
   }
 
   async reorder(orderedIds: readonly string[]): Promise<void> {

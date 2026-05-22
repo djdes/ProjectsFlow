@@ -14,6 +14,7 @@ import type {
 } from '../../domain/project/ProjectMembership.js';
 import type { Project, ProjectStatus } from '../../domain/project/Project.js';
 import type { User } from '../../domain/user/User.js';
+import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
 import type {
   AddMemberInput,
   ProjectMemberRepository,
@@ -74,7 +75,11 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       .innerJoin(users, eq(users.id, projectMembers.userId))
       .where(eq(projectMembers.projectId, projectId))
       .orderBy(asc(projectMembers.joinedAt));
-    return rows.map((r) => ({ ...toMembership(r.member), user: toUser(r.user) }));
+    return rows.map((r) => ({
+      ...toMembership(r.member),
+      user: toUser(r.user),
+      notificationPrefs: r.member.notificationPrefs ?? null,
+    }));
   }
 
   async listProjectsForUser(userId: string): Promise<ProjectWithRole[]> {
@@ -136,6 +141,29 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       .set({ role })
       .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
     return this.findForProject(projectId, userId);
+  }
+
+  async getNotificationPrefs(
+    projectId: string,
+    userId: string,
+  ): Promise<NotificationPrefs | null> {
+    const rows = await this.db
+      .select({ prefs: projectMembers.notificationPrefs })
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)))
+      .limit(1);
+    return rows[0]?.prefs ?? null;
+  }
+
+  async setNotificationPrefs(
+    projectId: string,
+    userId: string,
+    prefs: NotificationPrefs,
+  ): Promise<void> {
+    await this.db
+      .update(projectMembers)
+      .set({ notificationPrefs: prefs })
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
   }
 
   async reorderForUser(userId: string, orderedIds: readonly string[]): Promise<void> {

@@ -9,7 +9,7 @@ import {
   type KeyboardEvent,
   type Ref,
 } from 'react';
-import { ImagePlus, Loader2, Pencil, Send, Trash2, X } from 'lucide-react';
+import { Download, FileText, Loader2, Paperclip, Pencil, Send, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,12 @@ import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { TaskCommitsSection } from './TaskCommitsSection';
 import { CommentBody } from './CommentBody';
+import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
+import {
+  extractClipboardFiles,
+  formatBytes,
+  isImageMime,
+} from '@/presentation/components/attachments/files';
 
 export type TaskDialogState =
   | { mode: 'create'; status: Task['status'] }
@@ -52,32 +58,19 @@ type Props = {
   projectName?: string;
 };
 
-const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-
-// Извлекает image-файлы из ClipboardEvent. Возвращает пустой массив если ничего
-// подходящего нет — caller'у тогда нужно дать textarea/контролу обработать paste
-// как обычно (не делать preventDefault).
-function extractClipboardImages(clipboardData: DataTransfer | null): File[] {
-  if (!clipboardData) return [];
-  const out: File[] = [];
-  for (let i = 0; i < clipboardData.items.length; i++) {
-    const it = clipboardData.items[i];
-    if (it && it.kind === 'file') {
-      const file = it.getAsFile();
-      if (file && ACCEPTED_TYPES.includes(file.type)) out.push(file);
-    }
+// Превью-тайл вложения в сетке: картинка → thumbnail, иначе → иконка + имя файла.
+function AttachmentThumb({ url, name, mime }: { url?: string; name: string; mime: string }): React.ReactElement {
+  if (isImageMime(mime) && url) {
+    return <img src={url} alt={name} loading="lazy" className="size-full object-cover" />;
   }
-  return out;
-}
-
-function filterValidImageFiles(files: FileList | File[]): File[] {
-  return Array.from(files).filter((f) => {
-    if (!ACCEPTED_TYPES.includes(f.type)) {
-      toast.error(`Тип файла "${f.type || 'неизвестный'}" не поддерживается — нужны картинки.`);
-      return false;
-    }
-    return true;
-  });
+  return (
+    <div className="flex size-full flex-col items-center justify-center gap-1 p-1.5 text-center">
+      <FileText className="size-6 text-muted-foreground" />
+      <span className="line-clamp-2 break-all text-[10px] leading-tight text-muted-foreground">
+        {name}
+      </span>
+    </div>
+  );
 }
 
 export function TaskDialog({
@@ -114,12 +107,13 @@ export function TaskDialog({
   }, [state]);
 
   const addPendingFiles = (raw: FileList | File[]): void => {
-    const valid = filterValidImageFiles(raw);
+    const valid = Array.from(raw);
     if (valid.length === 0) return;
     const additions: PendingFile[] = valid.map((file) => ({
       id: crypto.randomUUID(),
       file,
-      previewUrl: URL.createObjectURL(file),
+      // Blob URL только для картинок (для thumbnail); иначе превью не нужно.
+      previewUrl: isImageMime(file.type) ? URL.createObjectURL(file) : '',
     }));
     setPendingFiles((prev) => [...prev, ...additions]);
   };
@@ -128,7 +122,7 @@ export function TaskDialog({
   // Если в буфере есть картинки — preventDefault (textarea не вставит binary-кашу) и роутим в нужную секцию.
   // Если картинок нет — просто пускаем дефолтное поведение (текст ↦ в textarea).
   const handleFormPaste = (e: ClipboardEvent<HTMLFormElement>): void => {
-    const files = extractClipboardImages(e.clipboardData);
+    const files = extractClipboardFiles(e.clipboardData);
     if (files.length === 0) return;
     e.preventDefault();
     if (state?.mode === 'create') {
@@ -323,7 +317,7 @@ function PendingAttachmentsSection({
   return (
     <div className="space-y-2" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       <div className="flex items-center justify-between">
-        <Label>Картинки и скриншоты</Label>
+        <Label>Файлы и&nbsp;картинки</Label>
         <Button
           type="button"
           variant="outline"
@@ -331,13 +325,12 @@ function PendingAttachmentsSection({
           className="h-7 gap-1.5"
           onClick={() => fileInputRef.current?.click()}
         >
-          <ImagePlus className="size-3.5" />
+          <Paperclip className="size-3.5" />
           Прикрепить
         </Button>
         <input
           ref={fileInputRef}
           type="file"
-          accept={ACCEPTED_TYPES.join(',')}
           multiple
           className="hidden"
           onChange={(e) => {
@@ -357,12 +350,7 @@ function PendingAttachmentsSection({
             key={pf.id}
             className="group relative aspect-square overflow-hidden rounded border bg-muted"
           >
-            <img
-              src={pf.previewUrl}
-              alt={pf.file.name}
-              loading="lazy"
-              className="size-full object-cover"
-            />
+            <AttachmentThumb url={pf.previewUrl || undefined} name={pf.file.name} mime={pf.file.type} />
             <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity group-hover:opacity-100">
               <p className="w-full truncate px-1.5 pb-1 text-left text-[10px] text-white">
                 {pf.file.name}
@@ -380,7 +368,7 @@ function PendingAttachmentsSection({
         ))}
         {files.length === 0 && (
           <div className="col-span-3 grid place-items-center py-6 text-center text-xs text-muted-foreground">
-            Перетащи картинки сюда, вставь из&nbsp;буфера (Ctrl+V) или нажми «Прикрепить».
+            Перетащи файлы сюда, вставь из&nbsp;буфера (Ctrl+V) или нажми «Прикрепить».
             Они загрузятся после создания задачи.
           </div>
         )}
@@ -438,7 +426,7 @@ function AttachmentsSection({
   }, [projectId, taskId, taskRepository]);
 
   const uploadFiles = async (files: FileList | File[]): Promise<void> => {
-    const valid = filterValidImageFiles(files);
+    const valid = Array.from(files);
     if (valid.length === 0) return;
     setUploadingCount((c) => c + valid.length);
     for (const file of valid) {
@@ -486,7 +474,7 @@ function AttachmentsSection({
   return (
     <div className="space-y-2" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       <div className="flex items-center justify-between">
-        <Label>Картинки и скриншоты</Label>
+        <Label>Файлы и&nbsp;картинки</Label>
         <Button
           type="button"
           variant="outline"
@@ -494,13 +482,12 @@ function AttachmentsSection({
           className="h-7 gap-1.5"
           onClick={() => fileInputRef.current?.click()}
         >
-          <ImagePlus className="size-3.5" />
+          <Paperclip className="size-3.5" />
           Прикрепить
         </Button>
         <input
           ref={fileInputRef}
           type="file"
-          accept={ACCEPTED_TYPES.join(',')}
           multiple
           className="hidden"
           onChange={(e) => {
@@ -523,12 +510,7 @@ function AttachmentsSection({
             className="group relative aspect-square overflow-hidden rounded border bg-muted"
             aria-label={`Открыть ${att.filename}`}
           >
-            <img
-              src={att.url}
-              alt={att.filename}
-              loading="lazy"
-              className="size-full object-cover"
-            />
+            <AttachmentThumb url={att.url} name={att.filename} mime={att.mimeType} />
             <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity group-hover:opacity-100">
               <p className="w-full truncate px-1.5 pb-1 text-left text-[10px] text-white">
                 {att.filename}
@@ -565,12 +547,12 @@ function AttachmentsSection({
         ))}
         {items.length === 0 && uploadingCount === 0 && !loading && (
           <div className="col-span-3 grid place-items-center py-6 text-center text-xs text-muted-foreground">
-            Перетащи картинки сюда, вставь из&nbsp;буфера (Ctrl+V) или нажми «Прикрепить».
+            Перетащи файлы сюда, вставь из&nbsp;буфера (Ctrl+V) или нажми «Прикрепить».
           </div>
         )}
       </div>
 
-      <ImagePreviewDialog attachment={preview} onClose={() => setPreview(null)} />
+      <AttachmentLightbox attachment={preview} onClose={() => setPreview(null)} />
     </div>
   );
 }
@@ -841,7 +823,39 @@ function CommentComposer({
   const [preview, setPreview] = useState(false);
   const [mention, setMention] = useState<MentionState | null>(null);
   const [pickerIndex, setPickerIndex] = useState(0);
+  const [pending, setPending] = useState<PendingFile[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const addFiles = (raw: FileList | File[]): void => {
+    const list = Array.from(raw);
+    if (list.length === 0) return;
+    setPending((prev) => [
+      ...prev,
+      ...list.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: isImageMime(file.type) ? URL.createObjectURL(file) : '',
+      })),
+    ]);
+  };
+  const removeFile = (id: string): void => {
+    setPending((prev) => {
+      prev.filter((p) => p.id === id).forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
+      return prev.filter((p) => p.id !== id);
+    });
+  };
+
+  // Paste внутри composer'а: перехватываем файлы сюда (а не в аттачи задачи). stopPropagation
+  // не даёт form-level paste-handler'у TaskDialog увести файл в аттачи задачи.
+  const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>): void => {
+    const files = extractClipboardFiles(e.clipboardData);
+    e.stopPropagation();
+    if (files.length > 0) {
+      e.preventDefault();
+      addFiles(files);
+    }
+  };
 
   // Кандидаты в пикере — кто угодно из команды кроме автора. Фильтруем по includes
   // (case-insensitive) — display name'ы могут содержать пробелы.
@@ -904,13 +918,26 @@ function CommentComposer({
 
   const submit = async (): Promise<void> => {
     const trimmed = body.trim();
-    if (trimmed.length === 0 || submitting) return;
+    // Разрешаем отправку, если есть текст ИЛИ вложения.
+    if ((trimmed.length === 0 && pending.length === 0) || submitting) return;
     setSubmitting(true);
     try {
-      const created = await taskRepository.createComment(projectId, taskId, trimmed);
-      onCreated(created);
+      const created = await taskRepository.createComment(projectId, taskId, trimmed || ' ');
+      const uploaded: TaskAttachment[] = [];
+      for (const pf of pending) {
+        try {
+          uploaded.push(
+            await taskRepository.uploadCommentAttachment(projectId, taskId, created.id, pf.file),
+          );
+        } catch (err) {
+          toast.error(`Не удалось загрузить ${pf.file.name}: ${(err as Error).message}`);
+        }
+      }
+      onCreated({ ...created, attachments: uploaded });
       setBody('');
       setMention(null);
+      pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
+      setPending([]);
     } catch (e) {
       toast.error(`Не удалось отправить: ${(e as Error).message}`);
     } finally {
@@ -970,23 +997,72 @@ function CommentComposer({
           onChange={handleChange}
           onSelect={handleSelect}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           rows={2}
           disabled={submitting}
-          placeholder="Написать комментарий… поддерживается Markdown"
+          placeholder="Написать комментарий… Markdown, файлы (Ctrl+V)"
           className="block w-full resize-none rounded-md bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
         />
       )}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="absolute right-1.5 top-1.5 size-7"
-        onClick={() => void submit()}
-        disabled={submitting || body.trim().length === 0}
-        aria-label="Отправить"
-      >
-        {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-      </Button>
+      <div className="absolute right-1.5 top-1.5 flex gap-0.5">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={submitting}
+          aria-label="Прикрепить файл"
+        >
+          <Paperclip className="size-3.5" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          onClick={() => void submit()}
+          disabled={submitting || (body.trim().length === 0 && pending.length === 0)}
+          aria-label="Отправить"
+        >
+          {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+        </Button>
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files) addFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      {pending.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-3 pb-1.5">
+          {pending.map((pf) => (
+            <span
+              key={pf.id}
+              className="inline-flex items-center gap-1 rounded border bg-muted/60 py-0.5 pl-1.5 pr-1 text-[11px]"
+            >
+              {pf.previewUrl ? (
+                <img src={pf.previewUrl} alt="" className="size-4 rounded object-cover" />
+              ) : (
+                <FileText className="size-3.5 text-muted-foreground" />
+              )}
+              <span className="max-w-[120px] truncate">{pf.file.name}</span>
+              <button
+                type="button"
+                onClick={() => removeFile(pf.id)}
+                className="grid size-4 place-items-center rounded-full text-muted-foreground hover:bg-destructive hover:text-white"
+                aria-label="Убрать"
+              >
+                <Trash2 className="size-2.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       {!preview && showPicker && (
         <MentionPicker
@@ -1091,6 +1167,7 @@ function CommentItem({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(comment.body);
   const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState<TaskAttachment | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -1123,7 +1200,8 @@ function CommentItem({
     setSaving(true);
     try {
       const updated = await taskRepository.updateComment(projectId, taskId, comment.id, trimmed);
-      onUpdated(updated);
+      // Сервер на update возвращает комментарий без вложений — сохраняем текущие.
+      onUpdated({ ...updated, attachments: comment.attachments });
       setEditing(false);
     } catch (e) {
       toast.error(`Не удалось сохранить: ${(e as Error).message}`);
@@ -1214,43 +1292,38 @@ function CommentItem({
             <CommentBody body={comment.body} />
           </div>
         )}
+        {comment.attachments.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {comment.attachments.map((att) =>
+              isImageMime(att.mimeType) ? (
+                <button
+                  key={att.id}
+                  type="button"
+                  onClick={() => setPreview(att)}
+                  className="size-14 overflow-hidden rounded border bg-muted"
+                  aria-label={`Открыть ${att.filename}`}
+                >
+                  <img src={att.url} alt={att.filename} loading="lazy" className="size-full object-cover" />
+                </button>
+              ) : (
+                <a
+                  key={att.id}
+                  href={att.url}
+                  download={att.filename}
+                  className="inline-flex items-center gap-1.5 rounded border bg-muted/50 px-2 py-1 text-[11px] hover:bg-muted"
+                >
+                  <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="max-w-[140px] truncate">{att.filename}</span>
+                  <span className="text-muted-foreground">{formatBytes(att.sizeBytes)}</span>
+                  <Download className="size-3 shrink-0 text-muted-foreground" />
+                </a>
+              ),
+            )}
+          </div>
+        )}
       </div>
+      <AttachmentLightbox attachment={preview} onClose={() => setPreview(null)} />
     </li>
   );
 }
 
-function ImagePreviewDialog({
-  attachment,
-  onClose,
-}: {
-  attachment: TaskAttachment | null;
-  onClose: () => void;
-}): React.ReactElement {
-  return (
-    <Dialog open={attachment !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="grid max-h-[90vh] max-w-4xl gap-0 overflow-hidden p-0">
-        <div className="flex items-center justify-between border-b px-4 py-2.5">
-          <p className="truncate text-sm font-medium">{attachment?.filename ?? ''}</p>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            onClick={onClose}
-            aria-label="Закрыть"
-          >
-            <X className="size-4" />
-          </Button>
-        </div>
-        <div className="grid place-items-center overflow-auto bg-muted/30 p-4">
-          {attachment && (
-            <img
-              src={attachment.url}
-              alt={attachment.filename}
-              className="max-h-[78vh] max-w-full object-contain"
-            />
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}

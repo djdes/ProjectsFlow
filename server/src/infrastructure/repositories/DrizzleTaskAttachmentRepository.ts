@@ -1,4 +1,4 @@
-import { asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { taskAttachments, type TaskAttachmentRow } from '../db/schema.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
@@ -11,6 +11,7 @@ function toAttachment(row: TaskAttachmentRow): TaskAttachment {
   return {
     id: row.id,
     taskId: row.taskId,
+    commentId: row.commentId ?? null,
     filename: row.filename,
     mimeType: row.mimeType,
     sizeBytes: row.sizeBytes,
@@ -26,6 +27,7 @@ export class DrizzleTaskAttachmentRepository implements TaskAttachmentRepository
     await this.db.insert(taskAttachments).values({
       id: input.id,
       taskId: input.taskId,
+      commentId: input.commentId ?? null,
       filename: input.filename,
       mimeType: input.mimeType,
       sizeBytes: input.sizeBytes,
@@ -49,9 +51,36 @@ export class DrizzleTaskAttachmentRepository implements TaskAttachmentRepository
     const rows = await this.db
       .select()
       .from(taskAttachments)
-      .where(eq(taskAttachments.taskId, taskId))
+      .where(and(eq(taskAttachments.taskId, taskId), isNull(taskAttachments.commentId)))
       .orderBy(asc(taskAttachments.uploadedAt));
     return rows.map(toAttachment);
+  }
+
+  async listByComment(commentId: string): Promise<TaskAttachment[]> {
+    const rows = await this.db
+      .select()
+      .from(taskAttachments)
+      .where(eq(taskAttachments.commentId, commentId))
+      .orderBy(asc(taskAttachments.uploadedAt));
+    return rows.map(toAttachment);
+  }
+
+  async listByCommentIds(commentIds: string[]): Promise<Map<string, TaskAttachment[]>> {
+    const out = new Map<string, TaskAttachment[]>();
+    if (commentIds.length === 0) return out;
+    const rows = await this.db
+      .select()
+      .from(taskAttachments)
+      .where(inArray(taskAttachments.commentId, commentIds))
+      .orderBy(asc(taskAttachments.uploadedAt));
+    for (const row of rows) {
+      const att = toAttachment(row);
+      if (!att.commentId) continue;
+      const list = out.get(att.commentId) ?? [];
+      list.push(att);
+      out.set(att.commentId, list);
+    }
+    return out;
   }
 
   async countsByTasks(taskIds: string[]): Promise<Map<string, number>> {
@@ -59,7 +88,7 @@ export class DrizzleTaskAttachmentRepository implements TaskAttachmentRepository
     const rows = await this.db
       .select({ taskId: taskAttachments.taskId, count: sql<number>`COUNT(*)` })
       .from(taskAttachments)
-      .where(inArray(taskAttachments.taskId, taskIds))
+      .where(and(inArray(taskAttachments.taskId, taskIds), isNull(taskAttachments.commentId)))
       .groupBy(taskAttachments.taskId);
     const out = new Map<string, number>();
     for (const r of rows) out.set(r.taskId, Number(r.count));

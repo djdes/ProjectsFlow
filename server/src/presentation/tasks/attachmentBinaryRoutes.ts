@@ -18,7 +18,23 @@ export function attachmentBinaryRouter(deps: Deps): Router {
     try {
       const id = req.params['id'] as string;
       const { attachment, data } = await deps.getAttachment.execute(req.user!.id, id);
-      res.setHeader('Content-Type', attachment.mimeType);
+
+      // Любой тип файла разрешён к загрузке, поэтому отдаём безопасно:
+      // - nosniff, чтобы браузер не «угадывал» MIME (анти-XSS на same-origin).
+      // - inline только для растровых картинок (нужно для превью); SVG и всё остальное —
+      //   принудительно скачиванием (SVG может нести скрипт; html/прочее — тоже).
+      const isInlineImage =
+        attachment.mimeType.startsWith('image/') && attachment.mimeType !== 'image/svg+xml';
+      // RFC5987-имя: кириллица ок, вырезаем CR/LF/кавычки/backslash.
+      const safeName = attachment.filename.replace(/[\r\n"\\]/g, '_');
+      const encodedName = encodeURIComponent(attachment.filename).replace(/['()]/g, escape);
+
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Type', isInlineImage ? attachment.mimeType : 'application/octet-stream');
+      res.setHeader(
+        'Content-Disposition',
+        `${isInlineImage ? 'inline' : 'attachment'}; filename="${safeName}"; filename*=UTF-8''${encodedName}`,
+      );
       res.setHeader('Content-Length', data.data.byteLength.toString());
       res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
       res.send(data.data);

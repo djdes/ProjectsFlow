@@ -30,6 +30,7 @@ import { GetProject } from './application/project/GetProject.js';
 import { CreateProject } from './application/project/CreateProject.js';
 import { UpdateProject } from './application/project/UpdateProject.js';
 import { ReorderProjects } from './application/project/ReorderProjects.js';
+import { ProjectNotificationService } from './application/notifications/ProjectNotificationService.js';
 import { CreateProjectWithGit } from './application/project/CreateProjectWithGit.js';
 import { GetOrCreateInbox } from './application/project/GetOrCreateInbox.js';
 import { ListProjectMembers } from './application/project/ListProjectMembers.js';
@@ -191,6 +192,16 @@ const adminRepo = new DrizzleAdminRepository(db);
 const employeeRepo = new DrizzleEmployeeRepository(db);
 const projectFinanceRepo = new DrizzleProjectFinanceRepository(db);
 
+// Рассылка email-оповещений команде по активности проекта (с учётом пер-участниковых
+// настроек и источника team/mcp). Используется роутами fire-and-forget.
+const projectNotifier = new ProjectNotificationService({
+  members: projectMemberRepo,
+  projects: projectRepo,
+  tasks: taskRepo,
+  email: emailSender,
+  appUrl: appBaseUrl,
+});
+
 // Admin-bypass: системный админ (users.is_admin) получает доступ ко всем проектам
 // через requireProjectAccess. Кешировать не нужно — getById дешёвый, вызов на access-check.
 configureAdminBypass(async (userId) => {
@@ -206,8 +217,7 @@ const uploadsDir = resolvePath(process.env['UPLOADS_DIR'] ?? 'uploads');
 const attachmentStorage = new FileSystemAttachmentStorage(uploadsDir);
 console.log(`[projectsflow] attachments dir: ${uploadsDir}`);
 
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB
-const ALLOWED_ATTACHMENT_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB. Любой тип файла (валидация = размер).
 const agentTokenHasher = new Sha256AgentTokenHasher();
 const agentDeviceCodeStore = new InMemoryAgentDeviceCodeStore();
 
@@ -317,6 +327,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
     appUrl: process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? 'http://localhost:5173',
     notifyProjectChanged,
+    members: projectMemberRepo,
   },
   notifications: {
     list: new ListNotifications({ repo: notificationRepo }),
@@ -325,6 +336,7 @@ const { app, devProxyUpgrade } = createApp({
     markAllRead: new MarkAllNotificationsRead({ repo: notificationRepo, now }),
     subscribe: (userId, fn) => notificationHub.subscribe(userId, fn),
     subscribeRealtime: (userId, fn) => realtimeHub.subscribe(userId, fn),
+    projectNotifier,
   },
   invites: {
     getByToken: new GetInviteByToken({
@@ -489,7 +501,6 @@ const { app, devProxyUpgrade } = createApp({
       storage: attachmentStorage,
       idGen: idGenerator,
       maxBytes: MAX_ATTACHMENT_BYTES,
-      allowedMimeTypes: ALLOWED_ATTACHMENT_MIME,
     }),
     deleteAttachment: new DeleteTaskAttachment({
       projects: projectRepo,
@@ -516,6 +527,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
+      attachments: taskAttachmentRepo,
     }),
     createComment: new CreateTaskComment({
       projects: projectRepo,
