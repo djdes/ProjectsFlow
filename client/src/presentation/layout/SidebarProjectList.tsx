@@ -3,13 +3,7 @@ import { Users } from 'lucide-react';
 import { useProjects } from '@/presentation/hooks/useProjects';
 import { cn } from '@/lib/utils';
 import { defaultProjectIcon as ProjectIcon } from './projectIcons';
-import type { Project, ProjectStatus } from '@/domain/project/Project';
-
-const statusDotColor: Record<ProjectStatus, string> = {
-  active: 'bg-emerald-500',
-  paused: 'bg-amber-500',
-  archived: 'bg-transparent',
-};
+import type { Project } from '@/domain/project/Project';
 
 function SidebarProjectListItem({ project }: { project: Project }): React.ReactElement {
   const isArchived = project.status === 'archived';
@@ -31,7 +25,14 @@ function SidebarProjectListItem({ project }: { project: Project }): React.ReactE
           {isActive && (
             <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-primary" />
           )}
-          <ProjectIcon className="size-4 shrink-0 text-muted-foreground" />
+          {/* Цвет иконки = индикатор git: зелёная при подключённом репо, серая без него. */}
+          <ProjectIcon
+            className={cn(
+              'size-4 shrink-0',
+              project.gitRepoUrl ? 'text-emerald-500' : 'text-muted-foreground',
+            )}
+            aria-label={project.gitRepoUrl ? 'Git подключён' : 'Git не подключён'}
+          />
           <span className="flex-1 truncate">{project.name}</span>
           {(project.memberCount ?? 0) > 1 && (
             <Users
@@ -48,12 +49,6 @@ function SidebarProjectListItem({ project }: { project: Project }): React.ReactE
             >
               {project.taskCount}
             </span>
-          )}
-          {project.status !== 'archived' && (
-            <span
-              className={cn('size-1.5 shrink-0 rounded-full', statusDotColor[project.status])}
-              aria-label={`Статус: ${project.status}`}
-            />
           )}
         </>
       )}
