@@ -154,14 +154,18 @@ export const secrets = mysqlTable(
   'secrets',
   {
     id: char('id', { length: 36 }).primaryKey(),
+    // Кто записал/обновил секрет (audit). НЕ часть ключа доступа.
     userId: char('user_id', { length: 36 }).notNull(),
+    // Scope секрета — проект. Все участники проекта видят один и тот же набор секретов.
+    projectId: char('project_id', { length: 36 }),
     secretKey: varchar('secret_key', { length: 500 }).notNull(),
     value: varchar('value', { length: 2000 }).notNull(),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
   (t) => [
-    uniqueIndex('uq_secrets_user_key').on(t.userId, t.secretKey),
+    uniqueIndex('uq_secrets_project_key').on(t.projectId, t.secretKey),
+    index('idx_secrets_project').on(t.projectId),
     index('idx_secrets_user').on(t.userId),
   ],
 );

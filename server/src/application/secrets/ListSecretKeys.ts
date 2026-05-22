@@ -1,9 +1,19 @@
+import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
+import type { ProjectRepository } from '../project/ProjectRepository.js';
+import { requireProjectAccess } from '../project/projectAccess.js';
 import type { SecretsRepository, StoredSecret } from './SecretsRepository.js';
 
-export class ListSecretKeys {
-  constructor(private readonly repo: SecretsRepository) {}
+type Deps = {
+  readonly projects: ProjectRepository;
+  readonly members: ProjectMemberRepository;
+  readonly repo: SecretsRepository;
+};
 
-  execute(userId: string): Promise<StoredSecret[]> {
-    return this.repo.listKeys(userId);
+export class ListSecretKeys {
+  constructor(private readonly deps: Deps) {}
+
+  async execute(projectId: string, userId: string): Promise<StoredSecret[]> {
+    await requireProjectAccess(this.deps, projectId, userId, 'read_project');
+    return this.deps.repo.listKeys(projectId);
   }
 }

@@ -5,14 +5,14 @@ import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
 import type { GithubTokenRepository } from '../github/GithubTokenRepository.js';
 import type { KbRepository } from '../kb/KbRepository.js';
-import type { GetSecret } from '../secrets/GetSecret.js';
+import type { SecretsRepository } from '../secrets/SecretsRepository.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tokens: GithubTokenRepository;
   readonly kb: KbRepository;
-  readonly getSecret: GetSecret;
+  readonly secrets: SecretsRepository;
 };
 
 // Результат для агента: ВСЕ поля credential'а уже в plaintext (vault://-рефы резолвнуты).
@@ -38,7 +38,9 @@ export class GetAgentCredential {
   async execute(projectId: string, userId: string, slug: string): Promise<ResolvedCredential> {
     const { project } = await requireProjectAccess(this.deps, projectId, userId, 'read_project');
     if (!project.kbRepoFullName) throw new KbNotConnectedError();
-    const token = await this.deps.tokens.getWithTokenByUserId(userId);
+    // KB-репо живёт под GitHub-аккаунтом владельца проекта — читаем его токеном,
+    // чтобы любой участник (не только владелец) видел те же креды.
+    const token = await this.deps.tokens.getWithTokenByUserId(project.ownerId);
     if (!token) throw new GithubNotConnectedError();
 
     const path = `credentials/${slug}.md`;
@@ -66,7 +68,9 @@ export class GetAgentCredential {
           // битом поле).
           continue;
         }
-        const plain = await this.deps.getSecret.execute(userId, match[1]!);
+        // Секреты scope'аются по проекту (одинаковы для всех участников).
+        const plain = await this.deps.secrets.getValue(project.id, match[1]!);
+        if (plain === null) continue;
         const fieldName = key.slice(0, -REF_SUFFIX.length);
         fields[fieldName] = plain;
       } else {

@@ -20,7 +20,8 @@ export class GetKbDocument {
   async execute(projectId: string, ownerUserId: string, path: string): Promise<KbDocument> {
     const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project');
     if (!project.kbRepoFullName) throw new KbNotConnectedError();
-    const token = await this.deps.tokens.getWithTokenByUserId(ownerUserId);
+    // KB-репо под аккаунтом владельца — читаем его токеном (общий доступ всем участникам).
+    const token = await this.deps.tokens.getWithTokenByUserId(project.ownerId);
     if (!token) throw new GithubNotConnectedError();
     const doc = await this.deps.kb.readOne({
       accessToken: token.accessToken, fullName: project.kbRepoFullName, path,

@@ -14,13 +14,16 @@ type Deps = {
 };
 
 export function secretsRouter(deps: Deps): Router {
-  const router = Router();
+  // mergeParams — чтобы достать :projectId из родительского mount'а
+  // (/api/projects/:projectId/secrets). Секреты scope'аются по проекту.
+  const router = Router({ mergeParams: true });
   router.use(requireAuth);
 
   router.put('/', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const projectId = req.params['projectId'] as string;
       const body = putSecretSchema.parse(req.body);
-      await deps.putSecret.execute(req.user!.id, body.key, body.value);
+      await deps.putSecret.execute(projectId, req.user!.id, body.key, body.value);
       res.status(204).end();
     } catch (e) {
       next(e);
@@ -29,8 +32,9 @@ export function secretsRouter(deps: Deps): Router {
 
   router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const projectId = req.params['projectId'] as string;
       const { key } = secretKeyQuerySchema.parse(req.query);
-      const value = await deps.getSecret.execute(req.user!.id, key);
+      const value = await deps.getSecret.execute(projectId, req.user!.id, key);
       res.json({ value });
     } catch (e) {
       next(e);
@@ -39,8 +43,9 @@ export function secretsRouter(deps: Deps): Router {
 
   router.delete('/', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const projectId = req.params['projectId'] as string;
       const { key } = secretKeyQuerySchema.parse(req.query);
-      const deleted = await deps.deleteSecret.execute(req.user!.id, key);
+      const deleted = await deps.deleteSecret.execute(projectId, req.user!.id, key);
       res.status(deleted ? 204 : 404).end();
     } catch (e) {
       next(e);
@@ -49,7 +54,8 @@ export function secretsRouter(deps: Deps): Router {
 
   router.get('/list', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const list = await deps.listSecretKeys.execute(req.user!.id);
+      const projectId = req.params['projectId'] as string;
+      const list = await deps.listSecretKeys.execute(projectId, req.user!.id);
       res.json({
         secrets: list.map((s) => ({
           key: s.secretKey,

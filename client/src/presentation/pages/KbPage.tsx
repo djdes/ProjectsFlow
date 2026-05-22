@@ -92,6 +92,7 @@ export function KbPage(): React.ReactElement {
             />
           ) : (
             <KbDocumentViewer
+              projectId={projectId ?? ''}
               document={document}
               kbRepoFullName={project.kbRepoFullName!}
               onEdit={() => setEditing(true)}

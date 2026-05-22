@@ -251,7 +251,7 @@ export function createApp(deps: AppDeps): CreatedApp {
 
   app.use('/api/projects', projectsRouter(deps.projects));
   app.use('/api/integrations/github', githubRouter(deps.github));
-  app.use('/api/secrets', secretsRouter(deps.secrets));
+  app.use('/api/projects/:projectId/secrets', secretsRouter(deps.secrets));
   app.use('/api/projects/:projectId/kb', kbRouter(deps.kb));
   app.use('/api/projects/:projectId/tasks', tasksRouter(deps.tasks));
   app.use('/api/attachments', attachmentBinaryRouter(deps.tasks));

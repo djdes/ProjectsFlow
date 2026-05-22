@@ -28,7 +28,9 @@ export class InitKbRepo {
     const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'manage_kb');
     if (project.kbRepoFullName) throw new KbRepoAlreadyConnectedError();
 
-    const token = await this.deps.tokens.getWithTokenByUserId(ownerUserId);
+    // KB-репо создаём под аккаунтом владельца проекта — тогда все участники
+    // читают его одним (владельца) токеном. См. фикс общих кредов.
+    const token = await this.deps.tokens.getWithTokenByUserId(project.ownerId);
     if (!token) throw new GithubNotConnectedError();
 
     const slug = slugify(project.name);

@@ -216,6 +216,7 @@ export function KbDocumentEditor({ projectId, document, onCancel, onSaved }: Pro
             <div key={key}>
               {isSecretRefKey(key) ? (
                 <SecretField
+                  projectId={projectId}
                   fieldLabel={key}
                   vaultRef={String(value)}
                   editable

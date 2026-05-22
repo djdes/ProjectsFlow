@@ -10,7 +10,7 @@ import type {
 function toStored(row: SecretRow): StoredSecret {
   return {
     id: row.id,
-    userId: row.userId,
+    projectId: row.projectId ?? null,
     secretKey: row.secretKey,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -20,51 +20,52 @@ function toStored(row: SecretRow): StoredSecret {
 export class DrizzleSecretsRepository implements SecretsRepository {
   constructor(private readonly db: Database) {}
 
-  async upsert(userId: string, key: string, value: string): Promise<void> {
+  async upsert(projectId: string, key: string, value: string, byUserId: string): Promise<void> {
     const existing = await this.db
       .select()
       .from(secrets)
-      .where(and(eq(secrets.userId, userId), eq(secrets.secretKey, key)))
+      .where(and(eq(secrets.projectId, projectId), eq(secrets.secretKey, key)))
       .limit(1);
     if (existing[0]) {
       await this.db
         .update(secrets)
-        .set({ value })
-        .where(and(eq(secrets.userId, userId), eq(secrets.secretKey, key)));
+        .set({ value, userId: byUserId })
+        .where(and(eq(secrets.projectId, projectId), eq(secrets.secretKey, key)));
     } else {
       await this.db.insert(secrets).values({
         id: randomUUID(),
-        userId,
+        userId: byUserId,
+        projectId,
         secretKey: key,
         value,
       });
     }
   }
 
-  async getValue(userId: string, key: string): Promise<string | null> {
+  async getValue(projectId: string, key: string): Promise<string | null> {
     const rows = await this.db
       .select()
       .from(secrets)
-      .where(and(eq(secrets.userId, userId), eq(secrets.secretKey, key)))
+      .where(and(eq(secrets.projectId, projectId), eq(secrets.secretKey, key)))
       .limit(1);
     const row = rows[0];
     if (!row) return null;
     return row.value;
   }
 
-  async delete(userId: string, key: string): Promise<boolean> {
+  async delete(projectId: string, key: string): Promise<boolean> {
     const res = await this.db
       .delete(secrets)
-      .where(and(eq(secrets.userId, userId), eq(secrets.secretKey, key)));
+      .where(and(eq(secrets.projectId, projectId), eq(secrets.secretKey, key)));
     const affected = (res as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
     return affected > 0;
   }
 
-  async listKeys(userId: string): Promise<StoredSecret[]> {
+  async listKeys(projectId: string): Promise<StoredSecret[]> {
     const rows = await this.db
       .select()
       .from(secrets)
-      .where(eq(secrets.userId, userId));
+      .where(eq(secrets.projectId, projectId));
     return rows.map(toStored);
   }
 }

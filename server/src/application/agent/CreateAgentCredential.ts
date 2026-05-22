@@ -94,11 +94,13 @@ export class CreateAgentCredential {
     if (errors.length > 0) throw new FrontmatterInvalidError(errors);
 
     // Секреты — первыми, чтобы не оставить файл с висящими vault-ref'ами при сбое.
+    // Scope — проект: креды общие для всех участников. input.userId идёт как audit.
     for (const s of secretsToWrite) {
-      await this.deps.secrets.upsert(input.userId, s.key, s.value);
+      await this.deps.secrets.upsert(project.id, s.key, s.value, input.userId);
     }
 
-    const token = await this.deps.tokens.getWithTokenByUserId(input.userId);
+    // KB-репо под аккаунтом владельца проекта — пишем его токеном.
+    const token = await this.deps.tokens.getWithTokenByUserId(project.ownerId);
     if (!token) throw new GithubNotConnectedError();
 
     const content = matter.stringify('', fm);

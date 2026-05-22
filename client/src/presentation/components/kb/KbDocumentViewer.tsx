@@ -9,6 +9,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import type { KbDocument } from '@/domain/kb/KbDocument';
 
 type Props = {
+  projectId: string;
   document: KbDocument;
   kbRepoFullName: string;
   onEdit: () => void;
@@ -36,7 +37,13 @@ function extractEntries(fm: KbDocument['frontmatter']): FieldEntry[] {
 
 type SecretState = { state: 'loading' } | { state: 'ok'; value: string } | { state: 'err'; err: string };
 
-function CredentialFieldsCard({ fm }: { fm: KbDocument['frontmatter'] }): React.ReactElement {
+function CredentialFieldsCard({
+  projectId,
+  fm,
+}: {
+  projectId: string;
+  fm: KbDocument['frontmatter'];
+}): React.ReactElement {
   const { secretsRepository } = useContainer();
   const entries = useMemo(() => extractEntries(fm), [fm]);
   const [secrets, setSecrets] = useState<Record<string, SecretState>>({});
@@ -49,7 +56,7 @@ function CredentialFieldsCard({ fm }: { fm: KbDocument['frontmatter'] }): React.
 
     for (const e of entries) {
       if (!e.isSecret) continue;
-      secretsRepository.get(e.vaultKey).then(
+      secretsRepository.get(projectId, e.vaultKey).then(
         (v) => {
           if (!cancelled) setSecrets((prev) => ({ ...prev, [e.key]: { state: 'ok', value: v } }));
         },
@@ -64,7 +71,7 @@ function CredentialFieldsCard({ fm }: { fm: KbDocument['frontmatter'] }): React.
     return () => {
       cancelled = true;
     };
-  }, [entries, secretsRepository]);
+  }, [entries, secretsRepository, projectId]);
 
   const copyValue = async (key: string, value: string): Promise<void> => {
     try {
@@ -176,7 +183,7 @@ function FrontmatterTable({ fm }: { fm: KbDocument['frontmatter'] }): React.Reac
   );
 }
 
-export function KbDocumentViewer({ document, kbRepoFullName, onEdit }: Props): React.ReactElement {
+export function KbDocumentViewer({ projectId, document, kbRepoFullName, onEdit }: Props): React.ReactElement {
   const githubUrl = `https://github.com/${kbRepoFullName}/blob/main/${document.path}`;
   return (
     <div className="space-y-4">
@@ -213,7 +220,7 @@ export function KbDocumentViewer({ document, kbRepoFullName, onEdit }: Props): R
       )}
 
       {document.frontmatter.type === 'credential' ? (
-        <CredentialFieldsCard fm={document.frontmatter} />
+        <CredentialFieldsCard projectId={projectId} fm={document.frontmatter} />
       ) : (
         <FrontmatterTable fm={document.frontmatter} />
       )}

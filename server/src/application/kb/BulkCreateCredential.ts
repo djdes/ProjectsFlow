@@ -175,12 +175,13 @@ export class BulkCreateCredential {
     if (errors.length > 0) throw new FrontmatterInvalidError(errors);
 
     // Сначала пишем секреты в vault (если что-то упадёт — не плодим файл с висящими ref'ами).
+    // Scope — проект: креды общие для всех участников. input.userId идёт как audit.
     for (const s of secretsToWrite) {
-      await this.deps.secrets.upsert(input.userId, s.key, s.value);
+      await this.deps.secrets.upsert(project.id, s.key, s.value, input.userId);
     }
 
-    // Потом — markdown-файл в KB-репо.
-    const token = await this.deps.tokens.getWithTokenByUserId(input.userId);
+    // Потом — markdown-файл в KB-репо (под аккаунтом владельца проекта).
+    const token = await this.deps.tokens.getWithTokenByUserId(project.ownerId);
     if (!token) throw new GithubNotConnectedError();
 
     const content = matter.stringify('', fm);

@@ -4,9 +4,10 @@ export type StoredSecretKey = {
   readonly updatedAt: Date;
 };
 
+// Секреты scope'аются по проекту — все методы принимают projectId.
 export interface SecretsRepository {
-  put(key: string, value: string): Promise<void>;
-  get(key: string): Promise<string>;
-  delete(key: string): Promise<void>;
-  list(): Promise<StoredSecretKey[]>;
+  put(projectId: string, key: string, value: string): Promise<void>;
+  get(projectId: string, key: string): Promise<string>;
+  delete(projectId: string, key: string): Promise<void>;
+  list(projectId: string): Promise<StoredSecretKey[]>;
 }

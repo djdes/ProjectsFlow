@@ -35,7 +35,8 @@ export class WriteKbDocument {
     const errors = validateFrontmatter(input.frontmatter, input.body);
     if (errors.length > 0) throw new FrontmatterInvalidError(errors);
 
-    const token = await this.deps.tokens.getWithTokenByUserId(input.userId);
+    // KB-репо под аккаунтом владельца проекта — пишем его токеном (общий доступ).
+    const token = await this.deps.tokens.getWithTokenByUserId(project.ownerId);
     if (!token) throw new GithubNotConnectedError();
 
     const content = matter.stringify(input.body, input.frontmatter as Record<string, unknown>);

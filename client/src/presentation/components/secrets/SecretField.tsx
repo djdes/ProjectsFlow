@@ -7,6 +7,7 @@ import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 
 type Props = {
+  projectId: string;
   fieldLabel: string;
   vaultRef: string;     // "vault://<project>/<file>/<field>"
   onChange?: (newValue: string | null) => void;  // null = delete
@@ -18,7 +19,7 @@ function parseVaultRef(ref: string): string | null {
   return m ? m[1] : null;
 }
 
-export function SecretField({ fieldLabel, vaultRef, onChange, editable = false }: Props): React.ReactElement {
+export function SecretField({ projectId, fieldLabel, vaultRef, onChange, editable = false }: Props): React.ReactElement {
   const { secretsRepository } = useContainer();
   const key = parseVaultRef(vaultRef);
   const [revealed, setRevealed] = useState<string | null>(null);
@@ -31,7 +32,7 @@ export function SecretField({ fieldLabel, vaultRef, onChange, editable = false }
     if (revealed) { setRevealed(null); return; }
     setLoading(true);
     try {
-      const value = await secretsRepository.get(key);
+      const value = await secretsRepository.get(projectId, key);
       setRevealed(value);
     } catch (err) {
       toast.error((err as Error).message ?? 'Не удалось получить секрет');
@@ -45,7 +46,7 @@ export function SecretField({ fieldLabel, vaultRef, onChange, editable = false }
       // Если не открыт — открываем и копируем
       if (!key) return;
       try {
-        const value = await secretsRepository.get(key);
+        const value = await secretsRepository.get(projectId, key);
         await navigator.clipboard.writeText(value);
         toast.success('Скопировано');
       } catch {
@@ -61,7 +62,7 @@ export function SecretField({ fieldLabel, vaultRef, onChange, editable = false }
     if (!key) return;
     setLoading(true);
     try {
-      await secretsRepository.put(key, newValue);
+      await secretsRepository.put(projectId, key, newValue);
       toast.success('Секрет обновлён');
       setEditing(false);
       setNewValue('');

@@ -19,7 +19,8 @@ export class DeleteKbDocument {
   async execute(projectId: string, userId: string, path: string): Promise<void> {
     const { project } = await requireProjectAccess(this.deps, projectId, userId, 'manage_kb');
     if (!project.kbRepoFullName) throw new KbNotConnectedError();
-    const token = await this.deps.tokens.getWithTokenByUserId(userId);
+    // KB-репо под аккаунтом владельца — пишем его токеном (общий доступ всем участникам).
+    const token = await this.deps.tokens.getWithTokenByUserId(project.ownerId);
     if (!token) throw new GithubNotConnectedError();
 
     const existing = await this.deps.kb.readOne({

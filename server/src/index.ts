@@ -239,10 +239,10 @@ const { app, devProxyUpgrade } = createApp({
     }),
   },
   secrets: {
-    putSecret: new PutSecret(secretsRepo),
-    getSecret: new GetSecret(secretsRepo),
-    deleteSecret: new DeleteSecret(secretsRepo),
-    listSecretKeys: new ListSecretKeys(secretsRepo),
+    putSecret: new PutSecret({ projects: projectRepo, members: projectMemberRepo, repo: secretsRepo }),
+    getSecret: new GetSecret({ projects: projectRepo, members: projectMemberRepo, repo: secretsRepo }),
+    deleteSecret: new DeleteSecret({ projects: projectRepo, members: projectMemberRepo, repo: secretsRepo }),
+    listSecretKeys: new ListSecretKeys({ projects: projectRepo, members: projectMemberRepo, repo: secretsRepo }),
   },
   kb: {
     initKbRepo: new InitKbRepo({
@@ -428,7 +428,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tokens: githubTokenRepo,
       kb: kbRepo,
-      getSecret: new GetSecret(secretsRepo),
+      secrets: secretsRepo,
     }),
     getAgentTask: new GetAgentTask({
       projects: projectRepo,
