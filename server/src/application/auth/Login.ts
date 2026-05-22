@@ -40,6 +40,7 @@ export class Login {
       email: candidate.email,
       displayName: candidate.displayName,
       avatarUrl: candidate.avatarUrl,
+      isAdmin: candidate.isAdmin,
       createdAt: candidate.createdAt,
     };
 

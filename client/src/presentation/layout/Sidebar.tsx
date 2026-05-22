@@ -1,16 +1,20 @@
 import { Link, NavLink } from 'react-router-dom';
-import { Bell, Inbox } from 'lucide-react';
+import { Bell, Inbox, Search, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NewProjectButton } from '@/presentation/components/forms/NewProjectButton';
+import { useGlobalSearch } from '@/presentation/components/search/GlobalSearchProvider';
 import { useUnreadNotificationsCount } from '@/presentation/hooks/useUnreadNotificationsCount';
+import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { SidebarProjectList } from './SidebarProjectList';
 import { SidebarUserMenu } from './SidebarUserMenu';
 
 export function Sidebar(): React.ReactElement {
   const { count: unreadCount } = useUnreadNotificationsCount();
+  const { open: openSearch } = useGlobalSearch();
+  const { user } = useCurrentUser();
 
   return (
-    <aside className="grid h-full grid-rows-[auto_auto_auto_auto_auto_1fr_auto] gap-3 border-r bg-card/40 p-3">
+    <aside className="grid h-full grid-rows-[auto_auto_auto_auto_auto_auto_1fr_auto] gap-3 border-r bg-card/40 p-3">
       <Link
         to="/"
         className="flex items-center gap-2 rounded-md px-2 py-1.5 text-base font-semibold tracking-tight transition-colors hover:bg-muted"
@@ -25,6 +29,18 @@ export function Sidebar(): React.ReactElement {
       </Link>
 
       <NewProjectButton className="w-full justify-start gap-2" />
+
+      <button
+        type="button"
+        onClick={openSearch}
+        className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
+      >
+        <Search className="size-4 shrink-0" />
+        <span className="flex-1 text-left">Поиск задач</span>
+        <kbd className="rounded border bg-muted px-1.5 text-[10px] font-medium tracking-wider text-muted-foreground">
+          ⌘K
+        </kbd>
+      </button>
 
       <NavLink
         to="/inbox"
@@ -84,7 +100,21 @@ export function Sidebar(): React.ReactElement {
         <SidebarProjectList />
       </nav>
 
-      <div className="border-t pt-2">
+      <div className="space-y-1 border-t pt-2">
+        {user?.isAdmin && (
+          <NavLink
+            to="/admin"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted',
+                isActive && 'bg-accent text-accent-foreground',
+              )
+            }
+          >
+            <Shield className="size-4 shrink-0 text-muted-foreground" />
+            <span className="flex-1 truncate">Администрирование</span>
+          </NavLink>
+        )}
         <SidebarUserMenu />
       </div>
     </aside>

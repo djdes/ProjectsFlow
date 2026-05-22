@@ -8,6 +8,9 @@ export type ProjectMemberWithUser = ProjectMembership & {
 
 export type ProjectWithRole = Project & {
   readonly role: ProjectRole;
+  // Read-model для sidebar: число участников (>1 ⇒ совместный проект) и общее число задач.
+  readonly memberCount: number;
+  readonly taskCount: number;
 };
 
 export type AddMemberInput = {

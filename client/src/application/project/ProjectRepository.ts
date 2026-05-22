@@ -18,6 +18,13 @@ export type CreateInviteInput = {
   readonly email: string | null;
 };
 
+// Результат проверки: используется ли тот же git-репо в чужом проекте.
+export type GitCollision = {
+  readonly exists: boolean;
+  readonly projectId?: string;
+  readonly projectName?: string;
+};
+
 export interface ProjectRepository {
   list(): Promise<Project[]>;
   getById(id: string): Promise<Project | null>;
@@ -38,4 +45,10 @@ export interface ProjectRepository {
   listInvites(projectId: string): Promise<ProjectInvite[]>;
   createInvite(projectId: string, input: CreateInviteInput): Promise<ProjectInvite>;
   deleteInvite(projectId: string, inviteId: string): Promise<void>;
+
+  // Git-collision → join-request: проверка совпадения репо + заявка на вступление +
+  // её разрешение владельцем (accept/decline).
+  checkGitCollision(gitRepoUrl: string): Promise<GitCollision>;
+  requestJoin(projectId: string): Promise<void>;
+  resolveJoinRequest(requestId: string, accept: boolean): Promise<void>;
 }

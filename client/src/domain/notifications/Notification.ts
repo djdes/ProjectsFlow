@@ -13,7 +13,34 @@ export type CommentMentionPayload = {
   readonly actorDisplayName: string;
 };
 
-export type NotificationPayload = CommentMentionPayload;
+// Приглашение в проект: показывается с кнопкой «Принять» (token → accept).
+export type ProjectInvitePayload = {
+  readonly type: 'project_invite';
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly role: 'editor' | 'viewer';
+  readonly inviteId: string;
+  readonly token: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
+// Запрос на вступление по git-репо: прилетает владельцу проекта.
+export type JoinRequestPayload = {
+  readonly type: 'join_request';
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly joinRequestId: string;
+  readonly requesterUserId: string;
+  readonly requesterDisplayName: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
+export type NotificationPayload =
+  | CommentMentionPayload
+  | ProjectInvitePayload
+  | JoinRequestPayload;
 
 export type Notification = {
   readonly id: string;

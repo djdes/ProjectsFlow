@@ -8,16 +8,25 @@ import type {
 import type { ProjectInviteRepository } from './ProjectInviteRepository.js';
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
+import type { UserRepository } from '../user/UserRepository.js';
+import type { NotificationRepository } from '../notifications/NotificationRepository.js';
+import type { EmailSender } from '../notifications/EmailSender.js';
+import { renderInviteEmail } from '../notifications/emails/inviteEmail.js';
 import { requireProjectAccess } from './projectAccess.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly invites: ProjectInviteRepository;
+  readonly users: UserRepository;
+  readonly notifications: NotificationRepository;
+  readonly email: EmailSender;
   readonly idGen: () => string;
   readonly randomToken: () => string;
   readonly now: () => Date;
   readonly ttlMs: number;
+  // Базовый URL приложения для accept-ссылки в письме/уведомлении.
+  readonly appUrl: string;
 };
 
 export type CreateInviteCommand = {
@@ -56,6 +65,58 @@ export class CreateProjectInvite {
       expiresAt,
       createdByUserId: input.actorUserId,
     });
+
+    // Доставка приглашения — best-effort: ни письмо, ни in-app-уведомление не должны
+    // ронять создание invite'а (owner всё равно получит token в ответе и может скопировать).
+    if (input.email) {
+      await this.notifyInvitee(input, project.name, invite).catch((err: unknown) => {
+        console.error('[invite] delivery failed:', err);
+      });
+    }
+
     return { invite };
+  }
+
+  private async notifyInvitee(
+    input: CreateInviteCommand,
+    projectName: string,
+    invite: ProjectInvite,
+  ): Promise<void> {
+    const email = input.email;
+    if (!email) return;
+
+    const actor = await this.deps.users.getById(input.actorUserId);
+    const actorDisplayName = actor?.displayName ?? 'Кто-то';
+    const acceptUrl = `${this.deps.appUrl.replace(/\/$/, '')}/invite/${invite.token}`;
+
+    // 1) Email с яркой кнопкой «Принять».
+    const message = renderInviteEmail({
+      to: email,
+      projectName,
+      actorDisplayName,
+      role: invite.role,
+      acceptUrl,
+    });
+    await this.deps.email.send(message);
+
+    // 2) Если у email уже есть аккаунт — кладём in-app-уведомление (отрисуется без
+    //    перезагрузки через SSE). Незарегистрированный — получит только письмо.
+    const invitee = await this.deps.users.getByEmail(email);
+    if (invitee) {
+      await this.deps.notifications.create({
+        id: this.deps.idGen(),
+        userId: invitee.id,
+        payload: {
+          type: 'project_invite',
+          projectId: invite.projectId,
+          projectName,
+          role: invite.role,
+          inviteId: invite.id,
+          token: invite.token,
+          actorUserId: input.actorUserId,
+          actorDisplayName,
+        },
+      });
+    }
   }
 }

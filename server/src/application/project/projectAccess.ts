@@ -18,6 +18,17 @@ export type ProjectAccessDeps = {
   readonly members: ProjectMemberRepository;
 };
 
+// Admin-bypass: резолвер «является ли userId системным админом». Конфигурится один раз
+// в composition root (см. index.ts). Дефолт — никто не админ (безопасный fallback,
+// чтобы в тестах/без конфигурации bypass был выключен). Сделано через module-level
+// инъекцию, чтобы НЕ протаскивать UserRepository через deps всех ~30 use-case'ов —
+// сигнатура requireProjectAccess остаётся прежней.
+let resolveIsAdmin: (userId: string) => Promise<boolean> = async () => false;
+
+export function configureAdminBypass(resolver: (userId: string) => Promise<boolean>): void {
+  resolveIsAdmin = resolver;
+}
+
 // Единая точка входа для multi-tenant access-check'а. Use-case'ы НЕ должны проверять
 // права через ProjectRepository напрямую — только через эту функцию.
 //
@@ -33,11 +44,27 @@ export async function requireProjectAccess(
   action: ProjectAction,
 ): Promise<ProjectAccess> {
   const membership = await deps.members.findForProject(projectId, userId);
-  if (!membership) throw new ProjectNotFoundError();
-  if (!can(membership.role, action)) {
-    throw new InsufficientProjectRoleError(membership.role, action);
+  if (membership && can(membership.role, action)) {
+    const project = await deps.projects.getById(projectId);
+    if (!project) throw new ProjectNotFoundError();
+    return { project, membership };
   }
-  const project = await deps.projects.getById(projectId);
-  if (!project) throw new ProjectNotFoundError();
-  return { project, membership };
+
+  // Admin-bypass: системный админ получает синтетическую owner-роль на любой проект —
+  // полный доступ к чужим проектам/задачам через те же use-case'ы.
+  if (await resolveIsAdmin(userId)) {
+    const project = await deps.projects.getById(projectId);
+    if (!project) throw new ProjectNotFoundError();
+    const synthetic: ProjectMembership = {
+      projectId,
+      userId,
+      role: 'owner',
+      joinedAt: new Date(),
+    };
+    return { project, membership: synthetic };
+  }
+
+  // membership не найден → 404 (не палим существование). Найден, но роль мала → 403.
+  if (!membership) throw new ProjectNotFoundError();
+  throw new InsufficientProjectRoleError(membership.role, action);
 }

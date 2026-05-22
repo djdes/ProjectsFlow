@@ -9,6 +9,11 @@ import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleP
 import { DrizzleProjectMemberRepository } from './infrastructure/repositories/DrizzleProjectMemberRepository.js';
 import { DrizzleProjectInviteRepository } from './infrastructure/repositories/DrizzleProjectInviteRepository.js';
 import { DrizzleNotificationRepository } from './infrastructure/repositories/DrizzleNotificationRepository.js';
+import { NotificationHub } from './infrastructure/notifications/NotificationHub.js';
+import { PublishingNotificationRepository } from './infrastructure/notifications/PublishingNotificationRepository.js';
+import { SmtpEmailSender } from './infrastructure/email/SmtpEmailSender.js';
+import { LoggingEmailSender } from './infrastructure/email/LoggingEmailSender.js';
+import type { EmailSender } from './application/notifications/EmailSender.js';
 import { DrizzleGithubTokenRepository } from './infrastructure/repositories/DrizzleGithubTokenRepository.js';
 import { FetchGithubApiClient } from './infrastructure/github/FetchGithubApiClient.js';
 import { DeviceFlowStore } from './infrastructure/github/DeviceFlowStore.js';
@@ -18,6 +23,7 @@ import { Logout } from './application/auth/Logout.js';
 import { GetCurrentUser } from './application/auth/GetCurrentUser.js';
 import { UpdateProfile } from './application/user/UpdateProfile.js';
 import { ListProjects } from './application/project/ListProjects.js';
+import { configureAdminBypass } from './application/project/projectAccess.js';
 import { GetProject } from './application/project/GetProject.js';
 import { CreateProject } from './application/project/CreateProject.js';
 import { UpdateProject } from './application/project/UpdateProject.js';
@@ -32,6 +38,10 @@ import { ListProjectInvites } from './application/project/ListProjectInvites.js'
 import { DeleteProjectInvite } from './application/project/DeleteProjectInvite.js';
 import { GetInviteByToken } from './application/project/GetInviteByToken.js';
 import { AcceptProjectInvite } from './application/project/AcceptProjectInvite.js';
+import { CheckGitCollision } from './application/project/CheckGitCollision.js';
+import { RequestProjectJoin } from './application/project/RequestProjectJoin.js';
+import { ResolveProjectJoinRequest } from './application/project/ResolveProjectJoinRequest.js';
+import { DrizzleProjectJoinRequestRepository } from './infrastructure/repositories/DrizzleProjectJoinRequestRepository.js';
 import { StartDeviceFlow } from './application/github/StartDeviceFlow.js';
 import { PollDeviceFlow } from './application/github/PollDeviceFlow.js';
 import { DisconnectGithub } from './application/github/DisconnectGithub.js';
@@ -74,6 +84,8 @@ import { PollAgentDeviceToken } from './application/agent/PollAgentDeviceToken.j
 import { GetAgentDeviceCodeInfo } from './application/agent/GetAgentDeviceCodeInfo.js';
 import { randomBytes } from 'node:crypto';
 import { ListTasks } from './application/task/ListTasks.js';
+import { SearchTasks } from './application/task/SearchTasks.js';
+import { DrizzleTaskSearchRepository } from './infrastructure/repositories/DrizzleTaskSearchRepository.js';
 import { CreateTask } from './application/task/CreateTask.js';
 import { UpdateTask } from './application/task/UpdateTask.js';
 import { MoveTask } from './application/task/MoveTask.js';
@@ -99,6 +111,10 @@ import { PutSecret } from './application/secrets/PutSecret.js';
 import { GetSecret } from './application/secrets/GetSecret.js';
 import { DeleteSecret } from './application/secrets/DeleteSecret.js';
 import { ListSecretKeys } from './application/secrets/ListSecretKeys.js';
+import { DrizzleAdminRepository } from './infrastructure/repositories/DrizzleAdminRepository.js';
+import { ListAllProjects } from './application/admin/ListAllProjects.js';
+import { ListAllUsers } from './application/admin/ListAllUsers.js';
+import { UpdateUserAsAdmin } from './application/admin/UpdateUserAsAdmin.js';
 import { createApp } from './presentation/http.js';
 import { config, sessionTtlMs } from './presentation/config.js';
 
@@ -110,8 +126,28 @@ const sessionRepo = new DrizzleSessionRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const projectMemberRepo = new DrizzleProjectMemberRepository(db);
 const projectInviteRepo = new DrizzleProjectInviteRepository(db);
-const notificationRepo = new DrizzleNotificationRepository(db);
+// Real-time-доставка: хаб + декоратор поверх Drizzle-репозитория. Любое создание
+// уведомления автоматически push'ится подписчикам SSE.
+const notificationHub = new NotificationHub();
+const notificationRepo = new PublishingNotificationRepository(
+  new DrizzleNotificationRepository(db),
+  notificationHub,
+);
 const githubTokenRepo = new DrizzleGithubTokenRepository(db);
+
+// Email: SMTP если задан SMTP_HOST, иначе логирующая заглушка (dev без почтовика).
+const emailSender: EmailSender = process.env['SMTP_HOST']
+  ? new SmtpEmailSender({
+      host: process.env['SMTP_HOST'],
+      port: Number(process.env['SMTP_PORT'] ?? 587),
+      user: process.env['SMTP_USER'] ?? '',
+      password: process.env['SMTP_PASSWORD'] ?? '',
+      from: process.env['SMTP_FROM'] ?? process.env['SMTP_USER'] ?? 'no-reply@projectsflow.ru',
+      secure: Number(process.env['SMTP_PORT'] ?? 587) === 465,
+    })
+  : new LoggingEmailSender();
+const appBaseUrl =
+  process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? 'http://localhost:5173';
 
 const githubApi = new FetchGithubApiClient(config.github.clientId);
 const deviceFlowStore = new DeviceFlowStore();
@@ -124,6 +160,16 @@ const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const agentJobRepo = new DrizzleAgentJobRepository(db);
+const taskSearchRepo = new DrizzleTaskSearchRepository(db);
+const projectJoinRequestRepo = new DrizzleProjectJoinRequestRepository(db);
+const adminRepo = new DrizzleAdminRepository(db);
+
+// Admin-bypass: системный админ (users.is_admin) получает доступ ко всем проектам
+// через requireProjectAccess. Кешировать не нужно — getById дешёвый, вызов на access-check.
+configureAdminBypass(async (userId) => {
+  const u = await userRepo.getById(userId);
+  return u?.isAdmin ?? false;
+});
 
 // Каталог с binary-аттачами. В dev: ./uploads (рядом с кодом), в prod: задаём
 // UPLOADS_DIR в .env (typically /var/www/.../uploads — снаружи tarball'а деплоя,
@@ -201,10 +247,14 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       invites: projectInviteRepo,
+      users: userRepo,
+      notifications: notificationRepo,
+      email: emailSender,
       idGen: idGenerator,
       randomToken: () => randomBytes(32).toString('hex'),
       now,
       ttlMs: 7 * 24 * 60 * 60 * 1000, // 7 дней (см. spec)
+      appUrl: appBaseUrl,
     }),
     listInvites: new ListProjectInvites({
       projects: projectRepo,
@@ -217,6 +267,26 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       invites: projectInviteRepo,
     }),
+    checkGitCollision: new CheckGitCollision({
+      projects: projectRepo,
+      members: projectMemberRepo,
+    }),
+    requestJoin: new RequestProjectJoin({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      joinRequests: projectJoinRequestRepo,
+      users: userRepo,
+      notifications: notificationRepo,
+      email: emailSender,
+      idGen: idGenerator,
+      appUrl: appBaseUrl,
+    }),
+    resolveJoinRequest: new ResolveProjectJoinRequest({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      joinRequests: projectJoinRequestRepo,
+      now,
+    }),
     appUrl: process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? 'http://localhost:5173',
   },
   notifications: {
@@ -224,6 +294,7 @@ const { app, devProxyUpgrade } = createApp({
     countUnread: new CountUnreadNotifications({ repo: notificationRepo }),
     markRead: new MarkNotificationRead({ repo: notificationRepo, now }),
     markAllRead: new MarkAllNotificationsRead({ repo: notificationRepo, now }),
+    subscribe: (userId, fn) => notificationHub.subscribe(userId, fn),
   },
   invites: {
     getByToken: new GetInviteByToken({
@@ -237,6 +308,14 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       now,
     }),
+  },
+  search: {
+    searchTasks: new SearchTasks({ search: taskSearchRepo }),
+  },
+  admin: {
+    listAllProjects: new ListAllProjects(adminRepo),
+    listAllUsers: new ListAllUsers(adminRepo),
+    updateUser: new UpdateUserAsAdmin(adminRepo),
   },
   secrets: {
     putSecret: new PutSecret({ projects: projectRepo, members: projectMemberRepo, repo: secretsRepo }),

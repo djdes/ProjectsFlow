@@ -36,6 +36,7 @@ function toUser(row: UserRow): User {
     email: row.email,
     displayName: row.displayName,
     avatarUrl: row.avatarUrl ?? null,
+    isAdmin: row.isAdmin,
     createdAt: row.createdAt,
   };
 }
@@ -76,13 +77,25 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
   }
 
   async listProjectsForUser(userId: string): Promise<ProjectWithRole[]> {
+    // Коррелированные подзапросы для read-model'а sidebar'а: число участников и задач.
+    // Дешевле отдельных запросов на каждый проект; индексы по project_id уже есть.
     const rows = await this.db
-      .select({ project: projects, role: projectMembers.role })
+      .select({
+        project: projects,
+        role: projectMembers.role,
+        memberCount: sql<number>`(SELECT COUNT(*) FROM project_members pm WHERE pm.project_id = ${projects.id})`,
+        taskCount: sql<number>`(SELECT COUNT(*) FROM tasks t WHERE t.project_id = ${projects.id})`,
+      })
       .from(projectMembers)
       .innerJoin(projects, eq(projects.id, projectMembers.projectId))
       .where(eq(projectMembers.userId, userId))
       .orderBy(asc(projects.createdAt));
-    return rows.map((r) => ({ ...toProject(r.project), role: r.role }));
+    return rows.map((r) => ({
+      ...toProject(r.project),
+      role: r.role,
+      memberCount: Number(r.memberCount),
+      taskCount: Number(r.taskCount),
+    }));
   }
 
   async countOwners(projectId: string): Promise<number> {

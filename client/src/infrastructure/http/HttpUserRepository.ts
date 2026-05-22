@@ -10,6 +10,7 @@ type UserDto = {
   email: string;
   displayName: string;
   avatarUrl: string | null;
+  isAdmin?: boolean;
   createdAt: string;
 };
 
@@ -19,6 +20,7 @@ function fromDto(dto: UserDto): User {
     email: dto.email,
     displayName: dto.displayName,
     avatarUrl: dto.avatarUrl,
+    isAdmin: dto.isAdmin ?? false,
   };
 }
 

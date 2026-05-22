@@ -6,13 +6,16 @@ import { HttpGithubRepository } from '@/infrastructure/http/HttpGithubRepository
 import { HttpKbRepository } from '@/infrastructure/http/HttpKbRepository';
 import { HttpSecretsRepository } from '@/infrastructure/http/HttpSecretsRepository';
 import { HttpTaskRepository } from '@/infrastructure/http/HttpTaskRepository';
+import { HttpTaskSearchRepository } from '@/infrastructure/http/HttpTaskSearchRepository';
 import { HttpInviteRepository } from '@/infrastructure/http/HttpInviteRepository';
 import { HttpNotificationRepository } from '@/infrastructure/http/HttpNotificationRepository';
 import { HttpAgentTokenRepository } from '@/infrastructure/http/HttpAgentTokenRepository';
 import { HttpAgentDeviceRepository } from '@/infrastructure/http/HttpAgentDeviceRepository';
 import { HttpAgentJobRepository } from '@/infrastructure/http/HttpAgentJobRepository';
+import { HttpAdminRepository } from '@/infrastructure/http/HttpAdminRepository';
 import { EnqueueAgentJob } from '@/application/agentJob/EnqueueAgentJob';
 import { CancelAgentJob } from '@/application/agentJob/CancelAgentJob';
+import { SearchTasks } from '@/application/task/SearchTasks';
 import { ListProjects } from '@/application/project/ListProjects';
 import { GetProject } from '@/application/project/GetProject';
 import { CreateProject } from '@/application/project/CreateProject';
@@ -29,6 +32,7 @@ import type { InviteRepository } from '@/application/project/InviteRepository';
 import type { NotificationRepository } from '@/application/notifications/NotificationRepository';
 import type { AgentTokenRepository } from '@/application/agent/AgentTokenRepository';
 import type { AgentDeviceRepository } from '@/application/agent/AgentDeviceRepository';
+import type { AdminRepository } from '@/application/admin/AdminRepository';
 
 type Container = {
   listProjects: ListProjects;
@@ -37,6 +41,7 @@ type Container = {
   updateProject: UpdateProject;
   getCurrentUser: GetCurrentUser;
   updateProfile: UpdateProfile;
+  searchTasks: SearchTasks;
   projectRepository: ProjectRepository;
   authRepository: AuthRepository;
   githubRepository: GithubRepository;
@@ -47,6 +52,7 @@ type Container = {
   notificationRepository: NotificationRepository;
   agentTokenRepository: AgentTokenRepository;
   agentDeviceRepository: AgentDeviceRepository;
+  adminRepository: AdminRepository;
   enqueueAgentJob: EnqueueAgentJob;
   cancelAgentJob: CancelAgentJob;
 };
@@ -59,11 +65,13 @@ function buildContainer(): Container {
   const kbRepo = new HttpKbRepository();
   const secretsRepo = new HttpSecretsRepository();
   const taskRepo = new HttpTaskRepository();
+  const taskSearchRepo = new HttpTaskSearchRepository();
   const inviteRepo = new HttpInviteRepository();
   const notificationRepo = new HttpNotificationRepository();
   const agentTokenRepo = new HttpAgentTokenRepository();
   const agentDeviceRepo = new HttpAgentDeviceRepository();
   const agentJobRepo = new HttpAgentJobRepository();
+  const adminRepo = new HttpAdminRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -71,6 +79,7 @@ function buildContainer(): Container {
     updateProject: new UpdateProject(projectRepo),
     getCurrentUser: new GetCurrentUser(userRepo),
     updateProfile: new UpdateProfile(userRepo),
+    searchTasks: new SearchTasks(taskSearchRepo),
     projectRepository: projectRepo,
     authRepository: authRepo,
     githubRepository: githubRepo,
@@ -81,6 +90,7 @@ function buildContainer(): Container {
     notificationRepository: notificationRepo,
     agentTokenRepository: agentTokenRepo,
     agentDeviceRepository: agentDeviceRepo,
+    adminRepository: adminRepo,
     enqueueAgentJob: new EnqueueAgentJob(agentJobRepo),
     cancelAgentJob: new CancelAgentJob(agentJobRepo),
   };

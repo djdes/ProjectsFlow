@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useContainer } from '@/infrastructure/di/container';
+import { NOTIFICATIONS_CHANGED_EVENT } from './useNotificationStream';
 
-// Polling-интервал. 60s — компромисс между freshness и нагрузкой. Если станет тесно
-// — переехать на SSE/WS в отдельной спеке.
+// Polling-интервал — fallback на случай разрыва SSE. SSE (useNotificationStream) даёт
+// мгновенный refresh через NOTIFICATIONS_CHANGED_EVENT; polling подстраховывает.
 const POLL_MS = 60_000;
 
 // Подгружает счётчик непрочитанных уведомлений с polling'ом + предоставляет refresh
@@ -26,7 +27,12 @@ export function useUnreadNotificationsCount(): {
   useEffect(() => {
     refresh();
     const id = window.setInterval(refresh, POLL_MS);
-    return () => window.clearInterval(id);
+    // Мгновенный refresh при SSE-событии (новое уведомление пришло без перезагрузки).
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, refresh);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, refresh);
+    };
   }, [refresh]);
 
   return { count, refresh };

@@ -25,6 +25,9 @@ import type { TransferProjectOwnership } from '../application/project/TransferPr
 import type { CreateProjectInvite } from '../application/project/CreateProjectInvite.js';
 import type { ListProjectInvites } from '../application/project/ListProjectInvites.js';
 import type { DeleteProjectInvite } from '../application/project/DeleteProjectInvite.js';
+import type { CheckGitCollision } from '../application/project/CheckGitCollision.js';
+import type { RequestProjectJoin } from '../application/project/RequestProjectJoin.js';
+import type { ResolveProjectJoinRequest } from '../application/project/ResolveProjectJoinRequest.js';
 import type { GetInviteByToken } from '../application/project/GetInviteByToken.js';
 import type { AcceptProjectInvite } from '../application/project/AcceptProjectInvite.js';
 import type { ListProjectCommits } from '../application/github/ListProjectCommits.js';
@@ -46,6 +49,7 @@ import type { WriteKbDocument } from '../application/kb/WriteKbDocument.js';
 import type { DeleteKbDocument } from '../application/kb/DeleteKbDocument.js';
 import type { BulkCreateCredential } from '../application/kb/BulkCreateCredential.js';
 import type { ListTasks } from '../application/task/ListTasks.js';
+import type { SearchTasks } from '../application/task/SearchTasks.js';
 import type { CreateTask } from '../application/task/CreateTask.js';
 import type { UpdateTask } from '../application/task/UpdateTask.js';
 import type { MoveTask } from '../application/task/MoveTask.js';
@@ -66,6 +70,10 @@ import type { ListNotifications } from '../application/notifications/ListNotific
 import type { CountUnreadNotifications } from '../application/notifications/CountUnreadNotifications.js';
 import type { MarkNotificationRead } from '../application/notifications/MarkNotificationRead.js';
 import type { MarkAllNotificationsRead } from '../application/notifications/MarkAllNotificationsRead.js';
+import type { Notification as NotificationEntity } from '../domain/notifications/Notification.js';
+import type { ListAllProjects } from '../application/admin/ListAllProjects.js';
+import type { ListAllUsers } from '../application/admin/ListAllUsers.js';
+import type { UpdateUserAsAdmin } from '../application/admin/UpdateUserAsAdmin.js';
 import type { CreateAgentToken } from '../application/agent/CreateAgentToken.js';
 import type { ListAgentTokens } from '../application/agent/ListAgentTokens.js';
 import type { RevokeAgentToken } from '../application/agent/RevokeAgentToken.js';
@@ -92,6 +100,8 @@ import { githubRouter } from './integrations/github/routes.js';
 import { secretsRouter } from './secrets/routes.js';
 import { kbRouter } from './kb/routes.js';
 import { tasksRouter } from './tasks/routes.js';
+import { searchRouter } from './search/routes.js';
+import { adminRouter } from './admin/routes.js';
 import { attachmentBinaryRouter } from './tasks/attachmentBinaryRoutes.js';
 import { inboxRouter } from './inbox/routes.js';
 import { invitesRouter } from './invites/routes.js';
@@ -126,17 +136,29 @@ type AppDeps = {
     readonly createInvite: CreateProjectInvite;
     readonly listInvites: ListProjectInvites;
     readonly deleteInvite: DeleteProjectInvite;
+    readonly checkGitCollision: CheckGitCollision;
+    readonly requestJoin: RequestProjectJoin;
+    readonly resolveJoinRequest: ResolveProjectJoinRequest;
     readonly appUrl: string;
   };
   readonly invites: {
     readonly getByToken: GetInviteByToken;
     readonly accept: AcceptProjectInvite;
   };
+  readonly search: {
+    readonly searchTasks: SearchTasks;
+  };
+  readonly admin: {
+    readonly listAllProjects: ListAllProjects;
+    readonly listAllUsers: ListAllUsers;
+    readonly updateUser: UpdateUserAsAdmin;
+  };
   readonly notifications: {
     readonly list: ListNotifications;
     readonly countUnread: CountUnreadNotifications;
     readonly markRead: MarkNotificationRead;
     readonly markAllRead: MarkAllNotificationsRead;
+    readonly subscribe: (userId: string, fn: (n: NotificationEntity) => void) => () => void;
   };
   readonly github: {
     readonly startDeviceFlow: StartDeviceFlow;
@@ -254,6 +276,8 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/projects/:projectId/secrets', secretsRouter(deps.secrets));
   app.use('/api/projects/:projectId/kb', kbRouter(deps.kb));
   app.use('/api/projects/:projectId/tasks', tasksRouter(deps.tasks));
+  app.use('/api/search', searchRouter(deps.search));
+  app.use('/api/admin', adminRouter(deps.admin));
   app.use('/api/attachments', attachmentBinaryRouter(deps.tasks));
   app.use('/api/inbox', inboxRouter({ getOrCreateInbox: deps.projects.getOrCreateInbox }));
   // Invites: GET — anon-доступ; POST /:token/accept — внутри router'а через requireAuth.
