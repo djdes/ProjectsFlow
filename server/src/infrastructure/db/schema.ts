@@ -1,13 +1,16 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   char,
+  date,
   double,
   index,
   int,
   json,
   mysqlEnum,
   mysqlTable,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -68,6 +71,8 @@ export const projects = mysqlTable(
     // phantom-flag: «Входящие» — отдельная вкладка для задач без привязки к конкретному проекту.
     // На юзера ровно одна inbox-запись (создаётся лениво через GetOrCreateInbox).
     isInbox: boolean('is_inbox').notNull().default(false),
+    // Видимость финансов: 'owner' (по умолчанию) — только владелец/admin; 'members' — все участники.
+    financeVisibility: mysqlEnum('finance_visibility', ['owner', 'members']).notNull().default('owner'),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -327,6 +332,74 @@ export const agentJobs = mysqlTable(
 
 export type AgentJobRow = typeof agentJobs.$inferSelect;
 export type NewAgentJobRow = typeof agentJobs.$inferInsert;
+
+// --- Финансы проекта (миграции 018-022) ---
+
+export const employees = mysqlTable(
+  'employees',
+  {
+    id: id(),
+    ownerUserId: fkUserId('owner_user_id'),
+    name: varchar('name', { length: 120 }).notNull(),
+    monthlySalaryKopecks: bigint('monthly_salary_kopecks', { mode: 'number' }).notNull().default(0),
+    active: boolean('active').notNull().default(true),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [index('idx_employees_owner').on(t.ownerUserId)],
+);
+
+export const projectEmployeeAssignments = mysqlTable(
+  'project_employee_assignments',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    employeeId: char('employee_id', { length: 36 }).notNull(),
+    allocationPercent: smallint('allocation_percent').notNull().default(100),
+    startedAt: date('started_at', { mode: 'date' }).notNull(),
+    endedAt: date('ended_at', { mode: 'date' }),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_assignment_project_employee').on(t.projectId, t.employeeId),
+    index('idx_assignment_project').on(t.projectId),
+    index('idx_assignment_employee').on(t.employeeId),
+  ],
+);
+
+export const projectExpenses = mysqlTable(
+  'project_expenses',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    amountKopecks: bigint('amount_kopecks', { mode: 'number' }).notNull(),
+    category: varchar('category', { length: 40 }).notNull().default('other'),
+    description: varchar('description', { length: 500 }),
+    incurredOn: date('incurred_on', { mode: 'date' }).notNull(),
+    createdBy: fkUserId('created_by'),
+    createdAt: createdAtCol(),
+  },
+  (t) => [index('idx_expenses_project').on(t.projectId)],
+);
+
+export const projectIncomes = mysqlTable(
+  'project_incomes',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    amountKopecks: bigint('amount_kopecks', { mode: 'number' }).notNull(),
+    source: varchar('source', { length: 120 }),
+    receivedOn: date('received_on', { mode: 'date' }).notNull(),
+    createdBy: fkUserId('created_by'),
+    createdAt: createdAtCol(),
+  },
+  (t) => [index('idx_incomes_project').on(t.projectId)],
+);
+
+export type EmployeeRow = typeof employees.$inferSelect;
+export type ProjectEmployeeAssignmentRow = typeof projectEmployeeAssignments.$inferSelect;
+export type ProjectExpenseRow = typeof projectExpenses.$inferSelect;
+export type ProjectIncomeRow = typeof projectIncomes.$inferSelect;
 
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;

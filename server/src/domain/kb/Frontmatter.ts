@@ -2,7 +2,14 @@ export type FrontmatterValue = string | number | boolean | null | FrontmatterVal
 
 export type Frontmatter = Readonly<Record<string, FrontmatterValue>>;
 
-export type KbDocumentType = 'credential' | 'decision' | 'service' | 'schema' | 'runbook' | 'note';
+export type KbDocumentType =
+  | 'credential'
+  | 'decision'
+  | 'service'
+  | 'schema'
+  | 'runbook'
+  | 'note'
+  | 'agent';
 
 export const KB_FOLDERS: Record<KbDocumentType, string> = {
   credential: 'credentials',
@@ -11,4 +18,5 @@ export const KB_FOLDERS: Record<KbDocumentType, string> = {
   schema: 'schemas',
   runbook: 'runbooks',
   note: 'notes',
+  agent: 'agents',
 };

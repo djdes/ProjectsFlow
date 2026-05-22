@@ -13,6 +13,8 @@ import { HttpAgentTokenRepository } from '@/infrastructure/http/HttpAgentTokenRe
 import { HttpAgentDeviceRepository } from '@/infrastructure/http/HttpAgentDeviceRepository';
 import { HttpAgentJobRepository } from '@/infrastructure/http/HttpAgentJobRepository';
 import { HttpAdminRepository } from '@/infrastructure/http/HttpAdminRepository';
+import { HttpEmployeeRepository } from '@/infrastructure/http/HttpEmployeeRepository';
+import { HttpProjectFinanceRepository } from '@/infrastructure/http/HttpProjectFinanceRepository';
 import { EnqueueAgentJob } from '@/application/agentJob/EnqueueAgentJob';
 import { CancelAgentJob } from '@/application/agentJob/CancelAgentJob';
 import { SearchTasks } from '@/application/task/SearchTasks';
@@ -33,6 +35,10 @@ import type { NotificationRepository } from '@/application/notifications/Notific
 import type { AgentTokenRepository } from '@/application/agent/AgentTokenRepository';
 import type { AgentDeviceRepository } from '@/application/agent/AgentDeviceRepository';
 import type { AdminRepository } from '@/application/admin/AdminRepository';
+import type {
+  EmployeeRepository,
+  ProjectFinanceRepository,
+} from '@/application/finance/FinanceRepository';
 
 type Container = {
   listProjects: ListProjects;
@@ -53,6 +59,8 @@ type Container = {
   agentTokenRepository: AgentTokenRepository;
   agentDeviceRepository: AgentDeviceRepository;
   adminRepository: AdminRepository;
+  employeeRepository: EmployeeRepository;
+  projectFinanceRepository: ProjectFinanceRepository;
   enqueueAgentJob: EnqueueAgentJob;
   cancelAgentJob: CancelAgentJob;
 };
@@ -72,6 +80,8 @@ function buildContainer(): Container {
   const agentDeviceRepo = new HttpAgentDeviceRepository();
   const agentJobRepo = new HttpAgentJobRepository();
   const adminRepo = new HttpAdminRepository();
+  const employeeRepo = new HttpEmployeeRepository();
+  const projectFinanceRepo = new HttpProjectFinanceRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -91,6 +101,8 @@ function buildContainer(): Container {
     agentTokenRepository: agentTokenRepo,
     agentDeviceRepository: agentDeviceRepo,
     adminRepository: adminRepo,
+    employeeRepository: employeeRepo,
+    projectFinanceRepository: projectFinanceRepo,
     enqueueAgentJob: new EnqueueAgentJob(agentJobRepo),
     cancelAgentJob: new CancelAgentJob(agentJobRepo),
   };

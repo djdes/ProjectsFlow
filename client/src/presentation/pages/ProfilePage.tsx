@@ -25,6 +25,7 @@ import { useUpdateProfile } from '@/presentation/hooks/useUpdateProfile';
 import { useTheme, type Theme } from '@/presentation/components/theme/ThemeProvider';
 import { GithubAccountSection } from '@/presentation/components/github/GithubAccountSection';
 import { AgentAccessCard } from '@/presentation/components/agent/AgentAccessCard';
+import { EmployeesCard } from '@/presentation/components/finance/EmployeesCard';
 import { getInitials } from '@/presentation/layout/projectIcons';
 
 function PersonalDataCard(): React.ReactElement {
@@ -237,6 +238,7 @@ export function ProfilePage(): React.ReactElement {
       <h1 className="text-3xl font-semibold tracking-tight">Профиль</h1>
 
       <PersonalDataCard />
+      <EmployeesCard />
       <GithubAccountSection />
       <AgentAccessCard />
       <SecurityCard />

@@ -22,6 +22,7 @@ type ProjectDto = {
   role?: ProjectRole;
   memberCount?: number;
   taskCount?: number;
+  financeVisibility?: 'owner' | 'members';
   createdAt: string;
 };
 
@@ -38,6 +39,7 @@ function fromDto(dto: ProjectDto): Project {
     role: dto.role ?? 'owner',
     memberCount: dto.memberCount,
     taskCount: dto.taskCount,
+    financeVisibility: dto.financeVisibility ?? 'owner',
     createdAt: new Date(dto.createdAt),
   };
 }

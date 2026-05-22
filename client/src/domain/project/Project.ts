@@ -2,6 +2,8 @@ import type { ProjectRole } from './ProjectMembership';
 
 export type ProjectStatus = 'active' | 'paused' | 'archived';
 
+export type FinanceVisibility = 'owner' | 'members';
+
 export type Project = {
   readonly id: string;
   readonly name: string;
@@ -18,5 +20,8 @@ export type Project = {
   // отсутствуют). memberCount > 1 ⇒ совместный проект (иконка участников).
   readonly memberCount?: number;
   readonly taskCount?: number;
+  // Кто видит финансы: 'owner' (по умолчанию) или 'members'. На list-эндпоинте может
+  // отсутствовать в старых ответах — дефолт 'owner'.
+  readonly financeVisibility: FinanceVisibility;
   readonly createdAt: Date;
 };

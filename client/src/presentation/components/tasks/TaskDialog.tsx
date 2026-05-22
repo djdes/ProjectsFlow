@@ -31,6 +31,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { TaskCommitsSection } from './TaskCommitsSection';
+import { CommentBody } from './CommentBody';
 
 export type TaskDialogState =
   | { mode: 'create'; status: Task['status'] }
@@ -837,6 +838,7 @@ function CommentComposer({
   const { user: currentUser } = useCurrentUser();
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [preview, setPreview] = useState(false);
   const [mention, setMention] = useState<MentionState | null>(null);
   const [pickerIndex, setPickerIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -953,17 +955,27 @@ function CommentComposer({
 
   return (
     <div className="relative rounded-md border bg-card transition-colors focus-within:border-foreground/30">
-      <textarea
-        ref={textareaRef}
-        value={body}
-        onChange={handleChange}
-        onSelect={handleSelect}
-        onKeyDown={handleKeyDown}
-        rows={2}
-        disabled={submitting}
-        placeholder="Написать комментарий…"
-        className="block w-full resize-none rounded-md bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
-      />
+      {preview ? (
+        <div className="min-h-[2.75rem] px-3 py-2">
+          {body.trim().length > 0 ? (
+            <CommentBody body={body} />
+          ) : (
+            <p className="text-sm text-muted-foreground/70">Нечего показывать</p>
+          )}
+        </div>
+      ) : (
+        <textarea
+          ref={textareaRef}
+          value={body}
+          onChange={handleChange}
+          onSelect={handleSelect}
+          onKeyDown={handleKeyDown}
+          rows={2}
+          disabled={submitting}
+          placeholder="Написать комментарий… поддерживается Markdown"
+          className="block w-full resize-none rounded-md bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+        />
+      )}
       <Button
         type="button"
         variant="ghost"
@@ -976,7 +988,7 @@ function CommentComposer({
         {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
       </Button>
 
-      {showPicker && (
+      {!preview && showPicker && (
         <MentionPicker
           candidates={candidates}
           activeIndex={pickerIndex}
@@ -984,6 +996,24 @@ function CommentComposer({
           onHoverIndex={setPickerIndex}
         />
       )}
+
+      <div className="flex items-center gap-3 px-3 pb-1.5 text-[11px]">
+        <button
+          type="button"
+          onClick={() => setPreview(false)}
+          className={cn('transition-colors', preview ? 'text-muted-foreground hover:text-foreground' : 'font-medium text-foreground')}
+        >
+          Написать
+        </button>
+        <button
+          type="button"
+          onClick={() => setPreview(true)}
+          className={cn('transition-colors', preview ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground')}
+        >
+          Превью
+        </button>
+        <span className="ml-auto text-[10px] text-muted-foreground/60">Markdown + HTML</span>
+      </div>
     </div>
   );
 }
@@ -1180,14 +1210,9 @@ function CommentItem({
             className="mt-0.5 block w-full resize-none bg-transparent p-0 text-sm leading-snug focus:outline-none disabled:opacity-50"
           />
         ) : (
-          <button
-            type="button"
-            onClick={enterEdit}
-            className="mt-0.5 block w-full cursor-text whitespace-pre-wrap break-words text-left text-sm leading-snug"
-            aria-label="Редактировать комментарий"
-          >
-            {comment.body}
-          </button>
+          <div className="mt-0.5">
+            <CommentBody body={comment.body} />
+          </div>
         )}
       </div>
     </li>

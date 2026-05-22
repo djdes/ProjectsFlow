@@ -74,6 +74,9 @@ import type { Notification as NotificationEntity } from '../domain/notifications
 import type { ListAllProjects } from '../application/admin/ListAllProjects.js';
 import type { ListAllUsers } from '../application/admin/ListAllUsers.js';
 import type { UpdateUserAsAdmin } from '../application/admin/UpdateUserAsAdmin.js';
+import type { ManageEmployees } from '../application/finance/ManageEmployees.js';
+import type { ManageProjectFinance } from '../application/finance/ManageProjectFinance.js';
+import type { GetProjectFinance } from '../application/finance/GetProjectFinance.js';
 import type { CreateAgentToken } from '../application/agent/CreateAgentToken.js';
 import type { ListAgentTokens } from '../application/agent/ListAgentTokens.js';
 import type { RevokeAgentToken } from '../application/agent/RevokeAgentToken.js';
@@ -102,6 +105,8 @@ import { kbRouter } from './kb/routes.js';
 import { tasksRouter } from './tasks/routes.js';
 import { searchRouter } from './search/routes.js';
 import { adminRouter } from './admin/routes.js';
+import { employeesRouter } from './finance/employeeRoutes.js';
+import { financeRouter } from './finance/routes.js';
 import { attachmentBinaryRouter } from './tasks/attachmentBinaryRoutes.js';
 import { inboxRouter } from './inbox/routes.js';
 import { invitesRouter } from './invites/routes.js';
@@ -152,6 +157,11 @@ type AppDeps = {
     readonly listAllProjects: ListAllProjects;
     readonly listAllUsers: ListAllUsers;
     readonly updateUser: UpdateUserAsAdmin;
+  };
+  readonly finance: {
+    readonly manageEmployees: ManageEmployees;
+    readonly manageProjectFinance: ManageProjectFinance;
+    readonly getProjectFinance: GetProjectFinance;
   };
   readonly notifications: {
     readonly list: ListNotifications;
@@ -278,6 +288,14 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/projects/:projectId/tasks', tasksRouter(deps.tasks));
   app.use('/api/search', searchRouter(deps.search));
   app.use('/api/admin', adminRouter(deps.admin));
+  app.use('/api/employees', employeesRouter({ manage: deps.finance.manageEmployees }));
+  app.use(
+    '/api/projects/:projectId/finance',
+    financeRouter({
+      getFinance: deps.finance.getProjectFinance,
+      manage: deps.finance.manageProjectFinance,
+    }),
+  );
   app.use('/api/attachments', attachmentBinaryRouter(deps.tasks));
   app.use('/api/inbox', inboxRouter({ getOrCreateInbox: deps.projects.getOrCreateInbox }));
   // Invites: GET — anon-доступ; POST /:token/accept — внутри router'а через requireAuth.

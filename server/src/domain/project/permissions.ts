@@ -26,7 +26,8 @@ export type ProjectAction =
   | 'remove_member'
   | 'transfer_ownership'
   | 'delegate_task_to_agent'
-  | 'cancel_agent_job';
+  | 'cancel_agent_job'
+  | 'manage_finance';
 
 const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   read_project: 'viewer',
@@ -48,6 +49,8 @@ const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   transfer_ownership: 'owner',
   delegate_task_to_agent: 'editor',
   cancel_agent_job: 'editor',
+  // Финансы (зарплаты/расходы/доходы) меняет только владелец.
+  manage_finance: 'owner',
 };
 
 const ROLE_LEVEL: Record<ProjectRole, number> = { viewer: 0, editor: 1, owner: 2 };

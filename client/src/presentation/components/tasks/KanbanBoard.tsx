@@ -21,7 +21,7 @@ import { useTasks } from '@/presentation/hooks/useTasks';
 import { useDoneSortOrder, type DoneSortOrder } from '@/presentation/hooks/useDoneSortOrder';
 import { KanbanCard } from './KanbanCard';
 import { KanbanColumn } from './KanbanColumn';
-import { PipelinePanel } from './PipelinePanel';
+import { FinanceSummaryCard } from './FinanceSummaryCard';
 import { TaskDialog, type TaskDialogState } from './TaskDialog';
 
 type Props = {
@@ -234,7 +234,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
 
   return (
     <div className="space-y-6">
-      <PipelinePanel tasks={tasks} />
+      <FinanceSummaryCard projectId={projectId} />
       <DndContext
         sensors={sensors}
         measuring={MEASURING_CONFIG}
