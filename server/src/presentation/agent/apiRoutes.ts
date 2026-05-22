@@ -23,12 +23,26 @@ import type { CompleteAgentJob } from '../../application/agent/CompleteAgentJob.
 import type { CheckRepoUsage } from '../../application/agent/CheckRepoUsage.js';
 import type { RequestRepoAccess } from '../../application/agent/RequestRepoAccess.js';
 import type { InitLocalKb } from '../../application/kb/InitLocalKb.js';
+import type { UpdateTask } from '../../application/task/UpdateTask.js';
+import type { DeleteTask } from '../../application/task/DeleteTask.js';
+import type { ListTaskCommits } from '../../application/task/ListTaskCommits.js';
+import type { SyncTaskCommits } from '../../application/task/SyncTaskCommits.js';
+import type { SearchTasks } from '../../application/task/SearchTasks.js';
+import type { GetProject } from '../../application/project/GetProject.js';
+import type { ListProjectMembers } from '../../application/project/ListProjectMembers.js';
+import type { GetProjectFinance } from '../../application/finance/GetProjectFinance.js';
+import type { ManageProjectFinance } from '../../application/finance/ManageProjectFinance.js';
+import type { GetKbDocument } from '../../application/kb/GetKbDocument.js';
+import type { DeleteKbDocument } from '../../application/kb/DeleteKbDocument.js';
 import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemoryRateLimiter.js';
 import { normalizeGitUrl } from '../../application/project/gitUrl.js';
 import type { PendingAgentJob } from '../../application/agent/AgentJobRepository.js';
 import type { Frontmatter } from '../../domain/kb/Frontmatter.js';
 import type { Project } from '../../domain/project/Project.js';
-import type { KbDocumentSummary } from '../../domain/kb/KbDocument.js';
+import type { KbDocument, KbDocumentSummary } from '../../domain/kb/KbDocument.js';
+import type { ProjectMemberWithUser } from '../../application/project/ProjectMemberRepository.js';
+import type { ProjectFinance } from '../../domain/finance/types.js';
+import type { TaskSearchResult } from '../../application/task/TaskSearchRepository.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { TaskComment } from '../../domain/task/TaskComment.js';
@@ -65,6 +79,17 @@ type Deps = {
   readonly checkRepoUsage: CheckRepoUsage;
   readonly requestRepoAccess: RequestRepoAccess;
   readonly initLocalKb: InitLocalKb;
+  readonly updateTask: UpdateTask;
+  readonly deleteTask: DeleteTask;
+  readonly listTaskCommits: ListTaskCommits;
+  readonly syncTaskCommits: SyncTaskCommits;
+  readonly searchTasks: SearchTasks;
+  readonly getProject: GetProject;
+  readonly listProjectMembers: ListProjectMembers;
+  readonly getKbDocument: GetKbDocument;
+  readonly deleteKbDocument: DeleteKbDocument;
+  readonly getProjectFinance: GetProjectFinance;
+  readonly manageProjectFinance: ManageProjectFinance;
   readonly rateLimiter: InMemoryRateLimiter;
   // Email-оповещения команде (источник 'mcp' — действия агента). Fire-and-forget.
   readonly notifier: ProjectNotificationService;
@@ -94,6 +119,30 @@ const repoAccessRequestSchema = z.object({
   gitRepoUrl: z.string().trim().min(1).max(500),
   requestTarget: z.string().trim().min(1).max(200),
   message: z.string().max(2000).optional(),
+});
+
+const updateTaskAgentSchema = z.object({
+  description: z.string().trim().min(1).max(10_000),
+});
+
+// KB-путь: тот же контракт, что у pf_write_kb_document — относительный .md внутри репо.
+const kbPathSchema = z.string().trim().regex(/^[a-z0-9_./-]+\.md$/i, 'путь должен быть вида folder/file.md');
+
+// ISO date-only (YYYY-MM-DD). Опционально; дефолт «сегодня» в use-case.
+const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'дата в формате YYYY-MM-DD');
+
+// Деньги от агента — в рублях (number). Роут конвертирует в копейки Math.round(rubles*100).
+const addExpenseSchema = z.object({
+  amountRubles: z.number().nonnegative(),
+  category: z.string().trim().min(1).max(80),
+  description: z.string().max(2000).optional(),
+  incurredOn: isoDateSchema.optional(),
+});
+
+const addIncomeSchema = z.object({
+  amountRubles: z.number().nonnegative(),
+  source: z.string().max(200).optional(),
+  receivedOn: isoDateSchema.optional(),
 });
 
 type TaskDto = Omit<Task, 'createdAt' | 'updatedAt'> & {
@@ -201,6 +250,128 @@ function repoToDto(r: GithubRepoSummary): RepoDto {
     description: r.description,
     private: r.private,
     pushedAt: r.pushedAt ? r.pushedAt.toISOString() : null,
+  };
+}
+
+// date-only Date → 'YYYY-MM-DD' (финансовые даты хранятся без времени).
+function dateOnlyToIso(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+type MemberDto = {
+  userId: string;
+  displayName: string;
+  email: string;
+  role: ProjectMemberWithUser['role'];
+  isAdmin: boolean;
+  joinedAt: string;
+};
+
+function memberToDto(m: ProjectMemberWithUser): MemberDto {
+  return {
+    userId: m.userId,
+    displayName: m.user.displayName,
+    email: m.user.email,
+    role: m.role,
+    isAdmin: m.user.isAdmin,
+    joinedAt: m.joinedAt.toISOString(),
+  };
+}
+
+type KbDocDto = {
+  path: string;
+  frontmatter: KbDocument['frontmatter'];
+  body: string;
+  sha: string | null;
+};
+
+function kbDocToDto(d: KbDocument): KbDocDto {
+  return { path: d.path, frontmatter: d.frontmatter, body: d.body, sha: d.sha };
+}
+
+type KbDocSummaryDto = {
+  path: string;
+  title: string | null;
+  kind: string | null;
+  frontmatter: KbDocumentSummary['frontmatter'];
+  sha: string | null;
+};
+
+function kbDocSummaryToDto(d: KbDocumentSummary): KbDocSummaryDto {
+  return {
+    path: d.path,
+    title: (d.frontmatter['title'] as string | undefined) ?? null,
+    kind: (d.frontmatter['kind'] as string | undefined) ?? null,
+    frontmatter: d.frontmatter,
+    sha: d.sha,
+  };
+}
+
+// Финансовая сводка. Суммы — в копейках (точность); агенту дополнительно удобны рубли,
+// но конвертацию делает MCP-обёртка (см. дизайн). Даты — date-only ISO.
+type FinanceDto = {
+  laborTotalKopecks: number;
+  otherExpensesTotalKopecks: number;
+  incomeTotalKopecks: number;
+  expenseTotalKopecks: number;
+  profitKopecks: number;
+  marginPercent: number | null;
+  labor: Array<{
+    assignmentId: string;
+    employeeId: string;
+    employeeName: string;
+    monthlySalaryKopecks: number;
+    allocationPercent: number;
+    startedAt: string;
+    endedAt: string | null;
+    costKopecks: number;
+  }>;
+  expenses: Array<{
+    id: string;
+    amountKopecks: number;
+    category: string;
+    description: string | null;
+    incurredOn: string;
+  }>;
+  incomes: Array<{
+    id: string;
+    amountKopecks: number;
+    source: string | null;
+    receivedOn: string;
+  }>;
+};
+
+function financeToDto(f: ProjectFinance): FinanceDto {
+  return {
+    laborTotalKopecks: f.laborTotalKopecks,
+    otherExpensesTotalKopecks: f.otherExpensesTotalKopecks,
+    incomeTotalKopecks: f.incomeTotalKopecks,
+    expenseTotalKopecks: f.expenseTotalKopecks,
+    profitKopecks: f.profitKopecks,
+    marginPercent: f.marginPercent,
+    labor: f.labor.map((l) => ({
+      assignmentId: l.assignmentId,
+      employeeId: l.employeeId,
+      employeeName: l.employeeName,
+      monthlySalaryKopecks: l.monthlySalaryKopecks,
+      allocationPercent: l.allocationPercent,
+      startedAt: dateOnlyToIso(l.startedAt),
+      endedAt: l.endedAt ? dateOnlyToIso(l.endedAt) : null,
+      costKopecks: l.costKopecks,
+    })),
+    expenses: f.expenses.map((e) => ({
+      id: e.id,
+      amountKopecks: e.amountKopecks,
+      category: e.category,
+      description: e.description,
+      incurredOn: dateOnlyToIso(e.incurredOn),
+    })),
+    incomes: f.incomes.map((i) => ({
+      id: i.id,
+      amountKopecks: i.amountKopecks,
+      source: i.source,
+      receivedOn: dateOnlyToIso(i.receivedOn),
+    })),
   };
 }
 
@@ -601,6 +772,228 @@ export function agentApiRouter(deps: Deps): Router {
         const projectId = req.params['projectId'] as string;
         await deps.initLocalKb.execute(projectId, req.user!.id);
         res.status(201).json({ ok: true });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Метаданные одного проекта. 404 если юзер не member (не утекаем существование чужого).
+  router.get('/projects/:projectId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projectId = req.params['projectId'] as string;
+      const project = await deps.getProject.execute(projectId, req.user!.id);
+      if (!project) {
+        res.status(404).json({ error: 'project_not_found' });
+        return;
+      }
+      res.json({ project: projectToAgentDto(project) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Состав команды проекта (viewer+). Без секретов — только публичный профиль участника.
+  router.get(
+    '/projects/:projectId/members',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const members = await deps.listProjectMembers.execute(projectId, req.user!.id);
+        res.json({ members: members.map(memberToDto) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Глобальный поиск по задачам. Scope — проекты юзера; admin видит все. Query — ?q=.
+  router.get('/search/tasks', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const q = typeof req.query['q'] === 'string' ? req.query['q'] : '';
+      const results: TaskSearchResult[] = await deps.searchTasks.execute(req.user!.id, q, {
+        isAdmin: req.user!.isAdmin,
+      });
+      res.json({ results });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Полный список KB-документов проекта (path + frontmatter + sha, без body). В отличие
+  // от /credentials отдаёт ВСЕ доки, не только credentials/.
+  router.get(
+    '/projects/:projectId/kb/documents',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const docs = await deps.listKbDocuments.execute(projectId, req.user!.id);
+        res.json({ documents: docs.map(kbDocSummaryToDto) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Чтение одного KB-документа целиком (body + frontmatter + sha). path — query-параметр.
+  router.get(
+    '/projects/:projectId/kb/document',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const path = kbPathSchema.parse(req.query['path']);
+        const doc = await deps.getKbDocument.execute(projectId, req.user!.id, path);
+        res.json({ document: kbDocToDto(doc) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Удаление KB-документа (необратимо). path — query-параметр. Требует роль editor+ (manage_kb).
+  router.delete(
+    '/projects/:projectId/kb/document',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const path = kbPathSchema.parse(req.query['path']);
+        await deps.deleteKbDocument.execute(projectId, req.user!.id, path);
+        res.status(204).end();
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Редактирование описания задачи (editor+). Меняем только description.
+  router.patch(
+    '/projects/:projectId/tasks/:taskId',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const body = updateTaskAgentSchema.parse(req.body);
+        const task = await deps.updateTask.execute({
+          projectId,
+          ownerUserId: req.user!.id,
+          taskId,
+          description: body.description,
+        });
+        res.json({ task: taskToDto(task) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Удаление задачи (необратимо). Чистит комментарии задачи. Требует роль editor+ (delete_task).
+  router.delete(
+    '/projects/:projectId/tasks/:taskId',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        await deps.deleteTask.execute(projectId, req.user!.id, taskId);
+        res.status(204).end();
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Список коммитов, привязанных к задаче.
+  router.get(
+    '/projects/:projectId/tasks/:taskId/commits',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const commits = await deps.listTaskCommits.execute(projectId, req.user!.id, taskId);
+        res.json({ commits: commits.map(commitToDto) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Авто-синхронизация коммитов: тянет последние коммиты с GitHub и привязывает к задачам
+  // по [short-id] в commit-message. Auto-transition todo → in_progress на первом коммите.
+  router.post(
+    '/projects/:projectId/sync-commits',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const result = await deps.syncTaskCommits.execute(projectId, req.user!.id);
+        res.json(result);
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Финансовая сводка проекта (P&L). Owner — всегда; не-владелец — только при
+  // finance_visibility='members' (иначе use-case вернёт 403).
+  router.get(
+    '/projects/:projectId/finance',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const finance = await deps.getProjectFinance.execute(projectId, req.user!.id);
+        res.json({ finance: financeToDto(finance) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Добавить расход (owner). amountRubles → копейки. incurredOn опционально (дефолт сегодня).
+  router.post(
+    '/projects/:projectId/finance/expenses',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const body = addExpenseSchema.parse(req.body);
+        const expense = await deps.manageProjectFinance.addExpense(projectId, req.user!.id, {
+          amountKopecks: Math.round(body.amountRubles * 100),
+          category: body.category,
+          description: body.description ?? null,
+          incurredOn: body.incurredOn ? new Date(body.incurredOn) : new Date(),
+        });
+        res.status(201).json({
+          expense: {
+            id: expense.id,
+            amountKopecks: expense.amountKopecks,
+            category: expense.category,
+            description: expense.description,
+            incurredOn: dateOnlyToIso(expense.incurredOn),
+          },
+        });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Добавить доход (owner). amountRubles → копейки. receivedOn опционально (дефолт сегодня).
+  router.post(
+    '/projects/:projectId/finance/incomes',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const body = addIncomeSchema.parse(req.body);
+        const income = await deps.manageProjectFinance.addIncome(projectId, req.user!.id, {
+          amountKopecks: Math.round(body.amountRubles * 100),
+          source: body.source ?? null,
+          receivedOn: body.receivedOn ? new Date(body.receivedOn) : new Date(),
+        });
+        res.status(201).json({
+          income: {
+            id: income.id,
+            amountKopecks: income.amountKopecks,
+            source: income.source,
+            receivedOn: dateOnlyToIso(income.receivedOn),
+          },
+        });
       } catch (e) {
         next(e);
       }

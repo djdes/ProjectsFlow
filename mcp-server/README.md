@@ -51,9 +51,11 @@ claude mcp add --scope user projectsflow \
 | Tool | Описание |
 |---|---|
 | `pf_list_projects` | Список проектов юзера (id, name, status, hasKb, gitRepoUrl) |
+| `pf_get_project` | Метаданные одного проекта (id, name, status, hasKb, gitRepoUrl). 404 если юзер не member. |
 | `pf_list_user_repos` | GitHub-репозитории юзера (fullName, htmlUrl, description, private, pushedAt). Зови перед `pf_create_project`, чтобы найти похожий по названию и предложить «подключить существующий». |
 | `pf_create_project` | Создать проект. **Перед вызовом спроси у юзера про git** (см. ритуал ниже): `git.mode` = `none` / `connect` (привязать `gitRepoUrl`) / `create` (завести новый репо под GitHub-аккаунтом юзера, по умолчанию private). |
 | `pf_update_project` | Переименовать проект и/или привязать git-репо (`name` и/или `gitRepoUrl`). Требует роль editor+. |
+| `pf_list_members` | Состав команды проекта (userId, displayName, email, role, isAdmin, joinedAt). |
 
 ### Чтение / vault
 
@@ -69,19 +71,43 @@ claude mcp add --scope user projectsflow \
 |---|---|
 | `pf_list_tasks` | Список задач в проекте (id, title, description, status, position, commitCount, commentCount) |
 | `pf_get_task` | Полный task + все вложения inline + thread комментариев. Картинки — как `image`-блоки (агент их видит), остальное — как embedded resources. Comments в текстовом мета-блоке, oldest-first. Вызывай всегда когда берёшь задачу в работу — комменты часто содержат уточнения. |
+| `pf_search_tasks` | Глобальный поиск по задачам (≥2 симв.). Scope — проекты юзера; admin — все. Возвращает taskId, projectId, projectName, status, excerpt. |
 | `pf_create_task` | Создать новую задачу (по умолчанию падает в TODO в конец колонки) |
+| `pf_update_task` | Изменить описание задачи (editor+). |
+| `pf_delete_task` | Удалить задачу (необратимо, чистит комментарии). editor+. |
 | `pf_create_task_comment` | Оставить комментарий на задаче — для прогресс-апдейтов по ходу работы. Mentions `@displayName` парсятся сервером, рассылаются notifications. Author = owner agent-токена. |
 | `pf_move_task` | Перенести задачу на статус `todo` / `in_progress` / `done` (в конец колонки) |
 | `pf_link_commit_to_task` | Привязать SHA коммита к задаче — auto-transition `todo → in_progress` на первом коммите |
+| `pf_list_commits` | Коммиты, привязанные к задаче (sha, message, authorName, htmlUrl, committedAt). |
+| `pf_sync_commits` | Скан последних коммитов GitHub и авто-привязка к задачам по `[short-id]` в message. Возвращает linkedCount/autoTransitionedCount/scannedCount. |
 | `pf_list_pending_agent_jobs` | Top-N queued agent-job'ов по всем проектам юзера. Для /loop-полла. |
 | `pf_claim_agent_job` | Атомарный pickup queued→running. 409 если race. |
 | `pf_complete_agent_job` | Финализация job: ok=true с prUrl или ok=false с error. |
 
-### Произвольная запись в KB
+### База знаний (KB)
 
 | Tool | Описание |
 |---|---|
-| `pf_write_kb_document` | Создать или обновить любой `.md` в KB-репо. Для credential'ов предпочитай `pf_create_credential` — он сам делит на vault/frontmatter. |
+| `pf_create_local_kb` | Создать локальную KB (без git-репо), чтобы сразу сохранять креды/заметки. Опционально. |
+| `pf_list_kb_documents` | Все KB-доки проекта (path, title, kind, frontmatter, sha) — не только credentials. |
+| `pf_read_kb_document` | Прочитать KB-док целиком (path, frontmatter, body, sha). |
+| `pf_write_kb_document` | Создать или обновить любой `.md` в KB. Для credential'ов предпочитай `pf_create_credential` — он сам делит на vault/frontmatter. |
+| `pf_delete_kb_document` | Удалить KB-док по path (необратимо). editor+. |
+
+### Финансы
+
+| Tool | Описание |
+|---|---|
+| `pf_get_finance` | P&L-сводка проекта (труд/расходы/доходы/прибыль/маржа). Суммы — в рублях (`*Rubles`) и копейках (`*Kopecks`). Owner — всегда; member — если `finance_visibility='members'`. |
+| `pf_add_expense` | Добавить расход (owner). `amountRubles` в рублях, `category`, опц. `description`/`incurredOn` (YYYY-MM-DD, дефолт сегодня). |
+| `pf_add_income` | Добавить доход (owner). `amountRubles` в рублях, опц. `source`/`receivedOn`. |
+
+### Общий доступ к репозиторию
+
+| Tool | Описание |
+|---|---|
+| `pf_check_repo_usage` | Приватная проверка, занят ли git-репо чужим проектом. Возвращает `ownership` (none/self/other) + непрозрачный `requestTarget` (при other). НЕ раскрывает владельца/имя/число. |
+| `pf_request_repo_access` | Запрос общего доступа к чужому репо (передай `requestTarget` из check). Уведомляет владельца; доступ выдаёт он на сайте. Идемпотентно. |
 
 ## Пример: deploy с credentials
 
