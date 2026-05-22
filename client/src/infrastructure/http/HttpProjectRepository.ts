@@ -147,6 +147,10 @@ export class HttpProjectRepository implements ProjectRepository {
     }
   }
 
+  async reorder(orderedIds: readonly string[]): Promise<void> {
+    await httpClient.put<void>('/projects/reorder', { orderedIds });
+  }
+
   async listMembers(projectId: string): Promise<ProjectMember[]> {
     const { members } = await httpClient.get<{ members: MemberDto[] }>(
       `/projects/${projectId}/members`,

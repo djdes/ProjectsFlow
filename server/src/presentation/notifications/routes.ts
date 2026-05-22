@@ -4,6 +4,7 @@ import type { CountUnreadNotifications } from '../../application/notifications/C
 import type { MarkNotificationRead } from '../../application/notifications/MarkNotificationRead.js';
 import type { MarkAllNotificationsRead } from '../../application/notifications/MarkAllNotificationsRead.js';
 import type { Notification } from '../../domain/notifications/Notification.js';
+import type { RealtimeEvent } from '../../domain/realtime/RealtimeEvent.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 type Deps = {
@@ -13,6 +14,8 @@ type Deps = {
   readonly markAllRead: MarkAllNotificationsRead;
   // Подписка на real-time-доставку (SSE). Возвращает unsubscribe.
   readonly subscribe: (userId: string, fn: (n: Notification) => void) => () => void;
+  // Подписка на «тихие» доменные события (task/project changed) для live-обновления UI.
+  readonly subscribeRealtime: (userId: string, fn: (e: RealtimeEvent) => void) => () => void;
 };
 
 type NotificationDto = Omit<Notification, 'createdAt' | 'readAt'> & {
@@ -65,12 +68,20 @@ export function notificationsRouter(deps: Deps): Router {
     };
     const unsubscribe = deps.subscribe(req.user!.id, send);
 
+    // «Тихие» события: тот же коннект, отдельный event-тип 'realtime'. Клиент по ним
+    // рефетчит данные (без toast).
+    const sendRealtime = (e: RealtimeEvent): void => {
+      res.write(`event: realtime\ndata: ${JSON.stringify(e)}\n\n`);
+    };
+    const unsubscribeRealtime = deps.subscribeRealtime(req.user!.id, sendRealtime);
+
     // Heartbeat — не даёт прокси/браузеру закрыть «молчащий» коннект.
     const heartbeat = setInterval(() => res.write(': ping\n\n'), 25_000);
 
     req.on('close', () => {
       clearInterval(heartbeat);
       unsubscribe();
+      unsubscribeRealtime();
     });
   });
 

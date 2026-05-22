@@ -10,6 +10,8 @@ import { DrizzleProjectMemberRepository } from './infrastructure/repositories/Dr
 import { DrizzleProjectInviteRepository } from './infrastructure/repositories/DrizzleProjectInviteRepository.js';
 import { DrizzleNotificationRepository } from './infrastructure/repositories/DrizzleNotificationRepository.js';
 import { NotificationHub } from './infrastructure/notifications/NotificationHub.js';
+import { RealtimeHub } from './infrastructure/realtime/RealtimeHub.js';
+import { ProjectEventBroadcaster } from './application/realtime/ProjectEventBroadcaster.js';
 import { PublishingNotificationRepository } from './infrastructure/notifications/PublishingNotificationRepository.js';
 import { SmtpEmailSender } from './infrastructure/email/SmtpEmailSender.js';
 import { LoggingEmailSender } from './infrastructure/email/LoggingEmailSender.js';
@@ -27,6 +29,7 @@ import { configureAdminBypass } from './application/project/projectAccess.js';
 import { GetProject } from './application/project/GetProject.js';
 import { CreateProject } from './application/project/CreateProject.js';
 import { UpdateProject } from './application/project/UpdateProject.js';
+import { ReorderProjects } from './application/project/ReorderProjects.js';
 import { CreateProjectWithGit } from './application/project/CreateProjectWithGit.js';
 import { GetOrCreateInbox } from './application/project/GetOrCreateInbox.js';
 import { ListProjectMembers } from './application/project/ListProjectMembers.js';
@@ -138,6 +141,20 @@ const notificationRepo = new PublishingNotificationRepository(
   new DrizzleNotificationRepository(db),
   notificationHub,
 );
+// Real-time-события (task/project changed) для live-обновления UI без перезагрузки.
+// Транслируются всем участникам проекта по тому же SSE-коннекту, что и уведомления.
+const realtimeHub = new RealtimeHub();
+const projectEventBroadcaster = new ProjectEventBroadcaster({
+  members: projectMemberRepo,
+  publisher: realtimeHub,
+});
+// Best-effort: ошибка резолва участников не должна влиять на основной запрос.
+const notifyTaskChanged = (projectId: string): void => {
+  void projectEventBroadcaster.broadcast(projectId, 'task_changed').catch(() => {});
+};
+const notifyProjectChanged = (projectId: string): void => {
+  void projectEventBroadcaster.broadcast(projectId, 'project_changed').catch(() => {});
+};
 const githubTokenRepo = new DrizzleGithubTokenRepository(db);
 
 // Email: SMTP если задан SMTP_HOST, иначе логирующая заглушка (dev без почтовика).
@@ -232,6 +249,7 @@ const { app, devProxyUpgrade } = createApp({
       idGen: idGenerator,
     }),
     updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo }),
+    reorderProjects: new ReorderProjects({ members: projectMemberRepo }),
     listProjectCommits: new ListProjectCommits({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -298,6 +316,7 @@ const { app, devProxyUpgrade } = createApp({
       now,
     }),
     appUrl: process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? 'http://localhost:5173',
+    notifyProjectChanged,
   },
   notifications: {
     list: new ListNotifications({ repo: notificationRepo }),
@@ -305,6 +324,7 @@ const { app, devProxyUpgrade } = createApp({
     markRead: new MarkNotificationRead({ repo: notificationRepo, now }),
     markAllRead: new MarkAllNotificationsRead({ repo: notificationRepo, now }),
     subscribe: (userId, fn) => notificationHub.subscribe(userId, fn),
+    subscribeRealtime: (userId, fn) => realtimeHub.subscribe(userId, fn),
   },
   invites: {
     getByToken: new GetInviteByToken({
@@ -519,6 +539,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
     agentJobs: agentJobRepo,
+    notifyTaskChanged,
   },
   agent: {
     createAgentToken: new CreateAgentToken({

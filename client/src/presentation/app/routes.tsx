@@ -1,6 +1,5 @@
 import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
 import { AppShell } from '@/presentation/layout/AppShell';
-import { HomePage } from '@/presentation/pages/HomePage';
 import { ProjectPage } from '@/presentation/pages/ProjectPage';
 import { KbPage } from '@/presentation/pages/KbPage';
 import { TasksPage } from '@/presentation/pages/TasksPage';
@@ -54,8 +53,11 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { index: true, element: <HomePage /> },
-      { path: 'inbox', element: <InboxPage /> },
+      // Главная после авторизации — «Входящие» (inbox). HomePage («Выберите проект»)
+      // больше не используется как индекс.
+      { index: true, element: <InboxPage /> },
+      // Старые ссылки на /inbox редиректим на канонический «/».
+      { path: 'inbox', element: <Navigate to="/" replace /> },
       { path: 'notifications', element: <NotificationsPage /> },
       // Доска задач — «дом» проекта: при входе сразу показываем kanban.
       { path: 'projects/:projectId', element: <TasksPage /> },

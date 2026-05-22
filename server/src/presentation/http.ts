@@ -16,6 +16,7 @@ import type { ListProjects } from '../application/project/ListProjects.js';
 import type { GetProject } from '../application/project/GetProject.js';
 import type { CreateProject } from '../application/project/CreateProject.js';
 import type { UpdateProject } from '../application/project/UpdateProject.js';
+import type { ReorderProjects } from '../application/project/ReorderProjects.js';
 import type { CreateProjectWithGit } from '../application/project/CreateProjectWithGit.js';
 import type { GetOrCreateInbox } from '../application/project/GetOrCreateInbox.js';
 import type { ListProjectMembers } from '../application/project/ListProjectMembers.js';
@@ -71,6 +72,7 @@ import type { CountUnreadNotifications } from '../application/notifications/Coun
 import type { MarkNotificationRead } from '../application/notifications/MarkNotificationRead.js';
 import type { MarkAllNotificationsRead } from '../application/notifications/MarkAllNotificationsRead.js';
 import type { Notification as NotificationEntity } from '../domain/notifications/Notification.js';
+import type { RealtimeEvent } from '../domain/realtime/RealtimeEvent.js';
 import type { ListAllProjects } from '../application/admin/ListAllProjects.js';
 import type { ListAllUsers } from '../application/admin/ListAllUsers.js';
 import type { UpdateUserAsAdmin } from '../application/admin/UpdateUserAsAdmin.js';
@@ -132,6 +134,7 @@ type AppDeps = {
     readonly getProject: GetProject;
     readonly createProject: CreateProject;
     readonly updateProject: UpdateProject;
+    readonly reorderProjects: ReorderProjects;
     readonly listProjectCommits: ListProjectCommits;
     readonly getOrCreateInbox: GetOrCreateInbox;
     readonly listMembers: ListProjectMembers;
@@ -145,6 +148,7 @@ type AppDeps = {
     readonly requestJoin: RequestProjectJoin;
     readonly resolveJoinRequest: ResolveProjectJoinRequest;
     readonly appUrl: string;
+    readonly notifyProjectChanged: (projectId: string) => void;
   };
   readonly invites: {
     readonly getByToken: GetInviteByToken;
@@ -169,6 +173,10 @@ type AppDeps = {
     readonly markRead: MarkNotificationRead;
     readonly markAllRead: MarkAllNotificationsRead;
     readonly subscribe: (userId: string, fn: (n: NotificationEntity) => void) => () => void;
+    readonly subscribeRealtime: (
+      userId: string,
+      fn: (e: RealtimeEvent) => void,
+    ) => () => void;
   };
   readonly github: {
     readonly startDeviceFlow: StartDeviceFlow;
@@ -213,6 +221,7 @@ type AppDeps = {
     readonly deleteComment: DeleteTaskComment;
     readonly maxAttachmentBytes: number;
     readonly agentJobs: AgentJobRepository;
+    readonly notifyTaskChanged: (projectId: string) => void;
   };
   readonly agent: {
     readonly createAgentToken: CreateAgentToken;

@@ -36,4 +36,9 @@ export interface ProjectMemberRepository {
   add(input: AddMemberInput): Promise<ProjectMembership>;
   remove(projectId: string, userId: string): Promise<boolean>;
   updateRole(projectId: string, userId: string, role: ProjectRole): Promise<ProjectMembership | null>;
+
+  // Персональная пересортировка проектов в сайдбаре userId. orderedIds задаёт желаемый
+  // порядок; sort_order проставляется по индексу. id, по которым у юзера нет membership,
+  // игнорируются (UPDATE по (projectId,userId) просто не затронет строк).
+  reorderForUser(userId: string, orderedIds: readonly string[]): Promise<void>;
 }

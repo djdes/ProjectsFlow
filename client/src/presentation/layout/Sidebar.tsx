@@ -1,14 +1,18 @@
 import { Link, NavLink } from 'react-router-dom';
-import { Bell, Inbox, ListPlus, PanelLeft, Plus, Search, Shield } from 'lucide-react';
+import { Bell, Inbox, PanelLeft, Plus, Search, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import { useNewProjectDialog } from '@/presentation/components/forms/NewProjectDialogProvider';
 import { useAddTaskDialog } from '@/presentation/components/forms/AddTaskDialogProvider';
 import { useGlobalSearch } from '@/presentation/components/search/GlobalSearchProvider';
 import { useUnreadNotificationsCount } from '@/presentation/hooks/useUnreadNotificationsCount';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { useProjects } from '@/presentation/hooks/useProjects';
 import { SidebarProjectList } from './SidebarProjectList';
 import { SidebarUserMenu } from './SidebarUserMenu';
+
+// Лимит проектов на тариф. Сейчас у всех безлимит → показываем ∞. Когда появятся
+// тарифы, значение придёт из профиля/подписки и рендер ниже подхватит число.
+const PROJECT_LIMIT = Infinity;
 
 type SidebarProps = {
   // Передаётся только на desktop — рисует иконку сворачивания панели. На мобиле (drawer)
@@ -22,6 +26,11 @@ export function Sidebar({ onToggleCollapse }: SidebarProps): React.ReactElement 
   const { open: openNewProject } = useNewProjectDialog();
   const { open: openAddTask } = useAddTaskDialog();
   const { user } = useCurrentUser();
+  const { data: projects, loading: projectsLoading } = useProjects();
+
+  // Счётчик «N/∞»: считаем обычные проекты (без phantom-инбокса). Пока грузится — не
+  // показываем, чтобы не мигало «0/∞».
+  const ownProjectsCount = (projects ?? []).filter((p) => !p.isInbox).length;
 
   return (
     <aside className="grid h-full grid-rows-[auto_auto_auto_auto_auto_1fr_auto] gap-3 border-r bg-card/40 p-3">
@@ -73,11 +82,15 @@ export function Sidebar({ onToggleCollapse }: SidebarProps): React.ReactElement 
         )}
       </div>
 
-      {/* Главное действие: быстрое добавление задачи */}
-      <Button onClick={openAddTask} className="w-full justify-start gap-2">
-        <ListPlus className="size-4" />
-        Добавить задачу
-      </Button>
+      {/* Главное действие: быстрое добавление задачи. Без фона, зелёный акцент. */}
+      <button
+        type="button"
+        onClick={openAddTask}
+        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-semibold text-success transition-colors hover:bg-muted"
+      >
+        <Plus className="size-4 shrink-0" />
+        <span className="flex-1 text-left">Добавить задачу</span>
+      </button>
 
       <button
         type="button"
@@ -92,7 +105,8 @@ export function Sidebar({ onToggleCollapse }: SidebarProps): React.ReactElement 
       </button>
 
       <NavLink
-        to="/inbox"
+        to="/"
+        end
         className={({ isActive }) =>
           cn(
             'group relative flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
@@ -113,8 +127,13 @@ export function Sidebar({ onToggleCollapse }: SidebarProps): React.ReactElement 
       </NavLink>
 
       <div className="flex items-center justify-between px-2 pt-1">
-        <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-          Проекты
+        <span className="flex items-baseline gap-1.5 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+          Мои проекты
+          {!projectsLoading && (
+            <span className="tracking-normal tabular-nums normal-case opacity-70">
+              {ownProjectsCount}/{PROJECT_LIMIT === Infinity ? '∞' : PROJECT_LIMIT}
+            </span>
+          )}
         </span>
         <button
           type="button"

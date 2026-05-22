@@ -3,6 +3,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import type { Task, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { useAgentJobPolling } from './useAgentJobPolling';
+import { useRealtimeTaskRefresh } from './useRealtimeTaskRefresh';
 
 type State = {
   tasks: Task[];
@@ -38,6 +39,9 @@ export function useTasks(projectId: string): UseTasks {
   }, [refetch]);
 
   useAgentJobPolling(state.tasks, refetch);
+  // Live-обновление: рефетч при SSE-событии об изменении задач в этом проекте + при
+  // возврате фокуса. void — refetch возвращает Promise, нам результат не нужен.
+  useRealtimeTaskRefresh(projectId, () => void refetch());
 
   const create: UseTasks['create'] = async (input) => {
     const task = await taskRepository.create(projectId, input);

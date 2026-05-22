@@ -22,6 +22,7 @@ import { ListProjects } from '@/application/project/ListProjects';
 import { GetProject } from '@/application/project/GetProject';
 import { CreateProject } from '@/application/project/CreateProject';
 import { UpdateProject } from '@/application/project/UpdateProject';
+import { ReorderProjects } from '@/application/project/ReorderProjects';
 import { GetCurrentUser } from '@/application/user/GetCurrentUser';
 import { UpdateProfile } from '@/application/user/UpdateProfile';
 import type { AuthRepository } from '@/application/auth/AuthRepository';
@@ -45,6 +46,7 @@ type Container = {
   getProject: GetProject;
   createProject: CreateProject;
   updateProject: UpdateProject;
+  reorderProjects: ReorderProjects;
   getCurrentUser: GetCurrentUser;
   updateProfile: UpdateProfile;
   searchTasks: SearchTasks;
@@ -87,6 +89,7 @@ function buildContainer(): Container {
     getProject: new GetProject(projectRepo),
     createProject: new CreateProject(projectRepo),
     updateProject: new UpdateProject(projectRepo),
+    reorderProjects: new ReorderProjects(projectRepo),
     getCurrentUser: new GetCurrentUser(userRepo),
     updateProfile: new UpdateProfile(userRepo),
     searchTasks: new SearchTasks(taskSearchRepo),

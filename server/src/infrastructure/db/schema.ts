@@ -92,6 +92,8 @@ export const projectMembers = mysqlTable(
     userId: char('user_id', { length: 36 }).notNull(),
     role: mysqlEnum('role', ['owner', 'editor', 'viewer']).notNull(),
     joinedAt: timestamp('joined_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    // Персональный порядок проекта в сайдбаре этого юзера. См. db/023.
+    sortOrder: int('sort_order').notNull().default(0),
   },
   (t) => [
     uniqueIndex('pk_project_members').on(t.projectId, t.userId),

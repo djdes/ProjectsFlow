@@ -4,6 +4,13 @@ import { toast } from '@/components/ui/sonner';
 // Window-событие, по которому счётчик непрочитанных делает мгновенный refresh.
 export const NOTIFICATIONS_CHANGED_EVENT = 'pf:notifications-changed';
 
+// «Тихие» realtime-события: задачи/проект изменились — UI рефетчит данные (без toast).
+// detail.projectId — в каком проекте произошло изменение.
+export const TASK_CHANGED_EVENT = 'pf:task-changed';
+export const PROJECT_CHANGED_EVENT = 'pf:project-changed';
+
+type RealtimeEvent = { kind: 'task_changed' | 'project_changed'; projectId: string };
+
 type StreamPayload =
   | { type: 'comment_mention'; projectName: string; actorDisplayName: string }
   | { type: 'project_invite'; projectName: string; actorDisplayName: string }
@@ -37,6 +44,18 @@ export function useNotificationStream(): void {
         // битый payload — игнорируем, но бейдж всё равно обновим ниже.
       }
       window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT));
+    });
+
+    // «Тихие» доменные события — ретранслируем как window CustomEvent с projectId.
+    // Страницы/провайдеры по ним рефетчат данные.
+    source.addEventListener('realtime', (event) => {
+      try {
+        const data = JSON.parse((event as MessageEvent).data) as RealtimeEvent;
+        const name = data.kind === 'project_changed' ? PROJECT_CHANGED_EVENT : TASK_CHANGED_EVENT;
+        window.dispatchEvent(new CustomEvent(name, { detail: { projectId: data.projectId } }));
+      } catch {
+        // битый payload — игнорируем.
+      }
     });
 
     return () => source.close();
