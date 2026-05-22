@@ -20,6 +20,9 @@ type Props = {
   onQuickPromote?: (task: Task) => void;
   // Триггер refetch после изменения agent-job на карточке (enqueue / cancel).
   onTaskChanged?: () => void;
+  // Доп. контрол в шапке колонки (слева от «+»). Сейчас используется done-колонкой
+  // для переключателя порядка сортировки.
+  headerExtra?: React.ReactNode;
 };
 
 export function KanbanColumn({
@@ -32,6 +35,7 @@ export function KanbanColumn({
   showShortId = true,
   onQuickPromote,
   onTaskChanged,
+  headerExtra,
 }: Props): React.ReactElement {
   // Droppable нужен чтобы можно было кинуть карточку в ПУСТУЮ колонку —
   // SortableContext один не реагирует на drop в empty list.
@@ -41,7 +45,7 @@ export function KanbanColumn({
   });
 
   return (
-    <div className="flex w-72 shrink-0 flex-col rounded-lg border bg-muted/30">
+    <div className="flex w-[82vw] max-w-[20rem] shrink-0 snap-start flex-col rounded-lg border bg-muted/30 sm:w-72 sm:max-w-none">
       <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
         <div className="flex items-center gap-2">
           {label.length > 0 && (
@@ -53,15 +57,18 @@ export function KanbanColumn({
             {tasks.length}
           </span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-6"
-          onClick={() => onCreate(status)}
-          aria-label="Добавить задачу"
-        >
-          <Plus className="size-4" />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          {headerExtra}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6"
+            onClick={() => onCreate(status)}
+            aria-label="Добавить задачу"
+          >
+            <Plus className="size-4" />
+          </Button>
+        </div>
       </div>
 
       <div

@@ -12,10 +12,13 @@ import {
   type DropAnimation,
 } from '@dnd-kit/core';
 import { motion } from 'motion/react';
+import { ArrowDownNarrowWide, ArrowUpNarrowWide } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import type { Task, TaskStatus } from '@/domain/task/Task';
 import { TASK_STATUSES } from '@/domain/task/Task';
 import { useTasks } from '@/presentation/hooks/useTasks';
+import { useDoneSortOrder, type DoneSortOrder } from '@/presentation/hooks/useDoneSortOrder';
 import { KanbanCard } from './KanbanCard';
 import { KanbanColumn } from './KanbanColumn';
 import { PipelinePanel } from './PipelinePanel';
@@ -63,10 +66,21 @@ const MEASURING_CONFIG = {
   droppable: { strategy: MeasuringStrategy.Always },
 };
 
-function groupByStatus(tasks: Task[]): Record<TaskStatus, Task[]> {
+function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStatus, Task[]> {
   const out: Record<TaskStatus, Task[]> = { backlog: [], todo: [], in_progress: [], done: [] };
   for (const t of tasks) out[t.status].push(t);
-  for (const s of TASK_STATUSES) out[s].sort((a, b) => a.position - b.position);
+  for (const s of TASK_STATUSES) {
+    if (s === 'done') {
+      // Готовые сортируем по времени завершения (updatedAt), а не по position:
+      // перенос в done обновляет updatedAt, поэтому свежевыполненная задача сама
+      // встаёт наверх при 'newest'. Это развязывает порядок done с position и не
+      // конфликтует с drag-математикой (она привязана к position в остальных колонках).
+      const dir = doneOrder === 'newest' ? -1 : 1;
+      out[s].sort((a, b) => dir * (a.updatedAt.getTime() - b.updatedAt.getTime()));
+    } else {
+      out[s].sort((a, b) => a.position - b.position);
+    }
+  }
   return out;
 }
 
@@ -83,7 +97,8 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
   // Чувствительность: 5px минимум до старта drag — иначе одиночный клик ловится как drag.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const grouped = useMemo(() => groupByStatus(tasks), [tasks]);
+  const { order: doneOrder, toggle: toggleDoneOrder } = useDoneSortOrder();
+  const grouped = useMemo(() => groupByStatus(tasks, doneOrder), [tasks, doneOrder]);
   const activeTask = activeId ? tasks.find((t) => t.id === activeId) ?? null : null;
 
   const handleDragStart = (e: DragStartEvent): void => {
@@ -201,9 +216,12 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
     return (
       <div className="space-y-6">
         <div className="h-24 animate-pulse rounded-lg bg-muted" />
-        <div className="flex gap-4">
+        <div className="flex gap-4 overflow-x-auto">
           {TASK_STATUSES.map((s) => (
-            <div key={s} className="h-64 w-72 animate-pulse rounded-lg bg-muted" />
+            <div
+              key={s}
+              className="h-64 w-[82vw] max-w-[20rem] shrink-0 animate-pulse rounded-lg bg-muted sm:w-72 sm:max-w-none"
+            />
           ))}
         </div>
       </div>
@@ -223,7 +241,10 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        {/* На мобиле колонки занимают почти всю ширину и «прилипают» при свайпе
+            (snap), на десктопе — обычный горизонтальный ряд. Drag между колонками
+            работает в обоих режимах: все колонки в DOM, просто проскроллены. */}
+        <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 sm:snap-none">
           {TASK_STATUSES.map((status) => (
             <KanbanColumn
               key={status}
@@ -236,6 +257,28 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
               showShortId={showCommits}
               onQuickPromote={status === 'backlog' ? handleQuickPromote : undefined}
               onTaskChanged={() => void refetch()}
+              headerExtra={
+                status === 'done' ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6"
+                    onClick={toggleDoneOrder}
+                    aria-label={
+                      doneOrder === 'newest'
+                        ? 'Сейчас сверху новые. Показать сначала старые'
+                        : 'Сейчас сверху старые. Показать сначала новые'
+                    }
+                    title={doneOrder === 'newest' ? 'Сверху новые' : 'Сверху старые'}
+                  >
+                    {doneOrder === 'newest' ? (
+                      <ArrowDownNarrowWide className="size-4" />
+                    ) : (
+                      <ArrowUpNarrowWide className="size-4" />
+                    )}
+                  </Button>
+                ) : undefined
+              }
             />
           ))}
         </div>
