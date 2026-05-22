@@ -46,11 +46,19 @@ claude mcp add --scope user projectsflow \
 
 ## Инструменты
 
+### Проекты
+
+| Tool | Описание |
+|---|---|
+| `pf_list_projects` | Список проектов юзера (id, name, status, hasKb, gitRepoUrl) |
+| `pf_list_user_repos` | GitHub-репозитории юзера (fullName, htmlUrl, description, private, pushedAt). Зови перед `pf_create_project`, чтобы найти похожий по названию и предложить «подключить существующий». |
+| `pf_create_project` | Создать проект. **Перед вызовом спроси у юзера про git** (см. ритуал ниже): `git.mode` = `none` / `connect` (привязать `gitRepoUrl`) / `create` (завести новый репо под GitHub-аккаунтом юзера, по умолчанию private). |
+| `pf_update_project` | Переименовать проект и/или привязать git-репо (`name` и/или `gitRepoUrl`). Требует роль editor+. |
+
 ### Чтение / vault
 
 | Tool | Описание |
 |---|---|
-| `pf_list_projects` | Список проектов юзера (id, name, hasKb, gitRepoUrl) |
 | `pf_list_credentials` | Список credential-файлов в проекте (slug, title, kind) |
 | `pf_get_credential` | Полный credential с резолвленными секретами (plaintext) |
 | `pf_create_credential` | Создание нового credential'а: structured fields с явным `isSecret` → frontmatter + vault |
@@ -59,7 +67,7 @@ claude mcp add --scope user projectsflow \
 
 | Tool | Описание |
 |---|---|
-| `pf_list_tasks` | Список задач в проекте (id, title, description, status, position, commitCount, attachmentCount) |
+| `pf_list_tasks` | Список задач в проекте (id, title, description, status, position, commitCount, commentCount) |
 | `pf_get_task` | Полный task + все вложения inline + thread комментариев. Картинки — как `image`-блоки (агент их видит), остальное — как embedded resources. Comments в текстовом мета-блоке, oldest-first. Вызывай всегда когда берёшь задачу в работу — комменты часто содержат уточнения. |
 | `pf_create_task` | Создать новую задачу (по умолчанию падает в TODO в конец колонки) |
 | `pf_create_task_comment` | Оставить комментарий на задаче — для прогресс-апдейтов по ходу работы. Mentions `@displayName` парсятся сервером, рассылаются notifications. Author = owner agent-токена. |
@@ -102,6 +110,25 @@ Claude: [runs git commit + git push, gets SHA=a1b2c3d]
    [calls pf_move_task with targetStatus=done → task in done column]
    Done. Task linked + moved.
 ```
+
+## Пример: создание проекта (ритуал «спроси про git»)
+
+Перед `pf_create_project` всегда уточняй про репозиторий — не создавай молча.
+
+```
+You: заведи проект «Лендинг Acme»
+Claude: [calls pf_list_user_repos → видит репо "djdes/acme-landing"]
+   Нашёл похожий репозиторий djdes/acme-landing. Как с git?
+   1) подключить acme-landing  2) создать новый репо  3) без репо
+You: подключай acme-landing
+Claude: [calls pf_create_project name="Лендинг Acme",
+           git={mode:"connect", gitRepoUrl:"https://github.com/djdes/acme-landing"}]
+   Готово — проект создан и привязан к acme-landing.
+```
+
+Для нового репо: `git={mode:"create", repoName:"acme-landing", private:true}` — сервер
+заведёт репозиторий под GitHub-аккаунтом юзера (тем, что подключён на сайте) и привяжет его.
+Если у юзера не подключён GitHub — вернётся `409 github_not_connected`.
 
 ## Revocation
 

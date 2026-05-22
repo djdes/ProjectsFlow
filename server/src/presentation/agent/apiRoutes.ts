@@ -1,6 +1,10 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import type { ListProjects } from '../../application/project/ListProjects.js';
+import type { CreateProjectWithGit } from '../../application/project/CreateProjectWithGit.js';
+import type { UpdateProject } from '../../application/project/UpdateProject.js';
+import type { ListUserRepos } from '../../application/github/ListUserRepos.js';
+import type { GithubRepoSummary } from '../../domain/github/GithubConnection.js';
 import type { ListKbDocuments } from '../../application/kb/ListKbDocuments.js';
 import type { GetAgentCredential } from '../../application/agent/GetAgentCredential.js';
 import type { GetAgentTask } from '../../application/agent/GetAgentTask.js';
@@ -36,6 +40,9 @@ import { writeDocSchema } from '../kb/schemas.js';
 type Deps = {
   readonly authenticate: AuthenticateAgentToken;
   readonly listProjects: ListProjects;
+  readonly createProjectWithGit: CreateProjectWithGit;
+  readonly updateProject: UpdateProject;
+  readonly listUserRepos: ListUserRepos;
   readonly listKbDocuments: ListKbDocuments;
   readonly getCredential: GetAgentCredential;
   readonly createCredential: CreateAgentCredential;
@@ -117,6 +124,68 @@ const completeAgentJobBodySchema = z.object({
   branchName: z.string().max(200).nullable().optional(),
 });
 
+// git-опция при создании проекта: подключить существующий репо / создать новый / никакой.
+const createProjectSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  git: z
+    .discriminatedUnion('mode', [
+      z.object({ mode: z.literal('none') }),
+      z.object({ mode: z.literal('connect'), gitRepoUrl: z.string().url() }),
+      z.object({
+        mode: z.literal('create'),
+        repoName: z.string().trim().min(1).max(100).optional(),
+        description: z.string().max(350).optional(),
+        private: z.boolean().optional(),
+      }),
+    ])
+    .optional(),
+});
+
+const updateProjectSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    gitRepoUrl: z.string().url().nullable().optional(),
+  })
+  .refine((v) => v.name !== undefined || v.gitRepoUrl !== undefined, {
+    message: 'нужно хотя бы одно поле (name или gitRepoUrl)',
+  });
+
+type ProjectDto = {
+  id: string;
+  name: string;
+  status: Project['status'];
+  hasKb: boolean;
+  gitRepoUrl: string | null;
+};
+
+function projectToAgentDto(p: Project): ProjectDto {
+  return {
+    id: p.id,
+    name: p.name,
+    status: p.status,
+    hasKb: p.kbRepoFullName !== null,
+    gitRepoUrl: p.gitRepoUrl,
+  };
+}
+
+type RepoDto = {
+  fullName: string;
+  htmlUrl: string;
+  description: string | null;
+  private: boolean;
+  pushedAt: string | null;
+};
+
+function repoToDto(r: GithubRepoSummary): RepoDto {
+  return {
+    fullName: r.fullName,
+    htmlUrl: r.htmlUrl,
+    description: r.description,
+    private: r.private,
+    pushedAt: r.pushedAt ? r.pushedAt.toISOString() : null,
+  };
+}
+
 // Endpoints для agents (MCP-сервер). Авторизация через Bearer-токен.
 export function agentApiRouter(deps: Deps): Router {
   const router = Router();
@@ -136,6 +205,50 @@ export function agentApiRouter(deps: Deps): Router {
           gitRepoUrl: p.gitRepoUrl,
         })),
       });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // GitHub-репозитории пользователя — чтобы перед созданием проекта агент мог найти
+  // похожий по названию и предложить «подключить существующий».
+  router.get('/repos', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const repos = await deps.listUserRepos.execute(req.user!.id);
+      res.json({ repos: repos.map(repoToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Создание нового проекта. git-режим выбирает пользователь (агент спрашивает заранее):
+  // none — без репо; connect — привязать существующий gitRepoUrl; create — завести
+  // новый репозиторий под GitHub-аккаунтом пользователя и привязать его.
+  router.post('/projects', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = createProjectSchema.parse(req.body);
+      const project = await deps.createProjectWithGit.execute({
+        ownerId: req.user!.id,
+        name: body.name,
+        git: body.git ?? { mode: 'none' },
+      });
+      res.status(201).json({ project: projectToAgentDto(project) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Изменение проекта: переименование и/или привязка git-репо. Требует роль editor+.
+  router.patch('/projects/:projectId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projectId = req.params['projectId'] as string;
+      const body = updateProjectSchema.parse(req.body);
+      const project = await deps.updateProject.execute({
+        id: projectId,
+        ownerId: req.user!.id,
+        patch: { name: body.name, gitRepoUrl: body.gitRepoUrl },
+      });
+      res.json({ project: projectToAgentDto(project) });
     } catch (e) {
       next(e);
     }

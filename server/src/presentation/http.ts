@@ -16,6 +16,7 @@ import type { ListProjects } from '../application/project/ListProjects.js';
 import type { GetProject } from '../application/project/GetProject.js';
 import type { CreateProject } from '../application/project/CreateProject.js';
 import type { UpdateProject } from '../application/project/UpdateProject.js';
+import type { CreateProjectWithGit } from '../application/project/CreateProjectWithGit.js';
 import type { GetOrCreateInbox } from '../application/project/GetOrCreateInbox.js';
 import type { ListProjectMembers } from '../application/project/ListProjectMembers.js';
 import type { RemoveProjectMember } from '../application/project/RemoveProjectMember.js';
@@ -195,6 +196,9 @@ type AppDeps = {
     readonly getDeviceCodeInfo: GetAgentDeviceCodeInfo;
     // Переиспользуемые порты для agent API
     readonly listProjects: ListProjects;
+    readonly createProjectWithGit: CreateProjectWithGit;
+    readonly updateProject: UpdateProject;
+    readonly listUserRepos: ListUserRepos;
     readonly listKbDocuments: ListKbDocuments;
     readonly listTasks: ListTasks;
     readonly createTask: CreateTask;
@@ -286,6 +290,9 @@ export function createApp(deps: AppDeps): CreatedApp {
     agentApiRouter({
       authenticate: deps.agent.authenticateAgentToken,
       listProjects: deps.agent.listProjects,
+      createProjectWithGit: deps.agent.createProjectWithGit,
+      updateProject: deps.agent.updateProject,
+      listUserRepos: deps.agent.listUserRepos,
       listKbDocuments: deps.agent.listKbDocuments,
       getCredential: deps.agent.getAgentCredential,
       createCredential: deps.agent.createAgentCredential,

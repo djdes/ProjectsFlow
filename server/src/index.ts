@@ -21,6 +21,7 @@ import { ListProjects } from './application/project/ListProjects.js';
 import { GetProject } from './application/project/GetProject.js';
 import { CreateProject } from './application/project/CreateProject.js';
 import { UpdateProject } from './application/project/UpdateProject.js';
+import { CreateProjectWithGit } from './application/project/CreateProjectWithGit.js';
 import { GetOrCreateInbox } from './application/project/GetOrCreateInbox.js';
 import { ListProjectMembers } from './application/project/ListProjectMembers.js';
 import { RemoveProjectMember } from './application/project/RemoveProjectMember.js';
@@ -446,6 +447,18 @@ const { app, devProxyUpgrade } = createApp({
     }),
     // Переиспользуем существующие use-cases для agent-эндпоинтов
     listProjects: new ListProjects(projectMemberRepo),
+    createProjectWithGit: new CreateProjectWithGit({
+      createProject: new CreateProject({
+        repo: projectRepo,
+        members: projectMemberRepo,
+        idGen: idGenerator,
+      }),
+      updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo }),
+      tokens: githubTokenRepo,
+      api: githubApi,
+    }),
+    updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo }),
+    listUserRepos: new ListUserRepos({ tokens: githubTokenRepo, api: githubApi }),
     listKbDocuments: new ListKbDocuments({
       projects: projectRepo,
       members: projectMemberRepo,

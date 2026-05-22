@@ -6,6 +6,9 @@
 // проектами, credential-vault и kanban-задачами:
 //
 //   - pf_list_projects         — список проектов юзера
+//   - pf_list_user_repos       — GitHub-репозитории юзера (для подбора перед созданием)
+//   - pf_create_project        — создать проект (+ опционально завести/привязать git-репо)
+//   - pf_update_project        — переименовать проект / привязать git-репо
 //   - pf_list_credentials      — список credential-файлов в проекте
 //   - pf_get_credential        — полный credential с резолвленными секретами
 //   - pf_list_tasks            — список kanban-задач в проекте
@@ -42,6 +45,72 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {},
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_list_user_repos',
+    description:
+      "List the authenticated user's GitHub repositories (most recently pushed first). " +
+      'Returns fullName, htmlUrl, description, private, pushedAt. Use this BEFORE ' +
+      'pf_create_project to look for an existing repo whose name resembles the new project — ' +
+      'so you can offer to connect it instead of creating a duplicate. Requires the user to ' +
+      'have connected GitHub on the site (otherwise 409 github_not_connected).',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'pf_create_project',
+    description:
+      'Create a new ProjectsFlow project for the current user. IMPORTANT — decide the git ' +
+      'option WITH THE USER before calling: (1) call pf_list_user_repos and look for a repo ' +
+      'whose name resembles `name`; (2) ask the user whether to CONNECT an existing repo ' +
+      '(suggest the closest match), CREATE a new repo under their GitHub account, or use ' +
+      "NEITHER. Put the decision in `git` (omit = none). For git.mode='create' with a " +
+      'non-latin project name, also pass a latin `repoName` (GitHub repo names must be ASCII). ' +
+      'New repos default to private. Returns the created project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Project name (shown in UI; may be Cyrillic)' },
+        git: {
+          type: 'object',
+          description: 'Git option chosen by the user. Omit for no repo.',
+          properties: {
+            mode: { type: 'string', enum: ['none', 'connect', 'create'] },
+            gitRepoUrl: {
+              type: 'string',
+              description: "mode='connect': full https URL of the existing repo",
+            },
+            repoName: {
+              type: 'string',
+              description: "mode='create': repo name (ASCII); defaults to a slug of the project name",
+            },
+            description: { type: 'string', description: "mode='create': repo description" },
+            private: { type: 'boolean', description: "mode='create': private repo (default true)" },
+          },
+          required: ['mode'],
+        },
+      },
+      required: ['name'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_update_project',
+    description:
+      'Update a project: rename it and/or attach a git repository. Pass at least one of ' +
+      'name / gitRepoUrl. Requires editor+ role on the project. Returns the updated project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        name: { type: 'string', description: 'New project name' },
+        gitRepoUrl: {
+          type: ['string', 'null'],
+          description: 'GitHub repo URL to attach (null to detach)',
+        },
+      },
+      required: ['projectId'],
       additionalProperties: false,
     },
   },
@@ -357,6 +426,30 @@ const TOOLS = [
 ];
 
 // Input schemas для validation (zod вместо ручного парсинга).
+const CreateProjectInputZ = z.object({
+  name: z.string().trim().min(1).max(200),
+  git: z
+    .discriminatedUnion('mode', [
+      z.object({ mode: z.literal('none') }),
+      z.object({ mode: z.literal('connect'), gitRepoUrl: z.string().url() }),
+      z.object({
+        mode: z.literal('create'),
+        repoName: z.string().trim().min(1).max(100).optional(),
+        description: z.string().max(350).optional(),
+        private: z.boolean().optional(),
+      }),
+    ])
+    .optional(),
+});
+const UpdateProjectInputZ = z
+  .object({
+    projectId: z.string().min(1),
+    name: z.string().trim().min(1).max(200).optional(),
+    gitRepoUrl: z.string().url().nullable().optional(),
+  })
+  .refine((v) => v.name !== undefined || v.gitRepoUrl !== undefined, {
+    message: 'нужно хотя бы одно поле (name или gitRepoUrl)',
+  });
 const ListCredentialsInput = z.object({ projectId: z.string().min(1) });
 const GetCredentialInput = z.object({
   projectId: z.string().min(1),
@@ -431,7 +524,7 @@ async function main(): Promise<void> {
   const api = new ApiClient(config);
 
   const server = new Server(
-    { name: 'projectsflow', version: '0.7.0' },
+    { name: 'projectsflow', version: '0.8.0' },
     { capabilities: { tools: {} } },
   );
 
@@ -444,6 +537,23 @@ async function main(): Promise<void> {
         case 'pf_list_projects': {
           const projects = await api.listProjects();
           return jsonResult(projects);
+        }
+        case 'pf_list_user_repos': {
+          const repos = await api.listUserRepos();
+          return jsonResult(repos);
+        }
+        case 'pf_create_project': {
+          const input = CreateProjectInputZ.parse(req.params.arguments ?? {});
+          const project = await api.createProject({ name: input.name, git: input.git });
+          return jsonResult(project);
+        }
+        case 'pf_update_project': {
+          const input = UpdateProjectInputZ.parse(req.params.arguments ?? {});
+          const project = await api.updateProject(input.projectId, {
+            name: input.name,
+            gitRepoUrl: input.gitRepoUrl,
+          });
+          return jsonResult(project);
         }
         case 'pf_list_credentials': {
           const input = ListCredentialsInput.parse(req.params.arguments ?? {});

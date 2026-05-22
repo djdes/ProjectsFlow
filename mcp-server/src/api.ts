@@ -11,6 +11,30 @@ export type Project = {
   gitRepoUrl: string | null;
 };
 
+export type UserRepo = {
+  fullName: string;
+  htmlUrl: string;
+  description: string | null;
+  private: boolean;
+  pushedAt: string | null;
+};
+
+// git-опция при создании проекта (см. pf_create_project).
+export type CreateProjectGit =
+  | { mode: 'none' }
+  | { mode: 'connect'; gitRepoUrl: string }
+  | { mode: 'create'; repoName?: string; description?: string; private?: boolean };
+
+export type CreateProjectInput = {
+  name: string;
+  git?: CreateProjectGit;
+};
+
+export type UpdateProjectInput = {
+  name?: string;
+  gitRepoUrl?: string | null;
+};
+
 export type CredentialSummary = {
   slug: string;
   path: string;
@@ -183,6 +207,27 @@ export class ApiClient {
   async listProjects(): Promise<Project[]> {
     const { projects } = await this.request<{ projects: Project[] }>('/agent/projects');
     return projects;
+  }
+
+  async listUserRepos(): Promise<UserRepo[]> {
+    const { repos } = await this.request<{ repos: UserRepo[] }>('/agent/repos');
+    return repos;
+  }
+
+  async createProject(input: CreateProjectInput): Promise<Project> {
+    const { project } = await this.request<{ project: Project }>('/agent/projects', {
+      method: 'POST',
+      body: input,
+    });
+    return project;
+  }
+
+  async updateProject(projectId: string, patch: UpdateProjectInput): Promise<Project> {
+    const { project } = await this.request<{ project: Project }>(
+      `/agent/projects/${encodeURIComponent(projectId)}`,
+      { method: 'PATCH', body: patch },
+    );
+    return project;
   }
 
   async listCredentials(projectId: string): Promise<CredentialSummary[]> {
