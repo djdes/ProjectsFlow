@@ -7,6 +7,7 @@ import { TasksPage } from '@/presentation/pages/TasksPage';
 import { InboxPage } from '@/presentation/pages/InboxPage';
 import { NotificationsPage } from '@/presentation/pages/NotificationsPage';
 import { ProfilePage } from '@/presentation/pages/ProfilePage';
+import { FinancePage } from '@/presentation/pages/FinancePage';
 import { AdminPage } from '@/presentation/pages/AdminPage';
 import { NotFoundPage } from '@/presentation/pages/NotFoundPage';
 import { LoginPage } from '@/presentation/pages/LoginPage';
@@ -61,6 +62,7 @@ export const router = createBrowserRouter([
       // Обзор/настройки проекта (git, KB, команда) переехали на отдельный роут.
       { path: 'projects/:projectId/overview', element: <ProjectPage /> },
       { path: 'projects/:projectId/kb', element: <KbPage /> },
+      { path: 'projects/:projectId/finance', element: <FinancePage /> },
       // Обратная совместимость со старыми ссылками на доску (напр. из уведомлений).
       { path: 'projects/:projectId/tasks', element: <LegacyTasksRedirect /> },
       { path: 'profile', element: <ProfilePage /> },

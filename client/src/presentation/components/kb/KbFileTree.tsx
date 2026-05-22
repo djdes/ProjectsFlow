@@ -12,7 +12,7 @@ type Props = {
   onBulkCreate?: (folder: string) => void;
 };
 
-const FOLDER_ORDER = ['credentials', 'decisions', 'services', 'schemas', 'runbooks', 'notes'];
+const FOLDER_ORDER = ['credentials', 'decisions', 'services', 'schemas', 'runbooks', 'notes', 'agents'];
 
 export const FOLDER_TO_TYPE: Record<string, string> = {
   credentials: 'credential',
@@ -21,6 +21,7 @@ export const FOLDER_TO_TYPE: Record<string, string> = {
   schemas: 'schema',
   runbooks: 'runbook',
   notes: 'note',
+  agents: 'agent',
 };
 
 function folderOf(path: string): string {

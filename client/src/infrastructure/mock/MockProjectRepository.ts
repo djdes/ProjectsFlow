@@ -46,6 +46,7 @@ export class MockProjectRepository implements ProjectRepository {
       kbRepoFullName: null,
       isInbox: true,
       role: 'owner',
+      financeVisibility: 'owner',
       createdAt: new Date(),
     };
     this.projects.unshift(inbox);
@@ -65,6 +66,7 @@ export class MockProjectRepository implements ProjectRepository {
       kbRepoFullName: null,
       isInbox: false,
       role: 'owner',
+      financeVisibility: 'owner',
       createdAt: new Date(),
     };
     // Новые проекты — наверху списка: user видит результат там, где он его ждёт

@@ -60,6 +60,11 @@ import {
   TaskAlreadyHasActiveAgentJobError,
   TaskMissingDescriptionError,
 } from '../../domain/agent/errors.js';
+import {
+  AssignmentNotFoundError,
+  EmployeeNotFoundError,
+  FinanceValidationError,
+} from '../../domain/finance/errors.js';
 
 type ErrorPayload = {
   error: string;
@@ -327,6 +332,19 @@ export function errorHandler(
   }
   if (err instanceof AgentDeviceCodeAlreadyApprovedError) {
     res.status(409).json({ error: 'already_approved', message: 'Код уже approved' });
+    return;
+  }
+
+  if (err instanceof EmployeeNotFoundError) {
+    res.status(404).json({ error: 'employee_not_found' });
+    return;
+  }
+  if (err instanceof AssignmentNotFoundError) {
+    res.status(404).json({ error: 'assignment_not_found' });
+    return;
+  }
+  if (err instanceof FinanceValidationError) {
+    res.status(400).json({ error: 'finance_validation', message: err.message });
     return;
   }
 

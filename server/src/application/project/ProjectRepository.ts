@@ -13,6 +13,7 @@ export type UpdateProjectInput = {
   readonly name?: string;
   readonly gitRepoUrl?: string | null;
   readonly kbRepoFullName?: string | null;
+  readonly financeVisibility?: 'owner' | 'members';
 };
 
 // Multi-tenancy: проверка доступа НЕ внутри ProjectRepository — она в use-case'ах через

@@ -50,6 +50,7 @@ function toProject(row: ProjectRow): Project {
     gitRepoUrl: row.gitRepoUrl ?? null,
     kbRepoFullName: row.kbRepoFullName ?? null,
     isInbox: row.isInbox,
+    financeVisibility: row.financeVisibility,
     createdAt: row.createdAt,
   };
 }

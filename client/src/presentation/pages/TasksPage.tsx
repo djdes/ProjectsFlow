@@ -1,40 +1,12 @@
-import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronRight, RefreshCw, Settings } from 'lucide-react';
+import { BookOpen, ChevronRight, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { toast } from '@/components/ui/sonner';
 import { useProject } from '@/presentation/hooks/useProject';
-import { useContainer } from '@/infrastructure/di/container';
 import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
 
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
   const { data, loading, notFound } = useProject(projectId ?? '');
-  const { taskRepository } = useContainer();
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [syncing, setSyncing] = useState(false);
-
-  const sync = async (): Promise<void> => {
-    if (!data) return;
-    setSyncing(true);
-    try {
-      const r = await taskRepository.syncCommits(data.id);
-      const linkedMsg =
-        r.linkedCount === 0
-          ? 'Новых привязок не найдено'
-          : `Привязано ${r.linkedCount} коммит(ов)${
-              r.autoTransitionedCount > 0
-                ? `, ${r.autoTransitionedCount} задач(а) переведено в работу`
-                : ''
-            }`;
-      toast.success(linkedMsg, { description: `Просканировано ${r.scannedCount} коммитов` });
-      setRefreshKey((k) => k + 1);
-    } catch (e) {
-      toast.error(`Не удалось синхронизировать: ${(e as Error).message}`);
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -72,26 +44,21 @@ export function TasksPage(): React.ReactElement {
         <h1 className="text-3xl font-semibold tracking-tight">Задачи</h1>
         <div className="flex flex-wrap items-center gap-2">
           <Button asChild variant="outline" size="sm">
-            <Link to={`/projects/${data.id}/overview`}>
-              <Settings className="size-4" />
-              Обзор проекта
+            <Link to={`/projects/${data.id}/kb`}>
+              <BookOpen className="size-4" />
+              База знаний
             </Link>
           </Button>
-          <Button variant="outline" size="sm" onClick={sync} disabled={syncing || !data.gitRepoUrl}>
-            <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
-            Синхронизировать коммиты
+          <Button asChild variant="outline" size="sm">
+            <Link to={`/projects/${data.id}/overview`}>
+              <Settings className="size-4" />
+              Настройки
+            </Link>
           </Button>
         </div>
       </div>
 
-      {!data.gitRepoUrl && (
-        <p className="text-xs text-muted-foreground">
-          Авто-привязка коммитов работает только когда у проекта подключён git-репозиторий. Привяжи
-          его в карточке проекта.
-        </p>
-      )}
-
-      <KanbanBoard key={refreshKey} projectId={data.id} projectName={data.name} />
+      <KanbanBoard projectId={data.id} projectName={data.name} />
     </div>
   );
 }

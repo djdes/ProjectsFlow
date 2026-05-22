@@ -115,6 +115,11 @@ import { DrizzleAdminRepository } from './infrastructure/repositories/DrizzleAdm
 import { ListAllProjects } from './application/admin/ListAllProjects.js';
 import { ListAllUsers } from './application/admin/ListAllUsers.js';
 import { UpdateUserAsAdmin } from './application/admin/UpdateUserAsAdmin.js';
+import { DrizzleEmployeeRepository } from './infrastructure/repositories/DrizzleEmployeeRepository.js';
+import { DrizzleProjectFinanceRepository } from './infrastructure/repositories/DrizzleProjectFinanceRepository.js';
+import { ManageEmployees } from './application/finance/ManageEmployees.js';
+import { ManageProjectFinance } from './application/finance/ManageProjectFinance.js';
+import { GetProjectFinance } from './application/finance/GetProjectFinance.js';
 import { createApp } from './presentation/http.js';
 import { config, sessionTtlMs } from './presentation/config.js';
 
@@ -166,6 +171,8 @@ const agentJobRepo = new DrizzleAgentJobRepository(db);
 const taskSearchRepo = new DrizzleTaskSearchRepository(db);
 const projectJoinRequestRepo = new DrizzleProjectJoinRequestRepository(db);
 const adminRepo = new DrizzleAdminRepository(db);
+const employeeRepo = new DrizzleEmployeeRepository(db);
+const projectFinanceRepo = new DrizzleProjectFinanceRepository(db);
 
 // Admin-bypass: системный админ (users.is_admin) получает доступ ко всем проектам
 // через requireProjectAccess. Кешировать не нужно — getById дешёвый, вызов на access-check.
@@ -319,6 +326,29 @@ const { app, devProxyUpgrade } = createApp({
     listAllProjects: new ListAllProjects(adminRepo),
     listAllUsers: new ListAllUsers(adminRepo),
     updateUser: new UpdateUserAsAdmin(adminRepo),
+  },
+  finance: {
+    manageEmployees: new ManageEmployees({
+      employees: employeeRepo,
+      finance: projectFinanceRepo,
+      idGen: idGenerator,
+      now,
+    }),
+    manageProjectFinance: new ManageProjectFinance({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      employees: employeeRepo,
+      finance: projectFinanceRepo,
+      idGen: idGenerator,
+      now,
+    }),
+    getProjectFinance: new GetProjectFinance({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      employees: employeeRepo,
+      finance: projectFinanceRepo,
+      now,
+    }),
   },
   secrets: {
     putSecret: new PutSecret({ projects: projectRepo, members: projectMemberRepo, repo: secretsRepo }),

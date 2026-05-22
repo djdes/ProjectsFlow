@@ -110,15 +110,19 @@ export class GithubKbRepository implements KbRepository {
 
   async listAll(input: ListInput): Promise<KbDocumentSummary[]> {
     const result: KbDocumentSummary[] = [];
-    const queue: string[] = input.folder ? [input.folder] : Object.values(KB_FOLDERS);
+    // Динамическое обнаружение папок: стартуем с корня репозитория и рекурсивно
+    // заходим во ВСЕ директории. Так показываются любые каталоги (agents/ и будущие),
+    // а не только захардкоженный KB_FOLDERS.
+    const queue: string[] = [input.folder ?? ''];
 
     while (queue.length > 0) {
       const folder = queue.shift()!;
       const items = await this.api.listRepoTree(input.accessToken, input.fullName, folder);
       for (const item of items) {
+        const base = item.path.split('/').pop()?.toLowerCase();
         if (item.type === 'dir') {
           queue.push(item.path);
-        } else if (item.path.endsWith('.md') && !item.path.endsWith('/README.md')) {
+        } else if (item.path.endsWith('.md') && base !== 'readme.md') {
           const file = await this.api.getRepoFile(input.accessToken, input.fullName, item.path);
           if (!file) continue;
           const parsed = matter(file.content);
