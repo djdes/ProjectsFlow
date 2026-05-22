@@ -9,6 +9,9 @@ export type SmtpConfig = {
   readonly from: string;
   // true для 465 (implicit TLS); для 587/25 — false (STARTTLS).
   readonly secure: boolean;
+  // false ⇒ принимать самоподписанный сертификат MTA (self-hosted почтовик без CA-cert).
+  // По умолчанию true (строгая проверка); ослабляется только явным env.
+  readonly rejectUnauthorized: boolean;
 };
 
 // SMTP-реализация через nodemailer. Отправка best-effort на стороне вызывающего:
@@ -24,6 +27,7 @@ export class SmtpEmailSender implements EmailSender {
       // Для 587 (secure=false) форсим STARTTLS — иначе письмо могло бы уйти в открытую.
       requireTLS: !config.secure,
       auth: { user: config.user, pass: config.password },
+      tls: { rejectUnauthorized: config.rejectUnauthorized },
     });
   }
 

@@ -144,6 +144,9 @@ const emailSender: EmailSender = process.env['SMTP_HOST']
       password: process.env['SMTP_PASSWORD'] ?? '',
       from: process.env['SMTP_FROM'] ?? process.env['SMTP_USER'] ?? 'no-reply@projectsflow.ru',
       secure: Number(process.env['SMTP_PORT'] ?? 587) === 465,
+      // Строгая проверка cert по умолчанию; SMTP_TLS_REJECT_UNAUTHORIZED=false —
+      // для self-hosted MTA с самоподписанным сертификатом.
+      rejectUnauthorized: process.env['SMTP_TLS_REJECT_UNAUTHORIZED'] !== 'false',
     })
   : new LoggingEmailSender();
 const appBaseUrl =
