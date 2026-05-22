@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Menu } from 'lucide-react';
+import { Menu, PanelLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { cn } from '@/lib/utils';
 import { NewProjectDialogProvider } from '@/presentation/components/forms/NewProjectDialogProvider';
+import { AddTaskDialogProvider } from '@/presentation/components/forms/AddTaskDialogProvider';
 import { GlobalSearchProvider } from '@/presentation/components/search/GlobalSearchProvider';
 import { ProjectsProvider } from '@/presentation/hooks/ProjectsProvider';
 import { GithubConnectionProvider } from '@/presentation/hooks/GithubConnectionProvider';
@@ -11,9 +13,31 @@ import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useNotificationStream } from '@/presentation/hooks/useNotificationStream';
 import { Sidebar } from './Sidebar';
 
+const COLLAPSE_KEY = 'pf_sidebar_collapsed';
+
 export function AppShell(): React.ReactElement {
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Свёрнутость левой панели (desktop), переживает перезагрузку.
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(COLLAPSE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleCollapse = useCallback(() => {
+    setCollapsed((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0');
+      } catch {
+        /* localStorage недоступен — состояние просто не персистится */
+      }
+      return next;
+    });
+  }, []);
+
   // SSE real-time-уведомления (toast + мгновенный бейдж). Только для authenticated-сессии,
   // которой и является AppShell (рендерится внутри ProtectedRoute).
   useNotificationStream();
@@ -24,11 +48,27 @@ export function AppShell(): React.ReactElement {
     <ProjectsProvider>
       <GithubConnectionProvider>
         <NewProjectDialogProvider>
+        <AddTaskDialogProvider>
         <GlobalSearchProvider>
         {isDesktop ? (
-          <div className="grid h-dvh grid-cols-[260px_1fr] bg-background text-foreground">
-            <Sidebar />
-            <main className="overflow-y-auto">
+          <div
+            className={cn(
+              'grid h-dvh bg-background text-foreground',
+              collapsed ? 'grid-cols-[1fr]' : 'grid-cols-[260px_1fr]',
+            )}
+          >
+            {!collapsed && <Sidebar onToggleCollapse={toggleCollapse} />}
+            <main className="relative overflow-y-auto">
+              {collapsed && (
+                <button
+                  type="button"
+                  onClick={toggleCollapse}
+                  aria-label="Показать панель"
+                  className="absolute left-2 top-2 z-20 grid size-8 place-items-center rounded-md border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <PanelLeft className="size-4" />
+                </button>
+              )}
               <Outlet />
             </main>
           </div>
@@ -58,6 +98,7 @@ export function AppShell(): React.ReactElement {
           </div>
         )}
         </GlobalSearchProvider>
+        </AddTaskDialogProvider>
         </NewProjectDialogProvider>
       </GithubConnectionProvider>
     </ProjectsProvider>
