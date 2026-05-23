@@ -9,6 +9,8 @@ import type { ListDispatcherCandidates } from '../../application/project/ListDis
 import type { SetGitTokenDelegation } from '../../application/project/SetGitTokenDelegation.js';
 import type { ListGitTokenAccessLog } from '../../application/project/ListGitTokenAccessLog.js';
 import type { GitTokenDelegationRepository } from '../../application/project/GitTokenDelegationRepository.js';
+import type { GithubTokenRepository } from '../../application/github/GithubTokenRepository.js';
+import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
 import type { UserRepository } from '../../application/user/UserRepository.js';
 import type { ReorderProjects } from '../../application/project/ReorderProjects.js';
 import type { ListProjectMembers } from '../../application/project/ListProjectMembers.js';
@@ -54,12 +56,15 @@ type Deps = {
   readonly listDispatcherCandidates: ListDispatcherCandidates;
   readonly setGitTokenDelegation: SetGitTokenDelegation;
   readonly listGitTokenAccessLog: ListGitTokenAccessLog;
-  // Прямое чтение делегации для GET-эндпоинта (без отдельного use-case'а — viewer+
-  // member может посмотреть «есть ли делегация» как факт; ВНУТРЬ access-log смотрит
-  // отдельный use-case с owner-check'ом).
+  // Прямое чтение делегации для GET-эндпоинта (mine/all) — без отдельного
+  // use-case'а, потому что логика «view-only» тривиальная.
   readonly gitTokenDelegations: GitTokenDelegationRepository;
-  // Для резолва displayName юзеров в access-log (UI «кто брал»).
+  // Для резолва displayName юзеров в access-log + githubLogin'ов в `all`-списке.
   readonly users: UserRepository;
+  readonly githubTokens: GithubTokenRepository;
+  // ProjectRepository — нужен в GET /git-token-delegation чтобы узнать ownerId
+  // (определяет видимость `all`-блока) без отдельного use-case'а.
+  readonly projects: ProjectRepository;
   readonly reorderProjects: ReorderProjects;
   readonly listProjectCommits: ListProjectCommits;
   readonly listMembers: ListProjectMembers;
@@ -447,35 +452,99 @@ export function projectsRouter(deps: Deps): Router {
   });
 
   // === Git-token delegation ===
-  // Текущее состояние делегации. Любой member может посмотреть «включена ли».
-  // Сами access-log entries — отдельным эндпоинтом ниже с owner-check'ом.
+  // v0.15: per-member opt-in.
+  // Возвращает:
+  //   - `mine`: статус делегации САМОГО caller'а в этом проекте (null если caller
+  //     не member или ни разу не настраивал).
+  //   - `all`: полный список членов с их статусами — ТОЛЬКО для owner проекта
+  //     (privacy: остальные видят только свой). Для не-owner'а массив пустой.
+  //     Сортировка: owner первым, затем по displayName ASC (та же логика, что в
+  //     GetDelegatedGitToken — UI рисует «кто будет выбран первым»).
   router.get(
     '/:id/git-token-delegation',
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const id = req.params.id;
         if (typeof id !== 'string') throw new ProjectNotFoundError();
-        // Owner-check мы здесь НЕ ставим — viewer должен видеть факт «есть/нет»
-        // чтобы понимать что Ralph будет авторизован под owner'ом. Сами секреты не
-        // утекают: возвращаются только enabled/grantedAt/revokedAt/grantedBy.
-        const delegation = await deps.gitTokenDelegations.get(id);
-        if (!delegation) {
-          res.json({ enabled: false, grantedAt: null, revokedAt: null, grantedBy: null });
-          return;
+        const callerId = req.user!.id;
+
+        const project = await deps.projects.getById(id);
+        if (!project) throw new ProjectNotFoundError();
+
+        // Caller's own delegation. Возвращаем null если не member ИЛИ записи нет.
+        const callerMembership = await deps.members.findForProject(id, callerId);
+        let mine: { enabled: boolean; grantedAt: string | null; revokedAt: string | null } | null = null;
+        if (callerMembership) {
+          const own = await deps.gitTokenDelegations.getForMember(id, callerId);
+          mine = own
+            ? {
+                enabled: own.enabled,
+                grantedAt: own.grantedAt ? own.grantedAt.toISOString() : null,
+                revokedAt: own.revokedAt ? own.revokedAt.toISOString() : null,
+              }
+            : { enabled: false, grantedAt: null, revokedAt: null };
         }
-        res.json({
-          enabled: delegation.enabled,
-          grantedAt: delegation.grantedAt ? delegation.grantedAt.toISOString() : null,
-          revokedAt: delegation.revokedAt ? delegation.revokedAt.toISOString() : null,
-          grantedBy: delegation.granterUserId,
-        });
+
+        // Privacy: `all` отдаём только owner'у. Остальные — пустой массив.
+        const isOwner = callerMembership?.role === 'owner';
+        let all: Array<{
+          granterUserId: string;
+          displayName: string;
+          githubLogin: string | null;
+          enabled: boolean;
+          grantedAt: string | null;
+          revokedAt: string | null;
+          isOwner: boolean;
+        }> = [];
+
+        if (isOwner) {
+          // Все members проекта (с user-данными) + все делегации + GH-логины
+          // одной пачкой. На проекте обычно ≤10 членов — N+1 на github-login
+          // приемлем.
+          const members = await deps.members.listByProject(id);
+          const allDelegations = await deps.gitTokenDelegations.listAllForProject(id);
+          const delegationByMember = new Map(allDelegations.map((d) => [d.granterUserId, d]));
+
+          const ghLogins = await Promise.all(
+            members.map(async (m) => {
+              const conn = await deps.githubTokens.getByUserId(m.userId);
+              return { userId: m.userId, login: conn?.githubLogin ?? null };
+            }),
+          );
+          const loginByUser = new Map(ghLogins.map((g) => [g.userId, g.login]));
+
+          // Сортировка: owner первым, остальные по displayName ASC, при равенстве email.
+          const sorted = [...members].sort((a, b) => {
+            if (a.userId === project.ownerId) return -1;
+            if (b.userId === project.ownerId) return 1;
+            const c = a.user.displayName.toLowerCase().localeCompare(b.user.displayName.toLowerCase(), 'ru');
+            if (c !== 0) return c;
+            return a.user.email.localeCompare(b.user.email);
+          });
+
+          all = sorted.map((m) => {
+            const d = delegationByMember.get(m.userId);
+            return {
+              granterUserId: m.userId,
+              displayName: m.user.displayName,
+              githubLogin: loginByUser.get(m.userId) ?? null,
+              enabled: d?.enabled ?? false,
+              grantedAt: d?.grantedAt ? d.grantedAt.toISOString() : null,
+              revokedAt: d?.revokedAt ? d.revokedAt.toISOString() : null,
+              isOwner: m.userId === project.ownerId,
+            };
+          });
+        }
+
+        res.json({ mine, all });
       } catch (e) {
         next(e);
       }
     },
   );
 
-  // Включить/выключить делегацию (owner-only через use-case).
+  // Включить/выключить ОДНУ делегацию. Без granterUserId — caller включает СВОЮ.
+  // С granterUserId — admin-on-behalf (use-case проверяет isAdmin).
   router.put(
     '/:id/git-token-delegation',
     async (req: Request, res: Response, next: NextFunction) => {
@@ -487,12 +556,13 @@ export function projectsRouter(deps: Deps): Router {
           projectId: id,
           callerUserId: req.user!.id,
           enabled: body.enabled,
+          granterUserId: body.granterUserId,
         });
         res.json({
           enabled: delegation.enabled,
           grantedAt: delegation.grantedAt ? delegation.grantedAt.toISOString() : null,
           revokedAt: delegation.revokedAt ? delegation.revokedAt.toISOString() : null,
-          grantedBy: delegation.granterUserId,
+          granterUserId: delegation.granterUserId,
         });
       } catch (e) {
         next(e);

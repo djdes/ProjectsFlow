@@ -10,6 +10,7 @@ import {
   json,
   mysqlEnum,
   mysqlTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -434,13 +435,15 @@ export const kbDocuments = mysqlTable(
 
 export type KbDocumentRow = typeof kbDocuments.$inferSelect;
 
-// Делегирование GitHub-токена owner'а проекта текущему Ralph-диспетчеру.
-// Одна запись на проект; granter = owner на момент включения. Реальный токен
-// не копируется — берётся live из user_github_tokens на запросе. См. db/029.
+// Делегирование GitHub-токена members'ами проекта текущему Ralph-диспетчеру.
+// **Per-member opt-in** (v0.15+): каждый участник проекта независимо включает
+// свою делегацию. PK составной — несколько записей на проект (по одной на члена).
+// Реальный токен не копируется — берётся live из user_github_tokens на запросе.
+// См. db/030.
 export const projectGitTokenDelegations = mysqlTable(
   'project_git_token_delegations',
   {
-    projectId: char('project_id', { length: 36 }).primaryKey(),
+    projectId: char('project_id', { length: 36 }).notNull(),
     granterUserId: char('granter_user_id', { length: 36 }).notNull(),
     enabled: boolean('enabled').notNull().default(false),
     grantedAt: timestamp('granted_at'),
@@ -448,7 +451,11 @@ export const projectGitTokenDelegations = mysqlTable(
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
-  (t) => [index('idx_pgtd_granter').on(t.granterUserId)],
+  (t) => [
+    primaryKey({ columns: [t.projectId, t.granterUserId] }),
+    index('idx_pgtd_project').on(t.projectId),
+    index('idx_pgtd_granter').on(t.granterUserId),
+  ],
 );
 
 export type ProjectGitTokenDelegationRow = typeof projectGitTokenDelegations.$inferSelect;
@@ -461,7 +468,8 @@ export const projectGitTokenAccessLog = mysqlTable(
     id: id(),
     projectId: char('project_id', { length: 36 }).notNull(),
     accessedByUserId: char('accessed_by_user_id', { length: 36 }).notNull(),
-    // null при `not_dispatcher` / `delegation_disabled` (granter может быть неизвестен)
+    // null при `not_dispatcher` / `delegation_disabled` / `no_eligible_grantor`
+    // (granter может быть неизвестен или их несколько).
     granterUserId: char('granter_user_id', { length: 36 }),
     outcome: mysqlEnum('outcome', [
       'ok',
@@ -469,6 +477,7 @@ export const projectGitTokenAccessLog = mysqlTable(
       'delegation_disabled',
       'granter_github_disconnected',
       'granter_not_owner_anymore',
+      'no_eligible_grantor',
     ]).notNull(),
     accessedAt: timestamp('accessed_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   },

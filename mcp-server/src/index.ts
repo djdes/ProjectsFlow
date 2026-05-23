@@ -724,13 +724,20 @@ const TOOLS = [
   {
     name: 'pf_get_project_git_token',
     description:
-      "Return a GitHub access token DELEGATED to the current dispatcher by this project's owner. " +
-      'Use ONLY for git operations on this project repository (clone/fetch/push/PR). Token belongs ' +
-      'to the owner — do not persist, do not log, do not use outside the immediate git command. ' +
-      'Returns 403 not_dispatcher / delegation_disabled / granter_not_owner_anymore if conditions ' +
-      "fail; 410 granter_github_disconnected if owner disconnected GitHub. Recommended URL form " +
-      'for git push: https://x-access-token:<token>@github.com/owner/repo.git (the token expires ' +
-      'when owner revokes delegation or rotates OAuth).',
+      'Return a GitHub access token DELEGATED to the current dispatcher by a project member. ' +
+      'v0.15+: per-member opt-in — every project member can independently enable their own ' +
+      'delegation. Server returns the token of the FIRST eligible grantor in deterministic ' +
+      'order: project owner first, then other members sorted by displayName ASC. The caller ' +
+      '(current dispatcher) is excluded from candidates — you never receive your own token ' +
+      'via this endpoint. Response includes `source: "owner_delegation" | "member_delegation"` ' +
+      'and `grantedByDisplayName` for diagnostics. Use ONLY for git operations on this project ' +
+      'repository (clone/fetch/push/PR). Token belongs to the grantor — do not persist, do not ' +
+      'log, do not use outside the immediate git command. Errors: 403 not_dispatcher (you are ' +
+      'not the dispatcher); 403 delegation_disabled (nobody enabled their delegation); 403 ' +
+      'no_eligible_grantor (candidates exist but none has GitHub connected — response includes ' +
+      '`candidatesChecked` for diagnostics). Recommended URL form for git push: ' +
+      'https://x-access-token:<token>@github.com/owner/repo.git (token expires when grantor ' +
+      'revokes delegation or rotates OAuth).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -951,7 +958,7 @@ async function main(): Promise<void> {
   const api = new ApiClient(config);
 
   const server = new Server(
-    { name: 'projectsflow', version: '0.14.0' },
+    { name: 'projectsflow', version: '0.15.0' },
     { capabilities: { tools: {} } },
   );
 
