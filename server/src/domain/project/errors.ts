@@ -121,3 +121,22 @@ export class GithubNotConnectedForDelegationError extends Error {
     this.name = 'GithubNotConnectedForDelegationError';
   }
 }
+
+// Кандидаты для делегации есть (кто-то включил toggle), но ни у одного из них
+// нет подключённого GitHub — токен взять физически не у кого. 403. v0.15+.
+// candidatesChecked используется в API-ответе для диагностики на стороне Ralph'а.
+export class NoEligibleGrantorError extends Error {
+  constructor(public readonly candidatesChecked: number) {
+    super(`No eligible grantor for git-token delegation (checked ${candidatesChecked} member(s))`);
+    this.name = 'NoEligibleGrantorError';
+  }
+}
+
+// Caller не является членом проекта — не может включать СВОЮ делегацию. 403. v0.15+.
+// Admin при включении за другого получает другую проверку (target должен быть member).
+export class NotProjectMemberForDelegationError extends Error {
+  constructor() {
+    super('Only project members can enable their own git-token delegation');
+    this.name = 'NotProjectMemberForDelegationError';
+  }
+}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, Github, Loader2, ShieldAlert } from 'lucide-react';
+import { Bot, ChevronDown, ChevronRight, Github, Loader2, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
@@ -7,46 +7,56 @@ import { useGithubConnection } from '@/presentation/hooks/GithubConnectionProvid
 import type {
   GitTokenAccessLogEntry,
   GitTokenAccessOutcome,
-  GitTokenDelegation,
+  GitTokenDelegationMember,
+  GitTokenDelegationStatus,
 } from '@/application/project/ProjectRepository';
 import type { Project } from '@/domain/project/Project';
 
 type Props = {
   project: Project;
-  // Только owner может включать/выключать. Не-owner видит read-only статус.
+  // Только owner видит блок «грантеры проекта». Не-owner видит только свой toggle.
   isOwner: boolean;
-  // displayName текущего диспетчера для подсказки «может через MCP получить
-  // твой OAuth-токен GitHub». null если диспетчера нет.
+  // displayName текущего диспетчера — нужен в подсказке + чтобы отметить «caller
+  // самому себе токен не отдаётся» в списке.
   currentDispatcherDisplayName: string | null;
 };
 
-// Делегирование GitHub-токена owner'а проекта Ralph-диспетчеру.
-// Owner ставит/снимает toggle; access-log виден ему же.
+// v0.15: per-member opt-in. UI разделён на 2 блока:
+//   1. «Моя делегация» — toggle CALLER-а (любой member видит). Включает свой
+//      собственный GitHub-токен для использования диспетчером.
+//   2. «Грантеры проекта» (только owner) — упорядоченный список членов с их
+//      статусами + индикацией «кто будет выбран первым».
 //
-// Visibility:
-// - Toggle/state — owner: интерактивно; не-owner: текст «owner X разрешил / не разрешил».
-// - GitHub disconnected у owner'а — toggle disabled с tooltip.
-// - Access-log — collapsible, грузится по клику; only owner.
+// Сервер при `pf_get_project_git_token` идёт в порядке owner→displayName ASC,
+// исключая caller-диспетчера. UI показывает этот порядок и помечает выбранного.
 export function GitTokenDelegationBlock({
   project,
   isOwner,
   currentDispatcherDisplayName,
 }: Props): React.ReactElement {
   const { projectRepository } = useContainer();
-  // GitHub-коннект ТЕКУЩЕГО юзера (если owner — он же granter). Для не-owner'а
-  // используется только в подсказке «нужен ли коннект» — не важно.
   const { connection: githubConn } = useGithubConnection();
-  const [delegation, setDelegation] = useState<GitTokenDelegation | null>(null);
+  const [status, setStatus] = useState<GitTokenDelegationStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [log, setLog] = useState<GitTokenAccessLogEntry[] | null>(null);
   const [logLoading, setLogLoading] = useState(false);
 
+  // Manual refetch — без cancellation token'а (вызывается из toggle-обработчика;
+  // если компонент к этому моменту размонтирован — React просто варнинг даст).
+  const load = useCallback((): void => {
+    projectRepository.getGitTokenDelegation(project.id).then(
+      setStatus,
+      (err: unknown) => setLoadError((err as Error).message ?? 'Не удалось загрузить'),
+    );
+  }, [project.id, projectRepository]);
+
+  // Первичная загрузка С cancellation — здесь возможен размонт во время fetch'а.
   useEffect(() => {
     let cancelled = false;
     projectRepository.getGitTokenDelegation(project.id).then(
-      (d) => { if (!cancelled) setDelegation(d); },
+      (s) => { if (!cancelled) setStatus(s); },
       (err: unknown) => {
         if (!cancelled) setLoadError((err as Error).message ?? 'Не удалось загрузить');
       },
@@ -54,23 +64,28 @@ export function GitTokenDelegationBlock({
     return () => { cancelled = true; };
   }, [project.id, projectRepository]);
 
-  const toggle = useCallback(async (): Promise<void> => {
-    if (!delegation) return;
+  const toggleMine = async (): Promise<void> => {
+    if (!status?.mine) return;
     setSaving(true);
     try {
-      const next = await projectRepository.setGitTokenDelegation(project.id, !delegation.enabled);
-      setDelegation(next);
-      toast.success(next.enabled ? 'Делегация GitHub-токена включена' : 'Делегация выключена');
+      await projectRepository.setGitTokenDelegation(project.id, !status.mine.enabled);
+      // Полный re-fetch — чтобы `all` тоже обновился у owner-а.
+      load();
+      toast.success(
+        status.mine.enabled
+          ? 'Твоя GitHub-делегация выключена'
+          : 'Твоя GitHub-делегация включена',
+      );
     } catch (err) {
       toast.error((err as Error).message ?? 'Не удалось сохранить');
     } finally {
       setSaving(false);
     }
-  }, [delegation, project.id, projectRepository]);
+  };
 
   const openLog = useCallback(async (): Promise<void> => {
     setLogOpen(true);
-    if (log !== null) return; // уже загружали
+    if (log !== null) return;
     setLogLoading(true);
     try {
       const entries = await projectRepository.listGitTokenAccessLog(project.id);
@@ -82,16 +97,6 @@ export function GitTokenDelegationBlock({
     }
   }, [log, project.id, projectRepository]);
 
-  // Disabled-state для toggle: только owner может + GitHub должен быть подключён.
-  // githubConn === null значит «не подключён» (provider возвращает null если нет).
-  const ownerHasGithub = isOwner ? githubConn !== null : true;
-  const canToggle = isOwner && ownerHasGithub && delegation !== null && !saving;
-  const disabledReason = !isOwner
-    ? 'Только владелец проекта может включать делегацию своего GitHub-токена'
-    : !ownerHasGithub
-      ? 'Сначала подключи GitHub на /profile'
-      : null;
-
   if (loadError) {
     return (
       <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
@@ -99,7 +104,7 @@ export function GitTokenDelegationBlock({
       </div>
     );
   }
-  if (delegation === null) {
+  if (status === null) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="size-4 animate-spin" />
@@ -108,53 +113,113 @@ export function GitTokenDelegationBlock({
     );
   }
 
+  // === БЛОК 1: моя делегация ===
+  const mine = status.mine;
+  const callerHasGithub = githubConn !== null;
+  const canToggleMine = mine !== null && callerHasGithub && !saving;
+  const mineDisabledReason =
+    mine === null
+      ? 'Ты не член этого проекта — делегацию включать нельзя'
+      : !callerHasGithub
+        ? 'Подключи GitHub на /profile'
+        : null;
+
+  // Кто будет выбран сервером (для UI-подсказки в `all`):
+  // owner первым если у него enabled+github; иначе первый по displayName ASC,
+  // исключая текущего диспетчера. Считаем на клиенте по тем же правилам.
+  const selectedGrantorId = computeSelected(status.all, currentDispatcherDisplayName);
+
   return (
     <div className="space-y-3 border-t pt-3">
-      <div className="flex items-start gap-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <Github className="size-4 text-muted-foreground" />
-            <p className="text-sm font-medium">Разрешить диспетчеру использовать мой GitHub-токен</p>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {delegation.enabled ? (
-              <>
-                Включено. Текущий диспетчер{' '}
-                <strong className="text-foreground">
-                  {currentDispatcherDisplayName ?? '(не назначен — некому)'}
-                </strong>{' '}
-                может через MCP получить твой OAuth-токен GitHub для пушей в репо
-                этого проекта. Снимается одним кликом.
-              </>
-            ) : (
-              <>
-                Выключено. Диспетчер не сможет пушить от твоего имени — Ralph будет
-                использовать свой токен (если есть). Включи, если хочешь чтобы
-                коммиты/PR шли под твоим GitHub-аккаунтом.
-              </>
+      {/* Заголовок секции */}
+      <div className="flex items-center gap-2">
+        <Github className="size-4 text-muted-foreground" />
+        <p className="text-sm font-medium">GitHub-делегация диспетчеру</p>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Каждый член проекта независимо разрешает использовать свой GitHub-токен для
+        git-операций в репо. Сервер при запросе диспетчером выбирает первого
+        подходящего в порядке: <strong>owner → остальные по алфавиту</strong>
+        {currentDispatcherDisplayName && (
+          <> (текущий диспетчер <strong>{currentDispatcherDisplayName}</strong> сам себе
+          токен не получит).</>
+        )}
+      </p>
+
+      {/* «Моя делегация» — toggle CALLER-а */}
+      <div className="rounded-md border bg-muted/10 p-3">
+        <div className="flex items-start gap-3">
+          <div className="flex-1 text-sm">
+            <p className="font-medium">Моя делегация</p>
+            <p className="text-xs text-muted-foreground">
+              {mine === null ? (
+                'Ты не член этого проекта.'
+              ) : mine.enabled ? (
+                <>
+                  Включена. Диспетчер может через MCP получить твой GitHub-токен для
+                  пушей в репо. Снимается одним кликом.
+                </>
+              ) : (
+                <>
+                  Выключена. Диспетчер не получит твой токен. Включи если хочешь
+                  чтобы коммиты/PR могли идти под твоим GitHub-аккаунтом.
+                </>
+              )}
+            </p>
+            {mineDisabledReason && (
+              <p className="mt-1 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                <ShieldAlert className="size-3" />
+                {mineDisabledReason}
+              </p>
             )}
+          </div>
+          {mine !== null && (
+            <Button
+              variant={mine.enabled ? 'outline' : 'default'}
+              size="sm"
+              onClick={() => void toggleMine()}
+              disabled={!canToggleMine}
+              title={mineDisabledReason ?? undefined}
+            >
+              {saving && <Loader2 className="size-3.5 animate-spin" />}
+              {mine.enabled ? 'Выключить' : 'Включить'}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* === БЛОК 2: грантеры проекта === (только owner) */}
+      {isOwner && status.all.length > 0 && (
+        <div className="rounded-md border bg-card p-3">
+          <p className="flex items-center gap-1.5 text-sm font-medium">
+            <Bot className="size-3.5 text-muted-foreground" />
+            Грантеры этого проекта
           </p>
-          {disabledReason && (
-            <p className="mt-1 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-              <ShieldAlert className="size-3" />
-              {disabledReason}
+          <p className="mb-2 mt-0.5 text-xs text-muted-foreground">
+            Порядок выбора сервером сверху вниз. Owner идёт первым, дальше — по
+            алфавиту. Диспетчер сам исключается из кандидатов.
+          </p>
+          <ul className="divide-y rounded-md border bg-muted/5">
+            {status.all.map((m, idx) => (
+              <GrantorRow
+                key={m.granterUserId}
+                m={m}
+                index={idx + 1}
+                isSelected={m.granterUserId === selectedGrantorId}
+                isCurrentDispatcher={m.displayName === currentDispatcherDisplayName}
+              />
+            ))}
+          </ul>
+          {selectedGrantorId === null && (
+            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+              ⚠ Сейчас никто не будет выбран — все включённые грантеры либо без GH,
+              либо являются текущим диспетчером.
             </p>
           )}
         </div>
-        {/* Сам toggle: кнопка с текстом. shadcn switch не используется в проекте — кнопка норм. */}
-        <Button
-          variant={delegation.enabled ? 'outline' : 'default'}
-          size="sm"
-          onClick={() => void toggle()}
-          disabled={!canToggle}
-          title={disabledReason ?? undefined}
-        >
-          {saving && <Loader2 className="size-3.5 animate-spin" />}
-          {delegation.enabled ? 'Выключить' : 'Включить'}
-        </Button>
-      </div>
+      )}
 
-      {/* Access-log — only owner. Collapsible. */}
+      {/* Access-log — only owner. */}
       {isOwner && (
         <div>
           {!logOpen ? (
@@ -211,6 +276,82 @@ export function GitTokenDelegationBlock({
   );
 }
 
+function GrantorRow({
+  m,
+  index,
+  isSelected,
+  isCurrentDispatcher,
+}: {
+  m: GitTokenDelegationMember;
+  index: number;
+  isSelected: boolean;
+  isCurrentDispatcher: boolean;
+}): React.ReactElement {
+  const reasonNotSelected =
+    !m.enabled ? 'не разрешено'
+    : !m.githubLogin ? 'нет GitHub'
+    : isCurrentDispatcher ? 'это и есть диспетчер'
+    : null;
+
+  return (
+    <li className="flex items-center gap-2 px-3 py-2 text-xs">
+      <span className="w-4 shrink-0 text-muted-foreground">{index}.</span>
+      <span className="flex-1 truncate font-medium">
+        {m.displayName}
+        {m.isOwner && (
+          <span className="ml-1.5 rounded bg-primary/15 px-1 text-[10px] font-medium uppercase tracking-wide text-primary">
+            owner
+          </span>
+        )}
+        {isCurrentDispatcher && (
+          <span className="ml-1.5 rounded bg-muted px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+            dispatcher
+          </span>
+        )}
+      </span>
+      <span className="text-muted-foreground">
+        github:{' '}
+        {m.githubLogin ? (
+          <span className="text-foreground">{m.githubLogin}</span>
+        ) : (
+          <span className="italic">нет</span>
+        )}
+      </span>
+      {isSelected ? (
+        <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] text-emerald-700 dark:text-emerald-400">
+          ✓ выбран
+        </span>
+      ) : (
+        <span
+          className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] ${
+            m.enabled
+              ? 'bg-muted text-muted-foreground'
+              : 'bg-muted/40 text-muted-foreground'
+          }`}
+        >
+          {reasonNotSelected ?? (m.enabled ? 'ok' : '—')}
+        </span>
+      )}
+    </li>
+  );
+}
+
+// Определить какого члена сервер выберет первым: owner если eligible, иначе
+// первый по displayName ASC (`all` уже отсортирован сервером в этом порядке).
+// Eligible = enabled && githubLogin && !isCurrentDispatcher.
+function computeSelected(
+  all: GitTokenDelegationMember[],
+  currentDispatcherDisplayName: string | null,
+): string | null {
+  const dispatcherName = currentDispatcherDisplayName;
+  const eligible = (m: GitTokenDelegationMember): boolean =>
+    m.enabled && m.githubLogin !== null && m.displayName !== dispatcherName;
+  const ownerMember = all.find((m) => m.isOwner);
+  if (ownerMember && eligible(ownerMember)) return ownerMember.granterUserId;
+  const next = all.find((m) => !m.isOwner && eligible(m));
+  return next?.granterUserId ?? null;
+}
+
 function OutcomeBadge({ outcome }: { outcome: GitTokenAccessOutcome }): React.ReactElement {
   const cfg: Record<GitTokenAccessOutcome, { label: string; cls: string }> = {
     ok: { label: 'ok', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' },
@@ -219,8 +360,12 @@ function OutcomeBadge({ outcome }: { outcome: GitTokenAccessOutcome }): React.Re
       cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
     },
     delegation_disabled: {
-      label: 'делегация off',
+      label: 'нет грантеров',
       cls: 'bg-muted text-muted-foreground',
+    },
+    no_eligible_grantor: {
+      label: 'без github',
+      cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
     },
     granter_github_disconnected: {
       label: 'github отключён',

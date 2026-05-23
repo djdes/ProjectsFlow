@@ -14,7 +14,9 @@ import {
   GranterGithubDisconnectedError,
   GranterNotOwnerAnymoreError,
   InsufficientProjectRoleError,
+  NoEligibleGrantorError,
   NotProjectDispatcherError,
+  NotProjectMemberForDelegationError,
   ProjectInviteAlreadyUsedError,
   ProjectInviteExpiredError,
   ProjectInviteNotFoundError,
@@ -194,6 +196,27 @@ export function errorHandler(
     res.status(400).json({
       error: 'github_not_connected',
       message: 'Подключи GitHub на /profile, потом включай делегацию',
+    });
+    return;
+  }
+  if (err instanceof NoEligibleGrantorError) {
+    // candidatesChecked отдаём в body — для диагностики на стороне Ralph'а
+    // («сколько кандидатов проверили, у скольких нет GitHub»).
+    res.status(403).json({
+      error: 'no_eligible_grantor',
+      candidatesChecked: err.candidatesChecked,
+      message:
+        'Никто из членов с включённой делегацией не имеет подключённого GitHub. ' +
+        'Попроси owner\'а или активного контрибутора подключить GitHub на /profile.',
+    });
+    return;
+  }
+  if (err instanceof NotProjectMemberForDelegationError) {
+    res.status(403).json({
+      error: 'not_project_member',
+      message:
+        'Включать делегацию своего GitHub-токена может только участник проекта. ' +
+        'Admin может управлять делегацией любого участника.',
     });
     return;
   }

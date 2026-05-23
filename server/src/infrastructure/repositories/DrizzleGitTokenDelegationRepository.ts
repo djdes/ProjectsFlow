@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   projectGitTokenAccessLog,
@@ -39,17 +39,43 @@ export class DrizzleGitTokenDelegationRepository implements GitTokenDelegationRe
     private readonly idGen: () => string,
   ) {}
 
-  async get(projectId: string): Promise<GitTokenDelegation | null> {
+  async getForMember(projectId: string, granterUserId: string): Promise<GitTokenDelegation | null> {
     const rows = await this.db
       .select()
       .from(projectGitTokenDelegations)
-      .where(eq(projectGitTokenDelegations.projectId, projectId))
+      .where(
+        and(
+          eq(projectGitTokenDelegations.projectId, projectId),
+          eq(projectGitTokenDelegations.granterUserId, granterUserId),
+        ),
+      )
       .limit(1);
     return rows[0] ? toDelegation(rows[0]) : null;
   }
 
+  async listEnabledForProject(projectId: string): Promise<GitTokenDelegation[]> {
+    const rows = await this.db
+      .select()
+      .from(projectGitTokenDelegations)
+      .where(
+        and(
+          eq(projectGitTokenDelegations.projectId, projectId),
+          eq(projectGitTokenDelegations.enabled, true),
+        ),
+      );
+    return rows.map(toDelegation);
+  }
+
+  async listAllForProject(projectId: string): Promise<GitTokenDelegation[]> {
+    const rows = await this.db
+      .select()
+      .from(projectGitTokenDelegations)
+      .where(eq(projectGitTokenDelegations.projectId, projectId));
+    return rows.map(toDelegation);
+  }
+
   async upsert(input: UpsertGitTokenDelegationInput): Promise<GitTokenDelegation> {
-    const existing = await this.get(input.projectId);
+    const existing = await this.getForMember(input.projectId, input.granterUserId);
     const now = new Date();
 
     if (!existing) {
@@ -59,7 +85,7 @@ export class DrizzleGitTokenDelegationRepository implements GitTokenDelegationRe
         granterUserId: input.granterUserId,
         enabled: input.enabled,
         // При первом включении проставляем granted_at; при «сразу enabled=false»
-        // (странный кейс — owner выключил никогда не включённую) — оставим null.
+        // (странный кейс — выключили никогда не включённую) — оставим null.
         grantedAt: input.enabled ? now : null,
         revokedAt: input.enabled ? null : now,
       });
@@ -67,18 +93,12 @@ export class DrizzleGitTokenDelegationRepository implements GitTokenDelegationRe
       // Уже было. Обновляем enabled + grantedAt/revokedAt с правильной семантикой:
       //   enable: revoked_at -> null; granted_at оставляем историческое если уже было,
       //                                иначе ставим now.
-      //   disable: revoked_at -> now; granted_at не трогаем.
-      // granter_user_id тоже обновляем (в редком случае ownership-transfer + повторное
-      // включение новым owner'ом).
+      //   disable: revoked_at -> now; granted_at не трогаем (история).
       const patch: Partial<{
-        granterUserId: string;
         enabled: boolean;
         grantedAt: Date | null;
         revokedAt: Date | null;
-      }> = {
-        granterUserId: input.granterUserId,
-        enabled: input.enabled,
-      };
+      }> = { enabled: input.enabled };
       if (input.enabled) {
         patch.revokedAt = null;
         if (!existing.grantedAt) patch.grantedAt = now;
@@ -88,10 +108,15 @@ export class DrizzleGitTokenDelegationRepository implements GitTokenDelegationRe
       await this.db
         .update(projectGitTokenDelegations)
         .set(patch)
-        .where(eq(projectGitTokenDelegations.projectId, input.projectId));
+        .where(
+          and(
+            eq(projectGitTokenDelegations.projectId, input.projectId),
+            eq(projectGitTokenDelegations.granterUserId, input.granterUserId),
+          ),
+        );
     }
 
-    const fresh = await this.get(input.projectId);
+    const fresh = await this.getForMember(input.projectId, input.granterUserId);
     if (!fresh) throw new Error('Failed to read back git-token delegation after upsert');
     return fresh;
   }

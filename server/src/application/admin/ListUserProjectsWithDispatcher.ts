@@ -42,12 +42,14 @@ export class ListUserProjectsWithDispatcher {
     const dispatchers = await this.deps.users.getManyByIds(dispatcherIds);
     const byId = new Map(dispatchers.map((u) => [u.id, u]));
 
-    // Per-project делегации. Простая итерация — обычно ≤10 проектов на юзера,
-    // N+1 не страшен. Если станет узким местом — добавим `getMany(ids)` в repo.
+    // v0.15: per-member делегации. В admin-обзоре «проекты юзера X» нас интересует
+    // конкретно X'овская делегация в каждом из его проектов (не любая) — admin
+    // через диалог toggle'ит ИМЕННО её. Используем getForMember(projectId, X).
     const delegations = await Promise.all(
       owned.map(async (p) => ({
         projectId: p.id,
-        enabled: (await this.deps.delegations.get(p.id))?.enabled ?? false,
+        enabled:
+          (await this.deps.delegations.getForMember(p.id, targetUserId))?.enabled ?? false,
       })),
     );
     const delegationByProject = new Map(delegations.map((d) => [d.projectId, d.enabled]));

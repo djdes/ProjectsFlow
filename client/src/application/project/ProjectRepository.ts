@@ -3,18 +3,30 @@ import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembers
 import type { ProjectInvite, ProjectInviteRole } from '@/domain/project/ProjectInvite';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 
-// Делегирование GitHub-токена owner'а проекта Ralph-диспетчеру.
-// Сам токен здесь не возвращается — только статус. Plaintext-токен получает
-// диспетчер через agent-API (`pf_get_project_git_token`).
-export type GitTokenDelegation = {
+// v0.15: per-member opt-in. У каждого члена проекта своя независимая делегация.
+// `mine` — статус CALLER-а в этом проекте. `all` — видно только owner'у:
+// полный список членов проекта с их статусами + github-логинами + sort'ом
+// (owner первым, потом по displayName ASC). Не-owner видит `all=[]`.
+export type GitTokenDelegationMember = {
+  readonly granterUserId: string;
+  readonly displayName: string;
+  // null если у юзера не подключён GitHub (его токен взять нельзя).
+  readonly githubLogin: string | null;
   readonly enabled: boolean;
-  // Когда впервые включили (null если ни разу).
   readonly grantedAt: string | null;
-  // Когда последний раз выключили (null после повторного enable).
   readonly revokedAt: string | null;
-  // Кто разрешил (обычно = owner проекта на момент включения). null если delegation
-  // ни разу не настраивали.
-  readonly grantedBy: string | null;
+  readonly isOwner: boolean;
+};
+
+export type GitTokenDelegationStatus = {
+  // Статус ТЕКУЩЕГО юзера (caller'а). null если caller — не member проекта.
+  readonly mine: {
+    readonly enabled: boolean;
+    readonly grantedAt: string | null;
+    readonly revokedAt: string | null;
+  } | null;
+  // Полный список членов с их статусами. Owner-only; не-owner получает [].
+  readonly all: GitTokenDelegationMember[];
 };
 
 export type GitTokenAccessOutcome =
@@ -22,7 +34,8 @@ export type GitTokenAccessOutcome =
   | 'not_dispatcher'
   | 'delegation_disabled'
   | 'granter_github_disconnected'
-  | 'granter_not_owner_anymore';
+  | 'granter_not_owner_anymore'
+  | 'no_eligible_grantor';
 
 export type GitTokenAccessLogEntry = {
   readonly accessedByUserId: string;
@@ -84,11 +97,16 @@ export interface ProjectRepository {
   // agent-токеном); setDispatcher — назначить/снять (owner-only).
   listDispatcherCandidates(projectId: string): Promise<DispatcherCandidate[]>;
   setDispatcher(projectId: string, userId: string | null): Promise<Project>;
-  // Делегирование GitHub-токена owner'а текущему Ralph-диспетчеру.
-  // PUT — only owner; GET — any member (видеть факт «включено/выключено»);
-  // access-log — only owner (личный audit).
-  getGitTokenDelegation(projectId: string): Promise<GitTokenDelegation>;
-  setGitTokenDelegation(projectId: string, enabled: boolean): Promise<GitTokenDelegation>;
+  // v0.15: per-member opt-in. GET возвращает `mine` (статус caller'а) + `all`
+  // (полный список членов, только для owner-а). PUT включает/выключает ОДНУ
+  // делегацию: без granterUserId — caller's own, с granterUserId — admin-on-behalf.
+  // access-log — только для owner'а.
+  getGitTokenDelegation(projectId: string): Promise<GitTokenDelegationStatus>;
+  setGitTokenDelegation(
+    projectId: string,
+    enabled: boolean,
+    granterUserId?: string,
+  ): Promise<{ enabled: boolean; grantedAt: string | null; revokedAt: string | null; granterUserId: string }>;
   listGitTokenAccessLog(projectId: string): Promise<GitTokenAccessLogEntry[]>;
   // Персональная пересортировка сайдбара: полный список id в желаемом порядке.
   reorder(orderedIds: readonly string[]): Promise<void>;

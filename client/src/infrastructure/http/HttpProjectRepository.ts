@@ -8,10 +8,10 @@ import type {
   DispatcherCandidate,
   GitCollision,
   GitTokenAccessLogEntry,
-  GitTokenDelegation,
+  GitTokenDelegationStatus,
   ProjectRepository,
-  UpdateProjectInput,
 } from '@/application/project/ProjectRepository';
+import type { UpdateProjectInput } from '@/application/project/ProjectRepository';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 import { HttpError, httpClient } from './httpClient';
 
@@ -174,13 +174,20 @@ export class HttpProjectRepository implements ProjectRepository {
     return fromDto(project);
   }
 
-  async getGitTokenDelegation(projectId: string): Promise<GitTokenDelegation> {
-    return httpClient.get<GitTokenDelegation>(`/projects/${projectId}/git-token-delegation`);
+  async getGitTokenDelegation(projectId: string): Promise<GitTokenDelegationStatus> {
+    return httpClient.get<GitTokenDelegationStatus>(
+      `/projects/${projectId}/git-token-delegation`,
+    );
   }
 
-  async setGitTokenDelegation(projectId: string, enabled: boolean): Promise<GitTokenDelegation> {
-    return httpClient.put<GitTokenDelegation>(`/projects/${projectId}/git-token-delegation`, {
+  async setGitTokenDelegation(
+    projectId: string,
+    enabled: boolean,
+    granterUserId?: string,
+  ): Promise<{ enabled: boolean; grantedAt: string | null; revokedAt: string | null; granterUserId: string }> {
+    return httpClient.put(`/projects/${projectId}/git-token-delegation`, {
       enabled,
+      ...(granterUserId !== undefined ? { granterUserId } : {}),
     });
   }
 

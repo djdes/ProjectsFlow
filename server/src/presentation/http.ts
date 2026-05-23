@@ -46,6 +46,7 @@ import type { PollDeviceFlow } from '../application/github/PollDeviceFlow.js';
 import type { DisconnectGithub } from '../application/github/DisconnectGithub.js';
 import type { ListUserRepos } from '../application/github/ListUserRepos.js';
 import type { GithubTokenRepository } from '../application/github/GithubTokenRepository.js';
+import type { ProjectRepository } from '../application/project/ProjectRepository.js';
 import type { PutSecret } from '../application/secrets/PutSecret.js';
 import type { GetSecret } from '../application/secrets/GetSecret.js';
 import type { DeleteSecret } from '../application/secrets/DeleteSecret.js';
@@ -157,11 +158,15 @@ type AppDeps = {
     readonly setGitTokenDelegation: SetGitTokenDelegation;
     readonly listGitTokenAccessLog: ListGitTokenAccessLog;
     readonly gitTokenDelegations: GitTokenDelegationRepository;
-    // UserRepository нужен только для резолва displayName юзеров в access-log'е
-    // (routes.ts/git-token-delegation/access-log). Прокидываем здесь чтобы не
-    // тащить в AppDeps top-level — UserRepository нигде больше в presentation
-    // не используется напрямую (только через use-case'ы).
+    // UserRepository нужен для резолва displayName юзеров в access-log'е и
+    // в `all`-блоке git-token-delegation.
     readonly users: UserRepository;
+    // GithubTokenRepository — для резолва github-login'а каждого члена в UI
+    // `all`-блока (owner видит «у кого подключён GH»).
+    readonly githubTokens: GithubTokenRepository;
+    // ProjectRepository.getById — нужен прямой lookup в GET-роуте делегации
+    // (без обёртки use-case'а; чтение public-полей).
+    readonly projects: ProjectRepository;
     readonly reorderProjects: ReorderProjects;
     readonly listProjectCommits: ListProjectCommits;
     readonly getOrCreateInbox: GetOrCreateInbox;

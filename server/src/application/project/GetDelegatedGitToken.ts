@@ -1,12 +1,12 @@
 import type { DelegatedGitToken } from '../../domain/project/GitTokenDelegation.js';
 import {
   GitTokenDelegationDisabledError,
-  GranterGithubDisconnectedError,
-  GranterNotOwnerAnymoreError,
+  NoEligibleGrantorError,
   NotProjectDispatcherError,
   ProjectNotFoundError,
 } from '../../domain/project/errors.js';
 import type { GithubTokenRepository } from '../github/GithubTokenRepository.js';
+import type { UserRepository } from '../user/UserRepository.js';
 import type { GitTokenDelegationRepository } from './GitTokenDelegationRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
 
@@ -14,6 +14,7 @@ type Deps = {
   readonly projects: ProjectRepository;
   readonly delegations: GitTokenDelegationRepository;
   readonly githubTokens: GithubTokenRepository;
+  readonly users: UserRepository;
 };
 
 export type GetDelegatedGitTokenInput = {
@@ -21,15 +22,25 @@ export type GetDelegatedGitTokenInput = {
   readonly callerUserId: string;
 };
 
-// Сердце фичи. Вызывается из agent-endpoint'а; возвращает либо токен либо доменную
-// ошибку. ВАЖНО: для КАЖДОГО outcome (включая ошибки) пишем audit-log — owner потом
-// видит «кто и когда пробовал взять мой токен через этот проект».
+// v0.15+: per-member opt-in с детерминированным fallback по алфавиту.
 //
-// Токен берётся LIVE из user_github_tokens каждый раз (не snapshot). Если owner
-// перевыдал OAuth — диспетчер автоматически получит свежий на следующем вызове.
+// Алгоритм выбора (см. спеку):
+//   1. Caller — диспетчер проекта? Нет → not_dispatcher.
+//   2. Получить ВСЕ enabled-делегации проекта. Пусто → delegation_disabled.
+//   3. Собрать упорядоченный список granter-кандидатов:
+//      a) project.ownerId (если у него enabled-делегация есть)
+//      b) остальные enabled-granter'ы, сорт. по displayName ASC, email ASC
+//      Исключить callerUserId (диспетчер сам себе токен не отдаёт).
+//   4. Для каждого по порядку — взять granter, проверить GitHub-коннект.
+//      Первый с подключённым GH → 200 + outcome='ok'.
+//   5. Никто не подошёл → 403 no_eligible_grantor, candidatesChecked = len.
 //
-// Никогда не печатаем сам токен в app-логи; ошибки/issue выпускают наружу только
-// outcome-строку и понятное сообщение для пользователя.
+// Audit-log:
+//   - outcome='ok': granter_user_id = id выбранного
+//   - остальные: granter_user_id = NULL (выбора не было)
+//
+// Токен берётся LIVE из user_github_tokens на каждом запросе — рефрэш OAuth
+// подхватывается автоматически. Никогда не печатаем сам токен в app-логи.
 export class GetDelegatedGitToken {
   constructor(private readonly deps: Deps) {}
 
@@ -39,7 +50,7 @@ export class GetDelegatedGitToken {
     // 1. Проект.
     const project = await this.deps.projects.getById(projectId);
     if (!project) {
-      // Не логируем — для несуществующего проекта вообще нет access-log'а.
+      // Не логируем — для несуществующего проекта нет access-log'а.
       throw new ProjectNotFoundError();
     }
 
@@ -54,59 +65,81 @@ export class GetDelegatedGitToken {
       throw new NotProjectDispatcherError();
     }
 
-    // 3. Делегация существует и включена.
-    const delegation = await this.deps.delegations.get(projectId);
-    if (!delegation || !delegation.enabled) {
+    // 3. Все enabled-делегации.
+    const enabledDelegations = await this.deps.delegations.listEnabledForProject(projectId);
+    if (enabledDelegations.length === 0) {
       await this.deps.delegations.logAccess({
         projectId,
         accessedByUserId: callerUserId,
-        granterUserId: delegation?.granterUserId ?? null,
+        granterUserId: null,
         outcome: 'delegation_disabled',
       });
       throw new GitTokenDelegationDisabledError();
     }
 
-    // 4. Granter всё ещё owner проекта (если ownership передали — старая делегация
-    //    невалидна, нужна новая от нового owner'а).
-    if (delegation.granterUserId !== project.ownerId) {
+    // 4. Упорядочить кандидатов: owner первый (если у него enabled-делегация),
+    //    потом остальные по displayName ASC, email ASC. Caller исключаем.
+    const granterIds = enabledDelegations
+      .map((d) => d.granterUserId)
+      .filter((id) => id !== callerUserId);
+
+    // Резолвим юзеров одним batch-fetch'ем.
+    const granterUsers = await this.deps.users.getManyByIds(granterIds);
+    const byId = new Map(granterUsers.map((u) => [u.id, u]));
+
+    // Owner идёт первым (если он в кандидатах). Остальных сортируем case-insensitive
+    // по displayName, при равенстве — по email.
+    const nonOwner = granterIds.filter((id) => id !== project.ownerId);
+    nonOwner.sort((a, b) => {
+      const ua = byId.get(a);
+      const ub = byId.get(b);
+      if (!ua || !ub) return 0;
+      const ca = ua.displayName.toLowerCase().localeCompare(ub.displayName.toLowerCase(), 'ru');
+      if (ca !== 0) return ca;
+      return ua.email.localeCompare(ub.email);
+    });
+
+    const orderedCandidates: string[] = [];
+    if (granterIds.includes(project.ownerId)) {
+      orderedCandidates.push(project.ownerId);
+    }
+    orderedCandidates.push(...nonOwner);
+
+    // 5. Пройти кандидатов по порядку — взять токен первого с подключённым GitHub.
+    for (const granterId of orderedCandidates) {
+      const granterUser = byId.get(granterId);
+      if (!granterUser) continue; // delegation row для удалённого юзера — пропускаем
+      const githubConn = await this.deps.githubTokens.getWithTokenByUserId(granterId);
+      if (!githubConn) continue;
+
+      // Нашли. Logging + return.
       await this.deps.delegations.logAccess({
         projectId,
         accessedByUserId: callerUserId,
-        granterUserId: delegation.granterUserId,
-        outcome: 'granter_not_owner_anymore',
+        granterUserId: granterId,
+        outcome: 'ok',
       });
-      throw new GranterNotOwnerAnymoreError();
+      const delegation = enabledDelegations.find((d) => d.granterUserId === granterId);
+      return {
+        token: githubConn.accessToken,
+        login: githubConn.githubLogin,
+        scopes: githubConn.scopes,
+        source: granterId === project.ownerId ? 'owner_delegation' : 'member_delegation',
+        grantedBy: granterId,
+        grantedByDisplayName: granterUser.displayName,
+        // grantedAt должен быть не-null (enabled=true ⇒ upsert проставил), но
+        // на крайний случай fallback на now.
+        grantedAt: delegation?.grantedAt ?? new Date(),
+      };
     }
 
-    // 5. У granter'а ВСЁ ЕЩЁ подключён GitHub (мог отключить после включения делегации).
-    const githubConn = await this.deps.githubTokens.getWithTokenByUserId(delegation.granterUserId);
-    if (!githubConn) {
-      await this.deps.delegations.logAccess({
-        projectId,
-        accessedByUserId: callerUserId,
-        granterUserId: delegation.granterUserId,
-        outcome: 'granter_github_disconnected',
-      });
-      throw new GranterGithubDisconnectedError();
-    }
-
-    // 6. Happy path.
+    // 6. Никто не подошёл.
     await this.deps.delegations.logAccess({
       projectId,
       accessedByUserId: callerUserId,
-      granterUserId: delegation.granterUserId,
-      outcome: 'ok',
+      granterUserId: null,
+      outcome: 'no_eligible_grantor',
     });
-    return {
-      token: githubConn.accessToken,
-      login: githubConn.githubLogin,
-      scopes: githubConn.scopes,
-      source: 'owner_delegation',
-      grantedBy: delegation.granterUserId,
-      // grantedAt у delegation проставляется при включении; на момент успешного
-      // вызова он точно not-null (delegation.enabled === true → шли через ветку
-      // INSERT/UPDATE которая ставит grantedAt). На всякий — fallback на now.
-      grantedAt: delegation.grantedAt ?? new Date(),
-    };
+    throw new NoEligibleGrantorError(orderedCandidates.length);
   }
 }

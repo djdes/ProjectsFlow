@@ -1048,16 +1048,16 @@ export function agentApiRouter(deps: Deps): Router {
     },
   );
 
-  // Делегированный GitHub-токен owner'а проекта для git-операций. Caller — текущий
-  // диспетчер проекта; owner должен был явно включить toggle на сайте. Токен берётся
-  // LIVE из user_github_tokens (рефрэш OAuth подхватывается). Для КАЖДОГО исхода
-  // (успешного и нет) пишется audit-log — owner видит «кто и когда брал мой токен».
+  // Делегированный GitHub-токен для git-операций. v0.15: per-member opt-in.
+  // Caller — текущий диспетчер проекта; сервер выбирает первого подходящего
+  // granter'а в порядке owner→displayName ASC (caller исключается из кандидатов).
+  // Токен берётся LIVE из user_github_tokens (рефрэш OAuth подхватывается).
+  // Для КАЖДОГО исхода пишется audit-log — owner видит «кто и когда брал».
   //
   // Ошибки use-case'а маппятся в errorHandler:
   //   NotProjectDispatcherError       → 403 not_dispatcher
-  //   GitTokenDelegationDisabledError → 403 delegation_disabled
-  //   GranterNotOwnerAnymoreError     → 403 granter_not_owner_anymore
-  //   GranterGithubDisconnectedError  → 410 granter_github_disconnected
+  //   GitTokenDelegationDisabledError → 403 delegation_disabled (никто не включил)
+  //   NoEligibleGrantorError          → 403 no_eligible_grantor (включили, но без GH)
   router.get(
     '/projects/:projectId/git-token',
     async (req: Request, res: Response, next: NextFunction) => {
@@ -1073,8 +1073,11 @@ export function agentApiRouter(deps: Deps): Router {
           token: token.token,
           login: token.login,
           scopes: token.scopes,
+          // v0.15: source может быть 'owner_delegation' либо 'member_delegation'
           source: token.source,
           grantedBy: token.grantedBy,
+          // v0.15: + displayName для диагностики на стороне Ralph'а
+          grantedByDisplayName: token.grantedByDisplayName,
           grantedAt: token.grantedAt.toISOString(),
         });
       } catch (e) {

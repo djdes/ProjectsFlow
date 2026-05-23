@@ -118,6 +118,7 @@ export function AdminUserDispatchersDialog({ user, onClose }: Props): React.Reac
                 />
                 <GitTokenDelegationToggle
                   projectId={p.projectId}
+                  granterUserId={user.id}
                   enabled={p.gitTokenDelegationEnabled}
                   ownerDisplayName={user.displayName}
                   onChanged={(enabled) => replaceProject({ ...p, gitTokenDelegationEnabled: enabled })}
@@ -241,17 +242,19 @@ function DispatcherPicker({
   );
 }
 
-// Toggle GitHub-делегации админом за владельца проекта. Granter ВСЕГДА = owner
-// (сервер сам подставляет), admin технически просто «жмёт за него». Если owner
-// не подключил GitHub — сервер вернёт 400 github_not_connected (рендерим в toast).
+// v0.15: per-member opt-in. Admin через optional `granterUserId` toggle'ит ИМЕННО
+// делегацию владельца проекта (target user). Без этого параметра был бы toggle
+// admin'овой собственной делегации, что бессмысленно в admin-UI.
 function GitTokenDelegationToggle({
   projectId,
+  granterUserId,
   enabled,
   ownerDisplayName,
   onChanged,
   projectRepository,
 }: {
   projectId: string;
+  granterUserId: string;
   enabled: boolean;
   ownerDisplayName: string;
   onChanged: (enabled: boolean) => void;
@@ -262,7 +265,11 @@ function GitTokenDelegationToggle({
   const toggle = async (): Promise<void> => {
     setSaving(true);
     try {
-      const next = await projectRepository.setGitTokenDelegation(projectId, !enabled);
+      const next = await projectRepository.setGitTokenDelegation(
+        projectId,
+        !enabled,
+        granterUserId,
+      );
       onChanged(next.enabled);
       toast.success(
         next.enabled

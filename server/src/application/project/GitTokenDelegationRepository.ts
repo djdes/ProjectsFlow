@@ -24,11 +24,19 @@ export type GitTokenAccessLogEntry = {
 };
 
 export interface GitTokenDelegationRepository {
-  // Текущая делегация проекта (или null если ещё ни разу не настраивали).
-  get(projectId: string): Promise<GitTokenDelegation | null>;
-  // Включить/выключить. При enabled=true: ставит granted_at = NOW(), revoked_at = NULL.
-  // При enabled=false: ставит revoked_at = NOW() (granted_at сохраняем как историю).
-  // Идемпотентно: если запись уже есть с тем же `enabled` — флаги не сбрасываются.
+  // Делегация конкретного члена проекта (granter). Null если запись не создавалась.
+  // v0.15: per-member opt-in — каждый член независимо включает СВОЮ делегацию.
+  getForMember(projectId: string, granterUserId: string): Promise<GitTokenDelegation | null>;
+  // Все active-делегации проекта (enabled=true). Используется в GetDelegatedGitToken
+  // для выбора кандидата и в UI для рендера списка «кто разрешил».
+  listEnabledForProject(projectId: string): Promise<GitTokenDelegation[]>;
+  // Все делегации проекта (включая enabled=false) — для UI «полный список членов
+  // с их статусом». Возвращает только существующие row'ы; члены без записи —
+  // считаются «не делегирующими» (enabled=false).
+  listAllForProject(projectId: string): Promise<GitTokenDelegation[]>;
+  // Upsert ОДНОЙ записи (один granter). При enabled=true: granted_at = NOW() если
+  // впервые, revoked_at = NULL. При enabled=false: revoked_at = NOW(), granted_at
+  // оставляем (история).
   upsert(input: UpsertGitTokenDelegationInput): Promise<GitTokenDelegation>;
   // Лог-запись о попытке вызова /agent/.../git-token. Пишется для ВСЕХ outcome'ов
   // (ok и ошибочных) — нужно для разбора инцидентов и UI «лога обращений» owner'у.

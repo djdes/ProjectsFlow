@@ -63,11 +63,15 @@ export class DrizzleAdminRepository implements AdminRepository {
           SELECT COUNT(*) FROM projects p
           WHERE p.owner_id = ${users.id} AND p.is_inbox = FALSE
         )`,
-        // Сколько из его owned-проектов имеют active delegation.
+        // v0.15: per-member делегации. В admin UI «X разрешил свой GH» = у X есть
+        // ВКЛЮЧЁННАЯ запись делегации в проекте где X — owner. Если другие
+        // members этого проекта тоже разрешили — это видно отдельно в диалоге.
         delegationEnabledCount: sql<number>`(
           SELECT COUNT(*) FROM project_git_token_delegations d
           INNER JOIN projects p ON p.id = d.project_id
-          WHERE p.owner_id = ${users.id} AND d.enabled = TRUE
+          WHERE p.owner_id = ${users.id}
+            AND d.granter_user_id = ${users.id}
+            AND d.enabled = TRUE
         )`,
         // Подключён ли GitHub. UI рисует индикатор «нет GH — делегацию включать нельзя».
         githubConnected: sql<number>`(

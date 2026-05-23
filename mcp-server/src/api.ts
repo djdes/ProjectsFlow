@@ -311,16 +311,18 @@ export type IncomeResult = {
   receivedOn: string;
 };
 
-// Делегированный GitHub-токен для git-операций. Plaintext OAuth-токен owner'а
-// проекта — используется ТОЛЬКО для команд git в репо этого проекта. Не персистить,
-// не логировать, не использовать вне непосредственного git-вызова. Сервер ротирует
-// автоматически когда owner перевыдаёт OAuth.
+// Делегированный GitHub-токен для git-операций. v0.15: per-member opt-in.
+// Сервер выбирает первого подходящего grantor'а в порядке owner→displayName ASC
+// (caller-диспетчер исключается). source указывает «owner» это был или «member».
+// Plaintext OAuth-токен — ТОЛЬКО для git-команд в репо проекта. Не персистить,
+// не логировать. Сервер ротирует автоматически когда юзер перевыдаёт OAuth.
 export type DelegatedGitToken = {
   token: string;
   login: string;
   scopes: string[];
-  source: 'owner_delegation';
+  source: 'owner_delegation' | 'member_delegation';
   grantedBy: string;
+  grantedByDisplayName: string;
   grantedAt: string;
 };
 

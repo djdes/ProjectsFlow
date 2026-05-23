@@ -325,6 +325,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       delegations: gitTokenDelegationRepo,
       githubTokens: githubTokenRepo,
+      users: userRepo,
     }),
     listGitTokenAccessLog: new ListGitTokenAccessLog({
       projects: projectRepo,
@@ -332,6 +333,8 @@ const { app, devProxyUpgrade } = createApp({
     }),
     gitTokenDelegations: gitTokenDelegationRepo,
     users: userRepo,
+    githubTokens: githubTokenRepo,
+    projects: projectRepo,
     reorderProjects: new ReorderProjects({ members: projectMemberRepo }),
     listProjectCommits: new ListProjectCommits({
       projects: projectRepo,
@@ -851,6 +854,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       delegations: gitTokenDelegationRepo,
       githubTokens: githubTokenRepo,
+      users: userRepo,
     }),
     rateLimiter: agentRateLimiter,
   },

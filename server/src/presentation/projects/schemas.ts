@@ -89,9 +89,12 @@ export const setDispatcherSchema = z.object({
   userId: z.string().min(1).nullable(),
 });
 
-// Включить/выключить делегирование GitHub-токена owner'а текущему диспетчеру.
+// Включить/выключить per-member делегацию GitHub-токена. Default granter =
+// callerUserId (caller включает СВОЮ делегацию). Optional `granterUserId` —
+// для admin-on-behalf: admin указывает за кого toggle'ить.
 export const setGitTokenDelegationSchema = z.object({
   enabled: z.boolean(),
+  granterUserId: z.string().min(1).optional(),
 });
 
 export type CreateInviteBody = z.infer<typeof createInviteSchema>;
