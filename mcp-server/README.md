@@ -55,6 +55,7 @@ claude mcp add --scope user projectsflow \
 | `pf_list_user_repos` | GitHub-репозитории юзера (fullName, htmlUrl, description, private, pushedAt). Зови перед `pf_create_project`, чтобы найти похожий по названию и предложить «подключить существующий». |
 | `pf_create_project` | Создать проект. **Перед вызовом спроси у юзера про git** (см. ритуал ниже): `git.mode` = `none` / `connect` (привязать `gitRepoUrl`) / `create` (завести новый репо под GitHub-аккаунтом юзера, по умолчанию private). |
 | `pf_update_project` | Переименовать проект и/или привязать git-репо (`name` и/или `gitRepoUrl`). Требует роль editor+. |
+| `pf_delete_project` | **Безвозвратное** удаление проекта (owner-only). Каскадно чистит задачи, локальную KB, секреты, финансы, инвайты, members. GitHub-репо НЕ удаляется. Inbox запрещён. Других участников уведомляет email'ом. Только по явной просьбе юзера. |
 | `pf_list_members` | Состав команды проекта (userId, displayName, email, role, isAdmin, joinedAt). |
 
 ### Чтение / vault

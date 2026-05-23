@@ -33,6 +33,10 @@ export interface ProjectRepository {
   getInbox(): Promise<Project>;
   create(input: CreateProjectInput): Promise<Project>;
   update(id: string, patch: UpdateProjectInput): Promise<Project>;
+  // Безвозвратное удаление проекта (owner-only, инбокс запрещён). Каскадно чистит
+  // все child-данные (задачи, KB, секреты, финансы и т.д.) — подробности
+  // на серверном DeleteProject use-case.
+  delete(id: string): Promise<void>;
   // Персональная пересортировка сайдбара: полный список id в желаемом порядке.
   reorder(orderedIds: readonly string[]): Promise<void>;
 

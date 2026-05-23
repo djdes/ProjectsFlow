@@ -36,6 +36,7 @@
 //   - pf_check_repo_usage      — приватная проверка занятости репо
 //   - pf_request_repo_access   — запрос общего доступа к репо
 //   - pf_get_my_account        — профиль юзера + github (OAuth-токен) + agent-токены
+//   - pf_delete_project        — безвозвратное удаление проекта (owner-only)
 //
 // Установка в Claude Code:
 //   claude mcp add projectsflow npx -- -y @projectsflow/mcp-server
@@ -707,6 +708,25 @@ const TOOLS = [
     },
   },
   {
+    name: 'pf_delete_project',
+    description:
+      'Permanently delete a project (OWNER-only). IRREVERSIBLE. Cascades deletion of: ' +
+      'tasks + their comments/commits/attachment-rows, local KB documents, project secrets ' +
+      'in vault, finance records (expenses/incomes/employee-assignments), invites and ' +
+      'join-requests, and team memberships. The connected GitHub repository and GitHub-KB ' +
+      'repo are NOT deleted — manage those on GitHub. Inbox-project cannot be deleted (409). ' +
+      'Other team members will be notified by email (best-effort). Use only when the user ' +
+      "EXPLICITLY asks to delete the project — never as part of cleanup or 'tidying up'.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+      },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pf_get_my_account',
     description:
       "Return the authenticated user's full account data: profile (id, email, displayName, " +
@@ -877,7 +897,7 @@ async function main(): Promise<void> {
   const api = new ApiClient(config);
 
   const server = new Server(
-    { name: 'projectsflow', version: '0.11.0' },
+    { name: 'projectsflow', version: '0.12.0' },
     { capabilities: { tools: {} } },
   );
 
@@ -1125,6 +1145,13 @@ async function main(): Promise<void> {
         case 'pf_get_my_account': {
           const account = await api.getMyAccount();
           return jsonResult(account);
+        }
+        case 'pf_delete_project': {
+          const input = z
+            .object({ projectId: z.string().min(1) })
+            .parse(req.params.arguments ?? {});
+          await api.deleteProject(input.projectId);
+          return jsonResult({ ok: true, deletedProjectId: input.projectId });
         }
         default:
           return errorResult(`Unknown tool: ${name}`);

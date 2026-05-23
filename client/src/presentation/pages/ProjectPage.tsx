@@ -1,12 +1,16 @@
-import { Link, useParams } from 'react-router-dom';
-import { ChevronRight, LayoutGrid } from 'lucide-react';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ChevronRight, LayoutGrid, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useProject } from '@/presentation/hooks/useProject';
+import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { GitRepoSection } from '@/presentation/components/forms/GitRepoSection';
 import { RecentCommitsSection } from '@/presentation/components/github/RecentCommitsSection';
 import { KbSection } from '@/presentation/components/kb/KbSection';
 import { EditableProjectTitle } from '@/presentation/components/project/EditableProjectTitle';
 import { TeamSection } from '@/presentation/components/project/TeamSection';
+import { DeleteProjectDialog } from '@/presentation/components/project/DeleteProjectDialog';
 import type { ProjectStatus } from '@/domain/project/Project';
 
 const statusLabel: Record<ProjectStatus, string> = {
@@ -25,7 +29,10 @@ function Badge({ children }: { children: React.ReactNode }): React.ReactElement 
 
 export function ProjectPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
   const { data, loading, notFound } = useProject(projectId ?? '');
+  const { refresh: refreshProjects } = useProjectsContext();
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   if (loading) {
     return (
@@ -89,6 +96,49 @@ export function ProjectPage(): React.ReactElement {
       <KbSection project={data} />
 
       <TeamSection project={data} />
+
+      {/* Опасная зона — только для владельца и не для inbox-проекта (служебный). */}
+      {data.role === 'owner' && !data.isInbox && (
+        <>
+          <Card className="border-destructive/30">
+            <CardHeader>
+              <CardTitle className="text-base text-destructive">Опасная зона</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 text-sm">
+                  <p className="font-medium">Удалить проект</p>
+                  <p className="text-muted-foreground">
+                    Безвозвратно удалит проект, все его задачи, локальные KB-документы,
+                    секреты и финансовые записи. Подключённый GitHub-репозиторий не
+                    затрагивается.
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  onClick={() => setDeleteOpen(true)}
+                  className="shrink-0"
+                >
+                  <Trash2 className="size-4" />
+                  Удалить проект
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <DeleteProjectDialog
+            open={deleteOpen}
+            onOpenChange={setDeleteOpen}
+            projectId={data.id}
+            projectName={data.name}
+            otherMemberCount={Math.max(0, (data.memberCount ?? 1) - 1)}
+            onDeleted={() => {
+              refreshProjects();
+              navigate('/');
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }

@@ -35,6 +35,7 @@ import type { ManageProjectFinance } from '../../application/finance/ManageProje
 import type { GetKbDocument } from '../../application/kb/GetKbDocument.js';
 import type { DeleteKbDocument } from '../../application/kb/DeleteKbDocument.js';
 import type { GetMyAccount } from '../../application/agent/GetMyAccount.js';
+import type { DeleteProject } from '../../application/project/DeleteProject.js';
 import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemoryRateLimiter.js';
 import { normalizeGitUrl } from '../../application/project/gitUrl.js';
 import type { PendingAgentJob } from '../../application/agent/AgentJobRepository.js';
@@ -92,6 +93,7 @@ type Deps = {
   readonly getProjectFinance: GetProjectFinance;
   readonly manageProjectFinance: ManageProjectFinance;
   readonly getMyAccount: GetMyAccount;
+  readonly deleteProject: DeleteProject;
   readonly rateLimiter: InMemoryRateLimiter;
   // Email-оповещения команде (источник 'mcp' — действия агента). Fire-and-forget.
   readonly notifier: ProjectNotificationService;
@@ -970,6 +972,34 @@ export function agentApiRouter(deps: Deps): Router {
             incurredOn: dateOnlyToIso(expense.incurredOn),
           },
         });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Безвозвратное удаление проекта через agent-API (owner-only). Каскадно чистит
+  // tasks/comments/commits/attachments-rows/kb_documents/secrets/finance/invites/
+  // join_requests/members + сам проект. Inbox запрещён (409). Email-уведомления
+  // остальным участникам fire-and-forget.
+  router.delete(
+    '/projects/:projectId',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const result = await deps.deleteProject.execute(projectId, req.user!.id);
+        void deps.notifier
+          .onProjectDeleted({
+            projectName: result.project.name,
+            actorUserId: req.user!.id,
+            actorDisplayName: req.user!.displayName,
+            recipients: result.memberSnapshots.map((m) => ({
+              userId: m.userId,
+              email: m.user.email,
+            })),
+          })
+          .catch(() => {});
+        res.status(204).end();
       } catch (e) {
         next(e);
       }

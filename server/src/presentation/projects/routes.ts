@@ -3,6 +3,7 @@ import type { ListProjects, ProjectWithRole } from '../../application/project/Li
 import type { GetProject } from '../../application/project/GetProject.js';
 import type { CreateProject } from '../../application/project/CreateProject.js';
 import type { UpdateProject } from '../../application/project/UpdateProject.js';
+import type { DeleteProject } from '../../application/project/DeleteProject.js';
 import type { ReorderProjects } from '../../application/project/ReorderProjects.js';
 import type { ListProjectMembers } from '../../application/project/ListProjectMembers.js';
 import type { RemoveProjectMember } from '../../application/project/RemoveProjectMember.js';
@@ -40,6 +41,7 @@ type Deps = {
   readonly getProject: GetProject;
   readonly createProject: CreateProject;
   readonly updateProject: UpdateProject;
+  readonly deleteProject: DeleteProject;
   readonly reorderProjects: ReorderProjects;
   readonly listProjectCommits: ListProjectCommits;
   readonly listMembers: ListProjectMembers;
@@ -249,6 +251,35 @@ export function projectsRouter(deps: Deps): Router {
       });
       deps.notifyProjectChanged(id);
       res.json({ project: toDto(project) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Безвозвратное удаление проекта (owner-only через requireProjectAccess(...,'delete_project')).
+  // Inbox запрещён (CannotDeleteInboxError → 400). Каскадит tasks/comments/commits/attachments-rows,
+  // kb_documents, secrets, finance, invites, join_requests, members + сам проект. Файлы аттачей
+  // best-effort чистит use-case fire-and-forget. GitHub-репо и github-KB-репо НЕ удаляются.
+  // Оставшимся участникам — email-оповещение через notifier (fire-and-forget).
+  router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const result = await deps.deleteProject.execute(id, req.user!.id);
+      // Live-сигнал участникам, у кого открыт сайдбар: проект должен пропасть.
+      // notifyProjectChanged — generic «что-то поменялось», в нашем случае удаление
+      // вызовет 404 при попытке достать проект и UI его уберёт.
+      deps.notifyProjectChanged(id);
+      // Email-уведомления оставшимся (без актора).
+      void deps.notifier
+        .onProjectDeleted({
+          projectName: result.project.name,
+          actorUserId: req.user!.id,
+          actorDisplayName: req.user!.displayName,
+          recipients: result.memberSnapshots.map((m) => ({ userId: m.userId, email: m.user.email })),
+        })
+        .catch(() => {});
+      res.status(204).end();
     } catch (e) {
       next(e);
     }

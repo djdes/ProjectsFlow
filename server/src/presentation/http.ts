@@ -16,6 +16,7 @@ import type { ListProjects } from '../application/project/ListProjects.js';
 import type { GetProject } from '../application/project/GetProject.js';
 import type { CreateProject } from '../application/project/CreateProject.js';
 import type { UpdateProject } from '../application/project/UpdateProject.js';
+import type { DeleteProject } from '../application/project/DeleteProject.js';
 import type { ReorderProjects } from '../application/project/ReorderProjects.js';
 import type { CreateProjectWithGit } from '../application/project/CreateProjectWithGit.js';
 import type { GetOrCreateInbox } from '../application/project/GetOrCreateInbox.js';
@@ -141,6 +142,7 @@ type AppDeps = {
     readonly getProject: GetProject;
     readonly createProject: CreateProject;
     readonly updateProject: UpdateProject;
+    readonly deleteProject: DeleteProject;
     readonly reorderProjects: ReorderProjects;
     readonly listProjectCommits: ListProjectCommits;
     readonly getOrCreateInbox: GetOrCreateInbox;
@@ -282,6 +284,7 @@ type AppDeps = {
     readonly getProjectFinance: GetProjectFinance;
     readonly manageProjectFinance: ManageProjectFinance;
     readonly getMyAccount: GetMyAccount;
+    readonly deleteProject: DeleteProject;
     readonly rateLimiter: InMemoryRateLimiter;
   };
 };
@@ -406,6 +409,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       getProjectFinance: deps.agent.getProjectFinance,
       manageProjectFinance: deps.agent.manageProjectFinance,
       getMyAccount: deps.agent.getMyAccount,
+      deleteProject: deps.agent.deleteProject,
       rateLimiter: deps.agent.rateLimiter,
       notifier: deps.notifications.projectNotifier,
     }),

@@ -24,4 +24,7 @@ export interface TaskAttachmentRepository {
   countsByTasks(taskIds: string[]): Promise<Map<string, number>>;
   delete(attachmentId: string): Promise<boolean>;
   deleteByTask(taskId: string): Promise<number>;
+  // Storage-ключи всех аттачей проекта (через JOIN с tasks). Use-case вызывает ДО
+  // каскадного удаления, чтобы потом fire-and-forget удалить файлы с диска.
+  listStorageKeysByProject(projectId: string): Promise<string[]>;
 }

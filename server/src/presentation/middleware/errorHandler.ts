@@ -6,6 +6,7 @@ import {
   UserNotFoundError,
 } from '../../domain/user/errors.js';
 import {
+  CannotDeleteInboxError,
   CannotInviteToInboxError,
   CannotRemoveSelfAsLastOwnerError,
   InsufficientProjectRoleError,
@@ -144,6 +145,13 @@ export function errorHandler(
     res.status(409).json({
       error: 'cannot_invite_to_inbox',
       message: 'Во «Входящие» нельзя приглашать — это личное пространство',
+    });
+    return;
+  }
+  if (err instanceof CannotDeleteInboxError) {
+    res.status(409).json({
+      error: 'cannot_delete_inbox',
+      message: 'Папку «Входящие» нельзя удалить — это служебный проект',
     });
     return;
   }

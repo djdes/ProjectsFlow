@@ -32,4 +32,11 @@ export interface ProjectRepository {
   // Все проекты с непустым git_repo_url. Нормализацию/фильтрацию делает use-case
   // (CheckGitCollision) — он же контролирует cross-tenant-раскрытие.
   listWithGitRepo(): Promise<Project[]>;
+  // Полное каскадное удаление проекта в ОДНОЙ транзакции: все child-таблицы
+  // (tasks/comments/commits/attachment-rows/kb_documents/secrets/finance/invites/
+  // join_requests/members/agent_jobs) + сам project. Файлы аттачей с диска чистит
+  // use-case ДО вызова этого метода (отдельный fire-and-forget storage.delete).
+  // Не удаляет: GitHub-репо проекта (внешний ресурс), employees (owner-scoped,
+  // шарятся между проектами), notifications (user-scoped, soft-fallback при клике).
+  deleteCascade(projectId: string): Promise<void>;
 }

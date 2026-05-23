@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   DndContext,
   PointerSensor,
@@ -22,9 +22,11 @@ import {
   MoreHorizontal,
   Pencil,
   Search,
+  Trash2,
   Users,
 } from 'lucide-react';
 import { useProjects } from '@/presentation/hooks/useProjects';
+import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useReorderProjects } from '@/presentation/hooks/useReorderProjects';
 import {
   DropdownMenu,
@@ -37,6 +39,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { defaultProjectIcon as ProjectIcon } from './projectIcons';
 import { RenameProjectDialog } from '@/presentation/components/project/RenameProjectDialog';
+import { DeleteProjectDialog } from '@/presentation/components/project/DeleteProjectDialog';
 import type { Project } from '@/domain/project/Project';
 
 type MoveDir = 'up' | 'down';
@@ -58,9 +61,15 @@ function SidebarProjectRow({
   onMove,
 }: RowProps): React.ReactElement {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { refresh: refreshProjects } = useProjectsContext();
   const [menuOpen, setMenuOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const isArchived = project.status === 'archived';
+  // Удалить может только owner; inbox-проект (служебный, один на юзера) удалять
+  // нельзя в принципе — пункт прячем, чтобы не было ложной кнопки.
+  const canDelete = project.role === 'owner' && !project.isInbox;
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: project.id,
@@ -186,6 +195,18 @@ function SidebarProjectRow({
             <ArrowDown />
             Переместить ниже
           </DropdownMenuItem>
+          {canDelete && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => setDeleteOpen(true)}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 />
+                Удалить проект…
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -195,6 +216,27 @@ function SidebarProjectRow({
         projectId={project.id}
         currentName={project.name}
       />
+
+      {canDelete && (
+        <DeleteProjectDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          projectId={project.id}
+          projectName={project.name}
+          // memberCount включает самого юзера; «остальные» = на 1 меньше.
+          // Если поле не пришло (старый ответ) — считаем что других нет.
+          otherMemberCount={Math.max(0, (project.memberCount ?? 1) - 1)}
+          onDeleted={() => {
+            // Если удалили проект, на странице которого сейчас находимся — уведём на главную.
+            if (location.pathname.startsWith(`/projects/${project.id}`)) {
+              navigate('/');
+            }
+            // И руками просим список перечитать (realtime SSE тоже сработает, но
+            // мгновенное обновление UX лучше — пользователь видит результат сразу).
+            refreshProjects();
+          }}
+        />
+      )}
     </div>
   );
 }

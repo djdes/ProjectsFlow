@@ -67,3 +67,12 @@ export class CannotRemoveSelfAsLastOwnerError extends Error {
     this.name = 'CannotRemoveSelfAsLastOwnerError';
   }
 }
+
+// Inbox-проект — служебный (по одному на юзера, туда падают orphan-задачи).
+// Удалять его нельзя: разрушит инвариант системы «у юзера всегда есть inbox».
+export class CannotDeleteInboxError extends Error {
+  constructor() {
+    super('Cannot delete inbox project');
+    this.name = 'CannotDeleteInboxError';
+  }
+}
