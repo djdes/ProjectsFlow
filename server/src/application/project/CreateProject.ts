@@ -12,6 +12,11 @@ type Deps = {
   readonly repo: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly idGen: () => string;
+  // Опциональная политика «авто-дефолт Ralph-диспетчера на новый проект».
+  // Возвращает userId дежурного admin'а (с активным токеном) либо null —
+  // тогда проект остаётся без диспетчера (ручной режим). Best-effort: если
+  // резолвер бросит ошибку — НЕ роняем создание проекта, просто пропускаем.
+  readonly resolveDefaultDispatcher?: () => Promise<string | null>;
 };
 
 export class CreateProject {
@@ -28,6 +33,24 @@ export class CreateProject {
     // Multi-tenancy: создатель сразу становится owner-member'ом проекта. Без этой строки
     // никакие последующие requireProjectAccess не пройдут (доступ исключительно через members).
     await this.deps.members.add({ projectId: project.id, userId: cmd.ownerId, role: 'owner' });
+
+    // Auto-default Ralph-диспетчера на дежурного admin'а (с активным agent-токеном).
+    // Best-effort: ошибка резолвера или update'а НЕ роняет создание проекта — проект уже
+    // существует, юзер ждёт 201. Inbox сюда не попадает: он создаётся отдельно через
+    // GetOrCreateInbox.repo.create() в обход этого use-case'а.
+    if (this.deps.resolveDefaultDispatcher) {
+      try {
+        const dispatcherUserId = await this.deps.resolveDefaultDispatcher();
+        if (dispatcherUserId) {
+          const updated = await this.deps.repo.update(project.id, { dispatcherUserId });
+          if (updated) return updated;
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[CreateProject] failed to set default dispatcher:', e);
+      }
+    }
+
     return project;
   }
 }
