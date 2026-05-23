@@ -24,17 +24,30 @@ export function useTasks(projectId: string): UseTasks {
   const { taskRepository } = useContainer();
   const [state, setState] = useState<State>({ tasks: [], loading: true, error: null });
 
+  // refetch() НЕ сбрасывает loading=true и НЕ обнуляет tasks. Это критично для
+  // SSE-обновлений: каждое SSE-событие вызывает refetch, и если бы тут стояло
+  // `loading: true` — KanbanBoard переключался в skeleton-режим на ~100-300мс,
+  // что юзеры видят как «контент мигает». Теперь данные обновляются in-place.
+  // Skeleton показывается только при первом mount/смене projectId (см. useEffect).
+  // На ошибке tasks НЕ обнуляем — пусть юзер видит последний снимок + error.
   const refetch = useCallback(async (): Promise<void> => {
-    setState((s) => ({ ...s, loading: true, error: null }));
     try {
       const tasks = await taskRepository.list(projectId);
       setState({ tasks, loading: false, error: null });
     } catch (e) {
-      setState({ tasks: [], loading: false, error: (e as Error).message ?? 'Не удалось загрузить' });
+      setState((s) => ({
+        ...s,
+        loading: false,
+        error: (e as Error).message ?? 'Не удалось загрузить',
+      }));
     }
   }, [taskRepository, projectId]);
 
   useEffect(() => {
+    // Смена projectId (или первый mount) — сбрасываем в skeleton-state, потом
+    // фетчим. SSE-refetch'и идут мимо useEffect (refetch вызывается напрямую
+    // из useRealtimeTaskRefresh), поэтому skeleton не дёргается на каждый event.
+    setState({ tasks: [], loading: true, error: null });
     void refetch();
   }, [refetch]);
 
