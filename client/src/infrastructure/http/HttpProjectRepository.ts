@@ -5,6 +5,7 @@ import { ProjectNameAlreadyExistsError } from '@/domain/project/errors';
 import type {
   CreateInviteInput,
   CreateProjectInput,
+  DispatcherCandidate,
   GitCollision,
   ProjectRepository,
   UpdateProjectInput,
@@ -25,6 +26,7 @@ type ProjectDto = {
   taskCount?: number;
   kbKind?: 'none' | 'github' | 'local';
   financeVisibility?: 'owner' | 'members';
+  dispatcherUserId?: string | null;
   createdAt: string;
 };
 
@@ -43,6 +45,7 @@ function fromDto(dto: ProjectDto): Project {
     memberCount: dto.memberCount,
     taskCount: dto.taskCount,
     financeVisibility: dto.financeVisibility ?? 'owner',
+    dispatcherUserId: dto.dispatcherUserId ?? null,
     createdAt: new Date(dto.createdAt),
   };
 }
@@ -152,6 +155,21 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async delete(id: string): Promise<void> {
     await httpClient.delete<void>(`/projects/${id}`);
+  }
+
+  async listDispatcherCandidates(projectId: string): Promise<DispatcherCandidate[]> {
+    const { candidates } = await httpClient.get<{ candidates: DispatcherCandidate[] }>(
+      `/projects/${projectId}/dispatcher-candidates`,
+    );
+    return candidates;
+  }
+
+  async setDispatcher(projectId: string, userId: string | null): Promise<Project> {
+    const { project } = await httpClient.put<{ project: ProjectDto }>(
+      `/projects/${projectId}/dispatcher`,
+      { userId },
+    );
+    return fromDto(project);
   }
 
   async reorder(orderedIds: readonly string[]): Promise<void> {

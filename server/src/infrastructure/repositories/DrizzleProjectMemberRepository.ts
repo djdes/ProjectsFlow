@@ -53,6 +53,7 @@ function toProject(row: ProjectRow): Project {
     isInbox: row.isInbox,
     kbKind: row.kbKind,
     financeVisibility: row.financeVisibility,
+    dispatcherUserId: row.dispatcherUserId ?? null,
     createdAt: row.createdAt,
   };
 }

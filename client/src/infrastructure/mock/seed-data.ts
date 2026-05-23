@@ -12,6 +12,7 @@ export const seedProjects: Project[] = [
     role: 'owner',
     kbKind: 'none',
     financeVisibility: 'owner',
+    dispatcherUserId: null,
     createdAt: new Date('2025-01-15'),
   },
   {
@@ -24,6 +25,7 @@ export const seedProjects: Project[] = [
     role: 'owner',
     kbKind: 'none',
     financeVisibility: 'owner',
+    dispatcherUserId: null,
     createdAt: new Date('2025-03-20'),
   },
   {
@@ -36,6 +38,7 @@ export const seedProjects: Project[] = [
     role: 'owner',
     kbKind: 'none',
     financeVisibility: 'owner',
+    dispatcherUserId: null,
     createdAt: new Date('2024-11-02'),
   },
   {
@@ -48,6 +51,7 @@ export const seedProjects: Project[] = [
     role: 'owner',
     kbKind: 'none',
     financeVisibility: 'owner',
+    dispatcherUserId: null,
     createdAt: new Date('2024-05-10'),
   },
 ];

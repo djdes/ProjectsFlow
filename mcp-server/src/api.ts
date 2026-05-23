@@ -9,6 +9,16 @@ export type Project = {
   status: string;
   hasKb: boolean;
   gitRepoUrl: string | null;
+  // Ralph-диспетчер: какой юзер автономно выполняет задачи. null = ручной режим.
+  dispatcherUserId?: string | null;
+  // Удобный флаг: «этот проект назначен мне как Ralph-диспетчеру». Сервер заполняет
+  // на всех agent-эндпоинтах, где знает токеновладельца.
+  isMyDispatch?: boolean;
+};
+
+export type DispatchedProject = Project & {
+  openTaskCount: number;
+  queuedAgentJobCount: number;
 };
 
 export type UserRepo = {
@@ -640,6 +650,21 @@ export class ApiClient {
       `/agent/projects/${encodeURIComponent(projectId)}`,
       { method: 'DELETE' },
     );
+  }
+
+  async listMyDispatchedProjects(): Promise<DispatchedProject[]> {
+    const { projects } = await this.request<{ projects: DispatchedProject[] }>(
+      '/agent/me/dispatched-projects',
+    );
+    return projects;
+  }
+
+  async setProjectDispatcher(projectId: string, userId: string | null): Promise<Project> {
+    const { project } = await this.request<{ project: Project }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/dispatcher`,
+      { method: 'PUT', body: { userId } },
+    );
+    return project;
   }
 }
 

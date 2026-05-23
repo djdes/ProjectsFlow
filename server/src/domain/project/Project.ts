@@ -16,6 +16,10 @@ export type Project = {
   readonly kbKind: KbKind;
   // Кто видит финансы проекта: 'owner' (по умолчанию) или 'members' (все участники).
   readonly financeVisibility: FinanceVisibility;
+  // Ralph-диспетчер: какой member отвечает за автономное выполнение задач этого
+  // проекта (через MCP /loop). NULL = ручной режим. Auto-NULL при revoke последнего
+  // активного agent-токена этого юзера.
+  readonly dispatcherUserId: string | null;
   // True для phantom-проекта «Входящие». На юзера ровно один такой; создаётся лениво
   // через GetOrCreateInbox. Из обычных списков (sidebar, HomePage) клиент должен
   // отфильтровать inbox-проекты — у них отдельная вкладка.

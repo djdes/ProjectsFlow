@@ -36,6 +36,7 @@ function toProject(row: ProjectRow): Project {
     isInbox: row.isInbox,
     kbKind: row.kbKind,
     financeVisibility: row.financeVisibility,
+    dispatcherUserId: row.dispatcherUserId ?? null,
     createdAt: row.createdAt,
   };
 }
@@ -90,12 +91,13 @@ export class DrizzleProjectRepository implements ProjectRepository {
   async update(id: string, patch: UpdateProjectInput): Promise<Project | null> {
     // Собираем set-объект только из реально переданных полей.
     // undefined = поле не указано клиентом (не трогаем), null = очистить.
-    const set: Partial<Pick<ProjectRow, 'name' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility'>> = {};
+    const set: Partial<Pick<ProjectRow, 'name' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId'>> = {};
     if (patch.name !== undefined) set.name = patch.name;
     if (patch.gitRepoUrl !== undefined) set.gitRepoUrl = patch.gitRepoUrl;
     if (patch.kbRepoFullName !== undefined) set.kbRepoFullName = patch.kbRepoFullName;
     if (patch.kbKind !== undefined) set.kbKind = patch.kbKind;
     if (patch.financeVisibility !== undefined) set.financeVisibility = patch.financeVisibility;
+    if (patch.dispatcherUserId !== undefined) set.dispatcherUserId = patch.dispatcherUserId;
 
     if (Object.keys(set).length > 0) {
       try {
@@ -115,6 +117,22 @@ export class DrizzleProjectRepository implements ProjectRepository {
       .from(projects)
       .where(isNotNull(projects.gitRepoUrl));
     return rows.map(toProject);
+  }
+
+  async listDispatchedByUser(userId: string): Promise<Project[]> {
+    const rows = await this.db
+      .select()
+      .from(projects)
+      .where(eq(projects.dispatcherUserId, userId));
+    return rows.map(toProject);
+  }
+
+  async clearDispatcherForUser(userId: string): Promise<number> {
+    const result = await this.db
+      .update(projects)
+      .set({ dispatcherUserId: null })
+      .where(eq(projects.dispatcherUserId, userId));
+    return (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
   }
 
   async deleteCascade(projectId: string): Promise<void> {

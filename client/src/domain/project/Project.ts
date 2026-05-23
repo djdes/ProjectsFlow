@@ -27,5 +27,7 @@ export type Project = {
   // Кто видит финансы: 'owner' (по умолчанию) или 'members'. На list-эндпоинте может
   // отсутствовать в старых ответах — дефолт 'owner'.
   readonly financeVisibility: FinanceVisibility;
+  // Ralph-диспетчер: какой member автономно выполняет задачи (MCP /loop). null = ручной.
+  readonly dispatcherUserId: string | null;
   readonly createdAt: Date;
 };

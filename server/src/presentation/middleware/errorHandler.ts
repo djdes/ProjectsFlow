@@ -17,6 +17,7 @@ import {
   ProjectNameEmptyError,
   ProjectNotFoundError,
 } from '../../domain/project/errors.js';
+import { DispatcherCandidateInvalidError } from '../../application/project/SetProjectDispatcher.js';
 import {
   GithubApiError,
   GithubIntegrationDisabledError,
@@ -153,6 +154,14 @@ export function errorHandler(
       error: 'cannot_delete_inbox',
       message: 'Папку «Входящие» нельзя удалить — это служебный проект',
     });
+    return;
+  }
+  if (err instanceof DispatcherCandidateInvalidError) {
+    const message =
+      err.reason === 'not_member'
+        ? 'Этот юзер не является участником проекта'
+        : 'У этого юзера нет активных agent-токенов — он не сможет работать как Ralph-диспетчер';
+    res.status(400).json({ error: `dispatcher_${err.reason}`, message });
     return;
   }
   if (err instanceof CannotRemoveSelfAsLastOwnerError) {

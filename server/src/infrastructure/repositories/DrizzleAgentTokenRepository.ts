@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { agentTokens, type AgentTokenRow } from '../db/schema.js';
 import type { AgentToken } from '../../domain/agent/AgentToken.js';
@@ -78,5 +78,13 @@ export class DrizzleAgentTokenRepository implements AgentTokenRepository {
       .update(agentTokens)
       .set({ lastUsedAt: new Date() })
       .where(eq(agentTokens.id, id));
+  }
+
+  async countActiveByUser(userId: string): Promise<number> {
+    const rows = await this.db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(agentTokens)
+      .where(and(eq(agentTokens.userId, userId), isNull(agentTokens.revokedAt)));
+    return Number(rows[0]?.count ?? 0);
   }
 }

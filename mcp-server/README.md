@@ -116,6 +116,15 @@ claude mcp add --scope user projectsflow \
 |---|---|
 | `pf_get_my_account` | Профиль текущего юзера + всё, что MCP может выдать: email/displayName/isAdmin, github-коннект с **plaintext OAuth-токеном** (твой собственный, симметрично `pf_get_credential`), список agent-токенов с метаданными (id/name/prefix/createdAt/lastUsedAt + `isCurrent` для токена этого вызова). **Пароль аккаунта НЕ возвращается** (bcrypt-хэш, необратимо → поле `passwordHashed: true`). **Plaintext agent-токенов НЕ возвращается** (хранится только хэш → поле `plaintextAvailable: false`). |
 
+### Ralph-диспетчер (автономное выполнение задач)
+
+«Ralph-диспетчер» — юзер, который автономно выполняет задачи проекта через MCP в режиме `/loop`. Один проект = один диспетчер (или ручной режим). См. **`docs/ralph-dispatcher-guide.md`** в репозитории за полным flow.
+
+| Tool | Описание |
+|---|---|
+| `pf_list_my_dispatched_projects` | Главный тул цикла Ralph'а: какие проекты сейчас на текущем юзере. Возвращает Project + `openTaskCount` + `queuedAgentJobCount` — чтобы пропускать «пустые» проекты без N лишних round-trip'ов. Без аргументов. |
+| `pf_set_project_dispatcher` | Назначить или снять диспетчера (`userId` или `null`). owner-only. Кандидат должен быть member И иметь ≥1 активный agent-токен. Обычно делается через UI проекта; этот тул — для скриптов. |
+
 ## Пример: deploy с credentials
 
 ```

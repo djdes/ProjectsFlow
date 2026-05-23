@@ -15,6 +15,7 @@ export type UpdateProjectInput = {
   readonly kbRepoFullName?: string | null;
   readonly kbKind?: 'none' | 'github' | 'local';
   readonly financeVisibility?: 'owner' | 'members';
+  readonly dispatcherUserId?: string | null;
 };
 
 // Multi-tenancy: проверка доступа НЕ внутри ProjectRepository — она в use-case'ах через
@@ -39,4 +40,11 @@ export interface ProjectRepository {
   // Не удаляет: GitHub-репо проекта (внешний ресурс), employees (owner-scoped,
   // шарятся между проектами), notifications (user-scoped, soft-fallback при клике).
   deleteCascade(projectId: string): Promise<void>;
+  // Все проекты, где dispatcher_user_id = userId. Используется агентом
+  // (`pf_list_my_dispatched_projects`) для понимания «какие проекты сейчас на мне».
+  listDispatchedByUser(userId: string): Promise<Project[]>;
+  // Снять userId со всех его проектов-диспетчеров. Вызывается из RevokeAgentToken
+  // когда у юзера revoked последний активный токен — он перестал быть ralph-capable,
+  // нельзя оставлять его диспетчером.
+  clearDispatcherForUser(userId: string): Promise<number>;
 }

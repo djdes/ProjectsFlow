@@ -3,6 +3,15 @@ import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembers
 import type { ProjectInvite, ProjectInviteRole } from '@/domain/project/ProjectInvite';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 
+// Кандидат в Ralph-диспетчеры проекта: участник с ≥1 активным agent-токеном.
+export type DispatcherCandidate = {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly email: string;
+  readonly role: ProjectRole;
+  readonly activeTokenCount: number;
+};
+
 export type CreateProjectInput = {
   readonly name: string;
 };
@@ -37,6 +46,11 @@ export interface ProjectRepository {
   // все child-данные (задачи, KB, секреты, финансы и т.д.) — подробности
   // на серверном DeleteProject use-case.
   delete(id: string): Promise<void>;
+  // Ralph-диспетчер проекта: кто автономно выполняет задачи через MCP /loop.
+  // listDispatcherCandidates — кого МОЖНО назначить (участники с ≥1 активным
+  // agent-токеном); setDispatcher — назначить/снять (owner-only).
+  listDispatcherCandidates(projectId: string): Promise<DispatcherCandidate[]>;
+  setDispatcher(projectId: string, userId: string | null): Promise<Project>;
   // Персональная пересортировка сайдбара: полный список id в желаемом порядке.
   reorder(orderedIds: readonly string[]): Promise<void>;
 

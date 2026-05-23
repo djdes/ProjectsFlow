@@ -84,6 +84,12 @@ export const transferOwnershipSchema = z.object({
   toUserId: z.string().min(1),
 });
 
+// Назначить или снять Ralph-диспетчера проекта. userId: null = снять.
+export const setDispatcherSchema = z.object({
+  userId: z.string().min(1).nullable(),
+});
+
 export type CreateInviteBody = z.infer<typeof createInviteSchema>;
 export type UpdateMemberRoleBody = z.infer<typeof updateMemberRoleSchema>;
 export type TransferOwnershipBody = z.infer<typeof transferOwnershipSchema>;
+export type SetDispatcherBody = z.infer<typeof setDispatcherSchema>;
