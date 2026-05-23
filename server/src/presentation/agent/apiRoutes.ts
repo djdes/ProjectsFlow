@@ -34,6 +34,7 @@ import type { GetProjectFinance } from '../../application/finance/GetProjectFina
 import type { ManageProjectFinance } from '../../application/finance/ManageProjectFinance.js';
 import type { GetKbDocument } from '../../application/kb/GetKbDocument.js';
 import type { DeleteKbDocument } from '../../application/kb/DeleteKbDocument.js';
+import type { GetMyAccount } from '../../application/agent/GetMyAccount.js';
 import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemoryRateLimiter.js';
 import { normalizeGitUrl } from '../../application/project/gitUrl.js';
 import type { PendingAgentJob } from '../../application/agent/AgentJobRepository.js';
@@ -90,6 +91,7 @@ type Deps = {
   readonly deleteKbDocument: DeleteKbDocument;
   readonly getProjectFinance: GetProjectFinance;
   readonly manageProjectFinance: ManageProjectFinance;
+  readonly getMyAccount: GetMyAccount;
   readonly rateLimiter: InMemoryRateLimiter;
   // Email-оповещения команде (источник 'mcp' — действия агента). Fire-and-forget.
   readonly notifier: ProjectNotificationService;
@@ -973,6 +975,53 @@ export function agentApiRouter(deps: Deps): Router {
       }
     },
   );
+
+  // Профиль текущего юзера + всё, что MCP может выдать обратно: github-коннект с
+  // OAuth-access-token'ом и список agent-токенов. Пароль НЕ возвращаем (хэш необратим).
+  // Plaintext agent-токенов НЕ возвращаем (хранится только bcrypt-хэш).
+  router.get('/me', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const account = await deps.getMyAccount.execute(req.user!.id);
+      res.json({
+        user: {
+          id: account.user.id,
+          email: account.user.email,
+          displayName: account.user.displayName,
+          avatarUrl: account.user.avatarUrl,
+          isAdmin: account.user.isAdmin,
+          createdAt: account.user.createdAt.toISOString(),
+          // Пояснение клиенту: пароль не возвращается принципиально (bcrypt-хэш).
+          passwordHashed: true,
+        },
+        github: account.github
+          ? {
+              connected: true,
+              login: account.github.githubLogin,
+              githubUserId: account.github.githubUserId,
+              scopes: account.github.scopes,
+              connectedAt: account.github.connectedAt.toISOString(),
+              // Plaintext OAuth-токен — твой собственный, по явному запросу.
+              // Используй с тем же scope, что и сайт (GitHub API/git push/clone).
+              accessToken: account.github.accessToken,
+            }
+          : { connected: false },
+        agentTokens: account.agentTokens.map((t) => ({
+          id: t.id,
+          name: t.name,
+          tokenPrefix: t.tokenPrefix,
+          createdAt: t.createdAt.toISOString(),
+          lastUsedAt: t.lastUsedAt ? t.lastUsedAt.toISOString() : null,
+          revokedAt: t.revokedAt ? t.revokedAt.toISOString() : null,
+          isCurrent: t.id === req.agentTokenId,
+          // Пояснение клиенту: plaintext-значение токена показывается ОДИН раз
+          // при создании, после в БД лежит только bcrypt-хэш — восстановить нельзя.
+          plaintextAvailable: false,
+        })),
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
 
   // Добавить доход (owner). amountRubles → копейки. receivedOn опционально (дефолт сегодня).
   router.post(

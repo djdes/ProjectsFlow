@@ -35,6 +35,7 @@
 //   - pf_add_income            — добавить доход
 //   - pf_check_repo_usage      — приватная проверка занятости репо
 //   - pf_request_repo_access   — запрос общего доступа к репо
+//   - pf_get_my_account        — профиль юзера + github (OAuth-токен) + agent-токены
 //
 // Установка в Claude Code:
 //   claude mcp add projectsflow npx -- -y @projectsflow/mcp-server
@@ -705,6 +706,21 @@ const TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'pf_get_my_account',
+    description:
+      "Return the authenticated user's full account data: profile (id, email, displayName, " +
+      'avatarUrl, isAdmin, createdAt), GitHub connection (login, scopes, plaintext OAuth ' +
+      'access_token if connected — symmetrical to pf_get_credential returning plaintext ' +
+      "secrets of the user's own data), and the list of agent-tokens (id, name, prefix, " +
+      'createdAt, lastUsedAt, isCurrent flag for the token that made THIS call). ' +
+      'Account PASSWORD is NOT returned: it is stored as a bcrypt hash and is physically ' +
+      'irreversible — the response carries `passwordHashed: true` as explicit explanation. ' +
+      "Agent-token PLAINTEXT values are NOT returned either: only a bcrypt hash is stored " +
+      '(the plaintext is shown once at creation time on the site) — each token entry carries ' +
+      '`plaintextAvailable: false`. No projectId needed — scope is the user behind the Bearer.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
 ];
 
 // Input schemas для validation (zod вместо ручного парсинга).
@@ -861,7 +877,7 @@ async function main(): Promise<void> {
   const api = new ApiClient(config);
 
   const server = new Server(
-    { name: 'projectsflow', version: '0.10.0' },
+    { name: 'projectsflow', version: '0.11.0' },
     { capabilities: { tools: {} } },
   );
 
@@ -1105,6 +1121,10 @@ async function main(): Promise<void> {
             receivedOn: input.receivedOn,
           });
           return jsonResult(income);
+        }
+        case 'pf_get_my_account': {
+          const account = await api.getMyAccount();
+          return jsonResult(account);
         }
         default:
           return errorResult(`Unknown tool: ${name}`);

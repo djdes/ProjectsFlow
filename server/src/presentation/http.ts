@@ -45,6 +45,7 @@ import type { InitKbRepo } from '../application/kb/InitKbRepo.js';
 import type { InitLocalKb } from '../application/kb/InitLocalKb.js';
 import type { CheckRepoUsage } from '../application/agent/CheckRepoUsage.js';
 import type { RequestRepoAccess } from '../application/agent/RequestRepoAccess.js';
+import type { GetMyAccount } from '../application/agent/GetMyAccount.js';
 import type { InMemoryRateLimiter } from '../infrastructure/ratelimit/InMemoryRateLimiter.js';
 import type { ConnectKbRepo } from '../application/kb/ConnectKbRepo.js';
 import type { DisconnectKb } from '../application/kb/DisconnectKb.js';
@@ -280,6 +281,7 @@ type AppDeps = {
     readonly deleteKbDocument: DeleteKbDocument;
     readonly getProjectFinance: GetProjectFinance;
     readonly manageProjectFinance: ManageProjectFinance;
+    readonly getMyAccount: GetMyAccount;
     readonly rateLimiter: InMemoryRateLimiter;
   };
 };
@@ -403,6 +405,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       deleteKbDocument: deps.agent.deleteKbDocument,
       getProjectFinance: deps.agent.getProjectFinance,
       manageProjectFinance: deps.agent.manageProjectFinance,
+      getMyAccount: deps.agent.getMyAccount,
       rateLimiter: deps.agent.rateLimiter,
       notifier: deps.notifications.projectNotifier,
     }),
