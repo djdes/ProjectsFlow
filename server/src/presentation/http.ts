@@ -17,6 +17,9 @@ import type { GetProject } from '../application/project/GetProject.js';
 import type { CreateProject } from '../application/project/CreateProject.js';
 import type { UpdateProject } from '../application/project/UpdateProject.js';
 import type { DeleteProject } from '../application/project/DeleteProject.js';
+import type { SetProjectDispatcher } from '../application/project/SetProjectDispatcher.js';
+import type { ListDispatcherCandidates } from '../application/project/ListDispatcherCandidates.js';
+import type { ListMyDispatchedProjects } from '../application/agent/ListMyDispatchedProjects.js';
 import type { ReorderProjects } from '../application/project/ReorderProjects.js';
 import type { CreateProjectWithGit } from '../application/project/CreateProjectWithGit.js';
 import type { GetOrCreateInbox } from '../application/project/GetOrCreateInbox.js';
@@ -143,6 +146,8 @@ type AppDeps = {
     readonly createProject: CreateProject;
     readonly updateProject: UpdateProject;
     readonly deleteProject: DeleteProject;
+    readonly setProjectDispatcher: SetProjectDispatcher;
+    readonly listDispatcherCandidates: ListDispatcherCandidates;
     readonly reorderProjects: ReorderProjects;
     readonly listProjectCommits: ListProjectCommits;
     readonly getOrCreateInbox: GetOrCreateInbox;
@@ -285,6 +290,8 @@ type AppDeps = {
     readonly manageProjectFinance: ManageProjectFinance;
     readonly getMyAccount: GetMyAccount;
     readonly deleteProject: DeleteProject;
+    readonly listMyDispatchedProjects: ListMyDispatchedProjects;
+    readonly setProjectDispatcher: SetProjectDispatcher;
     readonly rateLimiter: InMemoryRateLimiter;
   };
 };
@@ -410,6 +417,8 @@ export function createApp(deps: AppDeps): CreatedApp {
       manageProjectFinance: deps.agent.manageProjectFinance,
       getMyAccount: deps.agent.getMyAccount,
       deleteProject: deps.agent.deleteProject,
+      listMyDispatchedProjects: deps.agent.listMyDispatchedProjects,
+      setProjectDispatcher: deps.agent.setProjectDispatcher,
       rateLimiter: deps.agent.rateLimiter,
       notifier: deps.notifications.projectNotifier,
     }),

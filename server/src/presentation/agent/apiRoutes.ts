@@ -36,6 +36,8 @@ import type { GetKbDocument } from '../../application/kb/GetKbDocument.js';
 import type { DeleteKbDocument } from '../../application/kb/DeleteKbDocument.js';
 import type { GetMyAccount } from '../../application/agent/GetMyAccount.js';
 import type { DeleteProject } from '../../application/project/DeleteProject.js';
+import type { ListMyDispatchedProjects } from '../../application/agent/ListMyDispatchedProjects.js';
+import type { SetProjectDispatcher } from '../../application/project/SetProjectDispatcher.js';
 import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemoryRateLimiter.js';
 import { normalizeGitUrl } from '../../application/project/gitUrl.js';
 import type { PendingAgentJob } from '../../application/agent/AgentJobRepository.js';
@@ -94,6 +96,8 @@ type Deps = {
   readonly manageProjectFinance: ManageProjectFinance;
   readonly getMyAccount: GetMyAccount;
   readonly deleteProject: DeleteProject;
+  readonly listMyDispatchedProjects: ListMyDispatchedProjects;
+  readonly setProjectDispatcher: SetProjectDispatcher;
   readonly rateLimiter: InMemoryRateLimiter;
   // Email-оповещения команде (источник 'mcp' — действия агента). Fire-and-forget.
   readonly notifier: ProjectNotificationService;
@@ -227,16 +231,27 @@ type ProjectDto = {
   status: Project['status'];
   hasKb: boolean;
   gitRepoUrl: string | null;
+  // Ralph-диспетчер: какой юзер автономно выполняет задачи. NULL = ручной режим.
+  dispatcherUserId: string | null;
+  // Удобный флаг для агента: «этот проект сейчас на мне». Заполняется при наличии
+  // currentUserId — иначе undefined (для /agent/projects без знания обладателя токена
+  // мы знаем актора, но в DTO-функции его не прокидываем — заполняется на месте).
+  isMyDispatch?: boolean;
 };
 
-function projectToAgentDto(p: Project): ProjectDto {
-  return {
+function projectToAgentDto(p: Project, currentUserId?: string): ProjectDto {
+  const dto: ProjectDto = {
     id: p.id,
     name: p.name,
     status: p.status,
     hasKb: p.kbKind !== 'none',
     gitRepoUrl: p.gitRepoUrl,
+    dispatcherUserId: p.dispatcherUserId,
   };
+  if (currentUserId !== undefined) {
+    dto.isMyDispatch = p.dispatcherUserId === currentUserId;
+  }
+  return dto;
 }
 
 type RepoDto = {
@@ -389,6 +404,7 @@ export function agentApiRouter(deps: Deps): Router {
   router.get('/projects', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const list = await deps.listProjects.execute(req.user!.id);
+      const me = req.user!.id;
       res.json({
         projects: list.map((p: Project) => ({
           id: p.id,
@@ -396,6 +412,8 @@ export function agentApiRouter(deps: Deps): Router {
           status: p.status,
           hasKb: p.kbKind !== 'none',
           gitRepoUrl: p.gitRepoUrl,
+          dispatcherUserId: p.dispatcherUserId,
+          isMyDispatch: p.dispatcherUserId === me,
         })),
       });
     } catch (e) {
@@ -425,7 +443,7 @@ export function agentApiRouter(deps: Deps): Router {
         name: body.name,
         git: body.git ?? { mode: 'none' },
       });
-      res.status(201).json({ project: projectToAgentDto(project) });
+      res.status(201).json({ project: projectToAgentDto(project, req.user!.id) });
     } catch (e) {
       next(e);
     }
@@ -441,7 +459,7 @@ export function agentApiRouter(deps: Deps): Router {
         ownerId: req.user!.id,
         patch: { name: body.name, gitRepoUrl: body.gitRepoUrl },
       });
-      res.json({ project: projectToAgentDto(project) });
+      res.json({ project: projectToAgentDto(project, req.user!.id) });
     } catch (e) {
       next(e);
     }
@@ -791,7 +809,7 @@ export function agentApiRouter(deps: Deps): Router {
         res.status(404).json({ error: 'project_not_found' });
         return;
       }
-      res.json({ project: projectToAgentDto(project) });
+      res.json({ project: projectToAgentDto(project, req.user!.id) });
     } catch (e) {
       next(e);
     }
@@ -972,6 +990,56 @@ export function agentApiRouter(deps: Deps): Router {
             incurredOn: dateOnlyToIso(expense.incurredOn),
           },
         });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Какие проекты сейчас на текущем юзере как Ralph-диспетчере. Главный тул /loop'а:
+  // агент дёргает в начале каждой итерации, чтобы понять «где есть работа». Возвращает
+  // Project + счётчики (openTaskCount, queuedAgentJobCount), чтобы агент мог пропустить
+  // «пустые» проекты без N лишних роунд-трипов.
+  router.get('/me/dispatched-projects', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const me = req.user!.id;
+      const list = await deps.listMyDispatchedProjects.execute(me);
+      res.json({
+        projects: list.map((d) => ({
+          ...projectToAgentDto(d.project, me),
+          openTaskCount: d.openTaskCount,
+          queuedAgentJobCount: d.queuedAgentJobCount,
+        })),
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Назначить / снять Ralph-диспетчера проекта. owner-only через use-case (отдельная
+  // проверка роли внутри SetProjectDispatcher). userId === null = снять диспетчера.
+  router.put(
+    '/projects/:projectId/dispatcher',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        // Парсим тело руками: на agent-API нет общей zod-схемы для этого роута, проще inline.
+        const raw = req.body as { userId?: unknown };
+        const userIdRaw = raw?.userId;
+        const userId: string | null =
+          userIdRaw === null
+            ? null
+            : typeof userIdRaw === 'string' && userIdRaw.length > 0
+              ? userIdRaw
+              : (() => {
+                  throw new Error('userId must be string or null');
+                })();
+        const project = await deps.setProjectDispatcher.execute(
+          projectId,
+          req.user!.id,
+          userId,
+        );
+        res.json({ project: projectToAgentDto(project, req.user!.id) });
       } catch (e) {
         next(e);
       }

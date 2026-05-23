@@ -49,6 +49,7 @@ export class MockProjectRepository implements ProjectRepository {
       role: 'owner',
       kbKind: 'none',
       financeVisibility: 'owner',
+      dispatcherUserId: null,
       createdAt: new Date(),
     };
     this.projects.unshift(inbox);
@@ -89,6 +90,7 @@ export class MockProjectRepository implements ProjectRepository {
       role: 'owner',
       kbKind: 'none',
       financeVisibility: 'owner',
+      dispatcherUserId: null,
       createdAt: new Date(),
     };
     // Новые проекты — наверху списка: user видит результат там, где он его ждёт
@@ -122,6 +124,15 @@ export class MockProjectRepository implements ProjectRepository {
   async delete(id: string): Promise<void> {
     this.projects = this.projects.filter((p) => p.id !== id);
     await delay(undefined);
+  }
+
+  // Mock: на этапе UI-скелета (Spec #1) HTTP-сервера ещё не было — здесь только
+  // заглушки. Реальная логика живёт в HttpProjectRepository.
+  listDispatcherCandidates(): Promise<never> {
+    return Promise.reject(new Error('Mock.listDispatcherCandidates: not implemented'));
+  }
+  setDispatcher(): Promise<never> {
+    return Promise.reject(new Error('Mock.setDispatcher: not implemented'));
   }
 
   // Multi-tenancy stubs — mock пока не моделирует members/invites. Если кому-то понадобится

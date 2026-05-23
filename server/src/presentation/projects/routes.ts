@@ -4,6 +4,8 @@ import type { GetProject } from '../../application/project/GetProject.js';
 import type { CreateProject } from '../../application/project/CreateProject.js';
 import type { UpdateProject } from '../../application/project/UpdateProject.js';
 import type { DeleteProject } from '../../application/project/DeleteProject.js';
+import type { SetProjectDispatcher } from '../../application/project/SetProjectDispatcher.js';
+import type { ListDispatcherCandidates } from '../../application/project/ListDispatcherCandidates.js';
 import type { ReorderProjects } from '../../application/project/ReorderProjects.js';
 import type { ListProjectMembers } from '../../application/project/ListProjectMembers.js';
 import type { RemoveProjectMember } from '../../application/project/RemoveProjectMember.js';
@@ -31,6 +33,7 @@ import {
   createProjectSchema,
   notificationPrefsSchema,
   reorderProjectsSchema,
+  setDispatcherSchema,
   transferOwnershipSchema,
   updateMemberRoleSchema,
   updateProjectSchema,
@@ -42,6 +45,8 @@ type Deps = {
   readonly createProject: CreateProject;
   readonly updateProject: UpdateProject;
   readonly deleteProject: DeleteProject;
+  readonly setProjectDispatcher: SetProjectDispatcher;
+  readonly listDispatcherCandidates: ListDispatcherCandidates;
   readonly reorderProjects: ReorderProjects;
   readonly listProjectCommits: ListProjectCommits;
   readonly listMembers: ListProjectMembers;
@@ -392,6 +397,37 @@ export function projectsRouter(deps: Deps): Router {
         .onMemberChanged(id, req.user!.id, 'передал владение проектом', 'team')
         .catch(() => {});
       res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Ralph-диспетчер -------------------------------------------------------
+  // Список кандидатов в диспетчеры (участники с ≥1 активным agent-токеном). viewer+.
+  router.get('/:id/dispatcher-candidates', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const candidates = await deps.listDispatcherCandidates.execute(id, req.user!.id);
+      res.json({ candidates });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Назначить / снять диспетчера. owner-only.
+  router.put('/:id/dispatcher', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const body = setDispatcherSchema.parse(req.body);
+      const project = await deps.setProjectDispatcher.execute(
+        id,
+        req.user!.id,
+        body.userId,
+      );
+      deps.notifyProjectChanged(id);
+      res.json({ project: toDto(project, 'owner') });
     } catch (e) {
       next(e);
     }

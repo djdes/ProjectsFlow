@@ -76,6 +76,11 @@ export const projects = mysqlTable(
     kbKind: mysqlEnum('kb_kind', ['none', 'github', 'local']).notNull().default('none'),
     // Видимость финансов: 'owner' (по умолчанию) — только владелец/admin; 'members' — все участники.
     financeVisibility: mysqlEnum('finance_visibility', ['owner', 'members']).notNull().default('owner'),
+    // Ralph-диспетчер: какой ЮЗЕР отвечает за автономное выполнение задач этого
+    // проекта через MCP /loop. NULL = ручной режим. Должен быть member И иметь
+    // активный agent-токен. На revoke последнего токена — auto-NULL во всех
+    // dispatched-проектах (см. RevokeAgentToken). См. db/028.
+    dispatcherUserId: char('dispatcher_user_id', { length: 36 }),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -83,6 +88,7 @@ export const projects = mysqlTable(
     index('idx_projects_owner_inbox').on(t.ownerId, t.isInbox),
     uniqueIndex('uq_projects_owner_name').on(t.ownerId, t.name),
     index('idx_projects_owner').on(t.ownerId),
+    index('idx_projects_dispatcher_user').on(t.dispatcherUserId),
   ],
 );
 

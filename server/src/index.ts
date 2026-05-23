@@ -61,6 +61,9 @@ import { CheckRepoUsage } from './application/agent/CheckRepoUsage.js';
 import { RequestRepoAccess } from './application/agent/RequestRepoAccess.js';
 import { GetMyAccount } from './application/agent/GetMyAccount.js';
 import { DeleteProject } from './application/project/DeleteProject.js';
+import { SetProjectDispatcher } from './application/project/SetProjectDispatcher.js';
+import { ListDispatcherCandidates } from './application/project/ListDispatcherCandidates.js';
+import { ListMyDispatchedProjects } from './application/agent/ListMyDispatchedProjects.js';
 import { InMemoryRateLimiter } from './infrastructure/ratelimit/InMemoryRateLimiter.js';
 import { InitKbRepo } from './application/kb/InitKbRepo.js';
 import { ConnectKbRepo } from './application/kb/ConnectKbRepo.js';
@@ -289,6 +292,16 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
+    }),
+    setProjectDispatcher: new SetProjectDispatcher({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      agentTokens: agentTokenRepo,
+    }),
+    listDispatcherCandidates: new ListDispatcherCandidates({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      agentTokens: agentTokenRepo,
     }),
     reorderProjects: new ReorderProjects({ members: projectMemberRepo }),
     listProjectCommits: new ListProjectCommits({
@@ -589,7 +602,7 @@ const { app, devProxyUpgrade } = createApp({
       randomToken: () => randomBytes(32).toString('hex'),
     }),
     listAgentTokens: new ListAgentTokens({ tokens: agentTokenRepo }),
-    revokeAgentToken: new RevokeAgentToken({ tokens: agentTokenRepo }),
+    revokeAgentToken: new RevokeAgentToken({ tokens: agentTokenRepo, projects: projectRepo }),
     authenticateAgentToken: new AuthenticateAgentToken({
       tokens: agentTokenRepo,
       hasher: agentTokenHasher,
@@ -787,6 +800,16 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
+    }),
+    listMyDispatchedProjects: new ListMyDispatchedProjects({
+      projects: projectRepo,
+      tasks: taskRepo,
+      agentJobs: agentJobRepo,
+    }),
+    setProjectDispatcher: new SetProjectDispatcher({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      agentTokens: agentTokenRepo,
     }),
     rateLimiter: agentRateLimiter,
   },

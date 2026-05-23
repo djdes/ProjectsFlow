@@ -37,6 +37,8 @@
 //   - pf_request_repo_access   — запрос общего доступа к репо
 //   - pf_get_my_account        — профиль юзера + github (OAuth-токен) + agent-токены
 //   - pf_delete_project        — безвозвратное удаление проекта (owner-only)
+//   - pf_list_my_dispatched_projects — проекты, где этот юзер — Ralph-диспетчер
+//   - pf_set_project_dispatcher      — назначить/снять диспетчера (owner-only)
 //
 // Установка в Claude Code:
 //   claude mcp add projectsflow npx -- -y @projectsflow/mcp-server
@@ -708,6 +710,38 @@ const TOOLS = [
     },
   },
   {
+    name: 'pf_list_my_dispatched_projects',
+    description:
+      "Return the list of projects where the CURRENT user is assigned as the Ralph dispatcher " +
+      '(i.e. the autonomous task executor). This is the MAIN tool a Ralph /loop polls every ' +
+      'tick to figure out where work exists. Each project entry includes openTaskCount ' +
+      '(todo + in_progress) and queuedAgentJobCount, so the loop can skip empty projects ' +
+      "without further round-trips. No args — scope is the user behind the Bearer token. " +
+      'Use together with pf_list_tasks / pf_list_pending_agent_jobs to pick the next item.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'pf_set_project_dispatcher',
+    description:
+      'Assign or clear the Ralph dispatcher of a project (OWNER-only). userId = a project ' +
+      "member's user id who has at least one active agent-token. Pass userId=null to clear " +
+      "the dispatcher (project goes back to manual mode). Server validates: target must be a " +
+      'member AND have ≥1 active token (otherwise 400 dispatcher_not_member / dispatcher_no_active_tokens). ' +
+      'Use sparingly — the typical assignment flow is via the website UI.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        userId: {
+          type: ['string', 'null'],
+          description: 'Target user id, or null to clear the dispatcher',
+        },
+      },
+      required: ['projectId', 'userId'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pf_delete_project',
     description:
       'Permanently delete a project (OWNER-only). IRREVERSIBLE. Cascades deletion of: ' +
@@ -897,7 +931,7 @@ async function main(): Promise<void> {
   const api = new ApiClient(config);
 
   const server = new Server(
-    { name: 'projectsflow', version: '0.12.0' },
+    { name: 'projectsflow', version: '0.13.0' },
     { capabilities: { tools: {} } },
   );
 
@@ -1152,6 +1186,20 @@ async function main(): Promise<void> {
             .parse(req.params.arguments ?? {});
           await api.deleteProject(input.projectId);
           return jsonResult({ ok: true, deletedProjectId: input.projectId });
+        }
+        case 'pf_list_my_dispatched_projects': {
+          const projects = await api.listMyDispatchedProjects();
+          return jsonResult(projects);
+        }
+        case 'pf_set_project_dispatcher': {
+          const input = z
+            .object({
+              projectId: z.string().min(1),
+              userId: z.string().min(1).nullable(),
+            })
+            .parse(req.params.arguments ?? {});
+          const project = await api.setProjectDispatcher(input.projectId, input.userId);
+          return jsonResult(project);
         }
         default:
           return errorResult(`Unknown tool: ${name}`);
