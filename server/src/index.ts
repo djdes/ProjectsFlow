@@ -59,6 +59,7 @@ import { DrizzleKbDocumentRepository } from './infrastructure/repositories/Drizz
 import { InitLocalKb } from './application/kb/InitLocalKb.js';
 import { CheckRepoUsage } from './application/agent/CheckRepoUsage.js';
 import { RequestRepoAccess } from './application/agent/RequestRepoAccess.js';
+import { GetMyAccount } from './application/agent/GetMyAccount.js';
 import { InMemoryRateLimiter } from './infrastructure/ratelimit/InMemoryRateLimiter.js';
 import { InitKbRepo } from './application/kb/InitKbRepo.js';
 import { ConnectKbRepo } from './application/kb/ConnectKbRepo.js';
@@ -768,6 +769,11 @@ const { app, devProxyUpgrade } = createApp({
       finance: projectFinanceRepo,
       idGen: idGenerator,
       now,
+    }),
+    getMyAccount: new GetMyAccount({
+      users: userRepo,
+      githubTokens: githubTokenRepo,
+      agentTokens: agentTokenRepo,
     }),
     rateLimiter: agentRateLimiter,
   },

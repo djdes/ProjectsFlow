@@ -109,6 +109,12 @@ claude mcp add --scope user projectsflow \
 | `pf_check_repo_usage` | Приватная проверка, занят ли git-репо чужим проектом. Возвращает `ownership` (none/self/other) + непрозрачный `requestTarget` (при other). НЕ раскрывает владельца/имя/число. |
 | `pf_request_repo_access` | Запрос общего доступа к чужому репо (передай `requestTarget` из check). Уведомляет владельца; доступ выдаёт он на сайте. Идемпотентно. |
 
+### Аккаунт
+
+| Tool | Описание |
+|---|---|
+| `pf_get_my_account` | Профиль текущего юзера + всё, что MCP может выдать: email/displayName/isAdmin, github-коннект с **plaintext OAuth-токеном** (твой собственный, симметрично `pf_get_credential`), список agent-токенов с метаданными (id/name/prefix/createdAt/lastUsedAt + `isCurrent` для токена этого вызова). **Пароль аккаунта НЕ возвращается** (bcrypt-хэш, необратимо → поле `passwordHashed: true`). **Plaintext agent-токенов НЕ возвращается** (хранится только хэш → поле `plaintextAvailable: false`). |
+
 ## Пример: deploy с credentials
 
 ```

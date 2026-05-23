@@ -301,6 +301,43 @@ export type IncomeResult = {
   receivedOn: string;
 };
 
+// Полный «account dump» текущего юзера. Используется `pf_get_my_account`.
+// Пароль — bcrypt-хэш, plaintext физически невозможно вернуть (поле
+// passwordHashed: true как явное пояснение). Plaintext значения agent-токенов
+// тоже невозможны (хранятся как хэш). GitHub OAuth access-token — твой
+// собственный, возвращается plaintext'ом (симметрично pf_get_credential).
+export type MyAccount = {
+  user: {
+    id: string;
+    email: string;
+    displayName: string;
+    avatarUrl: string | null;
+    isAdmin: boolean;
+    createdAt: string;
+    passwordHashed: true;
+  };
+  github:
+    | {
+        connected: true;
+        login: string;
+        githubUserId: string;
+        scopes: string[];
+        connectedAt: string;
+        accessToken: string;
+      }
+    | { connected: false };
+  agentTokens: Array<{
+    id: string;
+    name: string;
+    tokenPrefix: string;
+    createdAt: string;
+    lastUsedAt: string | null;
+    revokedAt: string | null;
+    isCurrent: boolean;
+    plaintextAvailable: false;
+  }>;
+};
+
 export class ApiClient {
   constructor(private readonly config: AgentConfig) {}
 
@@ -592,6 +629,10 @@ export class ApiClient {
       { method: 'POST', body: input },
     );
     return income;
+  }
+
+  async getMyAccount(): Promise<MyAccount> {
+    return this.request<MyAccount>('/agent/me');
   }
 }
 
