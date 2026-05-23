@@ -12,6 +12,7 @@ import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import type { DispatcherCandidate } from '@/application/project/ProjectRepository';
 import type { Project } from '@/domain/project/Project';
+import { GitTokenDelegationBlock } from './GitTokenDelegationBlock';
 
 type Props = {
   project: Project;
@@ -218,6 +219,15 @@ export function DispatcherSection({ project, onChanged }: Props): React.ReactEle
               </div>
           </div>
         )}
+
+        {/* Делегирование GitHub-токена owner'а текущему диспетчеру. Показывается
+            всегда (даже без кандидатов), потому что owner может включить delegation
+            заранее — до того как назначит диспетчера. */}
+        <GitTokenDelegationBlock
+          project={project}
+          isOwner={project.role === 'owner'}
+          currentDispatcherDisplayName={currentDispatcher?.displayName ?? null}
+        />
       </CardContent>
     </Card>
   );

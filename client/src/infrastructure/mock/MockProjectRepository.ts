@@ -134,6 +134,15 @@ export class MockProjectRepository implements ProjectRepository {
   setDispatcher(): Promise<never> {
     return Promise.reject(new Error('Mock.setDispatcher: not implemented'));
   }
+  getGitTokenDelegation(): Promise<never> {
+    return Promise.reject(new Error('Mock.getGitTokenDelegation: not implemented'));
+  }
+  setGitTokenDelegation(): Promise<never> {
+    return Promise.reject(new Error('Mock.setGitTokenDelegation: not implemented'));
+  }
+  listGitTokenAccessLog(): Promise<never> {
+    return Promise.reject(new Error('Mock.listGitTokenAccessLog: not implemented'));
+  }
 
   // Multi-tenancy stubs — mock пока не моделирует members/invites. Если кому-то понадобится
   // мокать «команду» — реализовать здесь по аналогии с projects[]. Параметры в payload'е

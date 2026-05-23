@@ -9,7 +9,12 @@ import {
   CannotDeleteInboxError,
   CannotInviteToInboxError,
   CannotRemoveSelfAsLastOwnerError,
+  GithubNotConnectedForDelegationError,
+  GitTokenDelegationDisabledError,
+  GranterGithubDisconnectedError,
+  GranterNotOwnerAnymoreError,
   InsufficientProjectRoleError,
+  NotProjectDispatcherError,
   ProjectInviteAlreadyUsedError,
   ProjectInviteExpiredError,
   ProjectInviteNotFoundError,
@@ -153,6 +158,42 @@ export function errorHandler(
     res.status(409).json({
       error: 'cannot_delete_inbox',
       message: 'Папку «Входящие» нельзя удалить — это служебный проект',
+    });
+    return;
+  }
+  // === Git-token delegation errors ===
+  if (err instanceof NotProjectDispatcherError) {
+    res.status(403).json({
+      error: 'not_dispatcher',
+      message: 'Только текущий Ralph-диспетчер проекта может получить делегированный токен',
+    });
+    return;
+  }
+  if (err instanceof GitTokenDelegationDisabledError) {
+    res.status(403).json({
+      error: 'delegation_disabled',
+      message: 'Владелец проекта не разрешил делегирование GitHub-токена',
+    });
+    return;
+  }
+  if (err instanceof GranterNotOwnerAnymoreError) {
+    res.status(403).json({
+      error: 'granter_not_owner_anymore',
+      message: 'Юзер, который разрешил делегацию, больше не владелец проекта — нужно заново включить от нового владельца',
+    });
+    return;
+  }
+  if (err instanceof GranterGithubDisconnectedError) {
+    res.status(410).json({
+      error: 'granter_github_disconnected',
+      message: 'Владелец отключил GitHub — попроси его подключить заново на /profile',
+    });
+    return;
+  }
+  if (err instanceof GithubNotConnectedForDelegationError) {
+    res.status(400).json({
+      error: 'github_not_connected',
+      message: 'Подключи GitHub на /profile, потом включай делегацию',
     });
     return;
   }

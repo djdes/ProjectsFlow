@@ -65,6 +65,10 @@ import { SetProjectDispatcher } from './application/project/SetProjectDispatcher
 import { ListDispatcherCandidates } from './application/project/ListDispatcherCandidates.js';
 import { ListMyDispatchedProjects } from './application/agent/ListMyDispatchedProjects.js';
 import { pickDefaultDispatcherUserId } from './application/project/pickDefaultDispatcher.js';
+import { SetGitTokenDelegation } from './application/project/SetGitTokenDelegation.js';
+import { GetDelegatedGitToken } from './application/project/GetDelegatedGitToken.js';
+import { ListGitTokenAccessLog } from './application/project/ListGitTokenAccessLog.js';
+import { DrizzleGitTokenDelegationRepository } from './infrastructure/repositories/DrizzleGitTokenDelegationRepository.js';
 import { InMemoryRateLimiter } from './infrastructure/ratelimit/InMemoryRateLimiter.js';
 import { InitKbRepo } from './application/kb/InitKbRepo.js';
 import { ConnectKbRepo } from './application/kb/ConnectKbRepo.js';
@@ -224,6 +228,8 @@ setInterval(() => agentRateLimiter.pruneExpired(), 10 * 60 * 1000).unref();
 const resolveDefaultDispatcher = (): Promise<string | null> =>
   pickDefaultDispatcherUserId(userRepo, agentTokenRepo);
 
+const gitTokenDelegationRepo = new DrizzleGitTokenDelegationRepository(db, idGenerator);
+
 // Секрет для непрозрачного requestTarget (HMAC). Отдельный env → fallback на vault-ключ.
 const repoAccessSecret =
   process.env['REPO_ACCESS_HMAC_SECRET'] ?? process.env['SECRETS_MASTER_KEY'] ?? 'dev-repo-access-secret';
@@ -314,6 +320,17 @@ const { app, devProxyUpgrade } = createApp({
       agentTokens: agentTokenRepo,
       users: userRepo,
     }),
+    setGitTokenDelegation: new SetGitTokenDelegation({
+      projects: projectRepo,
+      delegations: gitTokenDelegationRepo,
+      githubTokens: githubTokenRepo,
+    }),
+    listGitTokenAccessLog: new ListGitTokenAccessLog({
+      projects: projectRepo,
+      delegations: gitTokenDelegationRepo,
+    }),
+    gitTokenDelegations: gitTokenDelegationRepo,
+    users: userRepo,
     reorderProjects: new ReorderProjects({ members: projectMemberRepo }),
     listProjectCommits: new ListProjectCommits({
       projects: projectRepo,
@@ -827,6 +844,11 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       agentTokens: agentTokenRepo,
       users: userRepo,
+    }),
+    getDelegatedGitToken: new GetDelegatedGitToken({
+      projects: projectRepo,
+      delegations: gitTokenDelegationRepo,
+      githubTokens: githubTokenRepo,
     }),
     rateLimiter: agentRateLimiter,
   },

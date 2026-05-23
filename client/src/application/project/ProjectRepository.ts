@@ -3,6 +3,34 @@ import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembers
 import type { ProjectInvite, ProjectInviteRole } from '@/domain/project/ProjectInvite';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 
+// Делегирование GitHub-токена owner'а проекта Ralph-диспетчеру.
+// Сам токен здесь не возвращается — только статус. Plaintext-токен получает
+// диспетчер через agent-API (`pf_get_project_git_token`).
+export type GitTokenDelegation = {
+  readonly enabled: boolean;
+  // Когда впервые включили (null если ни разу).
+  readonly grantedAt: string | null;
+  // Когда последний раз выключили (null после повторного enable).
+  readonly revokedAt: string | null;
+  // Кто разрешил (обычно = owner проекта на момент включения). null если delegation
+  // ни разу не настраивали.
+  readonly grantedBy: string | null;
+};
+
+export type GitTokenAccessOutcome =
+  | 'ok'
+  | 'not_dispatcher'
+  | 'delegation_disabled'
+  | 'granter_github_disconnected'
+  | 'granter_not_owner_anymore';
+
+export type GitTokenAccessLogEntry = {
+  readonly accessedByUserId: string;
+  readonly accessedByDisplayName: string | null;
+  readonly accessedAt: string;
+  readonly outcome: GitTokenAccessOutcome;
+};
+
 // Кандидат в Ralph-диспетчеры проекта: участник или admin с ≥1 активным agent-токеном.
 export type DispatcherCandidate = {
   readonly userId: string;
@@ -56,6 +84,12 @@ export interface ProjectRepository {
   // agent-токеном); setDispatcher — назначить/снять (owner-only).
   listDispatcherCandidates(projectId: string): Promise<DispatcherCandidate[]>;
   setDispatcher(projectId: string, userId: string | null): Promise<Project>;
+  // Делегирование GitHub-токена owner'а текущему Ralph-диспетчеру.
+  // PUT — only owner; GET — any member (видеть факт «включено/выключено»);
+  // access-log — only owner (личный audit).
+  getGitTokenDelegation(projectId: string): Promise<GitTokenDelegation>;
+  setGitTokenDelegation(projectId: string, enabled: boolean): Promise<GitTokenDelegation>;
+  listGitTokenAccessLog(projectId: string): Promise<GitTokenAccessLogEntry[]>;
   // Персональная пересортировка сайдбара: полный список id в желаемом порядке.
   reorder(orderedIds: readonly string[]): Promise<void>;
 

@@ -98,10 +98,23 @@ loop:
    шлют notifications.
 3. **Если нужны секреты.** `pf_get_credential(projectId, slug)` — plaintext.
    `pf_list_credentials` — посмотреть какие есть.
-4. **Если работа с git'ом.** Используй свой собственный GitHub OAuth-токен:
-   `pf_get_my_account()` → `github.accessToken`. Делай ветку
-   `agent/<short-task-id>-<slug>`, коммить с `[<short-task-id>]` в message
-   (например `[a1b2c3d4] feat: add X`), пуш.
+4. **Если работа с git'ом.** Сначала попробуй **делегированный токен владельца**:
+   `pf_get_project_git_token(projectId)`. Это GitHub OAuth-токен `project.ownerId`,
+   разрешённый owner'ом через UI «Ralph-диспетчер» → toggle «Разрешить диспетчеру
+   использовать мой GitHub-токен». Используй ТОЛЬКО для git-операций в этом
+   проекте, НЕ персисти, НЕ логируй. Формат URL для push:
+   `https://x-access-token:<token>@github.com/owner/repo.git`. Каждое обращение
+   пишется в audit-log владельца.
+
+   Если 403 `delegation_disabled` / `granter_not_owner_anymore` или 410
+   `granter_github_disconnected` — fallback на свой собственный токен:
+   `pf_get_my_account()` → `github.accessToken` (работает только если ты сам
+   коллаборатор репо). Если и его нет — `pf_create_task_comment` с просьбой к
+   owner'у включить делегирование, потом `pf_complete_agent_job(ok=false,
+   error='no_git_token')`.
+
+   Делай ветку `agent/<short-task-id>-<slug>`, коммить с `[<short-task-id>]`
+   в message (например `[a1b2c3d4] feat: add X`), пуш.
 5. **Линк коммитов.** После каждого `git push`:
    `pf_link_commit_to_task(projectId, taskId, sha)`. Auto-transition
    `todo → in_progress` происходит автоматически на первом линке.
@@ -125,6 +138,37 @@ loop:
 - Лучшая практика — пользоваться job-очередью через UI: «Отправить агенту» в
   карточке задачи создаёт job, тогда coordination делается атомарно.
 
+## Делегирование GitHub-токена владельца
+
+Owner проекта может разрешить дежурному Ralph-диспетчеру использовать СВОЙ
+OAuth-токен GitHub для git-операций в репо этого проекта. Зачем это нужно: на
+совместных проектах диспетчером часто бывает не владелец репо (например, admin
+управляет диспетчерами всех юзеров), и его собственный токен не имеет прав
+push'ить в чужой репо.
+
+**Как это работает:**
+
+- Owner на сайте, в секции «Ralph-диспетчер», ставит toggle «Разрешить
+  диспетчеру использовать мой GitHub-токен».
+- Toggle привязан к **проекту**, а не к конкретному диспетчер-юзеру: если owner
+  поменяет диспетчера, новый автоматически получит доступ (политика «доверяю
+  любому, кого Я САМ назначил»). Снимается одним кликом.
+- Делегация действительна пока: caller — текущий диспетчер; toggle включён;
+  granter всё ещё owner; у него подключён GitHub.
+- Сервер берёт токен **live** из GitHub-коннекта owner'a на каждом запросе —
+  ротация OAuth автоматически подхватывается.
+- Каждое обращение (успех или нет) пишется в audit-log. Owner видит «кто и
+  когда брал мой токен через этот проект» прямо в UI.
+
+**Ralph-этикет:**
+
+- Используй полученный токен **только** для git-команд (`git clone/push/fetch`,
+  `gh pr create`). Не звони с ним левые GitHub API.
+- НЕ персисти токен в файлы/env. Получи перед операцией, используй, забудь.
+- НЕ логируй значение. Только prefix (`ghp_xxxx…`) если совсем нужно.
+- При 403/410 от `pf_get_project_git_token` — fallback на свой токен
+  (см. жизненный цикл задачи, шаг 4).
+
 ## Что НЕ должен делать Ralph
 
 - **Удалять задачи/проекты/КБ-документы.** `pf_delete_task`, `pf_delete_project`,
@@ -146,6 +190,9 @@ loop:
 | `pf_complete_agent_job` 409 `agent_job_not_in_running_state` | Job отменена юзером во время работы — НЕ делай PR, почисти branch, выйди молча |
 | `pf_link_commit_to_task` 404 GithubApiError | SHA ещё не на GitHub — повтори через 5 сек (push мог не дойти) |
 | `pf_get_credential` 404 `secret_not_found` | Секрет утерян из vault — оставь комментарий юзеру, выйди |
+| `pf_get_project_git_token` 403 `delegation_disabled` | Owner не включил toggle — fallback на свой токен через `pf_get_my_account` |
+| `pf_get_project_git_token` 403 `granter_not_owner_anymore` | Owner поменялся — попроси нового owner'а включить делегацию заново |
+| `pf_get_project_git_token` 410 `granter_github_disconnected` | Owner отключил GitHub — попроси переподключить на `/profile` |
 
 ## API vs MCP
 
@@ -214,5 +261,5 @@ loop:
 
 ---
 
-**Версия гайда:** synced с `@projectsflow/mcp-server@0.13.0`.
+**Версия гайда:** synced с `@projectsflow/mcp-server@0.14.0`.
 Список MCP-тулов — `mcp-server/README.md`.

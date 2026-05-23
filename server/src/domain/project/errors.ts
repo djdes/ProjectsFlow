@@ -76,3 +76,48 @@ export class CannotDeleteInboxError extends Error {
     this.name = 'CannotDeleteInboxError';
   }
 }
+
+// === Git-token delegation ===
+// Все ошибки use-case'а GetDelegatedGitToken — мапятся на конкретные HTTP-коды
+// в errorHandler (см. presentation/middleware/errorHandler.ts).
+
+// Caller — не текущий диспетчер проекта. 403.
+export class NotProjectDispatcherError extends Error {
+  constructor() {
+    super('Caller is not the current dispatcher of this project');
+    this.name = 'NotProjectDispatcherError';
+  }
+}
+
+// Owner не включил делегирование (или выключил). 403.
+export class GitTokenDelegationDisabledError extends Error {
+  constructor() {
+    super('Owner has not granted git-token delegation for this project');
+    this.name = 'GitTokenDelegationDisabledError';
+  }
+}
+
+// Granter (тот кто делегировал) отключил GitHub. 410.
+export class GranterGithubDisconnectedError extends Error {
+  constructor() {
+    super('Granter disconnected GitHub; ask the owner to reconnect on /profile');
+    this.name = 'GranterGithubDisconnectedError';
+  }
+}
+
+// Granter больше не owner проекта (ownership передали другому). 403.
+// Старая делегация автоматически невалидна — нужна новая от текущего owner'а.
+export class GranterNotOwnerAnymoreError extends Error {
+  constructor() {
+    super('The user who granted git-token delegation is no longer the project owner');
+    this.name = 'GranterNotOwnerAnymoreError';
+  }
+}
+
+// Owner пытается включить делегацию, но у него самого не подключён GitHub. 400.
+export class GithubNotConnectedForDelegationError extends Error {
+  constructor() {
+    super('Cannot enable git-token delegation: connect GitHub on /profile first');
+    this.name = 'GithubNotConnectedForDelegationError';
+  }
+}

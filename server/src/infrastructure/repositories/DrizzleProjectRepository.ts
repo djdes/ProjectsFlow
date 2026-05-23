@@ -5,6 +5,8 @@ import {
   kbDocuments,
   projectEmployeeAssignments,
   projectExpenses,
+  projectGitTokenAccessLog,
+  projectGitTokenDelegations,
   projectIncomes,
   projectInvites,
   projectJoinRequests,
@@ -167,6 +169,13 @@ export class DrizzleProjectRepository implements ProjectRepository {
       await tx.delete(projectInvites).where(eq(projectInvites.projectId, projectId));
       await tx.delete(projectJoinRequests).where(eq(projectJoinRequests.projectId, projectId));
       await tx.delete(projectMembers).where(eq(projectMembers.projectId, projectId));
+      // Git-token delegation + audit-log (см. db/029).
+      await tx
+        .delete(projectGitTokenAccessLog)
+        .where(eq(projectGitTokenAccessLog.projectId, projectId));
+      await tx
+        .delete(projectGitTokenDelegations)
+        .where(eq(projectGitTokenDelegations.projectId, projectId));
 
       // Финальный — сам проект.
       await tx.delete(projects).where(eq(projects.id, projectId));

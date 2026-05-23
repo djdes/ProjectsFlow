@@ -20,6 +20,11 @@ import type { DeleteProject } from '../application/project/DeleteProject.js';
 import type { SetProjectDispatcher } from '../application/project/SetProjectDispatcher.js';
 import type { ListDispatcherCandidates } from '../application/project/ListDispatcherCandidates.js';
 import type { ListMyDispatchedProjects } from '../application/agent/ListMyDispatchedProjects.js';
+import type { SetGitTokenDelegation } from '../application/project/SetGitTokenDelegation.js';
+import type { ListGitTokenAccessLog } from '../application/project/ListGitTokenAccessLog.js';
+import type { GetDelegatedGitToken } from '../application/project/GetDelegatedGitToken.js';
+import type { GitTokenDelegationRepository } from '../application/project/GitTokenDelegationRepository.js';
+import type { UserRepository } from '../application/user/UserRepository.js';
 import type { ReorderProjects } from '../application/project/ReorderProjects.js';
 import type { CreateProjectWithGit } from '../application/project/CreateProjectWithGit.js';
 import type { GetOrCreateInbox } from '../application/project/GetOrCreateInbox.js';
@@ -149,6 +154,14 @@ type AppDeps = {
     readonly deleteProject: DeleteProject;
     readonly setProjectDispatcher: SetProjectDispatcher;
     readonly listDispatcherCandidates: ListDispatcherCandidates;
+    readonly setGitTokenDelegation: SetGitTokenDelegation;
+    readonly listGitTokenAccessLog: ListGitTokenAccessLog;
+    readonly gitTokenDelegations: GitTokenDelegationRepository;
+    // UserRepository нужен только для резолва displayName юзеров в access-log'е
+    // (routes.ts/git-token-delegation/access-log). Прокидываем здесь чтобы не
+    // тащить в AppDeps top-level — UserRepository нигде больше в presentation
+    // не используется напрямую (только через use-case'ы).
+    readonly users: UserRepository;
     readonly reorderProjects: ReorderProjects;
     readonly listProjectCommits: ListProjectCommits;
     readonly getOrCreateInbox: GetOrCreateInbox;
@@ -294,6 +307,7 @@ type AppDeps = {
     readonly deleteProject: DeleteProject;
     readonly listMyDispatchedProjects: ListMyDispatchedProjects;
     readonly setProjectDispatcher: SetProjectDispatcher;
+    readonly getDelegatedGitToken: GetDelegatedGitToken;
     readonly rateLimiter: InMemoryRateLimiter;
   };
 };
@@ -421,6 +435,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       deleteProject: deps.agent.deleteProject,
       listMyDispatchedProjects: deps.agent.listMyDispatchedProjects,
       setProjectDispatcher: deps.agent.setProjectDispatcher,
+      getDelegatedGitToken: deps.agent.getDelegatedGitToken,
       rateLimiter: deps.agent.rateLimiter,
       notifier: deps.notifications.projectNotifier,
     }),

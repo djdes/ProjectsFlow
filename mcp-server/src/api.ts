@@ -311,6 +311,19 @@ export type IncomeResult = {
   receivedOn: string;
 };
 
+// Делегированный GitHub-токен для git-операций. Plaintext OAuth-токен owner'а
+// проекта — используется ТОЛЬКО для команд git в репо этого проекта. Не персистить,
+// не логировать, не использовать вне непосредственного git-вызова. Сервер ротирует
+// автоматически когда owner перевыдаёт OAuth.
+export type DelegatedGitToken = {
+  token: string;
+  login: string;
+  scopes: string[];
+  source: 'owner_delegation';
+  grantedBy: string;
+  grantedAt: string;
+};
+
 // Полный «account dump» текущего юзера. Используется `pf_get_my_account`.
 // Пароль — bcrypt-хэш, plaintext физически невозможно вернуть (поле
 // passwordHashed: true как явное пояснение). Plaintext значения agent-токенов
@@ -665,6 +678,12 @@ export class ApiClient {
       { method: 'PUT', body: { userId } },
     );
     return project;
+  }
+
+  async getProjectGitToken(projectId: string): Promise<DelegatedGitToken> {
+    return this.request<DelegatedGitToken>(
+      `/agent/projects/${encodeURIComponent(projectId)}/git-token`,
+    );
   }
 }
 
