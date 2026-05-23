@@ -224,18 +224,14 @@ export function BulkCredentialDialog({
                     >
                       секрет
                     </label>
+                    {/* Значение показываем plaintext в любом случае — юзер только что сам его
+                        вставил и нуждается в визуальной проверке ПЕРЕД отправкой в vault.
+                        Маскирование тут давало ложное чувство приватности (текст уже в textarea
+                        выше), мешая поймать опечатки. */}
                     <span className="ml-2 flex-1 truncate font-mono text-sm">
                       <span className="font-medium">{f.key}</span>
                       <span className="text-muted-foreground">: </span>
-                      <span
-                        className={
-                          secretOverrides[f.key]
-                            ? 'text-muted-foreground/40'
-                            : 'text-foreground'
-                        }
-                      >
-                        {secretOverrides[f.key] ? '••••••••' : f.value}
-                      </span>
+                      <span className="text-foreground">{f.value}</span>
                     </span>
                   </li>
                 ))}

@@ -1,18 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Copy, Edit, ExternalLink, Loader2 } from 'lucide-react';
+import { Check, Copy, Edit, ExternalLink, Loader2, Pencil, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
-import type { KbDocument } from '@/domain/kb/KbDocument';
+import { HttpError } from '@/lib/HttpError';
+import type { Frontmatter, KbDocument } from '@/domain/kb/KbDocument';
 
 type Props = {
   projectId: string;
   document: KbDocument;
   kbRepoFullName: string;
   onEdit: () => void;
+  // Вызывается после успешного inline-edit одного поля — KbPage перечитывает doc.
+  onUpdated: () => void;
 };
 
 // Поля, которые относятся к метаданным документа и не отображаются в "Значениях".
@@ -39,14 +43,23 @@ type SecretState = { state: 'loading' } | { state: 'ok'; value: string } | { sta
 
 function CredentialFieldsCard({
   projectId,
-  fm,
+  document,
+  onUpdated,
 }: {
   projectId: string;
-  fm: KbDocument['frontmatter'];
+  document: KbDocument;
+  onUpdated: () => void;
 }): React.ReactElement {
-  const { secretsRepository } = useContainer();
+  const fm = document.frontmatter;
+  const { secretsRepository, kbRepository } = useContainer();
   const entries = useMemo(() => extractEntries(fm), [fm]);
   const [secrets, setSecrets] = useState<Record<string, SecretState>>({});
+
+  // Inline-edit: ключ редактируемого поля + текущее значение в инпуте + флаг saving.
+  // Одновременно редактируется только одно поле — нет ситуации с конкурирующими записями.
+  const [editKey, setEditKey] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,6 +119,57 @@ function CredentialFieldsCard({
     }
   };
 
+  const startEdit = (entry: FieldEntry): void => {
+    setEditKey(entry.key);
+    if (entry.isSecret) {
+      // Для секрета подставляем текущее значение, если оно уже загружено,
+      // иначе пустую строку — юзер вводит новое.
+      const s = secrets[entry.key];
+      setDraft(s?.state === 'ok' ? s.value : '');
+    } else {
+      setDraft(entry.value);
+    }
+  };
+
+  const cancelEdit = (): void => {
+    setEditKey(null);
+    setDraft('');
+  };
+
+  const saveEdit = async (entry: FieldEntry): Promise<void> => {
+    setSaving(true);
+    try {
+      if (entry.isSecret) {
+        // Secret: точечный апсёрт в vault. Frontmatter не трогаем (vault://-ref тот же).
+        await secretsRepository.put(projectId, entry.vaultKey, draft);
+        // Локально обновляем кеш чтобы UI сразу показал новое значение без перезагрузки.
+        setSecrets((prev) => ({ ...prev, [entry.key]: { state: 'ok', value: draft } }));
+        toast.success(`Сохранено: ${entry.key}`);
+        setEditKey(null);
+        // Перезагрузка doc не обязательна — frontmatter не менялся; но дёрнем
+        // onUpdated на случай, если родителю нужно обновить кеши.
+        onUpdated();
+      } else {
+        // Plain: правим frontmatter (только этот ключ), body не меняем, sha — текущий.
+        // При конфликте (409) сервер ответит KbRepoConflictError → показываем юзеру.
+        const nextFm: Frontmatter = { ...fm, [entry.key]: draft };
+        await kbRepository.write(projectId, document.path, nextFm, document.body, document.sha);
+        toast.success(`Сохранено: ${entry.key}`);
+        setEditKey(null);
+        // Тут перезагрузка нужна: получим свежий sha и распарсенный frontmatter.
+        onUpdated();
+      }
+    } catch (err) {
+      if (err instanceof HttpError && err.status === 409) {
+        toast.error('Документ изменён в другой вкладке — обнови страницу');
+      } else {
+        toast.error((err as Error).message ?? 'Не удалось сохранить');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
@@ -124,35 +188,91 @@ function CredentialFieldsCard({
                 ? s.value
                 : null
               : e.value;
+            const isEditing = editKey === e.key;
             return (
               <li key={e.key} className="flex items-center gap-3 px-4 py-2">
                 <span className="w-40 shrink-0 font-mono text-xs text-muted-foreground">
                   {e.key}
                 </span>
-                <span className="flex-1 break-all font-mono text-xs">
-                  {e.isSecret ? (
-                    s?.state === 'ok' ? (
-                      s.value
-                    ) : s?.state === 'err' ? (
-                      <span className="text-destructive">не удалось загрузить ({s.err})</span>
-                    ) : (
-                      <Loader2 className="size-3 animate-spin text-muted-foreground" />
-                    )
-                  ) : (
-                    e.value
-                  )}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  disabled={resolvedValue === null}
-                  onClick={() => {
-                    if (resolvedValue !== null) void copyValue(e.key, resolvedValue);
-                  }}
-                >
-                  <Copy className="size-3.5" />
-                </Button>
+                {isEditing ? (
+                  <>
+                    <Input
+                      value={draft}
+                      onChange={(ev) => setDraft(ev.target.value)}
+                      onKeyDown={(ev) => {
+                        if (ev.key === 'Enter') void saveEdit(e);
+                        if (ev.key === 'Escape') cancelEdit();
+                      }}
+                      autoFocus
+                      disabled={saving}
+                      className="h-7 flex-1 font-mono text-xs"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      disabled={saving}
+                      onClick={() => void saveEdit(e)}
+                      aria-label="Сохранить"
+                    >
+                      {saving ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Check className="size-3.5" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      disabled={saving}
+                      onClick={cancelEdit}
+                      aria-label="Отмена"
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 break-all font-mono text-xs">
+                      {e.isSecret ? (
+                        s?.state === 'ok' ? (
+                          s.value
+                        ) : s?.state === 'err' ? (
+                          <span className="text-destructive">не удалось загрузить ({s.err})</span>
+                        ) : (
+                          <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                        )
+                      ) : (
+                        e.value
+                      )}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      // Для секрета редактирование доступно даже при ошибке загрузки
+                      // (юзер сможет перезаписать утерянный секрет — типичный сценарий
+                      // «secret_not_found»). Для plain — всегда.
+                      onClick={() => startEdit(e)}
+                      aria-label="Изменить"
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      disabled={resolvedValue === null}
+                      onClick={() => {
+                        if (resolvedValue !== null) void copyValue(e.key, resolvedValue);
+                      }}
+                      aria-label="Копировать"
+                    >
+                      <Copy className="size-3.5" />
+                    </Button>
+                  </>
+                )}
               </li>
             );
           })}
@@ -183,7 +303,7 @@ function FrontmatterTable({ fm }: { fm: KbDocument['frontmatter'] }): React.Reac
   );
 }
 
-export function KbDocumentViewer({ projectId, document, kbRepoFullName, onEdit }: Props): React.ReactElement {
+export function KbDocumentViewer({ projectId, document, kbRepoFullName, onEdit, onUpdated }: Props): React.ReactElement {
   const githubUrl = `https://github.com/${kbRepoFullName}/blob/main/${document.path}`;
   return (
     <div className="space-y-4">
@@ -220,7 +340,7 @@ export function KbDocumentViewer({ projectId, document, kbRepoFullName, onEdit }
       )}
 
       {document.frontmatter.type === 'credential' ? (
-        <CredentialFieldsCard projectId={projectId} fm={document.frontmatter} />
+        <CredentialFieldsCard projectId={projectId} document={document} onUpdated={onUpdated} />
       ) : (
         <FrontmatterTable fm={document.frontmatter} />
       )}
