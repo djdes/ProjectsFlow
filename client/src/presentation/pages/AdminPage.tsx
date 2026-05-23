@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Shield, FolderGit2, GitCommitHorizontal, Users } from 'lucide-react';
+import { Bot, Github, Shield, FolderGit2, GitCommitHorizontal, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -184,6 +184,39 @@ function UsersTab(): React.ReactElement {
                 <p className="truncate text-xs text-muted-foreground">
                   {u.email} · {u.projectCount} проектов
                 </p>
+                {/* Делегация GitHub-токена. Badge показываем только если есть owned-проекты
+                    (без них знаменатель = 0, делегация невозможна). При отсутствии GitHub
+                    у юзера явно говорим: «GitHub не подключён». */}
+                {u.ownedProjectCount > 0 && (
+                  <p
+                    className="mt-0.5 inline-flex items-center gap-1 truncate text-xs text-muted-foreground"
+                    title={
+                      u.githubConnected
+                        ? `${u.delegationEnabledCount} из ${u.ownedProjectCount} owned-проектов имеют делегацию GitHub-токена`
+                        : 'GitHub у юзера не подключён — делегацию включить нельзя'
+                    }
+                  >
+                    <Github className="size-3" />
+                    <span>
+                      Делегация:{' '}
+                      {u.githubConnected ? (
+                        <span
+                          className={
+                            u.delegationEnabledCount > 0
+                              ? 'font-medium text-emerald-700 dark:text-emerald-400'
+                              : ''
+                          }
+                        >
+                          {u.delegationEnabledCount}/{u.ownedProjectCount}
+                        </span>
+                      ) : (
+                        <span className="text-amber-600 dark:text-amber-400">
+                          GitHub не подключён
+                        </span>
+                      )}
+                    </span>
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">

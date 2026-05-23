@@ -57,6 +57,22 @@ export class DrizzleAdminRepository implements AdminRepository {
         isAdmin: users.isAdmin,
         createdAt: users.createdAt,
         projectCount: sql<number>`(SELECT COUNT(*) FROM project_members pm WHERE pm.user_id = ${users.id})`,
+        // Сколько проектов где юзер OWNER (для знаменателя «X/Y» делегации).
+        // Исключаем inbox — он персональный, делегация для него не имеет смысла.
+        ownedProjectCount: sql<number>`(
+          SELECT COUNT(*) FROM projects p
+          WHERE p.owner_id = ${users.id} AND p.is_inbox = FALSE
+        )`,
+        // Сколько из его owned-проектов имеют active delegation.
+        delegationEnabledCount: sql<number>`(
+          SELECT COUNT(*) FROM project_git_token_delegations d
+          INNER JOIN projects p ON p.id = d.project_id
+          WHERE p.owner_id = ${users.id} AND d.enabled = TRUE
+        )`,
+        // Подключён ли GitHub. UI рисует индикатор «нет GH — делегацию включать нельзя».
+        githubConnected: sql<number>`(
+          SELECT COUNT(*) FROM user_github_tokens g WHERE g.user_id = ${users.id}
+        )`,
       })
       .from(users)
       .orderBy(asc(users.createdAt));
@@ -68,6 +84,9 @@ export class DrizzleAdminRepository implements AdminRepository {
       avatarUrl: r.avatarUrl ?? null,
       isAdmin: r.isAdmin,
       projectCount: Number(r.projectCount),
+      ownedProjectCount: Number(r.ownedProjectCount),
+      delegationEnabledCount: Number(r.delegationEnabledCount),
+      githubConnected: Number(r.githubConnected) > 0,
       createdAt: r.createdAt,
     }));
   }

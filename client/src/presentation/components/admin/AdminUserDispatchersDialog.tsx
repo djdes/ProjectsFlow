@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Bot, Loader2 } from 'lucide-react';
+import { Bot, Github, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -116,6 +116,13 @@ export function AdminUserDispatchersDialog({ user, onClose }: Props): React.Reac
                   }}
                   projectRepository={projectRepository}
                 />
+                <GitTokenDelegationToggle
+                  projectId={p.projectId}
+                  enabled={p.gitTokenDelegationEnabled}
+                  ownerDisplayName={user.displayName}
+                  onChanged={(enabled) => replaceProject({ ...p, gitTokenDelegationEnabled: enabled })}
+                  projectRepository={projectRepository}
+                />
               </li>
             ))}
           </ul>
@@ -229,6 +236,70 @@ function DispatcherPicker({
       </Button>
       <Button size="sm" variant="ghost" onClick={() => setPicking(false)} disabled={saving}>
         Отмена
+      </Button>
+    </div>
+  );
+}
+
+// Toggle GitHub-делегации админом за владельца проекта. Granter ВСЕГДА = owner
+// (сервер сам подставляет), admin технически просто «жмёт за него». Если owner
+// не подключил GitHub — сервер вернёт 400 github_not_connected (рендерим в toast).
+function GitTokenDelegationToggle({
+  projectId,
+  enabled,
+  ownerDisplayName,
+  onChanged,
+  projectRepository,
+}: {
+  projectId: string;
+  enabled: boolean;
+  ownerDisplayName: string;
+  onChanged: (enabled: boolean) => void;
+  projectRepository: ReturnType<typeof useContainer>['projectRepository'];
+}): React.ReactElement {
+  const [saving, setSaving] = useState(false);
+
+  const toggle = async (): Promise<void> => {
+    setSaving(true);
+    try {
+      const next = await projectRepository.setGitTokenDelegation(projectId, !enabled);
+      onChanged(next.enabled);
+      toast.success(
+        next.enabled
+          ? `GitHub-делегация ${ownerDisplayName} включена`
+          : `GitHub-делегация ${ownerDisplayName} выключена`,
+      );
+    } catch (e) {
+      toast.error((e as Error).message ?? 'Не удалось сохранить');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <Github className="size-3.5 text-muted-foreground" />
+      <span className="flex-1 text-xs text-muted-foreground">
+        Делегация GitHub-токена:{' '}
+        <strong
+          className={
+            enabled
+              ? 'text-emerald-700 dark:text-emerald-400'
+              : 'text-muted-foreground'
+          }
+        >
+          {enabled ? 'включена' : 'выключена'}
+        </strong>
+      </span>
+      <Button
+        size="sm"
+        variant={enabled ? 'outline' : 'default'}
+        onClick={() => void toggle()}
+        disabled={saving}
+        title={`Переключить за владельца (${ownerDisplayName}). Granter останется owner — admin технически просто жмёт.`}
+      >
+        {saving && <Loader2 className="size-3.5 animate-spin" />}
+        {enabled ? 'Выключить' : 'Включить'}
       </Button>
     </div>
   );
