@@ -434,6 +434,49 @@ export const kbDocuments = mysqlTable(
 
 export type KbDocumentRow = typeof kbDocuments.$inferSelect;
 
+// Делегирование GitHub-токена owner'а проекта текущему Ralph-диспетчеру.
+// Одна запись на проект; granter = owner на момент включения. Реальный токен
+// не копируется — берётся live из user_github_tokens на запросе. См. db/029.
+export const projectGitTokenDelegations = mysqlTable(
+  'project_git_token_delegations',
+  {
+    projectId: char('project_id', { length: 36 }).primaryKey(),
+    granterUserId: char('granter_user_id', { length: 36 }).notNull(),
+    enabled: boolean('enabled').notNull().default(false),
+    grantedAt: timestamp('granted_at'),
+    revokedAt: timestamp('revoked_at'),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [index('idx_pgtd_granter').on(t.granterUserId)],
+);
+
+export type ProjectGitTokenDelegationRow = typeof projectGitTokenDelegations.$inferSelect;
+
+// Audit-лог: каждый вызов GET /agent/projects/:id/git-token (успех или нет).
+// Owner смотрит «кто и когда брал мой токен» на странице проекта.
+export const projectGitTokenAccessLog = mysqlTable(
+  'project_git_token_access_log',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    accessedByUserId: char('accessed_by_user_id', { length: 36 }).notNull(),
+    // null при `not_dispatcher` / `delegation_disabled` (granter может быть неизвестен)
+    granterUserId: char('granter_user_id', { length: 36 }),
+    outcome: mysqlEnum('outcome', [
+      'ok',
+      'not_dispatcher',
+      'delegation_disabled',
+      'granter_github_disconnected',
+      'granter_not_owner_anymore',
+    ]).notNull(),
+    accessedAt: timestamp('accessed_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [index('idx_pgtal_project_time').on(t.projectId, t.accessedAt)],
+);
+
+export type ProjectGitTokenAccessLogRow = typeof projectGitTokenAccessLog.$inferSelect;
+
 export type EmployeeRow = typeof employees.$inferSelect;
 export type ProjectEmployeeAssignmentRow = typeof projectEmployeeAssignments.$inferSelect;
 export type ProjectExpenseRow = typeof projectExpenses.$inferSelect;

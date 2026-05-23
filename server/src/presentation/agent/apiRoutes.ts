@@ -38,6 +38,7 @@ import type { GetMyAccount } from '../../application/agent/GetMyAccount.js';
 import type { DeleteProject } from '../../application/project/DeleteProject.js';
 import type { ListMyDispatchedProjects } from '../../application/agent/ListMyDispatchedProjects.js';
 import type { SetProjectDispatcher } from '../../application/project/SetProjectDispatcher.js';
+import type { GetDelegatedGitToken } from '../../application/project/GetDelegatedGitToken.js';
 import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemoryRateLimiter.js';
 import { normalizeGitUrl } from '../../application/project/gitUrl.js';
 import type { PendingAgentJob } from '../../application/agent/AgentJobRepository.js';
@@ -98,6 +99,7 @@ type Deps = {
   readonly deleteProject: DeleteProject;
   readonly listMyDispatchedProjects: ListMyDispatchedProjects;
   readonly setProjectDispatcher: SetProjectDispatcher;
+  readonly getDelegatedGitToken: GetDelegatedGitToken;
   readonly rateLimiter: InMemoryRateLimiter;
   // Email-оповещения команде (источник 'mcp' — действия агента). Fire-and-forget.
   readonly notifier: ProjectNotificationService;
@@ -1040,6 +1042,41 @@ export function agentApiRouter(deps: Deps): Router {
           userId,
         );
         res.json({ project: projectToAgentDto(project, req.user!.id) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Делегированный GitHub-токен owner'а проекта для git-операций. Caller — текущий
+  // диспетчер проекта; owner должен был явно включить toggle на сайте. Токен берётся
+  // LIVE из user_github_tokens (рефрэш OAuth подхватывается). Для КАЖДОГО исхода
+  // (успешного и нет) пишется audit-log — owner видит «кто и когда брал мой токен».
+  //
+  // Ошибки use-case'а маппятся в errorHandler:
+  //   NotProjectDispatcherError       → 403 not_dispatcher
+  //   GitTokenDelegationDisabledError → 403 delegation_disabled
+  //   GranterNotOwnerAnymoreError     → 403 granter_not_owner_anymore
+  //   GranterGithubDisconnectedError  → 410 granter_github_disconnected
+  router.get(
+    '/projects/:projectId/git-token',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const token = await deps.getDelegatedGitToken.execute({
+          projectId,
+          callerUserId: req.user!.id,
+        });
+        // Никогда не печатаем token в app-логи — только outcome в access-log таблицу
+        // (там нет значения, только факт + outcome). Здесь возвращаем юзеру и забываем.
+        res.json({
+          token: token.token,
+          login: token.login,
+          scopes: token.scopes,
+          source: token.source,
+          grantedBy: token.grantedBy,
+          grantedAt: token.grantedAt.toISOString(),
+        });
       } catch (e) {
         next(e);
       }

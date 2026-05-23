@@ -89,7 +89,13 @@ export const setDispatcherSchema = z.object({
   userId: z.string().min(1).nullable(),
 });
 
+// Включить/выключить делегирование GitHub-токена owner'а текущему диспетчеру.
+export const setGitTokenDelegationSchema = z.object({
+  enabled: z.boolean(),
+});
+
 export type CreateInviteBody = z.infer<typeof createInviteSchema>;
 export type UpdateMemberRoleBody = z.infer<typeof updateMemberRoleSchema>;
 export type TransferOwnershipBody = z.infer<typeof transferOwnershipSchema>;
 export type SetDispatcherBody = z.infer<typeof setDispatcherSchema>;
+export type SetGitTokenDelegationBody = z.infer<typeof setGitTokenDelegationSchema>;

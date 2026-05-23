@@ -124,6 +124,7 @@ claude mcp add --scope user projectsflow \
 |---|---|
 | `pf_list_my_dispatched_projects` | Главный тул цикла Ralph'а: какие проекты сейчас на текущем юзере. Возвращает Project + `openTaskCount` + `queuedAgentJobCount` — чтобы пропускать «пустые» проекты без N лишних round-trip'ов. Без аргументов. |
 | `pf_set_project_dispatcher` | Назначить или снять диспетчера (`userId` или `null`). owner-only. Кандидат должен быть member И иметь ≥1 активный agent-токен. Обычно делается через UI проекта; этот тул — для скриптов. |
+| `pf_get_project_git_token` | Делегированный GitHub OAuth-токен owner'а проекта для git-операций (clone/push/PR в репо этого проекта). Caller — текущий диспетчер; owner на сайте включил toggle «разрешить делегацию». Используй URL: `https://x-access-token:<token>@github.com/owner/repo.git`. Токен НЕ персистить, НЕ логировать. 403 если не диспетчер / делегация выключена / granter не owner; 410 если owner отключил GitHub. Каждое обращение пишется в audit-log владельца. |
 
 ## Пример: deploy с credentials
 

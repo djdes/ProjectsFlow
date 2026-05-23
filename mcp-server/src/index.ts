@@ -39,6 +39,7 @@
 //   - pf_delete_project        — безвозвратное удаление проекта (owner-only)
 //   - pf_list_my_dispatched_projects — проекты, где этот юзер — Ralph-диспетчер
 //   - pf_set_project_dispatcher      — назначить/снять диспетчера (owner-only)
+//   - pf_get_project_git_token       — делегированный GitHub-токен owner'а для git-операций
 //
 // Установка в Claude Code:
 //   claude mcp add projectsflow npx -- -y @projectsflow/mcp-server
@@ -721,6 +722,25 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'pf_get_project_git_token',
+    description:
+      "Return a GitHub access token DELEGATED to the current dispatcher by this project's owner. " +
+      'Use ONLY for git operations on this project repository (clone/fetch/push/PR). Token belongs ' +
+      'to the owner — do not persist, do not log, do not use outside the immediate git command. ' +
+      'Returns 403 not_dispatcher / delegation_disabled / granter_not_owner_anymore if conditions ' +
+      "fail; 410 granter_github_disconnected if owner disconnected GitHub. Recommended URL form " +
+      'for git push: https://x-access-token:<token>@github.com/owner/repo.git (the token expires ' +
+      'when owner revokes delegation or rotates OAuth).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+      },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pf_set_project_dispatcher',
     description:
       'Assign or clear the Ralph dispatcher of a project (OWNER-only). userId = a project ' +
@@ -931,7 +951,7 @@ async function main(): Promise<void> {
   const api = new ApiClient(config);
 
   const server = new Server(
-    { name: 'projectsflow', version: '0.13.0' },
+    { name: 'projectsflow', version: '0.14.0' },
     { capabilities: { tools: {} } },
   );
 
@@ -1200,6 +1220,13 @@ async function main(): Promise<void> {
             .parse(req.params.arguments ?? {});
           const project = await api.setProjectDispatcher(input.projectId, input.userId);
           return jsonResult(project);
+        }
+        case 'pf_get_project_git_token': {
+          const input = z
+            .object({ projectId: z.string().min(1) })
+            .parse(req.params.arguments ?? {});
+          const token = await api.getProjectGitToken(input.projectId);
+          return jsonResult(token);
         }
         default:
           return errorResult(`Unknown tool: ${name}`);

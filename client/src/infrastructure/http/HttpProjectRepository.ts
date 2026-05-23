@@ -7,6 +7,8 @@ import type {
   CreateProjectInput,
   DispatcherCandidate,
   GitCollision,
+  GitTokenAccessLogEntry,
+  GitTokenDelegation,
   ProjectRepository,
   UpdateProjectInput,
 } from '@/application/project/ProjectRepository';
@@ -170,6 +172,23 @@ export class HttpProjectRepository implements ProjectRepository {
       { userId },
     );
     return fromDto(project);
+  }
+
+  async getGitTokenDelegation(projectId: string): Promise<GitTokenDelegation> {
+    return httpClient.get<GitTokenDelegation>(`/projects/${projectId}/git-token-delegation`);
+  }
+
+  async setGitTokenDelegation(projectId: string, enabled: boolean): Promise<GitTokenDelegation> {
+    return httpClient.put<GitTokenDelegation>(`/projects/${projectId}/git-token-delegation`, {
+      enabled,
+    });
+  }
+
+  async listGitTokenAccessLog(projectId: string): Promise<GitTokenAccessLogEntry[]> {
+    const { entries } = await httpClient.get<{ entries: GitTokenAccessLogEntry[] }>(
+      `/projects/${projectId}/git-token-delegation/access-log`,
+    );
+    return entries;
   }
 
   async reorder(orderedIds: readonly string[]): Promise<void> {
