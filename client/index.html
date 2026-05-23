@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <!-- iOS Safari игнорирует maximum-scale/user-scalable для accessibility (с iOS 10+) —
+         не полагаемся на них. Защита от авто-зума при фокусе в input реализована через
+         font-size: 16px на input/textarea в @media (max-width: 639px) в globals.css. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>ProjectsFlow</title>
     <script>
       // FOUC fix: применяем тему ДО React, чтобы не мерцать светлым на загрузке тёмной.

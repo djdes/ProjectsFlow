@@ -90,16 +90,30 @@
   /* iOS Safari зумит страницу при фокусе на input/textarea с font-size < 16px.
      На мобильных принудительно ставим 16px; на desktop (sm+) размер из Tailwind. */
   @media (max-width: 639px) {
-    input[type='text'],
-    input[type='email'],
-    input[type='password'],
-    input[type='search'],
-    input[type='url'],
-    input[type='tel'],
-    input[type='number'],
+    /* Покрываем `<input>` без type-атрибута (default = text), плюс все text-input
+       типы. Селектор `input:not(...)` исключает checkbox/radio/file — у них
+       font-size не влияет на zoom-trigger. */
+    input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='submit']):not([type='reset']):not([type='button']),
     textarea,
     select {
       font-size: 16px !important;
+    }
+
+    /* При фокусе iOS скроллит focused-input в viewport. По умолчанию он клеит
+       поле близко к низу видимой области, и DialogFooter с Submit-кнопкой
+       уходит за клавиатуру. `scroll-margin-bottom: 8rem` заставляет браузер
+       оставить ~128px пространства под полем — submit-кнопку видно без скроллов. */
+    input,
+    textarea {
+      scroll-margin-bottom: 8rem;
+    }
+
+    /* Apple HIG / Material рекомендуют tap-target ≥ 44px на сенсорных устройствах.
+       Дефолтный shadcn Button = h-9 (36px) — слишком мелко для пальца. Поднимаем
+       минимум только тем кнопкам, у которых не задан явный size-класс (icon-buttons
+       типа size-6/size-7 продолжают работать корректно — у них height задан явно). */
+    button:not([class*='size-']) {
+      min-height: 44px;
     }
   }
 }
