@@ -98,13 +98,10 @@ export function ProjectPage(): React.ReactElement {
 
       <TeamSection project={data} />
 
-      {/* Ralph-диспетчер — не показываем для inbox-проекта (он персональный, нет команды). */}
+      {/* Ralph-диспетчер — не показываем для inbox-проекта (он персональный, нет команды).
+          Менять диспетчера может любой участник (viewer+) — server валидирует. */}
       {!data.isInbox && (
-        <DispatcherSection
-          project={data}
-          isOwner={data.role === 'owner'}
-          onChanged={(p) => applyReplace(p)}
-        />
+        <DispatcherSection project={data} onChanged={(p) => applyReplace(p)} />
       )}
 
       {/* Опасная зона — только для владельца и не для inbox-проекта (служебный). */}

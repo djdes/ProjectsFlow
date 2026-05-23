@@ -15,8 +15,6 @@ import type { Project } from '@/domain/project/Project';
 
 type Props = {
   project: Project;
-  // Owner-only — рендерим в read-only режиме для editor/viewer.
-  isOwner: boolean;
   // Колбэк после успешного set/unset — родитель обновляет state проекта,
   // чтобы UI сразу показал нового диспетчера.
   onChanged: (project: Project) => void;
@@ -31,7 +29,7 @@ type Props = {
 // - 0 кандидатов → «никто из участников не подключил agent-токен» + ссылка на профиль;
 // - 1 кандидат → автовыбран, кнопка «Сделать диспетчером» (или «Снять» если уже);
 // - 2+ → select-dropdown.
-export function DispatcherSection({ project, isOwner, onChanged }: Props): React.ReactElement {
+export function DispatcherSection({ project, onChanged }: Props): React.ReactElement {
   const { projectRepository } = useContainer();
   const [candidates, setCandidates] = useState<DispatcherCandidate[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -156,9 +154,9 @@ export function DispatcherSection({ project, isOwner, onChanged }: Props): React
               )}
             </div>
 
-            {/* Owner: контролы выбора */}
-            {isOwner && (
-              <div className="flex flex-wrap items-center gap-2">
+            {/* Контролы выбора. Доступно любому участнику (viewer+) — это routing
+                automation, не data access. Server валидирует action на permission. */}
+            <div className="flex flex-wrap items-center gap-2">
                 {candidates.length === 1 ? (
                   // 1 кандидат — single-pick
                   <>
@@ -178,7 +176,8 @@ export function DispatcherSection({ project, isOwner, onChanged }: Props): React
                         disabled={saving}
                       >
                         {saving && <Loader2 className="size-3.5 animate-spin" />}
-                        Назначить {candidates[0]!.displayName} диспетчером
+                        Назначить {candidates[0]!.displayName}
+                        {candidates[0]!.isAdmin ? ' (admin)' : ''} диспетчером
                       </Button>
                     )}
                   </>
@@ -194,8 +193,12 @@ export function DispatcherSection({ project, isOwner, onChanged }: Props): React
                       <option value="">— ручной режим (нет диспетчера) —</option>
                       {candidates.map((c) => (
                         <option key={c.userId} value={c.userId}>
-                          {c.displayName} ({c.activeTokenCount}{' '}
-                          {c.activeTokenCount === 1 ? 'токен' : 'токенов'})
+                          {c.displayName}
+                          {c.isAdmin ? ' (admin)' : ''}
+                          {!c.isMember ? ' [не member]' : ''}
+                          {' · '}
+                          {c.activeTokenCount}{' '}
+                          {c.activeTokenCount === 1 ? 'токен' : 'токенов'}
                         </option>
                       ))}
                     </select>
@@ -210,12 +213,6 @@ export function DispatcherSection({ project, isOwner, onChanged }: Props): React
                   </>
                 )}
               </div>
-            )}
-            {!isOwner && (
-              <p className="text-xs text-muted-foreground">
-                Менять диспетчера может только владелец проекта.
-              </p>
-            )}
           </div>
         )}
       </CardContent>

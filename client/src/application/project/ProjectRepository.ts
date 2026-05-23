@@ -3,13 +3,18 @@ import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembers
 import type { ProjectInvite, ProjectInviteRole } from '@/domain/project/ProjectInvite';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 
-// Кандидат в Ralph-диспетчеры проекта: участник с ≥1 активным agent-токеном.
+// Кандидат в Ralph-диспетчеры проекта: участник или admin с ≥1 активным agent-токеном.
 export type DispatcherCandidate = {
   readonly userId: string;
   readonly displayName: string;
   readonly email: string;
-  readonly role: ProjectRole;
+  // null если admin не-member (для него доступ — через admin-bypass, не через role).
+  readonly role: ProjectRole | null;
   readonly activeTokenCount: number;
+  // True если admin — UI помечает плашкой «(admin)».
+  readonly isAdmin: boolean;
+  // True если member проекта. False для admin-не-member'ов.
+  readonly isMember: boolean;
 };
 
 export type CreateProjectInput = {

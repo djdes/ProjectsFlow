@@ -159,8 +159,10 @@ export function errorHandler(
   if (err instanceof DispatcherCandidateInvalidError) {
     const message =
       err.reason === 'not_member'
-        ? 'Этот юзер не является участником проекта'
-        : 'У этого юзера нет активных agent-токенов — он не сможет работать как Ralph-диспетчер';
+        ? 'Этот юзер не является участником проекта (диспетчером может быть только member или admin)'
+        : err.reason === 'no_active_tokens'
+          ? 'У этого юзера нет активных agent-токенов — он не сможет работать как Ralph-диспетчер'
+          : 'Юзер не найден';
     res.status(400).json({ error: `dispatcher_${err.reason}`, message });
     return;
   }

@@ -85,6 +85,7 @@ import type { RealtimeEvent } from '../domain/realtime/RealtimeEvent.js';
 import type { ProjectNotificationService } from '../application/notifications/ProjectNotificationService.js';
 import type { ListAllProjects } from '../application/admin/ListAllProjects.js';
 import type { ListAllUsers } from '../application/admin/ListAllUsers.js';
+import type { ListUserProjectsWithDispatcher } from '../application/admin/ListUserProjectsWithDispatcher.js';
 import type { UpdateUserAsAdmin } from '../application/admin/UpdateUserAsAdmin.js';
 import type { ManageEmployees } from '../application/finance/ManageEmployees.js';
 import type { ManageProjectFinance } from '../application/finance/ManageProjectFinance.js';
@@ -176,6 +177,7 @@ type AppDeps = {
     readonly listAllProjects: ListAllProjects;
     readonly listAllUsers: ListAllUsers;
     readonly updateUser: UpdateUserAsAdmin;
+    readonly listUserProjectsWithDispatcher: ListUserProjectsWithDispatcher;
   };
   readonly finance: {
     readonly manageEmployees: ManageEmployees;
