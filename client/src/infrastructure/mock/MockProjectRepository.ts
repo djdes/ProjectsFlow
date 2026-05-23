@@ -119,6 +119,11 @@ export class MockProjectRepository implements ProjectRepository {
     return delay(next);
   }
 
+  async delete(id: string): Promise<void> {
+    this.projects = this.projects.filter((p) => p.id !== id);
+    await delay(undefined);
+  }
+
   // Multi-tenancy stubs — mock пока не моделирует members/invites. Если кому-то понадобится
   // мокать «команду» — реализовать здесь по аналогии с projects[]. Параметры в payload'е
   // ошибки, чтобы лог дал понять что не так.

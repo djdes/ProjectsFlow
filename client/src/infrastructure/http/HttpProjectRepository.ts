@@ -150,6 +150,10 @@ export class HttpProjectRepository implements ProjectRepository {
     }
   }
 
+  async delete(id: string): Promise<void> {
+    await httpClient.delete<void>(`/projects/${id}`);
+  }
+
   async reorder(orderedIds: readonly string[]): Promise<void> {
     await httpClient.put<void>('/projects/reorder', { orderedIds });
   }

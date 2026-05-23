@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { taskAttachments, type TaskAttachmentRow } from '../db/schema.js';
+import { taskAttachments, tasks, type TaskAttachmentRow } from '../db/schema.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type {
   CreateTaskAttachmentInput,
@@ -104,5 +104,17 @@ export class DrizzleTaskAttachmentRepository implements TaskAttachmentRepository
   async deleteByTask(taskId: string): Promise<number> {
     const result = await this.db.delete(taskAttachments).where(eq(taskAttachments.taskId, taskId));
     return (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
+  }
+
+  async listStorageKeysByProject(projectId: string): Promise<string[]> {
+    // INNER JOIN с tasks: аттач существует только если его task ещё в БД.
+    // Используется DeleteProject use-case'ом ДО каскадного удаления, чтобы потом
+    // best-effort удалить файлы с диска (DB-каскад только убирает ROW'ы).
+    const rows = await this.db
+      .select({ storageKey: taskAttachments.storageKey })
+      .from(taskAttachments)
+      .innerJoin(tasks, eq(tasks.id, taskAttachments.taskId))
+      .where(eq(tasks.projectId, projectId));
+    return rows.map((r) => r.storageKey);
   }
 }

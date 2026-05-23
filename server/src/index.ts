@@ -60,6 +60,7 @@ import { InitLocalKb } from './application/kb/InitLocalKb.js';
 import { CheckRepoUsage } from './application/agent/CheckRepoUsage.js';
 import { RequestRepoAccess } from './application/agent/RequestRepoAccess.js';
 import { GetMyAccount } from './application/agent/GetMyAccount.js';
+import { DeleteProject } from './application/project/DeleteProject.js';
 import { InMemoryRateLimiter } from './infrastructure/ratelimit/InMemoryRateLimiter.js';
 import { InitKbRepo } from './application/kb/InitKbRepo.js';
 import { ConnectKbRepo } from './application/kb/ConnectKbRepo.js';
@@ -283,6 +284,12 @@ const { app, devProxyUpgrade } = createApp({
       idGen: idGenerator,
     }),
     updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo }),
+    deleteProject: new DeleteProject({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      attachments: taskAttachmentRepo,
+      storage: attachmentStorage,
+    }),
     reorderProjects: new ReorderProjects({ members: projectMemberRepo }),
     listProjectCommits: new ListProjectCommits({
       projects: projectRepo,
@@ -774,6 +781,12 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
       githubTokens: githubTokenRepo,
       agentTokens: agentTokenRepo,
+    }),
+    deleteProject: new DeleteProject({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      attachments: taskAttachmentRepo,
+      storage: attachmentStorage,
     }),
     rateLimiter: agentRateLimiter,
   },

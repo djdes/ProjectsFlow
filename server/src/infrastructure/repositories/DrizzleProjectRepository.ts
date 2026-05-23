@@ -1,6 +1,22 @@
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { projects, type ProjectRow } from '../db/schema.js';
+import {
+  agentJobs,
+  kbDocuments,
+  projectEmployeeAssignments,
+  projectExpenses,
+  projectIncomes,
+  projectInvites,
+  projectJoinRequests,
+  projectMembers,
+  projects,
+  secrets,
+  taskAttachments,
+  taskComments,
+  taskCommits,
+  tasks,
+  type ProjectRow,
+} from '../db/schema.js';
 import type { Project, ProjectStatus } from '../../domain/project/Project.js';
 import { ProjectNameAlreadyExistsError } from '../../domain/project/errors.js';
 import type {
@@ -99,5 +115,43 @@ export class DrizzleProjectRepository implements ProjectRepository {
       .from(projects)
       .where(isNotNull(projects.gitRepoUrl));
     return rows.map(toProject);
+  }
+
+  async deleteCascade(projectId: string): Promise<void> {
+    // Одна транзакция: или всё, или ничего. FK ON DELETE CASCADE на схеме нет
+    // (см. db/*.sql) — вручную чистим в порядке children → parent.
+    await this.db.transaction(async (tx) => {
+      // Список task-ID этого проекта — нужен для удаления task_attachments/
+      // task_comments/task_commits, у которых FK по task_id, а не по project_id.
+      const taskIds = (
+        await tx
+          .select({ id: tasks.id })
+          .from(tasks)
+          .where(eq(tasks.projectId, projectId))
+      ).map((r) => r.id);
+
+      if (taskIds.length > 0) {
+        await tx.delete(taskAttachments).where(inArray(taskAttachments.taskId, taskIds));
+        await tx.delete(taskComments).where(inArray(taskComments.taskId, taskIds));
+        await tx.delete(taskCommits).where(inArray(taskCommits.taskId, taskIds));
+      }
+
+      // Удаляем сами task'и после очистки их child-таблиц.
+      await tx.delete(tasks).where(eq(tasks.projectId, projectId));
+
+      // Прочие project-scoped таблицы. Порядок между ними не важен.
+      await tx.delete(agentJobs).where(eq(agentJobs.projectId, projectId));
+      await tx.delete(kbDocuments).where(eq(kbDocuments.projectId, projectId));
+      await tx.delete(secrets).where(eq(secrets.projectId, projectId));
+      await tx.delete(projectEmployeeAssignments).where(eq(projectEmployeeAssignments.projectId, projectId));
+      await tx.delete(projectExpenses).where(eq(projectExpenses.projectId, projectId));
+      await tx.delete(projectIncomes).where(eq(projectIncomes.projectId, projectId));
+      await tx.delete(projectInvites).where(eq(projectInvites.projectId, projectId));
+      await tx.delete(projectJoinRequests).where(eq(projectJoinRequests.projectId, projectId));
+      await tx.delete(projectMembers).where(eq(projectMembers.projectId, projectId));
+
+      // Финальный — сам проект.
+      await tx.delete(projects).where(eq(projects.id, projectId));
+    });
   }
 }

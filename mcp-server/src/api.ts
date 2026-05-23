@@ -634,6 +634,13 @@ export class ApiClient {
   async getMyAccount(): Promise<MyAccount> {
     return this.request<MyAccount>('/agent/me');
   }
+
+  async deleteProject(projectId: string): Promise<void> {
+    await this.request<void>(
+      `/agent/projects/${encodeURIComponent(projectId)}`,
+      { method: 'DELETE' },
+    );
+  }
 }
 
 export class ApiError extends Error {

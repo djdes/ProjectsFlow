@@ -8,6 +8,7 @@ import {
   type NotifSource,
 } from '../../domain/notifications/NotificationPrefs.js';
 import { renderActivityEmail, type ActivityEmailInput } from './emails/activityEmail.js';
+import { renderProjectDeletedEmail } from './emails/projectDeletedEmail.js';
 
 type Deps = {
   readonly members: ProjectMemberRepository;
@@ -160,5 +161,34 @@ export class ProjectNotificationService {
       ctaUrl: this.projectUrl(projectId),
       ctaLabel: 'Открыть проект',
     }));
+  }
+
+  // Уведомление об удалении проекта. Особый случай: project'а в БД уже нет, поэтому
+  // принимаем snapshot напрямую и НЕ дёргаем dispatch (он начал бы с lookup'а
+  // projects.getById и тихо вышел бы из-за отсутствия). Best-effort, как и другие
+  // методы — каждое письмо в своём try/catch, ошибки одного получателя не валят рассылку.
+  async onProjectDeleted(input: {
+    projectName: string;
+    actorUserId: string;
+    actorDisplayName: string;
+    recipients: ReadonlyArray<{ userId: string; email: string }>;
+  }): Promise<void> {
+    const targets = input.recipients.filter((r) => r.userId !== input.actorUserId);
+    if (targets.length === 0) return;
+    await Promise.all(
+      targets.map(async (r) => {
+        try {
+          const msg = renderProjectDeletedEmail({
+            to: r.email,
+            projectName: input.projectName,
+            actorDisplayName: input.actorDisplayName,
+            appUrl: this.deps.appUrl.replace(/\/$/, ''),
+          });
+          await this.deps.email.send(msg);
+        } catch (e) {
+          console.warn(`[notifications] project-deleted email to ${r.email} failed:`, e);
+        }
+      }),
+    );
   }
 }
