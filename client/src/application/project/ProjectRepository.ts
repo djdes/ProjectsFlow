@@ -37,11 +37,19 @@ export type GitTokenAccessOutcome =
   | 'granter_not_owner_anymore'
   | 'no_eligible_grantor';
 
+// v0.16+: context — «для чего брали токен». NULL для legacy-записей.
+export type GitTokenAccessContext =
+  | 'git_token_fetch'
+  | 'link_commit'
+  | 'sync_commits'
+  | 'kb_write';
+
 export type GitTokenAccessLogEntry = {
   readonly accessedByUserId: string;
   readonly accessedByDisplayName: string | null;
   readonly accessedAt: string;
   readonly outcome: GitTokenAccessOutcome;
+  readonly context: GitTokenAccessContext | null;
 };
 
 // Кандидат в Ralph-диспетчеры проекта: участник или admin с ≥1 активным agent-токеном.

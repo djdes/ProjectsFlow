@@ -9,11 +9,25 @@ export type UpsertGitTokenDelegationInput = {
   readonly enabled: boolean;
 };
 
+// Контекст вызова — для чего брали токен. Помогает owner'у в UI понимать
+// «не только для git_token_fetch у меня брали; ещё для link_commit и kb_write».
+// NULL для legacy-записей (до v0.16). v0.16-форматы:
+//   'git_token_fetch' — явный agent-endpoint /agent/.../git-token
+//   'link_commit'     — внутренний resolve в LinkCommit
+//   'sync_commits'    — внутренний resolve в SyncTaskCommits
+//   'kb_write'        — внутренний resolve в GithubKbBackend.write
+export type GitTokenAccessContext =
+  | 'git_token_fetch'
+  | 'link_commit'
+  | 'sync_commits'
+  | 'kb_write';
+
 export type LogGitTokenAccessInput = {
   readonly projectId: string;
   readonly accessedByUserId: string;
   readonly granterUserId: string | null;
   readonly outcome: GitTokenAccessOutcome;
+  readonly context?: GitTokenAccessContext;
 };
 
 export type GitTokenAccessLogEntry = {
@@ -21,6 +35,7 @@ export type GitTokenAccessLogEntry = {
   readonly granterUserId: string | null;
   readonly accessedAt: Date;
   readonly outcome: GitTokenAccessOutcome;
+  readonly context: GitTokenAccessContext | null;
 };
 
 export interface GitTokenDelegationRepository {

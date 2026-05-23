@@ -112,12 +112,14 @@ export class GetDelegatedGitToken {
       const githubConn = await this.deps.githubTokens.getWithTokenByUserId(granterId);
       if (!githubConn) continue;
 
-      // Нашли. Logging + return.
+      // Нашли. Logging + return. context='git_token_fetch' — отличает прямой
+      // вызов /agent/.../git-token от внутренних usages (link_commit, kb_write).
       await this.deps.delegations.logAccess({
         projectId,
         accessedByUserId: callerUserId,
         granterUserId: granterId,
         outcome: 'ok',
+        context: 'git_token_fetch',
       });
       const delegation = enabledDelegations.find((d) => d.granterUserId === granterId);
       return {

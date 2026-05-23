@@ -99,12 +99,16 @@ export class CreateAgentCredential {
     // Markdown-документ в KB (github или local — решает DispatchingKbStore).
     const content = matter.stringify('', fm);
     const path = `credentials/${fileSlug}.md`;
-    const { sha } = await this.deps.kb.write(project, {
-      path,
-      content,
-      message: `chore(kb): create credential ${fileSlug} via agent`,
-      sha: null,
-    });
+    const { sha } = await this.deps.kb.write(
+      project,
+      {
+        path,
+        content,
+        message: `chore(kb): create credential ${fileSlug} via agent`,
+        sha: null,
+      },
+      input.userId,
+    );
 
     return { path, slug: fileSlug, sha, secretsWritten: secretsToWrite.map((s) => s.key) };
   }

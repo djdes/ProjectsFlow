@@ -118,6 +118,10 @@ loop:
 5. **Линк коммитов.** После каждого `git push`:
    `pf_link_commit_to_task(projectId, taskId, sha)`. Auto-transition
    `todo → in_progress` происходит автоматически на первом линке.
+   **v0.16+:** работает даже у диспетчера без собственного GitHub — сервер
+   автоматически использует делегированный токен (тот же порядок выбора,
+   что у `pf_get_project_git_token`: owner→displayName ASC, caller исключается).
+   Owner видит это в audit-log'е с `context=link_commit`.
 6. **Блокер.** Если уперлись (нужно решение юзера, потеря доступа, неоднозначный
    scope) — `pf_create_task_comment` с описанием и `@mention` владельца, потом
    `pf_complete_agent_job(ok=false, error=<коротко>)`.
@@ -169,6 +173,13 @@ loop:
   ротация OAuth подхватывается автоматически. При revoke токена на GitHub
   юзер должен переподключить — после reconnect его кандидатура автоматически
   снова в строю.
+- **v0.16+:** делегация работает не только для прямого вызова
+  `pf_get_project_git_token`, но и для **server-side операций**, где сервер
+  делает GitHub-запрос от имени caller'а: `pf_link_commit_to_task`,
+  `pf_sync_commits`, KB-write для github-backed-KB. У диспетчера-админа без
+  собственного GitHub эти операции тоже работают — берётся делегированный
+  токен. В audit-log'е owner видит `context`: `link_commit` / `sync_commits` /
+  `kb_write` отдельно от `git_token_fetch`.
 - Каждое обращение (успех или нет) пишется в audit-log. Owner видит «кто и
   когда брал токен через этот проект» прямо в UI.
 
@@ -282,5 +293,5 @@ member — admin технически просто жмёт. Owner это пот
 
 ---
 
-**Версия гайда:** synced с `@projectsflow/mcp-server@0.15.0`.
+**Версия гайда:** synced с `@projectsflow/mcp-server@0.16.0`.
 Список MCP-тулов — `mcp-server/README.md`.

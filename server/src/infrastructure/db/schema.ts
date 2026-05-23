@@ -479,6 +479,9 @@ export const projectGitTokenAccessLog = mysqlTable(
       'granter_not_owner_anymore',
       'no_eligible_grantor',
     ]).notNull(),
+    // v0.16: для чего брали токен — 'git_token_fetch' (исходный endpoint),
+    // 'link_commit', 'sync_commits', 'kb_write'. NULL для legacy-записей.
+    context: varchar('context', { length: 50 }),
     accessedAt: timestamp('accessed_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (t) => [index('idx_pgtal_project_time').on(t.projectId, t.accessedAt)],

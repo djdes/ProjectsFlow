@@ -19,16 +19,16 @@ export class DispatchingKbStore implements ProjectKbStore {
     throw new KbNotConnectedError();
   }
 
-  list(project: Project): Promise<KbDocumentSummary[]> {
-    return this.pick(project).list(project);
+  list(project: Project, actorUserId: string): Promise<KbDocumentSummary[]> {
+    return this.pick(project).list(project, actorUserId);
   }
-  read(project: Project, path: string): Promise<KbDocument | null> {
-    return this.pick(project).read(project, path);
+  read(project: Project, path: string, actorUserId: string): Promise<KbDocument | null> {
+    return this.pick(project).read(project, path, actorUserId);
   }
-  write(project: Project, input: KbWriteInput): Promise<{ sha: string }> {
-    return this.pick(project).write(project, input);
+  write(project: Project, input: KbWriteInput, actorUserId: string): Promise<{ sha: string }> {
+    return this.pick(project).write(project, input, actorUserId);
   }
-  delete(project: Project, input: KbDeleteInput): Promise<void> {
-    return this.pick(project).delete(project, input);
+  delete(project: Project, input: KbDeleteInput, actorUserId: string): Promise<void> {
+    return this.pick(project).delete(project, input, actorUserId);
   }
 }
