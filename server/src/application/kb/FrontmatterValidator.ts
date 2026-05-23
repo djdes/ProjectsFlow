@@ -33,13 +33,11 @@ export function validateFrontmatter(
   }
 
   if (type === 'credential') {
+    // Раньше требовали наличие хотя бы одного *_ref-поля (credential обязан иметь секрет).
+    // Сняли: бывают «креды» из чисто публичных полей (path/scope/url/rotated_at) — это
+    // нормальный use-case (например, метаданные ротации, ссылки на runbook'и). Если секреты
+    // всё-таки указаны через *_ref — формат проверяем ниже как и раньше.
     const refKeys = Object.keys(fm).filter((k) => REF_KEY_RE.test(k));
-    if (refKeys.length === 0) {
-      errors.push({
-        code: 'credential_no_ref',
-        message: 'credential must have at least one *_ref field (e.g. password_ref: vault://...)',
-      });
-    }
     for (const k of refKeys) {
       const v = fm[k];
       if (typeof v !== 'string' || !VAULT_VALUE_RE.test(v)) {

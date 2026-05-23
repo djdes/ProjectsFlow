@@ -96,6 +96,7 @@ export function KbPage(): React.ReactElement {
               document={document}
               kbRepoFullName={project.kbRepoFullName!}
               onEdit={() => setEditing(true)}
+              onUpdated={() => { reload(); }}
             />
           ))}
           {!activePath && <p className="text-sm text-muted-foreground">Выбери файл слева.</p>}

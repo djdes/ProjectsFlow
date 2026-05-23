@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Copy, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +26,20 @@ export function SecretField({ projectId, fieldLabel, vaultRef, onChange, editabl
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [newValue, setNewValue] = useState('');
+
+  // Авто-reveal при монтировании — юзер просил видеть значения по умолчанию.
+  // Eye-кнопка ниже остаётся как ручной toggle Hide↔Show для шеринга экрана.
+  useEffect(() => {
+    if (!key) return;
+    let cancelled = false;
+    secretsRepository.get(projectId, key).then(
+      (v) => { if (!cancelled) setRevealed(v); },
+      // Тихо: если секрет не найден / нет доступа — оставляем маску, ошибку
+      // пользователь увидит при попытке открыть руками.
+      () => {},
+    );
+    return () => { cancelled = true; };
+  }, [projectId, key, secretsRepository]);
 
   const handleReveal = async (): Promise<void> => {
     if (!key) { toast.error('Невалидный vault://-ref'); return; }
