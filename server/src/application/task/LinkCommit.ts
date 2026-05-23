@@ -10,6 +10,12 @@ import { requireProjectAccess } from '../project/projectAccess.js';
 import type { GithubApiClient } from '../github/GithubApiClient.js';
 import type { GithubTokenRepository } from '../github/GithubTokenRepository.js';
 import { parseGithubOwnerRepo } from '../github/ListProjectCommits.js';
+import {
+  logDelegatedUsage,
+  resolveEffectiveGithubToken,
+} from '../github/resolveEffectiveGithubToken.js';
+import type { GitTokenDelegationRepository } from '../project/GitTokenDelegationRepository.js';
+import type { UserRepository } from '../user/UserRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
 
@@ -20,6 +26,9 @@ type Deps = {
   readonly taskCommits: TaskCommitRepository;
   readonly tokens: GithubTokenRepository;
   readonly api: GithubApiClient;
+  // v0.16+: для fallback'а на делегированный токен когда у caller'а нет своего GH.
+  readonly delegations: GitTokenDelegationRepository;
+  readonly users: UserRepository;
 };
 
 export type LinkCommitCommand = {
@@ -47,15 +56,24 @@ export class LinkCommit {
     const parsed = parseGithubOwnerRepo(project.gitRepoUrl);
     if (!parsed) throw new GithubRepoUrlInvalidError(project.gitRepoUrl);
 
-    const tokenRow = await this.deps.tokens.getWithTokenByUserId(input.ownerUserId);
-    if (!tokenRow) throw new GithubNotConnectedError();
+    // v0.16+: используем effective-token (свой → делегированный owner'а/member'а
+    // если caller — диспетчер этого проекта). Это разблокирует admin-диспетчеров
+    // без собственного GitHub: они получают токен любого согласившегося грантера.
+    const eff = await resolveEffectiveGithubToken(this.deps, input.ownerUserId, input.projectId);
+    if (!eff) throw new GithubNotConnectedError();
 
     // Тянем сам коммит с GitHub чтобы snapshot был валидный (sha может быть произвольный).
-    const commit = await this.deps.api.getCommit(tokenRow.accessToken, {
+    const commit = await this.deps.api.getCommit(eff.accessToken, {
       owner: parsed.owner,
       repo: parsed.repo,
       sha: input.sha,
     });
+
+    // Audit-log: если использовали делегацию — owner увидит в access-log'е что
+    // мы брали его токен для link_commit. Fire-and-forget — ошибки логирования
+    // не должны валить успешный link.
+    void logDelegatedUsage(this.deps.delegations, input.projectId, input.ownerUserId, eff, 'link_commit')
+      .catch(() => {});
 
     const { linked } = await this.deps.taskCommits.link({
       taskId: input.taskId,

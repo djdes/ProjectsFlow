@@ -34,11 +34,15 @@ export class WriteKbDocument {
 
     const content = matter.stringify(input.body, input.frontmatter as Record<string, unknown>);
 
-    return this.deps.kb.write(project, {
-      path: input.path,
-      content,
-      message: `chore(kb): update ${input.path} via ProjectsFlow UI`,
-      sha: input.sha,
-    });
+    return this.deps.kb.write(
+      project,
+      {
+        path: input.path,
+        content,
+        message: `chore(kb): update ${input.path} via ProjectsFlow UI`,
+        sha: input.sha,
+      },
+      input.userId,
+    );
   }
 }

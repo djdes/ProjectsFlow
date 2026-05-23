@@ -589,6 +589,7 @@ export function projectsRouter(deps: Deps): Router {
             accessedByDisplayName: usersMap.get(e.accessedByUserId)?.displayName ?? null,
             accessedAt: e.accessedAt.toISOString(),
             outcome: e.outcome,
+            context: e.context,
           })),
         });
       } catch (e) {

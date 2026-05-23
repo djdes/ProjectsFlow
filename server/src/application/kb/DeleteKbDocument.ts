@@ -17,13 +17,17 @@ export class DeleteKbDocument {
     const { project } = await requireProjectAccess(this.deps, projectId, userId, 'manage_kb');
     if (project.kbKind === 'none') throw new KbNotConnectedError();
 
-    const existing = await this.deps.kb.read(project, path);
+    const existing = await this.deps.kb.read(project, path, userId);
     if (!existing || !existing.sha) throw new KbDocumentNotFoundError(path);
 
-    await this.deps.kb.delete(project, {
-      path,
-      sha: existing.sha,
-      message: `chore(kb): delete ${path} via ProjectsFlow UI`,
-    });
+    await this.deps.kb.delete(
+      project,
+      {
+        path,
+        sha: existing.sha,
+        message: `chore(kb): delete ${path} via ProjectsFlow UI`,
+      },
+      userId,
+    );
   }
 }

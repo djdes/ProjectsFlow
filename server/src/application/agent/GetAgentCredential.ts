@@ -37,7 +37,7 @@ export class GetAgentCredential {
     if (project.kbKind === 'none') throw new KbNotConnectedError();
 
     const path = `credentials/${slug}.md`;
-    const doc = await this.deps.kb.read(project, path);
+    const doc = await this.deps.kb.read(project, path, userId);
     if (!doc) throw new KbDocumentNotFoundError(path);
 
     const fm = doc.frontmatter as Record<string, unknown>;

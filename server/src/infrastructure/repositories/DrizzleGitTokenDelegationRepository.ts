@@ -7,6 +7,7 @@ import {
   type ProjectGitTokenDelegationRow,
 } from '../db/schema.js';
 import type {
+  GitTokenAccessContext,
   GitTokenAccessLogEntry,
   GitTokenDelegationRepository,
   LogGitTokenAccessInput,
@@ -30,6 +31,7 @@ function toLogEntry(row: ProjectGitTokenAccessLogRow): GitTokenAccessLogEntry {
     granterUserId: row.granterUserId ?? null,
     accessedAt: row.accessedAt,
     outcome: row.outcome,
+    context: (row.context ?? null) as GitTokenAccessContext | null,
   };
 }
 
@@ -128,6 +130,7 @@ export class DrizzleGitTokenDelegationRepository implements GitTokenDelegationRe
       accessedByUserId: input.accessedByUserId,
       granterUserId: input.granterUserId,
       outcome: input.outcome,
+      context: input.context ?? null,
     });
   }
 

@@ -212,9 +212,19 @@ const adminRepo = new DrizzleAdminRepository(db);
 const employeeRepo = new DrizzleEmployeeRepository(db);
 const projectFinanceRepo = new DrizzleProjectFinanceRepository(db);
 
+const gitTokenDelegationRepo = new DrizzleGitTokenDelegationRepository(db, idGenerator);
+
 // KB-store: единый фасад, выбирающий github↔local-бэкенд по project.kbKind.
+// v0.16+: GithubKbBackend получает `delegations`/`projects`/`users` для
+// fallback'а на делегированный токен в `resolveEffectiveGithubToken`.
 const kbStore = new DispatchingKbStore({
-  github: new GithubKbBackend({ kb: kbRepo, tokens: githubTokenRepo }),
+  github: new GithubKbBackend({
+    kb: kbRepo,
+    tokens: githubTokenRepo,
+    projects: projectRepo,
+    delegations: gitTokenDelegationRepo,
+    users: userRepo,
+  }),
   local: new LocalKbBackend({ docs: kbDocumentRepo, idGen: idGenerator }),
 });
 
@@ -227,8 +237,6 @@ setInterval(() => agentRateLimiter.pruneExpired(), 10 * 60 * 1000).unref();
 // режиме. Используется в CreateProject (web + agent flow).
 const resolveDefaultDispatcher = (): Promise<string | null> =>
   pickDefaultDispatcherUserId(userRepo, agentTokenRepo);
-
-const gitTokenDelegationRepo = new DrizzleGitTokenDelegationRepository(db, idGenerator);
 
 // Секрет для непрозрачного requestTarget (HMAC). Отдельный env → fallback на vault-ключ.
 const repoAccessSecret =
@@ -549,6 +557,8 @@ const { app, devProxyUpgrade } = createApp({
       taskCommits: taskCommitRepo,
       tokens: githubTokenRepo,
       api: githubApi,
+      delegations: gitTokenDelegationRepo,
+      users: userRepo,
     }),
     unlinkCommit: new UnlinkCommit({
       projects: projectRepo,
@@ -569,6 +579,8 @@ const { app, devProxyUpgrade } = createApp({
       taskCommits: taskCommitRepo,
       tokens: githubTokenRepo,
       api: githubApi,
+      delegations: gitTokenDelegationRepo,
+      users: userRepo,
     }),
     uploadAttachment: new UploadTaskAttachment({
       projects: projectRepo,
@@ -719,6 +731,8 @@ const { app, devProxyUpgrade } = createApp({
       taskCommits: taskCommitRepo,
       tokens: githubTokenRepo,
       api: githubApi,
+      delegations: gitTokenDelegationRepo,
+      users: userRepo,
     }),
     writeKbDocument: new WriteKbDocument({
       projects: projectRepo,
@@ -803,6 +817,8 @@ const { app, devProxyUpgrade } = createApp({
       taskCommits: taskCommitRepo,
       tokens: githubTokenRepo,
       api: githubApi,
+      delegations: gitTokenDelegationRepo,
+      users: userRepo,
     }),
     searchTasks: new SearchTasks({ search: taskSearchRepo }),
     getProject: new GetProject({ projects: projectRepo, members: projectMemberRepo }),

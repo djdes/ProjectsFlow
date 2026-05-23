@@ -8,6 +8,12 @@ import { requireProjectAccess } from '../project/projectAccess.js';
 import type { GithubApiClient } from '../github/GithubApiClient.js';
 import type { GithubTokenRepository } from '../github/GithubTokenRepository.js';
 import { parseGithubOwnerRepo } from '../github/ListProjectCommits.js';
+import {
+  logDelegatedUsage,
+  resolveEffectiveGithubToken,
+} from '../github/resolveEffectiveGithubToken.js';
+import type { GitTokenDelegationRepository } from '../project/GitTokenDelegationRepository.js';
+import type { UserRepository } from '../user/UserRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
 
@@ -18,6 +24,9 @@ type Deps = {
   readonly taskCommits: TaskCommitRepository;
   readonly tokens: GithubTokenRepository;
   readonly api: GithubApiClient;
+  // v0.16+: fallback на делегированный токен (см. LinkCommit).
+  readonly delegations: GitTokenDelegationRepository;
+  readonly users: UserRepository;
 };
 
 export type SyncResult = {
@@ -53,10 +62,14 @@ export class SyncTaskCommits {
     const parsed = parseGithubOwnerRepo(project.gitRepoUrl);
     if (!parsed) throw new GithubRepoUrlInvalidError(project.gitRepoUrl);
 
-    const tokenRow = await this.deps.tokens.getWithTokenByUserId(ownerUserId);
-    if (!tokenRow) throw new GithubNotConnectedError();
+    // v0.16+: effective-token (свой → делегированный, если caller диспетчер).
+    const eff = await resolveEffectiveGithubToken(this.deps, ownerUserId, projectId);
+    if (!eff) throw new GithubNotConnectedError();
 
-    const commits = await this.deps.api.listRecentCommits(tokenRow.accessToken, {
+    void logDelegatedUsage(this.deps.delegations, projectId, ownerUserId, eff, 'sync_commits')
+      .catch(() => {});
+
+    const commits = await this.deps.api.listRecentCommits(eff.accessToken, {
       owner: parsed.owner,
       repo: parsed.repo,
       limit: SYNC_LIMIT,

@@ -374,7 +374,10 @@ const TOOLS = [
       'Link a git commit (by SHA) to a kanban task. The commit SHA must be reachable on ' +
       "the project's GitHub repo — call this AFTER `git push`, not before. The server pulls " +
       'commit metadata (message, author, date, html_url) from GitHub and stores a snapshot. ' +
-      'On the first linked commit, the task auto-transitions from "todo" to "in_progress".',
+      'On the first linked commit, the task auto-transitions from "todo" to "in_progress". ' +
+      'v0.16+: works for admin-dispatchers without their own GitHub — server falls back to ' +
+      "delegated owner/member token (same order as pf_get_project_git_token). Owner sees " +
+      'usage in audit-log with context=link_commit.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -958,7 +961,7 @@ async function main(): Promise<void> {
   const api = new ApiClient(config);
 
   const server = new Server(
-    { name: 'projectsflow', version: '0.15.0' },
+    { name: 'projectsflow', version: '0.16.0' },
     { capabilities: { tools: {} } },
   );
 

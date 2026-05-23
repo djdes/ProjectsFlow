@@ -5,6 +5,7 @@ import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import { useGithubConnection } from '@/presentation/hooks/GithubConnectionProvider';
 import type {
+  GitTokenAccessContext,
   GitTokenAccessLogEntry,
   GitTokenAccessOutcome,
   GitTokenDelegationMember,
@@ -263,6 +264,7 @@ export function GitTokenDelegationBlock({
                       <span className="flex-1 truncate text-foreground">
                         {e.accessedByDisplayName ?? e.accessedByUserId.slice(0, 8)}
                       </span>
+                      <ContextBadge context={e.context} />
                       <OutcomeBadge outcome={e.outcome} />
                     </li>
                   ))}
@@ -350,6 +352,32 @@ function computeSelected(
   if (ownerMember && eligible(ownerMember)) return ownerMember.granterUserId;
   const next = all.find((m) => !m.isOwner && eligible(m));
   return next?.granterUserId ?? null;
+}
+
+// v0.16+: context показывает «для чего брали токен». Помогает owner'у понять
+// картину: «git_token_fetch» — диспетчер запросил для своих git-команд;
+// «link_commit/sync_commits» — сервер автоматически использовал при привязке
+// коммитов; «kb_write» — при записи в KB.
+function ContextBadge({
+  context,
+}: {
+  context: GitTokenAccessContext | null;
+}): React.ReactElement | null {
+  if (context === null) return null;
+  const labels: Record<GitTokenAccessContext, string> = {
+    git_token_fetch: 'fetch',
+    link_commit: 'link',
+    sync_commits: 'sync',
+    kb_write: 'kb',
+  };
+  return (
+    <span
+      className="shrink-0 rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+      title={`context: ${context}`}
+    >
+      {labels[context]}
+    </span>
+  );
 }
 
 function OutcomeBadge({ outcome }: { outcome: GitTokenAccessOutcome }): React.ReactElement {

@@ -35,7 +35,9 @@ export class LocalKbBackend implements ProjectKbStore {
     private readonly deps: { docs: KbDocumentRepository; idGen: () => string },
   ) {}
 
-  async list(project: Project): Promise<KbDocumentSummary[]> {
+  // _actorUserId везде игнорируем — local KB не нуждается в GitHub-токене.
+  // Параметр в сигнатуре только для совместимости с ProjectKbStore (см. v0.16).
+  async list(project: Project, _actorUserId?: string): Promise<KbDocumentSummary[]> {
     const recs = await this.deps.docs.listByProject(project.id);
     return recs.map((r) => {
       const m = matter(r.content);
@@ -49,12 +51,12 @@ export class LocalKbBackend implements ProjectKbStore {
     });
   }
 
-  async read(project: Project, path: string): Promise<KbDocument | null> {
+  async read(project: Project, path: string, _actorUserId?: string): Promise<KbDocument | null> {
     const r = await this.deps.docs.getByPath(project.id, path);
     return r ? parseDoc(path, r.content, r.sha) : null;
   }
 
-  async write(project: Project, input: KbWriteInput): Promise<{ sha: string }> {
+  async write(project: Project, input: KbWriteInput, _actorUserId?: string): Promise<{ sha: string }> {
     const existing = await this.deps.docs.getByPath(project.id, input.path);
     // Optimistic-lock: если клиент прислал sha (update) и он не совпал с текущим — конфликт.
     if (input.sha && existing && existing.sha !== input.sha) {
@@ -71,7 +73,7 @@ export class LocalKbBackend implements ProjectKbStore {
     return { sha };
   }
 
-  async delete(project: Project, input: KbDeleteInput): Promise<void> {
+  async delete(project: Project, input: KbDeleteInput, _actorUserId?: string): Promise<void> {
     const existing = await this.deps.docs.getByPath(project.id, input.path);
     if (!existing) throw new KbDocumentNotFoundError(input.path);
     await this.deps.docs.deleteByPath(project.id, input.path);
