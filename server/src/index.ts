@@ -322,6 +322,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
     setGitTokenDelegation: new SetGitTokenDelegation({
       projects: projectRepo,
+      members: projectMemberRepo,
       delegations: gitTokenDelegationRepo,
       githubTokens: githubTokenRepo,
     }),
@@ -432,6 +433,7 @@ const { app, devProxyUpgrade } = createApp({
     updateUser: new UpdateUserAsAdmin(adminRepo),
     listUserProjectsWithDispatcher: new ListUserProjectsWithDispatcher({
       members: projectMemberRepo,
+      delegations: gitTokenDelegationRepo,
       users: userRepo,
     }),
   },

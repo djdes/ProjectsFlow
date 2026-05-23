@@ -1,9 +1,11 @@
 import type { ProjectStatus } from '../../domain/project/Project.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
+import type { GitTokenDelegationRepository } from '../project/GitTokenDelegationRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 
 type Deps = {
   readonly members: ProjectMemberRepository;
+  readonly delegations: GitTokenDelegationRepository;
   readonly users: UserRepository;
 };
 
@@ -16,6 +18,8 @@ export type AdminProjectDispatcherView = {
   readonly dispatcherUserId: string | null;
   readonly dispatcherDisplayName: string | null;
   readonly dispatcherEmail: string | null;
+  // GitHub-делегация: включена ли владельцем (или admin'ом за владельца).
+  readonly gitTokenDelegationEnabled: boolean;
 };
 
 // Admin-only: список проектов конкретного юзера (где он owner) + их текущие
@@ -38,6 +42,16 @@ export class ListUserProjectsWithDispatcher {
     const dispatchers = await this.deps.users.getManyByIds(dispatcherIds);
     const byId = new Map(dispatchers.map((u) => [u.id, u]));
 
+    // Per-project делегации. Простая итерация — обычно ≤10 проектов на юзера,
+    // N+1 не страшен. Если станет узким местом — добавим `getMany(ids)` в repo.
+    const delegations = await Promise.all(
+      owned.map(async (p) => ({
+        projectId: p.id,
+        enabled: (await this.deps.delegations.get(p.id))?.enabled ?? false,
+      })),
+    );
+    const delegationByProject = new Map(delegations.map((d) => [d.projectId, d.enabled]));
+
     return owned.map((p) => ({
       projectId: p.id,
       projectName: p.name,
@@ -50,6 +64,7 @@ export class ListUserProjectsWithDispatcher {
       dispatcherEmail: p.dispatcherUserId
         ? (byId.get(p.dispatcherUserId)?.email ?? null)
         : null,
+      gitTokenDelegationEnabled: delegationByProject.get(p.id) ?? false,
     }));
   }
 }

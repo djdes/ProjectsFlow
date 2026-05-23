@@ -22,6 +22,15 @@ export type AdminUserView = {
   readonly avatarUrl: string | null;
   readonly isAdmin: boolean;
   readonly projectCount: number;
+  // Сколько проектов где этот юзер OWNER (подмножество projectCount).
+  // Нужно для UI «Делегация X/Y» — знаменатель.
+  readonly ownedProjectCount: number;
+  // Сколько из owned-проектов имеют git_token_delegation.enabled=true.
+  // Числитель для UI «Делегация X/Y». 0 если ни одного.
+  readonly delegationEnabledCount: number;
+  // Подключён ли GitHub. Если нет — делегацию включать нельзя в принципе;
+  // UI рисует это как hint.
+  readonly githubConnected: boolean;
   readonly createdAt: Date;
 };
 
