@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Github, Shield, FolderGit2, GitCommitHorizontal, Users } from 'lucide-react';
+import { Bot, Check, ExternalLink, Github, Loader2, Pencil, Shield, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -81,6 +81,10 @@ function ProjectsTab(): React.ReactElement {
       .catch((e: unknown) => toast.error(`Не удалось загрузить: ${(e as Error).message}`));
   }, [adminRepository]);
 
+  const replaceProject = (id: string, patch: Partial<AdminProject>): void => {
+    setProjects((prev) => prev?.map((p) => (p.id === id ? { ...p, ...patch } : p)) ?? prev);
+  };
+
   if (!projects) return <ListSkeleton />;
   if (projects.length === 0) {
     return <EmptyBox>Проектов нет.</EmptyBox>;
@@ -106,32 +110,155 @@ function ProjectsTab(): React.ReactElement {
           </h2>
           <ul className="divide-y overflow-hidden rounded-lg border bg-card">
             {g.items.map((p) => (
-              <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{p.name}</p>
-                  <p className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>{p.status}</span>
-                    <span className="inline-flex items-center gap-1">
-                      <Users className="size-3" /> {p.memberCount}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <GitCommitHorizontal className="size-3" /> {p.taskCount} задач
-                    </span>
-                  </p>
+              <li key={p.id} className="space-y-2 px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{p.name}</p>
+                    <p className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>{p.status}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Users className="size-3" /> {p.memberCount}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <GitCommitHorizontal className="size-3" /> {p.taskCount} задач
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <Button asChild size="sm" variant="outline">
+                      <Link to={`/projects/${p.id}`}>Доска</Link>
+                    </Button>
+                    <Button asChild size="sm" variant="ghost">
+                      <Link to={`/projects/${p.id}/overview`}>Обзор</Link>
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex shrink-0 gap-2">
-                  <Button asChild size="sm" variant="outline">
-                    <Link to={`/projects/${p.id}`}>Доска</Link>
-                  </Button>
-                  <Button asChild size="sm" variant="ghost">
-                    <Link to={`/projects/${p.id}/overview`}>Обзор</Link>
-                  </Button>
-                </div>
+                <EditableProjectRepo
+                  projectId={p.id}
+                  currentUrl={p.gitRepoUrl}
+                  onSaved={(newUrl) => replaceProject(p.id, { gitRepoUrl: newUrl })}
+                />
               </li>
             ))}
           </ul>
         </section>
       ))}
+    </div>
+  );
+}
+
+// Inline-редактирование gitRepoUrl проекта (admin-only — на странице админ-панели).
+// View: иконка GH + URL (или «не подключён») + ✏ pencil. Edit: <Input> + ✓ / ✕.
+// PATCH /api/projects/:id с admin-bypass (update_project = editor+, admin проходит).
+//
+// Сохранение: пустая строка → null (отвязать). Невалидный URL — пусть сервер
+// валидирует и вернёт ошибку в toast.
+function EditableProjectRepo({
+  projectId,
+  currentUrl,
+  onSaved,
+}: {
+  projectId: string;
+  currentUrl: string | null;
+  onSaved: (newUrl: string | null) => void;
+}): React.ReactElement {
+  const { projectRepository } = useContainer();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(currentUrl ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const startEdit = (): void => {
+    setDraft(currentUrl ?? '');
+    setEditing(true);
+  };
+  const cancelEdit = (): void => {
+    setEditing(false);
+    setDraft(currentUrl ?? '');
+  };
+  const save = async (): Promise<void> => {
+    setSaving(true);
+    try {
+      const trimmed = draft.trim();
+      const newUrl = trimmed.length === 0 ? null : trimmed;
+      // Patch уважает null = очистить (см. UpdateProjectInput).
+      await projectRepository.update(projectId, { gitRepoUrl: newUrl });
+      onSaved(newUrl);
+      setEditing(false);
+      toast.success(newUrl === null ? 'Git-репо отвязан' : 'Git-репо обновлён');
+    } catch (e) {
+      toast.error((e as Error).message ?? 'Не удалось сохранить');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void save();
+            if (e.key === 'Escape') cancelEdit();
+          }}
+          autoFocus
+          disabled={saving}
+          placeholder="https://github.com/owner/repo (или пусто чтобы отвязать)"
+          className="h-7 flex-1 font-mono text-xs"
+        />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          disabled={saving}
+          onClick={() => void save()}
+          aria-label="Сохранить"
+        >
+          {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          disabled={saving}
+          onClick={cancelEdit}
+          aria-label="Отмена"
+        >
+          <X className="size-3.5" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <FolderGit2 className="size-3.5 shrink-0 text-muted-foreground" />
+      {currentUrl ? (
+        <a
+          href={currentUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="inline-flex min-w-0 items-center gap-1 truncate font-mono text-foreground hover:underline"
+          title={currentUrl}
+        >
+          <span className="truncate">{currentUrl}</span>
+          <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
+        </a>
+      ) : (
+        <span className="italic text-muted-foreground">не подключён</span>
+      )}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="ml-auto size-6"
+        onClick={startEdit}
+        aria-label="Изменить git-репо"
+        title="Изменить git-репо"
+      >
+        <Pencil className="size-3" />
+      </Button>
     </div>
   );
 }
