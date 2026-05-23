@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, FileText, Inbox, Paperclip, Trash2 } from 'lucide-react';
 import {
@@ -46,6 +46,10 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // autoFocus только на desktop — на мобильных клавиатура сразу перекрывает диалог.
+  const descRef = useCallback((el: HTMLTextAreaElement | null) => {
+    if (el && !window.matchMedia('(pointer: coarse)').matches) el.focus();
+  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -136,8 +140,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
             </Label>
             <textarea
               id="task-desc"
-              autoFocus
-              rows={5}
+              ref={descRef}
+              rows={3}
               maxLength={5000}
               value={description}
               onChange={(e) => setDescription(e.target.value)}

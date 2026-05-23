@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -94,6 +95,10 @@ export function TaskDialog({
   // В edit-режиме секция аттачей экспонирует addFiles через ref — чтобы paste-handler
   // на форме (поймает Ctrl+V даже когда фокус в textarea) мог пнуть аплоад.
   const attachmentsRef = useRef<AttachmentsHandle>(null);
+  // autoFocus только на desktop — на мобильных клавиатура сразу перекрывает диалог.
+  const descRef = useCallback((el: HTMLTextAreaElement | null) => {
+    if (el && !window.matchMedia('(pointer: coarse)').matches) el.focus();
+  }, []);
 
   useEffect(() => {
     if (!state) return;
@@ -173,8 +178,10 @@ export function TaskDialog({
   return (
     <Dialog open={state !== null} onOpenChange={(open) => !open && onClose()}>
       {/* max-h + grid с прижатыми header/footer и скроллом в body — чтоб длинные секции
-          (особенно коммиты + пикер) не выезжали за viewport. */}
-      <DialogContent className="grid max-h-[90vh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-3xl">
+          (особенно коммиты + пикер) не выезжали за viewport.
+          Mobile: bottom-sheet уже ограничен 85dvh из dialog.tsx; здесь переопределяем на 90dvh.
+          Desktop: классический 90vh. */}
+      <DialogContent className="grid max-h-[85dvh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-h-[90vh] sm:max-w-3xl">
         <DialogHeader className="px-6 pb-2 pt-4">
           {/* Title/Description обязаны существовать для a11y (Radix), но визуально не нужны.
               Видимый контент шапки — название проекта (контекст «к какому проекту таска»). */}
@@ -209,11 +216,11 @@ export function TaskDialog({
           ) : (
             <textarea
               id="task-desc"
+              ref={descRef}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               maxLength={5000}
-              rows={6}
-              autoFocus
+              rows={4}
               placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
               className="block w-full resize-none rounded-md border bg-background p-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:border-foreground/30 focus:outline-none"
             />
