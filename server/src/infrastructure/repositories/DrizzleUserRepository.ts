@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { users, type UserRow } from '../db/schema.js';
 import type { User, UserWithSecrets } from '../../domain/user/User.js';
@@ -70,5 +70,19 @@ export class DrizzleUserRepository implements UserRepository {
     const updated = await this.getById(id);
     if (!updated) throw new Error('User disappeared during updateProfile');
     return updated;
+  }
+
+  async getManyByIds(ids: readonly string[]): Promise<User[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .select()
+      .from(users)
+      .where(inArray(users.id, [...ids]));
+    return rows.map(toUser);
+  }
+
+  async listAdmins(): Promise<User[]> {
+    const rows = await this.db.select().from(users).where(eq(users.isAdmin, true));
+    return rows.map(toUser);
   }
 }

@@ -3,6 +3,7 @@ import type {
   AdminRepository,
   AdminUser,
   AdminUserPatch,
+  AdminUserProjectDispatcher,
 } from '@/application/admin/AdminRepository';
 import { httpClient } from './httpClient';
 
@@ -19,5 +20,12 @@ export class HttpAdminRepository implements AdminRepository {
 
   async updateUser(id: string, patch: AdminUserPatch): Promise<void> {
     await httpClient.patch<unknown>(`/admin/users/${id}`, patch);
+  }
+
+  async listUserProjectsWithDispatcher(userId: string): Promise<AdminUserProjectDispatcher[]> {
+    const { projects } = await httpClient.get<{ projects: AdminUserProjectDispatcher[] }>(
+      `/admin/users/${userId}/projects-with-dispatcher`,
+    );
+    return projects;
   }
 }

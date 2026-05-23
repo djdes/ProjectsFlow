@@ -27,7 +27,8 @@ export type ProjectAction =
   | 'transfer_ownership'
   | 'delegate_task_to_agent'
   | 'cancel_agent_job'
-  | 'manage_finance';
+  | 'manage_finance'
+  | 'set_project_dispatcher';
 
 const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   read_project: 'viewer',
@@ -51,6 +52,10 @@ const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   cancel_agent_job: 'editor',
   // Финансы (зарплаты/расходы/доходы) меняет только владелец.
   manage_finance: 'owner',
+  // Сменить Ralph-диспетчера может любой участник — это routing automation,
+  // не доступ к данным. Admin-bypass позволяет админу менять диспетчера в любом
+  // проекте (даже где он не member) — используется в admin-панели.
+  set_project_dispatcher: 'viewer',
 };
 
 const ROLE_LEVEL: Record<ProjectRole, number> = { viewer: 0, editor: 1, owner: 2 };

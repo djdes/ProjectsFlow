@@ -131,6 +131,7 @@ import { ListSecretKeys } from './application/secrets/ListSecretKeys.js';
 import { DrizzleAdminRepository } from './infrastructure/repositories/DrizzleAdminRepository.js';
 import { ListAllProjects } from './application/admin/ListAllProjects.js';
 import { ListAllUsers } from './application/admin/ListAllUsers.js';
+import { ListUserProjectsWithDispatcher } from './application/admin/ListUserProjectsWithDispatcher.js';
 import { UpdateUserAsAdmin } from './application/admin/UpdateUserAsAdmin.js';
 import { DrizzleEmployeeRepository } from './infrastructure/repositories/DrizzleEmployeeRepository.js';
 import { DrizzleProjectFinanceRepository } from './infrastructure/repositories/DrizzleProjectFinanceRepository.js';
@@ -297,11 +298,13 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       agentTokens: agentTokenRepo,
+      users: userRepo,
     }),
     listDispatcherCandidates: new ListDispatcherCandidates({
       projects: projectRepo,
       members: projectMemberRepo,
       agentTokens: agentTokenRepo,
+      users: userRepo,
     }),
     reorderProjects: new ReorderProjects({ members: projectMemberRepo }),
     listProjectCommits: new ListProjectCommits({
@@ -402,6 +405,10 @@ const { app, devProxyUpgrade } = createApp({
     listAllProjects: new ListAllProjects(adminRepo),
     listAllUsers: new ListAllUsers(adminRepo),
     updateUser: new UpdateUserAsAdmin(adminRepo),
+    listUserProjectsWithDispatcher: new ListUserProjectsWithDispatcher({
+      members: projectMemberRepo,
+      users: userRepo,
+    }),
   },
   finance: {
     manageEmployees: new ManageEmployees({
@@ -810,6 +817,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       agentTokens: agentTokenRepo,
+      users: userRepo,
     }),
     rateLimiter: agentRateLimiter,
   },

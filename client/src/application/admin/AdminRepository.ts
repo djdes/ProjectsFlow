@@ -27,8 +27,23 @@ export type AdminUserPatch = {
   readonly isAdmin?: boolean;
 };
 
+// Проект юзера + его текущий диспетчер (с резолвом имён). Используется
+// admin-страницей в колонке «Проекты / Диспетчеры».
+export type AdminUserProjectDispatcher = {
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly status: ProjectStatus;
+  readonly isInbox: boolean;
+  readonly dispatcherUserId: string | null;
+  readonly dispatcherDisplayName: string | null;
+  readonly dispatcherEmail: string | null;
+};
+
 export interface AdminRepository {
   listProjects(): Promise<AdminProject[]>;
   listUsers(): Promise<AdminUser[]>;
   updateUser(id: string, patch: AdminUserPatch): Promise<void>;
+  // Проекты юзера (где он owner) + текущие диспетчеры. Сменить диспетчера
+  // admin может через обычный `projectRepository.setDispatcher` (admin-bypass).
+  listUserProjectsWithDispatcher(userId: string): Promise<AdminUserProjectDispatcher[]>;
 }

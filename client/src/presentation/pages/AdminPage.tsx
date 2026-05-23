@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, FolderGit2, GitCommitHorizontal, Users } from 'lucide-react';
+import { Bot, Shield, FolderGit2, GitCommitHorizontal, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import type { AdminProject, AdminUser } from '@/application/admin/AdminRepository';
 import { useContainer } from '@/infrastructure/di/container';
 import { getInitials } from '@/presentation/layout/projectIcons';
+import { AdminUserDispatchersDialog } from '@/presentation/components/admin/AdminUserDispatchersDialog';
 
 type Tab = 'projects' | 'users';
 
@@ -139,6 +140,7 @@ function UsersTab(): React.ReactElement {
   const { adminRepository } = useContainer();
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [editing, setEditing] = useState<AdminUser | null>(null);
+  const [dispatchersUser, setDispatchersUser] = useState<AdminUser | null>(null);
 
   const reload = (): void => {
     adminRepository
@@ -184,7 +186,16 @@ function UsersTab(): React.ReactElement {
                 </p>
               </div>
             </div>
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setDispatchersUser(u)}
+                title="Управление Ralph-диспетчерами в проектах этого юзера"
+              >
+                <Bot className="size-4" />
+                Диспетчеры
+              </Button>
               <Button size="sm" variant="outline" onClick={() => setEditing(u)}>
                 Изменить
               </Button>
@@ -204,6 +215,13 @@ function UsersTab(): React.ReactElement {
             setEditing(null);
             reload();
           }}
+        />
+      )}
+
+      {dispatchersUser && (
+        <AdminUserDispatchersDialog
+          user={dispatchersUser}
+          onClose={() => setDispatchersUser(null)}
         />
       )}
     </>

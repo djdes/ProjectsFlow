@@ -2,6 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import type { ListAllProjects } from '../../application/admin/ListAllProjects.js';
 import type { ListAllUsers } from '../../application/admin/ListAllUsers.js';
 import type { UpdateUserAsAdmin } from '../../application/admin/UpdateUserAsAdmin.js';
+import type { ListUserProjectsWithDispatcher } from '../../application/admin/ListUserProjectsWithDispatcher.js';
 import type { AdminProjectView, AdminUserView } from '../../application/admin/AdminRepository.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
@@ -10,6 +11,7 @@ type Deps = {
   readonly listAllProjects: ListAllProjects;
   readonly listAllUsers: ListAllUsers;
   readonly updateUser: UpdateUserAsAdmin;
+  readonly listUserProjectsWithDispatcher: ListUserProjectsWithDispatcher;
 };
 
 function projectToDto(p: AdminProjectView): Record<string, unknown> {
@@ -41,6 +43,26 @@ export function adminRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  // Проекты юзера (где он owner) + текущие диспетчеры с резолвом имён.
+  // Admin использует это в колонке «Проекты / Диспетчеры». Менять диспетчера
+  // admin может через основной /api/projects/:id/dispatcher (admin-bypass).
+  router.get(
+    '/users/:id/projects-with-dispatcher',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params['id'];
+        if (typeof id !== 'string') {
+          res.status(404).json({ error: 'not_found' });
+          return;
+        }
+        const projects = await deps.listUserProjectsWithDispatcher.execute(id);
+        res.json({ projects });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   router.patch('/users/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
