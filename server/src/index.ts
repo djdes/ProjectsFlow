@@ -64,6 +64,7 @@ import { DeleteProject } from './application/project/DeleteProject.js';
 import { SetProjectDispatcher } from './application/project/SetProjectDispatcher.js';
 import { ListDispatcherCandidates } from './application/project/ListDispatcherCandidates.js';
 import { ListMyDispatchedProjects } from './application/agent/ListMyDispatchedProjects.js';
+import { pickDefaultDispatcherUserId } from './application/project/pickDefaultDispatcher.js';
 import { InMemoryRateLimiter } from './infrastructure/ratelimit/InMemoryRateLimiter.js';
 import { InitKbRepo } from './application/kb/InitKbRepo.js';
 import { ConnectKbRepo } from './application/kb/ConnectKbRepo.js';
@@ -217,6 +218,12 @@ const kbStore = new DispatchingKbStore({
 const agentRateLimiter = new InMemoryRateLimiter();
 setInterval(() => agentRateLimiter.pruneExpired(), 10 * 60 * 1000).unref();
 
+// Политика «авто-дефолт Ralph-диспетчера для новых проектов»: первый admin
+// с активным agent-токеном. Если такого нет — null, проект остаётся в ручном
+// режиме. Используется в CreateProject (web + agent flow).
+const resolveDefaultDispatcher = (): Promise<string | null> =>
+  pickDefaultDispatcherUserId(userRepo, agentTokenRepo);
+
 // Секрет для непрозрачного requestTarget (HMAC). Отдельный env → fallback на vault-ключ.
 const repoAccessSecret =
   process.env['REPO_ACCESS_HMAC_SECRET'] ?? process.env['SECRETS_MASTER_KEY'] ?? 'dev-repo-access-secret';
@@ -286,6 +293,7 @@ const { app, devProxyUpgrade } = createApp({
       repo: projectRepo,
       members: projectMemberRepo,
       idGen: idGenerator,
+      resolveDefaultDispatcher,
     }),
     updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo }),
     deleteProject: new DeleteProject({
@@ -642,6 +650,7 @@ const { app, devProxyUpgrade } = createApp({
         repo: projectRepo,
         members: projectMemberRepo,
         idGen: idGenerator,
+        resolveDefaultDispatcher,
       }),
       updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo }),
       tokens: githubTokenRepo,

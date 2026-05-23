@@ -117,11 +117,14 @@ export function DispatcherSection({ project, onChanged }: Props): React.ReactEle
               <div>
                 <p className="font-medium">Нет ralph-кандидатов</p>
                 <p className="text-muted-foreground">
-                  Ни у одного участника нет активного agent-токена. Создай токен в{' '}
+                  Ни у одного участника проекта <strong>и ни у одного админа</strong>{' '}
+                  нет активного agent-токена. Создай токен в{' '}
                   <a href="/profile" className="text-foreground underline">
                     профиле
                   </a>{' '}
-                  и установи MCP — после этого станешь диспетчером.
+                  и установи MCP — после этого станешь диспетчером. Админ с токеном
+                  тоже автоматически появится в списке (его можно назначить даже
+                  если он не member).
                 </p>
               </div>
             </div>
