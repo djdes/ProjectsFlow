@@ -1,4 +1,7 @@
-import { ProxyAgent, type Dispatcher } from 'undici';
+// ВАЖНО: undici fetch + ProxyAgent — не глобальный fetch (он использует встроенный
+// в Node 22 undici 6.x, и dispatcher от внешнего undici 8.x даёт «invalid onRequestStart
+// method»). Используем undici.fetch напрямую.
+import { fetch as undiciFetch, ProxyAgent, type Dispatcher } from 'undici';
 import type {
   SendMessageInput,
   SendMessageResult,
@@ -19,9 +22,14 @@ type TgResponse<T> = {
   parameters?: { retry_after?: number };
 };
 
-// node fetch (undici) принимает dispatcher через init, но в стандартных типах RequestInit
-// его нет. Используем `& { dispatcher?: Dispatcher }` чтобы оставить TS строгим.
-type FetchInit = RequestInit & { dispatcher?: Dispatcher };
+// undiciFetch принимает dispatcher через init; нативный fetch — нет. Типы undici своего
+// RequestInit отличаются от lib.dom, но нам достаточно minimal subset (method/headers/body).
+type TgFetchInit = {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+  dispatcher?: Dispatcher;
+};
 
 export class HttpTelegramClient implements TelegramClient {
   private readonly base: string;
@@ -42,14 +50,18 @@ export class HttpTelegramClient implements TelegramClient {
     this.dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
   }
 
-  private async tgFetch(path: string, init?: FetchInit): Promise<Response> {
-    const opts: FetchInit = { ...init };
+  // Возвращаем Response-подобный объект из undici (status/ok/json/text — те же что у DOM).
+  private async tgFetch(
+    path: string,
+    init?: TgFetchInit,
+  ): Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }> {
+    const opts: TgFetchInit = { ...init };
     if (this.dispatcher) opts.dispatcher = this.dispatcher;
-    return fetch(`${this.base}${path}`, opts as RequestInit);
+    return undiciFetch(`${this.base}${path}`, opts);
   }
 
   async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
-    let res: Response;
+    let res: Awaited<ReturnType<typeof this.tgFetch>>;
     try {
       res = await this.tgFetch('/sendMessage', {
         method: 'POST',
