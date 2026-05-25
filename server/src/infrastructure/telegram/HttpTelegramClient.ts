@@ -1,3 +1,4 @@
+import { ProxyAgent, type Dispatcher } from 'undici';
 import type {
   SendMessageInput,
   SendMessageResult,
@@ -6,6 +7,9 @@ import type {
 
 // Реальная реализация TelegramClient на fetch. Никаких ретраев внутри —
 // rate_limited/error возвращаются caller'у; caller (очередь рассылки) сам решает.
+//
+// HTTP-proxy: если задан proxyUrl, все запросы идут через undici ProxyAgent. Нужно
+// когда хостинг блокирует часть подсетей api.telegram.org (типично для RU-провайдеров).
 
 type TgResponse<T> = {
   ok: boolean;
@@ -15,25 +19,39 @@ type TgResponse<T> = {
   parameters?: { retry_after?: number };
 };
 
+// node fetch (undici) принимает dispatcher через init, но в стандартных типах RequestInit
+// его нет. Используем `& { dispatcher?: Dispatcher }` чтобы оставить TS строгим.
+type FetchInit = RequestInit & { dispatcher?: Dispatcher };
+
 export class HttpTelegramClient implements TelegramClient {
   private readonly base: string;
+  private readonly dispatcher: Dispatcher | undefined;
 
-  // apiBaseUrl — override https://api.telegram.org для случаев, когда хостинг блокирует
-  // часть Telegram CDN (типично для RU-провайдеров: некоторые подсети api.telegram.org
-  // дают ETIMEDOUT). Можно указать reverse-proxy / CF-worker как relay, например
-  // 'https://tg-relay.example.com'. Без trailing slash.
+  // apiBaseUrl — override https://api.telegram.org (если используется relay, например
+  // CF-worker, тогда proxy не нужен).
+  // proxyUrl — HTTP/HTTPS proxy URL вида 'http://user:pass@host:port'. Применяется ко всем
+  // запросам к Telegram API. Если задан И apiBaseUrl — proxy всё равно применяется
+  // (для случая когда relay тоже за прокси). Без proxy — прямой fetch.
   constructor(
     private readonly botToken: string,
     apiBaseUrl: string = 'https://api.telegram.org',
+    proxyUrl?: string,
   ) {
     const cleaned = apiBaseUrl.replace(/\/$/, '');
     this.base = `${cleaned}/bot${botToken}`;
+    this.dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
+  }
+
+  private async tgFetch(path: string, init?: FetchInit): Promise<Response> {
+    const opts: FetchInit = { ...init };
+    if (this.dispatcher) opts.dispatcher = this.dispatcher;
+    return fetch(`${this.base}${path}`, opts as RequestInit);
   }
 
   async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
     let res: Response;
     try {
-      res = await fetch(`${this.base}/sendMessage`, {
+      res = await this.tgFetch('/sendMessage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -72,7 +90,7 @@ export class HttpTelegramClient implements TelegramClient {
   }
 
   async setWebhook(url: string, secretToken: string): Promise<void> {
-    const res = await fetch(`${this.base}/setWebhook`, {
+    const res = await this.tgFetch('/setWebhook', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -89,6 +107,6 @@ export class HttpTelegramClient implements TelegramClient {
   }
 
   async deleteWebhook(): Promise<void> {
-    await fetch(`${this.base}/deleteWebhook`, { method: 'POST' }).catch(() => {});
+    await this.tgFetch('/deleteWebhook', { method: 'POST' }).catch(() => {});
   }
 }
