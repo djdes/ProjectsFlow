@@ -811,9 +811,14 @@ function TaskDescriptionEditor({
 function TaskCommentsSection({
   projectId,
   taskId,
+  // External composer (footer of TaskDrawer). When provided, the section
+  // skips the inline `CommentComposer` and exposes `handleCreated` via this
+  // ref so the parent's composer can push newly created comments into the list.
+  onCommentCreatedRef,
 }: {
   projectId: string;
   taskId: string;
+  onCommentCreatedRef?: React.MutableRefObject<((c: TaskComment) => void) | null>;
 }): React.ReactElement {
   const { taskRepository, projectRepository } = useContainer();
   const [comments, setComments] = useState<TaskComment[]>([]);
@@ -861,6 +866,17 @@ function TaskCommentsSection({
     setComments((prev) => [...prev, created]);
   };
 
+  // Expose for external composer (footer of TaskDrawer).
+  useEffect(() => {
+    if (onCommentCreatedRef) {
+      onCommentCreatedRef.current = handleCreated;
+      return () => {
+        onCommentCreatedRef.current = null;
+      };
+    }
+    return undefined;
+  }, [onCommentCreatedRef]);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -890,12 +906,14 @@ function TaskCommentsSection({
         </ul>
       ) : null}
 
-      <CommentComposer
-        projectId={projectId}
-        taskId={taskId}
-        members={members}
-        onCreated={handleCreated}
-      />
+      {!onCommentCreatedRef && (
+        <CommentComposer
+          projectId={projectId}
+          taskId={taskId}
+          members={members}
+          onCreated={handleCreated}
+        />
+      )}
     </div>
   );
 }
