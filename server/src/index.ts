@@ -301,8 +301,13 @@ const telegramBotToken = process.env['TELEGRAM_BOT_TOKEN'] ?? '';
 const telegramBotUsername = process.env['TELEGRAM_BOT_USERNAME'] ?? null;
 const telegramWebhookSecret = process.env['TELEGRAM_WEBHOOK_SECRET'] ?? null;
 const telegramWebhookUrl = process.env['TELEGRAM_WEBHOOK_URL'] ?? null;
+// TELEGRAM_API_BASE_URL — опциональный relay (например, CF-worker), если хостинг не
+// маршрутизирует api.telegram.org (типично RU-провайдеры: часть подсетей даёт ETIMEDOUT).
+// Без env — прямой канал на api.telegram.org.
+const telegramApiBaseUrl =
+  process.env['TELEGRAM_API_BASE_URL'] ?? 'https://api.telegram.org';
 
-const telegramClient = new HttpTelegramClient(telegramBotToken);
+const telegramClient = new HttpTelegramClient(telegramBotToken, telegramApiBaseUrl);
 const telegramOutboundRepo = new DrizzleTelegramOutboundRepository(db);
 
 const connectTelegramAccount = new ConnectTelegramAccount({
