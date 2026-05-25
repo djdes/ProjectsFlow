@@ -10,6 +10,7 @@ import { AgentJobBadge } from './AgentJobBadge';
 import { ClaudeIcon } from './ClaudeIcon';
 import { DelegateToAgentButton } from './DelegateToAgentButton';
 import { RalphModeBadge } from './RalphMode';
+import { STATUS_LABEL } from './statusLabels';
 
 type Props = {
   task: Task;
@@ -159,13 +160,13 @@ export function KanbanCard({
                     aria-hidden
                     className="size-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]"
                   />
-                  В&nbsp;работе
+                  {STATUS_LABEL.in_progress}
                 </span>
               )}
               {task.status === 'awaiting_clarification' && (
                 <span className="ml-auto flex items-center gap-1 font-medium text-amber-600 dark:text-amber-400">
                   <ClaudeIcon className="size-3" />
-                  На&nbsp;уточнении
+                  {STATUS_LABEL.awaiting_clarification}
                 </span>
               )}
             </div>
@@ -193,8 +194,8 @@ export function KanbanCard({
                 e.stopPropagation();
                 onQuickPromote(task);
               }}
-              aria-label="Перенести в TODO"
-              title="Перенести в TODO"
+              aria-label="Передать воркеру"
+              title="Передать воркеру"
             >
               <ArrowRight className="size-3.5" />
             </Button>
