@@ -23,6 +23,7 @@ import { useDoneSortOrder, type DoneSortOrder } from '@/presentation/hooks/useDo
 import { KanbanCard } from './KanbanCard';
 import { KanbanColumn } from './KanbanColumn';
 import { QuickAddTodo } from './QuickAddTodo';
+import { STATUS_LABEL } from './statusLabels';
 import { TaskDialog, type TaskDialogState } from './TaskDialog';
 
 type Props = {
@@ -32,18 +33,6 @@ type Props = {
   showCommits?: boolean;
   // Имя проекта — пробрасывается в TaskDialog как контекстный заголовок. В inbox не передаём.
   projectName?: string;
-};
-
-const COLUMN_LABELS: Record<TaskStatus, string> = {
-  // Backlog — колонка слева для задач на triage / approval. Карточки в ней получают
-  // стрелку → для быстрого перевода в TODO без drag'а.
-  backlog: 'На подтверждении',
-  todo: 'TODO',
-  in_progress: 'В работе',
-  // Активная задача на паузе: ждёт ответа человека (ralph-question, разбор retry-fail,
-  // переформулировка). Эмодзи 🤔 — спецификация awaiting_clarification.
-  awaiting_clarification: '🤔 На уточнении',
-  done: 'Готово',
 };
 
 // Какие колонки реально рисуем. in_progress и awaiting_clarification не имеют
@@ -301,7 +290,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
             <KanbanColumn
               key={status}
               status={status}
-              label={COLUMN_LABELS[status]}
+              label={STATUS_LABEL[status]}
               tasks={grouped[status]}
               onCreate={(s) => setDialog({ mode: 'create', status: s })}
               onEdit={(t) => setDialog({ mode: 'edit', task: t })}
