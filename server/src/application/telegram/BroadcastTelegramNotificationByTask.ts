@@ -15,6 +15,10 @@ export type BroadcastByTaskCommand = {
   readonly respectPrefs: boolean;
   // Если задан — исключаем из получателей (caller через @RalphBot и так получит).
   readonly skipUserId?: string;
+  // Прокидывается в SendAgentTelegramNotification для каждого получателя — нужен
+  // чтобы сохранить маппинг message_id → question_id для последующего reply-handling'а.
+  // См. spec telegram-reply-to-ralph-answer.md.
+  readonly ralphQuestionId?: string;
 };
 
 export type BroadcastResultItem =
@@ -79,6 +83,7 @@ export class BroadcastTelegramNotificationByTask {
         replyMarkup: cmd.replyMarkup,
         skipDedupCheck: cmd.skipDedupCheck,
         skipPrefsCheck: !cmd.respectPrefs,
+        ralphQuestionId: cmd.ralphQuestionId,
       });
       switch (r.status) {
         case 'ok':

@@ -125,6 +125,7 @@ import { ListTaskCommentsForAgent } from './application/task/ListTaskCommentsFor
 import { MaybeReopenForClarification } from './application/task/MaybeReopenForClarification.js';
 import { HttpTelegramClient } from './infrastructure/telegram/HttpTelegramClient.js';
 import { DrizzleTelegramOutboundRepository } from './infrastructure/repositories/DrizzleTelegramOutboundRepository.js';
+import { DrizzleTelegramRalphQuestionRepository } from './infrastructure/repositories/DrizzleTelegramRalphQuestionRepository.js';
 import { ConnectTelegramAccount } from './application/telegram/ConnectTelegramAccount.js';
 import { GetTelegramStatus } from './application/telegram/GetTelegramStatus.js';
 import { SendAgentTelegramNotification } from './application/telegram/SendAgentTelegramNotification.js';
@@ -319,6 +320,7 @@ const telegramClient = new HttpTelegramClient(
   telegramHttpProxy,
 );
 const telegramOutboundRepo = new DrizzleTelegramOutboundRepository(db);
+const telegramRalphQuestionRepo = new DrizzleTelegramRalphQuestionRepository(db);
 
 const connectTelegramAccount = new ConnectTelegramAccount({
   users: userRepo,
@@ -348,9 +350,23 @@ const sendAgentTelegramNotification = new SendAgentTelegramNotification({
   users: userRepo,
   client: telegramClient,
   outbound: telegramOutboundRepo,
+  ralphQuestionMessages: telegramRalphQuestionRepo,
   idGen: idGenerator,
   kindToPref: TG_KIND_TO_PREF,
 });
+// CreateTaskComment + MaybeReopenForClarification используются и в HTTP-роутерах (см. ниже),
+// и в HandleTelegramWebhook (reply→ralph-answer ветка). Один экземпляр на оба чтобы не
+// дублировать конструкцию и не разъезжаться по поведению.
+const createTaskCommentUseCase = new CreateTaskComment({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  tasks: taskRepo,
+  comments: taskCommentRepo,
+  notifications: notificationRepo,
+  idGen: idGenerator,
+});
+const maybeReopenForClarification = new MaybeReopenForClarification({ tasks: taskRepo });
+
 const handleTelegramWebhook = new HandleTelegramWebhook({
   users: userRepo,
   members: projectMemberRepo,
@@ -358,6 +374,12 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   client: telegramClient,
   appUrl: appBaseUrl,
   botUsername: telegramBotUsername,
+  ralphQuestionMessages: telegramRalphQuestionRepo,
+  createComment: createTaskCommentUseCase,
+  maybeReopenForClarification,
+  notifyTaskChanged,
+  notifyCommentAdded,
+  notifyStatusChanged,
 });
 // v2: fan-out по taskId — грузит задачу/members и переиспользует sendAgentTelegramNotification
 // per recipient (там уже все gates — link/started/prefs/dedup/audit).
@@ -746,14 +768,7 @@ const { app, devProxyUpgrade } = createApp({
       comments: taskCommentRepo,
       attachments: taskAttachmentRepo,
     }),
-    createComment: new CreateTaskComment({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      tasks: taskRepo,
-      comments: taskCommentRepo,
-      notifications: notificationRepo,
-      idGen: idGenerator,
-    }),
+    createComment: createTaskCommentUseCase,
     updateComment: new UpdateTaskComment({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -773,7 +788,7 @@ const { app, devProxyUpgrade } = createApp({
     notifyStatusChanged,
     // tasks repo — нужен роуту для чтения oldStatus до move'а (SSE task_status_changed).
     tasks: taskRepo,
-    maybeReopenForClarification: new MaybeReopenForClarification({ tasks: taskRepo }),
+    maybeReopenForClarification,
   },
   agent: {
     createAgentToken: new CreateAgentToken({
@@ -844,14 +859,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       idGen: idGenerator,
     }),
-    createComment: new CreateTaskComment({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      tasks: taskRepo,
-      comments: taskCommentRepo,
-      notifications: notificationRepo,
-      idGen: idGenerator,
-    }),
+    createComment: createTaskCommentUseCase,
     // Чтение комментариев задачи (Ralph F11 polling): фильтры since/limit/marker
     // + ownerDisplayName. Не использует ListTaskComments из tasks-блока (та тянет
     // attachments-батч лишний раз).

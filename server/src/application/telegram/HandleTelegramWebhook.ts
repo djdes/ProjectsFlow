@@ -1,7 +1,10 @@
 import type { TelegramClient } from './TelegramClient.js';
+import type { TelegramRalphQuestionRepository } from './TelegramRalphQuestionRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
+import type { CreateTaskComment } from '../task/CreateTaskComment.js';
+import type { MaybeReopenForClarification } from '../task/MaybeReopenForClarification.js';
 import {
   getAllTgPrefsResolved,
   type TelegramNotificationPrefs,
@@ -17,6 +20,12 @@ export type TelegramUpdate = {
     readonly from?: { readonly id: number; readonly username?: string; readonly first_name?: string };
     readonly chat: { readonly id: number; readonly type: string };
     readonly text?: string;
+    // Reply на наше сообщение → ловим как ralph-answer. См. spec
+    // C:/www/ralph/prompts/telegram-reply-to-ralph-answer.md.
+    readonly reply_to_message?: {
+      readonly message_id: number;
+      readonly from?: { readonly id: number; readonly is_bot?: boolean };
+    };
   };
 };
 
@@ -27,6 +36,28 @@ type Deps = {
   readonly client: TelegramClient;
   readonly appUrl: string;
   readonly botUsername: string | null;
+  // Reply→ralph-answer ветка. См. spec telegram-reply-to-ralph-answer.md.
+  readonly ralphQuestionMessages: TelegramRalphQuestionRepository;
+  readonly createComment: CreateTaskComment;
+  readonly maybeReopenForClarification: MaybeReopenForClarification;
+  // Live-обновление UI после auto-create комментария / auto-return статуса.
+  // Best-effort — webhook не блокирует ответ на SSE.
+  readonly notifyTaskChanged: (projectId: string) => void;
+  readonly notifyCommentAdded: (
+    projectId: string,
+    taskId: string,
+    commentId: string,
+    ownerUserId: string,
+    actorKind?: 'user' | 'agent' | 'system',
+    agentName?: string | null,
+  ) => void;
+  readonly notifyStatusChanged: (
+    projectId: string,
+    taskId: string,
+    oldStatus: string,
+    newStatus: string,
+    actorUserId: string,
+  ) => void;
 };
 
 // Роутер команд бота. Сами reply'и шлём через TelegramClient.sendMessage — best-effort,
@@ -42,13 +73,129 @@ export class HandleTelegramWebhook {
     const tgUserId = msg.from.id;
     const chatId = msg.chat.id;
 
+    // Reply→ralph-answer ловим ДО командного роутинга — юзер может reply'нуть на
+    // ralph-question просто текстом, без слэш-префикса (типичный TG UX).
+    if (msg.reply_to_message?.message_id) {
+      return this.handleReply(tgUserId, chatId, msg.reply_to_message.message_id, text);
+    }
+
     // Routing по первому слову — это командный текст. Игнор остального.
     const cmd = text.split(/\s+/, 1)[0]?.toLowerCase() ?? '';
     if (cmd === '/start') return this.handleStart(tgUserId, chatId, msg.from.first_name);
     if (cmd === '/pause') return this.handlePause(tgUserId, chatId);
     if (cmd === '/pending') return this.handlePending(tgUserId, chatId);
     if (cmd === '/help') return this.handleHelp(chatId);
-    // Прочие сообщения — пока игнор. Reply'и → комментарии в задачу — future scope.
+    // Прочие сообщения — игнор. Если юзер хочет ответить — пусть use reply на сообщение бота.
+  }
+
+  // Reply на наше сообщение → ralph-answer комментарий в задаче. Шаги:
+  //   1. Найти маппинг (chat, message) → (task, question, recipient).
+  //   2. Проверить что отправитель == адресат (нельзя отвечать за другого).
+  //   3. Создать коммент с маркером <!-- ralph-answer {...} --> от лица юзера.
+  //   4. Триггернуть MaybeReopenForClarification (auto-return awaiting → in_progress).
+  //   5. SSE comment_added + (если был возврат) task_status_changed.
+  //   6. TG-подтверждение юзеру.
+  // На любой неуспех — отвечаем понятным текстом, не падаем (TG retry'ит 5xx лавиной).
+  private async handleReply(
+    tgUserId: number,
+    chatId: number,
+    replyToMessageId: number,
+    text: string,
+  ): Promise<void> {
+    const mapping = await this.deps.ralphQuestionMessages.findByMessage(chatId, replyToMessageId);
+    if (!mapping) {
+      // Reply не на наш ralph-question (например на /start, или старое сообщение, или
+      // вопрос которого мы не сохранили). Деликатно объясняем.
+      await this.reply(
+        chatId,
+        '↩️ Это сообщение не привязано к открытому вопросу Ralph. Ответы через reply работают только на свежие уточнения (`🤔 Ralph задал уточнение…`).',
+      );
+      return;
+    }
+
+    const senderUserId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
+    if (!senderUserId || senderUserId !== mapping.recipientUserId) {
+      // Защита от того что чужой TG-аккаунт отвечает на чужое уточнение (после share
+      // chat'а, например). По spec'е — отвечает только адресат.
+      await this.reply(chatId, '🚫 Ответить на это уточнение может только адресат.');
+      return;
+    }
+
+    // Грузим задачу — нужен projectId для CreateTaskComment.
+    const task = await this.deps.tasks.getById(mapping.taskId);
+    if (!task) {
+      await this.reply(chatId, '⚠️ Задача удалена. Уточнение больше неактуально.');
+      return;
+    }
+
+    // Body коммента: видимая шапка + markdown с ответом + machine-readable маркер.
+    // Маркер парсится Ralph-диспетчером через Scan-PfAnswers и сервером через
+    // MaybeReopenForClarification (substring '<!-- ralph-answer '). Поэтому формат и
+    // пробелы важны.
+    const answerPayload = {
+      v: 1,
+      q: mapping.ralphQuestionId,
+      value: text,
+      source: 'tg-reply-projectsflow-bot',
+      answeredAt: new Date().toISOString(),
+    };
+    const body =
+      `**✅ Ответ на уточнение** (через Telegram reply)\n\n${text}\n\n` +
+      `<!-- ralph-answer ${JSON.stringify(answerPayload)} -->`;
+
+    let comment;
+    try {
+      comment = await this.deps.createComment.execute({
+        projectId: task.projectId,
+        ownerUserId: senderUserId,
+        taskId: task.id,
+        body,
+        // ВАЖНО: это ответ ЧЕЛОВЕКА. Без явного 'user' default бы тоже сработал, но
+        // фиксируем явно — чтобы случайно не отрисовать Claude-стиль на этом комменте.
+        actorKind: 'user',
+      });
+    } catch (err) {
+      console.warn('[tg-webhook] createComment failed for reply:', err);
+      await this.reply(
+        chatId,
+        '❌ Не удалось сохранить ответ (внутренняя ошибка). Попробуйте через интерфейс ProjectsFlow.',
+      );
+      return;
+    }
+
+    // SSE: новый коммент видят все участники проекта мгновенно.
+    this.deps.notifyCommentAdded(
+      task.projectId,
+      task.id,
+      comment.id,
+      senderUserId,
+      'user',
+      null,
+    );
+
+    // Auto-return awaiting_clarification → in_progress. Best-effort.
+    try {
+      const reopened = await this.deps.maybeReopenForClarification.execute(task.id, body);
+      if (reopened) {
+        this.deps.notifyStatusChanged(
+          task.projectId,
+          task.id,
+          reopened.oldStatus,
+          reopened.newStatus,
+          senderUserId,
+        );
+      }
+    } catch (err) {
+      console.warn('[tg-webhook] auto-reopen failed:', err);
+    }
+    this.deps.notifyTaskChanged(task.projectId);
+
+    // Подтверждение юзеру. Урезаем текст до 80 символов чтоб не повторять простыню.
+    const preview = text.length > 80 ? text.slice(0, 79).trimEnd() + '…' : text;
+    await this.reply(
+      chatId,
+      `✅ Принято: <i>${escapeHtml(preview)}</i>\n\nЗадача возвращена в работу.`,
+    );
   }
 
   private async handleStart(
