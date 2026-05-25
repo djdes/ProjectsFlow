@@ -6,6 +6,7 @@ import type {
   SendMessageInput,
   SendMessageResult,
   TelegramClient,
+  TelegramUpdate,
 } from '../../application/telegram/TelegramClient.js';
 
 // Реальная реализация TelegramClient на fetch. Никаких ретраев внутри —
@@ -120,5 +121,24 @@ export class HttpTelegramClient implements TelegramClient {
 
   async deleteWebhook(): Promise<void> {
     await this.tgFetch('/deleteWebhook', { method: 'POST' }).catch(() => {});
+  }
+
+  async getUpdates(offset: number, timeoutSeconds: number): Promise<TelegramUpdate[]> {
+    // long-poll: undici keep-alive держит соединение открытым timeoutSeconds. Нам важно
+    // дать proxy чуть больше времени чтоб не порвал раньше TG (timeoutSeconds + 5).
+    const res = await this.tgFetch('/getUpdates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        offset,
+        timeout: timeoutSeconds,
+        allowed_updates: ['message'],
+      }),
+    });
+    const body = (await res.json().catch(() => null)) as TgResponse<TelegramUpdate[]> | null;
+    if (!res.ok || !body?.ok) {
+      throw new Error(`getUpdates failed: ${body?.description ?? res.status}`);
+    }
+    return body.result ?? [];
   }
 }

@@ -130,6 +130,7 @@ import { GetTelegramStatus } from './application/telegram/GetTelegramStatus.js';
 import { SendAgentTelegramNotification } from './application/telegram/SendAgentTelegramNotification.js';
 import { HandleTelegramWebhook } from './application/telegram/HandleTelegramWebhook.js';
 import { BroadcastTelegramNotificationByTask } from './application/telegram/BroadcastTelegramNotificationByTask.js';
+import { TelegramPoller } from './application/telegram/TelegramPoller.js';
 import { CreateTaskComment } from './application/task/CreateTaskComment.js';
 import { UpdateTaskComment } from './application/task/UpdateTaskComment.js';
 import { DeleteTaskComment } from './application/task/DeleteTaskComment.js';
@@ -362,6 +363,12 @@ const broadcastTelegramByTask = new BroadcastTelegramNotificationByTask({
   tasks: taskRepo,
   members: projectMemberRepo,
   send: sendAgentTelegramNotification,
+});
+// Polling-fallback: для хостингов где inbound от Telegram блокируется (типично RU).
+// Сам long-poll'ит getUpdates через тот же proxy.
+const telegramPoller = new TelegramPoller({
+  client: telegramClient,
+  handler: handleTelegramWebhook,
 });
 
 // Admin-bypass: системный админ (users.is_admin) получает доступ ко всем проектам
@@ -1039,23 +1046,31 @@ const server = app.listen(config.port, () => {
   console.log(
     `[projectsflow] github integration: ${config.github.clientId ? 'enabled' : 'DISABLED (no GITHUB_CLIENT_ID)'}`,
   );
-  // Telegram webhook: регистрируем только если есть token+url+secret. Best-effort —
-  // ошибка setWebhook не валит процесс (часто прокси/network в dev). В dev (нет публичного
-  // URL) пропускаем тихо.
-  if (telegramBotToken && telegramWebhookUrl && telegramWebhookSecret) {
-    telegramClient
-      .setWebhook(telegramWebhookUrl, telegramWebhookSecret)
-      .then(() => console.log(`[projectsflow] telegram webhook: ${telegramWebhookUrl}`))
-      .catch((err) => console.warn('[projectsflow] telegram setWebhook failed:', err));
+  // Telegram mode: TELEGRAM_MODE = 'webhook' | 'polling' | 'auto' (default).
+  // auto = webhook если задан URL+secret, иначе polling. Полезно для хостингов где
+  // inbound от Telegram блокируется — там webhook никогда не доставит апдейты.
+  const tgMode = (process.env['TELEGRAM_MODE'] || 'auto').toLowerCase();
+  if (!telegramBotToken) {
+    console.log('[projectsflow] telegram bot: DISABLED (missing TELEGRAM_BOT_TOKEN)');
+  } else if (
+    tgMode === 'webhook' ||
+    (tgMode === 'auto' && telegramWebhookUrl && telegramWebhookSecret)
+  ) {
+    if (!telegramWebhookUrl || !telegramWebhookSecret) {
+      console.warn(
+        '[projectsflow] telegram: webhook mode requested, но TELEGRAM_WEBHOOK_URL/SECRET пусты — fallback на polling',
+      );
+      void telegramPoller.start().catch((err) => console.warn('[tg-poller] start failed:', err));
+    } else {
+      telegramClient
+        .setWebhook(telegramWebhookUrl, telegramWebhookSecret)
+        .then(() => console.log(`[projectsflow] telegram webhook: ${telegramWebhookUrl}`))
+        .catch((err) => console.warn('[projectsflow] telegram setWebhook failed:', err));
+    }
+  } else if (tgMode === 'polling' || tgMode === 'auto') {
+    void telegramPoller.start().catch((err) => console.warn('[tg-poller] start failed:', err));
   } else {
-    const missing = [
-      !telegramBotToken && 'TELEGRAM_BOT_TOKEN',
-      !telegramWebhookUrl && 'TELEGRAM_WEBHOOK_URL',
-      !telegramWebhookSecret && 'TELEGRAM_WEBHOOK_SECRET',
-    ].filter(Boolean);
-    console.log(
-      `[projectsflow] telegram bot: DISABLED (missing ${missing.join(', ')})`,
-    );
+    console.warn(`[projectsflow] telegram: unknown TELEGRAM_MODE='${tgMode}'`);
   }
 });
 
@@ -1066,9 +1081,11 @@ if (devProxyUpgrade) {
   console.log('[projectsflow] dev gateway: proxying SPA + HMR to Vite');
 }
 
-// Грациозный shutdown — закрываем pool, иначе процесс висит.
+// Грациозный shutdown — закрываем pool, иначе процесс висит. Также останавливаем
+// TG-поллер (он сам завершит long-poll по timeout от Telegram).
 const shutdown = (signal: string): void => {
   console.log(`[projectsflow] received ${signal}, shutting down`);
+  void telegramPoller.stop();
   server.close(() => {
     pool.end().then(() => {
       console.log('[projectsflow] pool closed, bye');
