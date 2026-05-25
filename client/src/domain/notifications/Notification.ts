@@ -15,6 +15,10 @@ export type CommentMentionPayload = {
   readonly commentExcerpt: string;
   readonly actorUserId: string;
   readonly actorDisplayName: string;
+  // Кто оставил коммент: 'user' | 'agent' | 'system'. Используется UI чтобы
+  // отрисовать Claude-стиль mention'а от agent'а. Optional — старые payload'ы без.
+  readonly actorKind?: 'user' | 'agent' | 'system';
+  readonly agentName?: string | null;
 };
 
 // Приглашение в проект: показывается с кнопкой «Принять» (token → accept).

@@ -191,9 +191,11 @@ const notifyCommentAdded = (
   taskId: string,
   commentId: string,
   ownerUserId: string,
+  actorKind?: 'user' | 'agent' | 'system',
+  agentName?: string | null,
 ): void => {
   void projectEventBroadcaster
-    .broadcastCommentAdded(projectId, taskId, commentId, ownerUserId)
+    .broadcastCommentAdded(projectId, taskId, commentId, ownerUserId, actorKind, agentName)
     .catch(() => {});
 };
 // SSE task_status_changed — move и авто-возврат awaiting_clarification → in_progress.

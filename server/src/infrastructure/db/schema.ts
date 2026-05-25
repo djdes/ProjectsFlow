@@ -317,6 +317,12 @@ export const taskComments = mysqlTable(
     taskId: char('task_id', { length: 36 }).notNull(),
     ownerUserId: char('owner_user_id', { length: 36 }).notNull(),
     body: text('body').notNull(),
+    // 'user' | 'agent' | 'system'. См. db/034 и spec comment-actor-kind.md.
+    // DEFAULT 'user' — обратная совместимость для исторических комментов.
+    actorKind: varchar('actor_kind', { length: 16 }).notNull().default('user'),
+    // Конкретный агент (ralph-dispatcher / ralph-worker / ralph-grillme / ralph-verify).
+    // NULL для actor_kind != 'agent'. UI маппит на читаемый title.
+    agentName: varchar('agent_name', { length: 64 }),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },

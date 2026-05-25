@@ -18,6 +18,12 @@ export type CommentMentionPayload = {
   readonly commentExcerpt: string;
   readonly actorUserId: string;
   readonly actorDisplayName: string;
+  // Кто оставил коммент: 'user' (человек) | 'agent' (Ralph/Claude) | 'system'. Клиент
+  // подсвечивает agent-mention'ы Claude-стилем. Optional — старые payload'ы без поля.
+  readonly actorKind?: 'user' | 'agent' | 'system';
+  // Конкретный agent (ralph-dispatcher | ralph-worker | ralph-grillme | ralph-verify).
+  // NULL/undefined для actorKind != 'agent'.
+  readonly agentName?: string | null;
 };
 
 // Приглашение в проект. Создаётся при invite на email уже зарегистрированного юзера —

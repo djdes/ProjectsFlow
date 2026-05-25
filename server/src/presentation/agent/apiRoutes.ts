@@ -65,7 +65,7 @@ import {
   taskStatusSchema,
   linkCommitSchema,
   createTaskSchema,
-  createTaskCommentSchema,
+  createAgentTaskCommentSchema,
 } from '../tasks/schemas.js';
 import { writeDocSchema } from '../kb/schemas.js';
 
@@ -88,6 +88,8 @@ type Deps = {
     taskId: string,
     commentId: string,
     ownerUserId: string,
+    actorKind?: 'user' | 'agent' | 'system',
+    agentName?: string | null,
   ) => void;
   readonly notifyStatusChanged: (
     projectId: string,
@@ -686,15 +688,28 @@ export function agentApiRouter(deps: Deps): Router {
       try {
         const projectId = req.params['projectId'] as string;
         const taskId = req.params['taskId'] as string;
-        const body = createTaskCommentSchema.parse(req.body);
+        const body = createAgentTaskCommentSchema.parse(req.body);
+        // Дефолт 'ralph-dispatcher' — исторически все agent-комменты пишет он. Когда
+        // другие агенты начнут писать (worker/grillme/verify), они передадут свой
+        // agentName явно через MCP-tool.
+        const agentName = body.agentName ?? 'ralph-dispatcher';
         const comment = await deps.createComment.execute({
           projectId,
           ownerUserId: req.user!.id,
           taskId,
           body: body.body,
+          actorKind: 'agent',
+          agentName,
         });
         void deps.notifier.onComment(projectId, req.user!.id, taskId, body.body, 'mcp').catch(() => {});
-        deps.notifyCommentAdded(projectId, taskId, comment.id, req.user!.id);
+        deps.notifyCommentAdded(
+          projectId,
+          taskId,
+          comment.id,
+          req.user!.id,
+          comment.actorKind,
+          comment.agentName,
+        );
         // Авто-возврат awaiting_clarification → in_progress по ralph-маркеру.
         // Best-effort: ошибка не должна ломать ответ.
         try {

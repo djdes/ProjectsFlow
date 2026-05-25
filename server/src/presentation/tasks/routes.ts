@@ -58,11 +58,14 @@ type Deps = {
   // Best-effort, не блокирует ответ.
   readonly notifyTaskChanged: (projectId: string) => void;
   // SSE comment_added — для realtime-реакции диспетчера/UI на новый комментарий.
+  // actorKind/agentName опциональны — для Claude-стилизации agent-комментов в UI.
   readonly notifyCommentAdded: (
     projectId: string,
     taskId: string,
     commentId: string,
     ownerUserId: string,
+    actorKind?: 'user' | 'agent' | 'system',
+    agentName?: string | null,
   ) => void;
   // SSE task_status_changed — move + авто-возврат awaiting_clarification → in_progress.
   readonly notifyStatusChanged: (
@@ -373,9 +376,18 @@ export function tasksRouter(deps: Deps): Router {
         ownerUserId: req.user!.id,
         taskId,
         body: body.body,
+        // Все человеческие роуты — actorKind='user' (default, но явно для читаемости).
+        actorKind: 'user',
       });
       deps.notifyTaskChanged(projectId);
-      deps.notifyCommentAdded(projectId, taskId, comment.id, req.user!.id);
+      deps.notifyCommentAdded(
+        projectId,
+        taskId,
+        comment.id,
+        req.user!.id,
+        comment.actorKind,
+        comment.agentName,
+      );
       // Авто-возврат awaiting_clarification → in_progress по маркеру в комменте.
       // Best-effort: ошибка не должна ломать ответ на создание коммента.
       try {

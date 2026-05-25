@@ -35,6 +35,14 @@
     /* Зелёный акцент для действия «добавить» (кнопка добавления задачи и т.п.). */
     --success: 142 71% 38%;
 
+    /* Фирменные цвета Claude — для рендера комментариев актора 'agent' (Ralph-диспетчер,
+       worker, grillme, verify). HEX-литералы по гайду Anthropic; не привязываем к тёмной
+       теме — peach-фон с тёплым акцентом нормально читается и в dark, и в light. */
+    --claude-orange: #d97757;
+    --claude-orange-dark: #c15f3c;
+    --claude-peach: #fef3ec;
+    --claude-cream: #faf9f5;
+
     --radius: 0.5rem;
   }
 
@@ -115,5 +123,43 @@
     button:not([class*='size-']) {
       min-height: 44px;
     }
+  }
+}
+
+/* Claude-стилизация комментария актора 'agent'. Принципиально не через
+   Tailwind-arbitrary values — keyframe-анимация и :where-host для контейнера хотят
+   нормальный CSS. Используется в TaskDialog CommentItem; см. spec comment-actor-kind.md. */
+@layer components {
+  .pf-claude-agent {
+    border-left: 3px solid var(--claude-orange);
+    background: var(--claude-peach);
+    border-radius: 0 8px 8px 0;
+    padding: 8px 12px;
+  }
+
+  .pf-claude-agent-icon {
+    color: var(--claude-orange);
+    /* Мягкое мерцание — узнаваемо как Claude, не отвлекает. */
+    animation: pf-claude-pulse 3s ease-in-out infinite;
+    display: inline-block;
+    transform-origin: center;
+  }
+
+  .pf-claude-agent-title {
+    color: var(--claude-orange-dark);
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-weight: 600;
+    font-size: 12.5px;
+    letter-spacing: 0.2px;
+  }
+
+  @keyframes pf-claude-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.75; transform: scale(1.1); }
+  }
+
+  /* Уважение системного prefers-reduced-motion. */
+  @media (prefers-reduced-motion: reduce) {
+    .pf-claude-agent-icon { animation: none; }
   }
 }

@@ -1,5 +1,5 @@
 import { TaskCommentBodyEmptyError, TaskNotFoundError } from '../../domain/task/errors.js';
-import type { TaskComment } from '../../domain/task/TaskComment.js';
+import type { TaskComment, TaskCommentActorKind } from '../../domain/task/TaskComment.js';
 import type { NotificationRepository } from '../notifications/NotificationRepository.js';
 import type {
   ProjectMemberRepository,
@@ -24,6 +24,10 @@ export type CreateTaskCommentCommand = {
   readonly ownerUserId: string;
   readonly taskId: string;
   readonly body: string;
+  // Кто пишет. По умолчанию 'user' — обратная совместимость со всеми существующими caller'ами.
+  // Agent-роутер передаёт 'agent' + agentName. См. spec comment-actor-kind.md.
+  readonly actorKind?: TaskCommentActorKind;
+  readonly agentName?: string | null;
 };
 
 // Парсит @-mentions из body против списка members. Один член может быть упомянут
@@ -74,6 +78,8 @@ export class CreateTaskComment {
       taskId: input.taskId,
       ownerUserId: input.ownerUserId,
       body,
+      actorKind: input.actorKind,
+      agentName: input.agentName,
     });
 
     // Mention-парсинг. Уведомления — best-effort: если что-то упадёт здесь, комментарий
@@ -83,7 +89,14 @@ export class CreateTaskComment {
       const mentionedUserIds = parseMentions(body, members, input.ownerUserId);
       if (mentionedUserIds.length > 0) {
         const actor = members.find((m) => m.userId === input.ownerUserId);
-        const actorDisplayName = actor?.user.displayName ?? 'Кто-то';
+        // Для agent-комментов displayName в members — это owner проекта (от чьего имени
+        // ходит agent-токен), а нам в UI нужно показать «Диспетчер · Claude Code». Поэтому
+        // явно делегируем actorDisplayName: для 'agent' — agentName или generic; для людей —
+        // member.displayName.
+        const actorDisplayName =
+          input.actorKind === 'agent'
+            ? (input.agentName ?? 'Агент')
+            : (actor?.user.displayName ?? 'Кто-то');
         const taskExcerpt = excerpt(task.description);
         const commentExcerpt = excerpt(body);
         for (const recipientId of mentionedUserIds) {
@@ -101,6 +114,8 @@ export class CreateTaskComment {
               commentExcerpt,
               actorUserId: input.ownerUserId,
               actorDisplayName,
+              actorKind: input.actorKind ?? 'user',
+              agentName: input.agentName ?? null,
             },
           });
         }

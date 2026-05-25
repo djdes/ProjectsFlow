@@ -73,6 +73,9 @@ function commentFromDto(dto: CommentDto): TaskComment {
     ...dto,
     createdAt: new Date(dto.createdAt),
     updatedAt: new Date(dto.updatedAt),
+    // Fallback 'user' — старый backend без миграции 034 не присылает поле.
+    actorKind: dto.actorKind ?? 'user',
+    agentName: dto.agentName ?? null,
     attachments: (dto.attachments ?? []).map(attachmentFromDto),
   };
 }

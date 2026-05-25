@@ -105,6 +105,9 @@ export type TaskComment = {
   taskId: string;
   ownerUserId: string;
   body: string;
+  // Тип актора (см. migration 034). 'user' — fallback для исторических записей.
+  actorKind?: 'user' | 'agent' | 'system';
+  agentName?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -116,6 +119,8 @@ export type TaskCommentForAgent = {
   body: string;
   ownerUserId: string;
   ownerDisplayName: string | null;
+  actorKind?: 'user' | 'agent' | 'system';
+  agentName?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -533,10 +538,15 @@ export class ApiClient {
     projectId: string,
     taskId: string,
     body: string,
+    agentName?: string,
   ): Promise<TaskComment> {
+    // agentName опционально — сервер дефолтит 'ralph-dispatcher'. Не отсылаем поле
+    // если не задано, чтобы старые серверы (без 034) тоже работали.
+    const payload: { body: string; agentName?: string } = { body };
+    if (agentName) payload.agentName = agentName;
     const { comment } = await this.request<{ comment: TaskComment }>(
       `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/comments`,
-      { method: 'POST', body: { body } },
+      { method: 'POST', body: payload },
     );
     return comment;
   }
