@@ -40,6 +40,9 @@ const COLUMN_LABELS: Record<TaskStatus, string> = {
   backlog: 'На подтверждении',
   todo: 'TODO',
   in_progress: 'В работе',
+  // Активная задача на паузе: ждёт ответа человека (ralph-question, разбор retry-fail,
+  // переформулировка). Эмодзи 🤔 — спецификация awaiting_clarification.
+  awaiting_clarification: '🤔 На уточнении',
   done: 'Готово',
 };
 
@@ -68,7 +71,13 @@ const MEASURING_CONFIG = {
 };
 
 function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStatus, Task[]> {
-  const out: Record<TaskStatus, Task[]> = { backlog: [], todo: [], in_progress: [], done: [] };
+  const out: Record<TaskStatus, Task[]> = {
+    backlog: [],
+    todo: [],
+    in_progress: [],
+    awaiting_clarification: [],
+    done: [],
+  };
   for (const t of tasks) out[t.status].push(t);
   for (const s of TASK_STATUSES) {
     if (s === 'done') {

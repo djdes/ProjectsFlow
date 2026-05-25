@@ -78,7 +78,7 @@ claude mcp add --scope user projectsflow \
 | `pf_delete_task` | Удалить задачу (необратимо, чистит комментарии). editor+. |
 | `pf_create_task_comment` | Оставить комментарий на задаче — для прогресс-апдейтов по ходу работы. Mentions `@displayName` парсятся сервером, рассылаются notifications. Author = owner agent-токена. |
 | `pf_list_task_comments` | Тред комментариев задачи (id, body, ownerUserId, ownerDisplayName, createdAt, updatedAt) с серверными фильтрами `since` / `limit` / `has_marker`. body — сырой markdown (HTML-комментарии `<!-- ralph-* -->` сохраняются для F11 Q&A-маркеров). Используй для polling'а новых ответов или чтобы понять историю обсуждения. |
-| `pf_move_task` | Перенести задачу на статус `todo` / `in_progress` / `done` (в конец колонки) |
+| `pf_move_task` | Перенести задачу на статус `backlog` / `todo` / `in_progress` / `awaiting_clarification` / `done` (в конец колонки). `awaiting_clarification` = «ждёт человека» (ответ на ralph-question, разбор retry-fail); сервер автоматически возвращает в `in_progress` когда приходит коммент с маркером `<!-- ralph-answer ` или `<!-- ralph-grillme-summary `. |
 | `pf_link_commit_to_task` | Привязать SHA коммита к задаче — auto-transition `todo → in_progress` на первом коммите |
 | `pf_list_commits` | Коммиты, привязанные к задаче (sha, message, authorName, htmlUrl, committedAt). |
 | `pf_sync_commits` | Скан последних коммитов GitHub и авто-привязка к задачам по `[short-id]` в message. Возвращает linkedCount/autoTransitionedCount/scannedCount. |

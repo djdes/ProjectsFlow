@@ -96,6 +96,7 @@ export class CreateTaskComment {
               projectName: project.name,
               taskId: task.id,
               taskExcerpt,
+              taskStatus: task.status,
               commentId: comment.id,
               commentExcerpt,
               actorUserId: input.ownerUserId,

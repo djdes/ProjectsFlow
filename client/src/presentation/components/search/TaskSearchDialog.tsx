@@ -11,6 +11,7 @@ const statusLabel: Record<TaskStatus, string> = {
   backlog: 'Бэклог',
   todo: 'To Do',
   in_progress: 'В работе',
+  awaiting_clarification: '🤔 На уточнении',
   done: 'Готово',
 };
 

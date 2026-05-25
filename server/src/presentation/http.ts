@@ -80,6 +80,8 @@ import type { ListTaskAttachments } from '../application/task/ListTaskAttachment
 import type { GetTaskAttachment } from '../application/task/GetTaskAttachment.js';
 import type { ListTaskComments } from '../application/task/ListTaskComments.js';
 import type { ListTaskCommentsForAgent } from '../application/task/ListTaskCommentsForAgent.js';
+import type { MaybeReopenForClarification } from '../application/task/MaybeReopenForClarification.js';
+import type { TaskRepository } from '../application/task/TaskRepository.js';
 import type { CreateTaskComment } from '../application/task/CreateTaskComment.js';
 import type { UpdateTaskComment } from '../application/task/UpdateTaskComment.js';
 import type { DeleteTaskComment } from '../application/task/DeleteTaskComment.js';
@@ -266,6 +268,15 @@ type AppDeps = {
       commentId: string,
       ownerUserId: string,
     ) => void;
+    readonly notifyStatusChanged: (
+      projectId: string,
+      taskId: string,
+      oldStatus: string,
+      newStatus: string,
+      actorUserId: string,
+    ) => void;
+    readonly tasks: TaskRepository;
+    readonly maybeReopenForClarification: MaybeReopenForClarification;
   };
   readonly agent: {
     readonly createAgentToken: CreateAgentToken;
@@ -459,6 +470,9 @@ export function createApp(deps: AppDeps): CreatedApp {
       rateLimiter: deps.agent.rateLimiter,
       notifier: deps.notifications.projectNotifier,
       notifyCommentAdded: deps.tasks.notifyCommentAdded,
+      notifyStatusChanged: deps.tasks.notifyStatusChanged,
+      taskRepo: deps.tasks.tasks,
+      maybeReopenForClarification: deps.tasks.maybeReopenForClarification,
     }),
   );
 

@@ -24,6 +24,8 @@ import type { AgentJobRepository } from '../../application/agent/AgentJobReposit
 import { requireAuth } from '../middleware/requireAuth.js';
 import { agentJobToDto } from '../agent-jobs/dto.js';
 import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
+import type { TaskRepository } from '../../application/task/TaskRepository.js';
+import type { MaybeReopenForClarification } from '../../application/task/MaybeReopenForClarification.js';
 import {
   createTaskCommentSchema,
   createTaskSchema,
@@ -62,6 +64,18 @@ type Deps = {
     commentId: string,
     ownerUserId: string,
   ) => void;
+  // SSE task_status_changed — move + авто-возврат awaiting_clarification → in_progress.
+  readonly notifyStatusChanged: (
+    projectId: string,
+    taskId: string,
+    oldStatus: string,
+    newStatus: string,
+    actorUserId: string,
+  ) => void;
+  // Чтение задачи (для oldStatus до move).
+  readonly tasks: TaskRepository;
+  // Авто-возврат awaiting_clarification → in_progress по ralph-маркеру в комменте.
+  readonly maybeReopenForClarification: MaybeReopenForClarification;
   // Email-оповещения команде (источник 'team' — действия человека). Fire-and-forget.
   readonly notifier: ProjectNotificationService;
 };
@@ -195,6 +209,9 @@ export function tasksRouter(deps: Deps): Router {
       const projectId = req.params['projectId'] as string;
       const taskId = req.params['taskId'] as string;
       const body = moveTaskSchema.parse(req.body);
+      // Снимаем старый статус ДО move — нужен для SSE task_status_changed payload.
+      // Если задача не найдена — move сам бросит 404; здесь просто гоним дальше.
+      const before = await deps.tasks.getById(taskId);
       const task = await deps.moveTask.execute({
         projectId,
         ownerUserId: req.user!.id,
@@ -204,6 +221,9 @@ export function tasksRouter(deps: Deps): Router {
         afterTaskId: body.afterTaskId,
       });
       deps.notifyTaskChanged(projectId);
+      if (before && before.status !== task.status) {
+        deps.notifyStatusChanged(projectId, taskId, before.status, task.status, req.user!.id);
+      }
       if (body.targetStatus === 'done') {
         void deps.notifier.onTaskDone(projectId, req.user!.id, task, 'team').catch(() => {});
       }
@@ -356,6 +376,23 @@ export function tasksRouter(deps: Deps): Router {
       });
       deps.notifyTaskChanged(projectId);
       deps.notifyCommentAdded(projectId, taskId, comment.id, req.user!.id);
+      // Авто-возврат awaiting_clarification → in_progress по маркеру в комменте.
+      // Best-effort: ошибка не должна ломать ответ на создание коммента.
+      try {
+        const reopened = await deps.maybeReopenForClarification.execute(taskId, body.body);
+        if (reopened) {
+          deps.notifyStatusChanged(
+            projectId,
+            taskId,
+            reopened.oldStatus,
+            reopened.newStatus,
+            req.user!.id,
+          );
+          deps.notifyTaskChanged(projectId);
+        }
+      } catch (err) {
+        console.warn('[auto-reopen] failed for task', taskId, err);
+      }
       void deps.notifier.onComment(projectId, req.user!.id, taskId, body.body, 'team').catch(() => {});
       res.status(201).json({ comment: commentToDto(comment) });
     } catch (e) {

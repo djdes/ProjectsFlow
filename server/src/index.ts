@@ -122,6 +122,7 @@ import { ListTaskAttachments } from './application/task/ListTaskAttachments.js';
 import { GetTaskAttachment } from './application/task/GetTaskAttachment.js';
 import { ListTaskComments } from './application/task/ListTaskComments.js';
 import { ListTaskCommentsForAgent } from './application/task/ListTaskCommentsForAgent.js';
+import { MaybeReopenForClarification } from './application/task/MaybeReopenForClarification.js';
 import { CreateTaskComment } from './application/task/CreateTaskComment.js';
 import { UpdateTaskComment } from './application/task/UpdateTaskComment.js';
 import { DeleteTaskComment } from './application/task/DeleteTaskComment.js';
@@ -185,6 +186,18 @@ const notifyCommentAdded = (
 ): void => {
   void projectEventBroadcaster
     .broadcastCommentAdded(projectId, taskId, commentId, ownerUserId)
+    .catch(() => {});
+};
+// SSE task_status_changed — move и авто-возврат awaiting_clarification → in_progress.
+const notifyStatusChanged = (
+  projectId: string,
+  taskId: string,
+  oldStatus: string,
+  newStatus: string,
+  actorUserId: string,
+): void => {
+  void projectEventBroadcaster
+    .broadcastStatusChanged(projectId, taskId, oldStatus, newStatus, actorUserId)
     .catch(() => {});
 };
 const githubTokenRepo = new DrizzleGithubTokenRepository(db);
@@ -662,6 +675,10 @@ const { app, devProxyUpgrade } = createApp({
     agentJobs: agentJobRepo,
     notifyTaskChanged,
     notifyCommentAdded,
+    notifyStatusChanged,
+    // tasks repo — нужен роуту для чтения oldStatus до move'а (SSE task_status_changed).
+    tasks: taskRepo,
+    maybeReopenForClarification: new MaybeReopenForClarification({ tasks: taskRepo }),
   },
   agent: {
     createAgentToken: new CreateAgentToken({

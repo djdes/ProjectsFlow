@@ -223,7 +223,15 @@ export const tasks = mysqlTable(
     id: id(),
     projectId: char('project_id', { length: 36 }).notNull(),
     description: text('description'),
-    status: mysqlEnum('status', ['backlog', 'todo', 'in_progress', 'done']).notNull().default('todo'),
+    status: mysqlEnum('status', [
+      'backlog',
+      'todo',
+      'in_progress',
+      'awaiting_clarification',
+      'done',
+    ])
+      .notNull()
+      .default('todo'),
     // Float-position для дешёвой вставки между двумя соседями — без массового UPDATE.
     position: double('position').notNull().default(0),
     delegatedToAgent: boolean('delegated_to_agent').notNull().default(false),

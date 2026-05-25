@@ -10,6 +10,10 @@ export type CommentMentionPayload = {
   // Превью описания таски (первые ~80 символов) — чтобы в UI уведомлений показать
   // контекст без отдельного fetch'а task'а.
   readonly taskExcerpt: string;
+  // Статус задачи на момент создания нотификации. Клиент подсвечивает выразительнее
+  // mention'ы попавшие на awaiting_clarification (это запрос действия от человека).
+  // Optional — старые нотификации в БД могут не иметь этого поля.
+  readonly taskStatus?: string;
   readonly commentId: string;
   readonly commentExcerpt: string;
   readonly actorUserId: string;
