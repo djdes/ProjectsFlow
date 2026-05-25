@@ -4,22 +4,24 @@ import { BookOpen, ChevronRight, Settings, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useContainer } from '@/infrastructure/di/container';
-import { formatRub } from '@/lib/money';
 import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
 
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
   const { data, loading, notFound } = useProject(projectId ?? '');
   const { projectFinanceRepository } = useContainer();
-  const [expenseTotal, setExpenseTotal] = useState<number | null>(null);
+  // Гейт видимости кнопки «Финансы»: дёргаем summary только чтобы проверить доступ.
+  // Сумму больше не показываем (раньше был чип в шапке), сам блок Доход/Расход/Прибыль
+  // живёт на странице /finance.
+  const [financeVisible, setFinanceVisible] = useState(false);
 
   useEffect(() => {
     if (!projectId) return;
     let cancelled = false;
     projectFinanceRepository
       .getSummary(projectId)
-      .then((f) => { if (!cancelled) setExpenseTotal(f.expenseTotalKopecks); })
-      .catch(() => { /* нет доступа — не показываем */ });
+      .then(() => { if (!cancelled) setFinanceVisible(true); })
+      .catch(() => { /* нет доступа — кнопку не показываем */ });
     return () => { cancelled = true; };
   }, [projectId, projectFinanceRepository]);
 
@@ -56,20 +58,16 @@ export function TasksPage(): React.ReactElement {
       </nav>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-semibold tracking-tight">Задачи</h1>
-          {expenseTotal !== null && expenseTotal > 0 && (
-            <Link
-              to={`/projects/${data.id}/finance`}
-              className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
-              title="Общий расход на проект"
-            >
-              <Wallet className="size-3" />
-              {formatRub(expenseTotal)}
-            </Link>
-          )}
-        </div>
+        <h1 className="text-3xl font-semibold tracking-tight">Задачи</h1>
         <div className="flex flex-wrap items-center gap-2">
+          {financeVisible && (
+            <Button asChild variant="outline" size="sm">
+              <Link to={`/projects/${data.id}/finance`}>
+                <Wallet className="size-4" />
+                Финансы
+              </Link>
+            </Button>
+          )}
           <Button asChild variant="outline" size="sm">
             <Link to={`/projects/${data.id}/kb`}>
               <BookOpen className="size-4" />
