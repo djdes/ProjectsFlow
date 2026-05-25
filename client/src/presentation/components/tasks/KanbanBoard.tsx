@@ -127,6 +127,10 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
   const { order: doneOrder, toggle: toggleDoneOrder } = useDoneSortOrder();
   const grouped = useMemo(() => groupByStatus(tasks, doneOrder), [tasks, doneOrder]);
   const activeTask = activeId ? tasks.find((t) => t.id === activeId) ?? null : null;
+  // Последняя задача в backlog/todo — нужна footer-композеру в TaskDrawer'е для
+  // beforeTaskId при move'е через переключатель «В черновики / Воркеру».
+  const backlogTail = grouped.backlog[grouped.backlog.length - 1] ?? null;
+  const todoTail = grouped.todo[grouped.todo.length - 1] ?? null;
 
   const handleDragStart = (e: DragStartEvent): void => {
     // Если drop-таймер ещё висит от предыдущего перетаскивания — гасим, иначе он позже
@@ -358,6 +362,8 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
         onCommitsChange={() => void refetch()}
         showCommits={showCommits}
         projectName={projectName}
+        backlogTail={backlogTail}
+        todoTail={todoTail}
       />
 
       {/* Floating quick-add (position: fixed). DOM-позиция значения не имеет —

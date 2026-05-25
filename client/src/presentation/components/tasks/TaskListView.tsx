@@ -40,6 +40,14 @@ export function TaskListView({ projectId, showCommits = true }: Props): React.Re
     return a.position - b.position;
   });
 
+  // Tails для footer-композера в TaskDrawer — последняя задача в backlog/todo
+  // по полю position (тот же критерий что в KanbanBoard).
+  const sortByPos = (a: Task, b: Task): number => a.position - b.position;
+  const backlogList = tasks.filter((t) => t.status === 'backlog').sort(sortByPos);
+  const todoList = tasks.filter((t) => t.status === 'todo').sort(sortByPos);
+  const backlogTail = backlogList[backlogList.length - 1] ?? null;
+  const todoTail = todoList[todoList.length - 1] ?? null;
+
   const handleDialogSubmit = async (input: {
     description: string;
     ralphMode?: import('@/domain/task/Task').RalphMode;
@@ -113,6 +121,8 @@ export function TaskListView({ projectId, showCommits = true }: Props): React.Re
         onSubmit={handleDialogSubmit}
         onCommitsChange={() => void refetch()}
         showCommits={showCommits}
+        backlogTail={backlogTail}
+        todoTail={todoTail}
       />
     </div>
   );
