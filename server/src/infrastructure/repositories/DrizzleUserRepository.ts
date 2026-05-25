@@ -4,9 +4,12 @@ import { users, type UserRow } from '../db/schema.js';
 import type { User, UserWithSecrets } from '../../domain/user/User.js';
 import type {
   CreateUserInput,
+  TelegramLinkInput,
   UpdateProfileInput,
   UserRepository,
 } from '../../application/user/UserRepository.js';
+import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
+import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
 
 function toUser(row: UserRow): User {
   return {
@@ -84,5 +87,107 @@ export class DrizzleUserRepository implements UserRepository {
   async listAdmins(): Promise<User[]> {
     const rows = await this.db.select().from(users).where(eq(users.isAdmin, true));
     return rows.map(toUser);
+  }
+
+  // ===== Telegram =====
+
+  async getTelegramLink(userId: string): Promise<TelegramLink | null> {
+    const rows = await this.db
+      .select({
+        telegramUserId: users.telegramUserId,
+        telegramUsername: users.telegramUsername,
+        telegramFirstName: users.telegramFirstName,
+        telegramPhotoUrl: users.telegramPhotoUrl,
+        telegramAuthDate: users.telegramAuthDate,
+        tgChatId: users.tgChatId,
+        tgStartedAt: users.tgStartedAt,
+        tgPairedAt: users.tgPairedAt,
+        tgNotificationPrefs: users.tgNotificationPrefs,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const r = rows[0];
+    if (!r || r.telegramUserId === null) return null;
+    return {
+      telegramUserId: r.telegramUserId,
+      telegramUsername: r.telegramUsername ?? null,
+      telegramFirstName: r.telegramFirstName ?? null,
+      telegramPhotoUrl: r.telegramPhotoUrl ?? null,
+      telegramAuthDate: r.telegramAuthDate ?? null,
+      tgChatId: r.tgChatId ?? null,
+      tgStartedAt: r.tgStartedAt ?? null,
+      tgPairedAt: r.tgPairedAt ?? null,
+      prefs: r.tgNotificationPrefs ?? null,
+    };
+  }
+
+  async findUserIdByTelegramUserId(telegramUserId: number): Promise<string | null> {
+    const rows = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.telegramUserId, telegramUserId))
+      .limit(1);
+    return rows[0]?.id ?? null;
+  }
+
+  async saveTelegramLink(userId: string, input: TelegramLinkInput): Promise<void> {
+    await this.db
+      .update(users)
+      .set({
+        telegramUserId: input.telegramUserId,
+        telegramUsername: input.telegramUsername,
+        telegramFirstName: input.telegramFirstName,
+        telegramPhotoUrl: input.telegramPhotoUrl,
+        telegramAuthDate: input.telegramAuthDate,
+        tgPairedAt: new Date(),
+        // tg_chat_id и tg_started_at НЕ трогаем — приходят из webhook /start.
+      })
+      .where(eq(users.id, userId));
+  }
+
+  async clearTelegramLink(userId: string): Promise<void> {
+    await this.db
+      .update(users)
+      .set({
+        telegramUserId: null,
+        telegramUsername: null,
+        telegramFirstName: null,
+        telegramPhotoUrl: null,
+        telegramAuthDate: null,
+        tgChatId: null,
+        tgStartedAt: null,
+        tgPairedAt: null,
+        tgNotificationPrefs: null,
+      })
+      .where(eq(users.id, userId));
+  }
+
+  async updateTelegramPrefs(
+    userId: string,
+    prefs: TelegramNotificationPrefs,
+  ): Promise<void> {
+    // Merge с существующими через read-then-write. Атомарность не критична — это user-
+    // preferences, конкурентный write такой же юзер делает только из одной вкладки.
+    const current = await this.getTelegramLink(userId);
+    const merged = { ...(current?.prefs ?? {}), ...prefs };
+    await this.db
+      .update(users)
+      .set({ tgNotificationPrefs: merged })
+      .where(eq(users.id, userId));
+  }
+
+  async markTelegramStarted(userId: string, chatId: number): Promise<void> {
+    await this.db
+      .update(users)
+      .set({ tgChatId: chatId, tgStartedAt: new Date() })
+      .where(eq(users.id, userId));
+  }
+
+  async clearTelegramStarted(userId: string): Promise<void> {
+    await this.db
+      .update(users)
+      .set({ tgStartedAt: null })
+      .where(eq(users.id, userId));
   }
 }

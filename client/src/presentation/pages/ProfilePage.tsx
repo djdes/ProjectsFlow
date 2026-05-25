@@ -26,6 +26,7 @@ import { useTheme, type Theme } from '@/presentation/components/theme/ThemeProvi
 import { GithubAccountSection } from '@/presentation/components/github/GithubAccountSection';
 import { AgentAccessCard } from '@/presentation/components/agent/AgentAccessCard';
 import { EmployeesCard } from '@/presentation/components/finance/EmployeesCard';
+import { TelegramSection } from '@/presentation/components/profile/TelegramSection';
 import { getInitials } from '@/presentation/layout/projectIcons';
 
 function PersonalDataCard(): React.ReactElement {
@@ -239,6 +240,7 @@ export function ProfilePage(): React.ReactElement {
 
       <PersonalDataCard />
       <EmployeesCard />
+      <TelegramSection />
       <GithubAccountSection />
       <AgentAccessCard />
       <SecurityCard />

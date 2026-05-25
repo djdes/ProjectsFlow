@@ -15,6 +15,7 @@ import { HttpAgentJobRepository } from '@/infrastructure/http/HttpAgentJobReposi
 import { HttpAdminRepository } from '@/infrastructure/http/HttpAdminRepository';
 import { HttpEmployeeRepository } from '@/infrastructure/http/HttpEmployeeRepository';
 import { HttpProjectFinanceRepository } from '@/infrastructure/http/HttpProjectFinanceRepository';
+import { HttpTelegramRepository } from '@/infrastructure/http/HttpTelegramRepository';
 import { EnqueueAgentJob } from '@/application/agentJob/EnqueueAgentJob';
 import { CancelAgentJob } from '@/application/agentJob/CancelAgentJob';
 import { SearchTasks } from '@/application/task/SearchTasks';
@@ -40,6 +41,7 @@ import type {
   EmployeeRepository,
   ProjectFinanceRepository,
 } from '@/application/finance/FinanceRepository';
+import type { TelegramRepository } from '@/application/telegram/TelegramRepository';
 
 type Container = {
   listProjects: ListProjects;
@@ -63,6 +65,7 @@ type Container = {
   adminRepository: AdminRepository;
   employeeRepository: EmployeeRepository;
   projectFinanceRepository: ProjectFinanceRepository;
+  telegramRepository: TelegramRepository;
   enqueueAgentJob: EnqueueAgentJob;
   cancelAgentJob: CancelAgentJob;
 };
@@ -84,6 +87,7 @@ function buildContainer(): Container {
   const adminRepo = new HttpAdminRepository();
   const employeeRepo = new HttpEmployeeRepository();
   const projectFinanceRepo = new HttpProjectFinanceRepository();
+  const telegramRepo = new HttpTelegramRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -106,6 +110,7 @@ function buildContainer(): Container {
     adminRepository: adminRepo,
     employeeRepository: employeeRepo,
     projectFinanceRepository: projectFinanceRepo,
+    telegramRepository: telegramRepo,
     enqueueAgentJob: new EnqueueAgentJob(agentJobRepo),
     cancelAgentJob: new CancelAgentJob(agentJobRepo),
   };

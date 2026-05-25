@@ -18,6 +18,7 @@ import {
   varchar,
 } from 'drizzle-orm/mysql-core';
 import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
+import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
 
 // id-длина 36 = UUID v4 в строковой форме (8-4-4-4-12).
 const id = () => char('id', { length: 36 }).primaryKey();
@@ -39,11 +40,51 @@ export const users = mysqlTable(
     avatarUrl: varchar('avatar_url', { length: 500 }),
     // Системный admin/root: глобальный доступ ко всем проектам + раздел управления.
     isAdmin: boolean('is_admin').notNull().default(false),
+    // Telegram-привязка через Login Widget. Все опциональны (юзер может не подключать TG).
+    // См. db/033 и spec multi-user-telegram-notifications.md.
+    telegramUserId: bigint('telegram_user_id', { mode: 'number' }),
+    telegramUsername: varchar('telegram_username', { length: 64 }),
+    telegramFirstName: varchar('telegram_first_name', { length: 128 }),
+    telegramPhotoUrl: varchar('telegram_photo_url', { length: 512 }),
+    telegramAuthDate: timestamp('telegram_auth_date'),
+    // tg_chat_id для личных чатов === telegram_user_id, но кэшируем явно после /start
+    // (TG не позволяет боту писать первым).
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }),
+    tgStartedAt: timestamp('tg_started_at'),
+    tgPairedAt: timestamp('tg_paired_at'),
+    tgNotificationPrefs: json('tg_notification_prefs').$type<TelegramNotificationPrefs | null>(),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
-  (t) => [uniqueIndex('uq_users_email').on(t.email)],
+  (t) => [
+    uniqueIndex('uq_users_email').on(t.email),
+    uniqueIndex('uq_users_telegram_user_id').on(t.telegramUserId),
+  ],
 );
+
+// Аудит исходящих TG-сообщений: дедуп (одинаковые kind+task_id+user в течение минуты —
+// skip) и debugging. См. db/033.
+export const telegramOutboundMessages = mysqlTable(
+  'telegram_outbound_messages',
+  {
+    id: id(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    chatId: bigint('chat_id', { mode: 'number' }).notNull(),
+    eventKind: varchar('event_kind', { length: 64 }).notNull(),
+    taskId: char('task_id', { length: 36 }),
+    messageId: bigint('message_id', { mode: 'number' }),
+    sentAt: timestamp('sent_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    // 'ok' / 'forbidden' / 'rate_limited' / 'error' / 'skipped_dedup' / 'skipped_pref_off'.
+    status: varchar('status', { length: 32 }).notNull(),
+    errorText: varchar('error_text', { length: 512 }),
+  },
+  (t) => [
+    index('idx_tg_out_user_sent').on(t.userId, t.sentAt),
+    index('idx_tg_out_dedup').on(t.userId, t.eventKind, t.taskId, t.sentAt),
+  ],
+);
+
+export type TelegramOutboundRow = typeof telegramOutboundMessages.$inferSelect;
 
 export const sessions = mysqlTable(
   'sessions',

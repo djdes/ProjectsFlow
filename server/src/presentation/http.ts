@@ -82,6 +82,10 @@ import type { ListTaskComments } from '../application/task/ListTaskComments.js';
 import type { ListTaskCommentsForAgent } from '../application/task/ListTaskCommentsForAgent.js';
 import type { MaybeReopenForClarification } from '../application/task/MaybeReopenForClarification.js';
 import type { TaskRepository } from '../application/task/TaskRepository.js';
+import type { ConnectTelegramAccount } from '../application/telegram/ConnectTelegramAccount.js';
+import type { GetTelegramStatus } from '../application/telegram/GetTelegramStatus.js';
+import type { HandleTelegramWebhook } from '../application/telegram/HandleTelegramWebhook.js';
+import type { SendAgentTelegramNotification } from '../application/telegram/SendAgentTelegramNotification.js';
 import type { CreateTaskComment } from '../application/task/CreateTaskComment.js';
 import type { UpdateTaskComment } from '../application/task/UpdateTaskComment.js';
 import type { DeleteTaskComment } from '../application/task/DeleteTaskComment.js';
@@ -132,6 +136,8 @@ import { employeesRouter } from './finance/employeeRoutes.js';
 import { financeRouter } from './finance/routes.js';
 import { attachmentBinaryRouter } from './tasks/attachmentBinaryRoutes.js';
 import { inboxRouter } from './inbox/routes.js';
+import { meTelegramRouter } from './me/telegramRoutes.js';
+import { telegramWebhookRouter } from './telegram/webhookRoutes.js';
 import { invitesRouter } from './invites/routes.js';
 import { notificationsRouter } from './notifications/routes.js';
 import { agentTokensRouter } from './agent/tokensRoutes.js';
@@ -193,6 +199,13 @@ type AppDeps = {
   };
   readonly search: {
     readonly searchTasks: SearchTasks;
+  };
+  readonly telegram: {
+    readonly connect: ConnectTelegramAccount;
+    readonly status: GetTelegramStatus;
+    readonly handler: HandleTelegramWebhook;
+    readonly webhookSecret: string | null;
+    readonly users: UserRepository;
   };
   readonly admin: {
     readonly listAllProjects: ListAllProjects;
@@ -333,6 +346,7 @@ type AppDeps = {
     readonly setProjectDispatcher: SetProjectDispatcher;
     readonly getDelegatedGitToken: GetDelegatedGitToken;
     readonly rateLimiter: InMemoryRateLimiter;
+    readonly sendTelegramNotification: SendAgentTelegramNotification;
   };
 };
 
@@ -396,6 +410,21 @@ export function createApp(deps: AppDeps): CreatedApp {
   );
   app.use('/api/attachments', attachmentBinaryRouter(deps.tasks));
   app.use('/api/inbox', inboxRouter({ getOrCreateInbox: deps.projects.getOrCreateInbox }));
+  app.use(
+    '/api/me/telegram',
+    meTelegramRouter({
+      connect: deps.telegram.connect,
+      status: deps.telegram.status,
+      users: deps.telegram.users,
+    }),
+  );
+  app.use(
+    '/api/telegram/webhook',
+    telegramWebhookRouter({
+      handler: deps.telegram.handler,
+      secretToken: deps.telegram.webhookSecret,
+    }),
+  );
   // Invites: GET — anon-доступ; POST /:token/accept — внутри router'а через requireAuth.
   app.use('/api/invites', invitesRouter({
     getByToken: deps.invites.getByToken,
@@ -473,6 +502,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       notifyStatusChanged: deps.tasks.notifyStatusChanged,
       taskRepo: deps.tasks.tasks,
       maybeReopenForClarification: deps.tasks.maybeReopenForClarification,
+      sendTelegramNotification: deps.agent.sendTelegramNotification,
     }),
   );
 

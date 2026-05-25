@@ -123,6 +123,12 @@ import { GetTaskAttachment } from './application/task/GetTaskAttachment.js';
 import { ListTaskComments } from './application/task/ListTaskComments.js';
 import { ListTaskCommentsForAgent } from './application/task/ListTaskCommentsForAgent.js';
 import { MaybeReopenForClarification } from './application/task/MaybeReopenForClarification.js';
+import { HttpTelegramClient } from './infrastructure/telegram/HttpTelegramClient.js';
+import { DrizzleTelegramOutboundRepository } from './infrastructure/repositories/DrizzleTelegramOutboundRepository.js';
+import { ConnectTelegramAccount } from './application/telegram/ConnectTelegramAccount.js';
+import { GetTelegramStatus } from './application/telegram/GetTelegramStatus.js';
+import { SendAgentTelegramNotification } from './application/telegram/SendAgentTelegramNotification.js';
+import { HandleTelegramWebhook } from './application/telegram/HandleTelegramWebhook.js';
 import { CreateTaskComment } from './application/task/CreateTaskComment.js';
 import { UpdateTaskComment } from './application/task/UpdateTaskComment.js';
 import { DeleteTaskComment } from './application/task/DeleteTaskComment.js';
@@ -283,6 +289,54 @@ const projectNotifier = new ProjectNotificationService({
   tasks: taskRepo,
   email: emailSender,
   appUrl: appBaseUrl,
+});
+
+// ===== Telegram multi-user notifications (Phase 1) =====
+// Конфиг: см. .env / spec multi-user-telegram-notifications.md. Все поля опциональны —
+// без token'а сервис в graceful-режиме: GET /api/me/telegram отвечает connected=false,
+// connect-попытки фейлятся при verify (нечем подписывать HMAC), агентский send
+// возвращает 'error: no token'. Webhook не регистрируется автоматически.
+const telegramBotToken = process.env['TELEGRAM_BOT_TOKEN'] ?? '';
+const telegramBotUsername = process.env['TELEGRAM_BOT_USERNAME'] ?? null;
+const telegramWebhookSecret = process.env['TELEGRAM_WEBHOOK_SECRET'] ?? null;
+const telegramWebhookUrl = process.env['TELEGRAM_WEBHOOK_URL'] ?? null;
+
+const telegramClient = new HttpTelegramClient(telegramBotToken);
+const telegramOutboundRepo = new DrizzleTelegramOutboundRepository(db);
+
+const connectTelegramAccount = new ConnectTelegramAccount({
+  users: userRepo,
+  botToken: telegramBotToken,
+  maxAuthAgeSeconds: 86_400,
+});
+const getTelegramStatus = new GetTelegramStatus({
+  users: userRepo,
+  botUsername: telegramBotUsername,
+});
+// Маппинг agent-kind → user pref-toggle. Неизвестные kinds шлются без pref-чека.
+const TG_KIND_TO_PREF = {
+  comment: 'commentOnMyTask',
+  mention: 'mention',
+  status_change: 'statusChange',
+  ralph_question: 'ralphQuestion',
+  ralph_question_reminder: 'ralphQuestion',
+  ralph_answer: 'ralphAnswer',
+  task_done: 'taskDone',
+} as const;
+const sendAgentTelegramNotification = new SendAgentTelegramNotification({
+  users: userRepo,
+  client: telegramClient,
+  outbound: telegramOutboundRepo,
+  idGen: idGenerator,
+  kindToPref: TG_KIND_TO_PREF,
+});
+const handleTelegramWebhook = new HandleTelegramWebhook({
+  users: userRepo,
+  members: projectMemberRepo,
+  tasks: taskRepo,
+  client: telegramClient,
+  appUrl: appBaseUrl,
+  botUsername: telegramBotUsername,
 });
 
 // Admin-bypass: системный админ (users.is_admin) получает доступ ко всем проектам
@@ -470,6 +524,13 @@ const { app, devProxyUpgrade } = createApp({
   },
   search: {
     searchTasks: new SearchTasks({ search: taskSearchRepo }),
+  },
+  telegram: {
+    connect: connectTelegramAccount,
+    status: getTelegramStatus,
+    handler: handleTelegramWebhook,
+    webhookSecret: telegramWebhookSecret,
+    users: userRepo,
   },
   admin: {
     listAllProjects: new ListAllProjects(adminRepo),
@@ -921,6 +982,7 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
     }),
     rateLimiter: agentRateLimiter,
+    sendTelegramNotification: sendAgentTelegramNotification,
   },
   github: {
     startDeviceFlow: new StartDeviceFlow({
@@ -950,6 +1012,24 @@ const server = app.listen(config.port, () => {
   console.log(
     `[projectsflow] github integration: ${config.github.clientId ? 'enabled' : 'DISABLED (no GITHUB_CLIENT_ID)'}`,
   );
+  // Telegram webhook: регистрируем только если есть token+url+secret. Best-effort —
+  // ошибка setWebhook не валит процесс (часто прокси/network в dev). В dev (нет публичного
+  // URL) пропускаем тихо.
+  if (telegramBotToken && telegramWebhookUrl && telegramWebhookSecret) {
+    telegramClient
+      .setWebhook(telegramWebhookUrl, telegramWebhookSecret)
+      .then(() => console.log(`[projectsflow] telegram webhook: ${telegramWebhookUrl}`))
+      .catch((err) => console.warn('[projectsflow] telegram setWebhook failed:', err));
+  } else {
+    const missing = [
+      !telegramBotToken && 'TELEGRAM_BOT_TOKEN',
+      !telegramWebhookUrl && 'TELEGRAM_WEBHOOK_URL',
+      !telegramWebhookSecret && 'TELEGRAM_WEBHOOK_SECRET',
+    ].filter(Boolean);
+    console.log(
+      `[projectsflow] telegram bot: DISABLED (missing ${missing.join(', ')})`,
+    );
+  }
 });
 
 // HMR-WebSocket: Vite-клиент конектится через тот же Express'овый origin.

@@ -1,4 +1,16 @@
 import type { User, UserWithSecrets } from '../../domain/user/User.js';
+import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
+import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
+
+// Поля, приходящие из Login Widget — сохраняются как есть. tg_chat_id/tg_started_at
+// заполняются позже из webhook'а /start.
+export type TelegramLinkInput = {
+  readonly telegramUserId: number;
+  readonly telegramUsername: string | null;
+  readonly telegramFirstName: string | null;
+  readonly telegramPhotoUrl: string | null;
+  readonly telegramAuthDate: Date;
+};
 
 export type CreateUserInput = {
   readonly id: string;
@@ -23,4 +35,21 @@ export interface UserRepository {
   listAdmins(): Promise<User[]>;
   create(input: CreateUserInput): Promise<User>;
   updateProfile(id: string, input: UpdateProfileInput): Promise<User>;
+
+  // Telegram-привязка. Все методы opt-in: если юзер не использует TG — никогда не зовутся.
+  getTelegramLink(userId: string): Promise<TelegramLink | null>;
+  // Для verify/connect: проверка что этот telegram_user_id ещё не привязан к другому юзеру.
+  findUserIdByTelegramUserId(telegramUserId: number): Promise<string | null>;
+  // Полный upsert привязки (после verify Login Widget). НЕ затрагивает prefs и
+  // tg_chat_id/tg_started_at (те ставятся отдельно через webhook /start).
+  saveTelegramLink(userId: string, input: TelegramLinkInput): Promise<void>;
+  // Очистка всех telegram_* колонок (юзер нажал Disconnect).
+  clearTelegramLink(userId: string): Promise<void>;
+  // Merge новых prefs с существующими (Partial-обновление).
+  updateTelegramPrefs(userId: string, prefs: TelegramNotificationPrefs): Promise<void>;
+  // Webhook /start: помечаем что юзер открыл чат и кэшируем chat_id.
+  markTelegramStarted(userId: string, chatId: number): Promise<void>;
+  // 403 от sendMessage (bot blocked / user not started): сбрасываем tg_started_at,
+  // чтобы UI показал «нужно нажать Start снова».
+  clearTelegramStarted(userId: string): Promise<void>;
 }
