@@ -67,6 +67,12 @@ export type TaskStatus =
   | 'awaiting_clarification'
   | 'done';
 
+// Режим работы Ralph по задаче. См. spec C:/www/ralph/prompts/task-ralph-mode.md.
+//   'normal'  — дефолт; worker может задать ralph-question, grillme по триггерам.
+//   'silent'  — worker не задаёт вопросов; при неясности сразу blocked.
+//   'grillme' — принудительно запускается grillme (до 10 вопросов), затем worker как normal.
+export type RalphMode = 'normal' | 'silent' | 'grillme';
+
 export type Task = {
   id: string;
   projectId: string;
@@ -74,6 +80,8 @@ export type Task = {
   description: string | null;
   status: TaskStatus;
   position: number;
+  // Optional на проводе — старый backend без миграции 035 не присылает.
+  ralphMode?: RalphMode;
   createdAt: string;
   updatedAt: string;
   commitCount?: number;
@@ -160,6 +168,12 @@ export type CreateCredentialResult = {
 export type CreateTaskInput = {
   description: string;
   status?: TaskStatus;
+  ralphMode?: RalphMode;
+};
+
+export type UpdateTaskInput = {
+  description?: string;
+  ralphMode?: RalphMode;
 };
 
 export type WriteKbDocInput = {
@@ -658,10 +672,14 @@ export class ApiClient {
     );
   }
 
-  async updateTask(projectId: string, taskId: string, description: string): Promise<Task> {
+  async updateTask(projectId: string, taskId: string, patch: UpdateTaskInput): Promise<Task> {
+    // Не шлём undefined-поля — старые серверы могут не понимать ralphMode и упасть на validate.
+    const body: Record<string, unknown> = {};
+    if (patch.description !== undefined) body.description = patch.description;
+    if (patch.ralphMode !== undefined) body.ralphMode = patch.ralphMode;
     const { task } = await this.request<{ task: Task }>(
       `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`,
-      { method: 'PATCH', body: { description } },
+      { method: 'PATCH', body },
     );
     return task;
   }

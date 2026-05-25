@@ -1,4 +1,4 @@
-import type { Task, TaskStatus } from '../../domain/task/Task.js';
+import type { RalphMode, Task, TaskStatus } from '../../domain/task/Task.js';
 
 export type CreateTaskInput = {
   readonly id: string;
@@ -6,12 +6,15 @@ export type CreateTaskInput = {
   readonly description: string;
   readonly status: TaskStatus;
   readonly position: number;
+  // Режим работы Ralph (default 'normal'). См. domain RalphMode.
+  readonly ralphMode?: RalphMode;
 };
 
 export type UpdateTaskPatch = {
   readonly description?: string | null;
   readonly status?: TaskStatus;
   readonly position?: number;
+  readonly ralphMode?: RalphMode;
 };
 
 export interface TaskRepository {

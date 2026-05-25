@@ -8,14 +8,19 @@ export const taskStatusSchema = z.enum([
   'done',
 ]);
 
+// Режим работы Ralph. См. spec C:/www/ralph/prompts/task-ralph-mode.md.
+export const ralphModeSchema = z.enum(['normal', 'silent', 'grillme']);
+
 export const createTaskSchema = z.object({
   description: z.string().trim().min(1, 'Введите описание').max(5000),
   status: taskStatusSchema.optional(),
+  ralphMode: ralphModeSchema.optional(),
 });
 
 export const updateTaskSchema = z
   .object({
     description: z.string().trim().min(1).max(5000).optional(),
+    ralphMode: ralphModeSchema.optional(),
   })
   .refine((o) => Object.keys(o).length > 0, { message: 'Нечего обновлять' });
 

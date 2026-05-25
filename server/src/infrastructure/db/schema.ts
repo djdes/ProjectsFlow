@@ -276,6 +276,9 @@ export const tasks = mysqlTable(
     // Float-position для дешёвой вставки между двумя соседями — без массового UPDATE.
     position: double('position').notNull().default(0),
     delegatedToAgent: boolean('delegated_to_agent').notNull().default(false),
+    // Режим работы Ralph по задаче. См. db/035 и domain RalphMode.
+    // VARCHAR (не enum) — forward-compat под новые режимы без миграции схемы Drizzle.
+    ralphMode: varchar('ralph_mode', { length: 16 }).notNull().default('normal'),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },

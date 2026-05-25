@@ -1,5 +1,5 @@
 import { TaskDescriptionEmptyError } from '../../domain/task/errors.js';
-import type { Task, TaskStatus } from '../../domain/task/Task.js';
+import type { RalphMode, Task, TaskStatus } from '../../domain/task/Task.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
@@ -18,6 +18,8 @@ export type CreateTaskCommand = {
   readonly description: string;
   // По умолчанию новая карточка добавляется в TODO наверх столбца.
   readonly status: TaskStatus;
+  // Режим работы Ralph по задаче. Если не указан — БД проставит DEFAULT 'normal'.
+  readonly ralphMode?: RalphMode;
 };
 
 const POSITION_STEP = 1024;
@@ -42,6 +44,7 @@ export class CreateTask {
       description,
       status: input.status,
       position,
+      ralphMode: input.ralphMode,
     });
   }
 }

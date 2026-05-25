@@ -378,7 +378,9 @@ const TOOLS = [
     name: 'pf_create_task',
     description:
       'Create a new kanban task in the project. By default the task lands at the bottom of ' +
-      "the TODO column. Use this when the user asks to add a task / TODO / ticket to a project.",
+      "the TODO column. Use this when the user asks to add a task / TODO / ticket to a project. " +
+      'Optionally specify ralphMode to control how the Ralph dispatcher should treat this task ' +
+      "(default 'normal').",
     inputSchema: {
       type: 'object',
       properties: {
@@ -391,6 +393,15 @@ const TOOLS = [
           type: 'string',
           enum: TASK_STATUS_VALUES,
           description: "Initial column. Default: 'todo'.",
+        },
+        ralphMode: {
+          type: 'string',
+          enum: ['normal', 'silent', 'grillme'],
+          description:
+            "How Ralph should handle this task: 'normal' (default — worker may ask " +
+            "ralph-question on critical ambiguity), 'silent' (worker never asks; on " +
+            "ambiguity → blocked immediately; grillme skipped), 'grillme' (force pre-worker " +
+            'grillme interview up to 10 questions, then worker as normal).',
         },
       },
       required: ['projectId', 'description'],
@@ -659,16 +670,26 @@ const TOOLS = [
   {
     name: 'pf_update_task',
     description:
-      "Update a task's description (markdown). Requires editor+ role. Returns the updated task. " +
-      'Use to edit task text — e.g. to expand a terse TODO into a full spec, or fix a typo.',
+      "Update a task's description (markdown) and/or Ralph mode. Requires editor+ role. " +
+      'Returns the updated task. Pass at least one of `description` or `ralphMode`.',
     inputSchema: {
       type: 'object',
       properties: {
         projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
         taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
-        description: { type: 'string', description: 'New task description (markdown), 1-10000 chars' },
+        description: {
+          type: 'string',
+          description: 'New task description (markdown), 1-10000 chars. Omit if only changing ralphMode.',
+        },
+        ralphMode: {
+          type: 'string',
+          enum: ['normal', 'silent', 'grillme'],
+          description:
+            "New Ralph mode for this task. 'normal' | 'silent' | 'grillme' " +
+            '(see pf_create_task for semantics). Omit to leave unchanged.',
+        },
       },
-      required: ['projectId', 'taskId', 'description'],
+      required: ['projectId', 'taskId'],
       additionalProperties: false,
     },
   },
@@ -931,6 +952,7 @@ const CreateTaskInputZ = z.object({
   projectId: z.string().min(1),
   description: z.string().min(1),
   status: z.enum(TASK_STATUS_VALUES).optional(),
+  ralphMode: z.enum(['normal', 'silent', 'grillme']).optional(),
 });
 const WriteKbDocInputZ = z.object({
   projectId: z.string().min(1),
@@ -1001,11 +1023,16 @@ const DeleteKbDocumentInput = z.object({
   projectId: z.string().min(1),
   path: z.string().regex(KbPathRegex, 'Path must end with .md'),
 });
-const UpdateTaskInputZ = z.object({
-  projectId: z.string().min(1),
-  taskId: z.string().min(1),
-  description: z.string().trim().min(1).max(10_000),
-});
+const UpdateTaskInputZ = z
+  .object({
+    projectId: z.string().min(1),
+    taskId: z.string().min(1),
+    description: z.string().trim().min(1).max(10_000).optional(),
+    ralphMode: z.enum(['normal', 'silent', 'grillme']).optional(),
+  })
+  .refine((o) => o.description !== undefined || o.ralphMode !== undefined, {
+    message: 'Pass at least one of `description` or `ralphMode`.',
+  });
 const DeleteTaskInputZ = z.object({
   projectId: z.string().min(1),
   taskId: z.string().min(1),
@@ -1156,6 +1183,7 @@ async function main(): Promise<void> {
           const task = await api.createTask(input.projectId, {
             description: input.description,
             status: input.status,
+            ralphMode: input.ralphMode,
           });
           return jsonResult(task);
         }
@@ -1259,7 +1287,10 @@ async function main(): Promise<void> {
         }
         case 'pf_update_task': {
           const input = UpdateTaskInputZ.parse(req.params.arguments ?? {});
-          const task = await api.updateTask(input.projectId, input.taskId, input.description);
+          const task = await api.updateTask(input.projectId, input.taskId, {
+            description: input.description,
+            ralphMode: input.ralphMode,
+          });
           return jsonResult(task);
         }
         case 'pf_delete_task': {

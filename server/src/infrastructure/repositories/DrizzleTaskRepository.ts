@@ -1,7 +1,7 @@
 import { and, asc, eq, max, min } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { tasks, type TaskRow } from '../db/schema.js';
-import type { Task, TaskStatus } from '../../domain/task/Task.js';
+import type { RalphMode, Task, TaskStatus } from '../../domain/task/Task.js';
 import type {
   CreateTaskInput,
   TaskRepository,
@@ -16,6 +16,9 @@ function toTask(row: TaskRow): Task {
     status: row.status as TaskStatus,
     position: row.position,
     delegatedToAgent: row.delegatedToAgent,
+    // VARCHAR в БД, cast в domain enum. Дефолт 'normal' — соответствует SQL DEFAULT,
+    // защита от unexpected значений (если миграция/ручной UPDATE проставит чушь).
+    ralphMode: (row.ralphMode as RalphMode) ?? 'normal',
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -45,6 +48,8 @@ export class DrizzleTaskRepository implements TaskRepository {
       description: input.description,
       status: input.status,
       position: input.position,
+      // Не выставляем если undefined — пусть отработает SQL DEFAULT 'normal'.
+      ...(input.ralphMode !== undefined ? { ralphMode: input.ralphMode } : {}),
     });
     const created = await this.getById(input.id);
     if (!created) throw new Error('Failed to read back task after insert');
@@ -52,10 +57,11 @@ export class DrizzleTaskRepository implements TaskRepository {
   }
 
   async update(taskId: string, patch: UpdateTaskPatch): Promise<Task | null> {
-    const set: Partial<Pick<TaskRow, 'description' | 'status' | 'position'>> = {};
+    const set: Partial<Pick<TaskRow, 'description' | 'status' | 'position' | 'ralphMode'>> = {};
     if (patch.description !== undefined) set.description = patch.description;
     if (patch.status !== undefined) set.status = patch.status;
     if (patch.position !== undefined) set.position = patch.position;
+    if (patch.ralphMode !== undefined) set.ralphMode = patch.ralphMode;
 
     if (Object.keys(set).length > 0) {
       await this.db.update(tasks).set(set).where(eq(tasks.id, taskId));

@@ -12,6 +12,14 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
   'done',
 ];
 
+// Режим работы Ralph по задаче. См. spec C:/www/ralph/prompts/task-ralph-mode.md.
+//   'normal'  — дефолт: worker может задать ralph-question; pre-worker grillme — по триггерам.
+//   'silent'  — worker не задаёт вопросов; при неясности сразу blocked. Grillme skip.
+//   'grillme' — принудительно запускается grillme (до 10 вопросов), затем worker как normal.
+export type RalphMode = 'normal' | 'silent' | 'grillme';
+
+export const RALPH_MODES: readonly RalphMode[] = ['normal', 'silent', 'grillme'];
+
 export type Task = {
   readonly id: string;
   readonly projectId: string;
@@ -19,6 +27,7 @@ export type Task = {
   readonly status: TaskStatus;
   readonly position: number;
   readonly delegatedToAgent: boolean;
+  readonly ralphMode: RalphMode;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };

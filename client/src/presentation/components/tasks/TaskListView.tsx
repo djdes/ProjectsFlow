@@ -7,6 +7,7 @@ import type { Task, TaskStatus } from '@/domain/task/Task';
 import { taskShortId } from '@/domain/task/Task';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { TaskDialog, type TaskDialogState } from './TaskDialog';
+import { RalphModeBadge } from './RalphMode';
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
   backlog: -1,
@@ -39,7 +40,10 @@ export function TaskListView({ projectId, showCommits = true }: Props): React.Re
     return a.position - b.position;
   });
 
-  const handleDialogSubmit = async (input: { description: string }): Promise<Task> => {
+  const handleDialogSubmit = async (input: {
+    description: string;
+    ralphMode?: import('@/domain/task/Task').RalphMode;
+  }): Promise<Task> => {
     if (!dialog) throw new Error('Dialog state missing');
     if (dialog.mode === 'create') return create({ ...input, status: dialog.status });
     return update(dialog.task.id, input);
@@ -179,7 +183,8 @@ function TaskListRow({
   const hasBadges =
     (task.commitCount ?? 0) > 0 ||
     (task.attachmentCount ?? 0) > 0 ||
-    (task.commentCount ?? 0) > 0;
+    (task.commentCount ?? 0) > 0 ||
+    task.ralphMode !== 'normal';
 
   return (
     <li
@@ -218,6 +223,7 @@ function TaskListRow({
                 {task.commentCount}
               </span>
             )}
+            <RalphModeBadge mode={task.ralphMode} />
           </div>
         )}
       </div>

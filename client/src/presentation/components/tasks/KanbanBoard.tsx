@@ -201,7 +201,10 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
     }
   };
 
-  const handleDialogSubmit = async (input: { description: string }): Promise<Task> => {
+  const handleDialogSubmit = async (input: {
+    description: string;
+    ralphMode?: import('@/domain/task/Task').RalphMode;
+  }): Promise<Task> => {
     if (!dialog) throw new Error('Dialog state missing');
     if (dialog.mode === 'create') {
       return create({ ...input, status: dialog.status });

@@ -13,6 +13,32 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
   'done',
 ];
 
+// Режим работы Ralph по задаче. Mirrors server/src/domain/task/Task.ts.
+// См. spec C:/www/ralph/prompts/task-ralph-mode.md.
+export type RalphMode = 'normal' | 'silent' | 'grillme';
+
+export const RALPH_MODES: readonly RalphMode[] = ['normal', 'silent', 'grillme'];
+
+// Метаданные для UI dropdown / badge — label, описание (tooltip), иконка.
+// Иконки — emoji для быстрой визуальной идентификации в плотной канбан-сетке.
+export const RALPH_MODE_META: Record<RalphMode, { label: string; description: string; icon: string }> = {
+  normal: {
+    label: 'Обычный',
+    description: 'Стандартный режим, если есть вопросы — задаются',
+    icon: '🤖',
+  },
+  silent: {
+    label: 'Тихий',
+    description: 'Ничего не спрашивает, просто делает',
+    icon: '🔇',
+  },
+  grillme: {
+    label: 'Много вопросов',
+    description: 'Скилл GrillMe: много вопросов, потом работа',
+    icon: '🎓',
+  },
+};
+
 export type Task = {
   readonly id: string;
   readonly projectId: string;
@@ -27,6 +53,8 @@ export type Task = {
   readonly commentCount?: number;
   readonly delegatedToAgent: boolean;
   readonly agentJob: AgentJob | null;
+  // Режим работы Ralph (default 'normal' если backend без 035).
+  readonly ralphMode: RalphMode;
 };
 
 // Короткий ID задачи (первые 8 hex-символов UUID без дефисов) — для вставки в commit
