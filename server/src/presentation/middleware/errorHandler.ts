@@ -18,7 +18,6 @@ import {
   NotProjectDispatcherError,
   NotProjectMemberForDelegationError,
   ProjectInviteAlreadyUsedError,
-  ProjectInviteEmailMismatchError,
   ProjectInviteExpiredError,
   ProjectInviteNotFoundError,
   ProjectNameAlreadyExistsError,
@@ -156,13 +155,6 @@ export function errorHandler(
   }
   if (err instanceof ProjectInviteAlreadyUsedError) {
     res.status(410).json({ error: 'invite_used', message: 'Это приглашение уже использовано' });
-    return;
-  }
-  if (err instanceof ProjectInviteEmailMismatchError) {
-    res.status(403).json({
-      error: 'invite_email_mismatch',
-      message: 'Это приглашение было выдано на другой email — войди под нужной учёткой',
-    });
     return;
   }
   if (err instanceof CannotInviteToInboxError) {

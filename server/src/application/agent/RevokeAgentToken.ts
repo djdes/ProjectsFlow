@@ -16,9 +16,23 @@ export class RevokeAgentToken {
     // Если это был ПОСЛЕДНИЙ активный токен юзера — он перестал быть ralph-capable,
     // снимаем его с роли диспетчера во всех проектах. Иначе у проектов остался бы
     // диспетчер без работающего MCP — никто не выполняет задачи, юзер этого не видит.
+    //
+    // Token-repo и project-repo — разные агрегаты, общую TX через application-layer
+    // не пропустишь без серьёзного рефактора. Пишем clearDispatcher как best-effort:
+    // если он упадёт, revoke всё равно прошёл (юзер ожидаемо больше не сможет работать).
+    // Логируем, чтобы расхождение было видно.
     const remaining = await this.deps.tokens.countActiveByUser(userId);
     if (remaining === 0) {
-      await this.deps.projects.clearDispatcherForUser(userId);
+      try {
+        await this.deps.projects.clearDispatcherForUser(userId);
+      } catch (e) {
+        console.error(
+          `[RevokeAgentToken] clearDispatcherForUser(${userId}) failed after token revoke:`,
+          (e as Error).message,
+        );
+        // Не пробрасываем — token revoke успешен, dispatcher-cleanup можно докрутить
+        // отложенно (TODO: cron-задача "снять диспетчера у юзеров без active tokens").
+      }
     }
   }
 }

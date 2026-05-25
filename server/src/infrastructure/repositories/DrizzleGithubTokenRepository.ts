@@ -56,15 +56,25 @@ export class DrizzleGithubTokenRepository implements GithubTokenRepository {
 
   async upsert(input: UpsertGithubTokenInput): Promise<GithubConnection> {
     const scopesStr = input.scopes.join(',');
-    // Поскольку userId — primary key, делаем delete+insert (просто и атомарно для нашего случая).
-    await this.db.delete(userGithubTokens).where(eq(userGithubTokens.userId, input.userId));
-    await this.db.insert(userGithubTokens).values({
-      userId: input.userId,
-      accessToken: input.accessToken,
-      scopes: scopesStr,
-      githubLogin: input.githubLogin,
-      githubUserId: input.githubUserId,
-    });
+    // ВАЖНО: было delete+insert БЕЗ TX — крэш между ними оставлял юзера без подключения
+    // (token wiped, новый не вставился). MySQL INSERT ... ON DUPLICATE KEY UPDATE атомарен.
+    await this.db
+      .insert(userGithubTokens)
+      .values({
+        userId: input.userId,
+        accessToken: input.accessToken,
+        scopes: scopesStr,
+        githubLogin: input.githubLogin,
+        githubUserId: input.githubUserId,
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          accessToken: input.accessToken,
+          scopes: scopesStr,
+          githubLogin: input.githubLogin,
+          githubUserId: input.githubUserId,
+        },
+      });
     const fresh = await this.getByUserId(input.userId);
     if (!fresh) throw new Error('Failed to read back github_token after insert');
     return fresh;

@@ -90,6 +90,36 @@ export class DrizzleProjectRepository implements ProjectRepository {
     return toProject(row);
   }
 
+  async createWithOwnerMembership(input: CreateProjectInput): Promise<Project> {
+    // Одна транзакция: project + owner-membership. Без TX был баг — если
+    // member.add падал после repo.create, проект оставался orphan'ом (никакой
+    // requireProjectAccess не пропустил бы даже создателя).
+    try {
+      await this.db.transaction(async (tx) => {
+        await tx.insert(projects).values({
+          id: input.id,
+          ownerId: input.ownerId,
+          name: input.name,
+          status: 'active',
+          gitRepoUrl: null,
+          isInbox: input.isInbox ?? false,
+        });
+        await tx.insert(projectMembers).values({
+          projectId: input.id,
+          userId: input.ownerId,
+          role: 'owner',
+        });
+      });
+    } catch (err) {
+      if (isDuplicateKey(err)) throw new ProjectNameAlreadyExistsError(input.name);
+      throw err;
+    }
+    const rows = await this.db.select().from(projects).where(eq(projects.id, input.id)).limit(1);
+    const row = rows[0];
+    if (!row) throw new Error('Failed to read back project after insert');
+    return toProject(row);
+  }
+
   async update(id: string, patch: UpdateProjectInput): Promise<Project | null> {
     // Собираем set-объект только из реально переданных полей.
     // undefined = поле не указано клиентом (не трогаем), null = очистить.

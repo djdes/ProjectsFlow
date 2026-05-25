@@ -28,6 +28,11 @@ export interface ProjectRepository {
   // Остаётся per-owner потому что inbox personal: 1 user = 1 inbox (см. spec секцию 7, решение 3).
   findInboxByOwner(ownerId: string): Promise<Project | null>;
   create(input: CreateProjectInput): Promise<Project>;
+  // АТОМАРНО: создаёт проект + добавляет owner'а как member с role='owner'.
+  // Без этой связки можно было получить orphan-проект (project существует, но в
+  // project_members его нет → ни один use-case не пускает даже создателя). Использовать
+  // вместо последовательного create() + members.add() в CreateProject / GetOrCreateInbox.
+  createWithOwnerMembership(input: CreateProjectInput): Promise<Project>;
   // Без owner-фильтра: caller уже проверил доступ. Возвращает null если проект не найден.
   update(id: string, patch: UpdateProjectInput): Promise<Project | null>;
   // Все проекты с непустым git_repo_url. Нормализацию/фильтрацию делает use-case

@@ -24,13 +24,14 @@ export class GetOrCreateInbox {
     if (existing) return existing;
 
     const name = await this.pickAvailableName(ownerId);
-    const project = await this.deps.repo.create({
+    // Атомарно (см. createWithOwnerMembership): иначе крэш между create и members.add
+    // оставлял бы inbox без owner-membership и юзер не мог бы видеть свой inbox.
+    const project = await this.deps.repo.createWithOwnerMembership({
       id: this.deps.idGen(),
       ownerId,
       name,
       isInbox: true,
     });
-    await this.deps.members.add({ projectId: project.id, userId: ownerId, role: 'owner' });
     return project;
   }
 

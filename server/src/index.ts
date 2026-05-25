@@ -251,8 +251,16 @@ const resolveDefaultDispatcher = (): Promise<string | null> =>
   pickDefaultDispatcherUserId(userRepo, agentTokenRepo);
 
 // Секрет для непрозрачного requestTarget (HMAC). Отдельный env → fallback на vault-ключ.
-const repoAccessSecret =
-  process.env['REPO_ACCESS_HMAC_SECRET'] ?? process.env['SECRETS_MASTER_KEY'] ?? 'dev-repo-access-secret';
+// ВАЖНО: в prod refuse-to-boot если оба env не заданы — иначе fallback на
+// захардкоженый 'dev-repo-access-secret' (виден в исходниках) позволил бы любому
+// форджить requestTarget'ы и DDOS'ить notifications.
+const envRepoAccessSecret = process.env['REPO_ACCESS_HMAC_SECRET'] ?? process.env['SECRETS_MASTER_KEY'];
+if (!envRepoAccessSecret && process.env['NODE_ENV'] === 'production') {
+  throw new Error(
+    'REPO_ACCESS_HMAC_SECRET (or SECRETS_MASTER_KEY) must be set in production — refusing to start with the dev fallback.',
+  );
+}
+const repoAccessSecret = envRepoAccessSecret ?? 'dev-repo-access-secret';
 
 // Рассылка email-оповещений команде по активности проекта (с учётом пер-участниковых
 // настроек и источника team/mcp). Используется роутами fire-and-forget.
