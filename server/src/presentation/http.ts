@@ -465,7 +465,14 @@ export function createApp(deps: AppDeps): CreatedApp {
     }),
   );
 
-  // Agent API endpoints (Bearer-auth)
+  // Agent API endpoints (Bearer-auth) — все ответы НЕ кэшируются edge'ом/CDN.
+  // Гипотеза по баг-репорту bug-comments-endpoint-transient-404.md (#5): кратко
+  // закэшированный 404 на CDN продолжает выдавать 404 до истечения TTL. Любые
+  // /api/agent/* — это agent-API, кэшировать на edge нельзя в принципе.
+  app.use('/api/agent', (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, private');
+    next();
+  });
   app.use(
     '/api/agent',
     agentApiRouter({
