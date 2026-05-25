@@ -24,14 +24,14 @@ import { KanbanCard } from './KanbanCard';
 import { KanbanColumn } from './KanbanColumn';
 import { QuickAddTodo } from './QuickAddTodo';
 import { STATUS_LABEL } from './statusLabels';
-import { TaskDialog, type TaskDialogState } from './TaskDialog';
+import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 
 type Props = {
   projectId: string;
-  // Если false — TaskDialog не показывает секцию коммитов. Для inbox-проекта так:
+  // Если false — TaskDrawer не показывает секцию коммитов. Для inbox-проекта так:
   // у него нет git-репо, привязывать нечего.
   showCommits?: boolean;
-  // Имя проекта — пробрасывается в TaskDialog как контекстный заголовок. В inbox не передаём.
+  // Имя проекта — пробрасывается в TaskDrawer как контекстный заголовок. В inbox не передаём.
   projectName?: string;
 };
 
@@ -98,7 +98,7 @@ function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStat
 
 export function KanbanBoard({ projectId, showCommits = true, projectName }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
-  const [dialog, setDialog] = useState<TaskDialogState | null>(null);
+  const [dialog, setDialog] = useState<TaskDrawerState | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   // Deep-link из email-кнопки: ?task=<id> открывает диалог задачи (один раз после загрузки).
   const deepLinkedRef = useRef(false);
@@ -351,7 +351,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
         </DragOverlay>
       </DndContext>
 
-      <TaskDialog
+      <TaskDrawer
         state={dialog}
         onClose={() => setDialog(null)}
         onSubmit={handleDialogSubmit}

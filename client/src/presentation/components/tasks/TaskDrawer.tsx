@@ -12,13 +12,12 @@ import {
 } from 'react';
 import { Download, FileText, Loader2, Paperclip, Pencil, Send, Trash2 } from 'lucide-react';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
@@ -43,12 +42,12 @@ import {
 import { RalphModeSelect } from './RalphMode';
 import type { RalphMode } from '@/domain/task/Task';
 
-export type TaskDialogState =
+export type TaskDrawerState =
   | { mode: 'create'; status: Task['status'] }
   | { mode: 'edit'; task: Task };
 
 type Props = {
-  state: TaskDialogState | null;
+  state: TaskDrawerState | null;
   onClose: () => void;
   // Возвращает созданный/обновлённый task — нужен в create-режиме, чтобы зааплоадить
   // pending-аттачи после получения task.id.
@@ -124,7 +123,7 @@ function TaskRalphModeChip({
   );
 }
 
-export function TaskDialog({
+export function TaskDrawer({
   state,
   onClose,
   onSubmit,
@@ -232,22 +231,24 @@ export function TaskDialog({
   };
 
   return (
-    <Dialog open={state !== null} onOpenChange={(open) => !open && onClose()}>
-      {/* max-h + grid с прижатыми header/footer и скроллом в body — чтоб длинные секции
-          (особенно коммиты + пикер) не выезжали за viewport.
-          Mobile: bottom-sheet уже ограничен 85dvh из dialog.tsx; здесь переопределяем на 90dvh.
-          Desktop: классический 90vh. */}
-      <DialogContent className="grid max-h-[85dvh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-h-[90vh] sm:max-w-3xl">
-        <DialogHeader className="px-6 pb-2 pt-4">
+    <Sheet open={state !== null} onOpenChange={(open) => !open && onClose()}>
+      {/* Side-drawer справа: header/body/footer на grid'е, скролл в body.
+          Mobile (pointer: coarse): drawer почти на всю ширину — sheet.tsx по умолчанию даёт w-3/4.
+          Desktop: фикс max-w-[640px] (см. Task 6 — expand-toggle).  */}
+      <SheetContent
+        side="right"
+        className="grid h-dvh grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-[640px]"
+      >
+        <SheetHeader className="px-6 pb-2 pt-4">
           {/* Title/Description обязаны существовать для a11y (Radix), но визуально не нужны.
               Видимый контент шапки — название проекта (контекст «к какому проекту таска»). */}
-          <DialogTitle className="sr-only">
+          <SheetTitle className="sr-only">
             {state?.mode === 'edit' ? 'Задача' : 'Новая задача'}
             {projectName ? ` · ${projectName}` : ''}
-          </DialogTitle>
-          <DialogDescription className="sr-only">
+          </SheetTitle>
+          <SheetDescription className="sr-only">
             {state?.mode === 'edit' ? 'Редактирование задачи' : 'Создание новой задачи'}
-          </DialogDescription>
+          </SheetDescription>
           <div className="flex items-center justify-between gap-3">
             {projectName ? (
               <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -264,10 +265,10 @@ export function TaskDialog({
               />
             )}
           </div>
-        </DialogHeader>
+        </SheetHeader>
 
         <form
-          id="task-dialog-form"
+          id="task-drawer-form"
           onSubmit={handleSubmit}
           onPaste={handleFormPaste}
           className="space-y-4 overflow-y-auto px-6 pb-4"
@@ -338,7 +339,7 @@ export function TaskDialog({
           )}
         </form>
 
-        <DialogFooter className="border-t bg-background px-6 py-4">
+        <div className="flex items-center justify-end gap-2 border-t bg-background px-6 py-4">
           {state?.mode === 'edit' ? (
             <Button type="button" variant="ghost" onClick={onClose}>
               Закрыть
@@ -348,15 +349,15 @@ export function TaskDialog({
               <Button type="button" variant="ghost" onClick={onClose}>
                 Отмена
               </Button>
-              <Button type="submit" form="task-dialog-form" disabled={saving}>
+              <Button type="submit" form="task-drawer-form" disabled={saving}>
                 {saving ? <Loader2 className="size-4 animate-spin" /> : null}
                 Создать
               </Button>
             </>
           )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 

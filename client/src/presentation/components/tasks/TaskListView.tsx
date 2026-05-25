@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import type { Task, TaskStatus } from '@/domain/task/Task';
 import { taskShortId } from '@/domain/task/Task';
 import { useTasks } from '@/presentation/hooks/useTasks';
-import { TaskDialog, type TaskDialogState } from './TaskDialog';
+import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import { RalphModeBadge } from './RalphMode';
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
@@ -30,7 +30,7 @@ type Props = {
 // перечёркиваются. Для аттачей/коммитов — клик по строке открывает диалог.
 export function TaskListView({ projectId, showCommits = true }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, remove, refetch } = useTasks(projectId);
-  const [dialog, setDialog] = useState<TaskDialogState | null>(null);
+  const [dialog, setDialog] = useState<TaskDrawerState | null>(null);
 
   // Сортируем по статусу (todo → in_progress → done), внутри статуса — по position.
   // Это даёт «открытые наверху, готовые внизу» без явных section-заголовков.
@@ -107,7 +107,7 @@ export function TaskListView({ projectId, showCommits = true }: Props): React.Re
         </ul>
       )}
 
-      <TaskDialog
+      <TaskDrawer
         state={dialog}
         onClose={() => setDialog(null)}
         onSubmit={handleDialogSubmit}
