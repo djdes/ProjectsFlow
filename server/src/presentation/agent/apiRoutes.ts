@@ -765,6 +765,11 @@ export function agentApiRouter(deps: Deps): Router {
             body: c.body,
             ownerUserId: c.ownerUserId,
             ownerDisplayName: c.ownerDisplayName,
+            // actor_kind / agent_name (db/034) — без них фронт не отличит agent от user
+            // и Ralph-диспетчер через pf_list_task_comments не сможет распознать свои
+            // собственные комменты. Fallback 'user' — для старых записей до миграции 034.
+            actorKind: c.actorKind ?? 'user',
+            agentName: c.agentName ?? null,
             createdAt: c.createdAt.toISOString(),
             updatedAt: c.updatedAt.toISOString(),
           })),
