@@ -125,7 +125,7 @@ function TaskRalphModeChip({
       value={mode}
       onChange={(v) => void change(v)}
       disabled={saving}
-      className="!h-7 min-w-[180px] !px-2 !py-0 text-xs"
+      className="!h-7 min-w-0 sm:min-w-[180px] !px-2 !py-0 text-xs"
     />
   );
 }
@@ -340,8 +340,8 @@ export function TaskDrawer({
       <SheetContent
         side="right"
         className={cn(
-          'grid h-dvh grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0',
-          expanded ? 'w-screen sm:max-w-none' : 'sm:max-w-[640px]',
+          'grid h-dvh w-full grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0',
+          expanded ? 'sm:max-w-none' : 'sm:max-w-[640px]',
         )}
       >
         {/* a11y stub for Radix — visually hidden. */}
@@ -357,7 +357,7 @@ export function TaskDrawer({
           <>
             {/* === STICKY HEADER === */}
             <div className="border-b bg-background/95 backdrop-blur-md">
-              <div className="flex items-center gap-2 px-4 pt-3">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 pt-3">
                 {renderExpandButton()}
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                   {projectName && (
@@ -403,7 +403,7 @@ export function TaskDrawer({
             </div>
 
             {/* === SCROLLABLE BODY === */}
-            <div ref={bodyRef} className="space-y-4 overflow-y-auto px-6 py-4">
+            <div ref={bodyRef} className="space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
               {canEdit ? (
                 <TaskDescriptionEditor
                   key={task.id}
@@ -495,7 +495,7 @@ export function TaskDrawer({
         ) : (
           // === CREATE MODE === — компактная форма (без sticky-разделения).
           <>
-            <div className="border-b bg-background/95 px-6 pb-2 pt-4 backdrop-blur-md">
+            <div className="border-b bg-background/95 px-4 pb-2 pt-4 sm:px-6 backdrop-blur-md">
               <div className="flex items-center gap-2">
                 {renderExpandButton()}
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -508,7 +508,7 @@ export function TaskDrawer({
               id="task-drawer-form"
               onSubmit={handleSubmit}
               onPaste={handleFormPaste}
-              className="space-y-4 overflow-y-auto px-6 pb-4 pt-4"
+              className="space-y-4 overflow-y-auto px-4 pb-4 pt-4 sm:px-6"
             >
               <textarea
                 id="task-desc"
@@ -543,7 +543,7 @@ export function TaskDrawer({
                 }}
               />
             </form>
-            <div className="flex items-center justify-end gap-2 border-t bg-background px-6 py-4">
+            <div className="flex items-center justify-end gap-2 border-t bg-background px-4 py-4 sm:px-6">
               <Button type="button" variant="ghost" onClick={onClose}>
                 Отмена
               </Button>
