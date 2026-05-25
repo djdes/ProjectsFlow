@@ -41,12 +41,24 @@ export type SendMessageResult =
   | SendMessageRateLimited
   | SendMessageError;
 
+// Минимальный slice Telegram Update — то что polling/webhook читают. Совпадает с
+// типом в HandleTelegramWebhook (см. там полное описание). Тут — для возврата getUpdates.
+export type TelegramUpdate = {
+  readonly update_id: number;
+  readonly message?: unknown;
+};
+
 export interface TelegramClient {
   // Возвращает дискриминированный результат — caller сам решает что логировать/повторять.
   sendMessage(input: SendMessageInput): Promise<SendMessageResult>;
   // Регистрация webhook'а на старте сервера. Идемпотентно — TG перезаписывает.
   // secret_token валидируется в webhook handler через X-Telegram-Bot-Api-Secret-Token.
   setWebhook(url: string, secretToken: string): Promise<void>;
-  // Сброс webhook'а — для dev/cleanup.
+  // Сброс webhook'а — для polling-mode (Telegram не даёт одновременно webhook+getUpdates,
+  // иначе getUpdates вернёт 409 Conflict).
   deleteWebhook(): Promise<void>;
+  // Long-polling getUpdates: блокируется до timeout (сек) или прихода апдейтов.
+  // offset = последний update_id + 1 (server-side ack того что прочитали).
+  // Используется когда webhook недоступен (inbound к нам заблокирован хостингом).
+  getUpdates(offset: number, timeoutSeconds: number): Promise<TelegramUpdate[]>;
 }
