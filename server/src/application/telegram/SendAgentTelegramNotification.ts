@@ -19,6 +19,9 @@ export type SendAgentNotificationCommand = {
   // Защита от лавины: если за prev 60с уже было успешное сообщение того же kind+task —
   // skip. Можно отключить если caller сам управляет дедупом.
   readonly skipDedupCheck?: boolean;
+  // v2: явный override prefs (caller знает что хочет — например high-priority алерт
+  // или admin-override). По умолчанию prefs учитываются.
+  readonly skipPrefsCheck?: boolean;
 };
 
 // Дискриминированный результат — caller (route) мапит в HTTP-код.
@@ -51,9 +54,9 @@ export class SendAgentTelegramNotification {
       return { status: 'not_started' };
     }
 
-    // Prefs-чек: только для известных kinds.
+    // Prefs-чек: только для известных kinds. skipPrefsCheck — override (v2).
     const prefKind = this.deps.kindToPref[cmd.kind];
-    if (prefKind && !resolveTgPref(link.prefs, prefKind)) {
+    if (!cmd.skipPrefsCheck && prefKind && !resolveTgPref(link.prefs, prefKind)) {
       await this.audit(cmd, link.tgChatId, 'skipped_pref_off', null, null);
       return { status: 'pref_off', kind: prefKind };
     }

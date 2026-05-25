@@ -18,6 +18,9 @@ import type { ListTaskCommentsForAgent } from '../../application/task/ListTaskCo
 import type { MaybeReopenForClarification } from '../../application/task/MaybeReopenForClarification.js';
 import type { TaskRepository } from '../../application/task/TaskRepository.js';
 import type { SendAgentTelegramNotification } from '../../application/telegram/SendAgentTelegramNotification.js';
+import type { BroadcastTelegramNotificationByTask } from '../../application/telegram/BroadcastTelegramNotificationByTask.js';
+import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
+import type { UserRepository } from '../../application/user/UserRepository.js';
 import type { MoveTask } from '../../application/task/MoveTask.js';
 import type { LinkCommit } from '../../application/task/LinkCommit.js';
 import type { WriteKbDocument } from '../../application/kb/WriteKbDocument.js';
@@ -125,19 +128,32 @@ type Deps = {
   readonly notifier: ProjectNotificationService;
   // Multi-user TG-уведомления (Ralph → @projectsflow_bot → юзер).
   readonly sendTelegramNotification: SendAgentTelegramNotification;
+  readonly broadcastTelegramByTask: BroadcastTelegramNotificationByTask;
+  // Нужны для members-эндпоинта (isOwner = userId === project.ownerId; hasTelegram batch).
+  readonly projects: ProjectRepository;
+  readonly users: UserRepository;
 };
 
-// /agent/notifications/telegram payload. parseMode дефолт HTML на стороне use-case;
-// kind — произвольный, маппится на pref-toggle через kindToPref в композиции.
-const telegramNotifySchema = z.object({
-  userId: z.string().min(1),
-  text: z.string().min(1).max(4096),
-  parseMode: z.enum(['HTML', 'MarkdownV2']).optional(),
-  kind: z.string().min(1).max(64),
-  taskId: z.string().min(1).optional(),
-  replyMarkup: z.unknown().optional(),
-  skipDedupCheck: z.boolean().optional(),
-});
+// /agent/notifications/telegram payload (v2). taskId XOR userId (хотя бы один).
+// taskId — fan-out на всех members проекта (caller сам исключается, см. handler).
+// userId — точечная отправка одному. Если оба → приоритет у userId.
+const telegramNotifySchema = z
+  .object({
+    taskId: z.string().min(1).optional(),
+    userId: z.string().min(1).optional(),
+    text: z.string().min(1).max(4096),
+    parseMode: z.enum(['HTML', 'MarkdownV2']).optional(),
+    kind: z.string().min(1).max(64),
+    replyMarkup: z.unknown().optional(),
+    skipDedupCheck: z.boolean().optional(),
+    // v2: учитывать prefs получателя (default true). При false — слать всем привязанным
+    // независимо от настроек (high-priority / admin override).
+    respectPrefs: z.boolean().optional(),
+  })
+  .refine((b) => Boolean(b.taskId || b.userId), {
+    message: 'Either taskId or userId must be provided',
+    path: ['taskId'],
+  });
 
 const createCredentialSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -333,16 +349,27 @@ type MemberDto = {
   email: string;
   role: ProjectMemberWithUser['role'];
   isAdmin: boolean;
+  // v2: каноничный владелец проекта (userId === project.ownerId). Может быть несколько
+  // role='owner' members; isOwner — это «оригинальный» владелец из projects.owner_id.
+  isOwner: boolean;
+  // v2: есть ли у юзера привязка TG (по users.telegram_user_id IS NOT NULL).
+  // Ralph использует чтобы решить, имеет ли смысл звать /notifications/telegram.
+  hasTelegram: boolean;
   joinedAt: string;
 };
 
-function memberToDto(m: ProjectMemberWithUser): MemberDto {
+function memberToDto(
+  m: ProjectMemberWithUser,
+  opts: { ownerId: string; telegramUserIds: ReadonlySet<string> },
+): MemberDto {
   return {
     userId: m.userId,
     displayName: m.user.displayName,
     email: m.user.email,
     role: m.role,
     isAdmin: m.user.isAdmin,
+    isOwner: m.userId === opts.ownerId,
+    hasTelegram: opts.telegramUserIds.has(m.userId),
     joinedAt: m.joinedAt.toISOString(),
   };
 }
@@ -924,13 +951,25 @@ export function agentApiRouter(deps: Deps): Router {
   });
 
   // Состав команды проекта (viewer+). Без секретов — только публичный профиль участника.
+  // v2: для каждого member'а добавлены isOwner (userId === project.ownerId — каноничный
+  // владелец) и hasTelegram (есть ли привязка TG) — нужны Ralph-диспетчеру для логов
+  // и pre-фильтрации перед /notifications/telegram.
   router.get(
     '/projects/:projectId/members',
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const projectId = req.params['projectId'] as string;
         const members = await deps.listProjectMembers.execute(projectId, req.user!.id);
-        res.json({ members: members.map(memberToDto) });
+        // Параллельно: проект (для ownerId) и батч TG-привязок по member-юзерам.
+        const memberIds = members.map((m) => m.userId);
+        const [project, telegramSet] = await Promise.all([
+          deps.projects.getById(projectId),
+          deps.users.findUsersWithTelegram(memberIds),
+        ]);
+        const ownerId = project?.ownerId ?? '';
+        res.json({
+          members: members.map((m) => memberToDto(m, { ownerId, telegramUserIds: telegramSet })),
+        });
       } catch (e) {
         next(e);
       }
@@ -1288,61 +1327,83 @@ export function agentApiRouter(deps: Deps): Router {
     },
   );
 
-  // Multi-user TG notification: Ralph (или любой agent с токеном) шлёт юзеру в его TG.
-  // Body: { userId, text, kind, taskId?, parseMode?, replyMarkup?, skipDedupCheck? }.
-  // Маппинг ответа на HTTP-коды:
-  //   ok                   → 200 { ok:true, messageId, chatId }
-  //   not_connected        → 410 { error:'not_connected' }
-  //   not_started          → 410 { error:'user_blocked_bot_or_not_started' }
-  //   forbidden            → 410 { error:'user_blocked_bot_or_not_started', description }
-  //   pref_off             → 200 { ok:false, skipped:'pref_off', kind }
-  //   dedup                → 200 { ok:false, skipped:'dedup' }
-  //   rate_limited         → 429 { error:'rate_limited', retryAfter }
-  //   error                → 500 { error:'telegram_send_failed', description }
+  // Multi-user TG notification (v2 — unified body+response).
+  // Body: { taskId? | userId?, text, kind, parseMode?, replyMarkup?, skipDedupCheck?,
+  //         respectPrefs? }. Хотя бы один из taskId/userId. Если оба — приоритет userId.
+  // Response (200):
+  //   { ok: true, sent: N, skipped: [{ userId, reason, detail? }, ...] }
+  // - taskId-режим: fan-out на всех members проекта (caller=req.user.id исключается).
+  // - userId-режим: точечная отправка одному (sent=0 или 1).
+  // Ошибки:
+  //   400 invalid_body — невалидный payload
+  //   404 task_not_found — taskId указан, задачи нет
+  //   404 user_not_found — userId указан, юзера нет (не реализуем строго: send в этом
+  //     случае вернёт not_connected → skipped; диспетчер увидит)
   router.post(
     '/notifications/telegram',
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const body = telegramNotifySchema.parse(req.body);
-        const r = await deps.sendTelegramNotification.execute({
-          userId: body.userId,
+        const respectPrefs = body.respectPrefs !== false;
+
+        // Приоритет userId. taskId-fan-out только если userId не указан.
+        if (body.userId) {
+          const r = await deps.sendTelegramNotification.execute({
+            userId: body.userId,
+            text: body.text,
+            parseMode: body.parseMode,
+            kind: body.kind,
+            taskId: body.taskId,
+            replyMarkup: body.replyMarkup,
+            skipDedupCheck: body.skipDedupCheck,
+            skipPrefsCheck: !respectPrefs,
+          });
+          const userId = body.userId;
+          // Унифицированный ответ. sent=1 только если 'ok'.
+          if (r.status === 'ok') {
+            res.json({
+              ok: true,
+              sent: 1,
+              skipped: [],
+              delivered: [{ userId, messageId: r.messageId }],
+            });
+            return;
+          }
+          const reason: string =
+            r.status === 'forbidden' ? 'forbidden' : r.status;
+          const detail =
+            r.status === 'forbidden' || r.status === 'error'
+              ? r.description
+              : r.status === 'rate_limited'
+                ? `retry_after=${r.retryAfter}`
+                : undefined;
+          res.json({
+            ok: true,
+            sent: 0,
+            skipped: [{ userId, reason, ...(detail ? { detail } : {}) }],
+            delivered: [],
+          });
+          return;
+        }
+
+        // taskId-режим (broadcast). 404 task_not_found бросается use-case'ом →
+        // errorHandler возвращает соответствующий status. Caller исключается из получателей.
+        const result = await deps.broadcastTelegramByTask.execute({
+          taskId: body.taskId!,
           text: body.text,
-          parseMode: body.parseMode,
           kind: body.kind,
-          taskId: body.taskId,
+          parseMode: body.parseMode,
           replyMarkup: body.replyMarkup,
           skipDedupCheck: body.skipDedupCheck,
+          respectPrefs,
+          skipUserId: req.user!.id,
         });
-        switch (r.status) {
-          case 'ok':
-            res.json({ ok: true, messageId: r.messageId, chatId: r.chatId });
-            return;
-          case 'not_connected':
-            res.status(410).json({ error: 'not_connected' });
-            return;
-          case 'not_started':
-            res.status(410).json({ error: 'user_blocked_bot_or_not_started' });
-            return;
-          case 'forbidden':
-            res
-              .status(410)
-              .json({ error: 'user_blocked_bot_or_not_started', description: r.description });
-            return;
-          case 'pref_off':
-            res.json({ ok: false, skipped: 'pref_off', kind: r.kind });
-            return;
-          case 'dedup':
-            res.json({ ok: false, skipped: 'dedup' });
-            return;
-          case 'rate_limited':
-            res.status(429).json({ error: 'rate_limited', retryAfter: r.retryAfter });
-            return;
-          case 'error':
-            res
-              .status(500)
-              .json({ error: 'telegram_send_failed', description: r.description });
-            return;
-        }
+        res.json({
+          ok: true,
+          sent: result.sent,
+          skipped: result.skipped,
+          delivered: result.delivered,
+        });
       } catch (e) {
         next(e);
       }

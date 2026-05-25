@@ -86,6 +86,7 @@ import type { ConnectTelegramAccount } from '../application/telegram/ConnectTele
 import type { GetTelegramStatus } from '../application/telegram/GetTelegramStatus.js';
 import type { HandleTelegramWebhook } from '../application/telegram/HandleTelegramWebhook.js';
 import type { SendAgentTelegramNotification } from '../application/telegram/SendAgentTelegramNotification.js';
+import type { BroadcastTelegramNotificationByTask } from '../application/telegram/BroadcastTelegramNotificationByTask.js';
 import type { CreateTaskComment } from '../application/task/CreateTaskComment.js';
 import type { UpdateTaskComment } from '../application/task/UpdateTaskComment.js';
 import type { DeleteTaskComment } from '../application/task/DeleteTaskComment.js';
@@ -347,6 +348,8 @@ type AppDeps = {
     readonly getDelegatedGitToken: GetDelegatedGitToken;
     readonly rateLimiter: InMemoryRateLimiter;
     readonly sendTelegramNotification: SendAgentTelegramNotification;
+    readonly broadcastTelegramByTask: BroadcastTelegramNotificationByTask;
+    readonly projects: ProjectRepository;
   };
 };
 
@@ -503,6 +506,9 @@ export function createApp(deps: AppDeps): CreatedApp {
       taskRepo: deps.tasks.tasks,
       maybeReopenForClarification: deps.tasks.maybeReopenForClarification,
       sendTelegramNotification: deps.agent.sendTelegramNotification,
+      broadcastTelegramByTask: deps.agent.broadcastTelegramByTask,
+      projects: deps.agent.projects,
+      users: deps.telegram.users,
     }),
   );
 
