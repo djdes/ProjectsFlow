@@ -10,7 +10,7 @@ import {
   type KeyboardEvent,
   type Ref,
 } from 'react';
-import { Download, FileText, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
+import { ChevronRight, Download, FileText, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -163,6 +163,20 @@ export function TaskDrawer({
   // Ref-канал для footer-композера → TaskCommentsSection: после создания комментария
   // композер дёргает текущий handler чтобы вставить созданный коммент в список.
   const onCommentCreatedRef = useRef<((c: TaskComment) => void) | null>(null);
+  // Ref на scrollable body — нужен чтобы скроллнуть вниз при открытии (комментарии
+  // сверху-вниз, новые внизу — пользователь хочет видеть свежие сразу).
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const scrollBodyToBottom = useCallback((): void => {
+    const el = bodyRef.current;
+    if (!el) return;
+    // requestAnimationFrame даёт layout'у отстояться после mount'а / появления коммитов.
+    requestAnimationFrame(() => {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'auto' });
+    });
+  }, []);
+  // Коммиты по умолчанию свёрнуты — это вторичный контент, чтобы не отвлекал.
+  // Раскрытие — клик по заголовку.
+  const [commitsOpen, setCommitsOpen] = useState(false);
   // Cache аттачей для header-row: грузим параллельно с AttachmentsSection (двойной
   // fetch — окей, эндпоинт лёгкий; альтернатива — поднимать state в KanbanBoard
   // через repository invalidate; оставляем простоту).
@@ -204,6 +218,7 @@ export function TaskDrawer({
     setCreateRalphMode('normal');
     setError(null);
     setExpanded(false);
+    setCommitsOpen(false);
     // При закрытии/смене диалога чистим pending — URL.revokeObjectURL для blob'ов.
     setPendingFiles((prev) => {
       prev.forEach((p) => URL.revokeObjectURL(p.previewUrl));
@@ -388,7 +403,7 @@ export function TaskDrawer({
             </div>
 
             {/* === SCROLLABLE BODY === */}
-            <div className="space-y-4 overflow-y-auto px-6 py-4">
+            <div ref={bodyRef} className="space-y-4 overflow-y-auto px-6 py-4">
               {canEdit ? (
                 <TaskDescriptionEditor
                   key={task.id}
@@ -422,12 +437,34 @@ export function TaskDrawer({
                   projectId={task.projectId}
                   taskId={task.id}
                   onCommentCreatedRef={onCommentCreatedRef}
+                  onFirstLoad={scrollBodyToBottom}
                 />
               </div>
 
               {showCommits && (
                 <div className="border-t pt-4">
-                  <TaskCommitsSection task={task} onChange={() => onCommitsChange?.()} />
+                  <button
+                    type="button"
+                    onClick={() => setCommitsOpen((v) => !v)}
+                    className="flex w-full items-center gap-1.5 text-xs uppercase tracking-widest text-muted-foreground/70 hover:text-foreground"
+                    aria-expanded={commitsOpen}
+                  >
+                    <ChevronRight
+                      className={cn(
+                        'size-3.5 shrink-0 transition-transform',
+                        commitsOpen && 'rotate-90',
+                      )}
+                    />
+                    <span>Коммиты</span>
+                    {task.commitCount !== undefined && task.commitCount > 0 && (
+                      <span className="text-[10px] opacity-70">· {task.commitCount}</span>
+                    )}
+                  </button>
+                  {commitsOpen && (
+                    <div className="mt-3">
+                      <TaskCommitsSection task={task} onChange={() => onCommitsChange?.()} />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -446,6 +483,7 @@ export function TaskDrawer({
                 todoTail={todoTail}
                 onCommentCreated={(c) => {
                   onCommentCreatedRef.current?.(c);
+                  scrollBodyToBottom();
                   onCommitsChange?.();
                 }}
                 onTaskChanged={() => onCommitsChange?.()}
@@ -951,10 +989,14 @@ function TaskCommentsSection({
   // skips the inline `CommentComposer` and exposes `handleCreated` via this
   // ref so the parent's composer can push newly created comments into the list.
   onCommentCreatedRef,
+  // Дёргается один раз после первой успешной загрузки комментариев — drawer
+  // использует это, чтобы скроллнуть body вниз (к последнему сообщению).
+  onFirstLoad,
 }: {
   projectId: string;
   taskId: string;
   onCommentCreatedRef?: React.MutableRefObject<((c: TaskComment) => void) | null>;
+  onFirstLoad?: () => void;
 }): React.ReactElement {
   const { taskRepository, projectRepository } = useContainer();
   const [comments, setComments] = useState<TaskComment[]>([]);
@@ -969,7 +1011,10 @@ function TaskCommentsSection({
     taskRepository
       .listComments(projectId, taskId)
       .then((list) => {
-        if (!cancelled) setComments(list);
+        if (!cancelled) {
+          setComments(list);
+          onFirstLoad?.();
+        }
       })
       .catch((e: unknown) => {
         if (!cancelled) toast.error(`Не удалось загрузить комментарии: ${(e as Error).message}`);
@@ -988,7 +1033,7 @@ function TaskCommentsSection({
     return () => {
       cancelled = true;
     };
-  }, [projectId, taskId, taskRepository, projectRepository]);
+  }, [projectId, taskId, taskRepository, projectRepository, onFirstLoad]);
 
   const handleUpdated = (updated: TaskComment): void => {
     setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));

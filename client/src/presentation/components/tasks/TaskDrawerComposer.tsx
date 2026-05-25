@@ -69,7 +69,11 @@ export function TaskDrawerComposer({
   const { taskRepository } = useContainer();
   const [body, setBody] = useState('');
   const [pending, setPending] = useState<PendingFile[]>([]);
-  const [target, setTarget] = useState<ComposerTarget>(() => readTarget(task.projectId));
+  // На awaiting_clarification дефолт = «Воркеру»: юзер отвечает на ralph-question и
+  // ожидаемое действие — продолжить работу. На остальных статусах берём из localStorage'а.
+  const [target, setTarget] = useState<ComposerTarget>(() =>
+    task.status === 'awaiting_clarification' ? 'worker' : readTarget(task.projectId),
+  );
   const [submitting, setSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
