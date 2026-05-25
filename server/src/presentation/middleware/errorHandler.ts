@@ -18,6 +18,7 @@ import {
   NotProjectDispatcherError,
   NotProjectMemberForDelegationError,
   ProjectInviteAlreadyUsedError,
+  ProjectInviteEmailMismatchError,
   ProjectInviteExpiredError,
   ProjectInviteNotFoundError,
   ProjectNameAlreadyExistsError,
@@ -90,9 +91,17 @@ export function errorHandler(
   _next: NextFunction,
 ): void {
   if (err instanceof ZodError) {
+    // Делаем message человеко-читаемым: первое нарушение с путём поля. Так клиент,
+    // который видит только текст ошибки (Ralph dispatcher на .NET читает только status),
+    // получит "targetStatus: Invalid enum value..." вместо безликого "Validation failed".
+    // details[] всё ещё доступны для тех, кто читает тело целиком.
+    const first = err.issues[0];
+    const message = first
+      ? `${first.path.length > 0 ? first.path.join('.') + ': ' : ''}${first.message}`
+      : 'Validation failed';
     res.status(400).json({
       error: 'bad_request',
-      message: 'Validation failed',
+      message,
       details: err.issues,
     } satisfies ErrorPayload);
     return;
@@ -147,6 +156,13 @@ export function errorHandler(
   }
   if (err instanceof ProjectInviteAlreadyUsedError) {
     res.status(410).json({ error: 'invite_used', message: 'Это приглашение уже использовано' });
+    return;
+  }
+  if (err instanceof ProjectInviteEmailMismatchError) {
+    res.status(403).json({
+      error: 'invite_email_mismatch',
+      message: 'Это приглашение было выдано на другой email — войди под нужной учёткой',
+    });
     return;
   }
   if (err instanceof CannotInviteToInboxError) {

@@ -79,6 +79,7 @@ import type { DeleteTaskAttachment } from '../application/task/DeleteTaskAttachm
 import type { ListTaskAttachments } from '../application/task/ListTaskAttachments.js';
 import type { GetTaskAttachment } from '../application/task/GetTaskAttachment.js';
 import type { ListTaskComments } from '../application/task/ListTaskComments.js';
+import type { ListTaskCommentsForAgent } from '../application/task/ListTaskCommentsForAgent.js';
 import type { CreateTaskComment } from '../application/task/CreateTaskComment.js';
 import type { UpdateTaskComment } from '../application/task/UpdateTaskComment.js';
 import type { DeleteTaskComment } from '../application/task/DeleteTaskComment.js';
@@ -259,6 +260,12 @@ type AppDeps = {
     readonly maxAttachmentBytes: number;
     readonly agentJobs: AgentJobRepository;
     readonly notifyTaskChanged: (projectId: string) => void;
+    readonly notifyCommentAdded: (
+      projectId: string,
+      taskId: string,
+      commentId: string,
+      ownerUserId: string,
+    ) => void;
   };
   readonly agent: {
     readonly createAgentToken: CreateAgentToken;
@@ -281,6 +288,7 @@ type AppDeps = {
     readonly listTasks: ListTasks;
     readonly createTask: CreateTask;
     readonly createComment: CreateTaskComment;
+    readonly listTaskCommentsForAgent: ListTaskCommentsForAgent;
     readonly moveTask: MoveTask;
     readonly linkCommit: LinkCommit;
     readonly writeKbDocument: WriteKbDocument;
@@ -346,12 +354,18 @@ export function createApp(deps: AppDeps): CreatedApp {
       login: deps.auth.login,
       logout: deps.auth.logout,
       updateProfile: deps.user.updateProfile,
+      // Шарим тот же агентский лимитер: процесс single-PM2, ключи изолированы префиксом.
+      rateLimiter: deps.agent.rateLimiter,
     }),
   );
 
   app.use(
     '/api/projects',
-    projectsRouter({ ...deps.projects, notifier: deps.notifications.projectNotifier }),
+    projectsRouter({
+      ...deps.projects,
+      notifier: deps.notifications.projectNotifier,
+      rateLimiter: deps.agent.rateLimiter,
+    }),
   );
   app.use('/api/integrations/github', githubRouter(deps.github));
   app.use('/api/projects/:projectId/secrets', secretsRouter(deps.secrets));
@@ -397,6 +411,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       approve: deps.agent.approveDeviceCode,
       poll: deps.agent.pollDeviceToken,
       info: deps.agent.getDeviceCodeInfo,
+      rateLimiter: deps.agent.rateLimiter,
     }),
   );
 
@@ -416,6 +431,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       getTask: deps.agent.getAgentTask,
       createTask: deps.agent.createTask,
       createComment: deps.agent.createComment,
+      listTaskCommentsForAgent: deps.agent.listTaskCommentsForAgent,
       moveTask: deps.agent.moveTask,
       linkCommit: deps.agent.linkCommit,
       writeKbDocument: deps.agent.writeKbDocument,
@@ -443,6 +459,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       getDelegatedGitToken: deps.agent.getDelegatedGitToken,
       rateLimiter: deps.agent.rateLimiter,
       notifier: deps.notifications.projectNotifier,
+      notifyCommentAdded: deps.tasks.notifyCommentAdded,
     }),
   );
 

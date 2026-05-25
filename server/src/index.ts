@@ -121,6 +121,7 @@ import { DeleteTaskAttachment } from './application/task/DeleteTaskAttachment.js
 import { ListTaskAttachments } from './application/task/ListTaskAttachments.js';
 import { GetTaskAttachment } from './application/task/GetTaskAttachment.js';
 import { ListTaskComments } from './application/task/ListTaskComments.js';
+import { ListTaskCommentsForAgent } from './application/task/ListTaskCommentsForAgent.js';
 import { CreateTaskComment } from './application/task/CreateTaskComment.js';
 import { UpdateTaskComment } from './application/task/UpdateTaskComment.js';
 import { DeleteTaskComment } from './application/task/DeleteTaskComment.js';
@@ -174,6 +175,17 @@ const notifyTaskChanged = (projectId: string): void => {
 };
 const notifyProjectChanged = (projectId: string): void => {
   void projectEventBroadcaster.broadcast(projectId, 'project_changed').catch(() => {});
+};
+// SSE comment_added — для Ralph-диспетчера (мгновенная реакция вместо polling'а).
+const notifyCommentAdded = (
+  projectId: string,
+  taskId: string,
+  commentId: string,
+  ownerUserId: string,
+): void => {
+  void projectEventBroadcaster
+    .broadcastCommentAdded(projectId, taskId, commentId, ownerUserId)
+    .catch(() => {});
 };
 const githubTokenRepo = new DrizzleGithubTokenRepository(db);
 
@@ -641,6 +653,7 @@ const { app, devProxyUpgrade } = createApp({
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
     agentJobs: agentJobRepo,
     notifyTaskChanged,
+    notifyCommentAdded,
   },
   agent: {
     createAgentToken: new CreateAgentToken({
@@ -718,6 +731,16 @@ const { app, devProxyUpgrade } = createApp({
       comments: taskCommentRepo,
       notifications: notificationRepo,
       idGen: idGenerator,
+    }),
+    // Чтение комментариев задачи (Ralph F11 polling): фильтры since/limit/marker
+    // + ownerDisplayName. Не использует ListTaskComments из tasks-блока (та тянет
+    // attachments-батч лишний раз).
+    listTaskCommentsForAgent: new ListTaskCommentsForAgent({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      comments: taskCommentRepo,
+      users: userRepo,
     }),
     moveTask: new MoveTask({
       projects: projectRepo,

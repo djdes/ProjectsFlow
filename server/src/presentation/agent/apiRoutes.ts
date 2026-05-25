@@ -14,6 +14,7 @@ import type { AuthenticateAgentToken } from '../../application/agent/Authenticat
 import type { ListTasks } from '../../application/task/ListTasks.js';
 import type { CreateTask } from '../../application/task/CreateTask.js';
 import type { CreateTaskComment } from '../../application/task/CreateTaskComment.js';
+import type { ListTaskCommentsForAgent } from '../../application/task/ListTaskCommentsForAgent.js';
 import type { MoveTask } from '../../application/task/MoveTask.js';
 import type { LinkCommit } from '../../application/task/LinkCommit.js';
 import type { WriteKbDocument } from '../../application/kb/WriteKbDocument.js';
@@ -75,6 +76,13 @@ type Deps = {
   readonly getTask: GetAgentTask;
   readonly createTask: CreateTask;
   readonly createComment: CreateTaskComment;
+  readonly listTaskCommentsForAgent: ListTaskCommentsForAgent;
+  readonly notifyCommentAdded: (
+    projectId: string,
+    taskId: string,
+    commentId: string,
+    ownerUserId: string,
+  ) => void;
   readonly moveTask: MoveTask;
   readonly linkCommit: LinkCommit;
   readonly writeKbDocument: WriteKbDocument;
@@ -123,6 +131,20 @@ const createCredentialSchema = z.object({
 
 const moveTaskAgentSchema = z.object({
   targetStatus: taskStatusSchema,
+});
+
+// Query-параметры для GET /projects/:id/tasks/:id/comments (Ralph F11). Все опциональны.
+// has_marker валидируем по белому списку — это подставится в SQL LIKE.
+const listCommentsQuerySchema = z.object({
+  since: z
+    .string()
+    .datetime({ offset: true, message: 'since должен быть ISO 8601 datetime' })
+    .optional()
+    .transform((v) => (v ? new Date(v) : undefined)),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+  has_marker: z
+    .enum(['ralph-question', 'ralph-answer', 'ralph-grillme-summary'])
+    .optional(),
 });
 
 const repoAccessRequestSchema = z.object({
@@ -619,7 +641,45 @@ export function agentApiRouter(deps: Deps): Router {
           body: body.body,
         });
         void deps.notifier.onComment(projectId, req.user!.id, taskId, body.body, 'mcp').catch(() => {});
+        deps.notifyCommentAdded(projectId, taskId, comment.id, req.user!.id);
         res.status(201).json({ comment: commentToDto(comment) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Чтение комментариев задачи (Ralph F11 Q&A). body отдаётся как есть в markdown —
+  // HTML-комментарии <!-- ralph-* --> внутри сохраняются нетронутыми (sanitization идёт
+  // только в UI-рендерере, не в API). Поддержка фильтров since/limit/has_marker — для
+  // оптимизации polling'а диспетчера.
+  router.get(
+    '/projects/:projectId/tasks/:taskId/comments',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const query = listCommentsQuerySchema.parse(req.query);
+        const comments = await deps.listTaskCommentsForAgent.execute(
+          projectId,
+          req.user!.id,
+          taskId,
+          {
+            since: query.since,
+            limit: query.limit,
+            markerSubstring: query.has_marker,
+          },
+        );
+        res.json({
+          comments: comments.map((c) => ({
+            id: c.id,
+            body: c.body,
+            ownerUserId: c.ownerUserId,
+            ownerDisplayName: c.ownerDisplayName,
+            createdAt: c.createdAt.toISOString(),
+            updatedAt: c.updatedAt.toISOString(),
+          })),
+        });
       } catch (e) {
         next(e);
       }
@@ -1020,22 +1080,17 @@ export function agentApiRouter(deps: Deps): Router {
 
   // Назначить / снять Ralph-диспетчера проекта. owner-only через use-case (отдельная
   // проверка роли внутри SetProjectDispatcher). userId === null = снять диспетчера.
+  const setDispatcherBodySchema = z.object({
+    userId: z.union([z.string().min(1), z.null()]),
+  });
   router.put(
     '/projects/:projectId/dispatcher',
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const projectId = req.params['projectId'] as string;
-        // Парсим тело руками: на agent-API нет общей zod-схемы для этого роута, проще inline.
-        const raw = req.body as { userId?: unknown };
-        const userIdRaw = raw?.userId;
-        const userId: string | null =
-          userIdRaw === null
-            ? null
-            : typeof userIdRaw === 'string' && userIdRaw.length > 0
-              ? userIdRaw
-              : (() => {
-                  throw new Error('userId must be string or null');
-                })();
+        // zod валидирует тело — ZodError маппится в 400 errorHandler'ом (раньше
+        // inline-throw из IIFE становился непрозрачным 500).
+        const { userId } = setDispatcherBodySchema.parse(req.body);
         const project = await deps.setProjectDispatcher.execute(
           projectId,
           req.user!.id,
