@@ -281,6 +281,8 @@ type AppDeps = {
       taskId: string,
       commentId: string,
       ownerUserId: string,
+      actorKind?: 'user' | 'agent' | 'system',
+      agentName?: string | null,
     ) => void;
     readonly notifyStatusChanged: (
       projectId: string,

@@ -206,8 +206,9 @@ const TOOLS = [
     name: 'pf_create_task_comment',
     description:
       'Post a comment to a kanban task. Use this to leave progress updates as you work: ' +
-      '"starting", "found blocker X", "approach: Y", "PR opened — N". The comment author ' +
-      "will be the user that issued the agent token. Mentions via `@displayName` are parsed " +
+      '"starting", "found blocker X", "approach: Y", "PR opened — N". Comments are stored ' +
+      'with actor_kind=\'agent\' (server auto-sets) so the UI shows a Claude-styled "✻ Диспетчер" ' +
+      'header instead of the token owner\'s name. Mentions via `@displayName` are parsed ' +
       'server-side and trigger notifications. Markdown is allowed in the body. Recommended ' +
       'cadence: one comment when picking up a task, one per significant decision/blocker, ' +
       'one at completion. Avoid noisy "still working" pings — those add no signal.',
@@ -219,6 +220,17 @@ const TOOLS = [
         body: {
           type: 'string',
           description: 'Comment body (markdown). 1-10000 chars after trim.',
+        },
+        agentName: {
+          type: 'string',
+          enum: ['ralph-dispatcher', 'ralph-worker', 'ralph-grillme', 'ralph-verify'],
+          description:
+            'Identifier of the agent process creating this comment. Drives the UI title: ' +
+            'ralph-dispatcher → "Диспетчер · Claude Code/Opus" (default), ' +
+            'ralph-worker → "Воркер · Claude Opus 4.7", ' +
+            'ralph-grillme → "Grillme-агент · Claude Opus 4.7", ' +
+            'ralph-verify → "Верификатор · Claude Sonnet 4.6". ' +
+            'Omit if you are not sure — server defaults to ralph-dispatcher.',
         },
       },
       required: ['projectId', 'taskId', 'body'],
@@ -931,6 +943,11 @@ const CreateTaskCommentInputZ = z.object({
   projectId: z.string().min(1),
   taskId: z.string().min(1),
   body: z.string().trim().min(1).max(10_000),
+  // Какой именно agent-процесс пишет коммент. Бэк дефолтит 'ralph-dispatcher'.
+  // Открытое enum через z.string() (не z.enum) — forward-compat для новых имён без релиза.
+  agentName: z
+    .enum(['ralph-dispatcher', 'ralph-worker', 'ralph-grillme', 'ralph-verify'])
+    .optional(),
 });
 
 const ListTaskCommentsInputZ = z.object({
@@ -1148,6 +1165,7 @@ async function main(): Promise<void> {
             input.projectId,
             input.taskId,
             input.body,
+            input.agentName,
           );
           return jsonResult(comment);
         }

@@ -36,6 +36,15 @@ export const createTaskCommentSchema = z.object({
   body: z.string().trim().min(1, 'Введите текст комментария').max(10000),
 });
 
+// Agent-вариант: тот же body + optional agentName. Поле опциональное чтобы старые
+// MCP-клиенты без agentName продолжали работать — сервер дефолтит 'ralph-dispatcher'.
+// Длина 64 — соответствует VARCHAR(64) в схеме. Список значений не enum (forward-compat
+// под новых агентов без миграции/деплоя сервера).
+export const createAgentTaskCommentSchema = z.object({
+  body: z.string().trim().min(1, 'Введите текст комментария').max(10000),
+  agentName: z.string().trim().min(1).max(64).optional(),
+});
+
 export const updateTaskCommentSchema = z.object({
   body: z.string().trim().min(1, 'Введите текст комментария').max(10000),
 });
@@ -45,4 +54,5 @@ export type UpdateTaskBody = z.infer<typeof updateTaskSchema>;
 export type MoveTaskBody = z.infer<typeof moveTaskSchema>;
 export type LinkCommitBody = z.infer<typeof linkCommitSchema>;
 export type CreateTaskCommentBody = z.infer<typeof createTaskCommentSchema>;
+export type CreateAgentTaskCommentBody = z.infer<typeof createAgentTaskCommentSchema>;
 export type UpdateTaskCommentBody = z.infer<typeof updateTaskCommentSchema>;

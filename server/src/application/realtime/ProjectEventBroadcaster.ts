@@ -30,6 +30,8 @@ export class ProjectEventBroadcaster {
     taskId: string,
     commentId: string,
     ownerUserId: string,
+    actorKind?: 'user' | 'agent' | 'system',
+    agentName?: string | null,
   ): Promise<void> {
     const members = await this.deps.members.listByProject(projectId);
     for (const m of members) {
@@ -39,6 +41,8 @@ export class ProjectEventBroadcaster {
         taskId,
         commentId,
         ownerUserId,
+        actorKind,
+        agentName,
       });
     }
   }

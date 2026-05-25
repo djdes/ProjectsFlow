@@ -1157,6 +1157,42 @@ function formatCommentTime(date: Date): string {
   return COMMENT_TIME_FORMATTER.format(date);
 }
 
+// Иконка Claude — восьмиконечная звезда (символ U+273B заменён на SVG для контроля
+// размеров и анимации). currentColor → можно красить через CSS-класс.
+function ClaudeIcon({ className }: { className?: string }): React.ReactElement {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M12 2 L13.5 10.5 L22 12 L13.5 13.5 L12 22 L10.5 13.5 L2 12 L10.5 10.5 Z" />
+    </svg>
+  );
+}
+
+// Маппинг agent_name → читаемый title. Default — диспетчер (исторически 99% автокомментов).
+// Расширяется без deploy backend'а — новые worker'ы добавлять сюда.
+function agentTitle(agentName: string | null): string {
+  switch (agentName) {
+    case 'ralph-worker':
+      return 'Воркер · Claude Opus 4.7';
+    case 'ralph-grillme':
+      return 'Grillme-агент · Claude Opus 4.7';
+    case 'ralph-verify':
+      return 'Верификатор · Claude Sonnet 4.6';
+    case 'ralph-dispatcher':
+    case null:
+      return 'Диспетчер · Claude Code/Opus';
+    default:
+      // Forward-compat: незнакомое имя — generic с показом raw-имени.
+      return `Агент · ${agentName}`;
+  }
+}
+
 function CommentItem({
   projectId,
   taskId,
@@ -1243,18 +1279,41 @@ function CommentItem({
   // Single-tenant: автор комментария — всегда текущий юзер (см. MEMORY: 1 user = 1 tenant).
   // Если когда-нибудь появится multi-tenancy, нужно резолвить юзера по comment.ownerUserId.
   const { user } = useCurrentUser();
+  const isAgent = comment.actorKind === 'agent';
+  const isSystem = comment.actorKind === 'system';
   const displayName = user?.displayName ?? '—';
   const initials = getInitials(displayName);
 
   return (
     <li className="group flex items-start gap-2.5 py-1">
-      <Avatar className="size-7 shrink-0">
-        {user?.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={displayName} /> : null}
-        <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
-      </Avatar>
-      <div className="min-w-0 flex-1">
+      {isAgent ? (
+        // Avatar заменён на «✻»-плашку — иконка Claude в peach-кружке, не путается с
+        // юзер-аватаром Denis (он был источником путаницы в исходном issue).
+        <div
+          className="flex size-7 shrink-0 items-center justify-center rounded-full"
+          style={{ background: 'var(--claude-peach)' }}
+        >
+          <ClaudeIcon className="pf-claude-agent-icon" />
+        </div>
+      ) : (
+        <Avatar className="size-7 shrink-0">
+          {user?.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={displayName} /> : null}
+          <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
+        </Avatar>
+      )}
+      <div className={`min-w-0 flex-1 ${isAgent ? 'pf-claude-agent' : ''}`}>
         <div className="flex items-baseline gap-2">
-          <span className="truncate text-xs font-medium">{displayName}</span>
+          {isAgent ? (
+            <span className="pf-claude-agent-title truncate">
+              {agentTitle(comment.agentName)}
+            </span>
+          ) : isSystem ? (
+            <span className="truncate rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+              ⚙ Система
+            </span>
+          ) : (
+            <span className="truncate text-xs font-medium">{displayName}</span>
+          )}
           <span className="text-[11px] text-muted-foreground">
             {formatCommentTime(comment.createdAt)}
             {isEdited && <span className="ml-1 opacity-70">· изменён</span>}

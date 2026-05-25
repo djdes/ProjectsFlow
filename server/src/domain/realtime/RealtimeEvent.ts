@@ -11,6 +11,11 @@ export type RealtimeEvent =
       readonly taskId: string;
       readonly commentId: string;
       readonly ownerUserId: string;
+      // Кто оставил коммент: 'user' | 'agent' | 'system'. Клиент использует чтобы
+      // отрисовать Claude-стиль для agent-комментов до полного рефетча. Optional —
+      // старые серверы/события могут не присылать.
+      readonly actorKind?: 'user' | 'agent' | 'system';
+      readonly agentName?: string | null;
     }
   // Изменение статуса задачи (move или auto-return при ralph-answer). Несёт old/new,
   // чтобы клиент мог: перерисовать колонку, подсветить @mention'ы по awaiting_clarification,

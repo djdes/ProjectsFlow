@@ -1,10 +1,14 @@
-import type { TaskComment } from '../../domain/task/TaskComment.js';
+import type { TaskComment, TaskCommentActorKind } from '../../domain/task/TaskComment.js';
 
 export type CreateTaskCommentInput = {
   readonly id: string;
   readonly taskId: string;
   readonly ownerUserId: string;
   readonly body: string;
+  // Тип актора. 'user' — дефолт для обратной совместимости; роуты явно указывают.
+  readonly actorKind?: TaskCommentActorKind;
+  // Конкретный agent (для UI title). NULL если actorKind != 'agent'.
+  readonly agentName?: string | null;
 };
 
 export type UpdateTaskCommentInput = {
