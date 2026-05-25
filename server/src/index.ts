@@ -135,6 +135,9 @@ import { TelegramPoller } from './application/telegram/TelegramPoller.js';
 import { CreateTaskComment } from './application/task/CreateTaskComment.js';
 import { UpdateTaskComment } from './application/task/UpdateTaskComment.js';
 import { DeleteTaskComment } from './application/task/DeleteTaskComment.js';
+import { RequestRalphCancel } from './application/task/RequestRalphCancel.js';
+import { RevokeRalphCancel } from './application/task/RevokeRalphCancel.js';
+import { AckRalphCancel } from './application/task/AckRalphCancel.js';
 import { ListNotifications } from './application/notifications/ListNotifications.js';
 import { CountUnreadNotifications } from './application/notifications/CountUnreadNotifications.js';
 import { MarkNotificationRead } from './application/notifications/MarkNotificationRead.js';
@@ -781,6 +784,17 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       comments: taskCommentRepo,
     }),
+    requestRalphCancel: new RequestRalphCancel({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+    }),
+    revokeRalphCancel: new RevokeRalphCancel({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      users: userRepo,
+    }),
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
     agentJobs: agentJobRepo,
     notifyTaskChanged,
@@ -929,6 +943,7 @@ const { app, devProxyUpgrade } = createApp({
     listPendingAgentJobs: new ListPendingAgentJobs({ agentJobs: agentJobRepo }),
     claimAgentJob: new ClaimAgentJob({ members: projectMemberRepo, agentJobs: agentJobRepo }),
     completeAgentJob: new CompleteAgentJob({ members: projectMemberRepo, agentJobs: agentJobRepo }),
+    ackRalphCancel: new AckRalphCancel({ tasks: taskRepo }),
     agentJobs: agentJobRepo,
     checkRepoUsage: new CheckRepoUsage({
       projects: projectRepo,

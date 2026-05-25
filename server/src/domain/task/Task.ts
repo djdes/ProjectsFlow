@@ -28,6 +28,14 @@ export type Task = {
   readonly position: number;
   readonly delegatedToAgent: boolean;
   readonly ralphMode: RalphMode;
+  // Pull-based cancel: момент когда юзер запросил отмену Ralph-работы (NULL = нет
+  // запроса). См. db/037, spec C:/www/ralph/prompts/task-ralph-cancel.md.
+  readonly ralphCancelRequestedAt: Date | null;
+  // Кто запросил (FK на users). NULL когда запроса нет.
+  readonly ralphCancelRequestedBy: string | null;
+  // Display name запросившего — заполняется через LEFT JOIN users в repository.
+  // Null если запроса нет ИЛИ юзер удалён.
+  readonly ralphCancelRequestedByDisplayName: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };

@@ -27,6 +27,7 @@ import type { WriteKbDocument } from '../../application/kb/WriteKbDocument.js';
 import type { ListPendingAgentJobs } from '../../application/agent/ListPendingAgentJobs.js';
 import type { ClaimAgentJob } from '../../application/agent/ClaimAgentJob.js';
 import type { CompleteAgentJob } from '../../application/agent/CompleteAgentJob.js';
+import type { AckRalphCancel } from '../../application/task/AckRalphCancel.js';
 import type { CheckRepoUsage } from '../../application/agent/CheckRepoUsage.js';
 import type { RequestRepoAccess } from '../../application/agent/RequestRepoAccess.js';
 import type { InitLocalKb } from '../../application/kb/InitLocalKb.js';
@@ -83,6 +84,9 @@ type Deps = {
   readonly createTask: CreateTask;
   readonly createComment: CreateTaskComment;
   readonly listTaskCommentsForAgent: ListTaskCommentsForAgent;
+  // Generic «в проекте изменились задачи» — для SSE task_changed (новые поля
+  // ralph_cancel и т.п. подтянутся при refetch'е в UI).
+  readonly notifyTaskChanged: (projectId: string) => void;
   readonly notifyCommentAdded: (
     projectId: string,
     taskId: string,
@@ -106,6 +110,7 @@ type Deps = {
   readonly listPendingAgentJobs: ListPendingAgentJobs;
   readonly claimAgentJob: ClaimAgentJob;
   readonly completeAgentJob: CompleteAgentJob;
+  readonly ackRalphCancel: AckRalphCancel;
   readonly checkRepoUsage: CheckRepoUsage;
   readonly requestRepoAccess: RequestRepoAccess;
   readonly initLocalKb: InitLocalKb;
@@ -913,6 +918,23 @@ export function agentApiRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  // Ralph диспетчер ack-ит cancel: сбрасывает флаг ralph_cancel_requested_at чтобы UI
+  // убрал «Отмена запрошена»-badge. Идемпотентно. См. spec C:/www/ralph/prompts/task-ralph-cancel.md §5.
+  router.post(
+    '/projects/:projectId/tasks/:taskId/ralph-cancel-ack',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        await deps.ackRalphCancel.execute({ projectId, taskId });
+        deps.notifyTaskChanged(projectId);
+        res.status(200).json({ ok: true });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   // Приватная проверка занятости git-репо. Ответ не раскрывает чужие проекты/владельцев —
   // только ownership + непрозрачный requestTarget (при ownership=other). Rate-limit 30/мин.

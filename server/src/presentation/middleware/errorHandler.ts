@@ -52,6 +52,8 @@ import {
   TaskDescriptionEmptyError,
   TaskNotFoundError,
 } from '../../domain/task/errors.js';
+import { TaskNotActiveError } from '../../application/task/RequestRalphCancel.js';
+import { RalphCancelNotRequestedByYouError } from '../../application/task/RevokeRalphCancel.js';
 import {
   AgentDeviceCodeAlreadyApprovedError,
   AgentDeviceCodeConsumedError,
@@ -347,6 +349,14 @@ export function errorHandler(
   }
   if (err instanceof TaskCommentBodyEmptyError) {
     res.status(400).json({ error: 'task_comment_body_empty', message: 'Введите текст комментария' });
+    return;
+  }
+  if (err instanceof TaskNotActiveError) {
+    res.status(409).json({ error: 'task_not_active', message: err.message });
+    return;
+  }
+  if (err instanceof RalphCancelNotRequestedByYouError) {
+    res.status(403).json({ error: 'ralph_cancel_not_yours', message: err.message });
     return;
   }
 

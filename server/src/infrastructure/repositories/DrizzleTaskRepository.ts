@@ -1,6 +1,6 @@
-import { and, asc, eq, max, min } from 'drizzle-orm';
+import { and, asc, eq, max, min, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { tasks, type TaskRow } from '../db/schema.js';
+import { tasks, users, type TaskRow } from '../db/schema.js';
 import type { RalphMode, Task, TaskStatus } from '../../domain/task/Task.js';
 import type {
   CreateTaskInput,
@@ -8,7 +8,12 @@ import type {
   UpdateTaskPatch,
 } from '../../application/task/TaskRepository.js';
 
-function toTask(row: TaskRow): Task {
+// Row shape с заджойненным display_name запросившего отмену Ralph.
+type TaskRowJoined = TaskRow & {
+  cancelByDisplayName: string | null;
+};
+
+function toTask(row: TaskRowJoined): Task {
   return {
     id: row.id,
     projectId: row.projectId,
@@ -19,6 +24,9 @@ function toTask(row: TaskRow): Task {
     // VARCHAR в БД, cast в domain enum. Дефолт 'normal' — соответствует SQL DEFAULT,
     // защита от unexpected значений (если миграция/ручной UPDATE проставит чушь).
     ralphMode: (row.ralphMode as RalphMode) ?? 'normal',
+    ralphCancelRequestedAt: row.ralphCancelRequestedAt ?? null,
+    ralphCancelRequestedBy: row.ralphCancelRequestedBy ?? null,
+    ralphCancelRequestedByDisplayName: row.cancelByDisplayName ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -27,18 +35,38 @@ function toTask(row: TaskRow): Task {
 export class DrizzleTaskRepository implements TaskRepository {
   constructor(private readonly db: Database) {}
 
-  async listByProject(projectId: string): Promise<Task[]> {
-    const rows = await this.db
-      .select()
+  // Базовый SELECT с LEFT JOIN users для display name запросившего cancel.
+  // LEFT JOIN — потому что флаг чаще NULL (стандартный кейс).
+  private baseSelect() {
+    return this.db
+      .select({
+        id: tasks.id,
+        projectId: tasks.projectId,
+        description: tasks.description,
+        status: tasks.status,
+        position: tasks.position,
+        delegatedToAgent: tasks.delegatedToAgent,
+        ralphMode: tasks.ralphMode,
+        ralphCancelRequestedAt: tasks.ralphCancelRequestedAt,
+        ralphCancelRequestedBy: tasks.ralphCancelRequestedBy,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
+        cancelByDisplayName: users.displayName,
+      })
       .from(tasks)
+      .leftJoin(users, eq(users.id, tasks.ralphCancelRequestedBy));
+  }
+
+  async listByProject(projectId: string): Promise<Task[]> {
+    const rows = await this.baseSelect()
       .where(eq(tasks.projectId, projectId))
       .orderBy(asc(tasks.status), asc(tasks.position), asc(tasks.id));
-    return rows.map(toTask);
+    return rows.map((r) => toTask(r as TaskRowJoined));
   }
 
   async getById(taskId: string): Promise<Task | null> {
-    const rows = await this.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
-    return rows[0] ? toTask(rows[0]) : null;
+    const rows = await this.baseSelect().where(eq(tasks.id, taskId)).limit(1);
+    return rows[0] ? toTask(rows[0] as TaskRowJoined) : null;
   }
 
   async create(input: CreateTaskInput): Promise<Task> {
@@ -93,5 +121,27 @@ export class DrizzleTaskRepository implements TaskRepository {
       .update(tasks)
       .set({ delegatedToAgent: value })
       .where(eq(tasks.id, taskId));
+  }
+
+  async requestRalphCancel(taskId: string, userId: string): Promise<Task | null> {
+    // Идемпотентно — пишем только если ralph_cancel_requested_at IS NULL.
+    // Это гарантирует что повторный POST не «обновляет» timestamp (важно для UI который
+    // показывает «N сек назад»).
+    await this.db
+      .update(tasks)
+      .set({
+        ralphCancelRequestedAt: sql`CURRENT_TIMESTAMP`,
+        ralphCancelRequestedBy: userId,
+      })
+      .where(and(eq(tasks.id, taskId), sql`${tasks.ralphCancelRequestedAt} IS NULL`));
+    return this.getById(taskId);
+  }
+
+  async clearRalphCancel(taskId: string): Promise<Task | null> {
+    await this.db
+      .update(tasks)
+      .set({ ralphCancelRequestedAt: null, ralphCancelRequestedBy: null })
+      .where(eq(tasks.id, taskId));
+    return this.getById(taskId);
   }
 }

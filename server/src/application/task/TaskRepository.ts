@@ -31,4 +31,16 @@ export interface TaskRepository {
    * re-queue flow в Plan B (при failed → автоматически снова в очередь).
    */
   setDelegatedToAgent(taskId: string, value: boolean): Promise<void>;
+  /**
+   * Установить ralph_cancel_requested_at = now() и ralph_cancel_requested_by = userId.
+   * Идемпотентно: если уже установлено — оставляем существующие значения. Используется
+   * RequestRalphCancel для signal'а Ralph диспетчеру.
+   */
+  requestRalphCancel(taskId: string, userId: string): Promise<Task | null>;
+  /**
+   * Сброс ralph_cancel_requested_at + by (NULL). Используется:
+   *  - RevokeRalphCancel когда юзер передумал отменять
+   *  - AckRalphCancel когда Ralph обработал отмену
+   */
+  clearRalphCancel(taskId: string): Promise<Task | null>;
 }

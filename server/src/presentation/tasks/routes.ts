@@ -16,6 +16,8 @@ import type { ListTaskComments } from '../../application/task/ListTaskComments.j
 import type { CreateTaskComment } from '../../application/task/CreateTaskComment.js';
 import type { UpdateTaskComment } from '../../application/task/UpdateTaskComment.js';
 import type { DeleteTaskComment } from '../../application/task/DeleteTaskComment.js';
+import type { RequestRalphCancel } from '../../application/task/RequestRalphCancel.js';
+import type { RevokeRalphCancel } from '../../application/task/RevokeRalphCancel.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
@@ -52,6 +54,8 @@ type Deps = {
   readonly createComment: CreateTaskComment;
   readonly updateComment: UpdateTaskComment;
   readonly deleteComment: DeleteTaskComment;
+  readonly requestRalphCancel: RequestRalphCancel;
+  readonly revokeRalphCancel: RevokeRalphCancel;
   readonly maxAttachmentBytes: number;
   readonly agentJobs: AgentJobRepository;
   // Live-обновление: сигнал «в проекте изменились задачи» всем участникам (SSE).
@@ -83,9 +87,11 @@ type Deps = {
   readonly notifier: ProjectNotificationService;
 };
 
-type TaskDto = Omit<Task, 'createdAt' | 'updatedAt'> & {
+type TaskDto = Omit<Task, 'createdAt' | 'updatedAt' | 'ralphCancelRequestedAt'> & {
   createdAt: string;
   updatedAt: string;
+  // Сериализуем как ISO-string чтоб клиент парсил через Date(...). null если нет запроса.
+  ralphCancelRequestedAt: string | null;
   commitCount?: number;
   attachmentCount?: number;
   commentCount?: number;
@@ -96,6 +102,9 @@ function toDto(t: Task | TaskWithCounts): TaskDto {
     ...t,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
+    ralphCancelRequestedAt: t.ralphCancelRequestedAt
+      ? t.ralphCancelRequestedAt.toISOString()
+      : null,
   };
   if ('commitCount' in t) base.commitCount = t.commitCount;
   if ('attachmentCount' in t) base.attachmentCount = t.attachmentCount;
@@ -245,6 +254,41 @@ export function tasksRouter(deps: Deps): Router {
       await deps.deleteTask.execute(projectId, req.user!.id, taskId);
       deps.notifyTaskChanged(projectId);
       res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // POST /:taskId/ralph-cancel — запрос на отмену работы Ralph (pull-based флаг).
+  // Идемпотентно: повторный POST не апдейтит timestamp.
+  router.post('/:taskId/ralph-cancel', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projectId = req.params['projectId'] as string;
+      const taskId = req.params['taskId'] as string;
+      const task = await deps.requestRalphCancel.execute({
+        projectId,
+        ownerUserId: req.user!.id,
+        taskId,
+      });
+      deps.notifyTaskChanged(projectId);
+      res.json({ task: toDto(task) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // DELETE /:taskId/ralph-cancel — отозвать запрос (только автор или admin).
+  router.delete('/:taskId/ralph-cancel', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projectId = req.params['projectId'] as string;
+      const taskId = req.params['taskId'] as string;
+      const task = await deps.revokeRalphCancel.execute({
+        projectId,
+        ownerUserId: req.user!.id,
+        taskId,
+      });
+      deps.notifyTaskChanged(projectId);
+      res.json({ task: toDto(task) });
     } catch (e) {
       next(e);
     }

@@ -55,6 +55,11 @@ export type Task = {
   readonly agentJob: AgentJob | null;
   // Режим работы Ralph (default 'normal' если backend без 035).
   readonly ralphMode: RalphMode;
+  // Pull-based отмена Ralph-работы (db/037). null = нет запроса. См. spec
+  // C:/www/ralph/prompts/task-ralph-cancel.md.
+  readonly ralphCancelRequestedAt: Date | null;
+  readonly ralphCancelRequestedBy: string | null;
+  readonly ralphCancelRequestedByDisplayName: string | null;
 };
 
 // Короткий ID задачи (первые 8 hex-символов UUID без дефисов) — для вставки в commit

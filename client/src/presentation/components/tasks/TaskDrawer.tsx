@@ -471,23 +471,25 @@ export function TaskDrawer({
 
             {/* === STICKY FOOTER === */}
             {task.status === 'in_progress' ? (
-              <CancelWorkButton
-                task={task}
-                backlogTail={backlogTail}
-                onCancelled={() => onCommitsChange?.()}
-              />
+              <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
             ) : (
-              <TaskDrawerComposer
-                task={task}
-                backlogTail={backlogTail}
-                todoTail={todoTail}
-                onCommentCreated={(c) => {
-                  onCommentCreatedRef.current?.(c);
-                  scrollBodyToBottom();
-                  onCommitsChange?.();
-                }}
-                onTaskChanged={() => onCommitsChange?.()}
-              />
+              <>
+                {/* На awaiting_clarification — композер для ralph-answer'а + cancel под ним. */}
+                {task.status === 'awaiting_clarification' && (
+                  <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
+                )}
+                <TaskDrawerComposer
+                  task={task}
+                  backlogTail={backlogTail}
+                  todoTail={todoTail}
+                  onCommentCreated={(c) => {
+                    onCommentCreatedRef.current?.(c);
+                    scrollBodyToBottom();
+                    onCommitsChange?.();
+                  }}
+                  onTaskChanged={() => onCommitsChange?.()}
+                />
+              </>
             )}
           </>
         ) : (

@@ -302,12 +302,17 @@ export const tasks = mysqlTable(
     // Режим работы Ralph по задаче. См. db/035 и domain RalphMode.
     // VARCHAR (не enum) — forward-compat под новые режимы без миграции схемы Drizzle.
     ralphMode: varchar('ralph_mode', { length: 16 }).notNull().default('normal'),
+    // Pull-based отмена работы Ralph (см. db/037). NULL = нет запроса; иначе момент
+    // когда юзер запросил. Ralph каждые ~5с поллит — увидит флаг, убьёт worker'а, ack-нет.
+    ralphCancelRequestedAt: timestamp('ralph_cancel_requested_at'),
+    ralphCancelRequestedBy: char('ralph_cancel_requested_by', { length: 36 }),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
   (t) => [
     index('idx_tasks_project_status_position').on(t.projectId, t.status, t.position),
     index('idx_tasks_project').on(t.projectId),
+    index('idx_tasks_ralph_cancel').on(t.ralphCancelRequestedAt),
   ],
 );
 

@@ -13,7 +13,14 @@ import { httpClient } from './httpClient';
 
 type TaskDto = Omit<
   Task,
-  'createdAt' | 'updatedAt' | 'delegatedToAgent' | 'agentJob' | 'ralphMode'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'delegatedToAgent'
+  | 'agentJob'
+  | 'ralphMode'
+  | 'ralphCancelRequestedAt'
+  | 'ralphCancelRequestedBy'
+  | 'ralphCancelRequestedByDisplayName'
 > & {
   createdAt: string;
   updatedAt: string;
@@ -21,6 +28,10 @@ type TaskDto = Omit<
   agentJob?: import('@/domain/agentJob/AgentJob').AgentJob | null;
   // Optional на проводе — старый backend без миграции 035 не присылает.
   ralphMode?: import('@/domain/task/Task').RalphMode;
+  // Optional — старый backend без 037 не отдаёт эти поля.
+  ralphCancelRequestedAt?: string | null;
+  ralphCancelRequestedBy?: string | null;
+  ralphCancelRequestedByDisplayName?: string | null;
 };
 
 type CommitDto = Omit<TaskCommit, 'committedAt' | 'linkedAt'> & {
@@ -47,6 +58,11 @@ function fromDto(dto: TaskDto): Task {
     agentJob: dto.agentJob ?? null,
     // Graceful default — backend без 035 продолжает работать (mode = текущее поведение).
     ralphMode: dto.ralphMode ?? 'normal',
+    ralphCancelRequestedAt: dto.ralphCancelRequestedAt
+      ? new Date(dto.ralphCancelRequestedAt)
+      : null,
+    ralphCancelRequestedBy: dto.ralphCancelRequestedBy ?? null,
+    ralphCancelRequestedByDisplayName: dto.ralphCancelRequestedByDisplayName ?? null,
   };
 }
 
@@ -199,5 +215,20 @@ export class HttpTaskRepository implements TaskRepository {
     await httpClient.delete<void>(
       `/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
     );
+  }
+
+  async requestRalphCancel(projectId: string, taskId: string): Promise<Task> {
+    const { task } = await httpClient.post<{ task: TaskDto }>(
+      `/projects/${projectId}/tasks/${taskId}/ralph-cancel`,
+      {},
+    );
+    return fromDto(task);
+  }
+
+  async revokeRalphCancel(projectId: string, taskId: string): Promise<Task> {
+    const { task } = await httpClient.delete<{ task: TaskDto }>(
+      `/projects/${projectId}/tasks/${taskId}/ralph-cancel`,
+    );
+    return fromDto(task);
   }
 }

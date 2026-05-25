@@ -90,6 +90,8 @@ import type { BroadcastTelegramNotificationByTask } from '../application/telegra
 import type { CreateTaskComment } from '../application/task/CreateTaskComment.js';
 import type { UpdateTaskComment } from '../application/task/UpdateTaskComment.js';
 import type { DeleteTaskComment } from '../application/task/DeleteTaskComment.js';
+import type { RequestRalphCancel } from '../application/task/RequestRalphCancel.js';
+import type { RevokeRalphCancel } from '../application/task/RevokeRalphCancel.js';
 import type { ListNotifications } from '../application/notifications/ListNotifications.js';
 import type { CountUnreadNotifications } from '../application/notifications/CountUnreadNotifications.js';
 import type { MarkNotificationRead } from '../application/notifications/MarkNotificationRead.js';
@@ -121,6 +123,7 @@ import type { ListAgentJobsForProject } from '../application/agent/ListAgentJobs
 import type { ListPendingAgentJobs } from '../application/agent/ListPendingAgentJobs.js';
 import type { ClaimAgentJob } from '../application/agent/ClaimAgentJob.js';
 import type { CompleteAgentJob } from '../application/agent/CompleteAgentJob.js';
+import type { AckRalphCancel } from '../application/task/AckRalphCancel.js';
 import type { AgentJobRepository } from '../application/agent/AgentJobRepository.js';
 import type { ProjectMemberRepository } from '../application/project/ProjectMemberRepository.js';
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
@@ -273,6 +276,8 @@ type AppDeps = {
     readonly createComment: CreateTaskComment;
     readonly updateComment: UpdateTaskComment;
     readonly deleteComment: DeleteTaskComment;
+    readonly requestRalphCancel: RequestRalphCancel;
+    readonly revokeRalphCancel: RevokeRalphCancel;
     readonly maxAttachmentBytes: number;
     readonly agentJobs: AgentJobRepository;
     readonly notifyTaskChanged: (projectId: string) => void;
@@ -326,6 +331,7 @@ type AppDeps = {
     readonly listPendingAgentJobs: ListPendingAgentJobs;
     readonly claimAgentJob: ClaimAgentJob;
     readonly completeAgentJob: CompleteAgentJob;
+    readonly ackRalphCancel: AckRalphCancel;
     readonly agentJobs: AgentJobRepository;
     readonly checkRepoUsage: CheckRepoUsage;
     readonly requestRepoAccess: RequestRepoAccess;
@@ -482,6 +488,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       listPendingAgentJobs: deps.agent.listPendingAgentJobs,
       claimAgentJob: deps.agent.claimAgentJob,
       completeAgentJob: deps.agent.completeAgentJob,
+      ackRalphCancel: deps.agent.ackRalphCancel,
       checkRepoUsage: deps.agent.checkRepoUsage,
       requestRepoAccess: deps.agent.requestRepoAccess,
       initLocalKb: deps.agent.initLocalKb,
@@ -503,6 +510,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       getDelegatedGitToken: deps.agent.getDelegatedGitToken,
       rateLimiter: deps.agent.rateLimiter,
       notifier: deps.notifications.projectNotifier,
+      notifyTaskChanged: deps.tasks.notifyTaskChanged,
       notifyCommentAdded: deps.tasks.notifyCommentAdded,
       notifyStatusChanged: deps.tasks.notifyStatusChanged,
       taskRepo: deps.tasks.tasks,

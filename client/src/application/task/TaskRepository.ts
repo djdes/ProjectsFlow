@@ -61,4 +61,7 @@ export interface TaskRepository {
     body: string,
   ): Promise<TaskComment>;
   deleteComment(projectId: string, taskId: string, commentId: string): Promise<void>;
+  // Запрос/отзыв отмены Ralph-работы (pull-based флаг, см. db/037).
+  requestRalphCancel(projectId: string, taskId: string): Promise<Task>;
+  revokeRalphCancel(projectId: string, taskId: string): Promise<Task>;
 }
