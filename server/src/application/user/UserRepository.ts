@@ -38,6 +38,9 @@ export interface UserRepository {
 
   // Telegram-привязка. Все методы opt-in: если юзер не использует TG — никогда не зовутся.
   getTelegramLink(userId: string): Promise<TelegramLink | null>;
+  // Батч: возвращает set userIds которые имеют привязку TG. Один SELECT вместо N.
+  // Используется для hasTelegram-флага в /members и при taskId fan-out'е.
+  findUsersWithTelegram(userIds: readonly string[]): Promise<Set<string>>;
   // Для verify/connect: проверка что этот telegram_user_id ещё не привязан к другому юзеру.
   findUserIdByTelegramUserId(telegramUserId: number): Promise<string | null>;
   // Полный upsert привязки (после verify Login Widget). НЕ затрагивает prefs и

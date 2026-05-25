@@ -129,6 +129,7 @@ import { ConnectTelegramAccount } from './application/telegram/ConnectTelegramAc
 import { GetTelegramStatus } from './application/telegram/GetTelegramStatus.js';
 import { SendAgentTelegramNotification } from './application/telegram/SendAgentTelegramNotification.js';
 import { HandleTelegramWebhook } from './application/telegram/HandleTelegramWebhook.js';
+import { BroadcastTelegramNotificationByTask } from './application/telegram/BroadcastTelegramNotificationByTask.js';
 import { CreateTaskComment } from './application/task/CreateTaskComment.js';
 import { UpdateTaskComment } from './application/task/UpdateTaskComment.js';
 import { DeleteTaskComment } from './application/task/DeleteTaskComment.js';
@@ -314,14 +315,19 @@ const getTelegramStatus = new GetTelegramStatus({
   botUsername: telegramBotUsername,
 });
 // Маппинг agent-kind → user pref-toggle. Неизвестные kinds шлются без pref-чека.
+// v2: добавлены ralph_answer_accepted/comment_on_my_task/task_blocked + task_done
+// перемаплен на statusChange (а не taskDone) по spec multi-user-telegram-...-v2-delta.
 const TG_KIND_TO_PREF = {
   comment: 'commentOnMyTask',
+  comment_on_my_task: 'commentOnMyTask',
   mention: 'mention',
   status_change: 'statusChange',
+  task_done: 'statusChange',
+  task_blocked: 'statusChange',
   ralph_question: 'ralphQuestion',
   ralph_question_reminder: 'ralphQuestion',
   ralph_answer: 'ralphAnswer',
-  task_done: 'taskDone',
+  ralph_answer_accepted: 'ralphAnswer',
 } as const;
 const sendAgentTelegramNotification = new SendAgentTelegramNotification({
   users: userRepo,
@@ -337,6 +343,13 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   client: telegramClient,
   appUrl: appBaseUrl,
   botUsername: telegramBotUsername,
+});
+// v2: fan-out по taskId — грузит задачу/members и переиспользует sendAgentTelegramNotification
+// per recipient (там уже все gates — link/started/prefs/dedup/audit).
+const broadcastTelegramByTask = new BroadcastTelegramNotificationByTask({
+  tasks: taskRepo,
+  members: projectMemberRepo,
+  send: sendAgentTelegramNotification,
 });
 
 // Admin-bypass: системный админ (users.is_admin) получает доступ ко всем проектам
@@ -983,6 +996,8 @@ const { app, devProxyUpgrade } = createApp({
     }),
     rateLimiter: agentRateLimiter,
     sendTelegramNotification: sendAgentTelegramNotification,
+    broadcastTelegramByTask,
+    projects: projectRepo,
   },
   github: {
     startDeviceFlow: new StartDeviceFlow({
