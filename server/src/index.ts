@@ -306,8 +306,15 @@ const telegramWebhookUrl = process.env['TELEGRAM_WEBHOOK_URL'] ?? null;
 // Без env — прямой канал на api.telegram.org.
 const telegramApiBaseUrl =
   process.env['TELEGRAM_API_BASE_URL'] ?? 'https://api.telegram.org';
+// TELEGRAM_HTTP_PROXY — HTTP(S)-proxy URL (стандарт http://user:pass@host:port) для
+// всех исходящих к Telegram. Самый простой способ обойти провайдерскую блокировку.
+const telegramHttpProxy = process.env['TELEGRAM_HTTP_PROXY'] || undefined;
 
-const telegramClient = new HttpTelegramClient(telegramBotToken, telegramApiBaseUrl);
+const telegramClient = new HttpTelegramClient(
+  telegramBotToken,
+  telegramApiBaseUrl,
+  telegramHttpProxy,
+);
 const telegramOutboundRepo = new DrizzleTelegramOutboundRepository(db);
 
 const connectTelegramAccount = new ConnectTelegramAccount({

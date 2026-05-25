@@ -76,7 +76,14 @@ export function TelegramSection(): React.ReactElement {
       try {
         const next = await telegramRepository.connect(user);
         setStatus(next);
-        toast.success('Telegram привязан');
+        toast.success('Telegram привязан — открываю бота, нажми Start');
+        // Auto-open бота: Telegram запрещает боту писать первым, юзеру нужно один
+        // раз нажать Start. Открываем в новой вкладке сразу после user-clicked
+        // Login Widget callback — popup blocker не должен помешать. Если всё же
+        // блокируется — fallback-кнопка в UI ниже (status.botDeepLink).
+        if (next.botDeepLink) {
+          window.open(next.botDeepLink, '_blank', 'noopener');
+        }
       } catch (e) {
         const msg = (e as Error).message || 'Не удалось привязать Telegram';
         toast.error(msg);
