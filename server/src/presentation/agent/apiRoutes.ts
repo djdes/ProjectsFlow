@@ -17,6 +17,7 @@ import type { CreateTaskComment } from '../../application/task/CreateTaskComment
 import type { ListTaskCommentsForAgent } from '../../application/task/ListTaskCommentsForAgent.js';
 import type { MaybeReopenForClarification } from '../../application/task/MaybeReopenForClarification.js';
 import type { TaskRepository } from '../../application/task/TaskRepository.js';
+import type { SendAgentTelegramNotification } from '../../application/telegram/SendAgentTelegramNotification.js';
 import type { MoveTask } from '../../application/task/MoveTask.js';
 import type { LinkCommit } from '../../application/task/LinkCommit.js';
 import type { WriteKbDocument } from '../../application/kb/WriteKbDocument.js';
@@ -122,7 +123,21 @@ type Deps = {
   readonly rateLimiter: InMemoryRateLimiter;
   // Email-оповещения команде (источник 'mcp' — действия агента). Fire-and-forget.
   readonly notifier: ProjectNotificationService;
+  // Multi-user TG-уведомления (Ralph → @projectsflow_bot → юзер).
+  readonly sendTelegramNotification: SendAgentTelegramNotification;
 };
+
+// /agent/notifications/telegram payload. parseMode дефолт HTML на стороне use-case;
+// kind — произвольный, маппится на pref-toggle через kindToPref в композиции.
+const telegramNotifySchema = z.object({
+  userId: z.string().min(1),
+  text: z.string().min(1).max(4096),
+  parseMode: z.enum(['HTML', 'MarkdownV2']).optional(),
+  kind: z.string().min(1).max(64),
+  taskId: z.string().min(1).optional(),
+  replyMarkup: z.unknown().optional(),
+  skipDedupCheck: z.boolean().optional(),
+});
 
 const createCredentialSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -1267,6 +1282,67 @@ export function agentApiRouter(deps: Deps): Router {
             receivedOn: dateOnlyToIso(income.receivedOn),
           },
         });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Multi-user TG notification: Ralph (или любой agent с токеном) шлёт юзеру в его TG.
+  // Body: { userId, text, kind, taskId?, parseMode?, replyMarkup?, skipDedupCheck? }.
+  // Маппинг ответа на HTTP-коды:
+  //   ok                   → 200 { ok:true, messageId, chatId }
+  //   not_connected        → 410 { error:'not_connected' }
+  //   not_started          → 410 { error:'user_blocked_bot_or_not_started' }
+  //   forbidden            → 410 { error:'user_blocked_bot_or_not_started', description }
+  //   pref_off             → 200 { ok:false, skipped:'pref_off', kind }
+  //   dedup                → 200 { ok:false, skipped:'dedup' }
+  //   rate_limited         → 429 { error:'rate_limited', retryAfter }
+  //   error                → 500 { error:'telegram_send_failed', description }
+  router.post(
+    '/notifications/telegram',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const body = telegramNotifySchema.parse(req.body);
+        const r = await deps.sendTelegramNotification.execute({
+          userId: body.userId,
+          text: body.text,
+          parseMode: body.parseMode,
+          kind: body.kind,
+          taskId: body.taskId,
+          replyMarkup: body.replyMarkup,
+          skipDedupCheck: body.skipDedupCheck,
+        });
+        switch (r.status) {
+          case 'ok':
+            res.json({ ok: true, messageId: r.messageId, chatId: r.chatId });
+            return;
+          case 'not_connected':
+            res.status(410).json({ error: 'not_connected' });
+            return;
+          case 'not_started':
+            res.status(410).json({ error: 'user_blocked_bot_or_not_started' });
+            return;
+          case 'forbidden':
+            res
+              .status(410)
+              .json({ error: 'user_blocked_bot_or_not_started', description: r.description });
+            return;
+          case 'pref_off':
+            res.json({ ok: false, skipped: 'pref_off', kind: r.kind });
+            return;
+          case 'dedup':
+            res.json({ ok: false, skipped: 'dedup' });
+            return;
+          case 'rate_limited':
+            res.status(429).json({ error: 'rate_limited', retryAfter: r.retryAfter });
+            return;
+          case 'error':
+            res
+              .status(500)
+              .json({ error: 'telegram_send_failed', description: r.description });
+            return;
+        }
       } catch (e) {
         next(e);
       }
