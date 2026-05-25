@@ -1,4 +1,6 @@
 import {
+  useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ClipboardEvent,
@@ -28,8 +30,13 @@ type Props = {
   onCreate: (input: { description: string; ralphMode?: RalphMode }) => Promise<Task>;
 };
 
-// Compact quick-add для TODO. Половина ширины, по центру. Textarea + (Ctrl+V или drag)
-// файлы, ниже — селектор Ralph-режима слева и Отправить справа. Ctrl/Cmd+Enter — submit.
+// Max-height растущей textarea (~9 строк при text-sm/leading-snug).
+const TEXTAREA_MAX_PX = 192;
+
+// Floating quick-add: фиксирован снизу страницы, по центру, половина ширины.
+// Textarea авто-растёт от одной строки до TEXTAREA_MAX_PX, дальше — внутренний скролл.
+// Footer: 📎 слева, селектор Ralph-режима и кнопка «Отправить» — справа.
+// Drop файла, Ctrl+V, Ctrl/Cmd+Enter — submit.
 export function QuickAddTodo({ onCreate }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const [text, setText] = useState('');
@@ -38,6 +45,17 @@ export function QuickAddTodo({ onCreate }: Props): React.ReactElement {
   const [submitting, setSubmitting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Авто-grow: сначала сбрасываем height в auto, чтобы scrollHeight посчитался без
+  // «застрявшей» высоты предыдущего рендера, потом задаём по содержимому (но не выше
+  // max). useLayoutEffect — чтобы пользователь не видел кадр со старой высотой.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_PX)}px`;
+  }, [text]);
 
   const addFiles = (raw: FileList | File[]): void => {
     const list = Array.from(raw);
@@ -118,8 +136,8 @@ export function QuickAddTodo({ onCreate }: Props): React.ReactElement {
     }
   };
 
-  // Enter — перенос строки (описание задачи может быть многострочным),
-  // Ctrl/Cmd+Enter — отправка. Совпадает с принятым в проекте паттерном для description-полей.
+  // Enter — перенос строки (описание может быть многострочным),
+  // Ctrl/Cmd+Enter — отправка. Совпадает с паттерном description-полей в проекте.
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -127,20 +145,30 @@ export function QuickAddTodo({ onCreate }: Props): React.ReactElement {
     }
   };
 
+  // Чистим Blob URL'ы pending-файлов при размонтировании.
+  useEffect(() => {
+    return () => {
+      pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const canSubmit = text.trim().length > 0 && !submitting;
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
+    // pointer-events-none на внешнем wrapper'е, pointer-events-auto на самой карточке —
+    // чтобы поля по бокам от floating-виджета не блокировали клики по канбану.
+    <div className="pointer-events-none fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 sm:bottom-4 sm:px-4">
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`overflow-hidden rounded-lg border bg-card shadow-sm transition-colors focus-within:border-foreground/30 ${
+        className={`pointer-events-auto w-full max-w-2xl overflow-hidden rounded-2xl border bg-card/95 shadow-xl backdrop-blur-md transition-colors focus-within:border-foreground/30 ${
           dragActive ? 'border-primary bg-primary/5' : ''
         }`}
       >
         {pending.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 border-b bg-muted/40 px-3 py-2">
+          <div className="flex flex-wrap gap-1.5 border-b bg-muted/30 px-2.5 py-1.5">
             {pending.map((pf) => (
               <span
                 key={pf.id}
@@ -167,51 +195,54 @@ export function QuickAddTodo({ onCreate }: Props): React.ReactElement {
         )}
 
         <textarea
+          ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onPaste={handlePaste}
           onKeyDown={handleKeyDown}
-          rows={3}
+          rows={1}
           disabled={submitting}
           placeholder="Быстрое добавление TODO для автовыполнения задачи в Claude Code/Opus"
-          className="block w-full resize-none bg-transparent px-3 py-2.5 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+          style={{ maxHeight: `${TEXTAREA_MAX_PX}px` }}
+          className="block w-full resize-none overflow-y-auto bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
         />
 
-        <div className="flex items-center justify-between gap-2 border-t bg-muted/20 px-2 py-2">
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-7"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={submitting}
-              aria-label="Прикрепить файл"
-              title="Прикрепить файл (или Ctrl+V / перетащи)"
-            >
-              <Paperclip className="size-3.5" />
-            </Button>
+        <div className="flex items-center justify-between gap-2 px-1.5 pb-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground hover:text-foreground"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={submitting}
+            aria-label="Прикрепить файл"
+            title="Прикрепить файл (или Ctrl+V / перетащи)"
+          >
+            <Paperclip className="size-3.5" />
+          </Button>
+          <div className="flex items-center gap-1.5">
             <RalphModeSelect
               value={ralphMode}
               onChange={setRalphMode}
               disabled={submitting}
-              className="!h-7 min-w-[180px] !px-2 !py-0 text-xs"
+              className="!h-7 min-w-[160px] !px-2 !py-0 text-xs"
             />
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 gap-1.5 px-2.5"
+              onClick={() => void submit()}
+              disabled={!canSubmit}
+              title="Ctrl+Enter"
+            >
+              {submitting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Send className="size-3.5" />
+              )}
+              Отправить
+            </Button>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => void submit()}
-            disabled={!canSubmit}
-            title="Ctrl+Enter"
-          >
-            {submitting ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Send className="size-3.5" />
-            )}
-            Отправить
-          </Button>
         </div>
 
         <input

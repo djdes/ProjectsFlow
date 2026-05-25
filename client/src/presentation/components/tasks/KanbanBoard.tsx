@@ -284,8 +284,9 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
   }
 
   return (
-    <div className="space-y-6">
-      <QuickAddTodo onCreate={(input) => create({ ...input, status: 'todo' })} />
+    // pb-32 — резерв под floating QuickAddTodo (fixed snizu): иначе нижние карточки
+    // прикрываются виджетом при скролле до конца.
+    <div className="space-y-6 pb-32">
       <DndContext
         sensors={sensors}
         measuring={MEASURING_CONFIG}
@@ -369,6 +370,10 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
         showCommits={showCommits}
         projectName={projectName}
       />
+
+      {/* Floating quick-add (position: fixed). DOM-позиция значения не имеет —
+          важно лишь чтобы компонент был смонтирован. */}
+      <QuickAddTodo onCreate={(input) => create({ ...input, status: 'todo' })} />
     </div>
   );
 }
