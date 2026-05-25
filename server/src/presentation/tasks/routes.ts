@@ -180,6 +180,7 @@ export function tasksRouter(deps: Deps): Router {
         ownerUserId: req.user!.id,
         description: body.description,
         status: body.status ?? 'todo',
+        ralphMode: body.ralphMode,
       });
       deps.notifyTaskChanged(projectId);
       void deps.notifier.onTaskCreated(projectId, req.user!.id, task, 'team').catch(() => {});
@@ -199,6 +200,7 @@ export function tasksRouter(deps: Deps): Router {
         ownerUserId: req.user!.id,
         taskId,
         description: body.description,
+        ralphMode: body.ralphMode,
       });
       deps.notifyTaskChanged(projectId);
       res.json({ task: toDto(task) });

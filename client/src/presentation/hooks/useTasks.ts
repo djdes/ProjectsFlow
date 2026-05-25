@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useContainer } from '@/infrastructure/di/container';
-import type { Task, TaskStatus } from '@/domain/task/Task';
+import type { RalphMode, Task, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { useAgentJobPolling } from './useAgentJobPolling';
 import { useRealtimeTaskRefresh } from './useRealtimeTaskRefresh';
@@ -13,8 +13,8 @@ type State = {
 
 export type UseTasks = State & {
   refetch: () => Promise<void>;
-  create: (input: { description: string; status: TaskStatus }) => Promise<Task>;
-  update: (taskId: string, input: { description?: string }) => Promise<Task>;
+  create: (input: { description: string; status: TaskStatus; ralphMode?: RalphMode }) => Promise<Task>;
+  update: (taskId: string, input: { description?: string; ralphMode?: RalphMode }) => Promise<Task>;
   // Оптимистично переставляет локально + летит на сервер. На фейле ревёртится из refetch'а.
   move: (taskId: string, input: MoveTaskInput) => Promise<void>;
   remove: (taskId: string) => Promise<void>;

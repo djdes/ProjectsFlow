@@ -25,6 +25,8 @@ import {
   formatBytes,
   isImageMime,
 } from '@/presentation/components/attachments/files';
+import { RalphModeSelect } from '@/presentation/components/tasks/RalphMode';
+import type { RalphMode } from '@/domain/task/Task';
 
 type Props = {
   open: boolean;
@@ -42,6 +44,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   const { data: projects } = useProjects();
   const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
@@ -55,6 +58,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     if (!open) {
       setDescription('');
       setProjectId(null);
+      setRalphMode('normal');
       setError(null);
       setPending((prev) => {
         prev.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
@@ -106,7 +110,11 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     try {
       // По умолчанию (без проекта) — во «Входящие»; иначе в выбранный проект.
       const targetId = projectId ?? (await projectRepository.getInbox()).id;
-      const task = await taskRepository.create(targetId, { description: trimmed, status: 'backlog' });
+      const task = await taskRepository.create(targetId, {
+        description: trimmed,
+        status: 'backlog',
+        ralphMode,
+      });
       // Загружаем вложения в созданную задачу (best-effort, ошибки — toast'ом).
       for (const pf of pending) {
         try {
@@ -178,6 +186,11 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Режим работы Ralph</Label>
+            <RalphModeSelect value={ralphMode} onChange={setRalphMode} disabled={saving} />
           </div>
 
           <div className="space-y-2">

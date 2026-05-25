@@ -39,6 +39,8 @@ import {
   formatBytes,
   isImageMime,
 } from '@/presentation/components/attachments/files';
+import { RalphModeSelect } from './RalphMode';
+import type { RalphMode } from '@/domain/task/Task';
 
 export type TaskDialogState =
   | { mode: 'create'; status: Task['status'] }
@@ -49,7 +51,9 @@ type Props = {
   onClose: () => void;
   // Возвращает созданный/обновлённый task — нужен в create-режиме, чтобы зааплоадить
   // pending-аттачи после получения task.id.
-  onSubmit: (input: { description: string }) => Promise<Task>;
+  // ralphMode — режим работы Ralph, который пользователь выбрал в форме (см. RalphModeSelect).
+  // Передаётся только в create-mode; в edit-mode смена режима идёт через отдельный PATCH.
+  onSubmit: (input: { description: string; ralphMode?: import('@/domain/task/Task').RalphMode }) => Promise<Task>;
   // Колбэк когда коммиты или аттачи у задачи поменялись — board перефетчит badge'и.
   onCommitsChange?: () => void;
   // Показывать секцию коммитов в edit-режиме. Для inbox-проекта выключаем — у него
@@ -74,6 +78,51 @@ function AttachmentThumb({ url, name, mime }: { url?: string; name: string; mime
   );
 }
 
+// Chip-селектор режима Ralph в edit-mode шапки. Показывает текущий режим бейджем;
+// клик раскрывает dropdown для смены — PATCH идёт сразу же (best-effort, error → toast).
+function TaskRalphModeChip({
+  task,
+  onChanged,
+}: {
+  task: Task;
+  onChanged: () => void;
+}): React.ReactElement {
+  const { taskRepository } = useContainer();
+  const [mode, setMode] = useState<RalphMode>(task.ralphMode);
+  const [saving, setSaving] = useState(false);
+
+  // Если родитель прислал обновлённую задачу — синкаем локальное состояние.
+  useEffect(() => {
+    setMode(task.ralphMode);
+  }, [task.ralphMode]);
+
+  const change = async (next: RalphMode): Promise<void> => {
+    if (next === mode || saving) return;
+    const prev = mode;
+    setMode(next); // optimistic
+    setSaving(true);
+    try {
+      await taskRepository.update(task.projectId, task.id, { ralphMode: next });
+      onChanged();
+    } catch (err) {
+      setMode(prev);
+      toast.error(`Не удалось сменить режим: ${(err as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // shadcn DropdownMenu — даёт нам же что и RalphModeSelect, но trigger компактный chip-вид.
+  return (
+    <RalphModeSelect
+      value={mode}
+      onChange={(v) => void change(v)}
+      disabled={saving}
+      className="!h-7 min-w-[180px] !px-2 !py-0 text-xs"
+    />
+  );
+}
+
 export function TaskDialog({
   state,
   onClose,
@@ -92,6 +141,8 @@ export function TaskDialog({
   // Pending-файлы при создании задачи. Берём File-объекты + Blob URL для превью,
   // после успешного create аплоадим их пачкой.
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  // Режим Ralph для create-mode (в edit-mode значение приходит из state.task).
+  const [createRalphMode, setCreateRalphMode] = useState<RalphMode>('normal');
   // В edit-режиме секция аттачей экспонирует addFiles через ref — чтобы paste-handler
   // на форме (поймает Ctrl+V даже когда фокус в textarea) мог пнуть аплоад.
   const attachmentsRef = useRef<AttachmentsHandle>(null);
@@ -103,6 +154,7 @@ export function TaskDialog({
   useEffect(() => {
     if (!state) return;
     setDescription(state.mode === 'edit' ? state.task.description ?? '' : '');
+    setCreateRalphMode('normal');
     setError(null);
     // При закрытии/смене диалога чистим pending — URL.revokeObjectURL для blob'ов.
     setPendingFiles((prev) => {
@@ -146,7 +198,10 @@ export function TaskDialog({
     setSaving(true);
     setError(null);
     try {
-      const task = await onSubmit({ description: description.trim() });
+      const task = await onSubmit({
+        description: description.trim(),
+        ralphMode: state?.mode === 'create' ? createRalphMode : undefined,
+      });
       // Если в create-режиме копились картинки — аплоадим их в новосозданную задачу.
       if (state?.mode === 'create' && pendingFiles.length > 0) {
         let ok = 0;
@@ -192,11 +247,22 @@ export function TaskDialog({
           <DialogDescription className="sr-only">
             {state?.mode === 'edit' ? 'Редактирование задачи' : 'Создание новой задачи'}
           </DialogDescription>
-          {projectName && (
-            <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {projectName}
-            </span>
-          )}
+          <div className="flex items-center justify-between gap-3">
+            {projectName ? (
+              <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {projectName}
+              </span>
+            ) : (
+              <span />
+            )}
+            {/* Бейдж режима в edit-mode — компактный, кликабельный для смены. */}
+            {state?.mode === 'edit' && (
+              <TaskRalphModeChip
+                task={state.task}
+                onChanged={() => onCommitsChange?.()}
+              />
+            )}
+          </div>
         </DialogHeader>
 
         <form
@@ -245,17 +311,29 @@ export function TaskDialog({
               )}
             </>
           ) : (
-            <PendingAttachmentsSection
-              files={pendingFiles}
-              onAdd={addPendingFiles}
-              onRemove={(id) => {
-                setPendingFiles((prev) => {
-                  const target = prev.find((p) => p.id === id);
-                  if (target) URL.revokeObjectURL(target.previewUrl);
-                  return prev.filter((p) => p.id !== id);
-                });
-              }}
-            />
+            <>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Режим работы Ralph
+                </label>
+                <RalphModeSelect
+                  value={createRalphMode}
+                  onChange={setCreateRalphMode}
+                  disabled={saving}
+                />
+              </div>
+              <PendingAttachmentsSection
+                files={pendingFiles}
+                onAdd={addPendingFiles}
+                onRemove={(id) => {
+                  setPendingFiles((prev) => {
+                    const target = prev.find((p) => p.id === id);
+                    if (target) URL.revokeObjectURL(target.previewUrl);
+                    return prev.filter((p) => p.id !== id);
+                  });
+                }}
+              />
+            </>
           )}
         </form>
 

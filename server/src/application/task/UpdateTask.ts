@@ -1,5 +1,5 @@
 import { TaskDescriptionEmptyError, TaskNotFoundError } from '../../domain/task/errors.js';
-import type { Task } from '../../domain/task/Task.js';
+import type { RalphMode, Task } from '../../domain/task/Task.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
@@ -16,6 +16,8 @@ export type UpdateTaskCommand = {
   readonly ownerUserId: string;
   readonly taskId: string;
   readonly description: string | undefined;
+  // Сменить режим Ralph можно в любой момент — diспетчер на следующем тике увидит.
+  readonly ralphMode?: RalphMode;
 };
 
 export class UpdateTask {
@@ -33,6 +35,7 @@ export class UpdateTask {
       if (trimmed.length === 0) throw new TaskDescriptionEmptyError();
       patch.description = trimmed;
     }
+    if (input.ralphMode !== undefined) patch.ralphMode = input.ralphMode;
 
     const updated = await this.deps.tasks.update(input.taskId, patch);
     if (!updated) throw new TaskNotFoundError(input.taskId);

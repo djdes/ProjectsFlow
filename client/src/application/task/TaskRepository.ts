@@ -1,4 +1,4 @@
-import type { Task, TaskStatus } from '@/domain/task/Task';
+import type { RalphMode, Task, TaskStatus } from '@/domain/task/Task';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import type { TaskComment } from '@/domain/task/TaskComment';
@@ -6,10 +6,13 @@ import type { TaskComment } from '@/domain/task/TaskComment';
 export type CreateTaskInput = {
   readonly description: string;
   readonly status?: TaskStatus;
+  // Режим работы Ralph. Если не передан — backend дефолтит 'normal'.
+  readonly ralphMode?: RalphMode;
 };
 
 export type UpdateTaskInput = {
   readonly description?: string;
+  readonly ralphMode?: RalphMode;
 };
 
 export type MoveTaskInput = {

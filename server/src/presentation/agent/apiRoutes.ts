@@ -197,9 +197,13 @@ const repoAccessRequestSchema = z.object({
   message: z.string().max(2000).optional(),
 });
 
-const updateTaskAgentSchema = z.object({
-  description: z.string().trim().min(1).max(10_000),
-});
+const updateTaskAgentSchema = z
+  .object({
+    description: z.string().trim().min(1).max(10_000).optional(),
+    // Worker может выставить режим (например 'silent' → дальше работает без вопросов).
+    ralphMode: z.enum(['normal', 'silent', 'grillme']).optional(),
+  })
+  .refine((o) => Object.keys(o).length > 0, { message: 'Нечего обновлять' });
 
 // KB-путь: тот же контракт, что у pf_write_kb_document — относительный .md внутри репо.
 const kbPathSchema = z.string().trim().regex(/^[a-z0-9_./-]+\.md$/i, 'путь должен быть вида folder/file.md');
@@ -632,6 +636,7 @@ export function agentApiRouter(deps: Deps): Router {
           ownerUserId: req.user!.id,
           description: body.description,
           status: body.status ?? 'todo',
+          ralphMode: body.ralphMode,
         });
         void deps.notifier.onTaskCreated(projectId, req.user!.id, task, 'mcp').catch(() => {});
         // taskToDto ожидает Task с commitCount, но из CreateTask он не приходит — оборачиваем
@@ -1062,6 +1067,7 @@ export function agentApiRouter(deps: Deps): Router {
           ownerUserId: req.user!.id,
           taskId,
           description: body.description,
+          ralphMode: body.ralphMode,
         });
         res.json({ task: taskToDto(task) });
       } catch (e) {

@@ -8,6 +8,7 @@ import type { Task } from '@/domain/task/Task';
 import { taskShortId } from '@/domain/task/Task';
 import { AgentJobBadge } from './AgentJobBadge';
 import { DelegateToAgentButton } from './DelegateToAgentButton';
+import { RalphModeBadge } from './RalphMode';
 
 type Props = {
   task: Task;
@@ -118,8 +119,9 @@ export function KanbanCard({
           {(showShortId ||
             (task.commitCount ?? 0) > 0 ||
             (task.attachmentCount ?? 0) > 0 ||
-            (task.commentCount ?? 0) > 0) && (
-            <div className="mt-2 flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+            (task.commentCount ?? 0) > 0 ||
+            task.ralphMode !== 'normal') && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
               {showShortId && (
                 <span className="font-mono normal-case tracking-normal opacity-60">
                   [{taskShortId(task.id)}]
@@ -143,6 +145,9 @@ export function KanbanCard({
                   {task.commentCount}
                 </span>
               )}
+              {/* Бейдж режима Ralph — только для не-дефолта (показывать каждой задаче '🤖 Обычный'
+                  было бы шумом). Component сам возвращает null если showDefault=false и mode='normal'. */}
+              <RalphModeBadge mode={task.ralphMode} />
             </div>
           )}
           {task.agentJob && onTaskChanged && (

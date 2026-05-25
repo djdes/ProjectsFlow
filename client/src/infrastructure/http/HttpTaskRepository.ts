@@ -11,11 +11,16 @@ import type {
 } from '@/application/task/TaskRepository';
 import { httpClient } from './httpClient';
 
-type TaskDto = Omit<Task, 'createdAt' | 'updatedAt' | 'delegatedToAgent' | 'agentJob'> & {
+type TaskDto = Omit<
+  Task,
+  'createdAt' | 'updatedAt' | 'delegatedToAgent' | 'agentJob' | 'ralphMode'
+> & {
   createdAt: string;
   updatedAt: string;
   delegatedToAgent?: boolean;
   agentJob?: import('@/domain/agentJob/AgentJob').AgentJob | null;
+  // Optional на проводе — старый backend без миграции 035 не присылает.
+  ralphMode?: import('@/domain/task/Task').RalphMode;
 };
 
 type CommitDto = Omit<TaskCommit, 'committedAt' | 'linkedAt'> & {
@@ -40,6 +45,8 @@ function fromDto(dto: TaskDto): Task {
     updatedAt: new Date(dto.updatedAt),
     delegatedToAgent: dto.delegatedToAgent ?? false,
     agentJob: dto.agentJob ?? null,
+    // Graceful default — backend без 035 продолжает работать (mode = текущее поведение).
+    ralphMode: dto.ralphMode ?? 'normal',
   };
 }
 
