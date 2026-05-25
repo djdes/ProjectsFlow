@@ -46,6 +46,17 @@ const COLUMN_LABELS: Record<TaskStatus, string> = {
   done: 'Готово',
 };
 
+// Какие колонки реально рисуем. in_progress и awaiting_clarification не имеют
+// собственных колонок — задачи в этих статусах визуально живут в TODO с badge'ом
+// статуса справа снизу. См. KanbanCard.
+const VISIBLE_STATUSES: readonly TaskStatus[] = ['backlog', 'todo', 'done'];
+
+// Маппинг реального статуса в визуальную колонку.
+function toVisibleStatus(status: TaskStatus): TaskStatus {
+  if (status === 'in_progress' || status === 'awaiting_clarification') return 'todo';
+  return status;
+}
+
 // Длительность drop-анимации в ms. Используется и dnd-kit'ом для position-lerp'а оверлея,
 // и motion'ом для exit-анимации rotate/scale у обёртки preview — они должны быть равны.
 const DROP_DURATION_MS = 320;
@@ -71,6 +82,8 @@ const MEASURING_CONFIG = {
 };
 
 function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStatus, Task[]> {
+  // Группируем по визуальной колонке: in_progress / awaiting_clarification визуально
+  // лежат в TODO (статус на task'е сохраняется и отображается badge'ом справа снизу).
   const out: Record<TaskStatus, Task[]> = {
     backlog: [],
     todo: [],
@@ -78,7 +91,7 @@ function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStat
     awaiting_clarification: [],
     done: [],
   };
-  for (const t of tasks) out[t.status].push(t);
+  for (const t of tasks) out[toVisibleStatus(t.status)].push(t);
   for (const s of TASK_STATUSES) {
     if (s === 'done') {
       // Готовые сортируем по времени завершения (updatedAt), а не по position:
@@ -160,11 +173,26 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
     } else {
       const overTask = tasks.find((t) => t.id === over.id);
       if (!overTask) return;
-      targetStatus = overTask.status;
+      // Visible-нормализация: если дропнули над in_progress/awaiting_clarification
+      // карточкой (визуально лежит в TODO), целевая колонка — todo.
+      targetStatus = toVisibleStatus(overTask.status);
     }
 
-    // Список карточек в целевой колонке БЕЗ перетаскиваемой (чтобы корректно посчитать соседей).
-    const targetList = grouped[targetStatus].filter((t) => t.id !== activeTask.id);
+    // Если активная задача in_progress / awaiting_clarification дропается в TODO
+    // (где она и так живёт визуально), её реальный статус сохраняем — это просто
+    // реордер внутри визуальной колонки, а не возврат к todo.
+    if (
+      targetStatus === 'todo' &&
+      (activeTask.status === 'in_progress' || activeTask.status === 'awaiting_clarification')
+    ) {
+      targetStatus = activeTask.status;
+    }
+
+    // Список карточек в визуальной колонке БЕЗ перетаскиваемой (для расчёта соседей).
+    // Берём именно визуальную колонку, потому что in_progress / awaiting_clarification
+    // карточки физически живут в grouped['todo'] (см. groupByStatus).
+    const visibleColumn = toVisibleStatus(targetStatus);
+    const targetList = grouped[visibleColumn].filter((t) => t.id !== activeTask.id);
 
     let insertIndex: number;
     if (overData?.type === 'column') {
@@ -178,14 +206,9 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
     const beforeTask = insertIndex > 0 ? targetList[insertIndex - 1] : null;
     const afterTask = insertIndex < targetList.length ? targetList[insertIndex] : null;
 
-    // No-op: ничего не изменилось.
-    if (
-      activeTask.status === targetStatus &&
-      (beforeTask?.id ?? null) ===
-        (grouped[activeTask.status].filter((t) => t.id !== activeTask.id)[insertIndex - 1]?.id ?? null)
-    ) {
-      // Дропнули туда же где было — пропускаем сетевой запрос.
-      const currentList = grouped[activeTask.status];
+    // No-op: дропнули туда же, где было.
+    if (toVisibleStatus(activeTask.status) === visibleColumn) {
+      const currentList = grouped[visibleColumn];
       const currentIndex = currentList.findIndex((t) => t.id === activeTask.id);
       if (currentIndex === insertIndex || currentIndex === insertIndex - 1) return;
     }
@@ -245,7 +268,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
       <div className="space-y-6">
         <div className="h-24 animate-pulse rounded-lg bg-muted" />
         <div className="flex gap-4 overflow-x-auto">
-          {TASK_STATUSES.map((s) => (
+          {VISIBLE_STATUSES.map((s) => (
             <div
               key={s}
               className="h-64 w-[82vw] max-w-[20rem] shrink-0 animate-pulse rounded-lg bg-muted sm:w-72 sm:max-w-none"
@@ -273,7 +296,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
             (snap), на десктопе — обычный горизонтальный ряд. Drag между колонками
             работает в обоих режимах: все колонки в DOM, просто проскроллены. */}
         <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 sm:snap-none">
-          {TASK_STATUSES.map((status) => (
+          {VISIBLE_STATUSES.map((status) => (
             <KanbanColumn
               key={status}
               status={status}

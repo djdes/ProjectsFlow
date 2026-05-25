@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
 import { taskShortId } from '@/domain/task/Task';
 import { AgentJobBadge } from './AgentJobBadge';
+import { ClaudeIcon } from './ClaudeIcon';
 import { DelegateToAgentButton } from './DelegateToAgentButton';
 import { RalphModeBadge } from './RalphMode';
 
@@ -120,7 +121,9 @@ export function KanbanCard({
             (task.commitCount ?? 0) > 0 ||
             (task.attachmentCount ?? 0) > 0 ||
             (task.commentCount ?? 0) > 0 ||
-            task.ralphMode !== 'normal') && (
+            task.ralphMode !== 'normal' ||
+            task.status === 'in_progress' ||
+            task.status === 'awaiting_clarification') && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
               {showShortId && (
                 <span className="font-mono normal-case tracking-normal opacity-60">
@@ -148,6 +151,23 @@ export function KanbanCard({
               {/* Бейдж режима Ralph — только для не-дефолта (показывать каждой задаче '🤖 Обычный'
                   было бы шумом). Component сам возвращает null если showDefault=false и mode='normal'. */}
               <RalphModeBadge mode={task.ralphMode} />
+              {/* Status-бэйдж справа снизу для статусов, у которых нет своей колонки:
+                  in_progress и awaiting_clarification визуально лежат в TODO. */}
+              {task.status === 'in_progress' && (
+                <span className="ml-auto flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400">
+                  <span
+                    aria-hidden
+                    className="size-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]"
+                  />
+                  В&nbsp;работе
+                </span>
+              )}
+              {task.status === 'awaiting_clarification' && (
+                <span className="ml-auto flex items-center gap-1 font-medium text-amber-600 dark:text-amber-400">
+                  <ClaudeIcon className="size-3" />
+                  На&nbsp;уточнении
+                </span>
+              )}
             </div>
           )}
           {task.agentJob && onTaskChanged && (

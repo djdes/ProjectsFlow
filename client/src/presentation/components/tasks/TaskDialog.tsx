@@ -33,6 +33,7 @@ import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { TaskCommitsSection } from './TaskCommitsSection';
 import { CommentBody } from './CommentBody';
+import { ClaudeIcon } from './ClaudeIcon';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
 import {
   extractClipboardFiles,
@@ -1233,23 +1234,6 @@ const COMMENT_TIME_FORMATTER = new Intl.DateTimeFormat('ru-RU', {
 
 function formatCommentTime(date: Date): string {
   return COMMENT_TIME_FORMATTER.format(date);
-}
-
-// Иконка Claude — восьмиконечная звезда (символ U+273B заменён на SVG для контроля
-// размеров и анимации). currentColor → можно красить через CSS-класс.
-function ClaudeIcon({ className }: { className?: string }): React.ReactElement {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-      className={className}
-    >
-      <path d="M12 2 L13.5 10.5 L22 12 L13.5 13.5 L12 22 L10.5 13.5 L2 12 L10.5 10.5 Z" />
-    </svg>
-  );
 }
 
 // Маппинг agent_name → читаемый title. Default — диспетчер (исторически 99% автокомментов).
