@@ -25,14 +25,14 @@ export class CreateProject {
   async execute(cmd: CreateProjectCommand): Promise<Project> {
     const name = cmd.name.trim();
     if (name.length === 0) throw new ProjectNameEmptyError();
-    const project = await this.deps.repo.create({
+    // АТОМАРНО: project + owner-membership в одной TX (см. createWithOwnerMembership).
+    // Раньше create() и members.add() шли последовательно — если member.add падал,
+    // проект оставался orphan'ом без доступа никому, включая создателя.
+    const project = await this.deps.repo.createWithOwnerMembership({
       id: this.deps.idGen(),
       ownerId: cmd.ownerId,
       name,
     });
-    // Multi-tenancy: создатель сразу становится owner-member'ом проекта. Без этой строки
-    // никакие последующие requireProjectAccess не пройдут (доступ исключительно через members).
-    await this.deps.members.add({ projectId: project.id, userId: cmd.ownerId, role: 'owner' });
 
     // Auto-default Ralph-диспетчера на дежурного admin'а (с активным agent-токеном).
     // Best-effort: ошибка резолвера или update'а НЕ роняет создание проекта — проект уже

@@ -4,6 +4,7 @@ import type { RequestAgentDeviceCode } from '../../application/agent/RequestAgen
 import type { ApproveAgentDeviceCode } from '../../application/agent/ApproveAgentDeviceCode.js';
 import type { PollAgentDeviceToken } from '../../application/agent/PollAgentDeviceToken.js';
 import type { GetAgentDeviceCodeInfo } from '../../application/agent/GetAgentDeviceCodeInfo.js';
+import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemoryRateLimiter.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 type Deps = {
@@ -11,7 +12,17 @@ type Deps = {
   readonly approve: ApproveAgentDeviceCode;
   readonly poll: PollAgentDeviceToken;
   readonly info: GetAgentDeviceCodeInfo;
+  readonly rateLimiter?: InMemoryRateLimiter;
 };
+
+function clientIp(req: Request): string {
+  const xff = req.headers['x-forwarded-for'];
+  if (typeof xff === 'string' && xff.length > 0) {
+    const first = xff.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return req.socket.remoteAddress ?? 'unknown';
+}
 
 // User code в формате "ABCD-1234" (8 chars + dash). Принимаем case-insensitive,
 // нормализуем перед поиском в store.
@@ -46,8 +57,16 @@ export function agentDeviceRouter(deps: Deps): Router {
 
   // — Anonymous endpoints —
 
-  router.post('/authorize', (_req: Request, res: Response, next: NextFunction) => {
+  router.post('/authorize', (req: Request, res: Response, next: NextFunction) => {
     try {
+      // Anonymous endpoint — лимитируем создание pending pairing'ов чтобы не
+      // ddos'ить in-memory store и не разогревать user-code keyspace под brute-force.
+      if (deps.rateLimiter) {
+        if (!deps.rateLimiter.hit(`device-authorize:${clientIp(req)}`, 30, 60 * 1000)) {
+          res.status(429).json({ error: 'too_many_requests' });
+          return;
+        }
+      }
       const result = deps.request.execute();
       res.status(201).json(result);
     } catch (e) {
@@ -84,6 +103,16 @@ export function agentDeviceRouter(deps: Deps): Router {
 
   router.post('/approve', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
     try {
+      // ВАЖНО: user-code это 8 chars из ~28 alpha = ~38 бит. Brute-force на /approve
+      // позволил бы logged-in attacker'у привязать СВОЙ agent-token к ЧУЖОМУ MCP-клиенту
+      // (victim получит наш token, его команды пойдут на наш аккаунт). Лимитим жёстко.
+      if (deps.rateLimiter) {
+        const key = `device-approve:${req.user!.id}:${clientIp(req)}`;
+        if (!deps.rateLimiter.hit(key, 5, 60 * 1000)) {
+          res.status(429).json({ error: 'too_many_attempts' });
+          return;
+        }
+      }
       const body = approveSchema.parse(req.body);
       await deps.approve.execute({
         userCode: body.userCode,

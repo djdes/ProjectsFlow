@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import type { Notification } from '@/domain/notifications/Notification';
 import { useContainer } from '@/infrastructure/di/container';
 import { useUnreadNotificationsCount } from '@/presentation/hooks/useUnreadNotificationsCount';
+import { NOTIFICATIONS_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { getInitials } from '@/presentation/layout/projectIcons';
 
@@ -69,6 +70,10 @@ export function NotificationsPage(): React.ReactElement {
       setItems((prev) =>
         prev.map((x) => (x.id === n.id ? { ...x, readAt: new Date() } : x)),
       );
+      // Дёргаем глобальный event — все instance'ы useUnreadNotificationsCount
+      // (включая sidebar) сами пересчитают; иначе бейдж в боковой панели остаётся
+      // stale до следующего 60s-polling'а.
+      window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT));
       refreshBadge();
     } catch (e) {
       toast.error(`Не удалось: ${(e as Error).message}`);
@@ -85,6 +90,7 @@ export function NotificationsPage(): React.ReactElement {
       // Локально проставляем readAt у всех unread.
       const now = new Date();
       setItems((prev) => prev.map((n) => (n.readAt ? n : { ...n, readAt: now })));
+      window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT));
       refreshBadge();
       toast.success(`Прочитано: ${updated}`);
     } catch (e) {

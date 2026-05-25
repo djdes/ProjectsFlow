@@ -14,8 +14,11 @@ export function sessionFromCookie(getCurrentUser: GetCurrentUser) {
         req.sessionId = result.sessionId;
       }
     } catch (e) {
-      // Не валим запрос — просто без user. Логируем для диагностики.
-      console.error('[sessionFromCookie] error:', e);
+      // Не валим запрос — просто без user. Логируем только message: dumping
+      // full error мог бы leak'нуть SQL-сообщения / схему через server logs,
+      // если attacker подкидывает malformed cookie специально чтобы поймать
+      // mysql2 error в логе.
+      console.error('[sessionFromCookie]', (e as Error).message);
     }
     next();
   };

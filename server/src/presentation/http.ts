@@ -364,7 +364,6 @@ export function createApp(deps: AppDeps): CreatedApp {
     projectsRouter({
       ...deps.projects,
       notifier: deps.notifications.projectNotifier,
-      rateLimiter: deps.agent.rateLimiter,
     }),
   );
   app.use('/api/integrations/github', githubRouter(deps.github));
