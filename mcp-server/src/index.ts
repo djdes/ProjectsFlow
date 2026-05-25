@@ -59,7 +59,15 @@ import { z } from 'zod';
 import { loadConfig } from './config.js';
 import { ApiClient, ApiError } from './api.js';
 
-const TASK_STATUS_VALUES = ['backlog', 'todo', 'in_progress', 'done'] as const;
+// 'awaiting_clarification' — задача на паузе до действия человека (Ralph F11 Q&A).
+// Порядок повторяет домен сервера: между in_progress и done.
+const TASK_STATUS_VALUES = [
+  'backlog',
+  'todo',
+  'in_progress',
+  'awaiting_clarification',
+  'done',
+] as const;
 
 const TOOLS = [
   {
@@ -257,7 +265,8 @@ const TOOLS = [
     name: 'pf_list_tasks',
     description:
       "List kanban tasks in a project. Returns id, title, description, status " +
-      "('backlog' | 'todo' | 'in_progress' | 'done'), position, commitCount, and commentCount " +
+      "('backlog' | 'todo' | 'in_progress' | 'awaiting_clarification' | 'done'), position, " +
+      'commitCount, and commentCount ' +
       '(>0 means the task already has a discussion thread — read it via pf_get_task). \'backlog\' ' +
       'is the unnamed left-most column for raw triage items — users manually promote them ' +
       'to TODO. Use this BEFORE making a commit: read open tasks (todo + in_progress), match ' +
@@ -280,7 +289,10 @@ const TOOLS = [
       'Use this to mark a task done after the commit is pushed, or to pull a task into in_progress ' +
       'when you start working on it. NOTE: pf_link_commit_to_task already auto-transitions ' +
       'todo→in_progress on the first linked commit, so you usually only need pf_move_task ' +
-      'explicitly when moving to done (or back to todo for a revert).',
+      "explicitly when moving to done (or back to todo for a revert). 'awaiting_clarification' " +
+      'parks an in-progress task waiting on a human (answer to ralph-question, post-retry triage, ' +
+      'reformulation) — server auto-returns it to in_progress when a comment with ' +
+      '`<!-- ralph-answer ` or `<!-- ralph-grillme-summary ` marker arrives.',
     inputSchema: {
       type: 'object',
       properties: {

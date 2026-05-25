@@ -58,7 +58,14 @@ export type ResolvedCredential = {
   fields: Record<string, string>;
 };
 
-export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'done';
+// 'awaiting_clarification' — задача на паузе до действия человека (ответ на
+// ralph-question, разбор retry-fail). Между in_progress и done в пайплайне.
+export type TaskStatus =
+  | 'backlog'
+  | 'todo'
+  | 'in_progress'
+  | 'awaiting_clarification'
+  | 'done';
 
 export type Task = {
   id: string;

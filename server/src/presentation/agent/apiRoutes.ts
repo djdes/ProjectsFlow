@@ -15,6 +15,8 @@ import type { ListTasks } from '../../application/task/ListTasks.js';
 import type { CreateTask } from '../../application/task/CreateTask.js';
 import type { CreateTaskComment } from '../../application/task/CreateTaskComment.js';
 import type { ListTaskCommentsForAgent } from '../../application/task/ListTaskCommentsForAgent.js';
+import type { MaybeReopenForClarification } from '../../application/task/MaybeReopenForClarification.js';
+import type { TaskRepository } from '../../application/task/TaskRepository.js';
 import type { MoveTask } from '../../application/task/MoveTask.js';
 import type { LinkCommit } from '../../application/task/LinkCommit.js';
 import type { WriteKbDocument } from '../../application/kb/WriteKbDocument.js';
@@ -83,6 +85,15 @@ type Deps = {
     commentId: string,
     ownerUserId: string,
   ) => void;
+  readonly notifyStatusChanged: (
+    projectId: string,
+    taskId: string,
+    oldStatus: string,
+    newStatus: string,
+    actorUserId: string,
+  ) => void;
+  readonly taskRepo: TaskRepository;
+  readonly maybeReopenForClarification: MaybeReopenForClarification;
   readonly moveTask: MoveTask;
   readonly linkCommit: LinkCommit;
   readonly writeKbDocument: WriteKbDocument;
@@ -642,6 +653,22 @@ export function agentApiRouter(deps: Deps): Router {
         });
         void deps.notifier.onComment(projectId, req.user!.id, taskId, body.body, 'mcp').catch(() => {});
         deps.notifyCommentAdded(projectId, taskId, comment.id, req.user!.id);
+        // Авто-возврат awaiting_clarification → in_progress по ralph-маркеру.
+        // Best-effort: ошибка не должна ломать ответ.
+        try {
+          const reopened = await deps.maybeReopenForClarification.execute(taskId, body.body);
+          if (reopened) {
+            deps.notifyStatusChanged(
+              projectId,
+              taskId,
+              reopened.oldStatus,
+              reopened.newStatus,
+              req.user!.id,
+            );
+          }
+        } catch (err) {
+          console.warn('[agent auto-reopen] failed for task', taskId, err);
+        }
         res.status(201).json({ comment: commentToDto(comment) });
       } catch (e) {
         next(e);
@@ -696,6 +723,7 @@ export function agentApiRouter(deps: Deps): Router {
         const projectId = req.params['projectId'] as string;
         const taskId = req.params['taskId'] as string;
         const body = moveTaskAgentSchema.parse(req.body);
+        const before = await deps.taskRepo.getById(taskId);
         const task = await deps.moveTask.execute({
           projectId,
           ownerUserId: req.user!.id,
@@ -704,6 +732,9 @@ export function agentApiRouter(deps: Deps): Router {
           beforeTaskId: null,
           afterTaskId: null,
         });
+        if (before && before.status !== task.status) {
+          deps.notifyStatusChanged(projectId, taskId, before.status, task.status, req.user!.id);
+        }
         if (body.targetStatus === 'done') {
           void deps.notifier.onTaskDone(projectId, req.user!.id, task, 'mcp').catch(() => {});
         }

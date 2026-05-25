@@ -7,6 +7,10 @@ export type CommentMentionPayload = {
   readonly projectName: string;
   readonly taskId: string;
   readonly taskExcerpt: string;
+  // Статус задачи на момент создания нотификации (server fills in). Используется UI чтобы
+  // подсветить ярче mention'ы на awaiting_clarification — это запрос действия от человека.
+  // Optional: старые записи в БД могут не иметь этого поля.
+  readonly taskStatus?: string;
   readonly commentId: string;
   readonly commentExcerpt: string;
   readonly actorUserId: string;

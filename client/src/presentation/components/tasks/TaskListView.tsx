@@ -12,6 +12,8 @@ const STATUS_ORDER: Record<TaskStatus, number> = {
   backlog: -1,
   todo: 0,
   in_progress: 1,
+  // awaiting_clarification сидит между in_progress и done в пайплайне.
+  awaiting_clarification: 1.5,
   done: 2,
 };
 

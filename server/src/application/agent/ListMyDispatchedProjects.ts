@@ -35,8 +35,13 @@ export class ListMyDispatchedProjects {
         this.deps.tasks.listByProject(p.id),
         this.deps.agentJobs.listForProject(p.id, 100),
       ]);
+      // «Открытые» = всё что не backlog (триаж) и не done (закрыта).
+      // awaiting_clarification — активная задача на паузе до действия человека.
       const openTaskCount = allTasks.filter(
-        (t) => t.status === 'todo' || t.status === 'in_progress',
+        (t) =>
+          t.status === 'todo' ||
+          t.status === 'in_progress' ||
+          t.status === 'awaiting_clarification',
       ).length;
       const queuedAgentJobCount = jobs.filter((j) => j.status === 'queued').length;
       out.push({ project: p, openTaskCount, queuedAgentJobCount });

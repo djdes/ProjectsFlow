@@ -289,6 +289,17 @@ function NotificationRow({
             <p className="text-sm leading-snug">
               <span className="font-medium">{payload.actorDisplayName}</span> упомянул тебя в{' '}
               <span className="font-medium">«{payload.projectName}»</span>
+              {payload.taskStatus === 'awaiting_clarification' && (
+                <>
+                  {' '}
+                  <span
+                    className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
+                    title="Задача ждёт твоего ответа"
+                  >
+                    🤔 ждёт уточнения
+                  </span>
+                </>
+              )}
               {payload.taskExcerpt && (
                 <>
                   {' · '}

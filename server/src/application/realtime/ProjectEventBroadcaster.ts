@@ -42,4 +42,27 @@ export class ProjectEventBroadcaster {
       });
     }
   }
+
+  // Смена статуса задачи (через move или авто-возврат awaiting_clarification → in_progress).
+  // old/new нужны клиенту чтобы анимировать переезд между колонками канбана и подсветить
+  // @mention'ы попавшие на awaiting_clarification.
+  async broadcastStatusChanged(
+    projectId: string,
+    taskId: string,
+    oldStatus: string,
+    newStatus: string,
+    actorUserId: string,
+  ): Promise<void> {
+    const members = await this.deps.members.listByProject(projectId);
+    for (const m of members) {
+      this.deps.publisher.publish(m.userId, {
+        kind: 'task_status_changed',
+        projectId,
+        taskId,
+        oldStatus,
+        newStatus,
+        actorUserId,
+      });
+    }
+  }
 }
