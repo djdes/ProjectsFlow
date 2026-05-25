@@ -102,6 +102,23 @@ export type TaskComment = {
   updatedAt: string;
 };
 
+// Возвращается GET-эндпоинтом listTaskComments (для F11/диспетчера).
+// ownerDisplayName может быть null если user удалён.
+export type TaskCommentForAgent = {
+  id: string;
+  body: string;
+  ownerUserId: string;
+  ownerDisplayName: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ListTaskCommentsFilters = {
+  since?: string;
+  limit?: number;
+  has_marker?: 'ralph-question' | 'ralph-answer' | 'ralph-grillme-summary';
+};
+
 export type TaskWithAttachments = {
   task: Task;
   attachments: TaskAttachmentWithData[];
@@ -377,12 +394,24 @@ export class ApiClient {
     const fetchInit: RequestInit = {
       method: init?.method ?? 'GET',
       headers,
+      // ВАЖНО: без timeout зависший backend держит CallToolRequest-handler промис
+      // вечно, и через несколько повторных вызовов MCP-процесс утекает по сокетам
+      // и памяти (stdio long-running). 30s — щедро для всех нормальных тулов.
+      signal: AbortSignal.timeout(30_000),
     };
     if (init?.body !== undefined) {
       headers['Content-Type'] = 'application/json';
       fetchInit.body = JSON.stringify(init.body);
     }
-    const res = await fetch(`${this.config.apiUrl}${path}`, fetchInit);
+    let res: Response;
+    try {
+      res = await fetch(`${this.config.apiUrl}${path}`, fetchInit);
+    } catch (e) {
+      if ((e as Error).name === 'TimeoutError' || (e as Error).name === 'AbortError') {
+        throw new ApiError(599, `timeout after 30s on ${path}`, null);
+      }
+      throw e;
+    }
     if (!res.ok) {
       let detail: unknown = null;
       try {
@@ -503,6 +532,22 @@ export class ApiClient {
       { method: 'POST', body: { body } },
     );
     return comment;
+  }
+
+  async listTaskComments(
+    projectId: string,
+    taskId: string,
+    filters: ListTaskCommentsFilters = {},
+  ): Promise<TaskCommentForAgent[]> {
+    const qs = new URLSearchParams();
+    if (filters.since) qs.set('since', filters.since);
+    if (filters.limit !== undefined) qs.set('limit', String(filters.limit));
+    if (filters.has_marker) qs.set('has_marker', filters.has_marker);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    const { comments } = await this.request<{ comments: TaskCommentForAgent[] }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/comments${suffix}`,
+    );
+    return comments;
   }
 
   async writeKbDocument(projectId: string, input: WriteKbDocInput): Promise<WriteKbDocResult> {

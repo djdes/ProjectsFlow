@@ -13,10 +13,33 @@ type Deps = {
 export class ProjectEventBroadcaster {
   constructor(private readonly deps: Deps) {}
 
-  async broadcast(projectId: string, kind: RealtimeEvent['kind']): Promise<void> {
+  async broadcast(
+    projectId: string,
+    kind: 'task_changed' | 'project_changed',
+  ): Promise<void> {
     const members = await this.deps.members.listByProject(projectId);
     for (const m of members) {
       this.deps.publisher.publish(m.userId, { kind, projectId } as RealtimeEvent);
+    }
+  }
+
+  // Отдельный метод для comment_added — нужны taskId/commentId/ownerUserId, чтобы Ralph
+  // диспетчер мгновенно подхватывал ответы юзера без 30с polling'а GET .../comments.
+  async broadcastCommentAdded(
+    projectId: string,
+    taskId: string,
+    commentId: string,
+    ownerUserId: string,
+  ): Promise<void> {
+    const members = await this.deps.members.listByProject(projectId);
+    for (const m of members) {
+      this.deps.publisher.publish(m.userId, {
+        kind: 'comment_added',
+        projectId,
+        taskId,
+        commentId,
+        ownerUserId,
+      });
     }
   }
 }

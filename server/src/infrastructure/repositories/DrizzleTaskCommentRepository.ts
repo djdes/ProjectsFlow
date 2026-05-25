@@ -1,12 +1,19 @@
-import { asc, count, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, eq, gte, inArray, like, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { taskComments, type TaskCommentRow } from '../db/schema.js';
 import type { TaskComment } from '../../domain/task/TaskComment.js';
 import type {
   CreateTaskCommentInput,
+  ListTaskCommentsFilters,
   TaskCommentRepository,
   UpdateTaskCommentInput,
 } from '../../application/task/TaskCommentRepository.js';
+
+// Эскейп для LIKE: `%` и `_` — wildcards; backslash — escape. Не даёт caller'у
+// случайно/намеренно использовать wildcard'ы в markerSubstring.
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
 
 function toComment(row: TaskCommentRow): TaskComment {
   return {
@@ -49,6 +56,26 @@ export class DrizzleTaskCommentRepository implements TaskCommentRepository {
       .from(taskComments)
       .where(eq(taskComments.taskId, taskId))
       .orderBy(asc(taskComments.createdAt));
+    return rows.map(toComment);
+  }
+
+  async listByTaskFiltered(
+    taskId: string,
+    filters: ListTaskCommentsFilters,
+  ): Promise<TaskComment[]> {
+    const conditions: SQL[] = [eq(taskComments.taskId, taskId)];
+    if (filters.since) conditions.push(gte(taskComments.createdAt, filters.since));
+    if (filters.markerSubstring) {
+      // Совпадает с любым ralph-маркером в body: '<!-- {marker}'. Эскейпим LIKE-метасимволы.
+      conditions.push(like(taskComments.body, `%<!-- ${escapeLike(filters.markerSubstring)}%`));
+    }
+    const limit = Math.max(1, Math.min(500, filters.limit ?? 200));
+    const rows = await this.db
+      .select()
+      .from(taskComments)
+      .where(and(...conditions))
+      .orderBy(asc(taskComments.createdAt))
+      .limit(limit);
     return rows.map(toComment);
   }
 

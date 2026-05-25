@@ -218,6 +218,42 @@ const TOOLS = [
     },
   },
   {
+    name: 'pf_list_task_comments',
+    description:
+      "Read the comment thread of a task (ASC by createdAt). Returns id, body (raw markdown — " +
+      "HTML comments like `<!-- ralph-* -->` are preserved), ownerUserId, ownerDisplayName, " +
+      'createdAt, updatedAt. Use this when you need conversation history — e.g. to check whether a ' +
+      'question you would ask has already been answered (look for `<!-- ralph-answer ... -->` markers), ' +
+      'or to read prior decisions before continuing work. Filter narrowly with `has_marker` when ' +
+      'scanning many comments for a specific kind. Note: pf_get_task already returns full thread for ' +
+      'one task — use pf_list_task_comments when you specifically need filters or to poll for updates.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
+        since: {
+          type: 'string',
+          description:
+            'ISO 8601 datetime. Returns only comments with createdAt >= since. Useful for polling.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Max comments to return. 1..500, default 200.',
+        },
+        has_marker: {
+          type: 'string',
+          enum: ['ralph-question', 'ralph-answer', 'ralph-grillme-summary'],
+          description:
+            'Server-side body filter — only comments containing `<!-- {marker}` substring. ' +
+            'Narrows huge threads to relevant Q&A markers.',
+        },
+      },
+      required: ['projectId', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pf_list_tasks',
     description:
       "List kanban tasks in a project. Returns id, title, description, status " +
@@ -885,6 +921,16 @@ const CreateTaskCommentInputZ = z.object({
   body: z.string().trim().min(1).max(10_000),
 });
 
+const ListTaskCommentsInputZ = z.object({
+  projectId: z.string().min(1),
+  taskId: z.string().min(1),
+  since: z.string().min(1).optional(),
+  limit: z.number().int().min(1).max(500).optional(),
+  has_marker: z
+    .enum(['ralph-question', 'ralph-answer', 'ralph-grillme-summary'])
+    .optional(),
+});
+
 const CheckRepoUsageInput = z.object({
   gitRepoUrl: z.string().min(1),
 });
@@ -1030,7 +1076,17 @@ async function main(): Promise<void> {
           ];
           // Бинари — image/* как `image`-блок (LLM видит картинку), остальное как
           // `resource` с blob (Claude Code умеет читать embedded resources).
+          // ВАЖНО: cap'аем размер inline-бинарей — большие файлы могут заглушить stdio-канал
+          // MCP и memory-spike процесс (base64 раздувает в ~1.33×, плюс concat).
+          const MAX_INLINE_BYTES = 2 * 1024 * 1024; // 2 MB raw
           for (const a of attachments) {
+            if (a.sizeBytes > MAX_INLINE_BYTES) {
+              content.push({
+                type: 'text',
+                text: `[attachment ${a.filename} (${a.mimeType}, ${Math.round(a.sizeBytes / 1024)} KB) — слишком большой для inline, открой в UI: projectsflow://attachment/${a.id}]`,
+              });
+              continue;
+            }
             if (a.mimeType.startsWith('image/')) {
               content.push({ type: 'image', data: a.dataBase64, mimeType: a.mimeType });
             } else {
@@ -1082,6 +1138,15 @@ async function main(): Promise<void> {
             input.body,
           );
           return jsonResult(comment);
+        }
+        case 'pf_list_task_comments': {
+          const input = ListTaskCommentsInputZ.parse(req.params.arguments ?? {});
+          const comments = await api.listTaskComments(input.projectId, input.taskId, {
+            since: input.since,
+            limit: input.limit,
+            has_marker: input.has_marker,
+          });
+          return jsonResult({ comments });
         }
         case 'pf_write_kb_document': {
           const input = WriteKbDocInputZ.parse(req.params.arguments ?? {});

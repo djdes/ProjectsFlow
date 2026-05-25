@@ -55,6 +55,13 @@ type Deps = {
   // Live-обновление: сигнал «в проекте изменились задачи» всем участникам (SSE).
   // Best-effort, не блокирует ответ.
   readonly notifyTaskChanged: (projectId: string) => void;
+  // SSE comment_added — для realtime-реакции диспетчера/UI на новый комментарий.
+  readonly notifyCommentAdded: (
+    projectId: string,
+    taskId: string,
+    commentId: string,
+    ownerUserId: string,
+  ) => void;
   // Email-оповещения команде (источник 'team' — действия человека). Fire-and-forget.
   readonly notifier: ProjectNotificationService;
 };
@@ -348,6 +355,7 @@ export function tasksRouter(deps: Deps): Router {
         body: body.body,
       });
       deps.notifyTaskChanged(projectId);
+      deps.notifyCommentAdded(projectId, taskId, comment.id, req.user!.id);
       void deps.notifier.onComment(projectId, req.user!.id, taskId, body.body, 'team').catch(() => {});
       res.status(201).json({ comment: commentToDto(comment) });
     } catch (e) {
