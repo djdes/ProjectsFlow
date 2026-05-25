@@ -10,12 +10,11 @@ import {
   type KeyboardEvent,
   type Ref,
 } from 'react';
-import { Download, FileText, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2 } from 'lucide-react';
+import { Download, FileText, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
   SheetDescription,
-  SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -23,7 +22,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { Task } from '@/domain/task/Task';
+import { taskShortId, type Task } from '@/domain/task/Task';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import type { TaskComment } from '@/domain/task/TaskComment';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
@@ -41,6 +40,10 @@ import {
 } from '@/presentation/components/attachments/files';
 import { RalphModeSelect } from './RalphMode';
 import type { RalphMode } from '@/domain/task/Task';
+import { TaskDrawerComposer } from './TaskDrawerComposer';
+import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
+import { CancelWorkButton } from './CancelWorkButton';
+import { STATUS_LABEL } from './statusLabels';
 
 export type TaskDrawerState =
   | { mode: 'create'; status: Task['status'] }
@@ -61,6 +64,10 @@ type Props = {
   showCommits?: boolean;
   // Имя проекта — рисуем в шапке диалога как контекстный заголовок. В inbox не передаём.
   projectName?: string;
+  // Последние задачи в backlog/todo — нужны для расчёта beforeTaskId при move'е
+  // через TaskDrawerComposer и CancelWorkButton. KanbanBoard вычисляет.
+  backlogTail?: { readonly id: string } | null;
+  todoTail?: { readonly id: string } | null;
 };
 
 // Превью-тайл вложения в сетке: картинка → thumbnail, иначе → иконка + имя файла.
@@ -130,6 +137,8 @@ export function TaskDrawer({
   onCommitsChange,
   showCommits = true,
   projectName,
+  backlogTail = null,
+  todoTail = null,
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   // В create-mode description редактируется обычной textarea на форме; в edit-mode
@@ -151,6 +160,39 @@ export function TaskDrawer({
   const [expanded, setExpanded] = useState(false);
   const isCoarsePointer =
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+  // Ref-канал для footer-композера → TaskCommentsSection: после создания комментария
+  // композер дёргает текущий handler чтобы вставить созданный коммент в список.
+  const onCommentCreatedRef = useRef<((c: TaskComment) => void) | null>(null);
+  // Cache аттачей для header-row: грузим параллельно с AttachmentsSection (двойной
+  // fetch — окей, эндпоинт лёгкий; альтернатива — поднимать state в KanbanBoard
+  // через repository invalidate; оставляем простоту).
+  const [headerAttachments, setHeaderAttachments] = useState<TaskAttachment[]>([]);
+
+  // Re-fetch header attachments when active task changes / commits-change tick.
+  useEffect(() => {
+    if (state?.mode !== 'edit') {
+      setHeaderAttachments([]);
+      return;
+    }
+    let cancelled = false;
+    void taskRepository
+      .listAttachments(state.task.projectId, state.task.id)
+      .then((list) => {
+        if (!cancelled) setHeaderAttachments(list);
+      })
+      .catch(() => {
+        /* tolerate — header-row не критичен */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [state, taskRepository]);
+
+  const refetchHeaderAttachments = useCallback((): void => {
+    if (state?.mode !== 'edit') return;
+    const { projectId, id } = state.task;
+    void taskRepository.listAttachments(projectId, id).then(setHeaderAttachments).catch(() => undefined);
+  }, [state, taskRepository]);
   // autoFocus только на desktop — на мобильных клавиатура сразу перекрывает диалог.
   const descRef = useCallback((el: HTMLTextAreaElement | null) => {
     if (el && !window.matchMedia('(pointer: coarse)').matches) el.focus();
@@ -236,11 +278,50 @@ export function TaskDrawer({
     }
   };
 
+  // Mapping статусов в цвет бейджа в header'е drawer'а.
+  const statusBadgeColor: Record<Task['status'], string> = {
+    backlog: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+    todo: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+    in_progress: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
+    awaiting_clarification: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+    done: 'bg-slate-500/15 text-slate-600 dark:text-slate-400',
+  };
+
+  const renderExpandButton = (): React.ReactElement | null => {
+    if (isCoarsePointer) return null;
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-7 shrink-0"
+        onClick={() => setExpanded((v) => !v)}
+        aria-label={expanded ? 'Свернуть' : 'Развернуть'}
+        title={expanded ? 'Свернуть' : 'Развернуть'}
+      >
+        {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+      </Button>
+    );
+  };
+
+  const renderCloseButton = (): React.ReactElement => (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="size-7 shrink-0"
+      onClick={onClose}
+      aria-label="Закрыть"
+    >
+      <X className="size-4" />
+    </Button>
+  );
+
+  const task = state?.mode === 'edit' ? state.task : null;
+  const canEdit = task?.status === 'backlog';
+
   return (
     <Sheet open={state !== null} onOpenChange={(open) => !open && onClose()}>
-      {/* Side-drawer справа: header/body/footer на grid'е, скролл в body.
-          Mobile (pointer: coarse): drawer почти на всю ширину — sheet.tsx по умолчанию даёт w-3/4.
-          Desktop: фикс max-w-[640px] (см. Task 6 — expand-toggle).  */}
       <SheetContent
         side="right"
         className={cn(
@@ -248,94 +329,158 @@ export function TaskDrawer({
           expanded ? 'w-screen sm:max-w-none' : 'sm:max-w-[640px]',
         )}
       >
-        <SheetHeader className="px-6 pb-2 pt-4">
-          {/* Title/Description обязаны существовать для a11y (Radix), но визуально не нужны.
-              Видимый контент шапки — название проекта (контекст «к какому проекту таска»). */}
-          <SheetTitle className="sr-only">
-            {state?.mode === 'edit' ? 'Задача' : 'Новая задача'}
-            {projectName ? ` · ${projectName}` : ''}
-          </SheetTitle>
-          <SheetDescription className="sr-only">
-            {state?.mode === 'edit' ? 'Редактирование задачи' : 'Создание новой задачи'}
-          </SheetDescription>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2">
-              {!isCoarsePointer && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 shrink-0"
-                  onClick={() => setExpanded((v) => !v)}
-                  aria-label={expanded ? 'Свернуть' : 'Развернуть'}
-                  title={expanded ? 'Свернуть' : 'Развернуть'}
+        {/* a11y stub for Radix — visually hidden. */}
+        <SheetTitle className="sr-only">
+          {state?.mode === 'edit' ? 'Задача' : 'Новая задача'}
+          {projectName ? ` · ${projectName}` : ''}
+        </SheetTitle>
+        <SheetDescription className="sr-only">
+          {state?.mode === 'edit' ? 'Редактирование задачи' : 'Создание новой задачи'}
+        </SheetDescription>
+
+        {state?.mode === 'edit' && task ? (
+          <>
+            {/* === STICKY HEADER === */}
+            <div className="border-b bg-background/95 backdrop-blur-md">
+              <div className="flex items-center gap-2 px-4 pt-3">
+                {renderExpandButton()}
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  {projectName && (
+                    <span className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      {projectName}
+                    </span>
+                  )}
+                  <span className="font-mono text-[10px] opacity-50">[{taskShortId(task.id)}]</span>
+                </div>
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider',
+                    statusBadgeColor[task.status],
+                  )}
                 >
-                  {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-                </Button>
-              )}
-              {projectName ? (
-                <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {projectName}
+                  {STATUS_LABEL[task.status]}
                 </span>
-              ) : null}
-            </div>
-            {/* Бейдж режима в edit-mode — компактный, кликабельный для смены. */}
-            {state?.mode === 'edit' && (
-              <TaskRalphModeChip
-                task={state.task}
-                onChanged={() => onCommitsChange?.()}
-              />
-            )}
-          </div>
-        </SheetHeader>
-
-        <form
-          id="task-drawer-form"
-          onSubmit={handleSubmit}
-          onPaste={handleFormPaste}
-          className="space-y-4 overflow-y-auto px-6 pb-4"
-        >
-          {state?.mode === 'edit' ? (
-            <TaskDescriptionEditor
-              key={state.task.id}
-              projectId={state.task.projectId}
-              taskId={state.task.id}
-              initialDescription={state.task.description ?? ''}
-              onSaved={() => onCommitsChange?.()}
-            />
-          ) : (
-            <textarea
-              id="task-desc"
-              ref={descRef}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              maxLength={5000}
-              rows={4}
-              placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
-              className="block w-full resize-none rounded-md border bg-background p-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:border-foreground/30 focus:outline-none"
-            />
-          )}
-          {error && <p className="text-sm text-destructive">{error}</p>}
-
-          {state?.mode === 'edit' ? (
-            <>
-              <AttachmentsSection
-                ref={attachmentsRef}
-                projectId={state.task.projectId}
-                taskId={state.task.id}
-                onChange={() => onCommitsChange?.()}
-              />
-              <div className="border-t pt-4">
-                <TaskCommentsSection projectId={state.task.projectId} taskId={state.task.id} />
+                {(task.status === 'backlog' ||
+                  task.status === 'todo' ||
+                  task.status === 'awaiting_clarification') && (
+                  <TaskRalphModeChip task={task} onChanged={() => onCommitsChange?.()} />
+                )}
+                {renderCloseButton()}
               </div>
-              {showCommits && (
-                <div className="border-t pt-4">
-                  <TaskCommitsSection task={state.task} onChange={() => onCommitsChange?.()} />
+
+              {task.description && task.description.trim().length > 0 && (
+                <p className="line-clamp-1 px-4 pt-2 text-sm text-muted-foreground">
+                  {task.description}
+                </p>
+              )}
+
+              <div className="px-4 py-2">
+                <TaskDrawerAttachmentRow
+                  items={headerAttachments}
+                  canEdit={canEdit}
+                  onAddFiles={(files) => {
+                    void attachmentsRef.current?.addFiles(files);
+                    // optimistic delayed refetch — AttachmentsSection поднимет canonical state.
+                    setTimeout(refetchHeaderAttachments, 400);
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* === SCROLLABLE BODY === */}
+            <div className="space-y-4 overflow-y-auto px-6 py-4">
+              {canEdit ? (
+                <TaskDescriptionEditor
+                  key={task.id}
+                  projectId={task.projectId}
+                  taskId={task.id}
+                  initialDescription={task.description ?? ''}
+                  onSaved={() => onCommitsChange?.()}
+                />
+              ) : (
+                <div className="whitespace-pre-wrap rounded-md border border-dashed border-transparent p-2 text-sm leading-snug">
+                  {task.description?.trim() || (
+                    <span className="italic text-muted-foreground">Без описания</span>
+                  )}
                 </div>
               )}
-            </>
-          ) : (
-            <>
+
+              {canEdit && (
+                <AttachmentsSection
+                  ref={attachmentsRef}
+                  projectId={task.projectId}
+                  taskId={task.id}
+                  onChange={() => {
+                    onCommitsChange?.();
+                    refetchHeaderAttachments();
+                  }}
+                />
+              )}
+
+              <div className="border-t pt-4">
+                <TaskCommentsSection
+                  projectId={task.projectId}
+                  taskId={task.id}
+                  onCommentCreatedRef={onCommentCreatedRef}
+                />
+              </div>
+
+              {showCommits && (
+                <div className="border-t pt-4">
+                  <TaskCommitsSection task={task} onChange={() => onCommitsChange?.()} />
+                </div>
+              )}
+            </div>
+
+            {/* === STICKY FOOTER === */}
+            {task.status === 'in_progress' ? (
+              <CancelWorkButton
+                task={task}
+                backlogTail={backlogTail}
+                onCancelled={() => onCommitsChange?.()}
+              />
+            ) : (
+              <TaskDrawerComposer
+                task={task}
+                backlogTail={backlogTail}
+                todoTail={todoTail}
+                onCommentCreated={(c) => {
+                  onCommentCreatedRef.current?.(c);
+                  onCommitsChange?.();
+                }}
+                onTaskChanged={() => onCommitsChange?.()}
+              />
+            )}
+          </>
+        ) : (
+          // === CREATE MODE === — компактная форма (без sticky-разделения).
+          <>
+            <div className="border-b bg-background/95 px-6 pb-2 pt-4 backdrop-blur-md">
+              <div className="flex items-center gap-2">
+                {renderExpandButton()}
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {projectName ? `${projectName} · ` : ''}Новая задача
+                </span>
+                <div className="ml-auto">{renderCloseButton()}</div>
+              </div>
+            </div>
+            <form
+              id="task-drawer-form"
+              onSubmit={handleSubmit}
+              onPaste={handleFormPaste}
+              className="space-y-4 overflow-y-auto px-6 pb-4 pt-4"
+            >
+              <textarea
+                id="task-desc"
+                ref={descRef}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                maxLength={5000}
+                rows={4}
+                placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
+                className="block w-full resize-none rounded-md border bg-background p-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:border-foreground/30 focus:outline-none"
+              />
+              {error && <p className="text-sm text-destructive">{error}</p>}
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">
                   Режим работы Ralph
@@ -357,17 +502,8 @@ export function TaskDrawer({
                   });
                 }}
               />
-            </>
-          )}
-        </form>
-
-        <div className="flex items-center justify-end gap-2 border-t bg-background px-6 py-4">
-          {state?.mode === 'edit' ? (
-            <Button type="button" variant="ghost" onClick={onClose}>
-              Закрыть
-            </Button>
-          ) : (
-            <>
+            </form>
+            <div className="flex items-center justify-end gap-2 border-t bg-background px-6 py-4">
               <Button type="button" variant="ghost" onClick={onClose}>
                 Отмена
               </Button>
@@ -375,9 +511,9 @@ export function TaskDrawer({
                 {saving ? <Loader2 className="size-4 animate-spin" /> : null}
                 Создать
               </Button>
-            </>
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </SheetContent>
     </Sheet>
   );
