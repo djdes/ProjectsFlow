@@ -151,6 +151,11 @@ const telegramNotifySchema = z
     // v2: учитывать prefs получателя (default true). При false — слать всем привязанным
     // независимо от настроек (high-priority / admin override).
     respectPrefs: z.boolean().optional(),
+    // Spec telegram-reply-to-ralph-answer.md: для kind ∈ {ralph_question,
+    // ralph_question_reminder} caller (Ralph) передаёт id вопроса из
+    // <!-- ralph-question {"id":"..."} -->. Бэк сохранит маппинг message_id→question_id
+    // чтобы матчить reply'и юзера в webhook'е. 64 — соответствует varchar в schema.
+    ralphQuestionId: z.string().trim().min(1).max(64).optional(),
   })
   .refine((b) => Boolean(b.taskId || b.userId), {
     message: 'Either taskId or userId must be provided',
@@ -1383,6 +1388,7 @@ export function agentApiRouter(deps: Deps): Router {
             replyMarkup: body.replyMarkup,
             skipDedupCheck: body.skipDedupCheck,
             skipPrefsCheck: !respectPrefs,
+            ralphQuestionId: body.ralphQuestionId,
           });
           const userId = body.userId;
           // Унифицированный ответ. sent=1 только если 'ok'.
@@ -1423,6 +1429,7 @@ export function agentApiRouter(deps: Deps): Router {
           skipDedupCheck: body.skipDedupCheck,
           respectPrefs,
           skipUserId: req.user!.id,
+          ralphQuestionId: body.ralphQuestionId,
         });
         res.json({
           ok: true,

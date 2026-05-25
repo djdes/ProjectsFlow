@@ -1,5 +1,6 @@
 import type { TelegramClient } from './TelegramClient.js';
 import type { TelegramOutboundRepository } from './TelegramOutboundRepository.js';
+import type { TelegramRalphQuestionRepository } from './TelegramRalphQuestionRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import {
   resolveTgPref,
@@ -22,6 +23,12 @@ export type SendAgentNotificationCommand = {
   // v2: явный override prefs (caller знает что хочет — например high-priority алерт
   // или admin-override). По умолчанию prefs учитываются.
   readonly skipPrefsCheck?: boolean;
+  // Spec telegram-reply-to-ralph-answer.md: для kind ∈ {ralph_question,
+  // ralph_question_reminder} caller пробрасывает id вопроса из <!-- ralph-question
+  // {"id":"..."} -->. При успешном send'е (status='ok') бэк сохраняет маппинг
+  // (chat_id, message_id) → (task_id, question_id), чтобы webhook потом мог найти
+  // привязку при reply'е от юзера. Если поле не задано — мэппинг не пишется.
+  readonly ralphQuestionId?: string;
 };
 
 // Дискриминированный результат — caller (route) мапит в HTTP-код.
@@ -39,6 +46,10 @@ type Deps = {
   readonly users: UserRepository;
   readonly client: TelegramClient;
   readonly outbound: TelegramOutboundRepository;
+  // Маппинг (chat,message)→(task,question) для последующего матча reply'я. Optional —
+  // если caller не передаёт ralphQuestionId, никаких записей не будет. Тип nullable
+  // вместо optional чтобы было ясно при wiring'е что фича есть.
+  readonly ralphQuestionMessages: TelegramRalphQuestionRepository;
   readonly idGen: () => string;
   // Знакомые kinds мапятся в pref-toggle; остальные шлются без pref-чека.
   readonly kindToPref: Partial<Record<string, TelegramNotifKind>>;
@@ -85,6 +96,22 @@ export class SendAgentTelegramNotification {
 
     if (send.kind === 'ok') {
       await this.audit(cmd, link.tgChatId, 'ok', send.messageId, null);
+      // Маппинг для ralph_question reply-handling. Best-effort: ошибка БД не должна
+      // ломать уже успешно отправленное сообщение (юзер увидит TG-сообщение в любом
+      // случае; в худшем — его reply не зашьётся, но это лучше чем фейл send'а).
+      if (cmd.ralphQuestionId && cmd.taskId) {
+        try {
+          await this.deps.ralphQuestionMessages.upsert({
+            tgChatId: link.tgChatId,
+            tgMessageId: send.messageId,
+            recipientUserId: cmd.userId,
+            taskId: cmd.taskId,
+            ralphQuestionId: cmd.ralphQuestionId,
+          });
+        } catch (err) {
+          console.warn('[tg-notif] ralphQuestionMessage upsert failed:', err);
+        }
+      }
       return { status: 'ok', messageId: send.messageId, chatId: link.tgChatId };
     }
     if (send.kind === 'forbidden') {

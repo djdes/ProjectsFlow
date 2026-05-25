@@ -86,6 +86,29 @@ export const telegramOutboundMessages = mysqlTable(
 
 export type TelegramOutboundRow = typeof telegramOutboundMessages.$inferSelect;
 
+// Маппинг отправленных TG-сообщений с ralph-question → question_id, для матчинга reply'ев
+// в webhook'е. См. db/036 + spec C:/www/ralph/prompts/telegram-reply-to-ralph-answer.md.
+// PK по (chat_id, message_id) — потому что message_id уникален только в рамках чата.
+export const telegramRalphQuestionMessages = mysqlTable(
+  'telegram_ralph_question_messages',
+  {
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
+    tgMessageId: bigint('tg_message_id', { mode: 'number' }).notNull(),
+    recipientUserId: char('recipient_user_id', { length: 36 }).notNull(),
+    taskId: char('task_id', { length: 36 }).notNull(),
+    ralphQuestionId: varchar('ralph_question_id', { length: 64 }).notNull(),
+    sentAt: timestamp('sent_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    // Композитный PK задаём через index — Drizzle MySQL не имеет prismaPK helper'а,
+    // а в БД он создан DDL'ом миграции 036. Тут только для query-планов.
+    index('idx_tg_rq_task').on(t.taskId),
+    index('idx_tg_rq_user').on(t.recipientUserId),
+  ],
+);
+
+export type TelegramRalphQuestionRow = typeof telegramRalphQuestionMessages.$inferSelect;
+
 export const sessions = mysqlTable(
   'sessions',
   {
