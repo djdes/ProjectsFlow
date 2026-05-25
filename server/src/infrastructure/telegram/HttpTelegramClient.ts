@@ -18,8 +18,16 @@ type TgResponse<T> = {
 export class HttpTelegramClient implements TelegramClient {
   private readonly base: string;
 
-  constructor(private readonly botToken: string) {
-    this.base = `https://api.telegram.org/bot${botToken}`;
+  // apiBaseUrl — override https://api.telegram.org для случаев, когда хостинг блокирует
+  // часть Telegram CDN (типично для RU-провайдеров: некоторые подсети api.telegram.org
+  // дают ETIMEDOUT). Можно указать reverse-proxy / CF-worker как relay, например
+  // 'https://tg-relay.example.com'. Без trailing slash.
+  constructor(
+    private readonly botToken: string,
+    apiBaseUrl: string = 'https://api.telegram.org',
+  ) {
+    const cleaned = apiBaseUrl.replace(/\/$/, '');
+    this.base = `${cleaned}/bot${botToken}`;
   }
 
   async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
