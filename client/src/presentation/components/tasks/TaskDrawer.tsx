@@ -10,7 +10,7 @@ import {
   type KeyboardEvent,
   type Ref,
 } from 'react';
-import { Download, FileText, Loader2, Paperclip, Pencil, Send, Trash2 } from 'lucide-react';
+import { Download, FileText, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2 } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -146,6 +146,11 @@ export function TaskDrawer({
   // В edit-режиме секция аттачей экспонирует addFiles через ref — чтобы paste-handler
   // на форме (поймает Ctrl+V даже когда фокус в textarea) мог пнуть аплоад.
   const attachmentsRef = useRef<AttachmentsHandle>(null);
+  // Expand-toggle: false → drawer 640px; true → full-width. На mobile (pointer: coarse)
+  // toggle всегда скрыт, drawer и так почти на весь экран (sheet.tsx default = w-3/4).
+  const [expanded, setExpanded] = useState(false);
+  const isCoarsePointer =
+    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
   // autoFocus только на desktop — на мобильных клавиатура сразу перекрывает диалог.
   const descRef = useCallback((el: HTMLTextAreaElement | null) => {
     if (el && !window.matchMedia('(pointer: coarse)').matches) el.focus();
@@ -156,6 +161,7 @@ export function TaskDrawer({
     setDescription(state.mode === 'edit' ? state.task.description ?? '' : '');
     setCreateRalphMode('normal');
     setError(null);
+    setExpanded(false);
     // При закрытии/смене диалога чистим pending — URL.revokeObjectURL для blob'ов.
     setPendingFiles((prev) => {
       prev.forEach((p) => URL.revokeObjectURL(p.previewUrl));
@@ -237,7 +243,10 @@ export function TaskDrawer({
           Desktop: фикс max-w-[640px] (см. Task 6 — expand-toggle).  */}
       <SheetContent
         side="right"
-        className="grid h-dvh grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-[640px]"
+        className={cn(
+          'grid h-dvh grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0',
+          expanded ? 'w-screen sm:max-w-none' : 'sm:max-w-[640px]',
+        )}
       >
         <SheetHeader className="px-6 pb-2 pt-4">
           {/* Title/Description обязаны существовать для a11y (Radix), но визуально не нужны.
@@ -250,13 +259,26 @@ export function TaskDrawer({
             {state?.mode === 'edit' ? 'Редактирование задачи' : 'Создание новой задачи'}
           </SheetDescription>
           <div className="flex items-center justify-between gap-3">
-            {projectName ? (
-              <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {projectName}
-              </span>
-            ) : (
-              <span />
-            )}
+            <div className="flex min-w-0 items-center gap-2">
+              {!isCoarsePointer && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 shrink-0"
+                  onClick={() => setExpanded((v) => !v)}
+                  aria-label={expanded ? 'Свернуть' : 'Развернуть'}
+                  title={expanded ? 'Свернуть' : 'Развернуть'}
+                >
+                  {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                </Button>
+              )}
+              {projectName ? (
+                <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {projectName}
+                </span>
+              ) : null}
+            </div>
             {/* Бейдж режима в edit-mode — компактный, кликабельный для смены. */}
             {state?.mode === 'edit' && (
               <TaskRalphModeChip
