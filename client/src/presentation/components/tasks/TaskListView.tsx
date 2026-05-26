@@ -11,7 +11,7 @@ import { RalphModeBadge } from './RalphMode';
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
   backlog: -1,
-  manual: 0.5,
+  manual: -0.5,
   todo: 0,
   in_progress: 1,
   // awaiting_clarification сидит между in_progress и done в пайплайне.
