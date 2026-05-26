@@ -60,12 +60,15 @@ export type ResolvedCredential = {
 
 // 'awaiting_clarification' — задача на паузе до действия человека (ответ на
 // ralph-question, разбор retry-fail). Между in_progress и done в пайплайне.
+// 'manual' — отдельная ветка вне pipeline'а: колонка для задач, которые делает
+// человек руками. Авто-переходов и agent-job триггеров не имеет.
 export type TaskStatus =
   | 'backlog'
   | 'todo'
   | 'in_progress'
   | 'awaiting_clarification'
-  | 'done';
+  | 'done'
+  | 'manual';
 
 // Режим работы Ralph по задаче. См. spec C:/www/ralph/prompts/task-ralph-mode.md.
 //   'normal'  — дефолт; worker может задать ralph-question, grillme по триггерам.

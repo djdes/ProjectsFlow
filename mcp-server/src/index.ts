@@ -60,13 +60,15 @@ import { loadConfig } from './config.js';
 import { ApiClient, ApiError } from './api.js';
 
 // 'awaiting_clarification' — задача на паузе до действия человека (Ralph F11 Q&A).
-// Порядок повторяет домен сервера: между in_progress и done.
+// 'manual' — колонка для задач, которые делает человек руками; вне pipeline'а агента.
+// Порядок повторяет домен сервера.
 const TASK_STATUS_VALUES = [
   'backlog',
   'todo',
   'in_progress',
   'awaiting_clarification',
   'done',
+  'manual',
 ] as const;
 
 const TOOLS = [
@@ -277,12 +279,13 @@ const TOOLS = [
     name: 'pf_list_tasks',
     description:
       "List kanban tasks in a project. Returns id, title, description, status " +
-      "('backlog' | 'todo' | 'in_progress' | 'awaiting_clarification' | 'done'), position, " +
-      'commitCount, and commentCount ' +
+      "('backlog' | 'todo' | 'in_progress' | 'awaiting_clarification' | 'done' | 'manual'), " +
+      'position, commitCount, and commentCount ' +
       '(>0 means the task already has a discussion thread — read it via pf_get_task). \'backlog\' ' +
       'is the unnamed left-most column for raw triage items — users manually promote them ' +
-      'to TODO. Use this BEFORE making a commit: read open tasks (todo + in_progress), match ' +
-      'against your staged diff and planned commit message, ask the user to confirm if you ' +
+      "to TODO. 'manual' is a parking column for tasks the user does by hand — no auto-transitions, " +
+      "agent never picks them up. Use this BEFORE making a commit: read open tasks (todo + in_progress), " +
+      'match against your staged diff and planned commit message, ask the user to confirm if you ' +
       'found a candidate, then call pf_link_commit_to_task and (optionally) pf_move_task after `git push`.',
     inputSchema: {
       type: 'object',
@@ -304,7 +307,9 @@ const TOOLS = [
       "explicitly when moving to done (or back to todo for a revert). 'awaiting_clarification' " +
       'parks an in-progress task waiting on a human (answer to ralph-question, post-retry triage, ' +
       'reformulation) — server auto-returns it to in_progress when a comment with ' +
-      '`<!-- ralph-answer ` or `<!-- ralph-grillme-summary ` marker arrives.',
+      '`<!-- ralph-answer ` or `<!-- ralph-grillme-summary ` marker arrives. ' +
+      "'manual' is a parking column for tasks the user does by hand — no auto-transitions trigger " +
+      'on this status.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -313,7 +318,8 @@ const TOOLS = [
         targetStatus: {
           type: 'string',
           enum: TASK_STATUS_VALUES,
-          description: "Target column: 'backlog', 'todo', 'in_progress', or 'done'",
+          description:
+            "Target column: 'backlog', 'todo', 'in_progress', 'awaiting_clarification', 'done', or 'manual'",
         },
       },
       required: ['projectId', 'taskId', 'targetStatus'],
