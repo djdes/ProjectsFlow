@@ -293,6 +293,7 @@ export const tasks = mysqlTable(
       'in_progress',
       'awaiting_clarification',
       'done',
+      'manual',
     ])
       .notNull()
       .default('todo'),

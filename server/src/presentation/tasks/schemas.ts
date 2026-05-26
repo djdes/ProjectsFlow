@@ -6,6 +6,7 @@ export const taskStatusSchema = z.enum([
   'in_progress',
   'awaiting_clarification',
   'done',
+  'manual',
 ]);
 
 // Режим работы Ralph. См. spec C:/www/ralph/prompts/task-ralph-mode.md.

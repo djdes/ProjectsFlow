@@ -2,7 +2,17 @@
 // (ответ на ralph-question, разбор после maxAttempts retry, переформулировка задачи,
 // auto-timeout F11). В пайплайне сидит между in_progress и done, поэтому в массиве
 // тоже между ними — порядок определяет колонки канбана и фильтры.
-export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'awaiting_clarification' | 'done';
+//
+// 'manual' — отдельная ветка ВНЕ pipeline'а: задачи которые делает человек руками.
+// Не имеет авто-переходов; в array идёт в конец чтобы numeric storage order существующих
+// строк MariaDB ENUM не менялся (см. db/038).
+export type TaskStatus =
+  | 'backlog'
+  | 'todo'
+  | 'in_progress'
+  | 'awaiting_clarification'
+  | 'done'
+  | 'manual';
 
 export const TASK_STATUSES: readonly TaskStatus[] = [
   'backlog',
@@ -10,6 +20,7 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
   'in_progress',
   'awaiting_clarification',
   'done',
+  'manual',
 ];
 
 // Режим работы Ralph по задаче. См. spec C:/www/ralph/prompts/task-ralph-mode.md.
