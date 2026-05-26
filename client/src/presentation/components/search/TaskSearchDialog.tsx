@@ -9,6 +9,7 @@ import type { TaskSearchResult } from '@/domain/task/TaskSearchResult';
 
 const statusLabel: Record<TaskStatus, string> = {
   backlog: 'Бэклог',
+  manual: 'В ручную',
   todo: 'To Do',
   in_progress: 'В работе',
   awaiting_clarification: '🤔 На уточнении',

@@ -296,6 +296,7 @@ export function TaskDrawer({
   // Mapping статусов в цвет бейджа в header'е drawer'а.
   const statusBadgeColor: Record<Task['status'], string> = {
     backlog: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+    manual: 'bg-purple-500/15 text-purple-600 dark:text-purple-400',
     todo: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
     in_progress: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
     awaiting_clarification: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',

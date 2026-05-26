@@ -4,6 +4,7 @@ import type { TaskStatus } from '@/domain/task/Task';
 // The domain enum keeps `backlog/todo/...`; this is the user-facing rename.
 export const STATUS_LABEL: Record<TaskStatus, string> = {
   backlog: 'ЧЕРНОВИКИ',
+  manual: 'В РУЧНУЮ',
   todo: 'ВОРКЕР',
   in_progress: 'В работе',
   awaiting_clarification: '🤔 На уточнении',

@@ -3,7 +3,16 @@ import type { AgentJob } from '../agentJob/AgentJob';
 // 'awaiting_clarification' — активная задача на паузе до действия человека (ответ на
 // ralph-question, разбор после maxAttempts retry, переформулировка). Между in_progress
 // и done — порядок в массиве определяет колонки канбана.
-export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'awaiting_clarification' | 'done';
+//
+// 'manual' — отдельная ветка ВНЕ pipeline'а: колонка для задач, которые делает человек
+// руками. Не имеет авто-переходов. В array идёт в конец чтобы зеркалить ENUM (db/038).
+export type TaskStatus =
+  | 'backlog'
+  | 'todo'
+  | 'in_progress'
+  | 'awaiting_clarification'
+  | 'done'
+  | 'manual';
 
 export const TASK_STATUSES: readonly TaskStatus[] = [
   'backlog',
@@ -11,6 +20,7 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
   'in_progress',
   'awaiting_clarification',
   'done',
+  'manual',
 ];
 
 // Режим работы Ralph по задаче. Mirrors server/src/domain/task/Task.ts.

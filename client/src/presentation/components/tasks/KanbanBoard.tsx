@@ -75,6 +75,7 @@ function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStat
   // лежат в TODO (статус на task'е сохраняется и отображается badge'ом справа снизу).
   const out: Record<TaskStatus, Task[]> = {
     backlog: [],
+    manual: [],
     todo: [],
     in_progress: [],
     awaiting_clarification: [],
