@@ -37,8 +37,9 @@ type Props = {
 
 // Какие колонки реально рисуем. in_progress и awaiting_clarification не имеют
 // собственных колонок — задачи в этих статусах визуально живут в TODO с badge'ом
-// статуса справа снизу. См. KanbanCard.
-const VISIBLE_STATUSES: readonly TaskStatus[] = ['backlog', 'todo', 'done'];
+// статуса справа снизу. См. KanbanCard. 'manual' — собственная колонка между
+// backlog и todo: парковка для задач, которые делает человек руками.
+const VISIBLE_STATUSES: readonly TaskStatus[] = ['backlog', 'manual', 'todo', 'done'];
 
 // Маппинг реального статуса в визуальную колонку.
 function toVisibleStatus(status: TaskStatus): TaskStatus {
