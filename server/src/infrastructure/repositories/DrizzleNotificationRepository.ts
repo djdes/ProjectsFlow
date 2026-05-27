@@ -11,12 +11,16 @@ import type {
 } from '../../application/notifications/NotificationRepository.js';
 
 function toNotification(row: NotificationRow): Notification {
-  // JSON-колонка приходит как object'ы у mysql2/drizzle. type внутри payload'а уже
-  // совпадает с row.type — domain держит payload как source-of-truth.
+  // MariaDB хранит JSON как LONGTEXT → mysql2 возвращает строку, а не объект.
+  // drizzle-orm не парсит (нет mapFromDriverValue для json-колонки). Парсим вручную.
+  const payload: NotificationPayload =
+    typeof row.payload === 'string'
+      ? (JSON.parse(row.payload) as NotificationPayload)
+      : (row.payload as NotificationPayload);
   return {
     id: row.id,
     userId: row.userId,
-    payload: row.payload as NotificationPayload,
+    payload,
     readAt: row.readAt ?? null,
     createdAt: row.createdAt,
   };

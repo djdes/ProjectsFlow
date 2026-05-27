@@ -14,10 +14,16 @@ type NotificationDto = {
 };
 
 function fromDto(dto: NotificationDto): Notification {
+  // Защита от double-serialized JSON: MariaDB хранит JSON как LONGTEXT, mysql2
+  // возвращает строку. Если сервер не распарсил — payload прилетит как string.
+  const payload: NotificationPayload =
+    typeof dto.payload === 'string'
+      ? (JSON.parse(dto.payload) as NotificationPayload)
+      : dto.payload;
   return {
     id: dto.id,
     userId: dto.userId,
-    payload: dto.payload,
+    payload,
     readAt: dto.readAt ? new Date(dto.readAt) : null,
     createdAt: new Date(dto.createdAt),
   };
