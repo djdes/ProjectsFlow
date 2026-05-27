@@ -5,7 +5,11 @@ import { Folder, type LucideIcon } from 'lucide-react';
 // просто визуальный маркер строки списка, не носитель информации.
 export const defaultProjectIcon: LucideIcon = Folder;
 
-export function getInitials(name: string): string {
+// Принимаем nullable: данные приходят из JSON-payload'ов notifications/memberships без
+// runtime-валидации, и в проде встречались легаси-записи без display name (рушили
+// NotificationsPage через `.trim()` of undefined).
+export function getInitials(name: string | null | undefined): string {
+  if (!name) return '?';
   const trimmed = name.trim();
   if (!trimmed) return '?';
   const parts = trimmed.split(/\s+/u);

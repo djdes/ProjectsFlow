@@ -287,7 +287,7 @@ function NotificationRow({
         {payload.type === 'comment_mention' && (
           <>
             <p className="text-sm leading-snug">
-              <span className="font-medium">{payload.actorDisplayName}</span> упомянул тебя в{' '}
+              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> упомянул тебя в{' '}
               <span className="font-medium">«{payload.projectName}»</span>
               {payload.taskStatus === 'awaiting_clarification' && (
                 <>
@@ -318,7 +318,7 @@ function NotificationRow({
         {payload.type === 'project_invite' && (
           <>
             <p className="text-sm leading-snug">
-              <span className="font-medium">{payload.actorDisplayName}</span> приглашает вас в{' '}
+              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> приглашает вас в{' '}
               <span className="font-medium">«{payload.projectName}»</span> как{' '}
               {roleLabel[payload.role]}
             </p>
@@ -339,7 +339,7 @@ function NotificationRow({
         {payload.type === 'join_request' && (
           <>
             <p className="text-sm leading-snug">
-              <span className="font-medium">{payload.requesterDisplayName}</span> просит доступ к
+              <span className="font-medium">{payload.requesterDisplayName ?? 'Пользователь'}</span> просит доступ к
               проекту <span className="font-medium">«{payload.projectName}»</span>
             </p>
             <div className="flex gap-2 pt-1">
