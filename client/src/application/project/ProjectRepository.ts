@@ -119,6 +119,14 @@ export interface ProjectRepository {
   // Персональная пересортировка сайдбара: полный список id в желаемом порядке.
   reorder(orderedIds: readonly string[]): Promise<void>;
 
+  // Персональная пометка проекта favorite (см. db/040). Сервер сам ставит
+  // favorite_sort_order = MAX+1 при favorite=true.
+  toggleFavorite(projectId: string, favorite: boolean): Promise<void>;
+
+  // Пересортировка проектов внутри секции «Избранное» сайдбара. Симметрично reorder,
+  // но затрагивает только favorite_sort_order для favorites текущего юзера.
+  reorderFavorites(orderedIds: readonly string[]): Promise<void>;
+
   // Multi-tenancy: members + invites. Owner-only операции упадут 403 на сервере.
   listMembers(projectId: string): Promise<ProjectMember[]>;
   updateMemberRole(

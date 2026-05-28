@@ -43,6 +43,16 @@ export const reorderProjectsSchema = z.object({
   orderedIds: z.array(z.string().min(1)).min(1),
 });
 
+// Toggle favorite-флага для проекта в сайдбаре текущего юзера.
+export const toggleFavoriteSchema = z.object({
+  favorite: z.boolean(),
+});
+
+// Пересортировка проектов в секции «Избранное» сайдбара. Симметрично reorderProjectsSchema.
+export const reorderFavoritesSchema = z.object({
+  orderedIds: z.array(z.string().min(1)).min(1),
+});
+
 // Пер-участниковые настройки оповещений: карта тип→{team,mcp}. Ключи валидируем как
 // известные типы; неизвестные отсекаем (passthrough off).
 const NOTIF_EVENT_TYPES = [
@@ -62,6 +72,8 @@ export const notificationPrefsSchema = z.record(
 export type CreateProjectBody = z.infer<typeof createProjectSchema>;
 export type UpdateProjectBody = z.infer<typeof updateProjectSchema>;
 export type ReorderProjectsBody = z.infer<typeof reorderProjectsSchema>;
+export type ToggleFavoriteBody = z.infer<typeof toggleFavoriteSchema>;
+export type ReorderFavoritesBody = z.infer<typeof reorderFavoritesSchema>;
 
 export const createInviteSchema = z.object({
   role: z.enum(['editor', 'viewer']),

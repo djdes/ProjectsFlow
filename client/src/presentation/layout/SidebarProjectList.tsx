@@ -19,6 +19,8 @@ import {
   ArrowDown,
   ArrowUp,
   BookOpen,
+  Heart,
+  HeartOff,
   MoreHorizontal,
   Pencil,
   Search,
@@ -28,6 +30,8 @@ import {
 import { useProjects } from '@/presentation/hooks/useProjects';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useReorderProjects } from '@/presentation/hooks/useReorderProjects';
+import { useReorderFavoriteProjects } from '@/presentation/hooks/useReorderFavoriteProjects';
+import { useToggleProjectFavorite } from '@/presentation/hooks/useToggleProjectFavorite';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,9 +47,14 @@ import { DeleteProjectDialog } from '@/presentation/components/project/DeletePro
 import type { Project } from '@/domain/project/Project';
 
 type MoveDir = 'up' | 'down';
+type Bucket = 'favorites' | 'main';
 
 type RowProps = {
   project: Project;
+  // Какой секции принадлежит эта строка. Один и тот же project.id может рендериться
+  // в обеих секциях — bucket нужен для уникальных id (dnd-kit, React keys) и для
+  // выбора правильного onMove.
+  bucket: Bucket;
   // Перетаскивание/перемещение доступно только на полном списке (без активного поиска).
   reorderable: boolean;
   isFirst: boolean;
@@ -55,6 +64,7 @@ type RowProps = {
 
 function SidebarProjectRow({
   project,
+  bucket,
   reorderable,
   isFirst,
   isLast,
@@ -63,6 +73,7 @@ function SidebarProjectRow({
   const navigate = useNavigate();
   const location = useLocation();
   const { refresh: refreshProjects } = useProjectsContext();
+  const { toggle: toggleFavorite } = useToggleProjectFavorite();
   const [menuOpen, setMenuOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -71,8 +82,12 @@ function SidebarProjectRow({
   // нельзя в принципе — пункт прячем, чтобы не было ложной кнопки.
   const canDelete = project.role === 'owner' && !project.isInbox;
 
+  // Один project.id может рендериться дважды (в favorites и в main); чтобы dnd-kit и
+  // React не ругались на дубли ключей — префиксуем sortable-id'шник bucket'ом.
+  const sortableId = `${bucket}-${project.id}`;
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: project.id,
+    id: sortableId,
     disabled: !reorderable,
   });
 
@@ -172,6 +187,14 @@ function SidebarProjectRow({
             <Pencil />
             Изменить имя
           </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              void toggleFavorite(project.id, !project.isFavorite);
+            }}
+          >
+            {project.isFavorite ? <HeartOff /> : <Heart />}
+            {project.isFavorite ? 'Удалить из избранного' : 'Добавить в избранное'}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => navigate(`/projects/${project.id}/kb`)}>
             <BookOpen />
             База знаний
@@ -257,13 +280,56 @@ function SidebarProjectListSkeleton(): React.ReactElement {
   );
 }
 
+// Один проект в секции. Хелпер выносит общий рендер строк (skeleton иначе разрастается).
+function ProjectGroup({
+  projects,
+  bucket,
+  reorderable,
+  onReorderEnd,
+  onMove,
+}: {
+  projects: readonly Project[];
+  bucket: Bucket;
+  reorderable: boolean;
+  onReorderEnd: (event: DragEndEvent) => void;
+  onMove: (projectId: string, dir: MoveDir) => void;
+}): React.ReactElement {
+  // Порог 5px: клик/тап по проекту не превращается в drag.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sortableIds = projects.map((p) => `${bucket}-${p.id}`);
+
+  const rows = (
+    <div className="space-y-0.5">
+      {projects.map((p, idx) => (
+        <SidebarProjectRow
+          key={`${bucket}-${p.id}`}
+          project={p}
+          bucket={bucket}
+          reorderable={reorderable}
+          isFirst={idx === 0}
+          isLast={idx === projects.length - 1}
+          onMove={onMove}
+        />
+      ))}
+    </div>
+  );
+
+  if (!reorderable) return rows;
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onReorderEnd}>
+      <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+        {rows}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
 export function SidebarProjectList(): React.ReactElement {
   const { data, loading, error } = useProjects();
   const { reorder } = useReorderProjects();
+  const { reorder: reorderFavorites } = useReorderFavoriteProjects();
   const [query, setQuery] = useState('');
-
-  // Порог 5px: клик/тап по проекту не превращается в drag.
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   if (loading) return <SidebarProjectListSkeleton />;
 
@@ -284,46 +350,64 @@ export function SidebarProjectList(): React.ReactElement {
 
   const q = query.trim().toLocaleLowerCase('ru');
   const searching = q.length > 0;
-  const filtered = searching
-    ? visible.filter((p) => p.name.toLocaleLowerCase('ru').includes(q))
-    : visible;
-  const renderedIds = filtered.map((p) => p.id);
+  const matches = (p: Project): boolean => p.name.toLocaleLowerCase('ru').includes(q);
 
-  const handleDragEnd = (event: DragEndEvent): void => {
+  // Секция «Избранное» — подмножество, сортированное локально по favorite_sort_order
+  // (сервер отдаёт основной список в порядке sort_order). Дубликат project.id ожидаем —
+  // см. spec: проект виден И в «Избранное», И в «Мои проекты».
+  const favoritesAll = visible
+    .filter((p) => p.isFavorite)
+    .slice()
+    .sort((a, b) => a.favoriteSortOrder - b.favoriteSortOrder);
+
+  const favorites = searching ? favoritesAll.filter(matches) : favoritesAll;
+  const regular = searching ? visible.filter(matches) : visible;
+  const showFavoritesHeader = !searching && favoritesAll.length > 0;
+
+  // В режиме поиска DnD выключен (как и в исходной логике).
+  const reorderable = !searching;
+
+  const handleFavoritesDragEnd = (event: DragEndEvent): void => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = renderedIds.indexOf(String(active.id));
-    const newIndex = renderedIds.indexOf(String(over.id));
+    const ids = favorites.map((p) => p.id);
+    const oldIndex = ids.indexOf(stripBucket(String(active.id)));
+    const newIndex = ids.indexOf(stripBucket(String(over.id)));
     if (oldIndex < 0 || newIndex < 0) return;
-    const next = arrayMove(renderedIds, oldIndex, newIndex);
-    void reorder(renderedIds, next);
+    const next = arrayMove(ids, oldIndex, newIndex);
+    void reorderFavorites(ids, next);
   };
 
-  const handleMove = (projectId: string, dir: MoveDir): void => {
-    const i = renderedIds.indexOf(projectId);
+  const handleRegularDragEnd = (event: DragEndEvent): void => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = regular.map((p) => p.id);
+    const oldIndex = ids.indexOf(stripBucket(String(active.id)));
+    const newIndex = ids.indexOf(stripBucket(String(over.id)));
+    if (oldIndex < 0 || newIndex < 0) return;
+    const next = arrayMove(ids, oldIndex, newIndex);
+    void reorder(ids, next);
+  };
+
+  const moveInFavorites = (projectId: string, dir: MoveDir): void => {
+    const ids = favorites.map((p) => p.id);
+    const i = ids.indexOf(projectId);
     const j = dir === 'up' ? i - 1 : i + 1;
-    if (i < 0 || j < 0 || j >= renderedIds.length) return;
-    const next = arrayMove(renderedIds, i, j);
-    void reorder(renderedIds, next);
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    const next = arrayMove(ids, i, j);
+    void reorderFavorites(ids, next);
   };
 
-  const rows =
-    filtered.length === 0 ? (
-      <p className="px-2 py-1.5 text-sm text-muted-foreground">Ничего не найдено.</p>
-    ) : (
-      <div className="space-y-0.5">
-        {filtered.map((p, idx) => (
-          <SidebarProjectRow
-            key={p.id}
-            project={p}
-            reorderable={!searching}
-            isFirst={idx === 0}
-            isLast={idx === filtered.length - 1}
-            onMove={handleMove}
-          />
-        ))}
-      </div>
-    );
+  const moveInRegular = (projectId: string, dir: MoveDir): void => {
+    const ids = regular.map((p) => p.id);
+    const i = ids.indexOf(projectId);
+    const j = dir === 'up' ? i - 1 : i + 1;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    const next = arrayMove(ids, i, j);
+    void reorder(ids, next);
+  };
+
+  const noMatches = searching && favorites.length === 0 && regular.length === 0;
 
   return (
     <div className="space-y-1.5">
@@ -339,19 +423,46 @@ export function SidebarProjectList(): React.ReactElement {
           />
         </div>
       )}
-      {searching ? (
-        rows
+
+      {noMatches ? (
+        <p className="px-2 py-1.5 text-sm text-muted-foreground">Ничего не найдено.</p>
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext items={renderedIds} strategy={verticalListSortingStrategy}>
-            {rows}
-          </SortableContext>
-        </DndContext>
+        <>
+          {showFavoritesHeader && favorites.length > 0 && (
+            <>
+              <div className="px-2 pt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+                Избранное
+              </div>
+              <ProjectGroup
+                projects={favorites}
+                bucket="favorites"
+                reorderable={reorderable}
+                onReorderEnd={handleFavoritesDragEnd}
+                onMove={moveInFavorites}
+              />
+            </>
+          )}
+
+          {regular.length > 0 ? (
+            <ProjectGroup
+              projects={regular}
+              bucket="main"
+              reorderable={reorderable}
+              onReorderEnd={handleRegularDragEnd}
+              onMove={moveInRegular}
+            />
+          ) : null}
+        </>
       )}
     </div>
   );
+}
+
+// `${bucket}-${projectId}` → `projectId`. Bucket — фиксированный список ('favorites'|'main'),
+// поэтому split по первому `-` корректен (UUID не содержит `-` в первом сегменте... содержит,
+// поэтому ищем именно префикс).
+function stripBucket(sortableId: string): string {
+  if (sortableId.startsWith('favorites-')) return sortableId.slice('favorites-'.length);
+  if (sortableId.startsWith('main-')) return sortableId.slice('main-'.length);
+  return sortableId;
 }

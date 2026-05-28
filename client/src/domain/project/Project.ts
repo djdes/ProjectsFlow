@@ -29,5 +29,10 @@ export type Project = {
   readonly financeVisibility: FinanceVisibility;
   // Ralph-диспетчер: какой member автономно выполняет задачи (MCP /loop). null = ручной.
   readonly dispatcherUserId: string | null;
+  // Персональный favorite-флаг + порядок в секции «Избранное» (см. db/040 + spec). На
+  // get/create/update эндпоинтах сервер их не отдаёт — клиент использует поля только из
+  // списка `GET /api/projects`. Дефолты применяются на маппинге, чтобы тип оставался строгим.
+  readonly isFavorite: boolean;
+  readonly favoriteSortOrder: number;
   readonly createdAt: Date;
 };

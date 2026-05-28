@@ -77,6 +77,15 @@ export class CannotDeleteInboxError extends Error {
   }
 }
 
+// Inbox-проект скрыт из общего списка сайдбара, поэтому пометка favorite не имеет
+// смысла (и UI до неё не доедет). Защита от ручных API-вызовов.
+export class CannotFavoriteInboxError extends Error {
+  constructor() {
+    super('Cannot favorite inbox project');
+    this.name = 'CannotFavoriteInboxError';
+  }
+}
+
 // === Git-token delegation ===
 // Все ошибки use-case'а GetDelegatedGitToken — мапятся на конкретные HTTP-коды
 // в errorHandler (см. presentation/middleware/errorHandler.ts).

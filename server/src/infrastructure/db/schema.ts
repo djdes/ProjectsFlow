@@ -170,6 +170,10 @@ export const projectMembers = mysqlTable(
     sortOrder: int('sort_order').notNull().default(0),
     // Пер-участниковые настройки email-оповещений (матрица тип×источник). NULL = дефолты. См. db/024.
     notificationPrefs: json('notification_prefs').$type<NotificationPrefs | null>(),
+    // Персональный favorite-флаг + порядок в секции «Избранное» сайдбара. См. db/040.
+    // favoriteSortOrder имеет смысл только при isFavorite=true; для не-favorites игнорируется.
+    isFavorite: boolean('is_favorite').notNull().default(false),
+    favoriteSortOrder: int('favorite_sort_order').notNull().default(0),
   },
   (t) => [
     uniqueIndex('pk_project_members').on(t.projectId, t.userId),

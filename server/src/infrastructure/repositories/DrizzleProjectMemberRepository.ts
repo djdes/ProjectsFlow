@@ -88,12 +88,16 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
   async listProjectsForUser(userId: string): Promise<ProjectWithRole[]> {
     // Коррелированные подзапросы для read-model'а sidebar'а: число участников и задач.
     // Дешевле отдельных запросов на каждый проект; индексы по project_id уже есть.
+    // Сортировка по обычному sort_order — клиент сам отдельно сортирует favorites
+    // по favorite_sort_order (см. SidebarProjectList).
     const rows = await this.db
       .select({
         project: projects,
         role: projectMembers.role,
         memberCount: sql<number>`(SELECT COUNT(*) FROM project_members pm WHERE pm.project_id = ${projects.id})`,
         taskCount: sql<number>`(SELECT COUNT(*) FROM tasks t WHERE t.project_id = ${projects.id})`,
+        isFavorite: projectMembers.isFavorite,
+        favoriteSortOrder: projectMembers.favoriteSortOrder,
       })
       .from(projectMembers)
       .innerJoin(projects, eq(projects.id, projectMembers.projectId))
@@ -104,6 +108,8 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       role: r.role,
       memberCount: Number(r.memberCount),
       taskCount: Number(r.taskCount),
+      isFavorite: r.isFavorite,
+      favoriteSortOrder: Number(r.favoriteSortOrder),
     }));
   }
 
@@ -206,6 +212,51 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
             and(
               eq(projectMembers.projectId, orderedIds[i]!),
               eq(projectMembers.userId, userId),
+            ),
+          );
+      }
+    });
+  }
+
+  async setFavorite(projectId: string, userId: string, favorite: boolean): Promise<void> {
+    if (!favorite) {
+      await this.db
+        .update(projectMembers)
+        .set({ isFavorite: false })
+        .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+      return;
+    }
+    // favorite=true: ставим флаг + favorite_sort_order = MAX+1 одной транзакцией, чтобы
+    // конкурентные toggle'ы не схлопнулись в одинаковый порядок.
+    await this.db.transaction(async (tx) => {
+      const rows = await tx
+        .select({ max: sql<number | null>`MAX(${projectMembers.favoriteSortOrder})` })
+        .from(projectMembers)
+        .where(
+          and(eq(projectMembers.userId, userId), eq(projectMembers.isFavorite, true)),
+        );
+      const nextOrder = Number(rows[0]?.max ?? -1) + 1;
+      await tx
+        .update(projectMembers)
+        .set({ isFavorite: true, favoriteSortOrder: nextOrder })
+        .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+    });
+  }
+
+  async reorderFavoritesForUser(userId: string, orderedIds: readonly string[]): Promise<void> {
+    if (orderedIds.length === 0) return;
+    // Симметрия reorderForUser, но пишет favorite_sort_order. WHERE по isFavorite=true,
+    // чтобы случайный id из основного списка не попал в favorite-порядок.
+    await this.db.transaction(async (tx) => {
+      for (let i = 0; i < orderedIds.length; i += 1) {
+        await tx
+          .update(projectMembers)
+          .set({ favoriteSortOrder: i })
+          .where(
+            and(
+              eq(projectMembers.projectId, orderedIds[i]!),
+              eq(projectMembers.userId, userId),
+              eq(projectMembers.isFavorite, true),
             ),
           );
       }

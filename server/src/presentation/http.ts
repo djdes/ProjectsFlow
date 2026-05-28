@@ -26,6 +26,8 @@ import type { GetDelegatedGitToken } from '../application/project/GetDelegatedGi
 import type { GitTokenDelegationRepository } from '../application/project/GitTokenDelegationRepository.js';
 import type { UserRepository } from '../application/user/UserRepository.js';
 import type { ReorderProjects } from '../application/project/ReorderProjects.js';
+import type { ToggleProjectFavorite } from '../application/project/ToggleProjectFavorite.js';
+import type { ReorderFavoriteProjects } from '../application/project/ReorderFavoriteProjects.js';
 import type { CreateProjectWithGit } from '../application/project/CreateProjectWithGit.js';
 import type { GetOrCreateInbox } from '../application/project/GetOrCreateInbox.js';
 import type { ListProjectMembers } from '../application/project/ListProjectMembers.js';
@@ -190,6 +192,8 @@ type AppDeps = {
     // (без обёртки use-case'а; чтение public-полей).
     readonly projects: ProjectRepository;
     readonly reorderProjects: ReorderProjects;
+    readonly toggleProjectFavorite: ToggleProjectFavorite;
+    readonly reorderFavoriteProjects: ReorderFavoriteProjects;
     readonly listProjectCommits: ListProjectCommits;
     readonly getOrCreateInbox: GetOrCreateInbox;
     readonly listMembers: ListProjectMembers;

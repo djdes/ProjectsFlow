@@ -50,6 +50,8 @@ export class MockProjectRepository implements ProjectRepository {
       kbKind: 'none',
       financeVisibility: 'owner',
       dispatcherUserId: null,
+      isFavorite: false,
+      favoriteSortOrder: 0,
       createdAt: new Date(),
     };
     this.projects.unshift(inbox);
@@ -75,6 +77,31 @@ export class MockProjectRepository implements ProjectRepository {
     await delay(undefined);
   }
 
+  async toggleFavorite(projectId: string, favorite: boolean): Promise<void> {
+    const maxFav = this.projects
+      .filter((p) => p.isFavorite)
+      .reduce((max, p) => Math.max(max, p.favoriteSortOrder), -1);
+    this.projects = this.projects.map((p) =>
+      p.id === projectId
+        ? favorite
+          ? { ...p, isFavorite: true, favoriteSortOrder: maxFav + 1 }
+          : { ...p, isFavorite: false }
+        : p,
+    );
+    await delay(undefined);
+  }
+
+  async reorderFavorites(orderedIds: readonly string[]): Promise<void> {
+    const orderById = new Map(orderedIds.map((id, i) => [id, i] as const));
+    this.projects = this.projects.map((p) => {
+      const idx = orderById.get(p.id);
+      return idx !== undefined && p.isFavorite
+        ? { ...p, favoriteSortOrder: idx }
+        : p;
+    });
+    await delay(undefined);
+  }
+
   async create(input: CreateProjectInput): Promise<Project> {
     const normalized = normalizeName(input.name);
     const duplicate = this.projects.some((p) => normalizeName(p.name) === normalized);
@@ -91,6 +118,8 @@ export class MockProjectRepository implements ProjectRepository {
       kbKind: 'none',
       financeVisibility: 'owner',
       dispatcherUserId: null,
+      isFavorite: false,
+      favoriteSortOrder: 0,
       createdAt: new Date(),
     };
     // Новые проекты — наверху списка: user видит результат там, где он его ждёт

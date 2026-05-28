@@ -13,6 +13,8 @@ import type { GithubTokenRepository } from '../../application/github/GithubToken
 import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
 import type { UserRepository } from '../../application/user/UserRepository.js';
 import type { ReorderProjects } from '../../application/project/ReorderProjects.js';
+import type { ToggleProjectFavorite } from '../../application/project/ToggleProjectFavorite.js';
+import type { ReorderFavoriteProjects } from '../../application/project/ReorderFavoriteProjects.js';
 import type { ListProjectMembers } from '../../application/project/ListProjectMembers.js';
 import type { RemoveProjectMember } from '../../application/project/RemoveProjectMember.js';
 import type { UpdateProjectMemberRole } from '../../application/project/UpdateProjectMemberRole.js';
@@ -38,9 +40,11 @@ import {
   createInviteSchema,
   createProjectSchema,
   notificationPrefsSchema,
+  reorderFavoritesSchema,
   reorderProjectsSchema,
   setDispatcherSchema,
   setGitTokenDelegationSchema,
+  toggleFavoriteSchema,
   transferOwnershipSchema,
   updateMemberRoleSchema,
   updateProjectSchema,
@@ -66,6 +70,8 @@ type Deps = {
   // (определяет видимость `all`-блока) без отдельного use-case'а.
   readonly projects: ProjectRepository;
   readonly reorderProjects: ReorderProjects;
+  readonly toggleProjectFavorite: ToggleProjectFavorite;
+  readonly reorderFavoriteProjects: ReorderFavoriteProjects;
   readonly listProjectCommits: ListProjectCommits;
   readonly listMembers: ListProjectMembers;
   readonly removeMember: RemoveProjectMember;
@@ -96,6 +102,10 @@ type ProjectDto = Omit<Project, 'createdAt'> & {
   // Только на list-эндпоинте (приходят из ProjectWithRole); на get/create/update — undefined.
   memberCount?: number;
   taskCount?: number;
+  // Персональный favorite-флаг + порядок в секции «Избранное» (см. db/040). На get/create/update
+  // — undefined; на list — всегда заполнены (default false/0 на свежих membership'ах).
+  isFavorite?: boolean;
+  favoriteSortOrder?: number;
 };
 
 function toDto(project: ProjectWithRole | Project, fallbackRole: 'owner' | 'editor' | 'viewer' = 'owner'): ProjectDto {
@@ -198,6 +208,18 @@ export function projectsRouter(deps: Deps): Router {
     }
   });
 
+  // Пересортировка проектов в секции «Избранное». Симметрично /reorder, но пишет
+  // favorite_sort_order и только для favorites текущего юзера.
+  router.put('/reorder-favorites', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { orderedIds } = reorderFavoritesSchema.parse(req.body);
+      await deps.reorderFavoriteProjects.execute({ userId: req.user!.id, orderedIds });
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
   // Git-collision: есть ли чужой проект с тем же репо. Регистрируем ДО '/:id', иначе
   // 'git-collision' матчится как id.
   router.get('/git-collision', async (req: Request, res: Response, next: NextFunction) => {
@@ -233,6 +255,24 @@ export function projectsRouter(deps: Deps): Router {
       const project = await deps.getProject.execute(id, req.user!.id);
       if (!project) throw new ProjectNotFoundError();
       res.json({ project: toDto(project) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Персональная пометка проекта как favorite. Любой member может пометить (favorite —
+  // персональная штука каждого юзера, не привилегия). Inbox — запрещён.
+  router.put('/:id/favorite', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const { favorite } = toggleFavoriteSchema.parse(req.body);
+      await deps.toggleProjectFavorite.execute({
+        userId: req.user!.id,
+        projectId: id,
+        favorite,
+      });
+      res.status(204).end();
     } catch (e) {
       next(e);
     }

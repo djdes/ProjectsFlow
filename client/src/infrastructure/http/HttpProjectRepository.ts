@@ -30,6 +30,9 @@ type ProjectDto = {
   kbKind?: 'none' | 'github' | 'local';
   financeVisibility?: 'owner' | 'members';
   dispatcherUserId?: string | null;
+  // Только на list-эндпоинте; на get/create/update сервер не отдаёт. Дефолтим false/0.
+  isFavorite?: boolean;
+  favoriteSortOrder?: number;
   createdAt: string;
 };
 
@@ -49,6 +52,8 @@ function fromDto(dto: ProjectDto): Project {
     taskCount: dto.taskCount,
     financeVisibility: dto.financeVisibility ?? 'owner',
     dispatcherUserId: dto.dispatcherUserId ?? null,
+    isFavorite: dto.isFavorite ?? false,
+    favoriteSortOrder: dto.favoriteSortOrder ?? 0,
     createdAt: new Date(dto.createdAt),
   };
 }
@@ -201,6 +206,14 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async reorder(orderedIds: readonly string[]): Promise<void> {
     await httpClient.put<void>('/projects/reorder', { orderedIds });
+  }
+
+  async toggleFavorite(projectId: string, favorite: boolean): Promise<void> {
+    await httpClient.put<void>(`/projects/${projectId}/favorite`, { favorite });
+  }
+
+  async reorderFavorites(orderedIds: readonly string[]): Promise<void> {
+    await httpClient.put<void>('/projects/reorder-favorites', { orderedIds });
   }
 
   async getNotificationPrefs(projectId: string): Promise<NotificationPrefs> {

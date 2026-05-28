@@ -30,6 +30,8 @@ import { GetProject } from './application/project/GetProject.js';
 import { CreateProject } from './application/project/CreateProject.js';
 import { UpdateProject } from './application/project/UpdateProject.js';
 import { ReorderProjects } from './application/project/ReorderProjects.js';
+import { ToggleProjectFavorite } from './application/project/ToggleProjectFavorite.js';
+import { ReorderFavoriteProjects } from './application/project/ReorderFavoriteProjects.js';
 import { ProjectNotificationService } from './application/notifications/ProjectNotificationService.js';
 import { CreateProjectWithGit } from './application/project/CreateProjectWithGit.js';
 import { GetOrCreateInbox } from './application/project/GetOrCreateInbox.js';
@@ -500,6 +502,11 @@ const { app, devProxyUpgrade } = createApp({
     githubTokens: githubTokenRepo,
     projects: projectRepo,
     reorderProjects: new ReorderProjects({ members: projectMemberRepo }),
+    toggleProjectFavorite: new ToggleProjectFavorite({
+      projects: projectRepo,
+      members: projectMemberRepo,
+    }),
+    reorderFavoriteProjects: new ReorderFavoriteProjects({ members: projectMemberRepo }),
     listProjectCommits: new ListProjectCommits({
       projects: projectRepo,
       members: projectMemberRepo,

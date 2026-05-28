@@ -22,6 +22,12 @@ type ProjectsContextValue = {
   // Переставить проекты в заданном порядке id (оптимистичная сортировка). id, которых нет
   // в списке (например, inbox), сохраняют относительное положение в хвосте.
   applyReorder: (orderedIds: readonly string[]) => void;
+  // Переключить favorite-флаг проекта (см. db/040). При favorite=true локально
+  // ставит favoriteSortOrder = MAX(существующие favs) + 1, чтобы новый избранный
+  // встал в конец секции «Избранное» — то же, что делает сервер.
+  applyToggleFavorite: (projectId: string, favorite: boolean) => void;
+  // Переставить favorites в заданном порядке id (только те, что isFavorite=true).
+  applyReorderFavorites: (orderedIds: readonly string[]) => void;
   // Перезагрузить список с сервера (для live-обновлений по SSE и refetch-on-focus).
   refresh: () => void;
 };
@@ -91,6 +97,35 @@ export function ProjectsProvider({ children }: { children: ReactNode }): React.R
         const idSet = new Set(orderedIds);
         const rest = prev.filter((p) => !idSet.has(p.id));
         return [...reordered, ...rest];
+      });
+    },
+    applyToggleFavorite: (projectId, favorite) => {
+      setData((prev) => {
+        if (prev === null) return prev;
+        // При favorite=true: новый favoriteSortOrder = MAX(существующие) + 1. Это
+        // дублирует серверную логику; на следующем refresh подтянем авторитетные значения.
+        const maxFavOrder = prev
+          .filter((p) => p.isFavorite)
+          .reduce((max, p) => Math.max(max, p.favoriteSortOrder), -1);
+        return prev.map((p) => {
+          if (p.id !== projectId) return p;
+          return favorite
+            ? { ...p, isFavorite: true, favoriteSortOrder: maxFavOrder + 1 }
+            : { ...p, isFavorite: false };
+        });
+      });
+    },
+    applyReorderFavorites: (orderedIds) => {
+      setData((prev) => {
+        if (prev === null) return prev;
+        // Назначаем favoriteSortOrder по позиции в orderedIds; не-favorites не трогаем.
+        const orderById = new Map(orderedIds.map((id, i) => [id, i] as const));
+        return prev.map((p) => {
+          const idx = orderById.get(p.id);
+          return idx !== undefined && p.isFavorite
+            ? { ...p, favoriteSortOrder: idx }
+            : p;
+        });
       });
     },
     refresh,

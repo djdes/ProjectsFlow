@@ -7,6 +7,7 @@ import {
 } from '../../domain/user/errors.js';
 import {
   CannotDeleteInboxError,
+  CannotFavoriteInboxError,
   CannotInviteToInboxError,
   CannotRemoveSelfAsLastOwnerError,
   GithubNotConnectedForDelegationError,
@@ -170,6 +171,13 @@ export function errorHandler(
     res.status(409).json({
       error: 'cannot_delete_inbox',
       message: 'Папку «Входящие» нельзя удалить — это служебный проект',
+    });
+    return;
+  }
+  if (err instanceof CannotFavoriteInboxError) {
+    res.status(409).json({
+      error: 'cannot_favorite_inbox',
+      message: 'Папку «Входящие» нельзя добавить в избранное',
     });
     return;
   }

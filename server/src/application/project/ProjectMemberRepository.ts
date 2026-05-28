@@ -14,6 +14,10 @@ export type ProjectWithRole = Project & {
   // Read-model для sidebar: число участников (>1 ⇒ совместный проект) и общее число задач.
   readonly memberCount: number;
   readonly taskCount: number;
+  // Персональный favorite-флаг (см. db/040). UI рисует секцию «Избранное» сверху сайдбара.
+  readonly isFavorite: boolean;
+  // Порядок внутри секции «Избранное» (имеет смысл только при isFavorite=true).
+  readonly favoriteSortOrder: number;
 };
 
 export type AddMemberInput = {
@@ -44,6 +48,16 @@ export interface ProjectMemberRepository {
   // порядок; sort_order проставляется по индексу. id, по которым у юзера нет membership,
   // игнорируются (UPDATE по (projectId,userId) просто не затронет строк).
   reorderForUser(userId: string, orderedIds: readonly string[]): Promise<void>;
+
+  // Toggle favorite-флага для (projectId,userId). При favorite=true репо ставит
+  // favorite_sort_order = MAX(favorite_sort_order среди favorites юзера) + 1 — новый
+  // избранный встаёт в конец секции, не схлопываясь в 0. При favorite=false — просто
+  // сбрасывает флаг (favorite_sort_order остаётся как мусор, но не влияет на UI).
+  setFavorite(projectId: string, userId: string, favorite: boolean): Promise<void>;
+
+  // Пересортировка favorites юзера. Симметрично reorderForUser, но пишет
+  // favorite_sort_order и только для строк, где is_favorite=true (остальные не затрагиваются).
+  reorderFavoritesForUser(userId: string, orderedIds: readonly string[]): Promise<void>;
 
   // Пер-участниковые настройки email-оповещений (NULL = дефолты).
   getNotificationPrefs(projectId: string, userId: string): Promise<NotificationPrefs | null>;
