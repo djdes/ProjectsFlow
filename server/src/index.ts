@@ -84,6 +84,11 @@ import { DrizzleTaskCommitRepository } from './infrastructure/repositories/Drizz
 import { DrizzleTaskAttachmentRepository } from './infrastructure/repositories/DrizzleTaskAttachmentRepository.js';
 import { DrizzleTaskCommentRepository } from './infrastructure/repositories/DrizzleTaskCommentRepository.js';
 import { DrizzleTaskDelegationRepository } from './infrastructure/repositories/DrizzleTaskDelegationRepository.js';
+import { AcceptTaskDelegation } from './application/task/AcceptTaskDelegation.js';
+import { DeclineTaskDelegation } from './application/task/DeclineTaskDelegation.js';
+import { WithdrawTaskDelegation } from './application/task/WithdrawTaskDelegation.js';
+import { ListMyPendingDelegations } from './application/task/ListMyPendingDelegations.js';
+import { AssignInboxTaskToProject } from './application/task/AssignInboxTaskToProject.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
 import { DrizzleAgentJobRepository } from './infrastructure/repositories/DrizzleAgentJobRepository.js';
@@ -813,6 +818,36 @@ const { app, devProxyUpgrade } = createApp({
     // tasks repo — нужен роуту для чтения oldStatus до move'а (SSE task_status_changed).
     tasks: taskRepo,
     maybeReopenForClarification,
+  },
+  delegations: {
+    accept: new AcceptTaskDelegation({
+      delegations: taskDelegationRepo,
+      users: userRepo,
+      notifications: notificationRepo,
+      idGen: idGenerator,
+    }),
+    decline: new DeclineTaskDelegation({
+      delegations: taskDelegationRepo,
+      tasks: taskRepo,
+      users: userRepo,
+      notifications: notificationRepo,
+      email: emailSender,
+      idGen: idGenerator,
+      appUrl: appBaseUrl,
+    }),
+    withdraw: new WithdrawTaskDelegation({ delegations: taskDelegationRepo }),
+    listPending: new ListMyPendingDelegations(taskDelegationRepo),
+    assignToProject: new AssignInboxTaskToProject({
+      tasks: taskRepo,
+      projects: projectRepo,
+      members: projectMemberRepo,
+      delegations: taskDelegationRepo,
+      users: userRepo,
+      notifications: notificationRepo,
+      email: emailSender,
+      idGen: idGenerator,
+      appUrl: appBaseUrl,
+    }),
   },
   agent: {
     createAgentToken: new CreateAgentToken({

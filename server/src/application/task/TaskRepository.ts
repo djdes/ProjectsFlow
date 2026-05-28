@@ -43,4 +43,11 @@ export interface TaskRepository {
    *  - AckRalphCancel когда Ralph обработал отмену
    */
   clearRalphCancel(taskId: string): Promise<Task | null>;
+  /**
+   * Перенос задачи в другой проект (только для inbox → реальный). Меняет
+   * tasks.project_id. Используется AssignInboxTaskToProject use-case'ом.
+   * Position не пересчитываем — задача попадает в проект с её текущим position
+   * и status (как правило 'todo'/'done'); UI отсортирует.
+   */
+  moveToProject(taskId: string, targetProjectId: string): Promise<Task | null>;
 }

@@ -93,6 +93,11 @@ import type { UpdateTaskComment } from '../application/task/UpdateTaskComment.js
 import type { DeleteTaskComment } from '../application/task/DeleteTaskComment.js';
 import type { RequestRalphCancel } from '../application/task/RequestRalphCancel.js';
 import type { RevokeRalphCancel } from '../application/task/RevokeRalphCancel.js';
+import type { AcceptTaskDelegation } from '../application/task/AcceptTaskDelegation.js';
+import type { DeclineTaskDelegation } from '../application/task/DeclineTaskDelegation.js';
+import type { WithdrawTaskDelegation } from '../application/task/WithdrawTaskDelegation.js';
+import type { ListMyPendingDelegations } from '../application/task/ListMyPendingDelegations.js';
+import type { AssignInboxTaskToProject } from '../application/task/AssignInboxTaskToProject.js';
 import type { ListNotifications } from '../application/notifications/ListNotifications.js';
 import type { CountUnreadNotifications } from '../application/notifications/CountUnreadNotifications.js';
 import type { MarkNotificationRead } from '../application/notifications/MarkNotificationRead.js';
@@ -301,6 +306,13 @@ type AppDeps = {
     ) => void;
     readonly tasks: TaskRepository;
     readonly maybeReopenForClarification: MaybeReopenForClarification;
+  };
+  readonly delegations: {
+    readonly accept: AcceptTaskDelegation;
+    readonly decline: DeclineTaskDelegation;
+    readonly withdraw: WithdrawTaskDelegation;
+    readonly listPending: ListMyPendingDelegations;
+    readonly assignToProject: AssignInboxTaskToProject;
   };
   readonly agent: {
     readonly createAgentToken: CreateAgentToken;

@@ -144,4 +144,12 @@ export class DrizzleTaskRepository implements TaskRepository {
       .where(eq(tasks.id, taskId));
     return this.getById(taskId);
   }
+
+  async moveToProject(taskId: string, targetProjectId: string): Promise<Task | null> {
+    await this.db
+      .update(tasks)
+      .set({ projectId: targetProjectId })
+      .where(eq(tasks.id, taskId));
+    return this.getById(taskId);
+  }
 }
