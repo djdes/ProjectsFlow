@@ -151,6 +151,13 @@ loop:
 
 См. полную спеку — [docs/superpowers/specs/2026-05-28-ai-prompt-improvement-design.md](superpowers/specs/2026-05-28-ai-prompt-improvement-design.md).
 
+> **Реальный диспетчер сейчас.** `dispatch.ps1` в репо `C:\www\ralph` —
+> long-running PowerShell, который ходит в REST API напрямую (НЕ через MCP).
+> Раздел ниже описывает **MCP-flow для альтернативного диспетчера** на `/loop`
+> Claude Code. Для интеграции в `dispatch.ps1` см.
+> [c:/www/ralph/docs/superpowers/specs/2026-05-28-ai-prompt-improvement-integration-design.md](https://github.com/djdes/PFLoopDispatch/blob/main/docs/superpowers/specs/2026-05-28-ai-prompt-improvement-integration-design.md) —
+> там REST-вызовы вместо MCP-tools, лёгкий `claude -p` без MCP-конфига.
+
 **Псевдокод `handle_ai_prompt_job`:**
 
 ```python
