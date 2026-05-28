@@ -1,14 +1,12 @@
 import {
   useCallback,
   useEffect,
-  useImperativeHandle,
   useRef,
   useState,
   type ClipboardEvent,
   type DragEvent,
   type FormEvent,
   type KeyboardEvent,
-  type Ref,
 } from 'react';
 import { ChevronRight, Download, FileText, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
 import {
@@ -178,9 +176,6 @@ export function TaskDrawer({
   // Срок и приоритет для create-mode (применимо к любому проекту).
   const [createDeadline, setCreateDeadline] = useState<string | null>(null);
   const [createPriority, setCreatePriority] = useState<TaskPriority | null>(null);
-  // В edit-режиме секция аттачей экспонирует addFiles через ref — чтобы paste-handler
-  // на форме (поймает Ctrl+V даже когда фокус в textarea) мог пнуть аплоад.
-  const attachmentsRef = useRef<AttachmentsHandle>(null);
   // Expand-toggle: false → drawer 640px; true → full-width. На mobile (pointer: coarse)
   // toggle всегда скрыт, drawer и так почти на весь экран (sheet.tsx default = w-3/4).
   const [expanded, setExpanded] = useState(false);
@@ -203,9 +198,7 @@ export function TaskDrawer({
   // Коммиты по умолчанию свёрнуты — это вторичный контент, чтобы не отвлекал.
   // Раскрытие — клик по заголовку.
   const [commitsOpen, setCommitsOpen] = useState(false);
-  // Cache аттачей для header-row: грузим параллельно с AttachmentsSection (двойной
-  // fetch — окей, эндпоинт лёгкий; альтернатива — поднимать state в KanbanBoard
-  // через repository invalidate; оставляем простоту).
+  // Cache аттачей для header-row.
   const [headerAttachments, setHeaderAttachments] = useState<TaskAttachment[]>([]);
 
   // Re-fetch header attachments when active task changes / commits-change tick.
@@ -267,6 +260,22 @@ export function TaskDrawer({
     setPendingFiles((prev) => [...prev, ...additions]);
   };
 
+  // Direct upload for edit-mode paste (no AttachmentsSection in body anymore).
+  const uploadFilesDirectly = async (files: File[]): Promise<void> => {
+    if (state?.mode !== 'edit') return;
+    const { projectId, id } = state.task;
+    for (const file of files) {
+      try {
+        await taskRepository.uploadAttachment(projectId, id, file);
+        toast.success(`${file.name} прикреплён`);
+      } catch (err) {
+        toast.error(`Не удалось загрузить ${file.name}: ${(err as Error).message}`);
+      }
+    }
+    onCommitsChange?.();
+    refetchHeaderAttachments();
+  };
+
   // Form-level paste handler — ловит Ctrl+V где угодно внутри формы (textarea, секция, пустое место).
   // Если в буфере есть картинки — preventDefault (textarea не вставит binary-кашу) и роутим в нужную секцию.
   // Если картинок нет — просто пускаем дефолтное поведение (текст ↦ в textarea).
@@ -277,7 +286,7 @@ export function TaskDrawer({
     if (state?.mode === 'create') {
       addPendingFiles(files);
     } else if (state?.mode === 'edit') {
-      void attachmentsRef.current?.addFiles(files);
+      void uploadFilesDirectly(files);
     }
   };
 
@@ -366,7 +375,7 @@ export function TaskDrawer({
   );
 
   const task = state?.mode === 'edit' ? state.task : null;
-  const canEdit = task?.status === 'backlog';
+  const canEdit = task?.status === 'backlog' || task?.status === 'manual';
 
   return (
     <Sheet open={state !== null} onOpenChange={(open) => !open && onClose()}>
@@ -434,20 +443,12 @@ export function TaskDrawer({
                 {renderCloseButton()}
               </div>
 
-              {task.description && task.description.trim().length > 0 && (
-                <p className="line-clamp-1 px-4 pt-2 text-sm text-muted-foreground">
-                  {task.description}
-                </p>
-              )}
-
               <div className="px-4 py-2">
                 <TaskDrawerAttachmentRow
                   items={headerAttachments}
                   canEdit={canEdit}
                   onAddFiles={(files) => {
-                    void attachmentsRef.current?.addFiles(files);
-                    // optimistic delayed refetch — AttachmentsSection поднимет canonical state.
-                    setTimeout(refetchHeaderAttachments, 400);
+                    void uploadFilesDirectly(files);
                   }}
                 />
               </div>
@@ -470,27 +471,6 @@ export function TaskDrawer({
                   )}
                 </div>
               )}
-
-              {canEdit && (
-                <AttachmentsSection
-                  ref={attachmentsRef}
-                  projectId={task.projectId}
-                  taskId={task.id}
-                  onChange={() => {
-                    onCommitsChange?.();
-                    refetchHeaderAttachments();
-                  }}
-                />
-              )}
-
-              <div className="border-t pt-4">
-                <TaskCommentsSection
-                  projectId={task.projectId}
-                  taskId={task.id}
-                  onCommentCreatedRef={onCommentCreatedRef}
-                  onFirstLoad={scrollBodyToBottom}
-                />
-              </div>
 
               {showCommits && (
                 <div className="border-t pt-4">
@@ -518,6 +498,15 @@ export function TaskDrawer({
                   )}
                 </div>
               )}
+
+              <div className="border-t pt-4">
+                <TaskCommentsSection
+                  projectId={task.projectId}
+                  taskId={task.id}
+                  onCommentCreatedRef={onCommentCreatedRef}
+                  onFirstLoad={scrollBodyToBottom}
+                />
+              </div>
             </div>
 
             {/* === STICKY FOOTER === */}
@@ -749,185 +738,6 @@ function PendingAttachmentsSection({
   );
 }
 
-// =========================================================
-// Attachments — список + загрузка для уже существующей задачи. ExposeFiles
-// через ref: form-level paste-handler в TaskDialog зовёт addFiles(files) когда
-// пользователь жмёт Ctrl+V где-то на форме (включая фокус в textarea).
-// =========================================================
-
-type AttachmentsHandle = {
-  addFiles: (files: FileList | File[]) => Promise<void>;
-};
-
-function AttachmentsSection({
-  ref,
-  projectId,
-  taskId,
-  onChange,
-}: {
-  ref?: Ref<AttachmentsHandle>;
-  projectId: string;
-  taskId: string;
-  onChange: () => void;
-}): React.ReactElement {
-  const { taskRepository } = useContainer();
-  const [items, setItems] = useState<TaskAttachment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [uploadingCount, setUploadingCount] = useState(0);
-  const [dragActive, setDragActive] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<TaskAttachment | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    taskRepository
-      .listAttachments(projectId, taskId)
-      .then((list) => {
-        if (!cancelled) setItems(list);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) toast.error(`Не удалось загрузить аттачи: ${(e as Error).message}`);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, taskId, taskRepository]);
-
-  const uploadFiles = async (files: FileList | File[]): Promise<void> => {
-    const valid = Array.from(files);
-    if (valid.length === 0) return;
-    setUploadingCount((c) => c + valid.length);
-    for (const file of valid) {
-      try {
-        const att = await taskRepository.uploadAttachment(projectId, taskId, file);
-        setItems((prev) => [...prev, att]);
-        onChange();
-      } catch (e) {
-        toast.error(`Не удалось загрузить ${file.name}: ${(e as Error).message}`);
-      } finally {
-        setUploadingCount((c) => c - 1);
-      }
-    }
-  };
-
-  useImperativeHandle(ref, () => ({ addFiles: uploadFiles }));
-
-  const handleDragOver = (e: DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    setDragActive(true);
-  };
-  const handleDragLeave = (e: DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    setDragActive(false);
-  };
-  const handleDrop = (e: DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    setDragActive(false);
-    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-      void uploadFiles(e.dataTransfer.files);
-    }
-  };
-
-  const handleDelete = async (att: TaskAttachment): Promise<void> => {
-    if (!window.confirm(`Удалить «${att.filename}»?`)) return;
-    try {
-      await taskRepository.deleteAttachment(projectId, taskId, att.id);
-      setItems((prev) => prev.filter((a) => a.id !== att.id));
-      onChange();
-    } catch (e) {
-      toast.error(`Не удалось удалить: ${(e as Error).message}`);
-    }
-  };
-
-  return (
-    <div className="space-y-2" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-      <div className="flex items-center justify-between">
-        <Label>Файлы и&nbsp;картинки</Label>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1.5"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <Paperclip className="size-3.5" />
-          Прикрепить
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) void uploadFiles(e.target.files);
-            e.target.value = '';
-          }}
-        />
-      </div>
-
-      <div
-        className={`grid grid-cols-3 gap-2 rounded-md border-2 border-dashed p-2 transition-colors ${
-          dragActive ? 'border-primary bg-primary/5' : 'border-border'
-        }`}
-      >
-        {items.map((att) => (
-          <button
-            key={att.id}
-            type="button"
-            onClick={() => setPreview(att)}
-            className="group relative aspect-square overflow-hidden rounded border bg-muted"
-            aria-label={`Открыть ${att.filename}`}
-          >
-            <AttachmentThumb url={att.url} name={att.filename} mime={att.mimeType} />
-            <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity group-hover:opacity-100">
-              <p className="w-full truncate px-1.5 pb-1 text-left text-[10px] text-white">
-                {att.filename}
-              </p>
-            </div>
-            <span
-              role="button"
-              aria-label="Удалить"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                void handleDelete(att);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  void handleDelete(att);
-                }
-              }}
-              className="absolute right-1 top-1 grid size-6 cursor-pointer place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-destructive group-hover:opacity-100"
-            >
-              <Trash2 className="size-3" />
-            </span>
-          </button>
-        ))}
-        {Array.from({ length: uploadingCount }).map((_, i) => (
-          <div
-            key={`uploading-${i}`}
-            className="grid aspect-square place-items-center rounded border bg-muted/40"
-          >
-            <Loader2 className="size-5 animate-spin text-muted-foreground" />
-          </div>
-        ))}
-        {items.length === 0 && uploadingCount === 0 && !loading && (
-          <div className="col-span-3 grid place-items-center py-6 text-center text-xs text-muted-foreground">
-            Перетащи файлы сюда, вставь из&nbsp;буфера (Ctrl+V) или нажми «Прикрепить».
-          </div>
-        )}
-      </div>
-
-      <AttachmentLightbox attachment={preview} onClose={() => setPreview(null)} />
-    </div>
-  );
-}
 
 // =========================================================
 // Inline-edit описания задачи. По дефолту — статичный текст; клик → textarea, autofocus,

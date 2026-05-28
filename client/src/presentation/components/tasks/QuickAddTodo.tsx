@@ -59,7 +59,15 @@ export function QuickAddTodo({
   aiProjectId = null,
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
-  const [text, setText] = useState('');
+  // Persist text across orientation changes on mobile — the browser may tear down
+  // and rebuild the layout (causing React to remount), losing useState.
+  const STORAGE_KEY = 'pf:quick-add-text';
+  const [text, setText] = useState(() => {
+    try { return sessionStorage.getItem(STORAGE_KEY) ?? ''; } catch { return ''; }
+  });
+  useEffect(() => {
+    try { if (text) sessionStorage.setItem(STORAGE_KEY, text); else sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  }, [text]);
   const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
   const [delegateUserId, setDelegateUserId] = useState<string | null>(null);
   const [deadline, setDeadline] = useState<string | null>(null);
@@ -157,6 +165,7 @@ export function QuickAddTodo({
       pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
       setPending([]);
       setText('');
+      try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
       setRalphMode('normal');
       setDelegateUserId(null);
       setDeadline(null);
