@@ -24,6 +24,11 @@ type Props = {
   // Доп. контрол в шапке колонки (слева от «+»). Сейчас используется done-колонкой
   // для переключателя порядка сортировки.
   headerExtra?: React.ReactNode;
+  // Inbox-only: показывать круглый чекбокс «выполнено» на каждой карточке.
+  // Также пробрасывает lastDoneTaskId/lastTodoTaskId для afterTaskId при move'е.
+  showCheckbox?: boolean;
+  lastDoneTaskId?: string | null;
+  lastTodoTaskId?: string | null;
 };
 
 export function KanbanColumn({
@@ -37,6 +42,9 @@ export function KanbanColumn({
   onQuickPromote,
   onTaskChanged,
   headerExtra,
+  showCheckbox = false,
+  lastDoneTaskId = null,
+  lastTodoTaskId = null,
 }: Props): React.ReactElement {
   // Droppable нужен чтобы можно было кинуть карточку в ПУСТУЮ колонку —
   // SortableContext один не реагирует на drop в empty list.
@@ -98,6 +106,9 @@ export function KanbanColumn({
               showShortId={showShortId}
               onQuickPromote={onQuickPromote}
               onTaskChanged={onTaskChanged}
+              showCheckbox={showCheckbox}
+              lastDoneTaskId={lastDoneTaskId}
+              lastTodoTaskId={lastTodoTaskId}
             />
           ))}
         </SortableContext>

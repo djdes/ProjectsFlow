@@ -8,6 +8,7 @@ import { taskShortId } from '@/domain/task/Task';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import { RalphModeBadge } from './RalphMode';
+import { InboxCheckbox } from './InboxCheckbox';
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
   backlog: -1,
@@ -24,30 +25,40 @@ type Props = {
   // Если false — скрываем UI коммит-привязки: секцию в диалоге, short-id в строках/заголовке.
   // Для inbox-проекта так: у него нет git-репо, привязывать нечего.
   showCommits?: boolean;
+  // Скрыть выполненные (status='done'). Toggle на странице InboxPage.
+  hideDone?: boolean;
 };
 
 // Плоский список задач — альтернатива канбану. UX заточен под inbox: на самом верху
 // quick-add (Enter сразу создаёт), ниже плоский список без секций. Done-задачи
 // перечёркиваются. Для аттачей/коммитов — клик по строке открывает диалог.
-export function TaskListView({ projectId, showCommits = true }: Props): React.ReactElement {
+export function TaskListView({ projectId, showCommits = true, hideDone = false }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, remove, refetch } = useTasks(projectId);
   const [dialog, setDialog] = useState<TaskDrawerState | null>(null);
 
+  // Фильтр hide-done применяем ДО сортировки/группировки. Сами done-задачи
+  // остаются в data — это просто скрытие в текущем view'е.
+  const visible = hideDone ? tasks.filter((t) => t.status !== 'done') : tasks;
+
   // Сортируем по статусу (todo → in_progress → done), внутри статуса — по position.
   // Это даёт «открытые наверху, готовые внизу» без явных section-заголовков.
-  const sorted = [...tasks].sort((a, b) => {
+  const sorted = [...visible].sort((a, b) => {
     const s = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
     if (s !== 0) return s;
     return a.position - b.position;
   });
 
-  // Tails для footer-композера в TaskDrawer — последняя задача в backlog/todo
-  // по полю position (тот же критерий что в KanbanBoard).
+  // Tails для footer-композера в TaskDrawer + чекбокса (afterTaskId при move'е).
+  // Считаем по ВСЕМ задачам (не visible), иначе при hideDone чекбокс перемещения
+  // в done будет промахиваться мимо реального хвоста.
   const sortByPos = (a: Task, b: Task): number => a.position - b.position;
   const backlogList = tasks.filter((t) => t.status === 'backlog').sort(sortByPos);
   const todoList = tasks.filter((t) => t.status === 'todo').sort(sortByPos);
+  const doneList = tasks.filter((t) => t.status === 'done').sort(sortByPos);
   const backlogTail = backlogList[backlogList.length - 1] ?? null;
   const todoTail = todoList[todoList.length - 1] ?? null;
+  const lastTodoTaskId = todoTail?.id ?? null;
+  const lastDoneTaskId = doneList[doneList.length - 1]?.id ?? null;
 
   const handleDialogSubmit = async (input: {
     description: string;
@@ -109,8 +120,12 @@ export function TaskListView({ projectId, showCommits = true }: Props): React.Re
               key={t.id}
               task={t}
               showShortId={showCommits}
+              showCheckbox={!showCommits}
+              lastDoneTaskId={lastDoneTaskId}
+              lastTodoTaskId={lastTodoTaskId}
               onEdit={() => setDialog({ mode: 'edit', task: t })}
               onDelete={() => handleDelete(t)}
+              onChanged={() => void refetch()}
             />
           ))}
         </ul>
@@ -182,13 +197,21 @@ function QuickAddInput({
 function TaskListRow({
   task,
   showShortId,
+  showCheckbox,
+  lastDoneTaskId,
+  lastTodoTaskId,
   onEdit,
   onDelete,
+  onChanged,
 }: {
   task: Task;
   showShortId: boolean;
+  showCheckbox: boolean;
+  lastDoneTaskId: string | null;
+  lastTodoTaskId: string | null;
   onEdit: () => void;
   onDelete: () => void;
+  onChanged: () => void;
 }): React.ReactElement {
   const isDone = task.status === 'done';
   const hasBadges =
@@ -202,6 +225,14 @@ function TaskListRow({
       className="group flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
       onClick={onEdit}
     >
+      {showCheckbox && !task.delegatedToAgent && (
+        <InboxCheckbox
+          task={task}
+          lastDoneTaskId={lastDoneTaskId}
+          lastTodoTaskId={lastTodoTaskId}
+          onChanged={onChanged}
+        />
+      )}
       <div className="min-w-0 flex-1">
         <p
           className={cn(

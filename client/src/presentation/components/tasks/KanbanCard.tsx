@@ -9,6 +9,7 @@ import { taskShortId } from '@/domain/task/Task';
 import { AgentJobBadge } from './AgentJobBadge';
 import { ClaudeIcon } from './ClaudeIcon';
 import { DelegateToAgentButton } from './DelegateToAgentButton';
+import { InboxCheckbox } from './InboxCheckbox';
 import { RalphModeBadge } from './RalphMode';
 import { STATUS_LABEL } from './statusLabels';
 
@@ -28,6 +29,11 @@ type Props = {
   // Вызывается после изменения состояния agent-job (enqueue / cancel) — триггерит
   // refetch tasks в родителе чтобы обновить бейдж.
   onTaskChanged?: () => void;
+  // Показывать круглый чекбокс «выполнено» слева от описания. Только для inbox
+  // и только если задача не в работе у Ralph.
+  showCheckbox?: boolean;
+  lastDoneTaskId?: string | null;
+  lastTodoTaskId?: string | null;
 };
 
 // Кастомный transition для reflow соседей при drag. Out-quart — плавнее дефолтного
@@ -45,6 +51,9 @@ export function KanbanCard({
   showShortId = true,
   onQuickPromote,
   onTaskChanged,
+  showCheckbox = false,
+  lastDoneTaskId = null,
+  lastTodoTaskId = null,
 }: Props): React.ReactElement {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -114,8 +123,24 @@ export function KanbanCard({
           isDragging && !preview && 'cursor-grabbing opacity-30',
         )}
       >
+        {showCheckbox && !preview && !task.delegatedToAgent && (
+          <div className="pt-0.5" onPointerDown={stopDrag}>
+            <InboxCheckbox
+              task={task}
+              lastDoneTaskId={lastDoneTaskId}
+              lastTodoTaskId={lastTodoTaskId}
+              onChanged={onTaskChanged}
+            />
+          </div>
+        )}
         <div className="min-w-0 flex-1">
-          <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-snug">
+          <p
+            className={cn(
+              'line-clamp-3 whitespace-pre-wrap text-sm leading-snug',
+              task.status === 'done' &&
+                'text-muted-foreground line-through decoration-muted-foreground/40',
+            )}
+          >
             {task.description ?? '—'}
           </p>
           {(showShortId ||

@@ -33,6 +33,8 @@ type Props = {
   showCommits?: boolean;
   // Имя проекта — пробрасывается в TaskDrawer как контекстный заголовок. В inbox не передаём.
   projectName?: string;
+  // Скрыть выполненные (status='done'). Toggle на странице InboxPage.
+  hideDone?: boolean;
 };
 
 // Какие колонки реально рисуем. in_progress и awaiting_clarification не имеют
@@ -98,8 +100,11 @@ function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStat
   return out;
 }
 
-export function KanbanBoard({ projectId, showCommits = true, projectName }: Props): React.ReactElement {
+export function KanbanBoard({ projectId, showCommits = true, projectName, hideDone = false }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
+  // showCheckbox = «это inbox-board». Inbox-board задаётся через showCommits=false
+  // (у inbox нет git-репо, так что коммиты скрыты). Единственный сигнал — этого хватает.
+  const isInbox = !showCommits;
   const [dialog, setDialog] = useState<TaskDrawerState | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   // Deep-link из email-кнопки: ?task=<id> открывает диалог задачи (один раз после загрузки).
@@ -133,6 +138,12 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
   // beforeTaskId при move'е через переключатель «В черновики / Воркеру».
   const backlogTail = grouped.backlog[grouped.backlog.length - 1] ?? null;
   const todoTail = grouped.todo[grouped.todo.length - 1] ?? null;
+  // Inbox-чекбокс: при ткании «done» кладём в конец done-колонки; «un-done» — в конец todo.
+  // doneOrder влияет на отображение (newest сверху/снизу), но «последний по position»
+  // — это для расчёта позиции на сервере; используем хвост по position среди done.
+  const doneByPos = useMemo(() => [...tasks.filter((t) => t.status === 'done')].sort((a, b) => a.position - b.position), [tasks]);
+  const lastDoneTaskId = doneByPos[doneByPos.length - 1]?.id ?? null;
+  const lastTodoTaskId = todoTail?.id ?? null;
 
   const handleDragStart = (e: DragStartEvent): void => {
     // Если drop-таймер ещё висит от предыдущего перетаскивания — гасим, иначе он позже
@@ -297,13 +308,16 @@ export function KanbanBoard({ projectId, showCommits = true, projectName }: Prop
               key={status}
               status={status}
               label={STATUS_LABEL[status]}
-              tasks={grouped[status]}
+              tasks={hideDone && status === 'done' ? [] : grouped[status]}
               onCreate={(s) => setDialog({ mode: 'create', status: s })}
               onEdit={(t) => setDialog({ mode: 'edit', task: t })}
               onDelete={handleDelete}
               showShortId={showCommits}
               onQuickPromote={status === 'backlog' ? handleQuickPromote : undefined}
               onTaskChanged={() => void refetch()}
+              showCheckbox={isInbox}
+              lastDoneTaskId={lastDoneTaskId}
+              lastTodoTaskId={lastTodoTaskId}
               headerExtra={
                 status === 'done' ? (
                   <Button
