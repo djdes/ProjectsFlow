@@ -1,10 +1,17 @@
-import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type FormEvent,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, FileText, Inbox, Paperclip, Trash2 } from 'lucide-react';
+import { ChevronDown, FileText, Inbox, Paperclip, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -16,13 +23,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
+import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useProjects } from '@/presentation/hooks/useProjects';
 import {
   extractClipboardFiles,
-  formatBytes,
   isImageMime,
 } from '@/presentation/components/attachments/files';
 import { RalphModeSelect } from '@/presentation/components/tasks/RalphMode';
@@ -41,6 +47,10 @@ type PendingFile = { id: string; file: File; previewUrl: string };
 // Sentinel для пункта «Без проекта» в radio-группе (radix требует строковое value).
 const INBOX_VALUE = '__inbox__';
 
+// Компактный Todoist-style диалог: textarea сверху, ряд пилюль-кнопок снизу
+// (Приоритет, Дедлайн, Делегировать, RalphMode, Вложение), внизу — проект-чип
+// + Cancel/Submit. Файлы — chips НАД textarea (как в QuickAddTodo). Drag&drop
+// и Ctrl+V работают на самом текстовом поле.
 export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement {
   const navigate = useNavigate();
   const { taskRepository, projectRepository } = useContainer();
@@ -55,6 +65,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
+  const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // autoFocus только на desktop — на мобильных клавиатура сразу перекрывает диалог.
   const descRef = useCallback((el: HTMLTextAreaElement | null) => {
@@ -70,6 +81,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       setDeadline(null);
       setPriority(null);
       setError(null);
+      setDragActive(false);
       setPending((prev) => {
         prev.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
         return [];
@@ -94,17 +106,36 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       })),
     ]);
   };
+
   const removeFile = (id: string): void => {
     setPending((prev) => {
-      prev.filter((p) => p.id === id).forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
+      const target = prev.find((p) => p.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
       return prev.filter((p) => p.id !== id);
     });
   };
+
   const handlePaste = (e: ClipboardEvent<HTMLFormElement>): void => {
     const files = extractClipboardFiles(e.clipboardData);
     if (files.length === 0) return;
     e.preventDefault();
     addFiles(files);
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLFormElement>): void => {
+    e.preventDefault();
+    setDragActive(true);
+  };
+  const handleDragLeave = (e: DragEvent<HTMLFormElement>): void => {
+    e.preventDefault();
+    setDragActive(false);
+  };
+  const handleDrop = (e: DragEvent<HTMLFormElement>): void => {
+    e.preventDefault();
+    setDragActive(false);
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      addFiles(e.dataTransfer.files);
+    }
   };
 
   // Только реальные проекты — inbox выбирается пунктом «Без проекта».
@@ -156,15 +187,52 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Новая задача</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} onPaste={handlePaste} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="task-desc">
-              Описание <span className="text-destructive">*</span>
-            </Label>
+        <form
+          onSubmit={handleSubmit}
+          onPaste={handlePaste}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className="space-y-3"
+        >
+          {/* Drag overlay indicator. Не блокирует ввод — просто рамку подсветит. */}
+          <div
+            className={cn(
+              'relative space-y-2 rounded-md border bg-background px-2 py-2 transition-colors',
+              dragActive ? 'border-primary bg-primary/5' : 'border-input',
+            )}
+          >
+            {pending.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {pending.map((pf) => (
+                  <span
+                    key={pf.id}
+                    className="inline-flex items-center gap-1.5 rounded border bg-background py-0.5 pl-1.5 pr-1 text-[11px]"
+                    title={pf.file.name}
+                  >
+                    {pf.previewUrl ? (
+                      <img src={pf.previewUrl} alt="" className="size-4 rounded object-cover" />
+                    ) : (
+                      <FileText className="size-3.5 text-muted-foreground" />
+                    )}
+                    <span className="max-w-[160px] truncate">{pf.file.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(pf.id)}
+                      className="grid size-4 place-items-center rounded-full text-muted-foreground hover:bg-destructive hover:text-white"
+                      aria-label="Убрать"
+                    >
+                      <X className="size-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
             <textarea
               id="task-desc"
               ref={descRef}
@@ -172,24 +240,74 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
               maxLength={5000}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Что нужно сделать. Контекст, шаги, ссылки."
-              className="block w-full resize-none rounded-md border bg-background p-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:border-foreground/30 focus:outline-none"
+              placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
+              className="block w-full resize-none bg-transparent text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>Проект</Label>
+          {/* Ряд пилюль под полем ввода: каждая открывает свой dropdown / picker. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <PrioritySelect value={priority} onChange={setPriority} disabled={saving} compact />
+            <DeadlinePicker value={deadline} onChange={setDeadline} disabled={saving} />
+            {projectId === null && (
+              <DelegateSelect
+                value={delegateUserId}
+                onChange={setDelegateUserId}
+                disabled={saving}
+              />
+            )}
+            <RalphModeSelect
+              value={ralphMode}
+              onChange={setRalphMode}
+              disabled={saving}
+              className="!h-7 !px-2 text-xs"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={saving}
+              title="Вложение (или перетащи файл / Ctrl+V)"
+            >
+              <Paperclip className="size-3.5" />
+              Вложение
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) addFiles(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </div>
+
+          {error && <p className="text-xs text-destructive">{error}</p>}
+
+          {/* Footer: проект-чип слева, Cancel/Submit справа. */}
+          <div className="flex items-center justify-between gap-2 border-t pt-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button type="button" variant="outline" className="w-full justify-between font-normal">
-                  <span className="flex items-center gap-2 truncate">
-                    {projectId === null && <Inbox className="size-4 shrink-0 text-muted-foreground" />}
-                    {selectedName}
-                  </span>
-                  <ChevronDown className="size-4 shrink-0 opacity-60" />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={saving}
+                  className="h-8 max-w-[60%] gap-1.5 px-2 text-xs font-normal"
+                >
+                  <Inbox className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{selectedName}</span>
+                  <ChevronDown className="size-3 shrink-0 opacity-60" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="max-h-72 w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto">
+              <DropdownMenuContent
+                align="start"
+                className="max-h-72 min-w-[260px] overflow-y-auto"
+              >
                 <DropdownMenuRadioGroup
                   value={projectId ?? INBOX_VALUE}
                   onValueChange={(v) => setProjectId(v === INBOX_VALUE ? null : v)}
@@ -205,100 +323,16 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
 
-          <div className="space-y-2">
-            <Label>Режим работы Ralph</Label>
-            <RalphModeSelect value={ralphMode} onChange={setRalphMode} disabled={saving} />
-          </div>
-
-          {projectId === null && (
-            <div className="space-y-2">
-              <Label>Делегировать</Label>
-              <DelegateSelect
-                value={delegateUserId}
-                onChange={setDelegateUserId}
-                disabled={saving}
-              />
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Приоритет</Label>
-              <PrioritySelect value={priority} onChange={setPriority} disabled={saving} />
-            </div>
-            <div className="space-y-2">
-              <Label>Срок</Label>
-              <DeadlinePicker value={deadline} onChange={setDeadline} disabled={saving} />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Файлы</Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1.5"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Paperclip className="size-3.5" />
-                Прикрепить
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                Отмена
               </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files) addFiles(e.target.files);
-                  e.target.value = '';
-                }}
-              />
+              <Button type="submit" disabled={disabled}>
+                {saving ? 'Добавляем…' : 'Добавить'}
+              </Button>
             </div>
-            {pending.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {pending.map((pf) => (
-                  <span
-                    key={pf.id}
-                    className="inline-flex items-center gap-1 rounded border bg-muted/60 py-0.5 pl-1.5 pr-1 text-[11px]"
-                  >
-                    {pf.previewUrl ? (
-                      <img src={pf.previewUrl} alt="" className="size-4 rounded object-cover" />
-                    ) : (
-                      <FileText className="size-3.5 text-muted-foreground" />
-                    )}
-                    <span className="max-w-[140px] truncate">{pf.file.name}</span>
-                    <span className="text-muted-foreground">{formatBytes(pf.file.size)}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(pf.id)}
-                      className="grid size-4 place-items-center rounded-full text-muted-foreground hover:bg-destructive hover:text-white"
-                      aria-label="Убрать"
-                    >
-                      <Trash2 className="size-2.5" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <p className="text-[11px] text-muted-foreground">
-              Любой тип файла. Можно вставить из&nbsp;буфера (Ctrl+V).
-            </p>
           </div>
-
-          {error && <p className="text-xs text-destructive">{error}</p>}
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Отмена
-            </Button>
-            <Button type="submit" disabled={disabled}>
-              {saving ? 'Добавляем…' : 'Добавить'}
-            </Button>
-          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
