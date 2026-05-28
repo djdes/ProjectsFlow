@@ -1,4 +1,5 @@
 import type { AgentJob } from '../agentJob/AgentJob';
+import type { TaskDelegation } from './TaskDelegation';
 
 // 'awaiting_clarification' — активная задача на паузе до действия человека (ответ на
 // ralph-question, разбор после maxAttempts retry, переформулировка). Между in_progress
@@ -70,6 +71,9 @@ export type Task = {
   readonly ralphCancelRequestedAt: Date | null;
   readonly ralphCancelRequestedBy: string | null;
   readonly ralphCancelRequestedByDisplayName: string | null;
+  // Активная (pending|accepted) делегация — null если задача не делегирована.
+  // Заполняется list-endpoint'ом left-join'ом. Optional: undefined = «не загружено».
+  readonly delegation?: TaskDelegation | null;
 };
 
 // Короткий ID задачи (первые 8 hex-символов UUID без дефисов) — для вставки в commit

@@ -1,3 +1,5 @@
+import type { TaskDelegation } from './TaskDelegation.js';
+
 // 'awaiting_clarification' — активная работа на паузе до действия человека
 // (ответ на ralph-question, разбор после maxAttempts retry, переформулировка задачи,
 // auto-timeout F11). В пайплайне сидит между in_progress и done, поэтому в массиве
@@ -49,4 +51,9 @@ export type Task = {
   readonly ralphCancelRequestedByDisplayName: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  // Активная (pending|accepted) делегация — null если задача не делегирована.
+  // Заполняется list/get-endpoint'ом left-join'ом на task_delegations (см. db/039).
+  // Optional: не все repository-call'ы джойнят (e.g. agent-internal getById),
+  // поэтому undefined трактуется как «не загружено», null — «гарантированно нет».
+  readonly delegation?: TaskDelegation | null;
 };
