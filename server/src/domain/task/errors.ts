@@ -53,3 +53,93 @@ export class TaskCommentBodyEmptyError extends Error {
     this.name = 'TaskCommentBodyEmptyError';
   }
 }
+
+// Делегирование inbox-задач (см. db/039, spec inbox-checkbox-and-delegation).
+
+export class SelfDelegationError extends Error {
+  readonly status = 400;
+  constructor() {
+    super('Нельзя делегировать задачу самому себе');
+    this.name = 'SelfDelegationError';
+  }
+}
+
+export class DelegationOnNonInboxError extends Error {
+  readonly status = 400;
+  constructor() {
+    super('Делегировать можно только задачи во «Входящих»');
+    this.name = 'DelegationOnNonInboxError';
+  }
+}
+
+export class DelegateNotInSharedMembersError extends Error {
+  readonly status = 403;
+  constructor() {
+    super('Этому пользователю нельзя делегировать (он не в общих проектах)');
+    this.name = 'DelegateNotInSharedMembersError';
+  }
+}
+
+export class DelegationNotFoundError extends Error {
+  readonly status = 404;
+  constructor(public readonly delegationId: string) {
+    super(`Delegation not found: ${delegationId}`);
+    this.name = 'DelegationNotFoundError';
+  }
+}
+
+export class DelegationWrongStateError extends Error {
+  readonly status = 409;
+  constructor(public readonly got: string, public readonly expected: string) {
+    super(`Ожидался статус ${expected}, текущий: ${got}`);
+    this.name = 'DelegationWrongStateError';
+  }
+}
+
+export class NotDelegateError extends Error {
+  readonly status = 403;
+  constructor() {
+    super('Только делегат может выполнять это действие');
+    this.name = 'NotDelegateError';
+  }
+}
+
+export class NotCreatorError extends Error {
+  readonly status = 403;
+  constructor() {
+    super('Только создатель задачи может выполнять это действие');
+    this.name = 'NotCreatorError';
+  }
+}
+
+export class NotInboxTaskError extends Error {
+  readonly status = 400;
+  constructor() {
+    super('Это действие доступно только для inbox-задач');
+    this.name = 'NotInboxTaskError';
+  }
+}
+
+export class TargetProjectNotFoundError extends Error {
+  readonly status = 404;
+  constructor(public readonly projectId: string) {
+    super(`Project not found: ${projectId}`);
+    this.name = 'TargetProjectNotFoundError';
+  }
+}
+
+export class TargetProjectIsInboxError extends Error {
+  readonly status = 400;
+  constructor() {
+    super('Целевой проект — это inbox; такого переноса не делаем');
+    this.name = 'TargetProjectIsInboxError';
+  }
+}
+
+export class AlreadyDelegatedError extends Error {
+  readonly status = 409;
+  constructor() {
+    super('Задача уже делегирована');
+    this.name = 'AlreadyDelegatedError';
+  }
+}

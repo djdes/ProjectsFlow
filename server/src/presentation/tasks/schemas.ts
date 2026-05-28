@@ -16,6 +16,9 @@ export const createTaskSchema = z.object({
   description: z.string().trim().min(1, 'Введите описание').max(5000),
   status: taskStatusSchema.optional(),
   ralphMode: ralphModeSchema.optional(),
+  // Опциональное one-to-one делегирование (только для inbox-задач). UUID юзера.
+  // Сервер дополнительно валидирует: не self, в shared-members caller'а, проект isInbox.
+  delegateUserId: z.string().uuid().nullable().optional(),
 });
 
 export const updateTaskSchema = z

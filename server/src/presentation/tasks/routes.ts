@@ -226,6 +226,7 @@ export function tasksRouter(deps: Deps): Router {
         description: body.description,
         status: body.status ?? 'todo',
         ralphMode: body.ralphMode,
+        delegateUserId: body.delegateUserId ?? null,
       });
       deps.notifyTaskChanged(projectId);
       void deps.notifier.onTaskCreated(projectId, req.user!.id, task, 'team').catch(() => {});
