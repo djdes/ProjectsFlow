@@ -36,7 +36,8 @@ function relativeTime(date: Date): string {
 }
 
 export function NotificationsPage(): React.ReactElement {
-  const { notificationRepository, inviteRepository, projectRepository } = useContainer();
+  const { notificationRepository, inviteRepository, projectRepository, taskDelegationRepository } =
+    useContainer();
   const navigate = useNavigate();
   const { refresh: refreshBadge } = useUnreadNotificationsCount();
   const { applyAppend } = useProjectsContext();
@@ -105,7 +106,39 @@ export function NotificationsPage(): React.ReactElement {
     if (n.payload.type === 'comment_mention' || n.payload.type === 'join_request') {
       navigate(`/projects/${n.payload.projectId}`);
     }
+    if (
+      n.payload.type === 'task_delegation' ||
+      n.payload.type === 'task_delegation_resolved'
+    ) {
+      // Ведём на inbox — там видны pending и обычный список с метками делегирования.
+      navigate('/inbox');
+    }
+    if (n.payload.type === 'task_assigned_to_project') {
+      navigate(`/projects/${n.payload.projectId}`);
+    }
     // project_invite: переход — по кнопке «Принять» (handleAcceptInvite), не по строке.
+  };
+
+  const handleAcceptDelegation = async (n: Notification): Promise<void> => {
+    if (n.payload.type !== 'task_delegation') return;
+    try {
+      await taskDelegationRepository.accept(n.payload.delegationId);
+      await markRead(n);
+      toast.success('Задача принята');
+    } catch (e) {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+    }
+  };
+
+  const handleDeclineDelegation = async (n: Notification): Promise<void> => {
+    if (n.payload.type !== 'task_delegation') return;
+    try {
+      await taskDelegationRepository.decline(n.payload.delegationId);
+      await markRead(n);
+      toast.success('Задача отклонена');
+    } catch (e) {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+    }
   };
 
   const handleResolveJoin = async (n: Notification, accept: boolean): Promise<void> => {
@@ -177,6 +210,8 @@ export function NotificationsPage(): React.ReactElement {
               onClick={() => void handleClick(n)}
               onAccept={() => void handleAcceptInvite(n)}
               onResolveJoin={(accept) => void handleResolveJoin(n, accept)}
+              onAcceptDelegation={() => void handleAcceptDelegation(n)}
+              onDeclineDelegation={() => void handleDeclineDelegation(n)}
             />
           ))}
         </ul>
@@ -253,11 +288,15 @@ function NotificationRow({
   onClick,
   onAccept,
   onResolveJoin,
+  onAcceptDelegation,
+  onDeclineDelegation,
 }: {
   n: Notification;
   onClick: () => void;
   onAccept: () => void;
   onResolveJoin: (accept: boolean) => void;
+  onAcceptDelegation: () => void;
+  onDeclineDelegation: () => void;
 }): React.ReactElement {
   const isUnread = n.readAt === null;
   const payload = n.payload;
@@ -334,6 +373,65 @@ function NotificationRow({
               </Button>
             </div>
           </>
+        )}
+
+        {payload.type === 'task_delegation' && (
+          <>
+            <p className="text-sm leading-snug">
+              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> делегировал вам задачу:
+            </p>
+            <p className="line-clamp-2 text-xs italic text-muted-foreground">
+              «{payload.taskExcerpt || '(без описания)'}»
+            </p>
+            <div className="flex gap-2 pt-1">
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAcceptDelegation();
+                }}
+              >
+                Принять
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeclineDelegation();
+                }}
+              >
+                Отклонить
+              </Button>
+            </div>
+          </>
+        )}
+
+        {payload.type === 'task_delegation_resolved' && (
+          <p className="text-sm leading-snug">
+            <span className="font-medium">{payload.actorDisplayName}</span>{' '}
+            {payload.resolution === 'accepted' ? 'принял' : 'отклонил'} делегированную вами задачу
+            {payload.taskExcerpt && (
+              <>
+                {' '}
+                <span className="italic text-muted-foreground">«{payload.taskExcerpt}»</span>
+              </>
+            )}
+          </p>
+        )}
+
+        {payload.type === 'task_assigned_to_project' && (
+          <p className="text-sm leading-snug">
+            <span className="font-medium">{payload.actorDisplayName}</span> перенёс делегированную вам задачу в{' '}
+            <span className="font-medium">«{payload.projectName}»</span>
+            {payload.taskExcerpt && (
+              <>
+                {' · '}
+                <span className="italic text-muted-foreground">«{payload.taskExcerpt}»</span>
+              </>
+            )}
+          </p>
         )}
 
         {payload.type === 'join_request' && (
