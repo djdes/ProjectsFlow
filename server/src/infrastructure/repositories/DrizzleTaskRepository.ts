@@ -1,6 +1,6 @@
 import { and, asc, eq, max, min, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { tasks, users, type TaskRow } from '../db/schema.js';
+import { projects, taskDelegations, tasks, users, type TaskRow } from '../db/schema.js';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '../../domain/task/Task.js';
 import type {
   CreateTaskInput,
@@ -71,6 +71,24 @@ export class DrizzleTaskRepository implements TaskRepository {
   async listByProject(projectId: string): Promise<Task[]> {
     const rows = await this.baseSelect()
       .where(eq(tasks.projectId, projectId))
+      .orderBy(asc(tasks.status), asc(tasks.position), asc(tasks.id));
+    return rows.map((r) => toTask(r as TaskRowJoined));
+  }
+
+  async listAcceptedDelegatedTo(userId: string): Promise<Task[]> {
+    // JOIN task_delegations + projects: фильтр accepted-делегации к userId на
+    // задачах, которые лежат в inbox-проектах (на всякий — out-of-scope:
+    // делегирование в проектные задачи мы не поддерживаем).
+    const rows = await this.baseSelect()
+      .innerJoin(taskDelegations, eq(taskDelegations.taskId, tasks.id))
+      .innerJoin(projects, eq(projects.id, tasks.projectId))
+      .where(
+        and(
+          eq(taskDelegations.delegateUserId, userId),
+          eq(taskDelegations.status, 'accepted'),
+          eq(projects.isInbox, true),
+        ),
+      )
       .orderBy(asc(tasks.status), asc(tasks.position), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }

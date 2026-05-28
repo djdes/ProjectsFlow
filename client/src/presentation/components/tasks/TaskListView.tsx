@@ -1,4 +1,5 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { GitCommit, ImageIcon, Loader2, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
@@ -42,6 +43,22 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
   const { tasks, loading, error, create, update, remove, refetch } = useTasks(projectId);
   const { user } = useCurrentUser();
   const [dialog, setDialog] = useState<TaskDrawerState | null>(null);
+
+  // Deep-link `?task=<id>` — открывает drawer задачи один раз после загрузки.
+  // Симметрично с KanbanBoard, чтобы переброс из notification работал и в list-view.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkedRef.current || loading) return;
+    const taskId = searchParams.get('task');
+    if (!taskId) return;
+    deepLinkedRef.current = true;
+    const task = tasks.find((t) => t.id === taskId);
+    if (task) setDialog({ mode: 'edit', task });
+    const next = new URLSearchParams(searchParams);
+    next.delete('task');
+    setSearchParams(next, { replace: true });
+  }, [loading, tasks, searchParams, setSearchParams]);
 
   // Фильтр hide-done применяем ДО сортировки/группировки. Сами done-задачи
   // остаются в data — это просто скрытие в текущем view'е.

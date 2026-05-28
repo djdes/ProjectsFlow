@@ -28,8 +28,23 @@ export class ListTasks {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, ownerUserId: string): Promise<TaskWithCounts[]> {
-    await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project');
-    const tasks = await this.deps.tasks.listByProject(projectId);
+    const { project } = await requireProjectAccess(
+      this.deps,
+      projectId,
+      ownerUserId,
+      'read_project',
+    );
+    let tasks = await this.deps.tasks.listByProject(projectId);
+
+    // Inbox-делегата: если caller-owner запрашивает свой inbox, добавим в результат
+    // задачи, которые ему делегированы (accepted) из чужих inbox-проектов. Без этого
+    // делегат не увидит принятую задачу в своих «Входящих» — она физически живёт
+    // в inbox создателя.
+    if (project.isInbox && project.ownerId === ownerUserId) {
+      const delegatedToMe = await this.deps.tasks.listAcceptedDelegatedTo(ownerUserId);
+      tasks = [...tasks, ...delegatedToMe];
+    }
+
     const ids = tasks.map((t) => t.id);
     const commitCounts = await this.deps.taskCommits.countsByTasks(ids);
     const attachmentCounts = await this.deps.attachments.countsByTasks(ids);

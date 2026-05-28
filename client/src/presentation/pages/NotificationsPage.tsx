@@ -106,10 +106,14 @@ export function NotificationsPage(): React.ReactElement {
 
   const handleAcceptDelegation = async (n: Notification): Promise<void> => {
     if (n.payload.type !== 'task_delegation') return;
+    const taskId = n.payload.taskId;
     try {
       await taskDelegationRepository.accept(n.payload.delegationId);
       await markRead(n);
       toast.success('Задача принята');
+      // Открываем задачу сразу — deep-link `?task=<id>` подхватывается
+      // KanbanBoard/TaskListView и открывает drawer.
+      navigate(`/inbox?task=${taskId}`);
     } catch (e) {
       toast.error(`Не удалось: ${(e as Error).message}`);
     }

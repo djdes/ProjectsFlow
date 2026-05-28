@@ -27,6 +27,13 @@ export type UpdateTaskPatch = {
 
 export interface TaskRepository {
   listByProject(projectId: string): Promise<Task[]>;
+  /**
+   * Inbox-задачи (из ЧУЖИХ inbox-проектов), где caller — accepted-делегат.
+   * Используется ListTasks для inbox-view'а делегата: он должен видеть в своём
+   * /inbox список задачи, которые ему делегированы, хотя физически они живут
+   * в inbox-проекте создателя.
+   */
+  listAcceptedDelegatedTo(userId: string): Promise<Task[]>;
   getById(taskId: string): Promise<Task | null>;
   create(input: CreateTaskInput): Promise<Task>;
   update(taskId: string, patch: UpdateTaskPatch): Promise<Task | null>;
