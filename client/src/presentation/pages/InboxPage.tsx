@@ -104,7 +104,7 @@ export function InboxPage(): React.ReactElement {
   }
 
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
+    <div className="flex h-full flex-col gap-4 p-4 sm:gap-6 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <InboxIcon className="size-7 text-primary" />

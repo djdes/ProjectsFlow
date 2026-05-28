@@ -48,7 +48,7 @@ export function TasksPage(): React.ReactElement {
   }
 
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
+    <div className="flex h-full flex-col gap-4 p-4 sm:gap-6 sm:p-6">
       <nav className="flex items-center gap-1 text-sm text-muted-foreground" aria-label="Хлебные крошки">
         <Link to="/" className="hover:text-foreground">
           Проекты

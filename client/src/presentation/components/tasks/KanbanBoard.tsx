@@ -285,7 +285,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
           {VISIBLE_STATUSES.map((s) => (
             <div
               key={s}
-              className="h-64 w-[82vw] max-w-[20rem] shrink-0 animate-pulse rounded-lg bg-muted sm:w-72 sm:max-w-none"
+              className="h-64 w-[82vw] max-w-[20rem] shrink-0 animate-pulse rounded-lg bg-muted/60 sm:w-72 sm:max-w-none sm:bg-muted"
             />
           ))}
         </div>

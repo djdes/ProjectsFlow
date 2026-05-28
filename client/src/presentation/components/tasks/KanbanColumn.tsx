@@ -57,7 +57,7 @@ export function KanbanColumn({
   });
 
   return (
-    <div className="flex w-[82vw] max-w-[20rem] shrink-0 snap-start flex-col rounded-lg border bg-muted/30 sm:w-72 sm:max-w-none">
+    <div className="flex w-[82vw] max-w-[20rem] shrink-0 snap-start flex-col rounded-lg border bg-muted/60 sm:w-72 sm:max-w-none sm:bg-muted/30">
       <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           {label.length > 0 && (

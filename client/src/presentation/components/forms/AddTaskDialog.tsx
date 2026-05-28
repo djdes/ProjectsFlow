@@ -284,8 +284,9 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
 
           {error && <p className="text-xs text-destructive">{error}</p>}
 
-          {/* Footer: проект-чип слева, [RalphMode | Cancel | Submit] справа. */}
-          <div className="flex items-center justify-between gap-2 border-t pt-3">
+          {/* Footer: проект-чип слева, [RalphMode | Cancel | Submit] справа.
+              На мобильных стекается вертикально, на sm+ — горизонтально. */}
+          <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -293,7 +294,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                   variant="ghost"
                   size="sm"
                   disabled={saving}
-                  className="h-8 max-w-[50%] gap-1.5 px-2 text-xs font-normal"
+                  className="h-8 max-w-full gap-1.5 px-2 text-xs font-normal sm:max-w-[50%]"
                 >
                   <Inbox className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="truncate">{selectedName}</span>
@@ -320,12 +321,12 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <RalphModeSelect
                 value={ralphMode}
                 onChange={setRalphMode}
                 disabled={saving}
-                className="!h-8 min-w-[140px] !px-2 text-xs"
+                className="!h-8 min-w-[100px] !px-2 text-xs sm:min-w-[140px]"
               />
               <AiImproveButton
                 text={description}
@@ -333,12 +334,14 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 onImproved={setDescription}
                 disabled={saving}
               />
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-                Отмена
-              </Button>
-              <Button type="submit" disabled={disabled}>
-                {saving ? 'Добавляем…' : 'Добавить'}
-              </Button>
+              <div className="ml-auto flex items-center gap-2">
+                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                  Отмена
+                </Button>
+                <Button type="submit" disabled={disabled}>
+                  {saving ? 'Добавляем…' : 'Добавить'}
+                </Button>
+              </div>
             </div>
           </div>
         </form>

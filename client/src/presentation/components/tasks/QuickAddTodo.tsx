@@ -239,7 +239,7 @@ export function QuickAddTodo({
           className="block w-full resize-none overflow-y-auto bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
         />
 
-        <div className="flex items-center justify-between gap-2 px-1.5 pb-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-1.5 px-1.5 pb-1.5 sm:gap-2">
           <Button
             type="button"
             variant="ghost"
@@ -252,7 +252,7 @@ export function QuickAddTodo({
           >
             <Paperclip className="size-3.5" />
           </Button>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <PrioritySelect
               value={priority}
               onChange={setPriority}
@@ -275,7 +275,7 @@ export function QuickAddTodo({
               value={ralphMode}
               onChange={setRalphMode}
               disabled={submitting}
-              className="!h-7 min-w-[160px] !px-2 !py-0 text-xs"
+              className="!h-7 min-w-[100px] !px-2 !py-0 text-xs sm:min-w-[160px]"
             />
             <AiImproveButton
               text={text}
@@ -297,7 +297,7 @@ export function QuickAddTodo({
               ) : (
                 <Send className="size-3.5" />
               )}
-              Отправить
+              <span className="hidden sm:inline">Отправить</span>
             </Button>
           </div>
         </div>

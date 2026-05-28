@@ -101,7 +101,7 @@ export function KanbanCard({
         }}
         role="button"
         className={cn(
-          'group relative flex touch-none select-none items-start gap-2 rounded-md border bg-card p-3 shadow-sm outline-none',
+          'group relative flex touch-none select-none items-start gap-2 rounded-md border bg-card p-3 shadow-md outline-none sm:shadow-sm',
           // Базовый transition только для тех свойств, которые меняем CSS-ом —
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
           'transition-[box-shadow,border-color,opacity] duration-150 ease-out',
@@ -226,7 +226,7 @@ export function KanbanCard({
           )}
         </div>
         <div
-          className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+          className="flex shrink-0 gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
           onPointerDown={stopDrag}
         >
           {onQuickPromote && !preview && (
