@@ -1,7 +1,6 @@
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
-  agentJobs,
   kbDocuments,
   projectEmployeeAssignments,
   projectExpenses,
@@ -190,7 +189,6 @@ export class DrizzleProjectRepository implements ProjectRepository {
       await tx.delete(tasks).where(eq(tasks.projectId, projectId));
 
       // Прочие project-scoped таблицы. Порядок между ними не важен.
-      await tx.delete(agentJobs).where(eq(agentJobs.projectId, projectId));
       await tx.delete(kbDocuments).where(eq(kbDocuments.projectId, projectId));
       await tx.delete(secrets).where(eq(secrets.projectId, projectId));
       await tx.delete(projectEmployeeAssignments).where(eq(projectEmployeeAssignments.projectId, projectId));

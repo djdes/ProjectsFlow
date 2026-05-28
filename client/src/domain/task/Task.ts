@@ -1,4 +1,3 @@
-import type { AgentJob } from '../agentJob/AgentJob';
 import type { TaskDelegation } from './TaskDelegation';
 
 // 'awaiting_clarification' — активная задача на паузе до действия человека (ответ на
@@ -69,8 +68,6 @@ export type Task = {
   readonly commitCount?: number;
   readonly attachmentCount?: number;
   readonly commentCount?: number;
-  readonly delegatedToAgent: boolean;
-  readonly agentJob: AgentJob | null;
   // Режим работы Ralph (default 'normal' если backend без 035).
   readonly ralphMode: RalphMode;
   // Pull-based отмена Ralph-работы (db/037). null = нет запроса. См. spec

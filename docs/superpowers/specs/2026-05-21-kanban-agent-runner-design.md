@@ -1,9 +1,10 @@
 # Spec: Kanban Agent Runner — авто-выполнение TODO-задач через Claude Code /loop
 
 **Дата:** 2026-05-21
-**Статус:** Утверждён (брейншторм + revision), готов к плану реализации Plan B
-**Зависит от:** Текущий MCP-сервер (`@projectsflow/mcp-server`), Spec #5 (Multi-tenant projects), Plan A backend (`agent_jobs` schema + UI кнопка)
-**Открывает дорогу для:** Scheduled-агенты (cron), cost-tracking, multi-step задачи
+**Статус:** ⚠️ **DEPRECATED 2026-05-28** — реализация удалена из ProjectsFlow (миграция db/043). Реальный диспетчер — `dispatch.ps1` в [PFLoopDispatch](https://github.com/djdes/PFLoopDispatch) — не использует `agent_jobs` queue, а напрямую поллит `/agent/projects/*/tasks` через REST. UI-кнопка «Передать агенту» и весь sticky-флаг `delegated_to_agent` тоже удалены. Эта спека сохранена как историческая.
+**Дата:** 2026-05-21
+**Зависело от:** Текущий MCP-сервер (`@projectsflow/mcp-server`), Spec #5 (Multi-tenant projects), Plan A backend (`agent_jobs` schema + UI кнопка)
+**Открывало дорогу для:** Scheduled-агенты (cron), cost-tracking, multi-step задачи
 
 > **Архитектурный пивот 2026-05-21.** Изначально (первая версия этой спеки) Plan B описывал
 > отдельный PM2-daemon на VPS, который через `spawn claude -p` исполнял бы задачи.

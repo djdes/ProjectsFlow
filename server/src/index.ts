@@ -94,13 +94,6 @@ import { AssignInboxTaskToProject } from './application/task/AssignInboxTaskToPr
 import { DelegateExistingTask } from './application/task/DelegateExistingTask.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
-import { DrizzleAgentJobRepository } from './infrastructure/repositories/DrizzleAgentJobRepository.js';
-import { EnqueueAgentJob } from './application/agent/EnqueueAgentJob.js';
-import { CancelAgentJob } from './application/agent/CancelAgentJob.js';
-import { ListAgentJobsForProject } from './application/agent/ListAgentJobsForProject.js';
-import { ListPendingAgentJobs } from './application/agent/ListPendingAgentJobs.js';
-import { ClaimAgentJob } from './application/agent/ClaimAgentJob.js';
-import { CompleteAgentJob } from './application/agent/CompleteAgentJob.js';
 import { DrizzleAiPromptJobRepository } from './infrastructure/repositories/DrizzleAiPromptJobRepository.js';
 import { EnqueueAiPromptJob } from './application/ai-prompt/EnqueueAiPromptJob.js';
 import { WaitForAiPromptJob } from './application/ai-prompt/WaitForAiPromptJob.js';
@@ -262,7 +255,6 @@ const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
 const taskDelegationRepo = new DrizzleTaskDelegationRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
-const agentJobRepo = new DrizzleAgentJobRepository(db);
 const aiPromptJobRepo = new DrizzleAiPromptJobRepository(db);
 const taskSearchRepo = new DrizzleTaskSearchRepository(db);
 const projectJoinRequestRepo = new DrizzleProjectJoinRequestRepository(db);
@@ -873,7 +865,6 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
     }),
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
-    agentJobs: agentJobRepo,
     notifyTaskChanged,
     notifyCommentAdded,
     notifyStatusChanged,
@@ -1052,22 +1043,6 @@ const { app, devProxyUpgrade } = createApp({
     }),
     pollDeviceToken: new PollAgentDeviceToken({ store: agentDeviceCodeStore, now }),
     getDeviceCodeInfo: new GetAgentDeviceCodeInfo({ store: agentDeviceCodeStore, now }),
-    enqueueAgentJob: new EnqueueAgentJob({
-      members: projectMemberRepo,
-      tasks: taskRepo,
-      agentJobs: agentJobRepo,
-    }),
-    cancelAgentJob: new CancelAgentJob({
-      members: projectMemberRepo,
-      agentJobs: agentJobRepo,
-    }),
-    listAgentJobsForProject: new ListAgentJobsForProject({
-      members: projectMemberRepo,
-      agentJobs: agentJobRepo,
-    }),
-    listPendingAgentJobs: new ListPendingAgentJobs({ agentJobs: agentJobRepo }),
-    claimAgentJob: new ClaimAgentJob({ members: projectMemberRepo, agentJobs: agentJobRepo }),
-    completeAgentJob: new CompleteAgentJob({ members: projectMemberRepo, agentJobs: agentJobRepo }),
     // AI prompt-improvement (см. spec 2026-05-28-ai-prompt-improvement-design.md)
     enqueueAiPromptJob: new EnqueueAiPromptJob({
       projects: projectRepo,
@@ -1094,7 +1069,6 @@ const { app, devProxyUpgrade } = createApp({
     claimAiPromptJob: new ClaimAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
     completeAiPromptJob: new CompleteAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
     ackRalphCancel: new AckRalphCancel({ tasks: taskRepo }),
-    agentJobs: agentJobRepo,
     checkRepoUsage: new CheckRepoUsage({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -1180,7 +1154,6 @@ const { app, devProxyUpgrade } = createApp({
     listMyDispatchedProjects: new ListMyDispatchedProjects({
       projects: projectRepo,
       tasks: taskRepo,
-      agentJobs: agentJobRepo,
       aiPromptJobs: aiPromptJobRepo,
     }),
     setProjectDispatcher: new SetProjectDispatcher({

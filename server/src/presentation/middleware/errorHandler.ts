@@ -62,16 +62,10 @@ import {
   AgentDeviceCodeExpiredError,
   AgentDeviceCodeNotFoundError,
   AgentDeviceCodePendingError,
-  AgentJobAlreadyClaimedError,
-  AgentJobNotCancellableError,
-  AgentJobNotFoundError,
-  AgentJobNotInRunningStateError,
   AgentTokenInvalidError,
   AgentTokenNameEmptyError,
   AgentTokenNotFoundError,
   RequestTargetStaleError,
-  TaskAlreadyHasActiveAgentJobError,
-  TaskMissingDescriptionError,
 } from '../../domain/agent/errors.js';
 import {
   AiPromptJobAlreadyClaimedError,
@@ -398,23 +392,6 @@ export function errorHandler(
     return;
   }
 
-  if (err instanceof AgentJobNotFoundError) {
-    res.status(404).json({ error: 'agent_job_not_found', message: err.message });
-    return;
-  }
-  if (err instanceof AgentJobNotCancellableError) {
-    res.status(409).json({ error: 'agent_job_not_cancellable', message: err.message });
-    return;
-  }
-  if (err instanceof AgentJobAlreadyClaimedError) {
-    res.status(409).json({ error: 'agent_job_already_claimed', message: err.message });
-    return;
-  }
-  if (err instanceof AgentJobNotInRunningStateError) {
-    res.status(409).json({ error: 'agent_job_not_in_running_state', message: err.message });
-    return;
-  }
-
   // AI prompt-job errors (см. spec 2026-05-28-ai-prompt-improvement-design.md)
   // AiPromptJobNotFoundError / AccessDeniedError мапятся inline в роутах,
   // потому что 404/403-семантика отличается от других случаев.
@@ -428,14 +405,6 @@ export function errorHandler(
   }
   if (err instanceof NotDispatcherForAiPromptJobError) {
     res.status(403).json({ error: 'not_dispatcher_for_job', message: err.message });
-    return;
-  }
-  if (err instanceof TaskAlreadyHasActiveAgentJobError) {
-    res.status(409).json({ error: 'task_has_active_agent_job', message: err.message });
-    return;
-  }
-  if (err instanceof TaskMissingDescriptionError) {
-    res.status(400).json({ error: 'task_missing_description', message: err.message });
     return;
   }
 

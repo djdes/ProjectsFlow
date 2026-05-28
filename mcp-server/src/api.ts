@@ -191,41 +191,6 @@ export type WriteKbDocResult = {
   sha: string;
 };
 
-export type PendingAgentJob = {
-  id: string;
-  projectId: string;
-  projectName: string;
-  gitRepoUrl: string | null;
-  taskId: string;
-  taskDescription: string | null;
-  createdAt: string;
-};
-
-export type AgentJobDto = {
-  id: string;
-  projectId: string;
-  taskId: string;
-  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
-  attempt: number;
-  claimedAt: string | null;
-  startedAt: string | null;
-  finishedAt: string | null;
-  error: string | null;
-  prUrl: string | null;
-  branchName: string | null;
-  runnerPid: number | null;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type CompleteAgentJobInput = {
-  ok: boolean;
-  prUrl?: string | null;
-  error?: string | null;
-  branchName?: string | null;
-};
-
 // AI prompt-improvement jobs (see docs/superpowers/specs/2026-05-28-ai-prompt-improvement-design.md)
 export type PendingAiPromptJob = {
   id: string;
@@ -613,28 +578,6 @@ export class ApiClient {
   async writeKbDocument(projectId: string, input: WriteKbDocInput): Promise<WriteKbDocResult> {
     return this.request<WriteKbDocResult>(
       `/agent/projects/${encodeURIComponent(projectId)}/kb/documents`,
-      { method: 'POST', body: input },
-    );
-  }
-
-  async listPendingAgentJobs(limit: number): Promise<PendingAgentJob[]> {
-    const { jobs } = await this.request<{ jobs: PendingAgentJob[] }>(
-      `/agent/pending-agent-jobs?limit=${limit}`,
-    );
-    return jobs;
-  }
-
-  async claimAgentJob(jobId: string): Promise<AgentJobDto> {
-    const { job } = await this.request<{ job: AgentJobDto }>(
-      `/agent/agent-jobs/${encodeURIComponent(jobId)}/claim`,
-      { method: 'POST', body: {} },
-    );
-    return job;
-  }
-
-  async completeAgentJob(jobId: string, input: CompleteAgentJobInput): Promise<void> {
-    await this.request<void>(
-      `/agent/agent-jobs/${encodeURIComponent(jobId)}/complete`,
       { method: 'POST', body: input },
     );
   }

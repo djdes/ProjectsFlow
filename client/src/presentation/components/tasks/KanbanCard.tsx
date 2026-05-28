@@ -6,9 +6,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
 import { taskShortId } from '@/domain/task/Task';
-import { AgentJobBadge } from './AgentJobBadge';
 import { ClaudeIcon } from './ClaudeIcon';
-import { DelegateToAgentButton } from './DelegateToAgentButton';
 import { DelegationBadge } from './DelegationBadge';
 import { InboxCheckbox } from './InboxCheckbox';
 import { RalphModeBadge } from './RalphMode';
@@ -135,7 +133,7 @@ export function KanbanCard({
           isDragging && !preview && 'cursor-grabbing opacity-30',
         )}
       >
-        {showCheckbox && !preview && !task.delegatedToAgent && (
+        {showCheckbox && !preview && (
           <div className="pt-0.5" onPointerDown={stopDrag}>
             <InboxCheckbox
               task={task}
@@ -226,15 +224,6 @@ export function KanbanCard({
               )}
             </div>
           )}
-          {task.agentJob && onTaskChanged && (
-            <div className="mt-2" onPointerDown={(e) => e.stopPropagation()}>
-              <AgentJobBadge
-                job={task.agentJob}
-                projectId={task.projectId}
-                onChanged={onTaskChanged}
-              />
-            </div>
-          )}
         </div>
         <div
           className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
@@ -255,20 +244,6 @@ export function KanbanCard({
               <ArrowRight className="size-3.5" />
             </Button>
           )}
-          {!preview &&
-            onTaskChanged &&
-            task.status === 'todo' &&
-            (!task.agentJob ||
-              task.agentJob.status === 'succeeded' ||
-              task.agentJob.status === 'failed' ||
-              task.agentJob.status === 'cancelled') && (
-              <DelegateToAgentButton
-                projectId={task.projectId}
-                taskId={task.id}
-                hasDescription={Boolean(task.description?.trim())}
-                onEnqueued={onTaskChanged}
-              />
-            )}
           <Button
             variant="ghost"
             size="icon"

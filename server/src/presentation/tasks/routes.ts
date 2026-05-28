@@ -24,9 +24,7 @@ import type { Task } from '../../domain/task/Task.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { TaskComment } from '../../domain/task/TaskComment.js';
-import type { AgentJobRepository } from '../../application/agent/AgentJobRepository.js';
 import { requireAuth } from '../middleware/requireAuth.js';
-import { agentJobToDto } from '../agent-jobs/dto.js';
 import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
 import type { TaskRepository } from '../../application/task/TaskRepository.js';
 import type { MaybeReopenForClarification } from '../../application/task/MaybeReopenForClarification.js';
@@ -63,7 +61,6 @@ type Deps = {
   readonly assignToProject: AssignInboxTaskToProject;
   readonly delegateExisting: DelegateExistingTask;
   readonly maxAttachmentBytes: number;
-  readonly agentJobs: AgentJobRepository;
   // Live-обновление: сигнал «в проекте изменились задачи» всем участникам (SSE).
   // Best-effort, не блокирует ответ.
   readonly notifyTaskChanged: (projectId: string) => void;
@@ -210,13 +207,7 @@ export function tasksRouter(deps: Deps): Router {
     try {
       const projectId = req.params['projectId'] as string;
       const list = await deps.listTasks.execute(projectId, req.user!.id);
-      const activeJobs = await deps.agentJobs.findActiveByTaskIds(list.map((t) => t.id));
-      res.json({
-        tasks: list.map((t) => ({
-          ...toDto(t),
-          agentJob: activeJobs.get(t.id) ? agentJobToDto(activeJobs.get(t.id)!) : null,
-        })),
-      });
+      res.json({ tasks: list.map(toDto) });
     } catch (e) {
       next(e);
     }

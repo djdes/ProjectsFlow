@@ -45,7 +45,6 @@ export type Task = {
   readonly description: string | null;
   readonly status: TaskStatus;
   readonly position: number;
-  readonly delegatedToAgent: boolean;
   readonly ralphMode: RalphMode;
   // Pull-based cancel: момент когда юзер запросил отмену Ralph-работы (NULL = нет
   // запроса). См. db/037, spec C:/www/ralph/prompts/task-ralph-cancel.md.

@@ -27,8 +27,6 @@ type TaskDto = Omit<
   Task,
   | 'createdAt'
   | 'updatedAt'
-  | 'delegatedToAgent'
-  | 'agentJob'
   | 'ralphMode'
   | 'ralphCancelRequestedAt'
   | 'ralphCancelRequestedBy'
@@ -39,8 +37,6 @@ type TaskDto = Omit<
 > & {
   createdAt: string;
   updatedAt: string;
-  delegatedToAgent?: boolean;
-  agentJob?: import('@/domain/agentJob/AgentJob').AgentJob | null;
   // Optional на проводе — старый backend без миграции 035 не присылает.
   ralphMode?: import('@/domain/task/Task').RalphMode;
   // Optional — старый backend без 037 не отдаёт эти поля.
@@ -74,8 +70,6 @@ function fromDto(dto: TaskDto): Task {
     ...dto,
     createdAt: new Date(dto.createdAt),
     updatedAt: new Date(dto.updatedAt),
-    delegatedToAgent: dto.delegatedToAgent ?? false,
-    agentJob: dto.agentJob ?? null,
     // Graceful default — backend без 035 продолжает работать (mode = текущее поведение).
     ralphMode: dto.ralphMode ?? 'normal',
     ralphCancelRequestedAt: dto.ralphCancelRequestedAt

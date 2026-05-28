@@ -304,7 +304,6 @@ export const tasks = mysqlTable(
       .default('todo'),
     // Float-position для дешёвой вставки между двумя соседями — без массового UPDATE.
     position: double('position').notNull().default(0),
-    delegatedToAgent: boolean('delegated_to_agent').notNull().default(false),
     // Режим работы Ralph по задаче. См. db/035 и domain RalphMode.
     // VARCHAR (не enum) — forward-compat под новые режимы без миграции схемы Drizzle.
     ralphMode: varchar('ralph_mode', { length: 16 }).notNull().default('normal'),
@@ -419,36 +418,6 @@ export const agentTokens = mysqlTable(
 export type AgentTokenRow = typeof agentTokens.$inferSelect;
 export type NewAgentTokenRow = typeof agentTokens.$inferInsert;
 
-export const agentJobs = mysqlTable(
-  'agent_jobs',
-  {
-    id: id(),
-    projectId: char('project_id', { length: 36 }).notNull(),
-    taskId: char('task_id', { length: 36 }).notNull(),
-    status: mysqlEnum('status', ['queued', 'running', 'succeeded', 'failed', 'cancelled'])
-      .notNull()
-      .default('queued'),
-    attempt: int('attempt').notNull().default(1),
-    claimedAt: timestamp('claimed_at'),
-    startedAt: timestamp('started_at'),
-    finishedAt: timestamp('finished_at'),
-    error: text('error'),
-    prUrl: varchar('pr_url', { length: 500 }),
-    branchName: varchar('branch_name', { length: 200 }),
-    runnerPid: int('runner_pid'),
-    createdBy: fkUserId('created_by'),
-    createdAt: createdAtCol(),
-    updatedAt: updatedAtCol(),
-  },
-  (t) => [
-    index('idx_agent_jobs_status').on(t.status),
-    index('idx_agent_jobs_project_status').on(t.projectId, t.status),
-    index('idx_agent_jobs_task').on(t.taskId),
-  ],
-);
-
-export type AgentJobRow = typeof agentJobs.$inferSelect;
-export type NewAgentJobRow = typeof agentJobs.$inferInsert;
 
 // --- Финансы проекта (миграции 018-022) ---
 

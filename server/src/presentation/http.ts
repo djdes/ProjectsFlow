@@ -126,19 +126,12 @@ import type { RequestAgentDeviceCode } from '../application/agent/RequestAgentDe
 import type { ApproveAgentDeviceCode } from '../application/agent/ApproveAgentDeviceCode.js';
 import type { PollAgentDeviceToken } from '../application/agent/PollAgentDeviceToken.js';
 import type { GetAgentDeviceCodeInfo } from '../application/agent/GetAgentDeviceCodeInfo.js';
-import type { EnqueueAgentJob } from '../application/agent/EnqueueAgentJob.js';
-import type { CancelAgentJob } from '../application/agent/CancelAgentJob.js';
-import type { ListAgentJobsForProject } from '../application/agent/ListAgentJobsForProject.js';
-import type { ListPendingAgentJobs } from '../application/agent/ListPendingAgentJobs.js';
-import type { ClaimAgentJob } from '../application/agent/ClaimAgentJob.js';
-import type { CompleteAgentJob } from '../application/agent/CompleteAgentJob.js';
 import type { EnqueueAiPromptJob } from '../application/ai-prompt/EnqueueAiPromptJob.js';
 import type { WaitForAiPromptJob } from '../application/ai-prompt/WaitForAiPromptJob.js';
 import type { ListPendingAiPromptJobs } from '../application/ai-prompt/ListPendingAiPromptJobs.js';
 import type { ClaimAiPromptJob } from '../application/ai-prompt/ClaimAiPromptJob.js';
 import type { CompleteAiPromptJob } from '../application/ai-prompt/CompleteAiPromptJob.js';
 import type { AckRalphCancel } from '../application/task/AckRalphCancel.js';
-import type { AgentJobRepository } from '../application/agent/AgentJobRepository.js';
 import type { ProjectMemberRepository } from '../application/project/ProjectMemberRepository.js';
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -163,7 +156,6 @@ import { notificationsRouter } from './notifications/routes.js';
 import { agentTokensRouter } from './agent/tokensRoutes.js';
 import { agentApiRouter } from './agent/apiRoutes.js';
 import { agentDeviceRouter } from './agent/deviceRoutes.js';
-import { buildAgentJobsRouter } from './agent-jobs/routes.js';
 import { buildAiPromptRouter } from './ai-prompt/routes.js';
 import './types.js'; // глобальное расширение Express.Request
 
@@ -299,7 +291,6 @@ type AppDeps = {
     readonly requestRalphCancel: RequestRalphCancel;
     readonly revokeRalphCancel: RevokeRalphCancel;
     readonly maxAttachmentBytes: number;
-    readonly agentJobs: AgentJobRepository;
     readonly notifyTaskChanged: (projectId: string) => void;
     readonly notifyCommentAdded: (
       projectId: string,
@@ -352,13 +343,6 @@ type AppDeps = {
     readonly moveTask: MoveTask;
     readonly linkCommit: LinkCommit;
     readonly writeKbDocument: WriteKbDocument;
-    // Agent jobs (kanban-agent-runner)
-    readonly enqueueAgentJob: EnqueueAgentJob;
-    readonly cancelAgentJob: CancelAgentJob;
-    readonly listAgentJobsForProject: ListAgentJobsForProject;
-    readonly listPendingAgentJobs: ListPendingAgentJobs;
-    readonly claimAgentJob: ClaimAgentJob;
-    readonly completeAgentJob: CompleteAgentJob;
     // AI prompt-improvement (см. spec 2026-05-28-ai-prompt-improvement-design.md)
     readonly enqueueAiPromptJob: EnqueueAiPromptJob;
     readonly waitForAiPromptJob: WaitForAiPromptJob;
@@ -366,7 +350,6 @@ type AppDeps = {
     readonly claimAiPromptJob: ClaimAiPromptJob;
     readonly completeAiPromptJob: CompleteAiPromptJob;
     readonly ackRalphCancel: AckRalphCancel;
-    readonly agentJobs: AgentJobRepository;
     readonly checkRepoUsage: CheckRepoUsage;
     readonly requestRepoAccess: RequestRepoAccess;
     readonly initLocalKb: InitLocalKb;
@@ -536,9 +519,6 @@ export function createApp(deps: AppDeps): CreatedApp {
       moveTask: deps.agent.moveTask,
       linkCommit: deps.agent.linkCommit,
       writeKbDocument: deps.agent.writeKbDocument,
-      listPendingAgentJobs: deps.agent.listPendingAgentJobs,
-      claimAgentJob: deps.agent.claimAgentJob,
-      completeAgentJob: deps.agent.completeAgentJob,
       listPendingAiPromptJobs: deps.agent.listPendingAiPromptJobs,
       claimAiPromptJob: deps.agent.claimAiPromptJob,
       completeAiPromptJob: deps.agent.completeAiPromptJob,
@@ -573,15 +553,6 @@ export function createApp(deps: AppDeps): CreatedApp {
       broadcastTelegramByTask: deps.agent.broadcastTelegramByTask,
       projects: deps.agent.projects,
       users: deps.telegram.users,
-    }),
-  );
-
-  app.use(
-    '/api',
-    buildAgentJobsRouter({
-      enqueueAgentJob: deps.agent.enqueueAgentJob,
-      cancelAgentJob: deps.agent.cancelAgentJob,
-      listAgentJobsForProject: deps.agent.listAgentJobsForProject,
     }),
   );
 

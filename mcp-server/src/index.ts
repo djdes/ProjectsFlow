@@ -523,74 +523,15 @@ const TOOLS = [
     },
   },
   {
-    name: 'pf_list_pending_agent_jobs',
-    description:
-      'List queued agent-jobs across ALL projects the current user is a member of, oldest first. ' +
-      'Each item includes project name, git repo URL, task description, and createdAt. Use this ' +
-      'at the start of every /check-agent-queue tick: if the array is empty, exit immediately ' +
-      "with a short message (don't burn message budget on empty ticks). If non-empty, pick the " +
-      'FIRST item and proceed to pf_claim_agent_job.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        limit: {
-          type: 'integer',
-          description: 'Max jobs to return (default 10, max 50)',
-        },
-      },
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'pf_claim_agent_job',
-    description:
-      'Atomically claim a queued agent-job - moves status from queued to running. Returns the ' +
-      "updated job. If another /loop session already claimed it (status not queued), returns 409 " +
-      '"agent_job_already_claimed" - skip the job and try the next one (or exit if list ' +
-      'returned only one). Always call this immediately after pf_list_pending_agent_jobs picks ' +
-      'a candidate, before doing any work.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        jobId: { type: 'string', description: 'Agent job id (from pf_list_pending_agent_jobs)' },
-      },
-      required: ['jobId'],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'pf_complete_agent_job',
-    description:
-      'Finalize an agent-job. Call this ONCE at the end of work - either after successful PR ' +
-      "creation (ok=true, prUrl=<url>, branchName=<branch>), or after failure (ok=false, " +
-      'error=<short reason>). Sets status to succeeded or failed, fills finished_at. If the ' +
-      'job was cancelled by the user during your work, this call returns 409 ' +
-      '"agent_job_not_in_running_state" - handle by cleaning up the local branch/worktree and ' +
-      'NOT pushing the PR. Do NOT retry pf_complete_agent_job after a 409: the server has ' +
-      'already finalized the job.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        jobId: { type: 'string', description: 'Agent job id' },
-        ok: { type: 'boolean', description: 'true on success, false on failure' },
-        prUrl: { type: ['string', 'null'], description: 'PR URL if PR was created' },
-        error: { type: ['string', 'null'], description: 'Short failure reason' },
-        branchName: { type: ['string', 'null'], description: 'Branch name that agent worked on' },
-      },
-      required: ['jobId', 'ok'],
-      additionalProperties: false,
-    },
-  },
-  {
     name: 'pf_list_pending_ai_prompt_jobs',
     description:
       'List queued AI-prompt-improvement jobs where current user is the dispatcher, oldest first. ' +
       'These are short-lived requests from the ProjectsFlow web UI: user clicked the "AI" button ' +
       'next to a task-description field, and the site wants the dispatcher to rewrite the text in ' +
       'plain Russian + elaborate on details. Each item has projectId (or null for Inbox tasks), ' +
-      'projectName and createdAt. Use in /loop ALONGSIDE pf_list_pending_agent_jobs, ideally ' +
-      'BEFORE checking regular agent_jobs — AI requests are time-sensitive (user is waiting up to ' +
-      '25s on a long-poll). If empty, fall through to the regular agent-job poll.',
+      'projectName and createdAt. Call this in /loop or directly from the dispatcher (e.g. ' +
+      'dispatch.ps1 in repo PFLoopDispatch) — AI requests are time-sensitive (user is waiting ' +
+      'up to 25s on a long-poll). If empty, no work to do.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -871,9 +812,9 @@ const TOOLS = [
       "Return the list of projects where the CURRENT user is assigned as the Ralph dispatcher " +
       '(i.e. the autonomous task executor). This is the MAIN tool a Ralph /loop polls every ' +
       'tick to figure out where work exists. Each project entry includes openTaskCount ' +
-      '(todo + in_progress) and queuedAgentJobCount, so the loop can skip empty projects ' +
+      '(todo + in_progress) and pendingAiPromptJobCount, so the loop can skip empty projects ' +
       "without further round-trips. No args — scope is the user behind the Bearer token. " +
-      'Use together with pf_list_tasks / pf_list_pending_agent_jobs to pick the next item.',
+      'Use together with pf_list_tasks to pick the next item.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -1063,22 +1004,6 @@ const RequestRepoAccessInput = z.object({
 });
 const CreateLocalKbInput = z.object({
   projectId: z.string().min(1),
-});
-
-const ListPendingAgentJobsInput = z.object({
-  limit: z.number().int().min(1).max(50).optional(),
-});
-
-const ClaimAgentJobInput = z.object({
-  jobId: z.string().min(1),
-});
-
-const CompleteAgentJobInput = z.object({
-  jobId: z.string().min(1),
-  ok: z.boolean(),
-  prUrl: z.string().url().nullable().optional(),
-  error: z.string().max(4000).nullable().optional(),
-  branchName: z.string().max(200).nullable().optional(),
 });
 
 const ListPendingAiPromptJobsInput = z.object({
@@ -1319,26 +1244,6 @@ async function main(): Promise<void> {
         case 'pf_create_local_kb': {
           const input = CreateLocalKbInput.parse(req.params.arguments ?? {});
           await api.createLocalKb(input.projectId);
-          return jsonResult({ ok: true });
-        }
-        case 'pf_list_pending_agent_jobs': {
-          const input = ListPendingAgentJobsInput.parse(req.params.arguments ?? {});
-          const jobs = await api.listPendingAgentJobs(input.limit ?? 10);
-          return jsonResult(jobs);
-        }
-        case 'pf_claim_agent_job': {
-          const input = ClaimAgentJobInput.parse(req.params.arguments ?? {});
-          const job = await api.claimAgentJob(input.jobId);
-          return jsonResult(job);
-        }
-        case 'pf_complete_agent_job': {
-          const input = CompleteAgentJobInput.parse(req.params.arguments ?? {});
-          await api.completeAgentJob(input.jobId, {
-            ok: input.ok,
-            prUrl: input.prUrl ?? null,
-            error: input.error ?? null,
-            branchName: input.branchName ?? null,
-          });
           return jsonResult({ ok: true });
         }
         case 'pf_list_pending_ai_prompt_jobs': {

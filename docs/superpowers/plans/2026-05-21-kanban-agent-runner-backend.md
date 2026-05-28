@@ -1,5 +1,7 @@
 # Kanban Agent Runner — Backend Foundation Implementation Plan
 
+> ⚠️ **DEPRECATED 2026-05-28.** План реализован и сразу удалён обратно: реальный диспетчер `dispatch.ps1` (репо PFLoopDispatch) не использует очередь `agent_jobs`. См. миграцию `db/043_drop_agent_jobs.sql`. Историческая ценность сохранена, выполнять не нужно.
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Поднять backend-инфраструктуру очереди agent-job'ов: схема БД, domain/application/infrastructure слои, HTTP endpoints + UI-кнопка «Отдать агенту» с бейджем статуса. После этого плана юзер кликает кнопку, видит job в `queued`, может отменить — но **runner ещё не подхватывает работу** (отдельный Plan B).

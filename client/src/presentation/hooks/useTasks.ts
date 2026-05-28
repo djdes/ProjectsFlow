@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useContainer } from '@/infrastructure/di/container';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
-import { useAgentJobPolling } from './useAgentJobPolling';
 import { useRealtimeTaskRefresh } from './useRealtimeTaskRefresh';
 
 type State = {
@@ -66,7 +65,6 @@ export function useTasks(projectId: string): UseTasks {
     void refetch();
   }, [refetch]);
 
-  useAgentJobPolling(state.tasks, refetch);
   // Live-обновление: рефетч при SSE-событии об изменении задач в этом проекте + при
   // возврате фокуса. void — refetch возвращает Promise, нам результат не нужен.
   useRealtimeTaskRefresh(projectId, () => void refetch());

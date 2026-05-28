@@ -1,5 +1,7 @@
 # Kanban Agent Runner — Plan B v2 (/loop architecture) Implementation Plan
 
+> ⚠️ **DEPRECATED 2026-05-28.** План реализован и сразу удалён обратно: реальный диспетчер `dispatch.ps1` (репо PFLoopDispatch) не использует MCP-tools `pf_list_pending_agent_jobs` / `pf_claim_agent_job` / `pf_complete_agent_job` — они удалены из `@projectsflow/mcp-server`. См. миграцию `db/043_drop_agent_jobs.sql`. Сохранено как историческая ценность.
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Дать локальной Claude Code сессии возможность работать как agent runner через `/loop` — добавить 3 MCP-tool'а (`pf_list_pending_agent_jobs`, `pf_claim_agent_job`, `pf_complete_agent_job`), 3 server endpoint'а под `requireAgentToken`, slash-command `~/.claude/commands/check-agent-queue.md`. Сервер ничего не запускает — вся execution на машине юзера, через подписку Claude Pro/Max.

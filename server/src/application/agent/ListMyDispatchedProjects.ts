@@ -1,13 +1,11 @@
 import type { Project } from '../../domain/project/Project.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
-import type { AgentJobRepository } from './AgentJobRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { AiPromptJobRepository } from '../ai-prompt/AiPromptJobRepository.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly tasks: TaskRepository;
-  readonly agentJobs: AgentJobRepository;
   readonly aiPromptJobs: AiPromptJobRepository;
 };
 
@@ -15,8 +13,6 @@ export type DispatchedProject = {
   readonly project: Project;
   // Открытые задачи (todo + in_progress) — сколько работы у Ralph'а на этом проекте.
   readonly openTaskCount: number;
-  // Queued agent-job'ы по этому проекту (если кто-то нажал «отправить агенту» в UI).
-  readonly queuedAgentJobCount: number;
   // Queued AI-prompt-job'ы по этому проекту (новый тип short-lived job'ов от сайта).
   // См. spec 2026-05-28-ai-prompt-improvement-design.md.
   readonly pendingAiPromptJobCount: number;
@@ -44,13 +40,7 @@ export class ListMyDispatchedProjects {
 
     const out: DispatchedProject[] = [];
     for (const p of projects) {
-      // Считаем открытые задачи и queued job'ы параллельно. listForProject лимитим
-      // в 100 — если у проекта >100 queued job'ов, точная цифра уже не важна, всё
-      // равно агент будет работать последовательно.
-      const [allTasks, jobs] = await Promise.all([
-        this.deps.tasks.listByProject(p.id),
-        this.deps.agentJobs.listForProject(p.id, 100),
-      ]);
+      const allTasks = await this.deps.tasks.listByProject(p.id);
       // «Открытые» = задачи, которые ждут работы или активно делаются:
       // todo / in_progress / awaiting_clarification. Backlog (триаж), done
       // (закрыта) и manual (отдельная ветка для человека) — исключены.
@@ -60,9 +50,8 @@ export class ListMyDispatchedProjects {
           t.status === 'in_progress' ||
           t.status === 'awaiting_clarification',
       ).length;
-      const queuedAgentJobCount = jobs.filter((j) => j.status === 'queued').length;
       const pendingAiPromptJobCount = aiCountByProject.get(p.id) ?? 0;
-      out.push({ project: p, openTaskCount, queuedAgentJobCount, pendingAiPromptJobCount });
+      out.push({ project: p, openTaskCount, pendingAiPromptJobCount });
     }
     return out;
   }

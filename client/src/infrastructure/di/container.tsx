@@ -12,14 +12,11 @@ import { HttpInviteRepository } from '@/infrastructure/http/HttpInviteRepository
 import { HttpNotificationRepository } from '@/infrastructure/http/HttpNotificationRepository';
 import { HttpAgentTokenRepository } from '@/infrastructure/http/HttpAgentTokenRepository';
 import { HttpAgentDeviceRepository } from '@/infrastructure/http/HttpAgentDeviceRepository';
-import { HttpAgentJobRepository } from '@/infrastructure/http/HttpAgentJobRepository';
 import { HttpAiPromptRepository } from '@/infrastructure/http/HttpAiPromptRepository';
 import { HttpAdminRepository } from '@/infrastructure/http/HttpAdminRepository';
 import { HttpEmployeeRepository } from '@/infrastructure/http/HttpEmployeeRepository';
 import { HttpProjectFinanceRepository } from '@/infrastructure/http/HttpProjectFinanceRepository';
 import { HttpTelegramRepository } from '@/infrastructure/http/HttpTelegramRepository';
-import { EnqueueAgentJob } from '@/application/agentJob/EnqueueAgentJob';
-import { CancelAgentJob } from '@/application/agentJob/CancelAgentJob';
 import { ImproveTaskDescription } from '@/application/ai/ImproveTaskDescription';
 import type { AiPromptRepository } from '@/application/ai/AiPromptRepository';
 import { SearchTasks } from '@/application/task/SearchTasks';
@@ -76,8 +73,6 @@ type Container = {
   employeeRepository: EmployeeRepository;
   projectFinanceRepository: ProjectFinanceRepository;
   telegramRepository: TelegramRepository;
-  enqueueAgentJob: EnqueueAgentJob;
-  cancelAgentJob: CancelAgentJob;
   aiPromptRepository: AiPromptRepository;
   improveTaskDescription: ImproveTaskDescription;
 };
@@ -96,7 +91,6 @@ function buildContainer(): Container {
   const notificationRepo = new HttpNotificationRepository();
   const agentTokenRepo = new HttpAgentTokenRepository();
   const agentDeviceRepo = new HttpAgentDeviceRepository();
-  const agentJobRepo = new HttpAgentJobRepository();
   const aiPromptRepo = new HttpAiPromptRepository();
   const adminRepo = new HttpAdminRepository();
   const employeeRepo = new HttpEmployeeRepository();
@@ -128,8 +122,6 @@ function buildContainer(): Container {
     employeeRepository: employeeRepo,
     projectFinanceRepository: projectFinanceRepo,
     telegramRepository: telegramRepo,
-    enqueueAgentJob: new EnqueueAgentJob(agentJobRepo),
-    cancelAgentJob: new CancelAgentJob(agentJobRepo),
     aiPromptRepository: aiPromptRepo,
     improveTaskDescription: new ImproveTaskDescription(aiPromptRepo),
   };

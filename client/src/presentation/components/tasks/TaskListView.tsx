@@ -267,7 +267,7 @@ function TaskListRow({
       )}
       onClick={onEdit}
     >
-      {showCheckbox && !task.delegatedToAgent && (
+      {showCheckbox && (
         <InboxCheckbox
           task={task}
           lastDoneTaskId={lastDoneTaskId}

@@ -20,7 +20,6 @@ function toTask(row: TaskRowJoined): Task {
     description: row.description ?? null,
     status: row.status as TaskStatus,
     position: row.position,
-    delegatedToAgent: row.delegatedToAgent,
     // VARCHAR в БД, cast в domain enum. Дефолт 'normal' — соответствует SQL DEFAULT,
     // защита от unexpected значений (если миграция/ручной UPDATE проставит чушь).
     ralphMode: (row.ralphMode as RalphMode) ?? 'normal',
@@ -54,7 +53,6 @@ export class DrizzleTaskRepository implements TaskRepository {
         description: tasks.description,
         status: tasks.status,
         position: tasks.position,
-        delegatedToAgent: tasks.delegatedToAgent,
         ralphMode: tasks.ralphMode,
         ralphCancelRequestedAt: tasks.ralphCancelRequestedAt,
         ralphCancelRequestedBy: tasks.ralphCancelRequestedBy,
@@ -149,13 +147,6 @@ export class DrizzleTaskRepository implements TaskRepository {
     const row = rows[0];
     if (!row || row.minPos === null || row.maxPos === null) return null;
     return { min: Number(row.minPos), max: Number(row.maxPos) };
-  }
-
-  async setDelegatedToAgent(taskId: string, value: boolean): Promise<void> {
-    await this.db
-      .update(tasks)
-      .set({ delegatedToAgent: value })
-      .where(eq(tasks.id, taskId));
   }
 
   async requestRalphCancel(taskId: string, userId: string): Promise<Task | null> {
