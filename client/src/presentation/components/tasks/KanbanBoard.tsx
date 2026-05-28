@@ -390,6 +390,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         backlogTail={backlogTail}
         todoTail={todoTail}
         isInbox={isInbox}
+        aiProjectId={isInbox ? null : projectId}
       />
 
       {/* Floating quick-add (position: fixed). DOM-позиция значения не имеет —

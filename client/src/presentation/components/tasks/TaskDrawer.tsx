@@ -50,6 +50,13 @@ import { TaskDrawerComposer } from './TaskDrawerComposer';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
 import { STATUS_LABEL } from './statusLabels';
+import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
+
+type PendingFile = {
+  readonly id: string;
+  readonly file: File;
+  readonly previewUrl: string;
+};
 
 export type TaskDrawerState =
   | { mode: 'create'; status: Task['status'] }
@@ -85,22 +92,9 @@ type Props = {
   //  - DelegateSelect в create-mode форме
   //  - AssignToProjectSelect в шапке edit-mode
   isInbox?: boolean;
+  // projectId для AI-кнопки. null = inbox/дефолтный диспетчер; UUID = диспетчер проекта.
+  aiProjectId?: string | null;
 };
-
-// Превью-тайл вложения в сетке: картинка → thumbnail, иначе → иконка + имя файла.
-function AttachmentThumb({ url, name, mime }: { url?: string; name: string; mime: string }): React.ReactElement {
-  if (isImageMime(mime) && url) {
-    return <img src={url} alt={name} loading="lazy" className="size-full object-cover" />;
-  }
-  return (
-    <div className="flex size-full flex-col items-center justify-center gap-1 p-1.5 text-center">
-      <FileText className="size-6 text-muted-foreground" />
-      <span className="line-clamp-2 break-all text-[10px] leading-tight text-muted-foreground">
-        {name}
-      </span>
-    </div>
-  );
-}
 
 // Chip-селектор режима Ralph в edit-mode шапки. Показывает текущий режим бейджем;
 // клик раскрывает dropdown для смены — PATCH идёт сразу же (best-effort, error → toast).
@@ -157,6 +151,7 @@ export function TaskDrawer({
   backlogTail = null,
   todoTail = null,
   isInbox = false,
+  aiProjectId = null,
 }: Props): React.ReactElement {
   const { user: currentUser } = useCurrentUser();
   const { taskRepository } = useContainer();
@@ -176,6 +171,10 @@ export function TaskDrawer({
   // Срок и приоритет для create-mode (применимо к любому проекту).
   const [createDeadline, setCreateDeadline] = useState<string | null>(null);
   const [createPriority, setCreatePriority] = useState<TaskPriority | null>(null);
+  // Drag-active флаг для create-mode (подсветка рамки при перетаскивании файлов).
+  const [createDragActive, setCreateDragActive] = useState(false);
+  // Ref на скрытый file input для кнопки «Вложение» в create-mode.
+  const createFileInputRef = useRef<HTMLInputElement>(null);
   // Expand-toggle: false → drawer 640px; true → full-width. На mobile (pointer: coarse)
   // toggle всегда скрыт, drawer и так почти на весь экран (sheet.tsx default = w-3/4).
   const [expanded, setExpanded] = useState(false);
@@ -241,6 +240,7 @@ export function TaskDrawer({
     setError(null);
     setExpanded(false);
     setCommitsOpen(false);
+    setCreateDragActive(false);
     // При закрытии/смене диалога чистим pending — URL.revokeObjectURL для blob'ов.
     setPendingFiles((prev) => {
       prev.forEach((p) => URL.revokeObjectURL(p.previewUrl));
@@ -287,6 +287,23 @@ export function TaskDrawer({
       addPendingFiles(files);
     } else if (state?.mode === 'edit') {
       void uploadFilesDirectly(files);
+    }
+  };
+
+  // Create-mode drag handlers (form-level, как в AddTaskDialog).
+  const handleCreateDragOver = (e: DragEvent<HTMLFormElement>): void => {
+    e.preventDefault();
+    setCreateDragActive(true);
+  };
+  const handleCreateDragLeave = (e: DragEvent<HTMLFormElement>): void => {
+    e.preventDefault();
+    setCreateDragActive(false);
+  };
+  const handleCreateDrop = (e: DragEvent<HTMLFormElement>): void => {
+    e.preventDefault();
+    setCreateDragActive(false);
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      addPendingFiles(Array.from(e.dataTransfer.files));
     }
   };
 
@@ -533,7 +550,8 @@ export function TaskDrawer({
             )}
           </>
         ) : (
-          // === CREATE MODE === — компактная форма (без sticky-разделения).
+          // === CREATE MODE === — Todoist-style: textarea + chips сверху, pills под
+          // полем, footer = RalphMode + AI + Cancel + Submit. Файлы — chips НАД textarea.
           <>
             <div className="border-b bg-background/95 px-4 pb-2 pt-4 sm:px-6 backdrop-blur-md">
               <div className="flex items-center gap-2">
@@ -548,85 +566,126 @@ export function TaskDrawer({
               id="task-drawer-form"
               onSubmit={handleSubmit}
               onPaste={handleFormPaste}
-              className="space-y-4 overflow-y-auto px-4 pb-4 pt-4 sm:px-6"
+              onDragOver={handleCreateDragOver}
+              onDragLeave={handleCreateDragLeave}
+              onDrop={handleCreateDrop}
+              className="space-y-3 overflow-y-auto px-4 pb-4 pt-4 sm:px-6"
             >
-              <textarea
-                id="task-desc"
-                ref={descRef}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                maxLength={5000}
-                rows={4}
-                placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
-                className="block w-full resize-none rounded-md border bg-background p-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:border-foreground/30 focus:outline-none"
-              />
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">
-                  Режим работы Ralph
-                </label>
-                <RalphModeSelect
-                  value={createRalphMode}
-                  onChange={setCreateRalphMode}
-                  disabled={saving}
+              {/* Textarea с chips вложений сверху (как в AddTaskDialog / QuickAddTodo) */}
+              <div
+                className={cn(
+                  'relative space-y-2 rounded-md border bg-background px-2 py-2 transition-colors',
+                  createDragActive ? 'border-primary bg-primary/5' : 'border-input',
+                )}
+              >
+                {pendingFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {pendingFiles.map((pf) => (
+                      <span
+                        key={pf.id}
+                        className="inline-flex items-center gap-1.5 rounded border bg-background py-0.5 pl-1.5 pr-1 text-[11px]"
+                        title={pf.file.name}
+                      >
+                        {pf.previewUrl ? (
+                          <img src={pf.previewUrl} alt="" className="size-4 rounded object-cover" />
+                        ) : (
+                          <FileText className="size-3.5 text-muted-foreground" />
+                        )}
+                        <span className="max-w-[160px] truncate">{pf.file.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingFiles((prev) => {
+                              const target = prev.find((p) => p.id === pf.id);
+                              if (target) URL.revokeObjectURL(target.previewUrl);
+                              return prev.filter((p) => p.id !== pf.id);
+                            });
+                          }}
+                          className="grid size-4 place-items-center rounded-full text-muted-foreground hover:bg-destructive hover:text-white"
+                          aria-label="Убрать"
+                        >
+                          <X className="size-2.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <textarea
+                  id="task-desc"
+                  ref={descRef}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  maxLength={5000}
+                  rows={4}
+                  placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
+                  className="block w-full resize-none bg-transparent text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none"
                 />
               </div>
-              {isInbox && state?.mode === 'create' && (
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    Делегировать
-                  </label>
+
+              {/* Пилюли-кнопки под полем: Priority, Deadline, Delegate, Вложение */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <PrioritySelect value={createPriority} onChange={setCreatePriority} disabled={saving} compact />
+                <DeadlinePicker value={createDeadline} onChange={setCreateDeadline} disabled={saving} />
+                {isInbox && (
                   <DelegateSelect
                     value={createDelegateUserId}
                     onChange={setCreateDelegateUserId}
                     disabled={saving}
                   />
-                </div>
-              )}
-              {state?.mode === 'create' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">
-                      Приоритет
-                    </label>
-                    <PrioritySelect
-                      value={createPriority}
-                      onChange={setCreatePriority}
-                      disabled={saving}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">
-                      Срок
-                    </label>
-                    <DeadlinePicker
-                      value={createDeadline}
-                      onChange={setCreateDeadline}
-                      disabled={saving}
-                    />
-                  </div>
-                </div>
-              )}
-              <PendingAttachmentsSection
-                files={pendingFiles}
-                onAdd={addPendingFiles}
-                onRemove={(id) => {
-                  setPendingFiles((prev) => {
-                    const target = prev.find((p) => p.id === id);
-                    if (target) URL.revokeObjectURL(target.previewUrl);
-                    return prev.filter((p) => p.id !== id);
-                  });
-                }}
-              />
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => createFileInputRef.current?.click()}
+                  disabled={saving}
+                  title="Вложение (или перетащи файл / Ctrl+V)"
+                >
+                  <Paperclip className="size-3.5" />
+                  Вложение
+                </Button>
+                <input
+                  ref={createFileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files) addPendingFiles(Array.from(e.target.files));
+                    e.target.value = '';
+                  }}
+                />
+              </div>
+
+              {error && <p className="text-xs text-destructive">{error}</p>}
             </form>
-            <div className="flex items-center justify-end gap-2 border-t bg-background px-4 py-4 sm:px-6">
-              <Button type="button" variant="ghost" onClick={onClose}>
-                Отмена
-              </Button>
-              <Button type="submit" form="task-drawer-form" disabled={saving}>
-                {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-                Создать
-              </Button>
+
+            {/* Footer: RalphMode + AI слева, Cancel + Submit справа */}
+            <div className="flex flex-col gap-2 border-t bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <RalphModeSelect
+                  value={createRalphMode}
+                  onChange={setCreateRalphMode}
+                  disabled={saving}
+                  className="!h-7 min-w-[100px] !px-2 text-xs sm:!h-8 sm:min-w-[140px]"
+                />
+                <AiImproveButton
+                  text={description}
+                  projectId={aiProjectId}
+                  onImproved={setDescription}
+                  disabled={saving}
+                  compact
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <Button type="button" variant="ghost" size="sm" className="h-8" onClick={onClose}>
+                  Отмена
+                </Button>
+                <Button type="submit" form="task-drawer-form" size="sm" className="h-8" disabled={saving}>
+                  {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Создать
+                </Button>
+              </div>
             </div>
           </>
         )}
@@ -634,110 +693,6 @@ export function TaskDrawer({
     </Sheet>
   );
 }
-
-// =========================================================
-// Pending-attachments — выбор файлов ДО создания задачи. Состояние и валидация
-// живут в TaskDialog (нужно зашерить с form-level paste-handler'ом); секция — чисто
-// презентационная: drag-drop + file-picker + рендер превью.
-// =========================================================
-
-type PendingFile = {
-  readonly id: string;
-  readonly file: File;
-  readonly previewUrl: string;
-};
-
-function PendingAttachmentsSection({
-  files,
-  onAdd,
-  onRemove,
-}: {
-  files: PendingFile[];
-  onAdd: (files: File[]) => void;
-  onRemove: (id: string) => void;
-}): React.ReactElement {
-  const [dragActive, setDragActive] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleDragOver = (e: DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    setDragActive(true);
-  };
-  const handleDragLeave = (e: DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    setDragActive(false);
-  };
-  const handleDrop = (e: DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    setDragActive(false);
-    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-      onAdd(Array.from(e.dataTransfer.files));
-    }
-  };
-
-  return (
-    <div className="space-y-2" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-      <div className="flex items-center justify-between">
-        <Label>Файлы и&nbsp;картинки</Label>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1.5"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <Paperclip className="size-3.5" />
-          Прикрепить
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) onAdd(Array.from(e.target.files));
-            e.target.value = '';
-          }}
-        />
-      </div>
-
-      <div
-        className={`grid grid-cols-3 gap-2 rounded-md border-2 border-dashed p-2 transition-colors ${
-          dragActive ? 'border-primary bg-primary/5' : 'border-border'
-        }`}
-      >
-        {files.map((pf) => (
-          <div
-            key={pf.id}
-            className="group relative aspect-square overflow-hidden rounded border bg-muted"
-          >
-            <AttachmentThumb url={pf.previewUrl || undefined} name={pf.file.name} mime={pf.file.type} />
-            <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity group-hover:opacity-100">
-              <p className="w-full truncate px-1.5 pb-1 text-left text-[10px] text-white">
-                {pf.file.name}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => onRemove(pf.id)}
-              className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-destructive group-hover:opacity-100"
-              aria-label="Убрать"
-            >
-              <Trash2 className="size-3" />
-            </button>
-          </div>
-        ))}
-        {files.length === 0 && (
-          <div className="col-span-3 grid place-items-center py-6 text-center text-xs text-muted-foreground">
-            Перетащи файлы сюда, вставь из&nbsp;буфера (Ctrl+V) или нажми «Прикрепить».
-            Они загрузятся после создания задачи.
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 
 // =========================================================
 // Inline-edit описания задачи. По дефолту — статичный текст; клик → textarea, autofocus,
@@ -843,9 +798,22 @@ function TaskDescriptionEditor({
           disabled={saving}
           className="block w-full resize-none rounded-md border border-transparent bg-transparent p-2 text-sm leading-snug focus:outline-none disabled:opacity-50"
         />
-        <p className="text-[11px] text-muted-foreground">
-          Ctrl+Enter — сохранить, Esc — отменить. {saving && '…'}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-[11px] text-muted-foreground">
+            Ctrl+Enter — сохранить, Esc — отменить. {saving && '…'}
+          </p>
+          {/* onMouseDown preventDefault не даёт blur сработать на textarea (и не сохранит
+              черновик раньше времени), пока AI работает над текстом. */}
+          <div className="ml-auto" onMouseDown={(e) => e.preventDefault()}>
+            <AiImproveButton
+              text={draft}
+              projectId={projectId}
+              onImproved={setDraft}
+              disabled={saving}
+              compact
+            />
+          </div>
+        </div>
       </div>
     );
   }

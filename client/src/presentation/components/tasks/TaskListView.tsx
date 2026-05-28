@@ -169,6 +169,7 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
         backlogTail={backlogTail}
         todoTail={todoTail}
         isInbox={!showCommits}
+        aiProjectId={showCommits ? projectId : null}
       />
     </div>
   );
