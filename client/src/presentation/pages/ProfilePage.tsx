@@ -27,6 +27,7 @@ import { GithubAccountSection } from '@/presentation/components/github/GithubAcc
 import { AgentAccessCard } from '@/presentation/components/agent/AgentAccessCard';
 import { EmployeesCard } from '@/presentation/components/finance/EmployeesCard';
 import { TelegramSection } from '@/presentation/components/profile/TelegramSection';
+import { ProjectsShareCard } from '@/presentation/components/profile/ProjectsShareCard';
 import { getInitials } from '@/presentation/layout/projectIcons';
 
 function PersonalDataCard(): React.ReactElement {
@@ -239,6 +240,7 @@ export function ProfilePage(): React.ReactElement {
       <h1 className="text-3xl font-semibold tracking-tight">Профиль</h1>
 
       <PersonalDataCard />
+      <ProjectsShareCard />
       <EmployeesCard />
       <TelegramSection />
       <GithubAccountSection />

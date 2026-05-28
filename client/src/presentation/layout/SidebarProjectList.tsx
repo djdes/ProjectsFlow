@@ -19,6 +19,7 @@ import {
   ArrowDown,
   ArrowUp,
   BookOpen,
+  ChevronDown,
   Heart,
   HeartOff,
   MoreHorizontal,
@@ -34,6 +35,7 @@ import { useReorderProjects } from '@/presentation/hooks/useReorderProjects';
 import { useReorderFavoriteProjects } from '@/presentation/hooks/useReorderFavoriteProjects';
 import { useToggleProjectFavorite } from '@/presentation/hooks/useToggleProjectFavorite';
 import { useNewProjectDialog } from '@/presentation/components/forms/NewProjectDialogProvider';
+import { useSidebarSectionCollapse } from '@/presentation/hooks/useSidebarSectionCollapse';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -336,6 +338,10 @@ export function SidebarProjectList(): React.ReactElement {
   const { reorder } = useReorderProjects();
   const { reorder: reorderFavorites } = useReorderFavoriteProjects();
   const { open: openNewProject } = useNewProjectDialog();
+  const { collapsed: favCollapsed, toggle: toggleFavCollapsed } =
+    useSidebarSectionCollapse('favorites');
+  const { collapsed: mainCollapsed, toggle: toggleMainCollapsed } =
+    useSidebarSectionCollapse('main');
   const [query, setQuery] = useState('');
 
   if (loading) return <SidebarProjectListSkeleton />;
@@ -352,20 +358,31 @@ export function SidebarProjectList(): React.ReactElement {
   const visible = (data ?? []).filter((p) => !p.isInbox);
 
   // Шапка «Мои проекты» (заголовок + счётчик + «+») рендерится всегда, чтобы юзер мог
-  // создать первый проект. Список ниже падает в empty-state.
+  // создать первый проект. Сам заголовок кликается — сворачивает секцию (как в Todoist).
   const myProjectsHeader = (
-    <div className="flex items-center justify-between px-2 pt-1">
-      <span className="flex items-baseline gap-1.5 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-        Мои проекты
+    <div className="flex items-center justify-between gap-1 px-2 pt-1">
+      <button
+        type="button"
+        onClick={toggleMainCollapsed}
+        aria-expanded={!mainCollapsed}
+        className="group flex flex-1 items-baseline gap-1.5 rounded text-left text-[11px] font-medium uppercase tracking-widest text-muted-foreground hover:text-foreground"
+      >
+        <ChevronDown
+          className={cn(
+            'size-3 shrink-0 self-center transition-transform',
+            mainCollapsed && '-rotate-90',
+          )}
+        />
+        <span>Мои проекты</span>
         <span className="tracking-normal tabular-nums normal-case opacity-70">
           {visible.length}/{PROJECT_LIMIT === Infinity ? '∞' : PROJECT_LIMIT}
         </span>
-      </span>
+      </button>
       <button
         type="button"
         onClick={openNewProject}
         aria-label="Новый проект"
-        className="grid size-6 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
         <Plus className="size-4" />
       </button>
@@ -460,35 +477,50 @@ export function SidebarProjectList(): React.ReactElement {
       )}
 
       {/* «Избранное» — самостоятельная секция НАД «Мои проекты». Скрывается в режиме поиска
-          (тогда выдача плоская, без дублей). */}
+          (тогда выдача плоская, без дублей). Заголовок кликается — сворачивает секцию. */}
       {showFavoritesSection && favorites.length > 0 && (
         <div className="space-y-1 pb-1">
-          <div className="px-2 pt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-            Избранное
-          </div>
-          <ProjectGroup
-            projects={favorites}
-            bucket="favorites"
-            reorderable={reorderable}
-            onReorderEnd={handleFavoritesDragEnd}
-            onMove={moveInFavorites}
-          />
+          <button
+            type="button"
+            onClick={toggleFavCollapsed}
+            aria-expanded={!favCollapsed}
+            className="flex w-full items-center gap-1.5 px-2 pt-1 text-left text-[11px] font-medium uppercase tracking-widest text-muted-foreground hover:text-foreground"
+          >
+            <ChevronDown
+              className={cn(
+                'size-3 shrink-0 transition-transform',
+                favCollapsed && '-rotate-90',
+              )}
+            />
+            <span>Избранное</span>
+          </button>
+          {!favCollapsed && (
+            <ProjectGroup
+              projects={favorites}
+              bucket="favorites"
+              reorderable={reorderable}
+              onReorderEnd={handleFavoritesDragEnd}
+              onMove={moveInFavorites}
+            />
+          )}
         </div>
       )}
 
       <div className="space-y-1">
         {myProjectsHeader}
-        {noMatches ? (
-          <p className="px-2 py-1.5 text-sm text-muted-foreground">Ничего не найдено.</p>
-        ) : regular.length > 0 ? (
-          <ProjectGroup
-            projects={regular}
-            bucket="main"
-            reorderable={reorderable}
-            onReorderEnd={handleRegularDragEnd}
-            onMove={moveInRegular}
-          />
-        ) : null}
+        {!mainCollapsed && (
+          noMatches ? (
+            <p className="px-2 py-1.5 text-sm text-muted-foreground">Ничего не найдено.</p>
+          ) : regular.length > 0 ? (
+            <ProjectGroup
+              projects={regular}
+              bucket="main"
+              reorderable={reorderable}
+              onReorderEnd={handleRegularDragEnd}
+              onMove={moveInRegular}
+            />
+          ) : null
+        )}
       </div>
     </div>
   );

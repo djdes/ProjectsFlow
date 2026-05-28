@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Copy, Loader2 } from 'lucide-react';
+import { Copy, Loader2, Users } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
@@ -16,6 +22,7 @@ import type {
   ProjectInvite,
   ProjectInviteRole,
 } from '@/domain/project/ProjectInvite';
+import type { SharedMember } from '@/application/project/ProjectRepository';
 import { useContainer } from '@/infrastructure/di/container';
 
 type Props = {
@@ -31,6 +38,9 @@ export function InviteDialog({ projectId, open, onClose, onCreated }: Props): Re
   const [role, setRole] = useState<ProjectInviteRole>('editor');
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState<ProjectInvite | null>(null);
+  // Список юзеров, с которыми caller уже состоит в общих проектах. Подгружаем при
+  // открытии и предлагаем выбрать одним кликом — частый кейс «пригласить того же».
+  const [sharedMembers, setSharedMembers] = useState<SharedMember[] | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -38,8 +48,21 @@ export function InviteDialog({ projectId, open, onClose, onCreated }: Props): Re
       setEmail('');
       setRole('editor');
       setCreated(null);
+      return;
     }
-  }, [open]);
+    let cancelled = false;
+    projectRepository
+      .listSharedMembers()
+      .then((list) => {
+        if (!cancelled) setSharedMembers(list);
+      })
+      .catch(() => {
+        if (!cancelled) setSharedMembers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, projectRepository]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -68,14 +91,16 @@ export function InviteDialog({ projectId, open, onClose, onCreated }: Props): Re
     }
   };
 
+  const hasSharedMembers = sharedMembers !== null && sharedMembers.length > 0;
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Пригласить в проект</DialogTitle>
           <DialogDescription>
-            Скопируй ссылку и отправь коллеге любым способом (мессенджер, email). Срок действия — 7
-            дней.
+            Если у получателя есть аккаунт — ему придёт уведомление в системе и письмо на
+            email. Иначе — отправь ссылку любым каналом. Срок действия — 7 дней.
           </DialogDescription>
         </DialogHeader>
 
@@ -95,8 +120,9 @@ export function InviteDialog({ projectId, open, onClose, onCreated }: Props): Re
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Это единственная возможность увидеть ссылку. Если потеряешь — отзови приглашение и
-              создай новое.
+              {created.email
+                ? 'Уведомление и письмо отправлены. Ссылку также можно скопировать и переслать вручную.'
+                : 'Это единственная возможность увидеть ссылку. Если потеряешь — отзови приглашение и создай новое.'}
             </p>
             <DialogFooter>
               <Button variant="ghost" onClick={onClose}>
@@ -107,7 +133,29 @@ export function InviteDialog({ projectId, open, onClose, onCreated }: Props): Re
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="invite-email">Email (необязательно)</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="invite-email">Email</Label>
+                {hasSharedMembers && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs">
+                        <Users className="size-3.5" />
+                        Из знакомых
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="max-h-72 w-64 overflow-y-auto">
+                      {sharedMembers!.map((m) => (
+                        <DropdownMenuItem key={m.id} onSelect={() => setEmail(m.email)}>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm">{m.displayName}</p>
+                            <p className="truncate text-xs text-muted-foreground">{m.email}</p>
+                          </div>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
               <Input
                 id="invite-email"
                 type="email"
@@ -116,8 +164,7 @@ export function InviteDialog({ projectId, open, onClose, onCreated }: Props): Re
                 placeholder="kolya@example.com"
               />
               <p className="text-xs text-muted-foreground">
-                Email — пометка «для кого». На него ничего не отправится (SMTP пока не подключён).
-                Принять приглашение может любой залогиненный юзер по ссылке.
+                Если email пустой — создастся «бесхозная» ссылка: её можно отправить вручную.
               </p>
             </div>
             <div className="space-y-2">
@@ -154,7 +201,7 @@ export function InviteDialog({ projectId, open, onClose, onCreated }: Props): Re
               </Button>
               <Button type="submit" disabled={submitting}>
                 {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
-                Создать ссылку
+                Пригласить
               </Button>
             </DialogFooter>
           </form>
