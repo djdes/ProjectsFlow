@@ -34,6 +34,8 @@ type TaskDto = Omit<
   | 'ralphCancelRequestedBy'
   | 'ralphCancelRequestedByDisplayName'
   | 'delegation'
+  | 'deadline'
+  | 'priority'
 > & {
   createdAt: string;
   updatedAt: string;
@@ -47,6 +49,9 @@ type TaskDto = Omit<
   ralphCancelRequestedByDisplayName?: string | null;
   // Optional — старый backend без db/039 не присылает.
   delegation?: DelegationDto | null;
+  // Optional — старый backend без db/041 не присылает.
+  deadline?: string | null;
+  priority?: import('@/domain/task/Task').TaskPriority | null;
 };
 
 type CommitDto = Omit<TaskCommit, 'committedAt' | 'linkedAt'> & {
@@ -78,6 +83,8 @@ function fromDto(dto: TaskDto): Task {
       : null,
     ralphCancelRequestedBy: dto.ralphCancelRequestedBy ?? null,
     ralphCancelRequestedByDisplayName: dto.ralphCancelRequestedByDisplayName ?? null,
+    deadline: dto.deadline ?? null,
+    priority: dto.priority ?? null,
     delegation: dto.delegation
       ? {
           ...dto.delegation,

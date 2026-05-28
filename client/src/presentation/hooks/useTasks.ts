@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useContainer } from '@/infrastructure/di/container';
-import type { RalphMode, Task, TaskStatus } from '@/domain/task/Task';
+import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { useAgentJobPolling } from './useAgentJobPolling';
 import { useRealtimeTaskRefresh } from './useRealtimeTaskRefresh';
@@ -18,8 +18,18 @@ export type UseTasks = State & {
     status: TaskStatus;
     ralphMode?: RalphMode;
     delegateUserId?: string | null;
+    deadline?: string | null;
+    priority?: TaskPriority | null;
   }) => Promise<Task>;
-  update: (taskId: string, input: { description?: string; ralphMode?: RalphMode }) => Promise<Task>;
+  update: (
+    taskId: string,
+    input: {
+      description?: string;
+      ralphMode?: RalphMode;
+      deadline?: string | null;
+      priority?: TaskPriority | null;
+    },
+  ) => Promise<Task>;
   // Оптимистично переставляет локально + летит на сервер. На фейле ревёртится из refetch'а.
   move: (taskId: string, input: MoveTaskInput) => Promise<void>;
   remove: (taskId: string) => Promise<void>;

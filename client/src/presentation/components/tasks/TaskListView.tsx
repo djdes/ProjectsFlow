@@ -10,7 +10,11 @@ import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import { RalphModeBadge } from './RalphMode';
 import { InboxCheckbox } from './InboxCheckbox';
 import { DelegationBadge } from './DelegationBadge';
+import { PriorityBadge } from './PriorityBadge';
+import { DeadlineBadge } from './DeadlineBadge';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { PRIORITY_META } from '@/domain/task/priorityMeta';
+import { relativeTime } from '@/lib/relativeTime';
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
   backlog: -1,
@@ -67,10 +71,12 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
     description: string;
     ralphMode?: import('@/domain/task/Task').RalphMode;
     delegateUserId?: string | null;
+    deadline?: string | null;
+    priority?: import('@/domain/task/Task').TaskPriority | null;
   }): Promise<Task> => {
     if (!dialog) throw new Error('Dialog state missing');
     if (dialog.mode === 'create') return create({ ...input, status: dialog.status });
-    // edit-mode: delegateUserId не применим (только для create).
+    // edit-mode: delegateUserId/deadline/priority — отдельные PATCH через chips.
     return update(dialog.task.id, { description: input.description, ralphMode: input.ralphMode });
   };
 
@@ -229,11 +235,19 @@ function TaskListRow({
     (task.attachmentCount ?? 0) > 0 ||
     (task.commentCount ?? 0) > 0 ||
     task.ralphMode !== 'normal' ||
-    hasDelegation;
+    hasDelegation ||
+    task.priority !== null ||
+    task.deadline !== null;
 
   return (
     <li
-      className="group flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+      className={cn(
+        'group flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40',
+        // Priority-accent — левый цветной border 4px. На List-row даёт визуально
+        // понятный «прокрашенный» strip слева, не меняя bg и не конкурируя с
+        // bg-muted hover.
+        task.priority && `border-l-4 ${PRIORITY_META[task.priority].border}`,
+      )}
       onClick={onEdit}
     >
       {showCheckbox && !task.delegatedToAgent && (
@@ -280,6 +294,16 @@ function TaskListRow({
             {task.delegation && currentUserId && (
               <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
             )}
+            {task.priority !== null && task.priority !== undefined && (
+              <PriorityBadge priority={task.priority} />
+            )}
+            {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
+            <span
+              className="opacity-60"
+              title={task.createdAt.toLocaleString('ru-RU')}
+            >
+              {relativeTime(task.createdAt)}
+            </span>
           </div>
         )}
       </div>

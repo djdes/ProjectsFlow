@@ -1,7 +1,7 @@
 import { and, asc, eq, max, min, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { tasks, users, type TaskRow } from '../db/schema.js';
-import type { RalphMode, Task, TaskStatus } from '../../domain/task/Task.js';
+import type { RalphMode, Task, TaskPriority, TaskStatus } from '../../domain/task/Task.js';
 import type {
   CreateTaskInput,
   TaskRepository,
@@ -27,6 +27,15 @@ function toTask(row: TaskRowJoined): Task {
     ralphCancelRequestedAt: row.ralphCancelRequestedAt ?? null,
     ralphCancelRequestedBy: row.ralphCancelRequestedBy ?? null,
     ralphCancelRequestedByDisplayName: row.cancelByDisplayName ?? null,
+    // Drizzle с mysql2 возвращает DATE-колонку как string 'YYYY-MM-DD' (см. drizzle docs).
+    // Cast не нужен — TypeScript $inferSelect уже даёт string | null.
+    deadline: row.deadline ?? null,
+    // tinyint 1..4 — на проводе number. Cast в TaskPriority безопасен (валидация в zod
+    // на write-path; на read возможно увидим число вне диапазона если кто-то сделал
+    // ручной UPDATE — но это edge-case).
+    priority: row.priority !== null && row.priority !== undefined
+      ? (row.priority as TaskPriority)
+      : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -49,6 +58,8 @@ export class DrizzleTaskRepository implements TaskRepository {
         ralphMode: tasks.ralphMode,
         ralphCancelRequestedAt: tasks.ralphCancelRequestedAt,
         ralphCancelRequestedBy: tasks.ralphCancelRequestedBy,
+        deadline: tasks.deadline,
+        priority: tasks.priority,
         createdAt: tasks.createdAt,
         updatedAt: tasks.updatedAt,
         cancelByDisplayName: users.displayName,
@@ -76,8 +87,10 @@ export class DrizzleTaskRepository implements TaskRepository {
       description: input.description,
       status: input.status,
       position: input.position,
-      // Не выставляем если undefined — пусть отработает SQL DEFAULT 'normal'.
+      // Не выставляем если undefined — пусть отработает SQL DEFAULT.
       ...(input.ralphMode !== undefined ? { ralphMode: input.ralphMode } : {}),
+      ...(input.deadline !== undefined ? { deadline: input.deadline } : {}),
+      ...(input.priority !== undefined ? { priority: input.priority } : {}),
     });
     const created = await this.getById(input.id);
     if (!created) throw new Error('Failed to read back task after insert');
@@ -85,11 +98,15 @@ export class DrizzleTaskRepository implements TaskRepository {
   }
 
   async update(taskId: string, patch: UpdateTaskPatch): Promise<Task | null> {
-    const set: Partial<Pick<TaskRow, 'description' | 'status' | 'position' | 'ralphMode'>> = {};
+    const set: Partial<
+      Pick<TaskRow, 'description' | 'status' | 'position' | 'ralphMode' | 'deadline' | 'priority'>
+    > = {};
     if (patch.description !== undefined) set.description = patch.description;
     if (patch.status !== undefined) set.status = patch.status;
     if (patch.position !== undefined) set.position = patch.position;
     if (patch.ralphMode !== undefined) set.ralphMode = patch.ralphMode;
+    if (patch.deadline !== undefined) set.deadline = patch.deadline;
+    if (patch.priority !== undefined) set.priority = patch.priority;
 
     if (Object.keys(set).length > 0) {
       await this.db.update(tasks).set(set).where(eq(tasks.id, taskId));

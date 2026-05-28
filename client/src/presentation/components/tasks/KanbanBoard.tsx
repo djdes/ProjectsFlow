@@ -236,13 +236,16 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     description: string;
     ralphMode?: import('@/domain/task/Task').RalphMode;
     delegateUserId?: string | null;
+    deadline?: string | null;
+    priority?: import('@/domain/task/Task').TaskPriority | null;
   }): Promise<Task> => {
     if (!dialog) throw new Error('Dialog state missing');
     if (dialog.mode === 'create') {
       return create({ ...input, status: dialog.status });
     }
     // edit-mode: TaskRepository.update не принимает delegateUserId — он только
-    // для create. Игнорируем.
+    // для create. Deadline/priority меняются через TaskPriorityChip/TaskDeadlineChip
+    // в шапке drawer'а (отдельные PATCH).
     return update(dialog.task.id, { description: input.description, ralphMode: input.ralphMode });
   };
 

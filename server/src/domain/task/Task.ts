@@ -33,6 +33,12 @@ export type RalphMode = 'normal' | 'silent' | 'grillme';
 
 export const RALPH_MODES: readonly RalphMode[] = ['normal', 'silent', 'grillme'];
 
+// Приоритет в стиле Todoist: 1=urgent (red), 2=high (orange), 3=medium (blue),
+// 4=low (slate). null = без приоритета (без подсветки). См. db/041.
+export type TaskPriority = 1 | 2 | 3 | 4;
+
+export const TASK_PRIORITIES: readonly TaskPriority[] = [1, 2, 3, 4];
+
 export type Task = {
   readonly id: string;
   readonly projectId: string;
@@ -49,6 +55,12 @@ export type Task = {
   // Display name запросившего — заполняется через LEFT JOIN users в repository.
   // Null если запроса нет ИЛИ юзер удалён.
   readonly ralphCancelRequestedByDisplayName: string | null;
+  // Срок выполнения. Date-only ISO-string 'YYYY-MM-DD' для избегания TZ-багов
+  // (UI рендерит через Intl.DateTimeFormat, parsing через new Date(value)).
+  // null = без deadline. См. db/041.
+  readonly deadline: string | null;
+  // Приоритет 1..4 (1=urgent, 4=low). null = без приоритета. См. db/041.
+  readonly priority: TaskPriority | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
   // Активная (pending|accepted) делегация — null если задача не делегирована.

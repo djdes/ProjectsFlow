@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import type { Notification } from '@/domain/notifications/Notification';
 import { useContainer } from '@/infrastructure/di/container';
 import { useUnreadNotificationsCount } from '@/presentation/hooks/useUnreadNotificationsCount';
+import { relativeTime } from '@/lib/relativeTime';
 import { NOTIFICATIONS_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { getInitials } from '@/presentation/layout/projectIcons';
@@ -18,22 +19,6 @@ const roleLabel: Record<'editor' | 'viewer', string> = {
 };
 
 type FilterMode = 'all' | 'unread';
-
-// Простой relative-time formatter. Для большего нашлось бы date-fns/relative-time-format,
-// но ради двух строк не нужна зависимость.
-function relativeTime(date: Date): string {
-  const now = Date.now();
-  const diff = Math.max(0, now - date.getTime());
-  const sec = Math.round(diff / 1000);
-  if (sec < 60) return 'только что';
-  const min = Math.round(sec / 60);
-  if (min < 60) return `${min} мин назад`;
-  const hr = Math.round(min / 60);
-  if (hr < 24) return `${hr} ч назад`;
-  const days = Math.round(hr / 24);
-  if (days < 7) return `${days} дн назад`;
-  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-}
 
 export function NotificationsPage(): React.ReactElement {
   const { notificationRepository, inviteRepository, projectRepository, taskDelegationRepository } =

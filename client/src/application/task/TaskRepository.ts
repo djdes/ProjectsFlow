@@ -1,4 +1,4 @@
-import type { RalphMode, Task, TaskStatus } from '@/domain/task/Task';
+import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import type { TaskComment } from '@/domain/task/TaskComment';
@@ -11,11 +11,19 @@ export type CreateTaskInput = {
   // Опциональное one-to-one делегирование (только для inbox-задач). UUID юзера
   // из shared-members списка caller'а; null/undefined — обычная задача.
   readonly delegateUserId?: string | null;
+  // Срок выполнения 'YYYY-MM-DD'. null = без deadline.
+  readonly deadline?: string | null;
+  // Приоритет 1..4 (1=urgent, 4=low). null = без приоритета.
+  readonly priority?: TaskPriority | null;
 };
 
 export type UpdateTaskInput = {
   readonly description?: string;
   readonly ralphMode?: RalphMode;
+  // null = очистить deadline; undefined = не менять.
+  readonly deadline?: string | null;
+  // null = убрать приоритет; undefined = не менять.
+  readonly priority?: TaskPriority | null;
 };
 
 export type MoveTaskInput = {

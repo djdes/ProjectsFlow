@@ -5,7 +5,7 @@ import {
   SelfDelegationError,
   TaskDescriptionEmptyError,
 } from '../../domain/task/errors.js';
-import type { RalphMode, Task, TaskStatus } from '../../domain/task/Task.js';
+import type { RalphMode, Task, TaskPriority, TaskStatus } from '../../domain/task/Task.js';
 import type { TaskDelegation } from '../../domain/task/TaskDelegation.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
@@ -42,6 +42,10 @@ export type CreateTaskCommand = {
   // (project.isInbox=true) и только если delegateUserId в shared-members списке
   // creator'а. null/undefined — обычная задача.
   readonly delegateUserId?: string | null;
+  // Срок выполнения. ISO 'YYYY-MM-DD'. null/undefined — без deadline.
+  readonly deadline?: string | null;
+  // Приоритет 1..4. null/undefined — без приоритета.
+  readonly priority?: TaskPriority | null;
 };
 
 const POSITION_STEP = 1024;
@@ -67,6 +71,8 @@ export class CreateTask {
       status: input.status,
       position,
       ralphMode: input.ralphMode,
+      deadline: input.deadline ?? null,
+      priority: input.priority ?? null,
     });
 
     let delegation: TaskDelegation | null = null;

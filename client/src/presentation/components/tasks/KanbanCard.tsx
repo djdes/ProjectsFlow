@@ -12,6 +12,10 @@ import { DelegateToAgentButton } from './DelegateToAgentButton';
 import { DelegationBadge } from './DelegationBadge';
 import { InboxCheckbox } from './InboxCheckbox';
 import { RalphModeBadge } from './RalphMode';
+import { PriorityBadge } from './PriorityBadge';
+import { DeadlineBadge } from './DeadlineBadge';
+import { PRIORITY_META } from '@/domain/task/priorityMeta';
+import { relativeTime } from '@/lib/relativeTime';
 import { STATUS_LABEL } from './statusLabels';
 
 type Props = {
@@ -104,6 +108,10 @@ export function KanbanCard({
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
           'transition-[box-shadow,border-color,opacity] duration-150 ease-out',
           'hover:shadow-md',
+          // Priority-accent: левый цветной border 4px (rose/orange/blue/slate).
+          // Не конфликтует с border-amber-500 на todo — у TODO-карточек priority-border
+          // перекрывает amber слева, остальной border остаётся amber. Минимально инвазивно.
+          task.priority && `border-l-4 ${PRIORITY_META[task.priority].border}`,
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
           // Status-аcent: TODO — пульсирующее янтарное неоновое «дыхание». Сообщает
           // «эта задача ждёт, чтобы её взяли в работу». Анимируется box-shadow
@@ -154,7 +162,9 @@ export function KanbanCard({
             task.ralphMode !== 'normal' ||
             task.status === 'in_progress' ||
             task.status === 'awaiting_clarification' ||
-            !!task.delegation) && (
+            !!task.delegation ||
+            task.priority !== null ||
+            task.deadline !== null) && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
               {showShortId && (
                 <span className="font-mono normal-case tracking-normal opacity-60">
@@ -185,6 +195,18 @@ export function KanbanCard({
               {task.delegation && currentUserId && (
                 <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
               )}
+              {task.priority !== null && task.priority !== undefined && (
+                <PriorityBadge priority={task.priority} />
+              )}
+              {task.deadline && (
+                <DeadlineBadge deadline={task.deadline} status={task.status} />
+              )}
+              <span
+                className="normal-case tracking-normal opacity-60"
+                title={task.createdAt.toLocaleString('ru-RU')}
+              >
+                {relativeTime(task.createdAt)}
+              </span>
               {/* Status-бэйдж справа снизу для статусов, у которых нет своей колонки:
                   in_progress и awaiting_clarification визуально лежат в TODO. */}
               {task.status === 'in_progress' && (

@@ -30,6 +30,13 @@ export type RalphMode = 'normal' | 'silent' | 'grillme';
 
 export const RALPH_MODES: readonly RalphMode[] = ['normal', 'silent', 'grillme'];
 
+// Приоритет в стиле Todoist: 1=urgent (red), 2=high (orange), 3=medium (blue),
+// 4=low (slate). null = без приоритета. См. db/041, domain/task/priorityMeta.ts
+// для label/color metadata.
+export type TaskPriority = 1 | 2 | 3 | 4;
+
+export const TASK_PRIORITIES: readonly TaskPriority[] = [1, 2, 3, 4];
+
 // Метаданные для UI dropdown / badge — label, описание (tooltip), иконка.
 // Иконки — emoji для быстрой визуальной идентификации в плотной канбан-сетке.
 export const RALPH_MODE_META: Record<RalphMode, { label: string; description: string; icon: string }> = {
@@ -71,6 +78,10 @@ export type Task = {
   readonly ralphCancelRequestedAt: Date | null;
   readonly ralphCancelRequestedBy: string | null;
   readonly ralphCancelRequestedByDisplayName: string | null;
+  // Срок выполнения. ISO-string 'YYYY-MM-DD' (без времени). null = не задан. См. db/041.
+  readonly deadline: string | null;
+  // Приоритет 1..4 (1=urgent, 4=low). null = без приоритета. См. db/041.
+  readonly priority: TaskPriority | null;
   // Активная (pending|accepted) делегация — null если задача не делегирована.
   // Заполняется list-endpoint'ом left-join'ом. Optional: undefined = «не загружено».
   readonly delegation?: TaskDelegation | null;

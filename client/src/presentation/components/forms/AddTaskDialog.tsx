@@ -27,7 +27,9 @@ import {
 } from '@/presentation/components/attachments/files';
 import { RalphModeSelect } from '@/presentation/components/tasks/RalphMode';
 import { DelegateSelect } from '@/presentation/components/tasks/DelegateSelect';
-import type { RalphMode } from '@/domain/task/Task';
+import { DeadlinePicker } from '@/presentation/components/tasks/DeadlinePicker';
+import { PrioritySelect } from '@/presentation/components/tasks/PrioritySelect';
+import type { RalphMode, TaskPriority } from '@/domain/task/Task';
 
 type Props = {
   open: boolean;
@@ -48,6 +50,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
   // Делегат для inbox-задачи. Сбрасывается при смене проекта на «не-inbox».
   const [delegateUserId, setDelegateUserId] = useState<string | null>(null);
+  const [deadline, setDeadline] = useState<string | null>(null);
+  const [priority, setPriority] = useState<TaskPriority | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
@@ -63,6 +67,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       setProjectId(null);
       setRalphMode('normal');
       setDelegateUserId(null);
+      setDeadline(null);
+      setPriority(null);
       setError(null);
       setPending((prev) => {
         prev.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
@@ -125,6 +131,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
         ralphMode,
         // delegateUserId применим только когда projectId === null (inbox).
         delegateUserId: projectId === null ? delegateUserId : null,
+        deadline,
+        priority,
       });
       // Загружаем вложения в созданную задачу (best-effort, ошибки — toast'ом).
       for (const pf of pending) {
@@ -214,6 +222,17 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
               />
             </div>
           )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Приоритет</Label>
+              <PrioritySelect value={priority} onChange={setPriority} disabled={saving} />
+            </div>
+            <div className="space-y-2">
+              <Label>Срок</Label>
+              <DeadlinePicker value={deadline} onChange={setDeadline} disabled={saving} />
+            </div>
+          </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">

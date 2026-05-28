@@ -14,6 +14,7 @@ import {
   smallint,
   text,
   timestamp,
+  tinyint,
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/mysql-core';
@@ -311,6 +312,12 @@ export const tasks = mysqlTable(
     // когда юзер запросил. Ralph каждые ~5с поллит — увидит флаг, убьёт worker'а, ack-нет.
     ralphCancelRequestedAt: timestamp('ralph_cancel_requested_at'),
     ralphCancelRequestedBy: char('ralph_cancel_requested_by', { length: 36 }),
+    // Срок выполнения. DATE без времени (UI: <input type="date">). См. db/041.
+    // mode:'string' — Drizzle отдаёт ISO 'YYYY-MM-DD' напрямую (без TZ-shenanigans
+    // которые случились бы с Date). Domain хранит string, парсит в Date только UI.
+    deadline: date('deadline', { mode: 'string' }),
+    // Приоритет 1..4 (1=urgent, 4=low — стиль Todoist). NULL = без приоритета. См. db/041.
+    priority: tinyint('priority', { unsigned: true }),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },

@@ -212,6 +212,17 @@ const updateTaskAgentSchema = z
     description: z.string().trim().min(1).max(10_000).optional(),
     // Worker может выставить режим (например 'silent' → дальше работает без вопросов).
     ralphMode: z.enum(['normal', 'silent', 'grillme']).optional(),
+    // Срок выполнения 'YYYY-MM-DD'. null = очистить. См. db/041.
+    deadline: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/u, 'Дата должна быть в формате YYYY-MM-DD')
+      .nullable()
+      .optional(),
+    // Приоритет 1..4. null = убрать.
+    priority: z
+      .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
+      .nullable()
+      .optional(),
   })
   .refine((o) => Object.keys(o).length > 0, { message: 'Нечего обновлять' });
 
@@ -647,6 +658,8 @@ export function agentApiRouter(deps: Deps): Router {
           description: body.description,
           status: body.status ?? 'todo',
           ralphMode: body.ralphMode,
+          deadline: body.deadline ?? null,
+          priority: body.priority ?? null,
         });
         void deps.notifier.onTaskCreated(projectId, req.user!.id, task, 'mcp').catch(() => {});
         // taskToDto ожидает Task с commitCount, но из CreateTask он не приходит — оборачиваем
@@ -1100,6 +1113,8 @@ export function agentApiRouter(deps: Deps): Router {
           taskId,
           description: body.description,
           ralphMode: body.ralphMode,
+          deadline: body.deadline,
+          priority: body.priority,
         });
         res.json({ task: taskToDto(task) });
       } catch (e) {

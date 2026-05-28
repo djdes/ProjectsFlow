@@ -12,6 +12,18 @@ export const taskStatusSchema = z.enum([
 // Режим работы Ralph. См. spec C:/www/ralph/prompts/task-ralph-mode.md.
 export const ralphModeSchema = z.enum(['normal', 'silent', 'grillme']);
 
+// Дата 'YYYY-MM-DD' (без времени). Жёсткий regex — backend хранит как есть, UI парсит
+// для отображения. nullable: null = очистить deadline; не передано = не менять.
+const deadlineSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/u, 'Дата должна быть в формате YYYY-MM-DD')
+  .nullable();
+
+// Приоритет 1..4 (Todoist style). nullable: null = убрать приоритет.
+const prioritySchema = z
+  .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
+  .nullable();
+
 export const createTaskSchema = z.object({
   description: z.string().trim().min(1, 'Введите описание').max(5000),
   status: taskStatusSchema.optional(),
@@ -19,12 +31,16 @@ export const createTaskSchema = z.object({
   // Опциональное one-to-one делегирование (только для inbox-задач). UUID юзера.
   // Сервер дополнительно валидирует: не self, в shared-members caller'а, проект isInbox.
   delegateUserId: z.string().uuid().nullable().optional(),
+  deadline: deadlineSchema.optional(),
+  priority: prioritySchema.optional(),
 });
 
 export const updateTaskSchema = z
   .object({
     description: z.string().trim().min(1).max(5000).optional(),
     ralphMode: ralphModeSchema.optional(),
+    deadline: deadlineSchema.optional(),
+    priority: prioritySchema.optional(),
   })
   .refine((o) => Object.keys(o).length > 0, { message: 'Нечего обновлять' });
 

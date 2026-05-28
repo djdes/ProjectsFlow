@@ -1,4 +1,4 @@
-import type { RalphMode, Task, TaskStatus } from '../../domain/task/Task.js';
+import type { RalphMode, Task, TaskPriority, TaskStatus } from '../../domain/task/Task.js';
 
 export type CreateTaskInput = {
   readonly id: string;
@@ -8,6 +8,10 @@ export type CreateTaskInput = {
   readonly position: number;
   // Режим работы Ralph (default 'normal'). См. domain RalphMode.
   readonly ralphMode?: RalphMode;
+  // Срок выполнения (ISO 'YYYY-MM-DD'). null = без deadline.
+  readonly deadline?: string | null;
+  // Приоритет 1..4 (1=urgent, 4=low). null = без приоритета.
+  readonly priority?: TaskPriority | null;
 };
 
 export type UpdateTaskPatch = {
@@ -15,6 +19,10 @@ export type UpdateTaskPatch = {
   readonly status?: TaskStatus;
   readonly position?: number;
   readonly ralphMode?: RalphMode;
+  // null = очистить deadline. undefined = не менять.
+  readonly deadline?: string | null;
+  // null = убрать приоритет. undefined = не менять.
+  readonly priority?: TaskPriority | null;
 };
 
 export interface TaskRepository {

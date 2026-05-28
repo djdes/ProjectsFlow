@@ -10,10 +10,12 @@ import {
 import { FileText, Loader2, Paperclip, Send, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
-import type { RalphMode, Task } from '@/domain/task/Task';
+import type { RalphMode, Task, TaskPriority } from '@/domain/task/Task';
 import { useContainer } from '@/infrastructure/di/container';
 import { RalphModeSelect } from './RalphMode';
 import { DelegateSelect } from './DelegateSelect';
+import { DeadlinePicker } from './DeadlinePicker';
+import { PrioritySelect } from './PrioritySelect';
 import {
   extractClipboardFiles,
   isImageMime,
@@ -32,6 +34,8 @@ type Props = {
     description: string;
     ralphMode?: RalphMode;
     delegateUserId?: string | null;
+    deadline?: string | null;
+    priority?: TaskPriority | null;
   }) => Promise<Task>;
   // Если true — рендерим DelegateSelect (только в inbox-режиме).
   isInbox?: boolean;
@@ -49,6 +53,8 @@ export function QuickAddTodo({ onCreate, isInbox = false }: Props): React.ReactE
   const [text, setText] = useState('');
   const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
   const [delegateUserId, setDelegateUserId] = useState<string | null>(null);
+  const [deadline, setDeadline] = useState<string | null>(null);
+  const [priority, setPriority] = useState<TaskPriority | null>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -114,7 +120,13 @@ export function QuickAddTodo({ onCreate, isInbox = false }: Props): React.ReactE
     if (trimmed.length === 0 || submitting) return;
     setSubmitting(true);
     try {
-      const task = await onCreate({ description: trimmed, ralphMode, delegateUserId });
+      const task = await onCreate({
+        description: trimmed,
+        ralphMode,
+        delegateUserId,
+        deadline,
+        priority,
+      });
       if (pending.length > 0) {
         let ok = 0;
         for (const pf of pending) {
@@ -138,6 +150,8 @@ export function QuickAddTodo({ onCreate, isInbox = false }: Props): React.ReactE
       setText('');
       setRalphMode('normal');
       setDelegateUserId(null);
+      setDeadline(null);
+      setPriority(null);
     } catch (err) {
       toast.error(`Не удалось создать: ${(err as Error).message}`);
     } finally {
@@ -230,6 +244,17 @@ export function QuickAddTodo({ onCreate, isInbox = false }: Props): React.ReactE
             <Paperclip className="size-3.5" />
           </Button>
           <div className="flex items-center gap-1.5">
+            <PrioritySelect
+              value={priority}
+              onChange={setPriority}
+              disabled={submitting}
+              compact
+            />
+            <DeadlinePicker
+              value={deadline}
+              onChange={setDeadline}
+              disabled={submitting}
+            />
             {isInbox && (
               <DelegateSelect
                 value={delegateUserId}

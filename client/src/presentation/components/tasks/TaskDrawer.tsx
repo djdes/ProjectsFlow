@@ -43,6 +43,11 @@ import type { RalphMode } from '@/domain/task/Task';
 import { DelegateSelect } from './DelegateSelect';
 import { AssignToProjectSelect } from './AssignToProjectSelect';
 import { DelegateTaskButton } from './DelegateTaskButton';
+import { DeadlinePicker } from './DeadlinePicker';
+import { PrioritySelect } from './PrioritySelect';
+import { TaskPriorityChip } from './TaskPriorityChip';
+import { TaskDeadlineChip } from './TaskDeadlineChip';
+import type { TaskPriority } from '@/domain/task/Task';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
@@ -64,6 +69,8 @@ type Props = {
     description: string;
     ralphMode?: import('@/domain/task/Task').RalphMode;
     delegateUserId?: string | null;
+    deadline?: string | null;
+    priority?: TaskPriority | null;
   }) => Promise<Task>;
   // Колбэк когда коммиты или аттачи у задачи поменялись — board перефетчит badge'и.
   onCommitsChange?: () => void;
@@ -168,6 +175,9 @@ export function TaskDrawer({
   const [createRalphMode, setCreateRalphMode] = useState<RalphMode>('normal');
   // Делегат для create-mode (только inbox). Очищаем после закрытия drawer'а.
   const [createDelegateUserId, setCreateDelegateUserId] = useState<string | null>(null);
+  // Срок и приоритет для create-mode (применимо к любому проекту).
+  const [createDeadline, setCreateDeadline] = useState<string | null>(null);
+  const [createPriority, setCreatePriority] = useState<TaskPriority | null>(null);
   // В edit-режиме секция аттачей экспонирует addFiles через ref — чтобы paste-handler
   // на форме (поймает Ctrl+V даже когда фокус в textarea) мог пнуть аплоад.
   const attachmentsRef = useRef<AttachmentsHandle>(null);
@@ -233,6 +243,8 @@ export function TaskDrawer({
     setDescription(state.mode === 'edit' ? state.task.description ?? '' : '');
     setCreateRalphMode('normal');
     setCreateDelegateUserId(null);
+    setCreateDeadline(null);
+    setCreatePriority(null);
     setError(null);
     setExpanded(false);
     setCommitsOpen(false);
@@ -282,6 +294,8 @@ export function TaskDrawer({
         description: description.trim(),
         ralphMode: state?.mode === 'create' ? createRalphMode : undefined,
         delegateUserId: state?.mode === 'create' ? createDelegateUserId : undefined,
+        deadline: state?.mode === 'create' ? createDeadline : undefined,
+        priority: state?.mode === 'create' ? createPriority : undefined,
       });
       // Если в create-режиме копились картинки — аплоадим их в новосозданную задачу.
       if (state?.mode === 'create' && pendingFiles.length > 0) {
@@ -399,6 +413,8 @@ export function TaskDrawer({
                   task.status === 'awaiting_clarification') && (
                   <TaskRalphModeChip task={task} onChanged={() => onCommitsChange?.()} />
                 )}
+                <TaskPriorityChip task={task} onChanged={() => onCommitsChange?.()} />
+                <TaskDeadlineChip task={task} onChanged={() => onCommitsChange?.()} />
                 {isInbox && (
                   <DelegateTaskButton
                     task={task}
@@ -576,6 +592,30 @@ export function TaskDrawer({
                     onChange={setCreateDelegateUserId}
                     disabled={saving}
                   />
+                </div>
+              )}
+              {state?.mode === 'create' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Приоритет
+                    </label>
+                    <PrioritySelect
+                      value={createPriority}
+                      onChange={setCreatePriority}
+                      disabled={saving}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Срок
+                    </label>
+                    <DeadlinePicker
+                      value={createDeadline}
+                      onChange={setCreateDeadline}
+                      disabled={saving}
+                    />
+                  </div>
                 </div>
               )}
               <PendingAttachmentsSection
