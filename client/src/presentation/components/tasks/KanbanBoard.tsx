@@ -20,6 +20,7 @@ import type { Task, TaskStatus } from '@/domain/task/Task';
 import { TASK_STATUSES } from '@/domain/task/Task';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { useDoneSortOrder, type DoneSortOrder } from '@/presentation/hooks/useDoneSortOrder';
+import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { KanbanCard } from './KanbanCard';
 import { KanbanColumn } from './KanbanColumn';
 import { QuickAddTodo } from './QuickAddTodo';
@@ -102,6 +103,7 @@ function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStat
 
 export function KanbanBoard({ projectId, showCommits = true, projectName, hideDone = false }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
+  const { user } = useCurrentUser();
   // showCheckbox = «это inbox-board». Inbox-board задаётся через showCommits=false
   // (у inbox нет git-репо, так что коммиты скрыты). Единственный сигнал — этого хватает.
   const isInbox = !showCommits;
@@ -321,6 +323,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
               showCheckbox={isInbox}
               lastDoneTaskId={lastDoneTaskId}
               lastTodoTaskId={lastTodoTaskId}
+              currentUserId={user?.id ?? null}
               headerExtra={
                 status === 'done' ? (
                   <Button

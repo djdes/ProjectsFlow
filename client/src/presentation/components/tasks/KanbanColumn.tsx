@@ -29,6 +29,8 @@ type Props = {
   showCheckbox?: boolean;
   lastDoneTaskId?: string | null;
   lastTodoTaskId?: string | null;
+  // Для DelegationBadge на карточках.
+  currentUserId?: string | null;
 };
 
 export function KanbanColumn({
@@ -45,6 +47,7 @@ export function KanbanColumn({
   showCheckbox = false,
   lastDoneTaskId = null,
   lastTodoTaskId = null,
+  currentUserId = null,
 }: Props): React.ReactElement {
   // Droppable нужен чтобы можно было кинуть карточку в ПУСТУЮ колонку —
   // SortableContext один не реагирует на drop в empty list.
@@ -109,6 +112,7 @@ export function KanbanColumn({
               showCheckbox={showCheckbox}
               lastDoneTaskId={lastDoneTaskId}
               lastTodoTaskId={lastTodoTaskId}
+              currentUserId={currentUserId}
             />
           ))}
         </SortableContext>

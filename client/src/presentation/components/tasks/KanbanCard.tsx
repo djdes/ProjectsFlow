@@ -9,6 +9,7 @@ import { taskShortId } from '@/domain/task/Task';
 import { AgentJobBadge } from './AgentJobBadge';
 import { ClaudeIcon } from './ClaudeIcon';
 import { DelegateToAgentButton } from './DelegateToAgentButton';
+import { DelegationBadge } from './DelegationBadge';
 import { InboxCheckbox } from './InboxCheckbox';
 import { RalphModeBadge } from './RalphMode';
 import { STATUS_LABEL } from './statusLabels';
@@ -34,6 +35,8 @@ type Props = {
   showCheckbox?: boolean;
   lastDoneTaskId?: string | null;
   lastTodoTaskId?: string | null;
+  // Для DelegationBadge: чтобы определить «я создатель / я делегат».
+  currentUserId?: string | null;
 };
 
 // Кастомный transition для reflow соседей при drag. Out-quart — плавнее дефолтного
@@ -54,6 +57,7 @@ export function KanbanCard({
   showCheckbox = false,
   lastDoneTaskId = null,
   lastTodoTaskId = null,
+  currentUserId = null,
 }: Props): React.ReactElement {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -149,7 +153,8 @@ export function KanbanCard({
             (task.commentCount ?? 0) > 0 ||
             task.ralphMode !== 'normal' ||
             task.status === 'in_progress' ||
-            task.status === 'awaiting_clarification') && (
+            task.status === 'awaiting_clarification' ||
+            !!task.delegation) && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
               {showShortId && (
                 <span className="font-mono normal-case tracking-normal opacity-60">
@@ -177,6 +182,9 @@ export function KanbanCard({
               {/* Бейдж режима Ralph — только для не-дефолта (показывать каждой задаче '🤖 Обычный'
                   было бы шумом). Component сам возвращает null если showDefault=false и mode='normal'. */}
               <RalphModeBadge mode={task.ralphMode} />
+              {task.delegation && currentUserId && (
+                <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
+              )}
               {/* Status-бэйдж справа снизу для статусов, у которых нет своей колонки:
                   in_progress и awaiting_clarification визуально лежат в TODO. */}
               {task.status === 'in_progress' && (

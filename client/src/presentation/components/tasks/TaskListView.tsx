@@ -9,6 +9,8 @@ import { useTasks } from '@/presentation/hooks/useTasks';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import { RalphModeBadge } from './RalphMode';
 import { InboxCheckbox } from './InboxCheckbox';
+import { DelegationBadge } from './DelegationBadge';
+import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
   backlog: -1,
@@ -34,6 +36,7 @@ type Props = {
 // перечёркиваются. Для аттачей/коммитов — клик по строке открывает диалог.
 export function TaskListView({ projectId, showCommits = true, hideDone = false }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, remove, refetch } = useTasks(projectId);
+  const { user } = useCurrentUser();
   const [dialog, setDialog] = useState<TaskDrawerState | null>(null);
 
   // Фильтр hide-done применяем ДО сортировки/группировки. Сами done-задачи
@@ -123,6 +126,7 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
               task={t}
               showShortId={showCommits}
               showCheckbox={!showCommits}
+              currentUserId={user?.id ?? null}
               lastDoneTaskId={lastDoneTaskId}
               lastTodoTaskId={lastTodoTaskId}
               onEdit={() => setDialog({ mode: 'edit', task: t })}
@@ -201,6 +205,7 @@ function TaskListRow({
   task,
   showShortId,
   showCheckbox,
+  currentUserId,
   lastDoneTaskId,
   lastTodoTaskId,
   onEdit,
@@ -210,6 +215,7 @@ function TaskListRow({
   task: Task;
   showShortId: boolean;
   showCheckbox: boolean;
+  currentUserId: string | null;
   lastDoneTaskId: string | null;
   lastTodoTaskId: string | null;
   onEdit: () => void;
@@ -217,11 +223,13 @@ function TaskListRow({
   onChanged: () => void;
 }): React.ReactElement {
   const isDone = task.status === 'done';
+  const hasDelegation = task.delegation !== null && task.delegation !== undefined;
   const hasBadges =
     (task.commitCount ?? 0) > 0 ||
     (task.attachmentCount ?? 0) > 0 ||
     (task.commentCount ?? 0) > 0 ||
-    task.ralphMode !== 'normal';
+    task.ralphMode !== 'normal' ||
+    hasDelegation;
 
   return (
     <li
@@ -269,6 +277,9 @@ function TaskListRow({
               </span>
             )}
             <RalphModeBadge mode={task.ralphMode} />
+            {task.delegation && currentUserId && (
+              <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
+            )}
           </div>
         )}
       </div>
