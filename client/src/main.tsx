@@ -8,6 +8,7 @@ import '@/styles/globals.css';
 
 import { ContainerProvider } from '@/infrastructure/di/container';
 import { ThemeProvider } from '@/presentation/components/theme/ThemeProvider';
+import { MotionProvider } from '@/presentation/components/motion/MotionProvider';
 import { AuthProvider } from '@/presentation/auth/AuthProvider';
 import { Toaster } from '@/components/ui/sonner';
 import { router } from '@/presentation/app/routes';
@@ -19,10 +20,12 @@ ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <ContainerProvider>
       <ThemeProvider defaultTheme="system" storageKey="pf-theme">
-        <AuthProvider>
-          <RouterProvider router={router} />
-          <Toaster />
-        </AuthProvider>
+        <MotionProvider storageKey="pf-motion">
+          <AuthProvider>
+            <RouterProvider router={router} />
+            <Toaster />
+          </AuthProvider>
+        </MotionProvider>
       </ThemeProvider>
     </ContainerProvider>
   </React.StrictMode>,

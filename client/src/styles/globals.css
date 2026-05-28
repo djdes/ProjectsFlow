@@ -162,4 +162,20 @@
   @media (prefers-reduced-motion: reduce) {
     .pf-claude-agent-icon { animation: none; }
   }
+
+  /* Ручное выключение анимаций (toggle в профиле/сайдбаре). Тот же a11y-приём,
+     что и для prefers-reduced-motion: глушим transition/animation у всех элементов,
+     чтобы Radix-овые slide-in/fade (Dialog/Sheet/Dropdown), Tailwind-овые
+     transition-* на ховерах и animate-pulse скелетоны срабатывали мгновенно.
+     Transform (dnd-kit drag) не трогаем — drag остаётся работающим. */
+  html.pf-no-motion *,
+  html.pf-no-motion *::before,
+  html.pf-no-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  html.pf-no-motion .pf-claude-agent-icon { animation: none; }
 }

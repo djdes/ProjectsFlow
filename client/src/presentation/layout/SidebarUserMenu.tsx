@@ -3,6 +3,7 @@ import { LogOut, Monitor, Moon, Settings, Sun, User as UserIcon } from 'lucide-r
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -18,6 +19,7 @@ import {
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { useTheme, type Theme } from '@/presentation/components/theme/ThemeProvider';
+import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { getInitials } from './projectIcons';
 
 export function SidebarUserMenu(): React.ReactElement {
@@ -25,6 +27,7 @@ export function SidebarUserMenu(): React.ReactElement {
   const { user, loading } = useCurrentUser();
   const { logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { animations, setAnimations } = useMotion();
 
   if (loading || !user) {
     return (
@@ -83,6 +86,13 @@ export function SidebarUserMenu(): React.ReactElement {
             </DropdownMenuSubContent>
           </DropdownMenuPortal>
         </DropdownMenuSub>
+        <DropdownMenuCheckboxItem
+          checked={animations}
+          onCheckedChange={setAnimations}
+          onSelect={(e) => e.preventDefault()}
+        >
+          Анимация
+        </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout}>
           <LogOut />

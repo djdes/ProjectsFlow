@@ -21,6 +21,19 @@
           /* localStorage недоступен — ничего страшного, останется light */
         }
       })();
+      // То же для анимаций — иначе первый кадр диалога/меню успеет анимироваться
+      // до монтирования MotionProvider.
+      (function () {
+        try {
+          var m = localStorage.getItem('pf-motion');
+          var off =
+            m === 'off' ||
+            (m === null && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+          if (off) document.documentElement.classList.add('pf-no-motion');
+        } catch (_) {
+          /* localStorage недоступен */
+        }
+      })();
     </script>
   </head>
   <body>

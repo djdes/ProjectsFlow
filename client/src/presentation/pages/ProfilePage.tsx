@@ -13,6 +13,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/sonner';
 import {
   Tooltip,
@@ -23,6 +24,7 @@ import {
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useUpdateProfile } from '@/presentation/hooks/useUpdateProfile';
 import { useTheme, type Theme } from '@/presentation/components/theme/ThemeProvider';
+import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { GithubAccountSection } from '@/presentation/components/github/GithubAccountSection';
 import { AgentAccessCard } from '@/presentation/components/agent/AgentAccessCard';
 import { EmployeesCard } from '@/presentation/components/finance/EmployeesCard';
@@ -194,13 +196,14 @@ function SecurityCard(): React.ReactElement {
 
 function PreferencesCard(): React.ReactElement {
   const { theme, setTheme } = useTheme();
+  const { animations, setAnimations } = useMotion();
   return (
     <Card>
       <CardHeader>
         <CardTitle>Преференсы</CardTitle>
         <CardDescription>Выбор сохраняется локально в&nbsp;этом браузере.</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-6">
         <div className="space-y-3">
           <Label>Тема</Label>
           <RadioGroup
@@ -221,6 +224,21 @@ function PreferencesCard(): React.ReactElement {
               </Label>
             ))}
           </RadioGroup>
+        </div>
+
+        <div className="flex items-start justify-between gap-4 sm:max-w-md">
+          <div className="space-y-1">
+            <div className="text-sm font-medium leading-none">Анимация</div>
+            <p className="text-sm text-muted-foreground">
+              Выключите, если интерфейс подтормаживает — например, при работе через RDP
+              или удалённый рабочий стол.
+            </p>
+          </div>
+          <Switch
+            checked={animations}
+            onCheckedChange={setAnimations}
+            aria-label="Анимация интерфейса"
+          />
         </div>
       </CardContent>
     </Card>
