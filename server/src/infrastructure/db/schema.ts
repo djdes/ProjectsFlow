@@ -589,3 +589,32 @@ export type SessionRow = typeof sessions.$inferSelect;
 export type NewSessionRow = typeof sessions.$inferInsert;
 export type ProjectRow = typeof projects.$inferSelect;
 export type NewProjectRow = typeof projects.$inferInsert;
+
+// task_delegations — миграция db/039. One-to-one делегирование inbox-задач.
+// Активные = (pending | accepted), терминальные = (declined | withdrawn | archived).
+export const taskDelegations = mysqlTable(
+  'task_delegations',
+  {
+    id: id(),
+    taskId: char('task_id', { length: 36 }).notNull(),
+    delegateUserId: char('delegate_user_id', { length: 36 }).notNull(),
+    status: mysqlEnum('status', [
+      'pending',
+      'accepted',
+      'declined',
+      'withdrawn',
+      'archived',
+    ])
+      .notNull()
+      .default('pending'),
+    createdAt: createdAtCol(),
+    respondedAt: timestamp('responded_at'),
+  },
+  (t) => [
+    index('idx_task_status').on(t.taskId, t.status),
+    index('idx_delegate_status').on(t.delegateUserId, t.status),
+  ],
+);
+
+export type TaskDelegationRow = typeof taskDelegations.$inferSelect;
+export type NewTaskDelegationRow = typeof taskDelegations.$inferInsert;
