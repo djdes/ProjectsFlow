@@ -188,7 +188,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl max-sm:flex max-sm:flex-col max-sm:overflow-y-hidden">
         <DialogHeader>
           <DialogTitle>Новая задача</DialogTitle>
         </DialogHeader>
@@ -198,8 +198,11 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className="space-y-3"
+          className="max-sm:flex max-sm:min-h-0 max-sm:flex-1 max-sm:flex-col max-sm:gap-3 sm:space-y-3"
         >
+          {/* На мобильных: scrollable-обёртка для textarea + pills, footer — за пределами скролла.
+              На десктопе: sm:contents делает обёртку прозрачной, дети участвуют в space-y-3 формы. */}
+          <div className="space-y-3 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:contents">
           {/* Drag overlay indicator. Не блокирует ввод — просто рамку подсветит. */}
           <div
             className={cn(
@@ -283,50 +286,51 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
           </div>
 
           {error && <p className="text-xs text-destructive">{error}</p>}
+          </div>{/* /scrollable wrapper */}
 
           {/* Footer: проект-чип слева, [RalphMode | Cancel | Submit] справа.
-              На мобильных стекается вертикально, на sm+ — горизонтально. */}
-          <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={saving}
-                  className="h-8 max-w-full gap-1.5 px-2 text-xs font-normal sm:max-w-[50%]"
+              На мобильных — flex-shrink-0 (не уезжает за скролл). */}
+          <div className="max-sm:flex-shrink-0 flex flex-col gap-2 border-t pt-2 sm:pt-3 sm:flex-row sm:items-center sm:justify-between">
+            {/* Верхняя строка footer: проект + ralph + AI */}
+            <div className="flex flex-wrap items-center gap-1.5 sm:contents">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={saving}
+                    className="h-7 max-w-full gap-1 px-2 text-xs font-normal sm:h-8 sm:gap-1.5 sm:max-w-[50%]"
+                  >
+                    <Inbox className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{selectedName}</span>
+                    <ChevronDown className="size-3 shrink-0 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="max-h-72 min-w-[260px] overflow-y-auto"
                 >
-                  <Inbox className="size-3.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{selectedName}</span>
-                  <ChevronDown className="size-3 shrink-0 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="max-h-72 min-w-[260px] overflow-y-auto"
-              >
-                <DropdownMenuRadioGroup
-                  value={projectId ?? INBOX_VALUE}
-                  onValueChange={(v) => setProjectId(v === INBOX_VALUE ? null : v)}
-                >
-                  <DropdownMenuRadioItem value={INBOX_VALUE}>
-                    Без проекта (Входящие)
-                  </DropdownMenuRadioItem>
-                  {realProjects.map((p) => (
-                    <DropdownMenuRadioItem key={p.id} value={p.id}>
-                      {p.name}
+                  <DropdownMenuRadioGroup
+                    value={projectId ?? INBOX_VALUE}
+                    onValueChange={(v) => setProjectId(v === INBOX_VALUE ? null : v)}
+                  >
+                    <DropdownMenuRadioItem value={INBOX_VALUE}>
+                      Без проекта (Входящие)
                     </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <div className="flex flex-wrap items-center gap-2">
+                    {realProjects.map((p) => (
+                      <DropdownMenuRadioItem key={p.id} value={p.id}>
+                        {p.name}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <RalphModeSelect
                 value={ralphMode}
                 onChange={setRalphMode}
                 disabled={saving}
-                className="!h-8 min-w-[100px] !px-2 text-xs sm:min-w-[140px]"
+                className="!h-7 min-w-[100px] !px-2 text-xs sm:!h-8 sm:min-w-[140px]"
               />
               <AiImproveButton
                 text={description}
@@ -334,14 +338,22 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 onImproved={setDescription}
                 disabled={saving}
               />
-              <div className="ml-auto flex items-center gap-2">
-                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-                  Отмена
-                </Button>
-                <Button type="submit" disabled={disabled}>
-                  {saving ? 'Добавляем…' : 'Добавить'}
-                </Button>
-              </div>
+            </div>
+
+            {/* Нижняя строка footer: Cancel + Submit */}
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 max-sm:hidden"
+                onClick={() => onOpenChange(false)}
+              >
+                Отмена
+              </Button>
+              <Button type="submit" size="sm" className="h-8" disabled={disabled}>
+                {saving ? 'Добавляем…' : 'Добавить'}
+              </Button>
             </div>
           </div>
         </form>
