@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Columns3, Inbox as InboxIcon, List as ListIcon } from 'lucide-react';
+import { Columns3, Eye, EyeOff, Inbox as InboxIcon, List as ListIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
@@ -10,11 +10,17 @@ import { TaskListView } from '@/presentation/components/tasks/TaskListView';
 
 type ViewMode = 'kanban' | 'list';
 const VIEW_STORAGE_KEY = 'inbox.view-mode';
+const HIDE_DONE_STORAGE_KEY = 'inbox.hide-done';
 
 function loadViewMode(): ViewMode {
   if (typeof window === 'undefined') return 'kanban';
   const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
   return stored === 'list' ? 'list' : 'kanban';
+}
+
+function loadHideDone(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(HIDE_DONE_STORAGE_KEY) === '1';
 }
 
 // «Входящие» — задачи без привязки к конкретному проекту. Под капотом обычный проект
@@ -27,6 +33,7 @@ export function InboxPage(): React.ReactElement {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>(loadViewMode);
+  const [hideDone, setHideDone] = useState<boolean>(loadHideDone);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +66,15 @@ export function InboxPage(): React.ReactElement {
     }
   };
 
+  const handleHideDoneChange = (next: boolean): void => {
+    setHideDone(next);
+    try {
+      window.localStorage.setItem(HIDE_DONE_STORAGE_KEY, next ? '1' : '0');
+    } catch {
+      // ignore — preference не переживёт reload, но это не критично.
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-4 p-6">
@@ -88,7 +104,10 @@ export function InboxPage(): React.ReactElement {
           <InboxIcon className="size-7 text-primary" />
           <h1 className="text-3xl font-semibold tracking-tight">Входящие</h1>
         </div>
-        <ViewToggle value={view} onChange={handleViewChange} />
+        <div className="flex items-center gap-2">
+          <HideDoneToggle value={hideDone} onChange={handleHideDoneChange} />
+          <ViewToggle value={view} onChange={handleViewChange} />
+        </div>
       </div>
       <p className="max-w-2xl text-sm text-muted-foreground">
         Задачи, которые ещё не&nbsp;привязаны к&nbsp;проекту. Сюда удобно кидать всё,
@@ -96,11 +115,37 @@ export function InboxPage(): React.ReactElement {
       </p>
 
       {view === 'kanban' ? (
-        <KanbanBoard projectId={project.id} showCommits={false} />
+        <KanbanBoard projectId={project.id} showCommits={false} hideDone={hideDone} />
       ) : (
-        <TaskListView projectId={project.id} showCommits={false} />
+        <TaskListView projectId={project.id} showCommits={false} hideDone={hideDone} />
       )}
     </div>
+  );
+}
+
+function HideDoneToggle({
+  value,
+  onChange,
+}: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      aria-pressed={value}
+      title={value ? 'Показать выполненные' : 'Скрыть выполненные'}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-md border bg-card px-2.5 py-1 text-xs transition-colors',
+        value
+          ? 'border-foreground/30 text-foreground'
+          : 'text-muted-foreground hover:text-foreground',
+      )}
+    >
+      {value ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+      {value ? 'Скрыты выполненные' : 'Скрыть выполненные'}
+    </button>
   );
 }
 
