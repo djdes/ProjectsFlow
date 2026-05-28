@@ -82,6 +82,7 @@ import { DrizzleTaskRepository } from './infrastructure/repositories/DrizzleTask
 import { DrizzleTaskCommitRepository } from './infrastructure/repositories/DrizzleTaskCommitRepository.js';
 import { DrizzleTaskAttachmentRepository } from './infrastructure/repositories/DrizzleTaskAttachmentRepository.js';
 import { DrizzleTaskCommentRepository } from './infrastructure/repositories/DrizzleTaskCommentRepository.js';
+import { DrizzleTaskDelegationRepository } from './infrastructure/repositories/DrizzleTaskDelegationRepository.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
 import { DrizzleAgentJobRepository } from './infrastructure/repositories/DrizzleAgentJobRepository.js';
@@ -243,6 +244,7 @@ const taskRepo = new DrizzleTaskRepository(db);
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
+const taskDelegationRepo = new DrizzleTaskDelegationRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const agentJobRepo = new DrizzleAgentJobRepository(db);
 const taskSearchRepo = new DrizzleTaskSearchRepository(db);
@@ -680,6 +682,7 @@ const { app, devProxyUpgrade } = createApp({
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,
       comments: taskCommentRepo,
+      delegations: taskDelegationRepo,
     }),
     createTask: new CreateTask({
       projects: projectRepo,
@@ -866,6 +869,7 @@ const { app, devProxyUpgrade } = createApp({
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,
       comments: taskCommentRepo,
+      delegations: taskDelegationRepo,
     }),
     createTask: new CreateTask({
       projects: projectRepo,

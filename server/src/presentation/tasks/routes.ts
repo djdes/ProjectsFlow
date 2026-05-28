@@ -87,7 +87,22 @@ type Deps = {
   readonly notifier: ProjectNotificationService;
 };
 
-type TaskDto = Omit<Task, 'createdAt' | 'updatedAt' | 'ralphCancelRequestedAt'> & {
+type TaskDelegationDto = {
+  id: string;
+  taskId: string;
+  delegateUserId: string;
+  delegateDisplayName: string;
+  creatorUserId: string;
+  creatorDisplayName: string;
+  status: string;
+  createdAt: string;
+  respondedAt: string | null;
+};
+
+type TaskDto = Omit<
+  Task,
+  'createdAt' | 'updatedAt' | 'ralphCancelRequestedAt' | 'delegation'
+> & {
   createdAt: string;
   updatedAt: string;
   // Сериализуем как ISO-string чтоб клиент парсил через Date(...). null если нет запроса.
@@ -95,15 +110,36 @@ type TaskDto = Omit<Task, 'createdAt' | 'updatedAt' | 'ralphCancelRequestedAt'> 
   commitCount?: number;
   attachmentCount?: number;
   commentCount?: number;
+  // Активная (pending|accepted) делегация. null если задача не делегирована.
+  // undefined невозможен на проводе — backend всегда выдаёт null.
+  delegation: TaskDelegationDto | null;
 };
 
 function toDto(t: Task | TaskWithCounts): TaskDto {
+  // Извлекаем delegation отдельно: дату надо отдельно сериализовать; rest нельзя
+  // спрэдить как есть (там Date-объекты).
+  const { delegation: _delegationOriginal, ...rest } = t;
   const base: TaskDto = {
-    ...t,
+    ...rest,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
     ralphCancelRequestedAt: t.ralphCancelRequestedAt
       ? t.ralphCancelRequestedAt.toISOString()
+      : null,
+    delegation: t.delegation
+      ? {
+          id: t.delegation.id,
+          taskId: t.delegation.taskId,
+          delegateUserId: t.delegation.delegateUserId,
+          delegateDisplayName: t.delegation.delegateDisplayName,
+          creatorUserId: t.delegation.creatorUserId,
+          creatorDisplayName: t.delegation.creatorDisplayName,
+          status: t.delegation.status,
+          createdAt: t.delegation.createdAt.toISOString(),
+          respondedAt: t.delegation.respondedAt
+            ? t.delegation.respondedAt.toISOString()
+            : null,
+        }
       : null,
   };
   if ('commitCount' in t) base.commitCount = t.commitCount;

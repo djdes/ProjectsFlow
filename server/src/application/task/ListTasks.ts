@@ -6,6 +6,7 @@ import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
+import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -14,6 +15,7 @@ type Deps = {
   readonly taskCommits: TaskCommitRepository;
   readonly attachments: TaskAttachmentRepository;
   readonly comments: TaskCommentRepository;
+  readonly delegations: TaskDelegationRepository;
 };
 
 export type TaskWithCounts = Task & {
@@ -32,11 +34,15 @@ export class ListTasks {
     const commitCounts = await this.deps.taskCommits.countsByTasks(ids);
     const attachmentCounts = await this.deps.attachments.countsByTasks(ids);
     const commentCounts = await this.deps.comments.countsByTasks(ids);
+    // Активные (pending|accepted) делегации — для inbox-задач. Для проектных
+    // задач map будет пустой (мы их не делегируем — см. spec out-of-scope).
+    const delegations = await this.deps.delegations.listActiveForTasks(ids);
     return tasks.map((t) => ({
       ...t,
       commitCount: commitCounts.get(t.id) ?? 0,
       attachmentCount: attachmentCounts.get(t.id) ?? 0,
       commentCount: commentCounts.get(t.id) ?? 0,
+      delegation: delegations.get(t.id) ?? null,
     }));
   }
 }
