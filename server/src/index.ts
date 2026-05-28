@@ -40,6 +40,7 @@ import { TransferProjectOwnership } from './application/project/TransferProjectO
 import { CreateProjectInvite } from './application/project/CreateProjectInvite.js';
 import { ListProjectInvites } from './application/project/ListProjectInvites.js';
 import { DeleteProjectInvite } from './application/project/DeleteProjectInvite.js';
+import { ListSharedMembers } from './application/project/ListSharedMembers.js';
 import { GetInviteByToken } from './application/project/GetInviteByToken.js';
 import { AcceptProjectInvite } from './application/project/AcceptProjectInvite.js';
 import { CheckGitCollision } from './application/project/CheckGitCollision.js';
@@ -537,6 +538,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       invites: projectInviteRepo,
     }),
+    listSharedMembers: new ListSharedMembers(projectMemberRepo),
     checkGitCollision: new CheckGitCollision({
       projects: projectRepo,
       members: projectMemberRepo,

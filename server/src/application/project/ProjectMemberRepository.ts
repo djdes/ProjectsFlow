@@ -52,4 +52,14 @@ export interface ProjectMemberRepository {
     userId: string,
     prefs: NotificationPrefs,
   ): Promise<void>;
+
+  // Дедуплицированный список user'ов, с которыми caller состоит в общих проектах.
+  // Без caller'а самого. Используется для дропдауна «делегировать» во входящих.
+  listSharedUsers(userId: string): Promise<SharedUser[]>;
 }
+
+export type SharedUser = {
+  readonly id: string;
+  readonly displayName: string;
+  readonly email: string;
+};

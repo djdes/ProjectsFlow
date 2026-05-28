@@ -34,6 +34,7 @@ import type { UpdateProjectMemberRole } from '../application/project/UpdateProje
 import type { TransferProjectOwnership } from '../application/project/TransferProjectOwnership.js';
 import type { CreateProjectInvite } from '../application/project/CreateProjectInvite.js';
 import type { ListProjectInvites } from '../application/project/ListProjectInvites.js';
+import type { ListSharedMembers } from '../application/project/ListSharedMembers.js';
 import type { DeleteProjectInvite } from '../application/project/DeleteProjectInvite.js';
 import type { CheckGitCollision } from '../application/project/CheckGitCollision.js';
 import type { RequestProjectJoin } from '../application/project/RequestProjectJoin.js';
@@ -141,6 +142,7 @@ import { financeRouter } from './finance/routes.js';
 import { attachmentBinaryRouter } from './tasks/attachmentBinaryRoutes.js';
 import { inboxRouter } from './inbox/routes.js';
 import { meTelegramRouter } from './me/telegramRoutes.js';
+import { sharedMembersRouter } from './me/sharedMembersRoutes.js';
 import { telegramWebhookRouter } from './telegram/webhookRoutes.js';
 import { invitesRouter } from './invites/routes.js';
 import { notificationsRouter } from './notifications/routes.js';
@@ -190,6 +192,7 @@ type AppDeps = {
     readonly createInvite: CreateProjectInvite;
     readonly listInvites: ListProjectInvites;
     readonly deleteInvite: DeleteProjectInvite;
+    readonly listSharedMembers: ListSharedMembers;
     readonly checkGitCollision: CheckGitCollision;
     readonly requestJoin: RequestProjectJoin;
     readonly resolveJoinRequest: ResolveProjectJoinRequest;
@@ -428,6 +431,10 @@ export function createApp(deps: AppDeps): CreatedApp {
       status: deps.telegram.status,
       users: deps.telegram.users,
     }),
+  );
+  app.use(
+    '/api/me/shared-members',
+    sharedMembersRouter({ listSharedMembers: deps.projects.listSharedMembers }),
   );
   app.use(
     '/api/telegram/webhook',

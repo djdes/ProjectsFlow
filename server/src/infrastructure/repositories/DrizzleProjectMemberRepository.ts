@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { aliasedTable, and, asc, eq, ne, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   projectMembers,
@@ -20,6 +20,7 @@ import type {
   ProjectMemberRepository,
   ProjectMemberWithUser,
   ProjectWithRole,
+  SharedUser,
 } from '../../application/project/ProjectMemberRepository.js';
 
 function toMembership(row: ProjectMemberRow): ProjectMembership {
@@ -166,6 +167,30 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       .update(projectMembers)
       .set({ notificationPrefs: prefs })
       .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+  }
+
+  async listSharedUsers(userId: string): Promise<SharedUser[]> {
+    // SELECT DISTINCT u.* FROM users u
+    // JOIN project_members pm2 ON pm2.user_id = u.id
+    // WHERE pm2.user_id != :userId
+    //   AND pm2.project_id IN (SELECT project_id FROM project_members WHERE user_id = :userId)
+    //
+    // Drizzle-вариант через self-join: pm1 = membership'ы caller'а; pm2 = другие members
+    // тех же проектов. SELECT DISTINCT по (id, displayName, email).
+    const pm1 = aliasedTable(projectMembers, 'pm1');
+    const pm2 = aliasedTable(projectMembers, 'pm2');
+    const rows = await this.db
+      .selectDistinct({
+        id: users.id,
+        displayName: users.displayName,
+        email: users.email,
+      })
+      .from(pm1)
+      .innerJoin(pm2, eq(pm2.projectId, pm1.projectId))
+      .innerJoin(users, eq(users.id, pm2.userId))
+      .where(and(eq(pm1.userId, userId), ne(pm2.userId, userId)))
+      .orderBy(asc(users.displayName));
+    return rows;
   }
 
   async reorderForUser(userId: string, orderedIds: readonly string[]): Promise<void> {
