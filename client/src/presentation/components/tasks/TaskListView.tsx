@@ -63,10 +63,12 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
   const handleDialogSubmit = async (input: {
     description: string;
     ralphMode?: import('@/domain/task/Task').RalphMode;
+    delegateUserId?: string | null;
   }): Promise<Task> => {
     if (!dialog) throw new Error('Dialog state missing');
     if (dialog.mode === 'create') return create({ ...input, status: dialog.status });
-    return update(dialog.task.id, input);
+    // edit-mode: delegateUserId не применим (только для create).
+    return update(dialog.task.id, { description: input.description, ralphMode: input.ralphMode });
   };
 
   const handleQuickAdd = async (description: string): Promise<void> => {
@@ -139,6 +141,7 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
         showCommits={showCommits}
         backlogTail={backlogTail}
         todoTail={todoTail}
+        isInbox={!showCommits}
       />
     </div>
   );

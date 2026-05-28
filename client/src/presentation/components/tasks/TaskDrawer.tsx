@@ -40,6 +40,8 @@ import {
 } from '@/presentation/components/attachments/files';
 import { RalphModeSelect } from './RalphMode';
 import type { RalphMode } from '@/domain/task/Task';
+import { DelegateSelect } from './DelegateSelect';
+import { AssignToProjectSelect } from './AssignToProjectSelect';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
@@ -56,7 +58,12 @@ type Props = {
   // pending-аттачи после получения task.id.
   // ralphMode — режим работы Ralph, который пользователь выбрал в форме (см. RalphModeSelect).
   // Передаётся только в create-mode; в edit-mode смена режима идёт через отдельный PATCH.
-  onSubmit: (input: { description: string; ralphMode?: import('@/domain/task/Task').RalphMode }) => Promise<Task>;
+  // delegateUserId — опциональное one-to-one делегирование (только inbox-задачи).
+  onSubmit: (input: {
+    description: string;
+    ralphMode?: import('@/domain/task/Task').RalphMode;
+    delegateUserId?: string | null;
+  }) => Promise<Task>;
   // Колбэк когда коммиты или аттачи у задачи поменялись — board перефетчит badge'и.
   onCommitsChange?: () => void;
   // Показывать секцию коммитов в edit-режиме. Для inbox-проекта выключаем — у него
@@ -68,6 +75,10 @@ type Props = {
   // через TaskDrawerComposer и CancelWorkButton. KanbanBoard вычисляет.
   backlogTail?: { readonly id: string } | null;
   todoTail?: { readonly id: string } | null;
+  // True когда drawer открыт в контексте inbox-проекта. Включает:
+  //  - DelegateSelect в create-mode форме
+  //  - AssignToProjectSelect в шапке edit-mode
+  isInbox?: boolean;
 };
 
 // Превью-тайл вложения в сетке: картинка → thumbnail, иначе → иконка + имя файла.
@@ -139,6 +150,7 @@ export function TaskDrawer({
   projectName,
   backlogTail = null,
   todoTail = null,
+  isInbox = false,
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   // В create-mode description редактируется обычной textarea на форме; в edit-mode
@@ -152,6 +164,8 @@ export function TaskDrawer({
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   // Режим Ralph для create-mode (в edit-mode значение приходит из state.task).
   const [createRalphMode, setCreateRalphMode] = useState<RalphMode>('normal');
+  // Делегат для create-mode (только inbox). Очищаем после закрытия drawer'а.
+  const [createDelegateUserId, setCreateDelegateUserId] = useState<string | null>(null);
   // В edit-режиме секция аттачей экспонирует addFiles через ref — чтобы paste-handler
   // на форме (поймает Ctrl+V даже когда фокус в textarea) мог пнуть аплоад.
   const attachmentsRef = useRef<AttachmentsHandle>(null);
@@ -216,6 +230,7 @@ export function TaskDrawer({
     if (!state) return;
     setDescription(state.mode === 'edit' ? state.task.description ?? '' : '');
     setCreateRalphMode('normal');
+    setCreateDelegateUserId(null);
     setError(null);
     setExpanded(false);
     setCommitsOpen(false);
@@ -264,6 +279,7 @@ export function TaskDrawer({
       const task = await onSubmit({
         description: description.trim(),
         ralphMode: state?.mode === 'create' ? createRalphMode : undefined,
+        delegateUserId: state?.mode === 'create' ? createDelegateUserId : undefined,
       });
       // Если в create-режиме копились картинки — аплоадим их в новосозданную задачу.
       if (state?.mode === 'create' && pendingFiles.length > 0) {
@@ -380,6 +396,15 @@ export function TaskDrawer({
                   task.status === 'todo' ||
                   task.status === 'awaiting_clarification') && (
                   <TaskRalphModeChip task={task} onChanged={() => onCommitsChange?.()} />
+                )}
+                {isInbox && (
+                  <AssignToProjectSelect
+                    task={task}
+                    onAssigned={() => {
+                      onCommitsChange?.();
+                      onClose();
+                    }}
+                  />
                 )}
                 {renderCloseButton()}
               </div>
@@ -532,6 +557,18 @@ export function TaskDrawer({
                   disabled={saving}
                 />
               </div>
+              {isInbox && state?.mode === 'create' && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Делегировать
+                  </label>
+                  <DelegateSelect
+                    value={createDelegateUserId}
+                    onChange={setCreateDelegateUserId}
+                    disabled={saving}
+                  />
+                </div>
+              )}
               <PendingAttachmentsSection
                 files={pendingFiles}
                 onAdd={addPendingFiles}

@@ -13,7 +13,12 @@ type State = {
 
 export type UseTasks = State & {
   refetch: () => Promise<void>;
-  create: (input: { description: string; status: TaskStatus; ralphMode?: RalphMode }) => Promise<Task>;
+  create: (input: {
+    description: string;
+    status: TaskStatus;
+    ralphMode?: RalphMode;
+    delegateUserId?: string | null;
+  }) => Promise<Task>;
   update: (taskId: string, input: { description?: string; ralphMode?: RalphMode }) => Promise<Task>;
   // Оптимистично переставляет локально + летит на сервер. На фейле ревёртится из refetch'а.
   move: (taskId: string, input: MoveTaskInput) => Promise<void>;

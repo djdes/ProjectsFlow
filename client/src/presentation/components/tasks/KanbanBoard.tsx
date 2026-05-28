@@ -233,12 +233,15 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   const handleDialogSubmit = async (input: {
     description: string;
     ralphMode?: import('@/domain/task/Task').RalphMode;
+    delegateUserId?: string | null;
   }): Promise<Task> => {
     if (!dialog) throw new Error('Dialog state missing');
     if (dialog.mode === 'create') {
       return create({ ...input, status: dialog.status });
     }
-    return update(dialog.task.id, input);
+    // edit-mode: TaskRepository.update не принимает delegateUserId — он только
+    // для create. Игнорируем.
+    return update(dialog.task.id, { description: input.description, ralphMode: input.ralphMode });
   };
 
   const handleQuickPromote = async (task: Task): Promise<void> => {
@@ -380,11 +383,15 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         projectName={projectName}
         backlogTail={backlogTail}
         todoTail={todoTail}
+        isInbox={isInbox}
       />
 
       {/* Floating quick-add (position: fixed). DOM-позиция значения не имеет —
           важно лишь чтобы компонент был смонтирован. */}
-      <QuickAddTodo onCreate={(input) => create({ ...input, status: 'todo' })} />
+      <QuickAddTodo
+        isInbox={isInbox}
+        onCreate={(input) => create({ ...input, status: 'todo' })}
+      />
     </div>
   );
 }

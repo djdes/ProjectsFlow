@@ -13,6 +13,7 @@ import { toast } from '@/components/ui/sonner';
 import type { RalphMode, Task } from '@/domain/task/Task';
 import { useContainer } from '@/infrastructure/di/container';
 import { RalphModeSelect } from './RalphMode';
+import { DelegateSelect } from './DelegateSelect';
 import {
   extractClipboardFiles,
   isImageMime,
@@ -27,7 +28,13 @@ type PendingFile = {
 type Props = {
   // Колбэк создания задачи. KanbanBoard оборачивает useTasks.create с фиксированным
   // status: 'todo', поэтому новые карточки всегда приземляются в колонку TODO.
-  onCreate: (input: { description: string; ralphMode?: RalphMode }) => Promise<Task>;
+  onCreate: (input: {
+    description: string;
+    ralphMode?: RalphMode;
+    delegateUserId?: string | null;
+  }) => Promise<Task>;
+  // Если true — рендерим DelegateSelect (только в inbox-режиме).
+  isInbox?: boolean;
 };
 
 // Max-height растущей textarea (~9 строк при text-sm/leading-snug).
@@ -37,10 +44,11 @@ const TEXTAREA_MAX_PX = 192;
 // Textarea авто-растёт от одной строки до TEXTAREA_MAX_PX, дальше — внутренний скролл.
 // Footer: 📎 слева, селектор Ralph-режима и кнопка «Отправить» — справа.
 // Drop файла, Ctrl+V, Ctrl/Cmd+Enter — submit.
-export function QuickAddTodo({ onCreate }: Props): React.ReactElement {
+export function QuickAddTodo({ onCreate, isInbox = false }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const [text, setText] = useState('');
   const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
+  const [delegateUserId, setDelegateUserId] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -106,7 +114,7 @@ export function QuickAddTodo({ onCreate }: Props): React.ReactElement {
     if (trimmed.length === 0 || submitting) return;
     setSubmitting(true);
     try {
-      const task = await onCreate({ description: trimmed, ralphMode });
+      const task = await onCreate({ description: trimmed, ralphMode, delegateUserId });
       if (pending.length > 0) {
         let ok = 0;
         for (const pf of pending) {
@@ -129,6 +137,7 @@ export function QuickAddTodo({ onCreate }: Props): React.ReactElement {
       setPending([]);
       setText('');
       setRalphMode('normal');
+      setDelegateUserId(null);
     } catch (err) {
       toast.error(`Не удалось создать: ${(err as Error).message}`);
     } finally {
@@ -221,6 +230,13 @@ export function QuickAddTodo({ onCreate }: Props): React.ReactElement {
             <Paperclip className="size-3.5" />
           </Button>
           <div className="flex items-center gap-1.5">
+            {isInbox && (
+              <DelegateSelect
+                value={delegateUserId}
+                onChange={setDelegateUserId}
+                disabled={submitting}
+              />
+            )}
             <RalphModeSelect
               value={ralphMode}
               onChange={setRalphMode}
