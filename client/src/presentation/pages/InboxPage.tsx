@@ -7,6 +7,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import type { Project } from '@/domain/project/Project';
 import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
 import { TaskListView } from '@/presentation/components/tasks/TaskListView';
+import { PendingDelegationsBlock } from '@/presentation/components/tasks/PendingDelegationsBlock';
 
 type ViewMode = 'kanban' | 'list';
 const VIEW_STORAGE_KEY = 'inbox.view-mode';
@@ -34,6 +35,11 @@ export function InboxPage(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>(loadViewMode);
   const [hideDone, setHideDone] = useState<boolean>(loadHideDone);
+  // refetchKey — простой механизм форсить пересоздание useTasks-хука в KanbanBoard/
+  // TaskListView. Меняется при accept/decline делегирования в PendingDelegationsBlock,
+  // чтобы список inbox-задач сразу подтянул свежее состояние (acceptance публикует
+  // SSE, но проще пересоздать board без задержки).
+  const [refetchKey, setRefetchKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,10 +120,12 @@ export function InboxPage(): React.ReactElement {
         что пришло на&nbsp;ум — потом можно разобрать по&nbsp;проектам.
       </p>
 
+      <PendingDelegationsBlock onChanged={() => setRefetchKey((k) => k + 1)} />
+
       {view === 'kanban' ? (
-        <KanbanBoard projectId={project.id} showCommits={false} hideDone={hideDone} />
+        <KanbanBoard key={refetchKey} projectId={project.id} showCommits={false} hideDone={hideDone} />
       ) : (
-        <TaskListView projectId={project.id} showCommits={false} hideDone={hideDone} />
+        <TaskListView key={refetchKey} projectId={project.id} showCommits={false} hideDone={hideDone} />
       )}
     </div>
   );
