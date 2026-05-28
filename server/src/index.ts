@@ -374,6 +374,7 @@ const createTaskCommentUseCase = new CreateTaskComment({
   tasks: taskRepo,
   comments: taskCommentRepo,
   notifications: notificationRepo,
+  delegations: taskDelegationRepo,
   idGen: idGenerator,
 });
 const maybeReopenForClarification = new MaybeReopenForClarification({ tasks: taskRepo });
@@ -706,17 +707,20 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
+      delegations: taskDelegationRepo,
     }),
     moveTask: new MoveTask({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
+      delegations: taskDelegationRepo,
     }),
     deleteTask: new DeleteTask({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
+      delegations: taskDelegationRepo,
     }),
     linkCommit: new LinkCommit({
       projects: projectRepo,
@@ -756,6 +760,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
+      delegations: taskDelegationRepo,
       idGen: idGenerator,
       maxBytes: MAX_ATTACHMENT_BYTES,
     }),
@@ -765,6 +770,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
+      delegations: taskDelegationRepo,
     }),
     listAttachments: new ListTaskAttachments({
       projects: projectRepo,
@@ -792,12 +798,14 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
+      delegations: taskDelegationRepo,
     }),
     deleteComment: new DeleteTaskComment({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
+      delegations: taskDelegationRepo,
     }),
     requestRalphCancel: new RequestRalphCancel({
       projects: projectRepo,
@@ -939,6 +947,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
+      delegations: taskDelegationRepo,
     }),
     linkCommit: new LinkCommit({
       projects: projectRepo,
@@ -1014,12 +1023,18 @@ const { app, devProxyUpgrade } = createApp({
     }),
     initLocalKb: new InitLocalKb({ projects: projectRepo, members: projectMemberRepo }),
     // Расширенный набор agent-операций (MCP 0.10) — те же use-case'ы, что у web-API.
-    updateTask: new UpdateTask({ projects: projectRepo, members: projectMemberRepo, tasks: taskRepo }),
+    updateTask: new UpdateTask({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      delegations: taskDelegationRepo,
+    }),
     deleteTask: new DeleteTask({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
+      delegations: taskDelegationRepo,
     }),
     listTaskCommits: new ListTaskCommits({
       projects: projectRepo,

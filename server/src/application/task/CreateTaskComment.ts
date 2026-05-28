@@ -6,9 +6,10 @@ import type {
   ProjectMemberWithUser,
 } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
-import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
+import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
+import { requireTaskModifyAccess } from './taskAuthorization.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -16,6 +17,7 @@ type Deps = {
   readonly tasks: TaskRepository;
   readonly comments: TaskCommentRepository;
   readonly notifications: NotificationRepository;
+  readonly delegations: TaskDelegationRepository;
   readonly idGen: () => string;
 };
 
@@ -63,13 +65,13 @@ export class CreateTaskComment {
     const body = input.body.trim();
     if (body.length === 0) throw new TaskCommentBodyEmptyError();
 
-    const { project, membership } = await requireProjectAccess(
+    const { project } = await requireTaskModifyAccess(
       this.deps,
       input.projectId,
+      input.taskId,
       input.ownerUserId,
       'create_comment',
     );
-    void membership;
     const task = await this.deps.tasks.getById(input.taskId);
     if (!task || task.projectId !== input.projectId) throw new TaskNotFoundError(input.taskId);
 

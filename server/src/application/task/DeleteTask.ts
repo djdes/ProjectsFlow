@@ -1,22 +1,24 @@
 import { TaskNotFoundError } from '../../domain/task/errors.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
-import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
+import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
+import { requireTaskDeleteAccess } from './taskAuthorization.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly comments: TaskCommentRepository;
+  readonly delegations: TaskDelegationRepository;
 };
 
 export class DeleteTask {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, ownerUserId: string, taskId: string): Promise<void> {
-    await requireProjectAccess(this.deps, projectId, ownerUserId, 'delete_task');
+    await requireTaskDeleteAccess(this.deps, projectId, ownerUserId, 'delete_task');
 
     const task = await this.deps.tasks.getById(taskId);
     if (!task || task.projectId !== projectId) throw new TaskNotFoundError(taskId);

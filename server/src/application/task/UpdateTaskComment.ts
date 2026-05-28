@@ -9,15 +9,17 @@ import {
 import type { TaskComment } from '../../domain/task/TaskComment.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
-import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
+import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
+import { requireTaskModifyAccess } from './taskAuthorization.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly comments: TaskCommentRepository;
+  readonly delegations: TaskDelegationRepository;
 };
 
 export type UpdateTaskCommentCommand = {
@@ -38,7 +40,13 @@ export class UpdateTaskComment {
     // Право «писать комментарии вообще» — viewer+. Дополнительно ниже проверяем
     // что юзер редактирует свой собственный комментарий (own-only edit; модерация
     // чужих комментариев editor'ом — отдельная фича).
-    await requireProjectAccess(this.deps, input.projectId, input.ownerUserId, 'update_own_comment');
+    await requireTaskModifyAccess(
+      this.deps,
+      input.projectId,
+      input.taskId,
+      input.ownerUserId,
+      'update_own_comment',
+    );
     const task = await this.deps.tasks.getById(input.taskId);
     if (!task || task.projectId !== input.projectId) throw new TaskNotFoundError(input.taskId);
     const existing = await this.deps.comments.getById(input.commentId);

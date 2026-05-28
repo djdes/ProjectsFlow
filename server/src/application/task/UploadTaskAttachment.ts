@@ -2,10 +2,11 @@ import { TaskAttachmentTooLargeError, TaskNotFoundError } from '../../domain/tas
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
-import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { AttachmentStorage } from './AttachmentStorage.js';
+import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
+import { requireTaskModifyAccess } from './taskAuthorization.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -13,6 +14,7 @@ type Deps = {
   readonly tasks: TaskRepository;
   readonly attachments: TaskAttachmentRepository;
   readonly storage: AttachmentStorage;
+  readonly delegations: TaskDelegationRepository;
   readonly idGen: () => string;
   readonly maxBytes: number;
 };
@@ -45,9 +47,10 @@ export class UploadTaskAttachment {
       throw new TaskAttachmentTooLargeError(input.data.byteLength, this.deps.maxBytes);
     }
 
-    await requireProjectAccess(
+    await requireTaskModifyAccess(
       this.deps,
       input.projectId,
+      input.taskId,
       input.ownerUserId,
       'manage_attachments',
     );

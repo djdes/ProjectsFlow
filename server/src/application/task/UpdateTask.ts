@@ -2,13 +2,15 @@ import { TaskDescriptionEmptyError, TaskNotFoundError } from '../../domain/task/
 import type { RalphMode, Task } from '../../domain/task/Task.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
-import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository, UpdateTaskPatch } from './TaskRepository.js';
+import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
+import { requireTaskModifyAccess } from './taskAuthorization.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
+  readonly delegations: TaskDelegationRepository;
 };
 
 export type UpdateTaskCommand = {
@@ -24,7 +26,13 @@ export class UpdateTask {
   constructor(private readonly deps: Deps) {}
 
   async execute(input: UpdateTaskCommand): Promise<Task> {
-    await requireProjectAccess(this.deps, input.projectId, input.ownerUserId, 'update_task');
+    await requireTaskModifyAccess(
+      this.deps,
+      input.projectId,
+      input.taskId,
+      input.ownerUserId,
+      'update_task',
+    );
 
     const existing = await this.deps.tasks.getById(input.taskId);
     if (!existing || existing.projectId !== input.projectId) throw new TaskNotFoundError(input.taskId);
