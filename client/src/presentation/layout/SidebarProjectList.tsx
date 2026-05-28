@@ -123,9 +123,11 @@ function SidebarProjectRow({
           cn(
             'relative flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
             'hover:bg-muted',
+            'cursor-pointer',
             isActive && 'bg-accent text-accent-foreground',
             isArchived && 'opacity-50',
-            reorderable && 'cursor-grab active:cursor-grabbing',
+            // На active drag — grab-cursor, иначе обычная pointer-рука (это всё-таки ссылка).
+            reorderable && isDragging && 'cursor-grabbing',
           )
         }
       >
