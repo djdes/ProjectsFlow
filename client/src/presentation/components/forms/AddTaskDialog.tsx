@@ -187,7 +187,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Новая задача</DialogTitle>
         </DialogHeader>

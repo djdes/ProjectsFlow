@@ -42,7 +42,7 @@ export function DelegateSelect({ value, onChange, disabled, className }: Props):
   }, [projectRepository]);
 
   const selected = members?.find((m) => m.id === value) ?? null;
-  const label = selected ? selected.displayName : 'Не делегировать';
+  const label = selected ? selected.displayName : 'Делегировать';
 
   return (
     <DropdownMenu>
