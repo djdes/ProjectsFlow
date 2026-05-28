@@ -111,7 +111,7 @@ function ProjectsTab(): React.ReactElement {
           <ul className="divide-y overflow-hidden rounded-lg border bg-card">
             {g.items.map((p) => (
               <li key={p.id} className="space-y-2 px-4 py-3">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{p.name}</p>
                     <p className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -294,12 +294,12 @@ function UsersTab(): React.ReactElement {
     <>
       <ul className="divide-y overflow-y-auto overflow-x-hidden rounded-lg border bg-card">
         {users.map((u) => (
-          <li key={u.id} className="flex items-center justify-between gap-3 px-4 py-3">
-            <div className="flex min-w-0 items-center gap-3">
+          <li key={u.id} className="space-y-2 px-4 py-3">
+            <div className="flex items-start gap-3">
               <Avatar className="size-8 shrink-0">
                 <AvatarFallback className="text-[11px]">{getInitials(u.displayName)}</AvatarFallback>
               </Avatar>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 truncate text-sm font-medium">
                   {u.displayName}
                   {u.isAdmin && (
@@ -311,9 +311,6 @@ function UsersTab(): React.ReactElement {
                 <p className="truncate text-xs text-muted-foreground">
                   {u.email} · {u.projectCount} проектов
                 </p>
-                {/* Делегация GitHub-токена. Badge показываем только если есть owned-проекты
-                    (без них знаменатель = 0, делегация невозможна). При отсутствии GitHub
-                    у юзера явно говорим: «GitHub не подключён». */}
                 {u.ownedProjectCount > 0 && (
                   <p
                     className="mt-0.5 inline-flex items-center gap-1 truncate text-xs text-muted-foreground"
@@ -346,7 +343,7 @@ function UsersTab(): React.ReactElement {
                 )}
               </div>
             </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 pl-11">
               <Button
                 size="sm"
                 variant="outline"

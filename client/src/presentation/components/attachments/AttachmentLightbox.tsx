@@ -16,19 +16,19 @@ export function AttachmentLightbox({
   const image = attachment ? isImageMime(attachment.mimeType) : false;
   return (
     <Dialog open={attachment !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="grid max-h-[90vh] max-w-4xl gap-0 overflow-hidden p-0">
+      <DialogContent className="grid max-h-[90dvh] max-w-4xl gap-0 overflow-hidden p-0">
         <div className="flex items-center justify-between border-b px-4 py-2.5">
           <p className="truncate text-sm font-medium">{attachment?.filename ?? ''}</p>
           <Button variant="ghost" size="icon" className="size-7" onClick={onClose} aria-label="Закрыть">
             <X className="size-4" />
           </Button>
         </div>
-        <div className="grid place-items-center overflow-auto bg-muted/30 p-4">
+        <div className="grid place-items-center overflow-auto bg-muted/30 p-2 sm:p-4">
           {attachment && image ? (
             <img
               src={attachment.url}
               alt={attachment.filename}
-              className="max-h-[78vh] max-w-full object-contain"
+              className="max-h-[75dvh] max-w-full object-contain"
             />
           ) : attachment ? (
             <div className="flex flex-col items-center gap-3 py-10 text-center">

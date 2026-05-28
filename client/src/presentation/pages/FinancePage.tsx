@@ -303,12 +303,12 @@ function AssignForm({
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-2 border-t pt-3">
+    <div className="grid grid-cols-1 items-end gap-2 border-t pt-3 sm:flex sm:flex-wrap">
       <div className="space-y-1">
         <Label className="text-xs">Сотрудник</Label>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button type="button" variant="outline" size="sm" className="w-44 justify-start font-normal">
+            <Button type="button" variant="outline" size="sm" className="w-full justify-start font-normal sm:w-44">
               <span className="truncate">{selected?.name ?? 'Выбрать…'}</span>
             </Button>
           </DropdownMenuTrigger>
@@ -323,15 +323,17 @@ function AssignForm({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="space-y-1">
-        <Label className="text-xs" htmlFor="alloc">Доля %</Label>
-        <Input id="alloc" className="w-20" value={percent} onChange={(e) => setPercent(e.target.value)} />
+      <div className="grid grid-cols-2 gap-2 sm:contents">
+        <div className="space-y-1">
+          <Label className="text-xs" htmlFor="alloc">Доля %</Label>
+          <Input id="alloc" className="sm:w-20" value={percent} onChange={(e) => setPercent(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs" htmlFor="astart">С даты</Label>
+          <Input id="astart" type="date" className="sm:w-40" value={start} onChange={(e) => setStart(e.target.value)} />
+        </div>
       </div>
-      <div className="space-y-1">
-        <Label className="text-xs" htmlFor="astart">С даты</Label>
-        <Input id="astart" type="date" className="w-40" value={start} onChange={(e) => setStart(e.target.value)} />
-      </div>
-      <Button size="sm" onClick={() => void submit()} disabled={saving}>
+      <Button size="sm" className="w-full sm:w-auto" onClick={() => void submit()} disabled={saving}>
         <Plus className="size-4" /> Назначить
       </Button>
     </div>
@@ -428,24 +430,24 @@ function ExpenseForm({
   };
 
   return (
-    <div className="flex flex-wrap items-end gap-2 border-t pt-3">
+    <div className="grid grid-cols-2 items-end gap-2 border-t pt-3 sm:flex sm:flex-wrap">
       <div className="space-y-1">
         <Label className="text-xs" htmlFor="exp-amount">Сумма ₽</Label>
-        <Input id="exp-amount" className="w-28" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
+        <Input id="exp-amount" className="sm:w-28" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
       </div>
       <div className="space-y-1">
         <Label className="text-xs" htmlFor="exp-cat">Категория</Label>
-        <Input id="exp-cat" className="w-28" value={category} onChange={(e) => setCategory(e.target.value)} />
+        <Input id="exp-cat" className="sm:w-28" value={category} onChange={(e) => setCategory(e.target.value)} />
       </div>
       <div className="space-y-1">
         <Label className="text-xs" htmlFor="exp-desc">Описание</Label>
-        <Input id="exp-desc" className="w-40" value={desc} onChange={(e) => setDesc(e.target.value)} />
+        <Input id="exp-desc" className="sm:w-40" value={desc} onChange={(e) => setDesc(e.target.value)} />
       </div>
       <div className="space-y-1">
         <Label className="text-xs" htmlFor="exp-date">Дата</Label>
-        <Input id="exp-date" type="date" className="w-40" value={date} onChange={(e) => setDate(e.target.value)} />
+        <Input id="exp-date" type="date" className="sm:w-40" value={date} onChange={(e) => setDate(e.target.value)} />
       </div>
-      <Button size="sm" onClick={() => void submit()} disabled={saving}>
+      <Button size="sm" className="col-span-2 w-full sm:w-auto" onClick={() => void submit()} disabled={saving}>
         <Plus className="size-4" /> Добавить
       </Button>
     </div>
@@ -481,20 +483,20 @@ function IncomeForm({
   };
 
   return (
-    <div className="flex flex-wrap items-end gap-2 border-t pt-3">
+    <div className="grid grid-cols-2 items-end gap-2 border-t pt-3 sm:flex sm:flex-wrap">
       <div className="space-y-1">
         <Label className="text-xs" htmlFor="inc-amount">Сумма ₽</Label>
-        <Input id="inc-amount" className="w-28" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
+        <Input id="inc-amount" className="sm:w-28" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
       </div>
-      <div className="space-y-1">
+      <div className="col-span-2 space-y-1 sm:col-span-1">
         <Label className="text-xs" htmlFor="inc-source">Источник</Label>
-        <Input id="inc-source" className="w-48" value={source} onChange={(e) => setSource(e.target.value)} />
+        <Input id="inc-source" className="sm:w-48" value={source} onChange={(e) => setSource(e.target.value)} />
       </div>
       <div className="space-y-1">
         <Label className="text-xs" htmlFor="inc-date">Дата</Label>
-        <Input id="inc-date" type="date" className="w-40" value={date} onChange={(e) => setDate(e.target.value)} />
+        <Input id="inc-date" type="date" className="sm:w-40" value={date} onChange={(e) => setDate(e.target.value)} />
       </div>
-      <Button size="sm" onClick={() => void submit()} disabled={saving}>
+      <Button size="sm" className="col-span-2 w-full sm:w-auto" onClick={() => void submit()} disabled={saving}>
         <Plus className="size-4" /> Добавить
       </Button>
     </div>
