@@ -42,6 +42,7 @@ import { RalphModeSelect } from './RalphMode';
 import type { RalphMode } from '@/domain/task/Task';
 import { DelegateSelect } from './DelegateSelect';
 import { AssignToProjectSelect } from './AssignToProjectSelect';
+import { DelegateTaskButton } from './DelegateTaskButton';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
@@ -152,6 +153,7 @@ export function TaskDrawer({
   todoTail = null,
   isInbox = false,
 }: Props): React.ReactElement {
+  const { user: currentUser } = useCurrentUser();
   const { taskRepository } = useContainer();
   // В create-mode description редактируется обычной textarea на форме; в edit-mode
   // компонент TaskDescriptionEditor самостоятельно фетчит/сохраняет через taskRepository,
@@ -396,6 +398,13 @@ export function TaskDrawer({
                   task.status === 'todo' ||
                   task.status === 'awaiting_clarification') && (
                   <TaskRalphModeChip task={task} onChanged={() => onCommitsChange?.()} />
+                )}
+                {isInbox && (
+                  <DelegateTaskButton
+                    task={task}
+                    currentUserId={currentUser?.id ?? null}
+                    onChanged={() => onCommitsChange?.()}
+                  />
                 )}
                 {isInbox && (
                   <AssignToProjectSelect

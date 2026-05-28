@@ -26,6 +26,7 @@ import {
   isImageMime,
 } from '@/presentation/components/attachments/files';
 import { RalphModeSelect } from '@/presentation/components/tasks/RalphMode';
+import { DelegateSelect } from '@/presentation/components/tasks/DelegateSelect';
 import type { RalphMode } from '@/domain/task/Task';
 
 type Props = {
@@ -45,6 +46,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState<string | null>(null);
   const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
+  // Делегат для inbox-задачи. Сбрасывается при смене проекта на «не-inbox».
+  const [delegateUserId, setDelegateUserId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
@@ -59,6 +62,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       setDescription('');
       setProjectId(null);
       setRalphMode('normal');
+      setDelegateUserId(null);
       setError(null);
       setPending((prev) => {
         prev.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
@@ -66,6 +70,11 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       });
     }
   }, [open]);
+
+  // При смене проекта на «не-inbox» сбрасываем делегата — он применим только к inbox.
+  useEffect(() => {
+    if (projectId !== null) setDelegateUserId(null);
+  }, [projectId]);
 
   const addFiles = (raw: FileList | File[]): void => {
     const list = Array.from(raw);
@@ -114,6 +123,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
         description: trimmed,
         status: 'backlog',
         ralphMode,
+        // delegateUserId применим только когда projectId === null (inbox).
+        delegateUserId: projectId === null ? delegateUserId : null,
       });
       // Загружаем вложения в созданную задачу (best-effort, ошибки — toast'ом).
       for (const pf of pending) {
@@ -192,6 +203,17 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
             <Label>Режим работы Ralph</Label>
             <RalphModeSelect value={ralphMode} onChange={setRalphMode} disabled={saving} />
           </div>
+
+          {projectId === null && (
+            <div className="space-y-2">
+              <Label>Делегировать</Label>
+              <DelegateSelect
+                value={delegateUserId}
+                onChange={setDelegateUserId}
+                disabled={saving}
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">

@@ -261,4 +261,12 @@ export class HttpTaskRepository implements TaskRepository {
     );
     return fromDto(task);
   }
+
+  async delegate(projectId: string, taskId: string, delegateUserId: string): Promise<Task> {
+    const { task } = await httpClient.post<{ task: TaskDto }>(
+      `/projects/${projectId}/tasks/${taskId}/delegate`,
+      { delegateUserId },
+    );
+    return fromDto(task);
+  }
 }

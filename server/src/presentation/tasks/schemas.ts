@@ -63,6 +63,11 @@ export const assignToProjectSchema = z.object({
   targetProjectId: z.string().uuid(),
 });
 
+// POST /:taskId/delegate — делегировать уже созданную inbox-задачу.
+export const delegateTaskSchema = z.object({
+  delegateUserId: z.string().uuid(),
+});
+
 export type CreateTaskBody = z.infer<typeof createTaskSchema>;
 export type UpdateTaskBody = z.infer<typeof updateTaskSchema>;
 export type MoveTaskBody = z.infer<typeof moveTaskSchema>;

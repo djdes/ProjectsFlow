@@ -98,6 +98,7 @@ import type { DeclineTaskDelegation } from '../application/task/DeclineTaskDeleg
 import type { WithdrawTaskDelegation } from '../application/task/WithdrawTaskDelegation.js';
 import type { ListMyPendingDelegations } from '../application/task/ListMyPendingDelegations.js';
 import type { AssignInboxTaskToProject } from '../application/task/AssignInboxTaskToProject.js';
+import type { DelegateExistingTask } from '../application/task/DelegateExistingTask.js';
 import type { ListNotifications } from '../application/notifications/ListNotifications.js';
 import type { CountUnreadNotifications } from '../application/notifications/CountUnreadNotifications.js';
 import type { MarkNotificationRead } from '../application/notifications/MarkNotificationRead.js';
@@ -314,6 +315,7 @@ type AppDeps = {
     readonly withdraw: WithdrawTaskDelegation;
     readonly listPending: ListMyPendingDelegations;
     readonly assignToProject: AssignInboxTaskToProject;
+    readonly delegateExisting: DelegateExistingTask;
   };
   readonly agent: {
     readonly createAgentToken: CreateAgentToken;
@@ -427,6 +429,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       ...deps.tasks,
       notifier: deps.notifications.projectNotifier,
       assignToProject: deps.delegations.assignToProject,
+      delegateExisting: deps.delegations.delegateExisting,
     }),
   );
   app.use('/api/delegations', delegationsRouter(deps.delegations));

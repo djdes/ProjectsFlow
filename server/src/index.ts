@@ -89,6 +89,7 @@ import { DeclineTaskDelegation } from './application/task/DeclineTaskDelegation.
 import { WithdrawTaskDelegation } from './application/task/WithdrawTaskDelegation.js';
 import { ListMyPendingDelegations } from './application/task/ListMyPendingDelegations.js';
 import { AssignInboxTaskToProject } from './application/task/AssignInboxTaskToProject.js';
+import { DelegateExistingTask } from './application/task/DelegateExistingTask.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
 import { DrizzleAgentJobRepository } from './infrastructure/repositories/DrizzleAgentJobRepository.js';
@@ -849,6 +850,17 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       projects: projectRepo,
       members: projectMemberRepo,
+      delegations: taskDelegationRepo,
+      users: userRepo,
+      notifications: notificationRepo,
+      email: emailSender,
+      idGen: idGenerator,
+      appUrl: appBaseUrl,
+    }),
+    delegateExisting: new DelegateExistingTask({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
       delegations: taskDelegationRepo,
       users: userRepo,
       notifications: notificationRepo,

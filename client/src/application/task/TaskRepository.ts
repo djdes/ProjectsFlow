@@ -70,4 +70,8 @@ export interface TaskRepository {
   // Перенос inbox-задачи в реальный проект. Активная делегация (если была) →
   // archived; делегат получает email + notification. Только creator (owner inbox).
   assignToProject(projectId: string, taskId: string, targetProjectId: string): Promise<Task>;
+  // Делегировать уже созданную inbox-задачу (UI «Делегировать» на карточке).
+  // delegateUserId должен быть в shared-members caller'а; задача должна быть inbox
+  // и без активной делегации.
+  delegate(projectId: string, taskId: string, delegateUserId: string): Promise<Task>;
 }

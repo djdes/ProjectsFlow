@@ -19,6 +19,7 @@ import type { DeleteTaskComment } from '../../application/task/DeleteTaskComment
 import type { RequestRalphCancel } from '../../application/task/RequestRalphCancel.js';
 import type { RevokeRalphCancel } from '../../application/task/RevokeRalphCancel.js';
 import type { AssignInboxTaskToProject } from '../../application/task/AssignInboxTaskToProject.js';
+import type { DelegateExistingTask } from '../../application/task/DelegateExistingTask.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
@@ -33,6 +34,7 @@ import {
   assignToProjectSchema,
   createTaskCommentSchema,
   createTaskSchema,
+  delegateTaskSchema,
   linkCommitSchema,
   moveTaskSchema,
   updateTaskCommentSchema,
@@ -59,6 +61,7 @@ type Deps = {
   readonly requestRalphCancel: RequestRalphCancel;
   readonly revokeRalphCancel: RevokeRalphCancel;
   readonly assignToProject: AssignInboxTaskToProject;
+  readonly delegateExisting: DelegateExistingTask;
   readonly maxAttachmentBytes: number;
   readonly agentJobs: AgentJobRepository;
   // Live-обновление: сигнал «в проекте изменились задачи» всем участникам (SSE).
@@ -316,6 +319,33 @@ export function tasksRouter(deps: Deps): Router {
         deps.notifyTaskChanged(req.params['projectId'] as string);
         deps.notifyTaskChanged(body.targetProjectId);
         res.json({ task: toDto(task) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // POST /:taskId/delegate — делегировать уже созданную inbox-задачу.
+  // Возвращает обновлённую task (с delegation = pending). UI сам перерисует ярлык.
+  router.post(
+    '/:taskId/delegate',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const taskId = req.params['taskId'] as string;
+        const body = delegateTaskSchema.parse(req.body);
+        const delegation = await deps.delegateExisting.execute(
+          taskId,
+          body.delegateUserId,
+          req.user!.id,
+        );
+        const task = await deps.tasks.getById(taskId);
+        if (!task) {
+          res.status(404).json({ error: 'task_not_found' });
+          return;
+        }
+        deps.notifyTaskChanged(req.params['projectId'] as string);
+        // Прикручиваем delegation к task — DrizzleTaskRepository.getById не джойнит.
+        res.json({ task: toDto({ ...task, delegation }) });
       } catch (e) {
         next(e);
       }
