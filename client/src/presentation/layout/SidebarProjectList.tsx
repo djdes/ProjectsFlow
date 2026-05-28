@@ -23,6 +23,7 @@ import {
   HeartOff,
   MoreHorizontal,
   Pencil,
+  Plus,
   Search,
   Trash2,
   Users,
@@ -32,6 +33,7 @@ import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useReorderProjects } from '@/presentation/hooks/useReorderProjects';
 import { useReorderFavoriteProjects } from '@/presentation/hooks/useReorderFavoriteProjects';
 import { useToggleProjectFavorite } from '@/presentation/hooks/useToggleProjectFavorite';
+import { useNewProjectDialog } from '@/presentation/components/forms/NewProjectDialogProvider';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -325,10 +327,15 @@ function ProjectGroup({
   );
 }
 
+// Лимит проектов на тариф. Сейчас у всех безлимит → показываем ∞. Когда появятся
+// тарифы, значение придёт из профиля/подписки и рендер ниже подхватит число.
+const PROJECT_LIMIT = Infinity;
+
 export function SidebarProjectList(): React.ReactElement {
   const { data, loading, error } = useProjects();
   const { reorder } = useReorderProjects();
   const { reorder: reorderFavorites } = useReorderFavoriteProjects();
+  const { open: openNewProject } = useNewProjectDialog();
   const [query, setQuery] = useState('');
 
   if (loading) return <SidebarProjectListSkeleton />;
@@ -344,8 +351,34 @@ export function SidebarProjectList(): React.ReactElement {
   // Inbox-проект скрываем — он рендерится отдельным пунктом в Sidebar.
   const visible = (data ?? []).filter((p) => !p.isInbox);
 
+  // Шапка «Мои проекты» (заголовок + счётчик + «+») рендерится всегда, чтобы юзер мог
+  // создать первый проект. Список ниже падает в empty-state.
+  const myProjectsHeader = (
+    <div className="flex items-center justify-between px-2 pt-1">
+      <span className="flex items-baseline gap-1.5 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+        Мои проекты
+        <span className="tracking-normal tabular-nums normal-case opacity-70">
+          {visible.length}/{PROJECT_LIMIT === Infinity ? '∞' : PROJECT_LIMIT}
+        </span>
+      </span>
+      <button
+        type="button"
+        onClick={openNewProject}
+        aria-label="Новый проект"
+        className="grid size-6 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <Plus className="size-4" />
+      </button>
+    </div>
+  );
+
   if (visible.length === 0) {
-    return <p className="px-2 py-1.5 text-sm text-muted-foreground">Проектов пока нет.</p>;
+    return (
+      <div className="space-y-1.5">
+        {myProjectsHeader}
+        <p className="px-2 py-1.5 text-sm text-muted-foreground">Проектов пока нет.</p>
+      </div>
+    );
   }
 
   const q = query.trim().toLocaleLowerCase('ru');
@@ -362,7 +395,9 @@ export function SidebarProjectList(): React.ReactElement {
 
   const favorites = searching ? favoritesAll.filter(matches) : favoritesAll;
   const regular = searching ? visible.filter(matches) : visible;
-  const showFavoritesHeader = !searching && favoritesAll.length > 0;
+  // Секцию «Избранное» показываем только когда есть favorites И мы не в режиме поиска.
+  // При поиске сворачиваем в плоский результат, чтобы не было дублей в выдаче.
+  const showFavoritesSection = !searching && favoritesAll.length > 0;
 
   // В режиме поиска DnD выключен (как и в исходной логике).
   const reorderable = !searching;
@@ -424,36 +459,37 @@ export function SidebarProjectList(): React.ReactElement {
         </div>
       )}
 
-      {noMatches ? (
-        <p className="px-2 py-1.5 text-sm text-muted-foreground">Ничего не найдено.</p>
-      ) : (
-        <>
-          {showFavoritesHeader && favorites.length > 0 && (
-            <>
-              <div className="px-2 pt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-                Избранное
-              </div>
-              <ProjectGroup
-                projects={favorites}
-                bucket="favorites"
-                reorderable={reorderable}
-                onReorderEnd={handleFavoritesDragEnd}
-                onMove={moveInFavorites}
-              />
-            </>
-          )}
-
-          {regular.length > 0 ? (
-            <ProjectGroup
-              projects={regular}
-              bucket="main"
-              reorderable={reorderable}
-              onReorderEnd={handleRegularDragEnd}
-              onMove={moveInRegular}
-            />
-          ) : null}
-        </>
+      {/* «Избранное» — самостоятельная секция НАД «Мои проекты». Скрывается в режиме поиска
+          (тогда выдача плоская, без дублей). */}
+      {showFavoritesSection && favorites.length > 0 && (
+        <div className="space-y-1 pb-1">
+          <div className="px-2 pt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+            Избранное
+          </div>
+          <ProjectGroup
+            projects={favorites}
+            bucket="favorites"
+            reorderable={reorderable}
+            onReorderEnd={handleFavoritesDragEnd}
+            onMove={moveInFavorites}
+          />
+        </div>
       )}
+
+      <div className="space-y-1">
+        {myProjectsHeader}
+        {noMatches ? (
+          <p className="px-2 py-1.5 text-sm text-muted-foreground">Ничего не найдено.</p>
+        ) : regular.length > 0 ? (
+          <ProjectGroup
+            projects={regular}
+            bucket="main"
+            reorderable={reorderable}
+            onReorderEnd={handleRegularDragEnd}
+            onMove={moveInRegular}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -1,18 +1,12 @@
 import { Link, NavLink } from 'react-router-dom';
 import { Bell, Inbox, PanelLeft, Plus, Search, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useNewProjectDialog } from '@/presentation/components/forms/NewProjectDialogProvider';
 import { useAddTaskDialog } from '@/presentation/components/forms/AddTaskDialogProvider';
 import { useGlobalSearch } from '@/presentation/components/search/GlobalSearchProvider';
 import { useUnreadNotificationsCount } from '@/presentation/hooks/useUnreadNotificationsCount';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
-import { useProjects } from '@/presentation/hooks/useProjects';
 import { SidebarProjectList } from './SidebarProjectList';
 import { SidebarUserMenu } from './SidebarUserMenu';
-
-// Лимит проектов на тариф. Сейчас у всех безлимит → показываем ∞. Когда появятся
-// тарифы, значение придёт из профиля/подписки и рендер ниже подхватит число.
-const PROJECT_LIMIT = Infinity;
 
 type SidebarProps = {
   // Передаётся только на desktop — рисует иконку сворачивания панели. На мобиле (drawer)
@@ -23,17 +17,11 @@ type SidebarProps = {
 export function Sidebar({ onToggleCollapse }: SidebarProps): React.ReactElement {
   const { count: unreadCount } = useUnreadNotificationsCount();
   const { open: openSearch } = useGlobalSearch();
-  const { open: openNewProject } = useNewProjectDialog();
   const { open: openAddTask } = useAddTaskDialog();
   const { user } = useCurrentUser();
-  const { data: projects, loading: projectsLoading } = useProjects();
-
-  // Счётчик «N/∞»: считаем обычные проекты (без phantom-инбокса). Пока грузится — не
-  // показываем, чтобы не мигало «0/∞».
-  const ownProjectsCount = (projects ?? []).filter((p) => !p.isInbox).length;
 
   return (
-    <aside className="grid h-full grid-rows-[auto_auto_auto_auto_auto_1fr_auto] gap-3 border-r bg-card/40 p-3">
+    <aside className="grid h-full grid-rows-[auto_auto_auto_auto_1fr_auto] gap-3 border-r bg-card/40 p-3">
       {/* Шапка: лого + колокольчик уведомлений + тоггл панели */}
       <div className="flex items-center gap-1">
         <Link
@@ -125,25 +113,6 @@ export function Sidebar({ onToggleCollapse }: SidebarProps): React.ReactElement 
           </>
         )}
       </NavLink>
-
-      <div className="flex items-center justify-between px-2 pt-1">
-        <span className="flex items-baseline gap-1.5 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-          Мои проекты
-          {!projectsLoading && (
-            <span className="tracking-normal tabular-nums normal-case opacity-70">
-              {ownProjectsCount}/{PROJECT_LIMIT === Infinity ? '∞' : PROJECT_LIMIT}
-            </span>
-          )}
-        </span>
-        <button
-          type="button"
-          onClick={openNewProject}
-          aria-label="Новый проект"
-          className="grid size-6 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Plus className="size-4" />
-        </button>
-      </div>
 
       <nav className="-mx-1 overflow-y-auto px-1">
         <SidebarProjectList />
