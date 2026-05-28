@@ -40,11 +40,13 @@ export function ProjectsShareCard(): React.ReactElement {
   const { projectRepository } = useContainer();
   const { data: projects } = useProjects();
 
-  // Только проекты, которыми caller владеет: invite_member требует owner-роль (см.
-  // permissions matrix). Inbox исключаем — invite в него запрещён.
+  // Проекты, в которые caller может приглашать: invite_member требует editor-роль и выше
+  // (см. permissions matrix). Viewer'ы — не могут. Inbox исключаем — invite в него запрещён.
   const ownProjects = useMemo(
     () =>
-      (projects ?? []).filter((p) => p.role === 'owner' && !p.isInbox),
+      (projects ?? []).filter(
+        (p) => (p.role === 'owner' || p.role === 'editor') && !p.isInbox,
+      ),
     [projects],
   );
 
@@ -192,14 +194,16 @@ export function ProjectsShareCard(): React.ReactElement {
       <CardHeader>
         <CardTitle>Общий доступ к проектам</CardTitle>
         <CardDescription>
-          Пригласи людей сразу в несколько своих проектов. Зарегистрированным юзерам придёт
-          уведомление в системе, остальным — письмо со ссылкой.
+          Пригласи людей сразу в несколько проектов (где у тебя роль редактора или
+          владельца). Зарегистрированным юзерам придёт уведомление в системе, остальным —
+          письмо со ссылкой.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         {ownProjects.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            У тебя пока нет своих проектов — создавать приглашения не во что.
+            У тебя пока нет проектов с правом приглашать (нужна роль редактора или
+            владельца).
           </p>
         ) : (
           <>

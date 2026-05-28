@@ -43,6 +43,9 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
   const isOwner = project.role === 'owner';
+  // С permissions-обновлением invite_member=editor — редактор тоже может приглашать,
+  // видеть и отзывать pending-инвайты. Viewer — нет.
+  const canInvite = project.role === 'owner' || project.role === 'editor';
 
   // В inbox команды не бывает (см. spec, решение 3). Скрываем секцию целиком.
   // Также защита: если как-то сервер отдал isInbox=true, мы не показываем UI.
@@ -57,7 +60,7 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
         const membersList = await projectRepository.listMembers(project.id);
         if (cancelled) return;
         setMembers(membersList);
-        if (isOwner) {
+        if (canInvite) {
           const invitesList = await projectRepository.listInvites(project.id);
           if (cancelled) return;
           setInvites(invitesList);
@@ -74,7 +77,7 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
     return () => {
       cancelled = true;
     };
-  }, [project.id, projectRepository, isOwner, skip]);
+  }, [project.id, projectRepository, canInvite, skip]);
 
   if (skip) return null;
 
@@ -171,7 +174,7 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
     <section className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold">Команда</h2>
-        {isOwner && (
+        {canInvite && (
           <Button size="sm" variant="outline" onClick={() => setShowInviteDialog(true)}>
             <UserPlus className="size-4" />
             Пригласить
@@ -267,7 +270,7 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
         </ul>
       )}
 
-      {isOwner && invites.length > 0 && (
+      {canInvite && invites.length > 0 && (
         <div className="space-y-1.5 pt-2">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
             Ожидают принятия

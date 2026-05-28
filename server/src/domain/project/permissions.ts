@@ -46,7 +46,10 @@ const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   link_commit: 'editor',
   manage_kb: 'editor',
   manage_attachments: 'editor',
-  invite_member: 'owner',
+  // Приглашать новых участников может editor (и owner): помогает командам с горизонтальной
+  // структурой расти, не дёргая владельца. Owner-only остаётся для remove_member и
+  // transfer_ownership (структурные изменения команды).
+  invite_member: 'editor',
   remove_member: 'owner',
   transfer_ownership: 'owner',
   delegate_task_to_agent: 'editor',
