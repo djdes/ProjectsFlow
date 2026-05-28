@@ -83,10 +83,9 @@ export class DrizzleAiPromptJobRepository implements AiPromptJobRepository {
       .update(aiPromptJobs)
       .set({ status: 'running', claimedAt: sql`CURRENT_TIMESTAMP` })
       .where(and(eq(aiPromptJobs.id, jobId), eq(aiPromptJobs.status, 'queued')));
-    const affected =
-      (result as unknown as { rowsAffected?: number; affectedRows?: number }).rowsAffected ??
-      (result as unknown as { affectedRows?: number }).affectedRows ??
-      0;
+    // Drizzle MySQL2 возвращает [ResultSetHeader, FieldPacket[]] для UPDATE —
+    // tuple, не объект. См. DrizzleTaskRepository.delete на правильный паттерн.
+    const affected = (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
     if (affected === 0) return null;
     return this.findById(jobId);
   }
@@ -126,11 +125,7 @@ export class DrizzleAiPromptJobRepository implements AiPromptJobRepository {
           lt(aiPromptJobs.createdAt, input.olderThan),
         ),
       );
-    return (
-      (result as unknown as { rowsAffected?: number; affectedRows?: number }).rowsAffected ??
-      (result as unknown as { affectedRows?: number }).affectedRows ??
-      0
-    );
+    return (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
   }
 
   async deleteTerminal(input: { olderThan: Date }): Promise<number> {
@@ -142,11 +137,7 @@ export class DrizzleAiPromptJobRepository implements AiPromptJobRepository {
           lt(aiPromptJobs.createdAt, input.olderThan),
         ),
       );
-    return (
-      (result as unknown as { rowsAffected?: number; affectedRows?: number }).rowsAffected ??
-      (result as unknown as { affectedRows?: number }).affectedRows ??
-      0
-    );
+    return (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
   }
 
   private async findRowById(id: string): Promise<AiPromptJobRow | undefined> {
