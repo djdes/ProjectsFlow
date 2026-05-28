@@ -27,6 +27,11 @@ import type { WriteKbDocument } from '../../application/kb/WriteKbDocument.js';
 import type { ListPendingAgentJobs } from '../../application/agent/ListPendingAgentJobs.js';
 import type { ClaimAgentJob } from '../../application/agent/ClaimAgentJob.js';
 import type { CompleteAgentJob } from '../../application/agent/CompleteAgentJob.js';
+import type { ListPendingAiPromptJobs } from '../../application/ai-prompt/ListPendingAiPromptJobs.js';
+import type { ClaimAiPromptJob } from '../../application/ai-prompt/ClaimAiPromptJob.js';
+import type { CompleteAiPromptJob } from '../../application/ai-prompt/CompleteAiPromptJob.js';
+import type { AiPromptJob } from '../../domain/ai-prompt/AiPromptJob.js';
+import type { PendingAiPromptJob } from '../../application/ai-prompt/AiPromptJobRepository.js';
 import type { AckRalphCancel } from '../../application/task/AckRalphCancel.js';
 import type { CheckRepoUsage } from '../../application/agent/CheckRepoUsage.js';
 import type { RequestRepoAccess } from '../../application/agent/RequestRepoAccess.js';
@@ -110,6 +115,9 @@ type Deps = {
   readonly listPendingAgentJobs: ListPendingAgentJobs;
   readonly claimAgentJob: ClaimAgentJob;
   readonly completeAgentJob: CompleteAgentJob;
+  readonly listPendingAiPromptJobs: ListPendingAiPromptJobs;
+  readonly claimAiPromptJob: ClaimAiPromptJob;
+  readonly completeAiPromptJob: CompleteAiPromptJob;
   readonly ackRalphCancel: AckRalphCancel;
   readonly checkRepoUsage: CheckRepoUsage;
   readonly requestRepoAccess: RequestRepoAccess;
@@ -291,6 +299,60 @@ const completeAgentJobBodySchema = z.object({
   error: z.string().max(4000).nullable().optional(),
   branchName: z.string().max(200).nullable().optional(),
 });
+
+// AI-prompt-job: complete body (см. spec 2026-05-28-ai-prompt-improvement-design.md).
+const completeAiPromptJobBodySchema = z
+  .object({
+    ok: z.boolean(),
+    improvedText: z.string().max(5000).nullable().optional(),
+    error: z.string().max(500).nullable().optional(),
+  })
+  .refine(
+    (b) => (b.ok ? Boolean(b.improvedText && b.improvedText.trim().length > 0) : true),
+    { message: 'improvedText required when ok=true', path: ['improvedText'] },
+  )
+  .refine(
+    (b) => (b.ok ? true : Boolean(b.error && b.error.trim().length > 0)),
+    { message: 'error required when ok=false', path: ['error'] },
+  );
+
+type PendingAiPromptJobDto = {
+  id: string;
+  projectId: string | null;
+  projectName: string | null;
+  createdAt: string;
+};
+
+function pendingAiPromptJobToDto(p: PendingAiPromptJob): PendingAiPromptJobDto {
+  return {
+    id: p.id,
+    projectId: p.projectId,
+    projectName: p.projectName,
+    createdAt: p.createdAt.toISOString(),
+  };
+}
+
+type AiPromptJobDto = {
+  id: string;
+  projectId: string | null;
+  status: AiPromptJob['status'];
+  inputText: string;
+  kbContext: string | null;
+  claimedAt: string | null;
+  createdAt: string;
+};
+
+function aiPromptJobToAgentDto(j: AiPromptJob): AiPromptJobDto {
+  return {
+    id: j.id,
+    projectId: j.projectId,
+    status: j.status,
+    inputText: j.inputText,
+    kbContext: j.kbContext,
+    claimedAt: j.claimedAt ? j.claimedAt.toISOString() : null,
+    createdAt: j.createdAt.toISOString(),
+  };
+}
 
 // git-опция при создании проекта: подключить существующий репо / создать новый / никакой.
 const createProjectSchema = z.object({
@@ -932,6 +994,65 @@ export function agentApiRouter(deps: Deps): Router {
     }
   });
 
+  // === AI Prompt Jobs (Ralph: poll → claim → process → complete) ===
+  // См. docs/superpowers/specs/2026-05-28-ai-prompt-improvement-design.md
+  // Ralph поллит вместе с обычными agent_jobs; короткий лайфтайм (≤25 сек long-poll
+  // на стороне сайта), процессит через Claude и возвращает improved_text.
+
+  // Список queued AI-prompt-job'ов где caller — диспетчер.
+  router.get(
+    '/pending-ai-prompt-jobs',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const limitParam = req.query['limit'];
+        const limit = typeof limitParam === 'string' ? parseInt(limitParam, 10) : undefined;
+        const jobs = await deps.listPendingAiPromptJobs.execute({
+          userId: req.user!.id,
+          limit: Number.isFinite(limit) ? limit : undefined,
+        });
+        res.json({ jobs: jobs.map(pendingAiPromptJobToDto) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Атомарный claim: queued → running. Возвращает полный job с inputText + kbContext.
+  router.post(
+    '/ai-prompt-jobs/:jobId/claim',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const jobId = req.params['jobId'] as string;
+        const job = await deps.claimAiPromptJob.execute({ userId: req.user!.id, jobId });
+        res.json({ job: aiPromptJobToAgentDto(job) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Финализация: running → succeeded | failed. Тело: { ok, improvedText?, error? }.
+  // ok=true ⇒ improvedText обязателен; ok=false ⇒ error обязателен.
+  router.post(
+    '/ai-prompt-jobs/:jobId/complete',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const jobId = req.params['jobId'] as string;
+        const body = completeAiPromptJobBodySchema.parse(req.body);
+        await deps.completeAiPromptJob.execute({
+          userId: req.user!.id,
+          jobId,
+          ok: body.ok,
+          improvedText: body.improvedText ?? null,
+          error: body.error ?? null,
+        });
+        res.status(204).end();
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
   // Ralph диспетчер ack-ит cancel: сбрасывает флаг ralph_cancel_requested_at чтобы UI
   // убрал «Отмена запрошена»-badge. Идемпотентно. См. spec C:/www/ralph/prompts/task-ralph-cancel.md §5.
   router.post(
@@ -1224,6 +1345,7 @@ export function agentApiRouter(deps: Deps): Router {
           ...projectToAgentDto(d.project, me),
           openTaskCount: d.openTaskCount,
           queuedAgentJobCount: d.queuedAgentJobCount,
+          pendingAiPromptJobCount: d.pendingAiPromptJobCount,
         })),
       });
     } catch (e) {

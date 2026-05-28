@@ -74,6 +74,11 @@ import {
   TaskMissingDescriptionError,
 } from '../../domain/agent/errors.js';
 import {
+  AiPromptJobAlreadyClaimedError,
+  AiPromptJobNotInRunningStateError,
+  NotDispatcherForAiPromptJobError,
+} from '../../domain/ai-prompt/errors.js';
+import {
   AssignmentNotFoundError,
   EmployeeNotFoundError,
   FinanceValidationError,
@@ -407,6 +412,22 @@ export function errorHandler(
   }
   if (err instanceof AgentJobNotInRunningStateError) {
     res.status(409).json({ error: 'agent_job_not_in_running_state', message: err.message });
+    return;
+  }
+
+  // AI prompt-job errors (см. spec 2026-05-28-ai-prompt-improvement-design.md)
+  // AiPromptJobNotFoundError / AccessDeniedError мапятся inline в роутах,
+  // потому что 404/403-семантика отличается от других случаев.
+  if (err instanceof AiPromptJobAlreadyClaimedError) {
+    res.status(409).json({ error: 'ai_prompt_job_already_claimed', message: err.message });
+    return;
+  }
+  if (err instanceof AiPromptJobNotInRunningStateError) {
+    res.status(409).json({ error: 'ai_prompt_job_not_in_running_state', message: err.message });
+    return;
+  }
+  if (err instanceof NotDispatcherForAiPromptJobError) {
+    res.status(403).json({ error: 'not_dispatcher_for_job', message: err.message });
     return;
   }
   if (err instanceof TaskAlreadyHasActiveAgentJobError) {

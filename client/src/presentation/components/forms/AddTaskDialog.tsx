@@ -35,6 +35,7 @@ import { RalphModeSelect } from '@/presentation/components/tasks/RalphMode';
 import { DelegateSelect } from '@/presentation/components/tasks/DelegateSelect';
 import { DeadlinePicker } from '@/presentation/components/tasks/DeadlinePicker';
 import { PrioritySelect } from '@/presentation/components/tasks/PrioritySelect';
+import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
 import type { RalphMode, TaskPriority } from '@/domain/task/Task';
 
 type Props = {
@@ -325,6 +326,12 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 onChange={setRalphMode}
                 disabled={saving}
                 className="!h-8 min-w-[140px] !px-2 text-xs"
+              />
+              <AiImproveButton
+                text={description}
+                projectId={projectId}
+                onImproved={setDescription}
+                disabled={saving}
               />
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
                 Отмена

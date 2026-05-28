@@ -101,6 +101,13 @@ import { ListAgentJobsForProject } from './application/agent/ListAgentJobsForPro
 import { ListPendingAgentJobs } from './application/agent/ListPendingAgentJobs.js';
 import { ClaimAgentJob } from './application/agent/ClaimAgentJob.js';
 import { CompleteAgentJob } from './application/agent/CompleteAgentJob.js';
+import { DrizzleAiPromptJobRepository } from './infrastructure/repositories/DrizzleAiPromptJobRepository.js';
+import { EnqueueAiPromptJob } from './application/ai-prompt/EnqueueAiPromptJob.js';
+import { WaitForAiPromptJob } from './application/ai-prompt/WaitForAiPromptJob.js';
+import { ListPendingAiPromptJobs } from './application/ai-prompt/ListPendingAiPromptJobs.js';
+import { ClaimAiPromptJob } from './application/ai-prompt/ClaimAiPromptJob.js';
+import { CompleteAiPromptJob } from './application/ai-prompt/CompleteAiPromptJob.js';
+import { AiPromptJobCleanup } from './application/ai-prompt/AiPromptJobCleanup.js';
 import { Sha256AgentTokenHasher } from './infrastructure/crypto/Sha256AgentTokenHasher.js';
 import { CreateAgentToken } from './application/agent/CreateAgentToken.js';
 import { ListAgentTokens } from './application/agent/ListAgentTokens.js';
@@ -256,6 +263,7 @@ const taskCommentRepo = new DrizzleTaskCommentRepository(db);
 const taskDelegationRepo = new DrizzleTaskDelegationRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const agentJobRepo = new DrizzleAgentJobRepository(db);
+const aiPromptJobRepo = new DrizzleAiPromptJobRepository(db);
 const taskSearchRepo = new DrizzleTaskSearchRepository(db);
 const projectJoinRequestRepo = new DrizzleProjectJoinRequestRepository(db);
 const adminRepo = new DrizzleAdminRepository(db);
@@ -287,6 +295,44 @@ setInterval(() => agentRateLimiter.pruneExpired(), 10 * 60 * 1000).unref();
 // режиме. Используется в CreateProject (web + agent flow).
 const resolveDefaultDispatcher = (): Promise<string | null> =>
   pickDefaultDispatcherUserId(userRepo, agentTokenRepo);
+
+// AI prompt-improvement: дефолтный диспетчер для Inbox-задач (без projectId).
+// AI_PROMPT_DEFAULT_DISPATCHER_EMAIL → userId. Кешируем на 60 сек чтобы не лазить
+// каждый раз в БД, но и подхватывать revoke токенов и переименования email'а.
+const aiPromptDefaultDispatcherEmail = (
+  process.env['AI_PROMPT_DEFAULT_DISPATCHER_EMAIL'] ?? ''
+).trim().toLowerCase();
+let aiPromptDispatcherCache: { userId: string | null; cachedAt: number } | null = null;
+const AI_PROMPT_DISPATCHER_CACHE_TTL_MS = 60 * 1000;
+const resolveDefaultAiDispatcherUserId = async (): Promise<string | null> => {
+  if (!aiPromptDefaultDispatcherEmail) return null;
+  const now = Date.now();
+  if (aiPromptDispatcherCache && now - aiPromptDispatcherCache.cachedAt < AI_PROMPT_DISPATCHER_CACHE_TTL_MS) {
+    return aiPromptDispatcherCache.userId;
+  }
+  const user = await userRepo.getByEmail(aiPromptDefaultDispatcherEmail);
+  aiPromptDispatcherCache = { userId: user?.id ?? null, cachedAt: now };
+  return aiPromptDispatcherCache.userId;
+};
+
+// Periodic cleanup для ai_prompt_jobs (каждые 60 сек). Лог только когда что-то сделано —
+// чтобы не засорять stdout.
+const aiPromptJobCleanup = new AiPromptJobCleanup({ aiPromptJobs: aiPromptJobRepo });
+setInterval(
+  () => {
+    void aiPromptJobCleanup
+      .runOnce(new Date())
+      .then((r) => {
+        if (r.cancelled > 0 || r.deleted > 0) {
+          console.log(
+            `[ai-prompt-cleanup] cancelled=${r.cancelled} deleted=${r.deleted}`,
+          );
+        }
+      })
+      .catch((err) => console.warn('[ai-prompt-cleanup] failed:', err));
+  },
+  60 * 1000,
+).unref();
 
 // Секрет для непрозрачного requestTarget (HMAC). Отдельный env → fallback на vault-ключ.
 // ВАЖНО: в prod refuse-to-boot если оба env не заданы — иначе fallback на
@@ -1022,6 +1068,31 @@ const { app, devProxyUpgrade } = createApp({
     listPendingAgentJobs: new ListPendingAgentJobs({ agentJobs: agentJobRepo }),
     claimAgentJob: new ClaimAgentJob({ members: projectMemberRepo, agentJobs: agentJobRepo }),
     completeAgentJob: new CompleteAgentJob({ members: projectMemberRepo, agentJobs: agentJobRepo }),
+    // AI prompt-improvement (см. spec 2026-05-28-ai-prompt-improvement-design.md)
+    enqueueAiPromptJob: new EnqueueAiPromptJob({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      aiPromptJobs: aiPromptJobRepo,
+      listKbDocuments: new ListKbDocuments({
+        projects: projectRepo,
+        members: projectMemberRepo,
+        kb: kbStore,
+      }),
+      getKbDocument: new GetKbDocument({
+        projects: projectRepo,
+        members: projectMemberRepo,
+        kb: kbStore,
+      }),
+      rateLimiter: agentRateLimiter,
+      resolveDefaultDispatcherUserId: resolveDefaultAiDispatcherUserId,
+    }),
+    waitForAiPromptJob: new WaitForAiPromptJob({
+      aiPromptJobs: aiPromptJobRepo,
+      isAdmin: async (userId) => (await userRepo.getById(userId))?.isAdmin ?? false,
+    }),
+    listPendingAiPromptJobs: new ListPendingAiPromptJobs({ aiPromptJobs: aiPromptJobRepo }),
+    claimAiPromptJob: new ClaimAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
+    completeAiPromptJob: new CompleteAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
     ackRalphCancel: new AckRalphCancel({ tasks: taskRepo }),
     agentJobs: agentJobRepo,
     checkRepoUsage: new CheckRepoUsage({
@@ -1110,6 +1181,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       tasks: taskRepo,
       agentJobs: agentJobRepo,
+      aiPromptJobs: aiPromptJobRepo,
     }),
     setProjectDispatcher: new SetProjectDispatcher({
       projects: projectRepo,

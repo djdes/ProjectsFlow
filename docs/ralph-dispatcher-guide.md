@@ -45,6 +45,16 @@
 
 ```
 loop:
+  # 0. AI-prompt-improvement jobs ПЕРВЫМ (юзер ждёт на long-poll'е ≤25 сек).
+  ai_jobs = pf_list_pending_ai_prompt_jobs(limit=10)
+  if ai_jobs.length > 0:
+      job = ai_jobs[0]
+      claimed = pf_claim_ai_prompt_job(job.id)
+      if claimed:
+          handle_ai_prompt_job(claimed)   # см. ниже § «AI prompt-improvement»
+          continue
+      # 409 already_claimed → другая машина успела, идём дальше
+
   projects = pf_list_my_dispatched_projects()   # ← каждую итерацию
   if projects.length == 0:
       sleep(20m)   # делать нечего, не жжём ресурсы
@@ -74,6 +84,8 @@ loop:
   # Ничего не нашли активного — пауза.
   sleep(10m)
 ```
+
+**Важно про периодичность.** AI-prompt-job'ы short-lived (юзер на long-poll'е ≤25 сек), поэтому диспетчер должен поллить их **чаще** обычных kanban-job'ов. Рекомендуемый интервал тика: **60 сек**. Сами AI-job'ы пикапятся каждый тик в начале, до любой другой работы.
 
 **Почему именно так:**
 
@@ -129,6 +141,67 @@ loop:
    `done` → `pf_complete_agent_job(ok=true, prUrl, branchName)`.
 8. **Если задача из job-очереди** — `pf_complete_agent_job` обязателен (без
    него job висит в `running` и юзер не видит результат).
+
+## AI prompt-improvement
+
+Сайт ProjectsFlow добавил кнопку «AI» в формах создания задач (`AddTaskDialog`,
+`QuickAddTodo`). Юзер вводит обрывочный текст, жмёт кнопку — сервер кладёт job в
+очередь `ai_prompt_jobs`. Диспетчер пикапит, переписывает текст через свою Claude-
+сессию, возвращает результат. Юзер видит обновлённую textarea через 5–25 сек.
+
+См. полную спеку — [docs/superpowers/specs/2026-05-28-ai-prompt-improvement-design.md](superpowers/specs/2026-05-28-ai-prompt-improvement-design.md).
+
+**Псевдокод `handle_ai_prompt_job`:**
+
+```python
+def handle_ai_prompt_job(job):
+    # job содержит inputText (черновик от юзера) и kbContext (опционально —
+    # пре-собранный KB-бандл). Если kbContext != null — добавляем как фон.
+    system = """Ты помощник по постановке задач в трекере проектов.
+Получаешь короткий черновик описания задачи от пользователя и переписываешь
+его в виде ясной постановки на русском языке.
+
+Правила:
+- Сохраняй исходный смысл и намерение автора.
+- Простой язык, короткие предложения, без канцеляризмов.
+- Структура: 1-2 предложения сути + (опционально) список шагов.
+- Домысливай разумные детали; помечай «предположительно».
+- Если дан KB-контекст — используй терминологию проекта, не цитируй дословно.
+- НЕ выдумывай людей, дедлайны, ссылки.
+- Объём: ≤800 символов.
+- Возвращай только переписанный текст, без преамбул и markdown-заголовков."""
+    user_msg = ""
+    if job.kbContext:
+        user_msg += f"Контекст проекта (база знаний):\n{job.kbContext}\n\n---\n\n"
+    user_msg += f"Черновик задачи:\n{job.inputText}"
+
+    try:
+        # Anthropic SDK; включить prompt caching на system (он стабилен).
+        resp = claude.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2048,
+            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        improved = resp.content[0].text.strip()
+        pf_complete_ai_prompt_job(job.id, ok=True, improvedText=improved)
+    except Exception as e:
+        pf_complete_ai_prompt_job(job.id, ok=False, error=short(e))
+```
+
+**Этикет AI-job'ов:**
+
+- Это **short-lived**: юзер ждёт на long-poll'е до 25 секунд. Бери в работу сразу,
+  не откладывай. Если в очереди есть AI-job — это всегда приоритет над kanban.
+- 409 `ai_prompt_job_already_claimed` — нормальная гонка между Ralph-инстансами.
+  Пропусти, попробуй следующий.
+- 409 `ai_prompt_job_not_in_running_state` после `pf_complete_ai_prompt_job` — job
+  был отменён server-side cleanup'ом (queued/running старше 5 мин → cancelled).
+  Не retry'ай, просто залогай и дальше.
+- НЕ читай KB сам — он уже в `job.kbContext`, сервер пре-собрал. Если NULL — значит
+  у проекта нет KB или Inbox-задача. Работай только с `inputText`.
+- НЕ оставляй task-комментарии и НЕ создавай PR'ы из AI-job'а. Это не kanban-task,
+  пользователь не ждёт ничего кроме переписанного текста в textarea.
 
 ## Координация между Ralph-instance'ами одного юзера
 

@@ -226,6 +226,32 @@ export type CompleteAgentJobInput = {
   branchName?: string | null;
 };
 
+// AI prompt-improvement jobs (see docs/superpowers/specs/2026-05-28-ai-prompt-improvement-design.md)
+export type PendingAiPromptJob = {
+  id: string;
+  projectId: string | null;
+  projectName: string | null;
+  createdAt: string;
+};
+
+export type AiPromptJobClaimed = {
+  id: string;
+  projectId: string | null;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  // Текст от юзера (1..5000 символов).
+  inputText: string;
+  // Опциональный KB-контекст, пре-собранный сервером.
+  kbContext: string | null;
+  claimedAt: string | null;
+  createdAt: string;
+};
+
+export type CompleteAiPromptJobInput = {
+  ok: boolean;
+  improvedText?: string | null;
+  error?: string | null;
+};
+
 export type RepoUsageResult = {
   ownership: 'none' | 'self' | 'other';
   requestTarget: string | null;
@@ -609,6 +635,28 @@ export class ApiClient {
   async completeAgentJob(jobId: string, input: CompleteAgentJobInput): Promise<void> {
     await this.request<void>(
       `/agent/agent-jobs/${encodeURIComponent(jobId)}/complete`,
+      { method: 'POST', body: input },
+    );
+  }
+
+  async listPendingAiPromptJobs(limit: number): Promise<PendingAiPromptJob[]> {
+    const { jobs } = await this.request<{ jobs: PendingAiPromptJob[] }>(
+      `/agent/pending-ai-prompt-jobs?limit=${limit}`,
+    );
+    return jobs;
+  }
+
+  async claimAiPromptJob(jobId: string): Promise<AiPromptJobClaimed> {
+    const { job } = await this.request<{ job: AiPromptJobClaimed }>(
+      `/agent/ai-prompt-jobs/${encodeURIComponent(jobId)}/claim`,
+      { method: 'POST', body: {} },
+    );
+    return job;
+  }
+
+  async completeAiPromptJob(jobId: string, input: CompleteAiPromptJobInput): Promise<void> {
+    await this.request<void>(
+      `/agent/ai-prompt-jobs/${encodeURIComponent(jobId)}/complete`,
       { method: 'POST', body: input },
     );
   }

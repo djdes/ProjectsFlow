@@ -132,6 +132,11 @@ import type { ListAgentJobsForProject } from '../application/agent/ListAgentJobs
 import type { ListPendingAgentJobs } from '../application/agent/ListPendingAgentJobs.js';
 import type { ClaimAgentJob } from '../application/agent/ClaimAgentJob.js';
 import type { CompleteAgentJob } from '../application/agent/CompleteAgentJob.js';
+import type { EnqueueAiPromptJob } from '../application/ai-prompt/EnqueueAiPromptJob.js';
+import type { WaitForAiPromptJob } from '../application/ai-prompt/WaitForAiPromptJob.js';
+import type { ListPendingAiPromptJobs } from '../application/ai-prompt/ListPendingAiPromptJobs.js';
+import type { ClaimAiPromptJob } from '../application/ai-prompt/ClaimAiPromptJob.js';
+import type { CompleteAiPromptJob } from '../application/ai-prompt/CompleteAiPromptJob.js';
 import type { AckRalphCancel } from '../application/task/AckRalphCancel.js';
 import type { AgentJobRepository } from '../application/agent/AgentJobRepository.js';
 import type { ProjectMemberRepository } from '../application/project/ProjectMemberRepository.js';
@@ -159,6 +164,7 @@ import { agentTokensRouter } from './agent/tokensRoutes.js';
 import { agentApiRouter } from './agent/apiRoutes.js';
 import { agentDeviceRouter } from './agent/deviceRoutes.js';
 import { buildAgentJobsRouter } from './agent-jobs/routes.js';
+import { buildAiPromptRouter } from './ai-prompt/routes.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
@@ -353,6 +359,12 @@ type AppDeps = {
     readonly listPendingAgentJobs: ListPendingAgentJobs;
     readonly claimAgentJob: ClaimAgentJob;
     readonly completeAgentJob: CompleteAgentJob;
+    // AI prompt-improvement (см. spec 2026-05-28-ai-prompt-improvement-design.md)
+    readonly enqueueAiPromptJob: EnqueueAiPromptJob;
+    readonly waitForAiPromptJob: WaitForAiPromptJob;
+    readonly listPendingAiPromptJobs: ListPendingAiPromptJobs;
+    readonly claimAiPromptJob: ClaimAiPromptJob;
+    readonly completeAiPromptJob: CompleteAiPromptJob;
     readonly ackRalphCancel: AckRalphCancel;
     readonly agentJobs: AgentJobRepository;
     readonly checkRepoUsage: CheckRepoUsage;
@@ -527,6 +539,9 @@ export function createApp(deps: AppDeps): CreatedApp {
       listPendingAgentJobs: deps.agent.listPendingAgentJobs,
       claimAgentJob: deps.agent.claimAgentJob,
       completeAgentJob: deps.agent.completeAgentJob,
+      listPendingAiPromptJobs: deps.agent.listPendingAiPromptJobs,
+      claimAiPromptJob: deps.agent.claimAiPromptJob,
+      completeAiPromptJob: deps.agent.completeAiPromptJob,
       ackRalphCancel: deps.agent.ackRalphCancel,
       checkRepoUsage: deps.agent.checkRepoUsage,
       requestRepoAccess: deps.agent.requestRepoAccess,
@@ -567,6 +582,16 @@ export function createApp(deps: AppDeps): CreatedApp {
       enqueueAgentJob: deps.agent.enqueueAgentJob,
       cancelAgentJob: deps.agent.cancelAgentJob,
       listAgentJobsForProject: deps.agent.listAgentJobsForProject,
+    }),
+  );
+
+  // AI-prompt-improvement (site-side, session-cookie auth): см. spec
+  // 2026-05-28-ai-prompt-improvement-design.md. POST /api/ai/prompt-jobs + GET с long-poll.
+  app.use(
+    '/api',
+    buildAiPromptRouter({
+      enqueueAiPromptJob: deps.agent.enqueueAiPromptJob,
+      waitForAiPromptJob: deps.agent.waitForAiPromptJob,
     }),
   );
 

@@ -16,6 +16,7 @@ import { RalphModeSelect } from './RalphMode';
 import { DelegateSelect } from './DelegateSelect';
 import { DeadlinePicker } from './DeadlinePicker';
 import { PrioritySelect } from './PrioritySelect';
+import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
 import {
   extractClipboardFiles,
   isImageMime,
@@ -39,6 +40,10 @@ type Props = {
   }) => Promise<Task>;
   // Если true — рендерим DelegateSelect (только в inbox-режиме).
   isInbox?: boolean;
+  // projectId для AI-кнопки. null = используем дефолтного AI-диспетчера
+  // (для Inbox-страницы); UUID = диспетчер этого проекта. См. spec
+  // 2026-05-28-ai-prompt-improvement-design.md.
+  aiProjectId?: string | null;
 };
 
 // Max-height растущей textarea (~9 строк при text-sm/leading-snug).
@@ -48,7 +53,11 @@ const TEXTAREA_MAX_PX = 192;
 // Textarea авто-растёт от одной строки до TEXTAREA_MAX_PX, дальше — внутренний скролл.
 // Footer: 📎 слева, селектор Ralph-режима и кнопка «Отправить» — справа.
 // Drop файла, Ctrl+V, Ctrl/Cmd+Enter — submit.
-export function QuickAddTodo({ onCreate, isInbox = false }: Props): React.ReactElement {
+export function QuickAddTodo({
+  onCreate,
+  isInbox = false,
+  aiProjectId = null,
+}: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const [text, setText] = useState('');
   const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
@@ -267,6 +276,13 @@ export function QuickAddTodo({ onCreate, isInbox = false }: Props): React.ReactE
               onChange={setRalphMode}
               disabled={submitting}
               className="!h-7 min-w-[160px] !px-2 !py-0 text-xs"
+            />
+            <AiImproveButton
+              text={text}
+              projectId={aiProjectId}
+              onImproved={setText}
+              disabled={submitting}
+              compact
             />
             <Button
               type="button"

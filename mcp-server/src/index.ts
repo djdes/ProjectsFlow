@@ -582,6 +582,71 @@ const TOOLS = [
     },
   },
   {
+    name: 'pf_list_pending_ai_prompt_jobs',
+    description:
+      'List queued AI-prompt-improvement jobs where current user is the dispatcher, oldest first. ' +
+      'These are short-lived requests from the ProjectsFlow web UI: user clicked the "AI" button ' +
+      'next to a task-description field, and the site wants the dispatcher to rewrite the text in ' +
+      'plain Russian + elaborate on details. Each item has projectId (or null for Inbox tasks), ' +
+      'projectName and createdAt. Use in /loop ALONGSIDE pf_list_pending_agent_jobs, ideally ' +
+      'BEFORE checking regular agent_jobs — AI requests are time-sensitive (user is waiting up to ' +
+      '25s on a long-poll). If empty, fall through to the regular agent-job poll.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', description: 'Max jobs to return (default 10, max 50)' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_claim_ai_prompt_job',
+    description:
+      'Atomically claim a queued AI-prompt-improvement job. Returns the full job: id, projectId, ' +
+      'inputText (the original user text, 1..5000 chars), kbContext (pre-fetched KB bundle, may ' +
+      'be null — server already collected it, you do NOT need to fetch KB yourself). On 409 ' +
+      '"ai_prompt_job_already_claimed" another session won — skip and try the next one. After ' +
+      'claim you have ~5 minutes before server-side cleanup cancels stuck jobs — process and ' +
+      'complete promptly. Call Claude with system prompt "Ты помощник по постановке задач..." ' +
+      '(see docs/superpowers/specs/2026-05-28-ai-prompt-improvement-design.md §8.3) and the ' +
+      'inputText + kbContext as the user message.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string', description: 'AI-prompt-job id (from pf_list_pending_ai_prompt_jobs)' },
+      },
+      required: ['jobId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_complete_ai_prompt_job',
+    description:
+      'Finalize an AI-prompt-improvement job. ok=true requires improvedText (the rewritten task ' +
+      'description, ≤5000 chars). ok=false requires error (short reason, ≤500 chars, e.g. ' +
+      '"claude_api_overloaded" or "rate_limited"). Server then unblocks the frontend long-poll ' +
+      'and returns the result to the user. Idempotency: do NOT retry on 409 ' +
+      '"ai_prompt_job_not_in_running_state" — the job has been cancelled by server cleanup or ' +
+      'user, just drop it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string', description: 'AI-prompt-job id' },
+        ok: { type: 'boolean', description: 'true if Claude produced a valid rewrite' },
+        improvedText: {
+          type: ['string', 'null'],
+          description: 'Rewritten task description (≤5000 chars). Required when ok=true.',
+        },
+        error: {
+          type: ['string', 'null'],
+          description: 'Short error reason (≤500 chars). Required when ok=false.',
+        },
+      },
+      required: ['jobId', 'ok'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pf_get_project',
     description:
       'Fetch metadata for a single project: id, name, status, hasKb, gitRepoUrl. Returns ' +
@@ -1016,6 +1081,21 @@ const CompleteAgentJobInput = z.object({
   branchName: z.string().max(200).nullable().optional(),
 });
 
+const ListPendingAiPromptJobsInput = z.object({
+  limit: z.number().int().min(1).max(50).optional(),
+});
+
+const ClaimAiPromptJobInput = z.object({
+  jobId: z.string().min(1),
+});
+
+const CompleteAiPromptJobInput = z.object({
+  jobId: z.string().min(1),
+  ok: z.boolean(),
+  improvedText: z.string().max(5000).nullable().optional(),
+  error: z.string().max(500).nullable().optional(),
+});
+
 const GetProjectInput = z.object({ projectId: z.string().min(1) });
 const ListMembersInput = z.object({ projectId: z.string().min(1) });
 const SearchTasksInput = z.object({ query: z.string().trim().min(2).max(200) });
@@ -1258,6 +1338,25 @@ async function main(): Promise<void> {
             prUrl: input.prUrl ?? null,
             error: input.error ?? null,
             branchName: input.branchName ?? null,
+          });
+          return jsonResult({ ok: true });
+        }
+        case 'pf_list_pending_ai_prompt_jobs': {
+          const input = ListPendingAiPromptJobsInput.parse(req.params.arguments ?? {});
+          const jobs = await api.listPendingAiPromptJobs(input.limit ?? 10);
+          return jsonResult(jobs);
+        }
+        case 'pf_claim_ai_prompt_job': {
+          const input = ClaimAiPromptJobInput.parse(req.params.arguments ?? {});
+          const job = await api.claimAiPromptJob(input.jobId);
+          return jsonResult(job);
+        }
+        case 'pf_complete_ai_prompt_job': {
+          const input = CompleteAiPromptJobInput.parse(req.params.arguments ?? {});
+          await api.completeAiPromptJob(input.jobId, {
+            ok: input.ok,
+            improvedText: input.improvedText ?? null,
+            error: input.error ?? null,
           });
           return jsonResult({ ok: true });
         }

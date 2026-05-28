@@ -396,6 +396,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
           важно лишь чтобы компонент был смонтирован. */}
       <QuickAddTodo
         isInbox={isInbox}
+        aiProjectId={isInbox ? null : projectId}
         onCreate={(input) => create({ ...input, status: 'todo' })}
       />
     </div>

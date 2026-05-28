@@ -629,3 +629,43 @@ export const taskDelegations = mysqlTable(
 
 export type TaskDelegationRow = typeof taskDelegations.$inferSelect;
 export type NewTaskDelegationRow = typeof taskDelegations.$inferInsert;
+
+// ai_prompt_jobs — миграция db/042. Очередь AI-промпт-улучшений: сайт кладёт job,
+// Ralph-диспетчер пикапит через MCP и возвращает improved_text. См.
+// docs/superpowers/specs/2026-05-28-ai-prompt-improvement-design.md
+export const aiPromptJobs = mysqlTable(
+  'ai_prompt_jobs',
+  {
+    id: id(),
+    createdBy: fkUserId('created_by'),
+    // NULL = inbox / без проекта.
+    projectId: char('project_id', { length: 36 }),
+    // Денормализованный диспетчер (на момент enqueue).
+    dispatcherUserId: char('dispatcher_user_id', { length: 36 }).notNull(),
+    status: mysqlEnum('status', ['queued', 'running', 'succeeded', 'failed', 'cancelled'])
+      .notNull()
+      .default('queued'),
+    inputText: text('input_text').notNull(),
+    // MEDIUMTEXT в Drizzle отсутствует как отдельный тип, но text() мапит на MariaDB
+    // TEXT (до 65535 байт). Пре-собранный KB в MAX_TOTAL=30000 символов уверенно
+    // влезает; если в будущем поднимем лимит — миграцией поменяем на MEDIUMTEXT.
+    kbContext: text('kb_context'),
+    improvedText: text('improved_text'),
+    error: varchar('error', { length: 500 }),
+    claimedAt: timestamp('claimed_at'),
+    finishedAt: timestamp('finished_at'),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    index('idx_ai_prompt_jobs_dispatcher_status').on(
+      t.dispatcherUserId,
+      t.status,
+      t.createdAt,
+    ),
+    index('idx_ai_prompt_jobs_status_created').on(t.status, t.createdAt),
+  ],
+);
+
+export type AiPromptJobRow = typeof aiPromptJobs.$inferSelect;
+export type NewAiPromptJobRow = typeof aiPromptJobs.$inferInsert;
