@@ -245,7 +245,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
             />
           </div>
 
-          {/* Ряд пилюль под полем ввода: каждая открывает свой dropdown / picker. */}
+          {/* Ряд пилюль-кнопок под полем ввода. Все в одну строку (flex-wrap fallback
+              на узких экранах). RalphMode сюда не входит — он в footer-е слева от Cancel. */}
           <div className="flex flex-wrap items-center gap-1.5">
             <PrioritySelect value={priority} onChange={setPriority} disabled={saving} compact />
             <DeadlinePicker value={deadline} onChange={setDeadline} disabled={saving} />
@@ -256,12 +257,6 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 disabled={saving}
               />
             )}
-            <RalphModeSelect
-              value={ralphMode}
-              onChange={setRalphMode}
-              disabled={saving}
-              className="!h-7 !px-2 text-xs"
-            />
             <Button
               type="button"
               variant="ghost"
@@ -288,7 +283,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
 
           {error && <p className="text-xs text-destructive">{error}</p>}
 
-          {/* Footer: проект-чип слева, Cancel/Submit справа. */}
+          {/* Footer: проект-чип слева, [RalphMode | Cancel | Submit] справа. */}
           <div className="flex items-center justify-between gap-2 border-t pt-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -297,7 +292,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                   variant="ghost"
                   size="sm"
                   disabled={saving}
-                  className="h-8 max-w-[60%] gap-1.5 px-2 text-xs font-normal"
+                  className="h-8 max-w-[50%] gap-1.5 px-2 text-xs font-normal"
                 >
                   <Inbox className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="truncate">{selectedName}</span>
@@ -325,6 +320,12 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
             </DropdownMenu>
 
             <div className="flex items-center gap-2">
+              <RalphModeSelect
+                value={ralphMode}
+                onChange={setRalphMode}
+                disabled={saving}
+                className="!h-8 min-w-[140px] !px-2 text-xs"
+              />
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
                 Отмена
               </Button>
