@@ -45,10 +45,46 @@ export type JoinRequestPayload = {
   readonly actorDisplayName: string;
 };
 
+// Делегирование inbox-задачи. Прилетает делегату с кнопками Accept/Decline.
+export type TaskDelegationPayload = {
+  readonly type: 'task_delegation';
+  readonly delegationId: string;
+  readonly taskId: string;
+  readonly taskExcerpt: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
+// Ответ делегата (accepted/declined). Прилетает создателю.
+// actor = делегат.
+export type TaskDelegationResolvedPayload = {
+  readonly type: 'task_delegation_resolved';
+  readonly delegationId: string;
+  readonly taskId: string;
+  readonly taskExcerpt: string;
+  readonly resolution: 'accepted' | 'declined';
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
+// Создатель перенёс делегированную задачу в реальный проект. Прилетает делегату.
+export type TaskAssignedToProjectPayload = {
+  readonly type: 'task_assigned_to_project';
+  readonly taskId: string;
+  readonly taskExcerpt: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
 export type NotificationPayload =
   | CommentMentionPayload
   | ProjectInvitePayload
-  | JoinRequestPayload;
+  | JoinRequestPayload
+  | TaskDelegationPayload
+  | TaskDelegationResolvedPayload
+  | TaskAssignedToProjectPayload;
 
 export type Notification = {
   readonly id: string;

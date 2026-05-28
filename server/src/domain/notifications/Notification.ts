@@ -52,10 +52,50 @@ export type JoinRequestPayload = {
   readonly actorDisplayName: string;
 };
 
+// Делегирование inbox-задачи. Прилетает делегату с кнопками Accept/Decline
+// в UI (на странице уведомлений и в верхнем блоке «Делегировано мне» в инбоксе).
+export type TaskDelegationPayload = {
+  readonly type: 'task_delegation';
+  readonly delegationId: string;
+  readonly taskId: string;
+  readonly taskExcerpt: string; // первые ~120 символов description
+  readonly actorUserId: string; // creator
+  readonly actorDisplayName: string;
+};
+
+// Ответ делегата на task_delegation. Прилетает создателю.
+// resolution: 'accepted' — статус и так виден в UI (только in-app notification);
+// resolution: 'declined' — отправляем также email (важная инфо).
+// actor = делегат (тот, кто принял/отклонил).
+export type TaskDelegationResolvedPayload = {
+  readonly type: 'task_delegation_resolved';
+  readonly delegationId: string;
+  readonly taskId: string;
+  readonly taskExcerpt: string;
+  readonly resolution: 'accepted' | 'declined';
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
+// Создатель перенёс делегированную задачу в реальный проект — делегат теряет
+// доступ (если не member проекта). Прилетает делегату.
+export type TaskAssignedToProjectPayload = {
+  readonly type: 'task_assigned_to_project';
+  readonly taskId: string;
+  readonly taskExcerpt: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly actorUserId: string; // creator
+  readonly actorDisplayName: string;
+};
+
 export type NotificationPayload =
   | CommentMentionPayload
   | ProjectInvitePayload
-  | JoinRequestPayload;
+  | JoinRequestPayload
+  | TaskDelegationPayload
+  | TaskDelegationResolvedPayload
+  | TaskAssignedToProjectPayload;
 
 export type Notification = {
   readonly id: string;
