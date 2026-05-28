@@ -150,6 +150,7 @@ import { meTelegramRouter } from './me/telegramRoutes.js';
 import { sharedMembersRouter } from './me/sharedMembersRoutes.js';
 import { telegramWebhookRouter } from './telegram/webhookRoutes.js';
 import { invitesRouter } from './invites/routes.js';
+import { delegationsRouter } from './delegations/routes.js';
 import { notificationsRouter } from './notifications/routes.js';
 import { agentTokensRouter } from './agent/tokensRoutes.js';
 import { agentApiRouter } from './agent/apiRoutes.js';
@@ -422,8 +423,13 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/projects/:projectId/kb', kbRouter(deps.kb));
   app.use(
     '/api/projects/:projectId/tasks',
-    tasksRouter({ ...deps.tasks, notifier: deps.notifications.projectNotifier }),
+    tasksRouter({
+      ...deps.tasks,
+      notifier: deps.notifications.projectNotifier,
+      assignToProject: deps.delegations.assignToProject,
+    }),
   );
+  app.use('/api/delegations', delegationsRouter(deps.delegations));
   app.use('/api/search', searchRouter(deps.search));
   app.use('/api/admin', adminRouter(deps.admin));
   app.use('/api/employees', employeesRouter({ manage: deps.finance.manageEmployees }));

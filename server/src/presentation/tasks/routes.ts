@@ -18,6 +18,7 @@ import type { UpdateTaskComment } from '../../application/task/UpdateTaskComment
 import type { DeleteTaskComment } from '../../application/task/DeleteTaskComment.js';
 import type { RequestRalphCancel } from '../../application/task/RequestRalphCancel.js';
 import type { RevokeRalphCancel } from '../../application/task/RevokeRalphCancel.js';
+import type { AssignInboxTaskToProject } from '../../application/task/AssignInboxTaskToProject.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
@@ -29,6 +30,7 @@ import type { ProjectNotificationService } from '../../application/notifications
 import type { TaskRepository } from '../../application/task/TaskRepository.js';
 import type { MaybeReopenForClarification } from '../../application/task/MaybeReopenForClarification.js';
 import {
+  assignToProjectSchema,
   createTaskCommentSchema,
   createTaskSchema,
   linkCommitSchema,
@@ -56,6 +58,7 @@ type Deps = {
   readonly deleteComment: DeleteTaskComment;
   readonly requestRalphCancel: RequestRalphCancel;
   readonly revokeRalphCancel: RevokeRalphCancel;
+  readonly assignToProject: AssignInboxTaskToProject;
   readonly maxAttachmentBytes: number;
   readonly agentJobs: AgentJobRepository;
   // Live-обновление: сигнал «в проекте изменились задачи» всем участникам (SSE).
@@ -295,6 +298,29 @@ export function tasksRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  // POST /:taskId/assign-to-project — перенос inbox-задачи в реальный проект.
+  // Активная делегация (если есть) → archived; делегат получает email + notification.
+  router.post(
+    '/:taskId/assign-to-project',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const taskId = req.params['taskId'] as string;
+        const body = assignToProjectSchema.parse(req.body);
+        const task = await deps.assignToProject.execute(
+          taskId,
+          body.targetProjectId,
+          req.user!.id,
+        );
+        // Notify оба проекта: source (inbox) и target — обоим UI важно перерисоваться.
+        deps.notifyTaskChanged(req.params['projectId'] as string);
+        deps.notifyTaskChanged(body.targetProjectId);
+        res.json({ task: toDto(task) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   // POST /:taskId/ralph-cancel — запрос на отмену работы Ralph (pull-based флаг).
   // Идемпотентно: повторный POST не апдейтит timestamp.

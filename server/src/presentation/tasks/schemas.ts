@@ -58,6 +58,11 @@ export const updateTaskCommentSchema = z.object({
   body: z.string().trim().min(1, 'Введите текст комментария').max(10000),
 });
 
+// POST /:taskId/assign-to-project — перенос inbox-задачи в реальный проект.
+export const assignToProjectSchema = z.object({
+  targetProjectId: z.string().uuid(),
+});
+
 export type CreateTaskBody = z.infer<typeof createTaskSchema>;
 export type UpdateTaskBody = z.infer<typeof updateTaskSchema>;
 export type MoveTaskBody = z.infer<typeof moveTaskSchema>;
