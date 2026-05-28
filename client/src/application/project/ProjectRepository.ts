@@ -141,4 +141,14 @@ export interface ProjectRepository {
   // Пер-участниковые настройки email-оповещений (свои, по проекту).
   getNotificationPrefs(projectId: string): Promise<NotificationPrefs>;
   setNotificationPrefs(projectId: string, prefs: NotificationPrefs): Promise<NotificationPrefs>;
+
+  // Дедуплицированный список user'ов, с которыми caller состоит в общих проектах
+  // (без caller'а самого). Используется UI-дропдауном «делегировать» во входящих.
+  listSharedMembers(): Promise<SharedMember[]>;
 }
+
+export type SharedMember = {
+  readonly id: string;
+  readonly displayName: string;
+  readonly email: string;
+};

@@ -8,6 +8,9 @@ export type CreateTaskInput = {
   readonly status?: TaskStatus;
   // Режим работы Ralph. Если не передан — backend дефолтит 'normal'.
   readonly ralphMode?: RalphMode;
+  // Опциональное one-to-one делегирование (только для inbox-задач). UUID юзера
+  // из shared-members списка caller'а; null/undefined — обычная задача.
+  readonly delegateUserId?: string | null;
 };
 
 export type UpdateTaskInput = {
@@ -64,4 +67,7 @@ export interface TaskRepository {
   // Запрос/отзыв отмены Ralph-работы (pull-based флаг, см. db/037).
   requestRalphCancel(projectId: string, taskId: string): Promise<Task>;
   revokeRalphCancel(projectId: string, taskId: string): Promise<Task>;
+  // Перенос inbox-задачи в реальный проект. Активная делегация (если была) →
+  // archived; делегат получает email + notification. Только creator (owner inbox).
+  assignToProject(projectId: string, taskId: string, targetProjectId: string): Promise<Task>;
 }

@@ -10,6 +10,7 @@ import type {
   GitTokenAccessLogEntry,
   GitTokenDelegationStatus,
   ProjectRepository,
+  SharedMember,
 } from '@/application/project/ProjectRepository';
 import type { UpdateProjectInput } from '@/application/project/ProjectRepository';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
@@ -274,5 +275,12 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async resolveJoinRequest(requestId: string, accept: boolean): Promise<void> {
     await httpClient.post<unknown>(`/projects/join-requests/${requestId}/resolve`, { accept });
+  }
+
+  async listSharedMembers(): Promise<SharedMember[]> {
+    const { members } = await httpClient.get<{ members: SharedMember[] }>(
+      '/me/shared-members',
+    );
+    return members;
   }
 }

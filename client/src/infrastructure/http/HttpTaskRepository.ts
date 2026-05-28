@@ -11,6 +11,18 @@ import type {
 } from '@/application/task/TaskRepository';
 import { httpClient } from './httpClient';
 
+type DelegationDto = {
+  id: string;
+  taskId: string;
+  delegateUserId: string;
+  delegateDisplayName: string;
+  creatorUserId: string;
+  creatorDisplayName: string;
+  status: import('@/domain/task/TaskDelegation').TaskDelegationStatus;
+  createdAt: string;
+  respondedAt: string | null;
+};
+
 type TaskDto = Omit<
   Task,
   | 'createdAt'
@@ -21,6 +33,7 @@ type TaskDto = Omit<
   | 'ralphCancelRequestedAt'
   | 'ralphCancelRequestedBy'
   | 'ralphCancelRequestedByDisplayName'
+  | 'delegation'
 > & {
   createdAt: string;
   updatedAt: string;
@@ -32,6 +45,8 @@ type TaskDto = Omit<
   ralphCancelRequestedAt?: string | null;
   ralphCancelRequestedBy?: string | null;
   ralphCancelRequestedByDisplayName?: string | null;
+  // Optional — старый backend без db/039 не присылает.
+  delegation?: DelegationDto | null;
 };
 
 type CommitDto = Omit<TaskCommit, 'committedAt' | 'linkedAt'> & {
@@ -63,6 +78,13 @@ function fromDto(dto: TaskDto): Task {
       : null,
     ralphCancelRequestedBy: dto.ralphCancelRequestedBy ?? null,
     ralphCancelRequestedByDisplayName: dto.ralphCancelRequestedByDisplayName ?? null,
+    delegation: dto.delegation
+      ? {
+          ...dto.delegation,
+          createdAt: new Date(dto.delegation.createdAt),
+          respondedAt: dto.delegation.respondedAt ? new Date(dto.delegation.respondedAt) : null,
+        }
+      : null,
   };
 }
 
@@ -228,6 +250,14 @@ export class HttpTaskRepository implements TaskRepository {
   async revokeRalphCancel(projectId: string, taskId: string): Promise<Task> {
     const { task } = await httpClient.delete<{ task: TaskDto }>(
       `/projects/${projectId}/tasks/${taskId}/ralph-cancel`,
+    );
+    return fromDto(task);
+  }
+
+  async assignToProject(projectId: string, taskId: string, targetProjectId: string): Promise<Task> {
+    const { task } = await httpClient.post<{ task: TaskDto }>(
+      `/projects/${projectId}/tasks/${taskId}/assign-to-project`,
+      { targetProjectId },
     );
     return fromDto(task);
   }

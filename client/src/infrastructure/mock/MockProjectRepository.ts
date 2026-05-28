@@ -191,4 +191,7 @@ export class MockProjectRepository implements ProjectRepository {
       new Error(`Mock.resolveJoinRequest(${requestId}, ${accept}): not implemented`),
     );
   }
+  listSharedMembers() {
+    return Promise.resolve([]);
+  }
 }
