@@ -42,6 +42,11 @@ export function AiImproveButton({
     if (isDisabled) return;
     setWorking(true);
     const original = text;
+    // Loading-toast — даёт визуальную обратную связь, пока AI работает (5-45 сек).
+    // Заменим на success/error по завершении через тот же id.
+    const toastId = toast.loading('AI улучшает текст…', {
+      description: 'Это занимает 5–45 секунд. Подожди немного.',
+    });
     try {
       const improved = await improveTaskDescription.execute({
         text: trimmed,
@@ -49,6 +54,7 @@ export function AiImproveButton({
       });
       onImproved(improved);
       toast.success('Текст улучшен AI', {
+        id: toastId,
         description: 'Нажми «Откатить», если стало хуже.',
         action: {
           label: 'Откатить',
@@ -58,6 +64,7 @@ export function AiImproveButton({
     } catch (err) {
       const code = err instanceof ImproveTaskDescriptionError ? err.code : 'unknown';
       toast.error(messageFor(code), {
+        id: toastId,
         description:
           err instanceof Error && err.message !== code ? err.message : undefined,
       });

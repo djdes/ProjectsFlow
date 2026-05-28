@@ -21,7 +21,10 @@ type WaitResponse = {
   finishedAt: string | null;
 };
 
-const DEFAULT_WAIT_SECONDS = 25;
+// 50 сек — компромисс: opus может тянуть 30-45 сек на длинных KB-контекстах,
+// haiku/sonnet укладываются в 5-15 сек. Server hard-cap = 60 сек (см. HARD_MAX_WAIT_MS
+// в WaitForAiPromptJob.ts). При желании уменьшить — можно передать waitSeconds в waitFor.
+const DEFAULT_WAIT_SECONDS = 50;
 
 export class HttpAiPromptRepository implements AiPromptRepository {
   async enqueue(input: EnqueueAiPromptInput): Promise<{ jobId: string }> {
