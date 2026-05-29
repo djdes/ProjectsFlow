@@ -1,9 +1,11 @@
+import { Fragment } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Task, TaskStatus } from '@/domain/task/Task';
 import { KanbanCard } from './KanbanCard';
+import { DropIndicatorLine } from './DropIndicatorLine';
 import { STATUS_SUBTITLE } from './statusLabels';
 
 type Props = {
@@ -31,6 +33,10 @@ type Props = {
   lastTodoTaskId?: string | null;
   // Для DelegationBadge на карточках.
   currentUserId?: string | null;
+  // Drop indicator: id перетаскиваемой карточки (null = нет активного drag'а).
+  activeId?: string | null;
+  // Drop target для этой колонки (null = курсор не над этой колонкой).
+  dropTarget?: { status: TaskStatus; overId: string } | null;
 };
 
 export function KanbanColumn({
@@ -48,6 +54,8 @@ export function KanbanColumn({
   lastDoneTaskId = null,
   lastTodoTaskId = null,
   currentUserId = null,
+  activeId = null,
+  dropTarget = null,
 }: Props): React.ReactElement {
   // Droppable нужен чтобы можно было кинуть карточку в ПУСТУЮ колонку —
   // SortableContext один не реагирует на drop в empty list.
@@ -101,22 +109,30 @@ export function KanbanColumn({
           strategy={verticalListSortingStrategy}
         >
           {tasks.map((t) => (
-            <KanbanCard
-              key={t.id}
-              task={t}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              showShortId={showShortId}
-              onQuickPromote={onQuickPromote}
-              onTaskChanged={onTaskChanged}
-              showCheckbox={showCheckbox}
-              lastDoneTaskId={lastDoneTaskId}
-              lastTodoTaskId={lastTodoTaskId}
-              currentUserId={currentUserId}
-            />
+            <Fragment key={t.id}>
+              {dropTarget && dropTarget.overId === t.id && t.id !== activeId && (
+                <DropIndicatorLine />
+              )}
+              <KanbanCard
+                task={t}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                showShortId={showShortId}
+                onQuickPromote={onQuickPromote}
+                onTaskChanged={onTaskChanged}
+                showCheckbox={showCheckbox}
+                lastDoneTaskId={lastDoneTaskId}
+                lastTodoTaskId={lastTodoTaskId}
+                currentUserId={currentUserId}
+              />
+            </Fragment>
           ))}
         </SortableContext>
-        {tasks.length === 0 && (
+        {/* Индикатор в конце колонки: при drop в пустую зону или пустая колонка */}
+        {dropTarget && dropTarget.overId === `column-${status}` && (
+          <DropIndicatorLine />
+        )}
+        {tasks.length === 0 && !dropTarget && (
           <p className="py-4 text-center text-xs text-muted-foreground/60">пусто</p>
         )}
       </div>

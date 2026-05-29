@@ -9,6 +9,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
   type DropAnimation,
 } from '@dnd-kit/core';
@@ -124,6 +125,12 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     setSearchParams(next, { replace: true });
   }, [loading, tasks, searchParams, setSearchParams]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Позиция drop-индикатора: в какой колонке и над каким элементом находится курсор.
+  // overId — id задачи (вставка перед ней) или 'column-{status}' (вставка в конец).
+  const [dropTarget, setDropTarget] = useState<{
+    status: TaskStatus;
+    overId: string;
+  } | null>(null);
   // 'lifted' — карточка приподнята (rotate+scale), 'settled' — лерпит обратно к identity.
   // Меняем на 'settled' в момент drop'а и держим activeId до конца drop-анимации, чтобы
   // motion успел синхронно с position-lerp'ом dnd-kit'а распрямить наклон.
@@ -155,12 +162,42 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
       dropTimerRef.current = null;
     }
     setActiveId(String(e.active.id));
+    setDropTarget(null);
     setPreviewPhase('lifted');
+  };
+
+  const handleDragOver = (e: DragOverEvent): void => {
+    const { active, over } = e;
+    if (!over || !active) {
+      setDropTarget(null);
+      return;
+    }
+
+    const overData = over.data.current as
+      | { type?: 'task' | 'column'; status?: TaskStatus }
+      | undefined;
+
+    if (overData?.type === 'column' && overData.status) {
+      setDropTarget({ status: overData.status, overId: `column-${overData.status}` });
+    } else if (overData?.type === 'task') {
+      const overTask = tasks.find((t) => t.id === over.id);
+      if (!overTask) {
+        setDropTarget(null);
+        return;
+      }
+      setDropTarget({
+        status: toVisibleStatus(overTask.status),
+        overId: String(over.id),
+      });
+    } else {
+      setDropTarget(null);
+    }
   };
 
   const handleDragEnd = async (e: DragEndEvent): Promise<void> => {
     // 1) motion начинает лерпить rotate/scale обратно к identity.
     setPreviewPhase('settled');
+    setDropTarget(null);
     // 2) activeId держим живым ровно до конца drop-анимации — DragOverlay в это время
     //    рендерит motion.div, и тот успевает доехать до rotate:0.
     dropTimerRef.current = setTimeout(() => {
@@ -305,7 +342,13 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         sensors={sensors}
         measuring={MEASURING_CONFIG}
         onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
+        onDragCancel={() => {
+          setDropTarget(null);
+          setPreviewPhase('settled');
+          setActiveId(null);
+        }}
       >
         {/* На мобиле колонки занимают почти всю ширину и «прилипают» при свайпе
             (snap), на десктопе — обычный горизонтальный ряд. Drag между колонками
@@ -327,6 +370,8 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
               lastDoneTaskId={lastDoneTaskId}
               lastTodoTaskId={lastTodoTaskId}
               currentUserId={user?.id ?? null}
+              activeId={activeId}
+              dropTarget={dropTarget?.status === status ? dropTarget : null}
               headerExtra={
                 status === 'done' ? (
                   <Button
