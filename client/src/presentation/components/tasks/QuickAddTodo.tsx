@@ -39,6 +39,9 @@ type Props = {
   }) => Promise<Task>;
   // Если true — рендерим DelegateSelect (только в inbox-режиме).
   isInbox?: boolean;
+  // True когда проект совместный (memberCount > 1, не inbox). Включает DelegateSelect
+  // с участниками проекта.
+  isShared?: boolean;
   // projectId для AI-кнопки. null = используем дефолтного AI-диспетчера
   // (для Inbox-страницы); UUID = диспетчер этого проекта. См. spec
   // 2026-05-28-ai-prompt-improvement-design.md.
@@ -55,6 +58,7 @@ const TEXTAREA_MAX_PX = 192;
 export function QuickAddTodo({
   onCreate,
   isInbox = false,
+  isShared = false,
   aiProjectId = null,
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
@@ -281,11 +285,12 @@ export function QuickAddTodo({
           >
             <Paperclip className="size-4" />
           </Button>
-          {isInbox && (
+          {(isInbox || isShared) && (
             <DelegateSelect
               value={delegateUserId}
               onChange={setDelegateUserId}
               disabled={submitting}
+              projectId={isShared && aiProjectId ? aiProjectId : undefined}
             />
           )}
           <RalphModeSelect

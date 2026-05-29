@@ -17,19 +17,26 @@ type Props = {
   onChange: (userId: string | null) => void;
   disabled?: boolean;
   className?: string;
+  // Если передан — грузим участников конкретного проекта (listMembers) вместо
+  // глобального listSharedMembers. Для совместных (не inbox) проектов.
+  projectId?: string;
 };
 
 // Single-select dropdown для выбора делегата при создании inbox-задачи.
 // Список — люди из моих shared-проектов (без меня самого). При пустом списке
 // показывает hint «пригласите кого-то в проект».
-export function DelegateSelect({ value, onChange, disabled, className }: Props): React.ReactElement {
+export function DelegateSelect({ value, onChange, disabled, className, projectId }: Props): React.ReactElement {
   const { projectRepository } = useContainer();
   const [members, setMembers] = useState<SharedMember[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    projectRepository
-      .listSharedMembers()
+    const loadMembers = projectId
+      ? projectRepository.listMembers(projectId).then((list) =>
+          list.map((m) => ({ id: m.userId, displayName: m.user.displayName, email: m.user.email })),
+        )
+      : projectRepository.listSharedMembers();
+    loadMembers
       .then((list) => {
         if (!cancelled) setMembers(list);
       })
@@ -39,7 +46,7 @@ export function DelegateSelect({ value, onChange, disabled, className }: Props):
     return () => {
       cancelled = true;
     };
-  }, [projectRepository]);
+  }, [projectRepository, projectId]);
 
   const selected = members?.find((m) => m.id === value) ?? null;
   const label = selected ? selected.displayName : 'Делегировать';

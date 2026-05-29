@@ -161,8 +161,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
         description: trimmed,
         status: 'backlog',
         ralphMode,
-        // delegateUserId применим только когда projectId === null (inbox).
-        delegateUserId: projectId === null ? delegateUserId : null,
+        delegateUserId: delegateUserId ?? null,
         deadline,
         priority,
       });
@@ -254,11 +253,12 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
           <div className="flex flex-wrap items-center gap-1.5">
             <PrioritySelect value={priority} onChange={setPriority} disabled={saving} compact />
             <DeadlinePicker value={deadline} onChange={setDeadline} disabled={saving} />
-            {projectId === null && (
+            {(projectId === null || (realProjects.find((p) => p.id === projectId)?.memberCount ?? 0) > 1) && (
               <DelegateSelect
                 value={delegateUserId}
                 onChange={setDelegateUserId}
                 disabled={saving}
+                projectId={projectId ?? undefined}
               />
             )}
             <Button
@@ -313,7 +313,10 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 >
                   <DropdownMenuRadioGroup
                     value={projectId ?? INBOX_VALUE}
-                    onValueChange={(v) => setProjectId(v === INBOX_VALUE ? null : v)}
+                    onValueChange={(v) => {
+                      setProjectId(v === INBOX_VALUE ? null : v);
+                      setDelegateUserId(null);
+                    }}
                   >
                     <DropdownMenuRadioItem value={INBOX_VALUE}>
                       Без проекта (Входящие)

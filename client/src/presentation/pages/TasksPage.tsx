@@ -83,7 +83,7 @@ export function TasksPage(): React.ReactElement {
         </div>
       </div>
 
-      <KanbanBoard projectId={data.id} projectName={data.name} />
+      <KanbanBoard projectId={data.id} projectName={data.name} memberCount={data.memberCount} />
     </div>
   );
 }

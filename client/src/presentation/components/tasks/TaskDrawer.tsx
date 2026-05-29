@@ -100,6 +100,9 @@ type Props = {
   //  - DelegateSelect в create-mode форме
   //  - AssignToProjectSelect в шапке edit-mode
   isInbox?: boolean;
+  // True когда проект совместный (memberCount > 1, но НЕ inbox). Включает
+  // блок делегирования (DelegateSelect/DelegateTaskButton) с участниками проекта.
+  isShared?: boolean;
   // projectId для AI-кнопки. null = inbox/дефолтный диспетчер; UUID = диспетчер проекта.
   aiProjectId?: string | null;
   // Колбэк для смены статуса задачи (move). Если передан — статус-бейдж кликабелен.
@@ -239,6 +242,7 @@ export function TaskDrawer({
   backlogTail = null,
   todoTail = null,
   isInbox = false,
+  isShared = false,
   aiProjectId = null,
   onMove,
 }: Props): React.ReactElement {
@@ -538,11 +542,12 @@ export function TaskDrawer({
                 )}
                 <TaskPriorityChip task={task} onChanged={() => onCommitsChange?.()} />
                 <TaskDeadlineChip task={task} onChanged={() => onCommitsChange?.()} />
-                {isInbox && (
+                {(isInbox || isShared) && (
                   <DelegateTaskButton
                     task={task}
                     currentUserId={currentUser?.id ?? null}
                     onChanged={() => onCommitsChange?.()}
+                    projectId={isShared ? task.projectId : undefined}
                   />
                 )}
                 {isInbox && (
@@ -723,11 +728,12 @@ export function TaskDrawer({
               <div className="flex flex-wrap items-center gap-1.5">
                 <PrioritySelect value={createPriority} onChange={setCreatePriority} disabled={saving} compact />
                 <DeadlinePicker value={createDeadline} onChange={setCreateDeadline} disabled={saving} />
-                {isInbox && (
+                {(isInbox || isShared) && (
                   <DelegateSelect
                     value={createDelegateUserId}
                     onChange={setCreateDelegateUserId}
                     disabled={saving}
+                    projectId={isShared && aiProjectId ? aiProjectId : undefined}
                   />
                 )}
                 <Button

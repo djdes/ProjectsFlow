@@ -19,13 +19,16 @@ type Props = {
   currentUserId: string | null;
   // Колбэк после delegate/withdraw — родитель refetch'ит данные.
   onChanged: () => void;
+  // Если передан — грузим участников конкретного проекта (listMembers) вместо
+  // глобального listSharedMembers. Для совместных (не inbox) проектов.
+  projectId?: string;
 };
 
 // Кнопка делегирования для существующей inbox-задачи. Три состояния:
 //  - нет активной делегации + caller=creator → dropdown с DelegateSelect.
 //  - pending + caller=creator → кнопка «Отозвать» (withdraw).
 //  - accepted ИЛИ caller≠creator → не рендерим (DelegationBadge сам покажет статус).
-export function DelegateTaskButton({ task, currentUserId, onChanged }: Props): React.ReactElement | null {
+export function DelegateTaskButton({ task, currentUserId, onChanged, projectId }: Props): React.ReactElement | null {
   const { projectRepository, taskRepository, taskDelegationRepository } = useContainer();
   const [members, setMembers] = useState<SharedMember[] | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -41,8 +44,14 @@ export function DelegateTaskButton({ task, currentUserId, onChanged }: Props): R
   useEffect(() => {
     if (!noActiveDelegation) return;
     let cancelled = false;
-    projectRepository
-      .listSharedMembers()
+    const loadMembers = projectId
+      ? projectRepository.listMembers(projectId).then((list) =>
+          list
+            .filter((m) => m.userId !== currentUserId)
+            .map((m) => ({ id: m.userId, displayName: m.user.displayName, email: m.user.email })),
+        )
+      : projectRepository.listSharedMembers();
+    loadMembers
       .then((list) => {
         if (!cancelled) setMembers(list);
       })
@@ -52,7 +61,7 @@ export function DelegateTaskButton({ task, currentUserId, onChanged }: Props): R
     return () => {
       cancelled = true;
     };
-  }, [projectRepository, noActiveDelegation]);
+  }, [projectRepository, noActiveDelegation, projectId, currentUserId]);
 
   if (!isCreator) return null;
 

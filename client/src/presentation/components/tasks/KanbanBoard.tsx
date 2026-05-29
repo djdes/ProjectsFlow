@@ -37,6 +37,8 @@ type Props = {
   projectName?: string;
   // Скрыть выполненные (status='done'). Toggle на странице InboxPage.
   hideDone?: boolean;
+  // Количество участников проекта. > 1 ⇒ совместный — показываем блок делегирования.
+  memberCount?: number;
 };
 
 // Какие колонки реально рисуем. in_progress и awaiting_clarification не имеют
@@ -102,12 +104,13 @@ function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStat
   return out;
 }
 
-export function KanbanBoard({ projectId, showCommits = true, projectName, hideDone = false }: Props): React.ReactElement {
+export function KanbanBoard({ projectId, showCommits = true, projectName, hideDone = false, memberCount }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const { user } = useCurrentUser();
   // showCheckbox = «это inbox-board». Inbox-board задаётся через showCommits=false
   // (у inbox нет git-репо, так что коммиты скрыты). Единственный сигнал — этого хватает.
   const isInbox = !showCommits;
+  const isShared = !isInbox && (memberCount ?? 0) > 1;
   const [dialog, setDialog] = useState<TaskDrawerState | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   // Deep-link из email-кнопки: ?task=<id> открывает диалог задачи (один раз после загрузки).
@@ -435,6 +438,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         backlogTail={backlogTail}
         todoTail={todoTail}
         isInbox={isInbox}
+        isShared={isShared}
         aiProjectId={isInbox ? null : projectId}
         onMove={async (taskId, targetStatus) => {
           await move(taskId, {
@@ -454,6 +458,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
           важно лишь чтобы компонент был смонтирован. */}
       <QuickAddTodo
         isInbox={isInbox}
+        isShared={isShared}
         aiProjectId={isInbox ? null : projectId}
         onCreate={(input) => create({ ...input, status: 'todo' })}
       />
