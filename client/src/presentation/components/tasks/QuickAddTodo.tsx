@@ -263,17 +263,17 @@ export function QuickAddTodo({
           onKeyDown={handleKeyDown}
           rows={1}
           disabled={submitting}
-          placeholder="Быстрое добавление TODO для автовыполнения задачи в Claude Code/Opus"
+          placeholder="Добавление в Claude Opus"
           style={{ maxHeight: `${TEXTAREA_MAX_PX}px` }}
           className="block w-full resize-none overflow-y-auto bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
         />
 
-        <div className="flex items-center gap-1.5 px-1.5 pb-1.5">
+        <div className="flex items-center gap-1.5 px-1.5 pb-2">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+            className="size-10 shrink-0 text-muted-foreground hover:text-foreground"
             onClick={() => fileInputRef.current?.click()}
             disabled={submitting}
             aria-label="Прикрепить файл"
@@ -292,7 +292,7 @@ export function QuickAddTodo({
             value={ralphMode}
             onChange={setRalphMode}
             disabled={submitting}
-            className="!h-8 min-w-[100px] !px-2 !py-0 text-xs sm:min-w-[140px]"
+            className="!h-10 min-w-[100px] !px-2.5 !py-0 text-xs sm:min-w-[140px]"
           />
           <div className="ml-auto flex items-center gap-1.5">
             <AiImproveButton
@@ -305,7 +305,7 @@ export function QuickAddTodo({
             <Button
               type="button"
               size="sm"
-              className="h-8 gap-1.5 px-3"
+              className="h-10 gap-1.5 px-3"
               onClick={() => void submit()}
               disabled={!canSubmit}
               title="Ctrl+Enter"

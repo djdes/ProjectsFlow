@@ -83,7 +83,7 @@ export function AiImproveButton({
       title="Улучшить текст с помощью AI"
       className={cn(
         'gap-1.5',
-        compact ? 'h-8 px-2.5 text-xs' : 'h-8',
+        compact ? 'h-10 px-2.5 text-xs' : 'h-8',
       )}
     >
       {working ? (
