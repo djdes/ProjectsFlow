@@ -7,11 +7,11 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from 'react';
-import { FileText, Loader2, Paperclip, Send, X } from 'lucide-react';
+import { FileText, Inbox, Loader2, NotebookPen, Paperclip, Send, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
-import type { RalphMode, Task, TaskPriority } from '@/domain/task/Task';
+import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { useContainer } from '@/infrastructure/di/container';
 import { RalphModeSelect } from './RalphMode';
 import { DelegateSelect } from './DelegateSelect';
@@ -28,10 +28,10 @@ type PendingFile = {
 };
 
 type Props = {
-  // Колбэк создания задачи. KanbanBoard оборачивает useTasks.create с фиксированным
-  // status: 'todo', поэтому новые карточки всегда приземляются в колонку TODO.
+  // Колбэк создания задачи. QuickAddTodo передаёт выбранный status (todo | backlog).
   onCreate: (input: {
     description: string;
+    status?: TaskStatus;
     ralphMode?: RalphMode;
     delegateUserId?: string | null;
     deadline?: string | null;
@@ -72,6 +72,7 @@ export function QuickAddTodo({
     try { if (text) sessionStorage.setItem(STORAGE_KEY, text); else sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
   }, [text]);
   const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
+  const [quickStatus, setQuickStatus] = useState<'todo' | 'backlog'>('todo');
   const [delegateUserId, setDelegateUserId] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [previewFile, setPreviewFile] = useState<PendingFile | null>(null);
@@ -141,6 +142,7 @@ export function QuickAddTodo({
     try {
       const task = await onCreate({
         description: trimmed,
+        status: quickStatus,
         ralphMode,
         delegateUserId,
       });
@@ -167,6 +169,7 @@ export function QuickAddTodo({
       setText('');
       try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
       setRalphMode('normal');
+      setQuickStatus('todo');
       setDelegateUserId(null);
     } catch (err) {
       toast.error(`Не удалось создать: ${(err as Error).message}`);
@@ -300,6 +303,25 @@ export function QuickAddTodo({
             className="!h-10 min-w-[100px] !px-2.5 !py-0 text-xs sm:min-w-[140px]"
           />
           <div className="ml-auto flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setQuickStatus((s) => (s === 'todo' ? 'backlog' : 'todo'))}
+              disabled={submitting}
+              title={quickStatus === 'todo' ? 'В очередь (нажми для черновика)' : 'Черновик (нажми для очереди)'}
+              className="inline-flex h-10 items-center gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+            >
+              {quickStatus === 'todo' ? (
+                <>
+                  <Inbox className="size-4" />
+                  <span className="hidden sm:inline">В очередь</span>
+                </>
+              ) : (
+                <>
+                  <NotebookPen className="size-4" />
+                  <span className="hidden sm:inline">Черновик</span>
+                </>
+              )}
+            </button>
             <AiImproveButton
               text={text}
               projectId={aiProjectId}

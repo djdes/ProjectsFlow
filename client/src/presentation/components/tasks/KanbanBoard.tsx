@@ -460,7 +460,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         isInbox={isInbox}
         isShared={isShared}
         aiProjectId={isInbox ? null : projectId}
-        onCreate={(input) => create({ ...input, status: 'todo' })}
+        onCreate={(input) => create({ ...input, status: input.status ?? 'todo' })}
       />
     </div>
   );
