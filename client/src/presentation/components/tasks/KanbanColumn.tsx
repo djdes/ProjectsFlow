@@ -1,6 +1,7 @@
 import { Fragment } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { AnimatePresence } from 'motion/react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Task, TaskStatus } from '@/domain/task/Task';
@@ -110,9 +111,11 @@ export function KanbanColumn({
         >
           {tasks.map((t) => (
             <Fragment key={t.id}>
-              {dropTarget && dropTarget.overId === t.id && t.id !== activeId && (
-                <DropIndicatorLine />
-              )}
+              <AnimatePresence>
+                {dropTarget && dropTarget.overId === t.id && t.id !== activeId && (
+                  <DropIndicatorLine />
+                )}
+              </AnimatePresence>
               <KanbanCard
                 task={t}
                 onEdit={onEdit}
@@ -129,9 +132,11 @@ export function KanbanColumn({
           ))}
         </SortableContext>
         {/* Индикатор в конце колонки: при drop в пустую зону или пустая колонка */}
-        {dropTarget && dropTarget.overId === `column-${status}` && (
-          <DropIndicatorLine />
-        )}
+        <AnimatePresence>
+          {dropTarget && dropTarget.overId === `column-${status}` && (
+            <DropIndicatorLine />
+          )}
+        </AnimatePresence>
         {tasks.length === 0 && !dropTarget && (
           <p className="py-4 text-center text-xs text-muted-foreground/60">пусто</p>
         )}
