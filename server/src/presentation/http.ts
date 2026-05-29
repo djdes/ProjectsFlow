@@ -142,6 +142,7 @@ import { secretsRouter } from './secrets/routes.js';
 import { kbRouter } from './kb/routes.js';
 import { tasksRouter } from './tasks/routes.js';
 import { searchRouter } from './search/routes.js';
+import type { EmailSender } from '../application/notifications/EmailSender.js';
 import { adminRouter } from './admin/routes.js';
 import { employeesRouter } from './finance/employeeRoutes.js';
 import { financeRouter } from './finance/routes.js';
@@ -234,6 +235,7 @@ type AppDeps = {
     readonly listAllUsers: ListAllUsers;
     readonly updateUser: UpdateUserAsAdmin;
     readonly listUserProjectsWithDispatcher: ListUserProjectsWithDispatcher;
+    readonly emailSender: EmailSender;
   };
   readonly finance: {
     readonly manageEmployees: ManageEmployees;

@@ -4,6 +4,12 @@ import type { ListAllUsers } from '../../application/admin/ListAllUsers.js';
 import type { UpdateUserAsAdmin } from '../../application/admin/UpdateUserAsAdmin.js';
 import type { ListUserProjectsWithDispatcher } from '../../application/admin/ListUserProjectsWithDispatcher.js';
 import type { AdminProjectView, AdminUserView } from '../../application/admin/AdminRepository.js';
+import type { EmailSender } from '../../application/notifications/EmailSender.js';
+import {
+  EMAIL_TEMPLATES,
+  renderSampleEmail,
+  type EmailTemplateKey,
+} from '../../application/admin/EmailTemplateCatalog.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 
@@ -12,6 +18,7 @@ type Deps = {
   readonly listAllUsers: ListAllUsers;
   readonly updateUser: UpdateUserAsAdmin;
   readonly listUserProjectsWithDispatcher: ListUserProjectsWithDispatcher;
+  readonly emailSender: EmailSender;
 };
 
 function projectToDto(p: AdminProjectView): Record<string, unknown> {
@@ -78,6 +85,52 @@ export function adminRouter(deps: Deps): Router {
       if (typeof body.isAdmin === 'boolean') patch.isAdmin = body.isAdmin;
       await deps.updateUser.execute(id, patch);
       res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // --- Email templates: каталог, предпросмотр, тестовая отправка ---
+
+  router.get('/email/templates', (_req: Request, res: Response) => {
+    res.json({ templates: EMAIL_TEMPLATES });
+  });
+
+  router.post('/email/preview', (req: Request, res: Response) => {
+    const { templateKey } = req.body ?? {};
+    if (typeof templateKey !== 'string') {
+      res.status(400).json({ error: 'templateKey is required' });
+      return;
+    }
+    const validKeys = EMAIL_TEMPLATES.map((t) => t.key);
+    if (!validKeys.includes(templateKey as EmailTemplateKey)) {
+      res.status(400).json({ error: `Unknown template: ${templateKey}` });
+      return;
+    }
+    const msg = renderSampleEmail(templateKey as EmailTemplateKey, 'preview@example.com');
+    res.json({ subject: msg.subject, html: msg.html, text: msg.text });
+  });
+
+  router.post('/email/send', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { templateKey, recipientEmail } = req.body ?? {};
+      if (typeof templateKey !== 'string' || typeof recipientEmail !== 'string') {
+        res.status(400).json({ error: 'templateKey and recipientEmail are required' });
+        return;
+      }
+      const email = recipientEmail.trim();
+      if (!email || !email.includes('@')) {
+        res.status(400).json({ error: 'Invalid email address' });
+        return;
+      }
+      const validKeys = EMAIL_TEMPLATES.map((t) => t.key);
+      if (!validKeys.includes(templateKey as EmailTemplateKey)) {
+        res.status(400).json({ error: `Unknown template: ${templateKey}` });
+        return;
+      }
+      const msg = renderSampleEmail(templateKey as EmailTemplateKey, email);
+      await deps.emailSender.send(msg);
+      res.json({ ok: true });
     } catch (e) {
       next(e);
     }

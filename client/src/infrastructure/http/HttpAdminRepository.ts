@@ -4,6 +4,8 @@ import type {
   AdminUser,
   AdminUserPatch,
   AdminUserProjectDispatcher,
+  EmailTemplateMeta,
+  EmailPreview,
 } from '@/application/admin/AdminRepository';
 import { httpClient } from './httpClient';
 
@@ -27,5 +29,20 @@ export class HttpAdminRepository implements AdminRepository {
       `/admin/users/${userId}/projects-with-dispatcher`,
     );
     return projects;
+  }
+
+  async listEmailTemplates(): Promise<EmailTemplateMeta[]> {
+    const { templates } = await httpClient.get<{ templates: EmailTemplateMeta[] }>(
+      '/admin/email/templates',
+    );
+    return templates;
+  }
+
+  async previewEmail(templateKey: string): Promise<EmailPreview> {
+    return httpClient.post<EmailPreview>('/admin/email/preview', { templateKey });
+  }
+
+  async sendTestEmail(templateKey: string, recipientEmail: string): Promise<void> {
+    await httpClient.post<unknown>('/admin/email/send', { templateKey, recipientEmail });
   }
 }

@@ -48,6 +48,18 @@ export type AdminUserProjectDispatcher = {
   readonly gitTokenDelegationEnabled: boolean;
 };
 
+export type EmailTemplateMeta = {
+  readonly key: string;
+  readonly label: string;
+  readonly description: string;
+};
+
+export type EmailPreview = {
+  readonly subject: string;
+  readonly html: string;
+  readonly text: string;
+};
+
 export interface AdminRepository {
   listProjects(): Promise<AdminProject[]>;
   listUsers(): Promise<AdminUser[]>;
@@ -55,4 +67,7 @@ export interface AdminRepository {
   // Проекты юзера (где он owner) + текущие диспетчеры. Сменить диспетчера
   // admin может через обычный `projectRepository.setDispatcher` (admin-bypass).
   listUserProjectsWithDispatcher(userId: string): Promise<AdminUserProjectDispatcher[]>;
+  listEmailTemplates(): Promise<EmailTemplateMeta[]>;
+  previewEmail(templateKey: string): Promise<EmailPreview>;
+  sendTestEmail(templateKey: string, recipientEmail: string): Promise<void>;
 }

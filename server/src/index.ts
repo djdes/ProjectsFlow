@@ -716,6 +716,7 @@ const { app, devProxyUpgrade } = createApp({
       delegations: gitTokenDelegationRepo,
       users: userRepo,
     }),
+    emailSender,
   },
   finance: {
     manageEmployees: new ManageEmployees({

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Check, ExternalLink, Github, Loader2, Pencil, Shield, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
+import { Bot, Check, ChevronRight, ExternalLink, Eye, Github, Loader2, Mail, Pencil, Send, Shield, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,12 +14,12 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
-import type { AdminProject, AdminUser } from '@/application/admin/AdminRepository';
+import type { AdminProject, AdminUser, EmailTemplateMeta, EmailPreview } from '@/application/admin/AdminRepository';
 import { useContainer } from '@/infrastructure/di/container';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { AdminUserDispatchersDialog } from '@/presentation/components/admin/AdminUserDispatchersDialog';
 
-type Tab = 'projects' | 'users';
+type Tab = 'projects' | 'users' | 'email';
 
 export function AdminPage(): React.ReactElement {
   const [tab, setTab] = useState<Tab>('projects');
@@ -38,9 +38,14 @@ export function AdminPage(): React.ReactElement {
         <TabButton active={tab === 'users'} onClick={() => setTab('users')}>
           <Users className="size-4" /> Пользователи
         </TabButton>
+        <TabButton active={tab === 'email'} onClick={() => setTab('email')}>
+          <Mail className="size-4" /> Email
+        </TabButton>
       </div>
 
-      {tab === 'projects' ? <ProjectsTab /> : <UsersTab />}
+      {tab === 'projects' && <ProjectsTab />}
+      {tab === 'users' && <UsersTab />}
+      {tab === 'email' && <EmailTab />}
     </div>
   );
 }
@@ -447,6 +452,201 @@ function EditUserDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function EmailTab(): React.ReactElement {
+  const { adminRepository } = useContainer();
+  const [templates, setTemplates] = useState<EmailTemplateMeta[] | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [preview, setPreview] = useState<EmailPreview | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [sending, setSending] = useState(false);
+  const [showText, setShowText] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    adminRepository
+      .listEmailTemplates()
+      .then((t) => {
+        setTemplates(t);
+        if (t.length > 0 && !selected) setSelected(t[0]!.key);
+      })
+      .catch((e: unknown) => toast.error(`Не удалось загрузить шаблоны: ${(e as Error).message}`));
+  }, [adminRepository]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!selected) return;
+    setLoadingPreview(true);
+    setPreview(null);
+    adminRepository
+      .previewEmail(selected)
+      .then(setPreview)
+      .catch((e: unknown) => toast.error(`Не удалось загрузить предпросмотр: ${(e as Error).message}`))
+      .finally(() => setLoadingPreview(false));
+  }, [selected, adminRepository]);
+
+  useEffect(() => {
+    if (!preview || !iframeRef.current) return;
+    const doc = iframeRef.current.contentDocument;
+    if (doc) {
+      doc.open();
+      doc.write(preview.html);
+      doc.close();
+    }
+  }, [preview]);
+
+  const handleSend = async (): Promise<void> => {
+    if (!selected || !recipientEmail.trim()) return;
+    setSending(true);
+    try {
+      await adminRepository.sendTestEmail(selected, recipientEmail.trim());
+      toast.success(`Тестовое письмо отправлено на ${recipientEmail.trim()}`);
+    } catch (e) {
+      toast.error(`Ошибка отправки: ${(e as Error).message}`);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (!templates) return <ListSkeleton />;
+
+  const selectedMeta = templates.find((t) => t.key === selected);
+
+  return (
+    <div className="flex flex-col gap-4 overflow-hidden lg:flex-row">
+      {/* Список шаблонов */}
+      <div className="w-full shrink-0 lg:w-72">
+        <h2 className="mb-2 text-sm font-medium text-muted-foreground">Шаблоны ({templates.length})</h2>
+        <ul className="divide-y overflow-y-auto rounded-lg border bg-card lg:max-h-[calc(100vh-220px)]">
+          {templates.map((t) => (
+            <li key={t.key}>
+              <button
+                type="button"
+                onClick={() => setSelected(t.key)}
+                className={cn(
+                  'flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors',
+                  selected === t.key
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-foreground hover:bg-muted/50',
+                )}
+              >
+                <Mail className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">{t.label}</span>
+                {selected === t.key && <ChevronRight className="size-3.5 shrink-0" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Предпросмотр + отправка */}
+      <div className="flex min-w-0 flex-1 flex-col gap-4">
+        {selectedMeta && (
+          <div className="space-y-1">
+            <h2 className="text-lg font-medium">{selectedMeta.label}</h2>
+            <p className="text-sm text-muted-foreground">{selectedMeta.description}</p>
+          </div>
+        )}
+
+        {/* Превью */}
+        <div className="overflow-hidden rounded-lg border bg-card">
+          <div className="flex items-center justify-between border-b px-4 py-2">
+            <div className="flex items-center gap-2 text-sm">
+              <Eye className="size-3.5 text-muted-foreground" />
+              <span className="font-medium">Предпросмотр</span>
+              {preview && (
+                <span className="text-xs text-muted-foreground">· {preview.subject}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setShowText(false)}
+                className={cn(
+                  'rounded px-2 py-0.5 text-xs transition-colors',
+                  !showText ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                HTML
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowText(true)}
+                className={cn(
+                  'rounded px-2 py-0.5 text-xs transition-colors',
+                  showText ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                Text
+              </button>
+            </div>
+          </div>
+          <div className="relative min-h-[360px]">
+            {loadingPreview ? (
+              <div className="flex h-[360px] items-center justify-center">
+                <Loader2 className="size-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : preview ? (
+              showText ? (
+                <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap p-4 font-mono text-xs text-muted-foreground">
+                  {preview.text}
+                </pre>
+              ) : (
+                <iframe
+                  ref={iframeRef}
+                  title="Email preview"
+                  className="h-[480px] w-full border-0 bg-white"
+                  sandbox=""
+                />
+              )
+            ) : (
+              <div className="flex h-[360px] items-center justify-center text-sm text-muted-foreground">
+                Выберите шаблон для предпросмотра
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Тестовая отправка */}
+        <div className="rounded-lg border bg-card p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
+            <Send className="size-3.5 text-muted-foreground" />
+            Тестовая отправка
+          </h3>
+          <div className="flex items-end gap-3">
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Label htmlFor="test-email-recipient">Email получателя</Label>
+              <Input
+                id="test-email-recipient"
+                type="email"
+                placeholder="test@example.com"
+                value={recipientEmail}
+                onChange={(e) => setRecipientEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleSend();
+                }}
+              />
+            </div>
+            <Button
+              onClick={() => void handleSend()}
+              disabled={sending || !selected || !recipientEmail.trim()}
+            >
+              {sending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Send className="size-4" />
+              )}
+              Отправить
+            </Button>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Письмо будет отправлено с демо-данными через настроенный SMTP. Если SMTP не настроен, письмо будет залогировано в консоль сервера.
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
