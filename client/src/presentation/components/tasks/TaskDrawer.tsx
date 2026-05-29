@@ -485,7 +485,7 @@ export function TaskDrawer({
   );
 
   const task = state?.mode === 'edit' ? state.task : null;
-  const canEdit = task?.status === 'backlog' || task?.status === 'manual';
+  const canEdit = !!task && task.status !== 'done';
 
   return (
     <Sheet open={state !== null} onOpenChange={(open) => !open && onClose()}>
