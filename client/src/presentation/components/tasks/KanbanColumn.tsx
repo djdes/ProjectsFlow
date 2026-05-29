@@ -113,7 +113,7 @@ export function KanbanColumn({
             <Fragment key={t.id}>
               <AnimatePresence>
                 {dropTarget && dropTarget.overId === t.id && t.id !== activeId && (
-                  <DropIndicatorLine />
+                  <DropIndicatorLine key={`drop-before-${t.id}`} />
                 )}
               </AnimatePresence>
               <KanbanCard
@@ -134,7 +134,7 @@ export function KanbanColumn({
         {/* Индикатор в конце колонки: при drop в пустую зону или пустая колонка */}
         <AnimatePresence>
           {dropTarget && dropTarget.overId === `column-${status}` && (
-            <DropIndicatorLine />
+            <DropIndicatorLine key={`drop-end-${status}`} />
           )}
         </AnimatePresence>
         {tasks.length === 0 && !dropTarget && (
