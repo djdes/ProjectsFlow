@@ -3,6 +3,9 @@
 import { db, pool } from './infrastructure/db/index.js';
 import { Argon2PasswordHasher } from './infrastructure/crypto/Argon2PasswordHasher.js';
 import { idGenerator } from './infrastructure/id/idGenerator.js';
+import { FileSystemBlobStorage } from './infrastructure/storage/FileSystemBlobStorage.js';
+import { DrizzleFileSyncRepository } from './infrastructure/repositories/DrizzleFileSyncRepository.js';
+import { FileSyncService } from './application/file-sync/FileSyncService.js';
 import { DrizzleUserRepository } from './infrastructure/repositories/DrizzleUserRepository.js';
 import { DrizzleSessionRepository } from './infrastructure/repositories/DrizzleSessionRepository.js';
 import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleProjectRepository.js';
@@ -464,6 +467,59 @@ const attachmentStorage = new FileSystemAttachmentStorage(uploadsDir);
 console.log(`[projectsflow] attachments dir: ${uploadsDir}`);
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB. Любой тип файла (валидация = размер).
+
+// --- file-sync (PF Desktop Companion, миграция db/044) ---
+const syncBlobsDir = resolvePath(process.env['SYNC_BLOBS_DIR'] ?? 'sync-blobs');
+const blobStorage = new FileSystemBlobStorage(syncBlobsDir);
+const SYNC_MAX_BLOB_BYTES = Number(process.env['SYNC_MAX_BLOB_BYTES'] ?? 100 * 1024 * 1024); // 100 MB/файл
+const SYNC_DRAFT_PIN_SECONDS = Number(process.env['SYNC_DRAFT_PIN_SECONDS'] ?? 6 * 60 * 60); // 6h
+const SYNC_DRAFT_MAX_AGE_SECONDS = Number(process.env['SYNC_DRAFT_MAX_AGE_SECONDS'] ?? 24 * 60 * 60); // 24h
+// Server-authoritative ignore-set (обе стороны тянут и сверяют hash). См. дизайн §5.
+const SYNC_IGNORE_SET = [
+  '.git',
+  'node_modules',
+  '.venv',
+  'venv',
+  '__pycache__',
+  'dist',
+  'build',
+  'out',
+  '.next',
+  '.nuxt',
+  'bin',
+  'obj',
+  '.idea',
+  '.vs',
+  '.DS_Store',
+  'Thumbs.db',
+];
+const fileSyncService = new FileSyncService({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  repo: new DrizzleFileSyncRepository(db),
+  storage: blobStorage,
+  idGen: idGenerator,
+  now,
+  serverIgnoreSet: SYNC_IGNORE_SET,
+  draftPinTtlSeconds: SYNC_DRAFT_PIN_SECONDS,
+  maxBlobBytes: SYNC_MAX_BLOB_BYTES,
+});
+console.log(`[projectsflow] sync blobs dir: ${syncBlobsDir}`);
+// Periodic GC: abort stale draft-снепшоты + удалить осиротевшие непинованные блобы.
+setInterval(
+  () => {
+    void fileSyncService
+      .pruneExpired(SYNC_DRAFT_MAX_AGE_SECONDS, 500)
+      .then((r) => {
+        if (r.abortedDrafts > 0 || r.deletedBlobs > 0) {
+          console.log(`[projectsflow] sync-gc: aborted ${r.abortedDrafts} drafts, deleted ${r.deletedBlobs} blobs`);
+        }
+      })
+      .catch((e) => console.error('[projectsflow] sync-gc error:', e));
+  },
+  10 * 60 * 1000,
+).unref();
+
 const agentTokenHasher = new Sha256AgentTokenHasher();
 const agentDeviceCodeStore = new InMemoryAgentDeviceCodeStore();
 
@@ -495,6 +551,10 @@ const { app, devProxyUpgrade } = createApp({
   },
   user: {
     updateProfile: new UpdateProfile(userRepo),
+  },
+  fileSync: {
+    service: fileSyncService,
+    maxBlobBytes: SYNC_MAX_BLOB_BYTES,
   },
   projects: {
     listProjects: new ListProjects(projectMemberRepo),

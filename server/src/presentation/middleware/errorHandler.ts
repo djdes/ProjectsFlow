@@ -37,6 +37,20 @@ import {
   SecretNotFoundError,
 } from '../../domain/secrets/errors.js';
 import {
+  SyncWorkspaceNotFoundError,
+  SyncSnapshotNotFoundError,
+  SyncSessionNotFoundError,
+  SnapshotNotSealedError,
+  BlobShaMismatchError,
+  BlobMissingError,
+  SyncQuotaExceededError,
+  BaseMovedConflictError,
+  IgnoreSetMismatchError,
+  InvalidManifestPathError,
+  CaseCollisionError,
+  NotAssignedDispatcherError,
+} from '../../domain/file-sync/errors.js';
+import {
   FrontmatterInvalidError,
   KbDocumentNotFoundError,
   KbNotConnectedError,
@@ -450,6 +464,56 @@ export function errorHandler(
   }
   if (err instanceof FinanceValidationError) {
     res.status(400).json({ error: 'finance_validation', message: err.message });
+    return;
+  }
+
+  // --- file-sync ---
+  if (err instanceof SyncWorkspaceNotFoundError) {
+    res.status(404).json({ error: 'sync_workspace_not_found' });
+    return;
+  }
+  if (err instanceof SyncSnapshotNotFoundError) {
+    res.status(404).json({ error: 'sync_snapshot_not_found' });
+    return;
+  }
+  if (err instanceof SyncSessionNotFoundError) {
+    res.status(404).json({ error: 'sync_session_not_found' });
+    return;
+  }
+  if (err instanceof SnapshotNotSealedError) {
+    res.status(409).json({ error: 'snapshot_not_sealed' });
+    return;
+  }
+  if (err instanceof BlobShaMismatchError) {
+    res.status(422).json({ error: 'blob_sha_mismatch', message: err.message });
+    return;
+  }
+  if (err instanceof BlobMissingError) {
+    res.status(409).json({ error: 'blob_missing', message: err.message });
+    return;
+  }
+  if (err instanceof SyncQuotaExceededError) {
+    res.status(413).json({ error: 'sync_quota_exceeded', message: err.message });
+    return;
+  }
+  if (err instanceof BaseMovedConflictError) {
+    res.status(409).json({ error: 'base_moved', message: err.message });
+    return;
+  }
+  if (err instanceof IgnoreSetMismatchError) {
+    res.status(409).json({ error: 'ignore_set_mismatch', message: err.message });
+    return;
+  }
+  if (err instanceof InvalidManifestPathError) {
+    res.status(422).json({ error: 'invalid_manifest_path', message: err.message });
+    return;
+  }
+  if (err instanceof CaseCollisionError) {
+    res.status(422).json({ error: 'case_collision', message: err.message });
+    return;
+  }
+  if (err instanceof NotAssignedDispatcherError) {
+    res.status(403).json({ error: 'not_assigned_dispatcher' });
     return;
   }
 

@@ -2,6 +2,7 @@ import {
   InsufficientProjectRoleError,
   ProjectNotFoundError,
 } from '../../domain/project/errors.js';
+import { NotAssignedDispatcherError } from '../../domain/file-sync/errors.js';
 import { can, type ProjectAction } from '../../domain/project/permissions.js';
 import type { ProjectMembership } from '../../domain/project/ProjectMembership.js';
 import type { Project } from '../../domain/project/Project.js';
@@ -67,4 +68,20 @@ export async function requireProjectAccess(
   // membership не найден → 404 (не палим существование). Найден, но роль мала → 403.
   if (!membership) throw new ProjectNotFoundError();
   throw new InsufficientProjectRoleError(membership.role, action);
+}
+
+// Гейт «действовать как назначенный диспетчер проекта» (file-sync SP2). НЕ роль-based:
+// разрешено только если project.dispatcherUserId === userId (или admin-bypass). Используется
+// на байтовых операциях диспетчера (pull manifest/blob, record result, push events), чтобы
+// рядовой member не мог перенаправить чужую папку на свой исполнитель. См. дизайн §6.
+export async function requireDispatcherAccess(
+  deps: ProjectAccessDeps,
+  projectId: string,
+  userId: string,
+): Promise<Project> {
+  const project = await deps.projects.getById(projectId);
+  if (!project) throw new ProjectNotFoundError();
+  if (project.dispatcherUserId === userId) return project;
+  if (await resolveIsAdmin(userId)) return project;
+  throw new NotAssignedDispatcherError(projectId);
 }

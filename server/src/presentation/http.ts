@@ -155,6 +155,8 @@ import { delegationsRouter } from './delegations/routes.js';
 import { notificationsRouter } from './notifications/routes.js';
 import { agentTokensRouter } from './agent/tokensRoutes.js';
 import { agentApiRouter } from './agent/apiRoutes.js';
+import { fileSyncRouter } from './file-sync/routes.js';
+import type { FileSyncService } from '../application/file-sync/FileSyncService.js';
 import { agentDeviceRouter } from './agent/deviceRoutes.js';
 import { buildAiPromptRouter } from './ai-prompt/routes.js';
 import './types.js'; // глобальное расширение Express.Request
@@ -168,6 +170,10 @@ type AppDeps = {
   };
   readonly user: {
     readonly updateProfile: UpdateProfile;
+  };
+  readonly fileSync: {
+    readonly service: FileSyncService;
+    readonly maxBlobBytes: number;
   };
   readonly projects: {
     readonly listProjects: ListProjects;
@@ -553,6 +559,17 @@ export function createApp(deps: AppDeps): CreatedApp {
       broadcastTelegramByTask: deps.agent.broadcastTelegramByTask,
       projects: deps.agent.projects,
       users: deps.telegram.users,
+    }),
+  );
+
+  // file-sync (Bearer-auth, тот же что у agentApiRouter): /api/agent/.../sync/* и .../events.
+  // Маунтится отдельным роутером ПОСЛЕ agentApiRouter — несовпавшие пути проваливаются сюда.
+  app.use(
+    '/api/agent',
+    fileSyncRouter({
+      service: deps.fileSync.service,
+      authenticate: deps.agent.authenticateAgentToken,
+      maxBlobBytes: deps.fileSync.maxBlobBytes,
     }),
   );
 

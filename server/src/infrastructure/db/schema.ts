@@ -638,3 +638,165 @@ export const aiPromptJobs = mysqlTable(
 
 export type AiPromptJobRow = typeof aiPromptJobs.$inferSelect;
 export type NewAiPromptJobRow = typeof aiPromptJobs.$inferInsert;
+
+// ============================================================================
+// file-sync — миграция db/044. Кастомная (не-git) синхронизация папок:
+// контент-адресуемые блобы + снепшоты + change-set'ы + round-trip сессии + лента
+// прогресса. См. docs/superpowers/specs (PF Desktop Companion).
+// ============================================================================
+
+const bytes = (name: string) => bigint(name, { mode: 'number', unsigned: true });
+const autoId = () => bigint('id', { mode: 'number', unsigned: true }).autoincrement().primaryKey();
+
+export const syncWorkspaces = mysqlTable(
+  'sync_workspaces',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    label: varchar('label', { length: 255 }),
+    baseSnapshotId: char('base_snapshot_id', { length: 36 }),
+    baseVersion: bytes('base_version').notNull().default(0),
+    dispatcherHeadSnapshotId: char('dispatcher_head_snapshot_id', { length: 36 }),
+    ignoreSetJson: json('ignore_set_json').$type<string[]>().notNull(),
+    ignoreSetHash: char('ignore_set_hash', { length: 64 }).notNull(),
+    isCaseSensitive: tinyint('is_case_sensitive').notNull().default(0),
+    clientProtocolVersion: int('client_protocol_version').notNull().default(1),
+    pendingApply: tinyint('pending_apply').notNull().default(0),
+    quotaBytes: bytes('quota_bytes').notNull().default(2147483648),
+    usedBytes: bytes('used_bytes').notNull().default(0),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [uniqueIndex('uq_sync_ws_project').on(t.projectId)],
+);
+export type SyncWorkspaceRow = typeof syncWorkspaces.$inferSelect;
+
+export const syncBlobs = mysqlTable(
+  'sync_blobs',
+  {
+    sha256: char('sha256', { length: 64 }).primaryKey(),
+    sizeBytes: bytes('size_bytes').notNull(),
+    storageKey: varchar('storage_key', { length: 500 }).notNull(),
+    refCount: int('ref_count').notNull().default(0),
+    pinnedUntil: timestamp('pinned_until'),
+    createdAt: createdAtCol(),
+  },
+  (t) => [index('idx_sync_blobs_ref').on(t.refCount), index('idx_sync_blobs_pin').on(t.pinnedUntil)],
+);
+export type SyncBlobRow = typeof syncBlobs.$inferSelect;
+
+export const syncSnapshots = mysqlTable(
+  'sync_snapshots',
+  {
+    id: id(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    source: mysqlEnum('source', ['client', 'dispatcher']).notNull(),
+    parentSnapshotId: char('parent_snapshot_id', { length: 36 }),
+    taskId: char('task_id', { length: 36 }),
+    status: mysqlEnum('status', ['draft', 'sealed', 'aborted']).notNull().default('draft'),
+    fileCount: int('file_count').notNull().default(0),
+    totalBytes: bytes('total_bytes').notNull().default(0),
+    manifestSha: char('manifest_sha', { length: 64 }),
+    ignoreSetHash: char('ignore_set_hash', { length: 64 }).notNull(),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+    sealedAt: timestamp('sealed_at'),
+  },
+  (t) => [
+    index('idx_sync_snap_ws').on(t.workspaceId),
+    index('idx_sync_snap_status').on(t.status),
+    index('idx_sync_snap_updated').on(t.updatedAt),
+  ],
+);
+export type SyncSnapshotRow = typeof syncSnapshots.$inferSelect;
+
+export const syncFileEntries = mysqlTable(
+  'sync_file_entries',
+  {
+    id: autoId(),
+    snapshotId: char('snapshot_id', { length: 36 }).notNull(),
+    path: varchar('path', { length: 1024 }).notNull(),
+    pathHash: char('path_hash', { length: 64 }).notNull(),
+    blobSha: char('blob_sha', { length: 64 }),
+    sizeBytes: bytes('size_bytes').notNull().default(0),
+    mode: int('mode').notNull().default(0),
+    mtimeMs: bytes('mtime_ms'),
+    isSymlink: tinyint('is_symlink').notNull().default(0),
+    symlinkTarget: varchar('symlink_target', { length: 1024 }),
+  },
+  (t) => [
+    uniqueIndex('uq_sfe_snap_path').on(t.snapshotId, t.pathHash),
+    index('idx_sfe_snap').on(t.snapshotId),
+    index('idx_sfe_blob').on(t.blobSha),
+  ],
+);
+export type SyncFileEntryRow = typeof syncFileEntries.$inferSelect;
+
+export const syncChangeSets = mysqlTable(
+  'sync_change_sets',
+  {
+    id: id(),
+    baseSnapshotId: char('base_snapshot_id', { length: 36 }).notNull(),
+    headSnapshotId: char('head_snapshot_id', { length: 36 }).notNull(),
+    changesJson: json('changes_json').notNull(),
+    addedCount: int('added_count').notNull().default(0),
+    modifiedCount: int('modified_count').notNull().default(0),
+    deletedCount: int('deleted_count').notNull().default(0),
+    createdAt: createdAtCol(),
+  },
+  (t) => [uniqueIndex('uq_scs_base_head').on(t.baseSnapshotId, t.headSnapshotId)],
+);
+export type SyncChangeSetRow = typeof syncChangeSets.$inferSelect;
+
+export const syncSessions = mysqlTable(
+  'sync_sessions',
+  {
+    id: id(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    taskId: char('task_id', { length: 36 }),
+    baseSnapshotId: char('base_snapshot_id', { length: 36 }).notNull(),
+    resultSnapshotId: char('result_snapshot_id', { length: 36 }),
+    status: mysqlEnum('status', [
+      'uploaded',
+      'materialized',
+      'result_ready',
+      'applied',
+      'conflict',
+      'partial',
+      'aborted',
+    ])
+      .notNull()
+      .default('uploaded'),
+    conflictJson: json('conflict_json'),
+    idempotencyKey: varchar('idempotency_key', { length: 128 }),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    index('idx_ss_ws').on(t.workspaceId),
+    index('idx_ss_task').on(t.taskId),
+    index('idx_ss_status').on(t.status),
+    uniqueIndex('uq_ss_idem').on(t.workspaceId, t.idempotencyKey),
+  ],
+);
+export type SyncSessionRow = typeof syncSessions.$inferSelect;
+
+export const taskProgressEvents = mysqlTable(
+  'task_progress_events',
+  {
+    id: autoId(),
+    taskId: char('task_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    seq: int('seq').notNull(),
+    kind: varchar('kind', { length: 32 }).notNull(),
+    text: text('text'),
+    payload: json('payload'),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_tpe_task_seq').on(t.taskId, t.seq),
+    index('idx_tpe_task').on(t.taskId),
+    index('idx_tpe_created').on(t.createdAt),
+  ],
+);
+export type TaskProgressEventRow = typeof taskProgressEvents.$inferSelect;
