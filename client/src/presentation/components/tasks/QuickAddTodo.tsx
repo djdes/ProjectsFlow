@@ -9,13 +9,12 @@ import {
 } from 'react';
 import { FileText, Loader2, Paperclip, Send, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
 import type { RalphMode, Task, TaskPriority } from '@/domain/task/Task';
 import { useContainer } from '@/infrastructure/di/container';
 import { RalphModeSelect } from './RalphMode';
 import { DelegateSelect } from './DelegateSelect';
-import { DeadlinePicker } from './DeadlinePicker';
-import { PrioritySelect } from './PrioritySelect';
 import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
 import {
   extractClipboardFiles,
@@ -70,9 +69,8 @@ export function QuickAddTodo({
   }, [text]);
   const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
   const [delegateUserId, setDelegateUserId] = useState<string | null>(null);
-  const [deadline, setDeadline] = useState<string | null>(null);
-  const [priority, setPriority] = useState<TaskPriority | null>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
+  const [previewFile, setPreviewFile] = useState<PendingFile | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -141,8 +139,6 @@ export function QuickAddTodo({
         description: trimmed,
         ralphMode,
         delegateUserId,
-        deadline,
-        priority,
       });
       if (pending.length > 0) {
         let ok = 0;
@@ -168,8 +164,6 @@ export function QuickAddTodo({
       try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
       setRalphMode('normal');
       setDelegateUserId(null);
-      setDeadline(null);
-      setPriority(null);
     } catch (err) {
       toast.error(`Не удалось создать: ${(err as Error).message}`);
     } finally {
@@ -217,7 +211,13 @@ export function QuickAddTodo({
                 title={pf.file.name}
               >
                 {pf.previewUrl ? (
-                  <img src={pf.previewUrl} alt="" className="size-4 rounded object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setPreviewFile(pf)}
+                    className="cursor-pointer"
+                  >
+                    <img src={pf.previewUrl} alt="" className="size-4 rounded object-cover" />
+                  </button>
                 ) : (
                   <FileText className="size-3.5 text-muted-foreground" />
                 )}
@@ -235,6 +235,26 @@ export function QuickAddTodo({
           </div>
         )}
 
+        {previewFile && (
+          <Dialog open onOpenChange={() => setPreviewFile(null)}>
+            <DialogContent className="grid max-h-[90dvh] max-w-4xl gap-0 overflow-hidden p-0">
+              <div className="flex items-center justify-between border-b px-4 py-2.5">
+                <p className="truncate text-sm font-medium">{previewFile.file.name}</p>
+                <Button variant="ghost" size="icon" className="size-7" onClick={() => setPreviewFile(null)} aria-label="Закрыть">
+                  <X className="size-4" />
+                </Button>
+              </div>
+              <div className="grid place-items-center overflow-auto bg-muted/30 p-2 sm:p-4">
+                <img
+                  src={previewFile.previewUrl}
+                  alt={previewFile.file.name}
+                  className="max-h-[75dvh] max-w-full object-contain"
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+
         <textarea
           ref={textareaRef}
           value={text}
@@ -248,44 +268,33 @@ export function QuickAddTodo({
           className="block w-full resize-none overflow-y-auto bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
         />
 
-        <div className="flex flex-wrap items-center justify-between gap-1.5 px-1.5 pb-1.5 sm:gap-2">
+        <div className="flex items-center gap-1.5 px-1.5 pb-1.5">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="size-7 text-muted-foreground hover:text-foreground"
+            className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
             onClick={() => fileInputRef.current?.click()}
             disabled={submitting}
             aria-label="Прикрепить файл"
             title="Прикрепить файл (или Ctrl+V / перетащи)"
           >
-            <Paperclip className="size-3.5" />
+            <Paperclip className="size-4" />
           </Button>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <PrioritySelect
-              value={priority}
-              onChange={setPriority}
-              disabled={submitting}
-              compact
-            />
-            <DeadlinePicker
-              value={deadline}
-              onChange={setDeadline}
+          {isInbox && (
+            <DelegateSelect
+              value={delegateUserId}
+              onChange={setDelegateUserId}
               disabled={submitting}
             />
-            {isInbox && (
-              <DelegateSelect
-                value={delegateUserId}
-                onChange={setDelegateUserId}
-                disabled={submitting}
-              />
-            )}
-            <RalphModeSelect
-              value={ralphMode}
-              onChange={setRalphMode}
-              disabled={submitting}
-              className="!h-7 min-w-[100px] !px-2 !py-0 text-xs sm:min-w-[160px]"
-            />
+          )}
+          <RalphModeSelect
+            value={ralphMode}
+            onChange={setRalphMode}
+            disabled={submitting}
+            className="!h-8 min-w-[100px] !px-2 !py-0 text-xs sm:min-w-[140px]"
+          />
+          <div className="ml-auto flex items-center gap-1.5">
             <AiImproveButton
               text={text}
               projectId={aiProjectId}
@@ -296,15 +305,15 @@ export function QuickAddTodo({
             <Button
               type="button"
               size="sm"
-              className="h-7 gap-1.5 px-2.5"
+              className="h-8 gap-1.5 px-3"
               onClick={() => void submit()}
               disabled={!canSubmit}
               title="Ctrl+Enter"
             >
               {submitting ? (
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 className="size-4 animate-spin" />
               ) : (
-                <Send className="size-3.5" />
+                <Send className="size-4" />
               )}
               <span className="hidden sm:inline">Отправить</span>
             </Button>
