@@ -391,6 +391,18 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         todoTail={todoTail}
         isInbox={isInbox}
         aiProjectId={isInbox ? null : projectId}
+        onMove={async (taskId, targetStatus) => {
+          await move(taskId, {
+            targetStatus,
+            beforeTaskId: null,
+            afterTaskId: null,
+          });
+          // Обновляем dialog-state чтобы drawer показывал новый статус сразу.
+          setDialog((prev) => {
+            if (prev?.mode !== 'edit' || prev.task.id !== taskId) return prev;
+            return { mode: 'edit', task: { ...prev.task, status: targetStatus } };
+          });
+        }}
       />
 
       {/* Floating quick-add (position: fixed). DOM-позиция значения не имеет —

@@ -8,7 +8,14 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { ChevronRight, Download, FileText, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, FileText, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Sheet,
   SheetContent,
@@ -37,7 +44,8 @@ import {
   isImageMime,
 } from '@/presentation/components/attachments/files';
 import { RalphModeSelect } from './RalphMode';
-import type { RalphMode } from '@/domain/task/Task';
+import type { RalphMode, TaskStatus } from '@/domain/task/Task';
+import { TASK_STATUSES } from '@/domain/task/Task';
 import { DelegateSelect } from './DelegateSelect';
 import { AssignToProjectSelect } from './AssignToProjectSelect';
 import { DelegateTaskButton } from './DelegateTaskButton';
@@ -94,6 +102,8 @@ type Props = {
   isInbox?: boolean;
   // projectId для AI-кнопки. null = inbox/дефолтный диспетчер; UUID = диспетчер проекта.
   aiProjectId?: string | null;
+  // Колбэк для смены статуса задачи (move). Если передан — статус-бейдж кликабелен.
+  onMove?: (taskId: string, targetStatus: TaskStatus) => Promise<void>;
 };
 
 // Chip-селектор режима Ralph в edit-mode шапки. Показывает текущий режим бейджем;
@@ -141,6 +151,84 @@ function TaskRalphModeChip({
   );
 }
 
+// Chip-селектор статуса задачи в edit-mode шапки. Показывает текущий статус
+// цветным бейджем; клик раскрывает dropdown для смены — move идёт сразу (optimistic).
+function TaskStatusChip({
+  task,
+  onMove,
+  onChanged,
+}: {
+  task: Task;
+  onMove: (taskId: string, targetStatus: TaskStatus) => Promise<void>;
+  onChanged: () => void;
+}): React.ReactElement {
+  const [status, setStatus] = useState<TaskStatus>(task.status);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setStatus(task.status);
+  }, [task.status]);
+
+  const statusBadgeColor: Record<TaskStatus, string> = {
+    backlog: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+    manual: 'bg-purple-500/15 text-purple-600 dark:text-purple-400',
+    todo: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+    in_progress: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
+    awaiting_clarification: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+    done: 'bg-slate-500/15 text-slate-600 dark:text-slate-400',
+  };
+
+  const change = async (next: TaskStatus): Promise<void> => {
+    if (next === status || saving) return;
+    const prev = status;
+    setStatus(next); // optimistic
+    setSaving(true);
+    try {
+      await onMove(task.id, next);
+      onChanged();
+    } catch (err) {
+      setStatus(prev);
+      toast.error(`Не удалось сменить статус: ${(err as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          disabled={saving}
+          className={cn(
+            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-colors hover:ring-1 hover:ring-foreground/20 disabled:opacity-50',
+            statusBadgeColor[status],
+          )}
+        >
+          {STATUS_LABEL[status]}
+          <ChevronDown className="size-3 opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[180px]">
+        <DropdownMenuRadioGroup value={status} onValueChange={(v) => void change(v as TaskStatus)}>
+          {TASK_STATUSES.map((s) => (
+            <DropdownMenuRadioItem key={s} value={s} className="py-1.5">
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                  statusBadgeColor[s],
+                )}
+              >
+                {STATUS_LABEL[s]}
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function TaskDrawer({
   state,
   onClose,
@@ -152,6 +240,7 @@ export function TaskDrawer({
   todoTail = null,
   isInbox = false,
   aiProjectId = null,
+  onMove,
 }: Props): React.ReactElement {
   const { user: currentUser } = useCurrentUser();
   const { taskRepository } = useContainer();
@@ -426,14 +515,22 @@ export function TaskDrawer({
                   )}
                   <span className="font-mono text-[10px] opacity-50">[{taskShortId(task.id)}]</span>
                 </div>
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider',
-                    statusBadgeColor[task.status],
-                  )}
-                >
-                  {STATUS_LABEL[task.status]}
-                </span>
+                {onMove ? (
+                  <TaskStatusChip
+                    task={task}
+                    onMove={onMove}
+                    onChanged={() => onCommitsChange?.()}
+                  />
+                ) : (
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider',
+                      statusBadgeColor[task.status],
+                    )}
+                  >
+                    {STATUS_LABEL[task.status]}
+                  </span>
+                )}
                 {(task.status === 'backlog' ||
                   task.status === 'todo' ||
                   task.status === 'awaiting_clarification') && (
