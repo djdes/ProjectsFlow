@@ -1,4 +1,5 @@
 import type { User } from '@/domain/user/User';
+import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 import type {
   UpdateProfileInput,
   UserRepository,
@@ -33,6 +34,21 @@ export class HttpUserRepository implements UserRepository {
   async updateProfile(input: UpdateProfileInput): Promise<User> {
     const { user } = await httpClient.patch<{ user: UserDto }>('/auth/me', input);
     return fromDto(user);
+  }
+
+  async getDefaultNotificationPrefs(): Promise<NotificationPrefs> {
+    const { prefs } = await httpClient.get<{ prefs: NotificationPrefs }>('/me/notification-prefs');
+    return prefs;
+  }
+
+  async setDefaultNotificationPrefs(prefs: NotificationPrefs): Promise<NotificationPrefs> {
+    const { prefs: saved } = await httpClient.put<{ prefs: NotificationPrefs }>('/me/notification-prefs', { prefs });
+    return saved;
+  }
+
+  async applyDefaultNotificationPrefsToAll(): Promise<number> {
+    const { applied } = await httpClient.post<{ applied: number }>('/me/notification-prefs/apply-all', {});
+    return applied;
   }
 }
 

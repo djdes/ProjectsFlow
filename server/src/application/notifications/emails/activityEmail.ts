@@ -66,6 +66,12 @@ export function renderActivityEmail(input: ActivityEmailInput): EmailMessage {
       bodyHtml = `<strong>${actor}</strong> привязал коммит к задаче <span style="color:#0f172a;">${task}</span> в проекте <strong>«${project}»</strong>.`;
       text = `${input.actorDisplayName} привязал коммит к задаче в «${input.projectName}»`;
       break;
+    case 'status_changed':
+      heading = 'Статус задачи изменён';
+      subject = `Статус задачи изменён в «${input.projectName}»`;
+      bodyHtml = `<strong>${actor}</strong> изменил статус задачи${detail ? ` (${detail})` : ''} в проекте <strong>«${project}»</strong>:<br/><span style="color:#0f172a;">${task}</span>`;
+      text = `${input.actorDisplayName} изменил статус задачи${input.detail ? ` (${input.detail})` : ''} в «${input.projectName}»: ${clip(input.taskExcerpt ?? '')}`;
+      break;
     case 'kb_updated':
       heading = 'Обновление базы знаний';
       subject = `Обновление базы знаний «${input.projectName}»`;

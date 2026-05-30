@@ -675,6 +675,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       joinRequests: projectJoinRequestRepo,
+      users: userRepo,
       now,
     }),
     appUrl: process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? 'http://localhost:5173',
@@ -700,6 +701,7 @@ const { app, devProxyUpgrade } = createApp({
     accept: new AcceptProjectInvite({
       invites: projectInviteRepo,
       members: projectMemberRepo,
+      users: userRepo,
       now,
     }),
   },
@@ -938,6 +940,8 @@ const { app, devProxyUpgrade } = createApp({
     // tasks repo — нужен роуту для чтения oldStatus до move'а (SSE task_status_changed).
     tasks: taskRepo,
     maybeReopenForClarification,
+    broadcastTelegram: broadcastTelegramByTask,
+    projectRepo,
   },
   delegations: {
     accept: new AcceptTaskDelegation({

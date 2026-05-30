@@ -58,6 +58,7 @@ export const reorderFavoritesSchema = z.object({
 const NOTIF_EVENT_TYPES = [
   'task_created',
   'task_done',
+  'status_changed',
   'comment_created',
   'member_changed',
   'commit_linked',

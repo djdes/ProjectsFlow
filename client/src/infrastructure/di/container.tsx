@@ -48,6 +48,7 @@ import type {
   ProjectFinanceRepository,
 } from '@/application/finance/FinanceRepository';
 import type { TelegramRepository } from '@/application/telegram/TelegramRepository';
+import type { UserRepository } from '@/application/user/UserRepository';
 
 type Container = {
   listProjects: ListProjects;
@@ -78,6 +79,7 @@ type Container = {
   aiPromptRepository: AiPromptRepository;
   improveTaskDescription: ImproveTaskDescription;
   automationRepository: AutomationRepository;
+  userRepository: UserRepository;
 };
 
 function buildContainer(): Container {
@@ -129,6 +131,7 @@ function buildContainer(): Container {
     aiPromptRepository: aiPromptRepo,
     improveTaskDescription: new ImproveTaskDescription(aiPromptRepo),
     automationRepository: automationRepo,
+    userRepository: userRepo,
   };
 }
 

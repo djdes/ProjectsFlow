@@ -149,6 +149,7 @@ import { financeRouter } from './finance/routes.js';
 import { attachmentBinaryRouter } from './tasks/attachmentBinaryRoutes.js';
 import { inboxRouter } from './inbox/routes.js';
 import { meTelegramRouter } from './me/telegramRoutes.js';
+import { meNotificationPrefsRouter } from './me/notificationPrefsRoutes.js';
 import { sharedMembersRouter } from './me/sharedMembersRoutes.js';
 import { telegramWebhookRouter } from './telegram/webhookRoutes.js';
 import { invitesRouter } from './invites/routes.js';
@@ -322,6 +323,8 @@ type AppDeps = {
     ) => void;
     readonly tasks: TaskRepository;
     readonly maybeReopenForClarification: MaybeReopenForClarification;
+    readonly broadcastTelegram: BroadcastTelegramNotificationByTask;
+    readonly projectRepo: ProjectRepository;
   };
   readonly delegations: {
     readonly accept: AcceptTaskDelegation;
@@ -468,6 +471,13 @@ export function createApp(deps: AppDeps): CreatedApp {
       connect: deps.telegram.connect,
       status: deps.telegram.status,
       users: deps.telegram.users,
+    }),
+  );
+  app.use(
+    '/api/me/notification-prefs',
+    meNotificationPrefsRouter({
+      users: deps.telegram.users,
+      members: deps.projects.members,
     }),
   );
   app.use(

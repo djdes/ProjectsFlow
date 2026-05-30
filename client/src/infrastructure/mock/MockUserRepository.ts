@@ -1,4 +1,5 @@
 import type { User } from '@/domain/user/User';
+import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 import type { UserRepository, UpdateProfileInput } from '@/application/user/UserRepository';
 import { seedUser } from './seed-data';
 
@@ -10,6 +11,7 @@ function delay<T>(value: T): Promise<T> {
 
 export class MockUserRepository implements UserRepository {
   private current: User = seedUser;
+  private defaultPrefs: NotificationPrefs = {};
 
   getCurrent(): Promise<User> {
     return delay(this.current);
@@ -18,5 +20,18 @@ export class MockUserRepository implements UserRepository {
   updateProfile(input: UpdateProfileInput): Promise<User> {
     this.current = { ...this.current, displayName: input.displayName, email: input.email };
     return delay(this.current);
+  }
+
+  getDefaultNotificationPrefs(): Promise<NotificationPrefs> {
+    return delay(this.defaultPrefs);
+  }
+
+  setDefaultNotificationPrefs(prefs: NotificationPrefs): Promise<NotificationPrefs> {
+    this.defaultPrefs = prefs;
+    return delay(this.defaultPrefs);
+  }
+
+  applyDefaultNotificationPrefsToAll(): Promise<number> {
+    return delay(3);
   }
 }

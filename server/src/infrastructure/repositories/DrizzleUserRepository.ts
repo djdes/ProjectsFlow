@@ -199,4 +199,20 @@ export class DrizzleUserRepository implements UserRepository {
       .set({ tgStartedAt: null })
       .where(eq(users.id, userId));
   }
+
+  async getDefaultNotificationPrefs(userId: string): Promise<import('../../domain/notifications/NotificationPrefs.js').NotificationPrefs | null> {
+    const rows = await this.db
+      .select({ prefs: users.defaultNotificationPrefs })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return rows[0]?.prefs ?? null;
+  }
+
+  async setDefaultNotificationPrefs(userId: string, prefs: import('../../domain/notifications/NotificationPrefs.js').NotificationPrefs): Promise<void> {
+    await this.db
+      .update(users)
+      .set({ defaultNotificationPrefs: prefs })
+      .where(eq(users.id, userId));
+  }
 }

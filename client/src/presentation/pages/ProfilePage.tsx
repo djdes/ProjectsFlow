@@ -30,6 +30,7 @@ import { AgentAccessCard } from '@/presentation/components/agent/AgentAccessCard
 import { EmployeesCard } from '@/presentation/components/finance/EmployeesCard';
 import { TelegramSection } from '@/presentation/components/profile/TelegramSection';
 import { ProjectsShareCard } from '@/presentation/components/profile/ProjectsShareCard';
+import { NotificationDefaultsCard } from '@/presentation/components/profile/NotificationDefaultsCard';
 import { getInitials } from '@/presentation/layout/projectIcons';
 
 function PersonalDataCard(): React.ReactElement {
@@ -260,6 +261,7 @@ export function ProfilePage(): React.ReactElement {
       <PersonalDataCard />
       <ProjectsShareCard />
       <EmployeesCard />
+      <NotificationDefaultsCard />
       <TelegramSection />
       <GithubAccountSection />
       <AgentAccessCard />

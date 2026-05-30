@@ -1,6 +1,7 @@
 import type { User, UserWithSecrets } from '../../domain/user/User.js';
 import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
+import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
 
 // Поля, приходящие из Login Widget — сохраняются как есть. tg_chat_id/tg_started_at
 // заполняются позже из webhook'а /start.
@@ -55,4 +56,8 @@ export interface UserRepository {
   // 403 от sendMessage (bot blocked / user not started): сбрасываем tg_started_at,
   // чтобы UI показал «нужно нажать Start снова».
   clearTelegramStarted(userId: string): Promise<void>;
+
+  // Глобальные дефолтные email-notification prefs (NULL = системные дефолты).
+  getDefaultNotificationPrefs(userId: string): Promise<NotificationPrefs | null>;
+  setDefaultNotificationPrefs(userId: string, prefs: NotificationPrefs): Promise<void>;
 }

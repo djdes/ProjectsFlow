@@ -54,6 +54,7 @@ export const users = mysqlTable(
     tgStartedAt: timestamp('tg_started_at'),
     tgPairedAt: timestamp('tg_paired_at'),
     tgNotificationPrefs: json('tg_notification_prefs').$type<TelegramNotificationPrefs | null>(),
+    defaultNotificationPrefs: json('default_notification_prefs').$type<NotificationPrefs | null>(),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },

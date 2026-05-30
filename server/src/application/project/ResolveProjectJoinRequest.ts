@@ -3,12 +3,14 @@ import type { JoinRequestStatus } from '../../domain/project/ProjectJoinRequest.
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
 import type { ProjectJoinRequestRepository } from './ProjectJoinRequestRepository.js';
+import type { UserRepository } from '../user/UserRepository.js';
 import { requireProjectAccess } from './projectAccess.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly joinRequests: ProjectJoinRequestRepository;
+  readonly users: UserRepository;
   readonly now: () => Date;
 };
 
@@ -37,6 +39,15 @@ export class ResolveProjectJoinRequest {
           userId: jr.requesterUserId,
           role: 'editor',
         });
+        // Копируем глобальные дефолтные notification prefs.
+        try {
+          const defaults = await this.deps.users.getDefaultNotificationPrefs(jr.requesterUserId);
+          if (defaults && Object.keys(defaults).length > 0) {
+            await this.deps.members.setNotificationPrefs(jr.projectId, jr.requesterUserId, defaults);
+          }
+        } catch {
+          // Best-effort.
+        }
       }
     }
 

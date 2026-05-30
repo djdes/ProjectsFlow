@@ -112,6 +112,25 @@ export class ProjectNotificationService {
     }));
   }
 
+  async onStatusChanged(
+    projectId: string,
+    actorUserId: string,
+    task: TaskCtx,
+    oldStatus: string,
+    newStatus: string,
+    source: NotifSource,
+  ): Promise<void> {
+    await this.dispatch(projectId, actorUserId, 'status_changed', source, (to, projectName, actorName) => ({
+      to,
+      type: 'status_changed',
+      projectName,
+      actorDisplayName: actorName,
+      taskExcerpt: task.description ?? undefined,
+      detail: `${oldStatus} → ${newStatus}`,
+      ctaUrl: this.taskUrl(projectId, task.id),
+    }));
+  }
+
   onMemberChanged(
     projectId: string,
     actorUserId: string,

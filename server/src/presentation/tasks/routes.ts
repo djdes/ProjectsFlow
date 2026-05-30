@@ -28,6 +28,8 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
 import type { TaskRepository } from '../../application/task/TaskRepository.js';
 import type { MaybeReopenForClarification } from '../../application/task/MaybeReopenForClarification.js';
+import type { BroadcastTelegramNotificationByTask } from '../../application/telegram/BroadcastTelegramNotificationByTask.js';
+import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
 import {
   assignToProjectSchema,
   createTaskCommentSchema,
@@ -88,6 +90,10 @@ type Deps = {
   readonly maybeReopenForClarification: MaybeReopenForClarification;
   // Email-оповещения команде (источник 'team' — действия человека). Fire-and-forget.
   readonly notifier: ProjectNotificationService;
+  // Telegram-рассылка всем участникам проекта по taskId. Fire-and-forget.
+  readonly broadcastTelegram: BroadcastTelegramNotificationByTask;
+  // Для получения имени проекта в TG-сообщениях.
+  readonly projectRepo: ProjectRepository;
 };
 
 type TaskDelegationDto = {
@@ -191,6 +197,46 @@ function attachmentToDto(att: TaskAttachment): AttachmentDto {
   };
 }
 
+// Статус-лейблы для TG-сообщений (совпадают с client-side statusLabels).
+const TG_STATUS_LABEL: Record<string, string> = {
+  backlog: 'Черновики',
+  manual: 'В ручную',
+  todo: 'Воркер',
+  in_progress: 'В работе',
+  awaiting_clarification: 'На уточнении',
+  done: 'Готово',
+};
+
+function tgExcerpt(text: string | null, limit = 100): string {
+  const s = (text ?? '').trim().replace(/\s+/g, ' ');
+  return s.length <= limit ? s : s.slice(0, limit - 1).trimEnd() + '…';
+}
+
+// Best-effort Telegram broadcast. Ошибки не влияют на HTTP-ответ.
+function fireTgBroadcast(
+  deps: Pick<Deps, 'broadcastTelegram' | 'projectRepo'>,
+  taskId: string,
+  projectId: string,
+  skipUserId: string,
+  buildText: (projectName: string) => string,
+  kind: string,
+): void {
+  void (async () => {
+    const project = await deps.projectRepo.getById(projectId);
+    const projectName = project?.name ?? 'проект';
+    await deps.broadcastTelegram.execute({
+      taskId,
+      text: buildText(projectName),
+      kind,
+      parseMode: 'HTML',
+      respectPrefs: true,
+      skipUserId,
+    });
+  })().catch((err) => {
+    console.warn('[tasks/tg-broadcast] failed:', err);
+  });
+}
+
 export function tasksRouter(deps: Deps): Router {
   const router = Router({ mergeParams: true });
   router.use(requireAuth);
@@ -229,6 +275,10 @@ export function tasksRouter(deps: Deps): Router {
       });
       deps.notifyTaskChanged(projectId);
       void deps.notifier.onTaskCreated(projectId, req.user!.id, task, 'team').catch(() => {});
+      fireTgBroadcast(deps, task.id, projectId, req.user!.id, (pn) =>
+        `📋 Новая задача в «${pn}»:\n<i>${tgExcerpt(task.description)}</i>`,
+        'comment_on_my_task',
+      );
       res.status(201).json({ task: toDto(task) });
     } catch (e) {
       next(e);
@@ -275,9 +325,17 @@ export function tasksRouter(deps: Deps): Router {
       deps.notifyTaskChanged(projectId);
       if (before && before.status !== task.status) {
         deps.notifyStatusChanged(projectId, taskId, before.status, task.status, req.user!.id);
-      }
-      if (body.targetStatus === 'done') {
-        void deps.notifier.onTaskDone(projectId, req.user!.id, task, 'team').catch(() => {});
+        if (body.targetStatus === 'done') {
+          void deps.notifier.onTaskDone(projectId, req.user!.id, task, 'team').catch(() => {});
+        } else {
+          void deps.notifier.onStatusChanged(projectId, req.user!.id, task, before.status, task.status, 'team').catch(() => {});
+        }
+        const oldLabel = TG_STATUS_LABEL[before.status] ?? before.status;
+        const newLabel = TG_STATUS_LABEL[task.status] ?? task.status;
+        fireTgBroadcast(deps, taskId, projectId, req.user!.id, (pn) =>
+          `🔄 Статус задачи изменён в «${pn}» (${oldLabel} → ${newLabel}):\n<i>${tgExcerpt(task.description)}</i>`,
+          'status_change',
+        );
       }
       res.json({ task: toDto(task) });
     } catch (e) {
@@ -540,6 +598,10 @@ export function tasksRouter(deps: Deps): Router {
         console.warn('[auto-reopen] failed for task', taskId, err);
       }
       void deps.notifier.onComment(projectId, req.user!.id, taskId, body.body, 'team').catch(() => {});
+      fireTgBroadcast(deps, taskId, projectId, req.user!.id, (pn) =>
+        `💬 Новый комментарий в «${pn}»:\n<i>${tgExcerpt(body.body)}</i>`,
+        'comment_on_my_task',
+      );
       res.status(201).json({ comment: commentToDto(comment) });
     } catch (e) {
       next(e);

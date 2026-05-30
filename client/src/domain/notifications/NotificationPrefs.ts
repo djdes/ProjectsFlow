@@ -2,6 +2,7 @@
 export type NotifEventType =
   | 'task_created'
   | 'task_done'
+  | 'status_changed'
   | 'comment_created'
   | 'member_changed'
   | 'commit_linked'
@@ -26,6 +27,7 @@ export function resolvePref(
 export const NOTIF_EVENT_LABELS: ReadonlyArray<{ type: NotifEventType; label: string }> = [
   { type: 'task_created', label: 'Создание задачи' },
   { type: 'task_done', label: 'Задача выполнена' },
+  { type: 'status_changed', label: 'Изменение статуса задачи' },
   { type: 'comment_created', label: 'Новый комментарий' },
   { type: 'member_changed', label: 'Изменения в команде' },
   { type: 'commit_linked', label: 'Привязка коммита' },
