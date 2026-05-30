@@ -734,6 +734,7 @@ export function TaskDrawer({
                     onChange={setCreateDelegateUserId}
                     disabled={saving}
                     projectId={isShared && aiProjectId ? aiProjectId : undefined}
+                    className="h-7 w-7"
                   />
                 )}
                 <Button

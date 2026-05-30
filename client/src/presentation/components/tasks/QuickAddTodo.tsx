@@ -294,6 +294,7 @@ export function QuickAddTodo({
               onChange={setDelegateUserId}
               disabled={submitting}
               projectId={isShared && aiProjectId ? aiProjectId : undefined}
+              className="size-10"
             />
           )}
           <RalphModeSelect

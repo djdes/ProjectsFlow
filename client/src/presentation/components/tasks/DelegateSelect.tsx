@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, User, UserPlus } from 'lucide-react';
+import { User, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -23,6 +23,7 @@ type Props = {
 };
 
 // Single-select dropdown для выбора делегата при создании inbox-задачи.
+// Icon-only кнопка: UserPlus когда выбран делегат, User когда нет.
 // Список — люди из моих shared-проектов (без меня самого). При пустом списке
 // показывает hint «пригласите кого-то в проект».
 export function DelegateSelect({ value, onChange, disabled, className, projectId }: Props): React.ReactElement {
@@ -49,7 +50,9 @@ export function DelegateSelect({ value, onChange, disabled, className, projectId
   }, [projectRepository, projectId]);
 
   const selected = members?.find((m) => m.id === value) ?? null;
-  const label = selected ? selected.displayName : 'Делегировать';
+  const title = selected
+    ? `Делегировано: ${selected.displayName}`
+    : 'Делегировать';
 
   return (
     <DropdownMenu>
@@ -57,20 +60,19 @@ export function DelegateSelect({ value, onChange, disabled, className, projectId
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size="icon"
           disabled={disabled}
           className={cn(
-            'h-7 gap-1.5 px-2 text-xs',
+            'shrink-0',
             value
               ? 'text-foreground'
               : 'text-muted-foreground hover:text-foreground',
             className,
           )}
-          title="Делегировать одному из участников ваших общих проектов"
+          title={title}
+          aria-label={title}
         >
-          {value ? <UserPlus className="size-3.5" /> : <User className="size-3.5" />}
-          {label}
-          <ChevronDown className="size-3" />
+          {value ? <UserPlus className="size-4" /> : <User className="size-4" />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[240px]">

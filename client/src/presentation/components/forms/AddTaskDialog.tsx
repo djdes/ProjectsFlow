@@ -259,6 +259,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 onChange={setDelegateUserId}
                 disabled={saving}
                 projectId={projectId ?? undefined}
+                className="h-7 w-7"
               />
             )}
             <Button
