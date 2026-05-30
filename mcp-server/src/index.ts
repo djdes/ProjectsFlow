@@ -818,6 +818,48 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'pf_get_automation_config',
+    description:
+      'Return the project automation config for the dispatcher: whether automation is enabled, ' +
+      'a computed `shouldRun` flag (server already accounts for the count/time limit), the ' +
+      'pause range (pauseMinSeconds..pauseMaxSeconds) to wait between tasks, the ralphMode to ' +
+      'create tasks with (usually "silent"), and `nextCriterion` — the criterion to generate ' +
+      'the next task from, with its editable systemPrompt and userHint. Call this when a ' +
+      'dispatched project has 0 open tasks and automationEnabled=true (from ' +
+      'pf_list_my_dispatched_projects). If shouldRun=true and nextCriterion is set: run Claude ' +
+      'with nextCriterion.systemPrompt (+ userHint) to produce ONE task description, create the ' +
+      'task (status=todo, ralphMode from config), then call pf_record_automation_task. Only the ' +
+      "project's assigned dispatcher may call this (403 otherwise).",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_my_dispatched_projects)' },
+      },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_record_automation_task',
+    description:
+      'Tell the server that an automation task was just created. The server increments the ' +
+      'task counter, starts the run clock on the first task (the time limit counts from here), ' +
+      'advances the round-robin criterion pointer, and closes the run (runStatus="completed") ' +
+      'once the count/time limit is reached. Returns the fresh config view (same shape as ' +
+      'pf_get_automation_config) so you can read the updated shouldRun and nextCriterion. Call ' +
+      'this exactly once per automation task you create, right after creating it. Only the ' +
+      "project's assigned dispatcher may call this.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id' },
+        taskId: { type: 'string', description: 'Id of the task you just created' },
+      },
+      required: ['projectId', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pf_get_project_git_token',
     description:
       'Return a GitHub access token DELEGATED to the current dispatcher by a project member. ' +
@@ -1055,6 +1097,11 @@ const ListCommitsInput = z.object({
 const SyncCommitsInput = z.object({ projectId: z.string().min(1) });
 const IsoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 const GetFinanceInput = z.object({ projectId: z.string().min(1) });
+const GetAutomationConfigInput = z.object({ projectId: z.string().min(1) });
+const RecordAutomationTaskInput = z.object({
+  projectId: z.string().min(1),
+  taskId: z.string().min(1),
+});
 const AddExpenseInputZ = z.object({
   projectId: z.string().min(1),
   amountRubles: z.number().nonnegative(),
@@ -1356,6 +1403,16 @@ async function main(): Promise<void> {
         case 'pf_list_my_dispatched_projects': {
           const projects = await api.listMyDispatchedProjects();
           return jsonResult(projects);
+        }
+        case 'pf_get_automation_config': {
+          const input = GetAutomationConfigInput.parse(req.params.arguments ?? {});
+          const config = await api.getAutomationConfig(input.projectId);
+          return jsonResult(config);
+        }
+        case 'pf_record_automation_task': {
+          const input = RecordAutomationTaskInput.parse(req.params.arguments ?? {});
+          const config = await api.recordAutomationTask(input.projectId, input.taskId);
+          return jsonResult(config);
         }
         case 'pf_set_project_dispatcher': {
           const input = z

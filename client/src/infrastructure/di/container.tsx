@@ -13,12 +13,14 @@ import { HttpNotificationRepository } from '@/infrastructure/http/HttpNotificati
 import { HttpAgentTokenRepository } from '@/infrastructure/http/HttpAgentTokenRepository';
 import { HttpAgentDeviceRepository } from '@/infrastructure/http/HttpAgentDeviceRepository';
 import { HttpAiPromptRepository } from '@/infrastructure/http/HttpAiPromptRepository';
+import { HttpAutomationRepository } from '@/infrastructure/http/HttpAutomationRepository';
 import { HttpAdminRepository } from '@/infrastructure/http/HttpAdminRepository';
 import { HttpEmployeeRepository } from '@/infrastructure/http/HttpEmployeeRepository';
 import { HttpProjectFinanceRepository } from '@/infrastructure/http/HttpProjectFinanceRepository';
 import { HttpTelegramRepository } from '@/infrastructure/http/HttpTelegramRepository';
 import { ImproveTaskDescription } from '@/application/ai/ImproveTaskDescription';
 import type { AiPromptRepository } from '@/application/ai/AiPromptRepository';
+import type { AutomationRepository } from '@/application/automation/AutomationRepository';
 import { SearchTasks } from '@/application/task/SearchTasks';
 import { ListProjects } from '@/application/project/ListProjects';
 import { GetProject } from '@/application/project/GetProject';
@@ -75,6 +77,7 @@ type Container = {
   telegramRepository: TelegramRepository;
   aiPromptRepository: AiPromptRepository;
   improveTaskDescription: ImproveTaskDescription;
+  automationRepository: AutomationRepository;
 };
 
 function buildContainer(): Container {
@@ -92,6 +95,7 @@ function buildContainer(): Container {
   const agentTokenRepo = new HttpAgentTokenRepository();
   const agentDeviceRepo = new HttpAgentDeviceRepository();
   const aiPromptRepo = new HttpAiPromptRepository();
+  const automationRepo = new HttpAutomationRepository();
   const adminRepo = new HttpAdminRepository();
   const employeeRepo = new HttpEmployeeRepository();
   const projectFinanceRepo = new HttpProjectFinanceRepository();
@@ -124,6 +128,7 @@ function buildContainer(): Container {
     telegramRepository: telegramRepo,
     aiPromptRepository: aiPromptRepo,
     improveTaskDescription: new ImproveTaskDescription(aiPromptRepo),
+    automationRepository: automationRepo,
   };
 }
 

@@ -19,6 +19,31 @@ export type Project = {
 export type DispatchedProject = Project & {
   openTaskCount: number;
   queuedAgentJobCount: number;
+  // Включена ли автоматизация проекта (см. план virtual-exploring-pascal.md).
+  automationEnabled?: boolean;
+};
+
+// Конфиг автоматизации для диспетчера: следующий критерий с промптом + надо ли продолжать.
+export type AutomationDispatcherCriterion = {
+  key: string;
+  label: string;
+  systemPrompt: string;
+  userHint: string | null;
+};
+
+export type AutomationForDispatcher = {
+  enabled: boolean;
+  shouldRun: boolean;
+  limitKind: 'count' | 'time';
+  limitCount: number | null;
+  limitMinutes: number | null;
+  tasksCreated: number;
+  runStartedAt: string | null;
+  runStatus: 'idle' | 'running' | 'completed' | 'stopped';
+  pauseMinSeconds: number;
+  pauseMaxSeconds: number;
+  ralphMode: string;
+  nextCriterion: AutomationDispatcherCriterion | null;
 };
 
 export type UserRepo = {
@@ -601,6 +626,22 @@ export class ApiClient {
     await this.request<void>(
       `/agent/ai-prompt-jobs/${encodeURIComponent(jobId)}/complete`,
       { method: 'POST', body: input },
+    );
+  }
+
+  async getAutomationConfig(projectId: string): Promise<AutomationForDispatcher> {
+    return this.request<AutomationForDispatcher>(
+      `/agent/projects/${encodeURIComponent(projectId)}/automation`,
+    );
+  }
+
+  async recordAutomationTask(
+    projectId: string,
+    taskId: string,
+  ): Promise<AutomationForDispatcher> {
+    return this.request<AutomationForDispatcher>(
+      `/agent/projects/${encodeURIComponent(projectId)}/automation/record-task`,
+      { method: 'POST', body: { taskId } },
     );
   }
 

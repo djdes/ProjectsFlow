@@ -2,11 +2,13 @@ import type { Project } from '../../domain/project/Project.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { AiPromptJobRepository } from '../ai-prompt/AiPromptJobRepository.js';
+import type { AutomationRepository } from '../automation/AutomationRepository.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly tasks: TaskRepository;
   readonly aiPromptJobs: AiPromptJobRepository;
+  readonly automation: AutomationRepository;
 };
 
 export type DispatchedProject = {
@@ -16,6 +18,9 @@ export type DispatchedProject = {
   // Queued AI-prompt-job'ы по этому проекту (новый тип short-lived job'ов от сайта).
   // См. spec 2026-05-28-ai-prompt-improvement-design.md.
   readonly pendingAiPromptJobCount: number;
+  // Включена ли автоматизация (project_automation.enabled). Диспетчер по этому флагу
+  // решает, опрашивать ли полный конфиг GET'ом /automation. См. план virtual-exploring-pascal.md.
+  readonly automationEnabled: boolean;
 };
 
 // Главный тул для Ralph'а: какие проекты сейчас назначены ему как диспетчеру.
@@ -38,6 +43,9 @@ export class ListMyDispatchedProjects {
       if (row.projectId !== null) aiCountByProject.set(row.projectId, row.count);
     }
 
+    // Один запрос на все проекты с включённой автоматизацией.
+    const automationEnabledIds = new Set(await this.deps.automation.listEnabledProjectIds());
+
     const out: DispatchedProject[] = [];
     for (const p of projects) {
       const allTasks = await this.deps.tasks.listByProject(p.id);
@@ -51,7 +59,12 @@ export class ListMyDispatchedProjects {
           t.status === 'awaiting_clarification',
       ).length;
       const pendingAiPromptJobCount = aiCountByProject.get(p.id) ?? 0;
-      out.push({ project: p, openTaskCount, pendingAiPromptJobCount });
+      out.push({
+        project: p,
+        openTaskCount,
+        pendingAiPromptJobCount,
+        automationEnabled: automationEnabledIds.has(p.id),
+      });
     }
     return out;
   }

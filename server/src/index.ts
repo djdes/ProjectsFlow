@@ -104,6 +104,11 @@ import { ListPendingAiPromptJobs } from './application/ai-prompt/ListPendingAiPr
 import { ClaimAiPromptJob } from './application/ai-prompt/ClaimAiPromptJob.js';
 import { CompleteAiPromptJob } from './application/ai-prompt/CompleteAiPromptJob.js';
 import { AiPromptJobCleanup } from './application/ai-prompt/AiPromptJobCleanup.js';
+import { DrizzleAutomationRepository } from './infrastructure/repositories/DrizzleAutomationRepository.js';
+import { GetAutomationConfig } from './application/automation/GetAutomationConfig.js';
+import { SaveAutomationConfig } from './application/automation/SaveAutomationConfig.js';
+import { GetAutomationForDispatcher } from './application/automation/GetAutomationForDispatcher.js';
+import { RecordAutomationTask } from './application/automation/RecordAutomationTask.js';
 import { Sha256AgentTokenHasher } from './infrastructure/crypto/Sha256AgentTokenHasher.js';
 import { CreateAgentToken } from './application/agent/CreateAgentToken.js';
 import { ListAgentTokens } from './application/agent/ListAgentTokens.js';
@@ -259,6 +264,7 @@ const taskCommentRepo = new DrizzleTaskCommentRepository(db);
 const taskDelegationRepo = new DrizzleTaskDelegationRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const aiPromptJobRepo = new DrizzleAiPromptJobRepository(db);
+const automationRepo = new DrizzleAutomationRepository(db);
 const taskSearchRepo = new DrizzleTaskSearchRepository(db);
 const projectJoinRequestRepo = new DrizzleProjectJoinRequestRepository(db);
 const adminRepo = new DrizzleAdminRepository(db);
@@ -1216,6 +1222,31 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       tasks: taskRepo,
       aiPromptJobs: aiPromptJobRepo,
+      automation: automationRepo,
+    }),
+    // Автоматизация проектов (см. план virtual-exploring-pascal.md). Site-side (config/save)
+    // и agent-side (dispatcher view / record-task) use-case'ы — все через automationRepo.
+    getAutomationConfig: new GetAutomationConfig({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      automation: automationRepo,
+    }),
+    saveAutomationConfig: new SaveAutomationConfig({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      automation: automationRepo,
+    }),
+    getAutomationForDispatcher: new GetAutomationForDispatcher({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      automation: automationRepo,
+      now,
+    }),
+    recordAutomationTask: new RecordAutomationTask({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      automation: automationRepo,
+      now,
     }),
     setProjectDispatcher: new SetProjectDispatcher({
       projects: projectRepo,

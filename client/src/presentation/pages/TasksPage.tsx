@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { BookOpen, ChevronRight, Settings, Wallet } from 'lucide-react';
+import { BookOpen, Bot, ChevronRight, Settings, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useContainer } from '@/infrastructure/di/container';
 import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
+import { AutomationDialog } from '@/presentation/components/project/AutomationDialog';
 
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -14,6 +15,7 @@ export function TasksPage(): React.ReactElement {
   // Сумму больше не показываем (раньше был чип в шапке), сам блок Доход/Расход/Прибыль
   // живёт на странице /finance.
   const [financeVisible, setFinanceVisible] = useState(false);
+  const [automationOpen, setAutomationOpen] = useState(false);
 
   useEffect(() => {
     if (!projectId) return;
@@ -68,6 +70,10 @@ export function TasksPage(): React.ReactElement {
               </Link>
             </Button>
           )}
+          <Button variant="outline" size="sm" onClick={() => setAutomationOpen(true)}>
+            <Bot className="size-4" />
+            Автоматизация
+          </Button>
           <Button asChild variant="outline" size="sm">
             <Link to={`/projects/${data.id}/kb`}>
               <BookOpen className="size-4" />
@@ -84,6 +90,13 @@ export function TasksPage(): React.ReactElement {
       </div>
 
       <KanbanBoard projectId={data.id} projectName={data.name} memberCount={data.memberCount} />
+
+      <AutomationDialog
+        open={automationOpen}
+        onOpenChange={setAutomationOpen}
+        projectId={data.id}
+        hasDispatcher={data.dispatcherUserId !== null}
+      />
     </div>
   );
 }

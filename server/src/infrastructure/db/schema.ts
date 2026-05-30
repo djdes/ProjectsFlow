@@ -640,6 +640,51 @@ export type AiPromptJobRow = typeof aiPromptJobs.$inferSelect;
 export type NewAiPromptJobRow = typeof aiPromptJobs.$inferInsert;
 
 // ============================================================================
+// project_automation — миграция db/045. Автоматизация: если у проекта нет открытых
+// задач, диспетчер (ralph) сам генерирует и выполняет задачи по выбранным критериям.
+// Сайт хранит конфиг + редактируемые промпты, считает лимит и round-robin критериев.
+// См. план virtual-exploring-pascal.md.
+// ============================================================================
+export const projectAutomation = mysqlTable('project_automation', {
+  projectId: char('project_id', { length: 36 }).primaryKey(),
+  enabled: boolean('enabled').notNull().default(false),
+  limitKind: mysqlEnum('limit_kind', ['count', 'time']).notNull().default('count'),
+  limitCount: int('limit_count'),
+  limitMinutes: int('limit_minutes'),
+  pauseMinSeconds: int('pause_min_seconds').notNull().default(60),
+  pauseMaxSeconds: int('pause_max_seconds').notNull().default(300),
+  ralphMode: varchar('ralph_mode', { length: 16 }).notNull().default('silent'),
+  runStatus: mysqlEnum('run_status', ['idle', 'running', 'completed', 'stopped'])
+    .notNull()
+    .default('idle'),
+  runStartedAt: timestamp('run_started_at'),
+  tasksCreated: int('tasks_created').notNull().default(0),
+  lastTaskAt: timestamp('last_task_at'),
+  nextCriterionIdx: int('next_criterion_idx').notNull().default(0),
+  createdAt: createdAtCol(),
+  updatedAt: updatedAtCol(),
+});
+
+export type ProjectAutomationRow = typeof projectAutomation.$inferSelect;
+export type NewProjectAutomationRow = typeof projectAutomation.$inferInsert;
+
+// Критерии автоматизации: до 5 строк на проект, редактируемый системный промпт + уточнение.
+export const projectAutomationCriteria = mysqlTable(
+  'project_automation_criteria',
+  {
+    projectId: char('project_id', { length: 36 }).notNull(),
+    criterionKey: varchar('criterion_key', { length: 40 }).notNull(),
+    enabled: boolean('enabled').notNull().default(false),
+    systemPrompt: text('system_prompt').notNull(),
+    userHint: text('user_hint'),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.criterionKey] })],
+);
+
+export type ProjectAutomationCriterionRow = typeof projectAutomationCriteria.$inferSelect;
+export type NewProjectAutomationCriterionRow = typeof projectAutomationCriteria.$inferInsert;
+
+// ============================================================================
 // file-sync — миграция db/044. Кастомная (не-git) синхронизация папок:
 // контент-адресуемые блобы + снепшоты + change-set'ы + round-trip сессии + лента
 // прогресса. См. docs/superpowers/specs (PF Desktop Companion).

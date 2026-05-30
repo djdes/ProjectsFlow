@@ -47,6 +47,9 @@ import type { DeleteKbDocument } from '../../application/kb/DeleteKbDocument.js'
 import type { GetMyAccount } from '../../application/agent/GetMyAccount.js';
 import type { DeleteProject } from '../../application/project/DeleteProject.js';
 import type { ListMyDispatchedProjects } from '../../application/agent/ListMyDispatchedProjects.js';
+import type { GetAutomationForDispatcher } from '../../application/automation/GetAutomationForDispatcher.js';
+import type { RecordAutomationTask } from '../../application/automation/RecordAutomationTask.js';
+import type { AutomationForDispatcher } from '../../application/automation/automationView.js';
 import type { SetProjectDispatcher } from '../../application/project/SetProjectDispatcher.js';
 import type { GetDelegatedGitToken } from '../../application/project/GetDelegatedGitToken.js';
 import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemoryRateLimiter.js';
@@ -128,6 +131,8 @@ type Deps = {
   readonly getMyAccount: GetMyAccount;
   readonly deleteProject: DeleteProject;
   readonly listMyDispatchedProjects: ListMyDispatchedProjects;
+  readonly getAutomationForDispatcher: GetAutomationForDispatcher;
+  readonly recordAutomationTask: RecordAutomationTask;
   readonly setProjectDispatcher: SetProjectDispatcher;
   readonly getDelegatedGitToken: GetDelegatedGitToken;
   readonly rateLimiter: InMemoryRateLimiter;
@@ -205,6 +210,10 @@ const repoAccessRequestSchema = z.object({
   gitRepoUrl: z.string().trim().min(1).max(500),
   requestTarget: z.string().trim().min(1).max(200),
   message: z.string().max(2000).optional(),
+});
+
+const recordAutomationTaskBodySchema = z.object({
+  taskId: z.string().trim().min(1).max(64),
 });
 
 const updateTaskAgentSchema = z
@@ -330,6 +339,37 @@ function aiPromptJobToAgentDto(j: AiPromptJob): AiPromptJobDto {
     kbContext: j.kbContext,
     claimedAt: j.claimedAt ? j.claimedAt.toISOString() : null,
     createdAt: j.createdAt.toISOString(),
+  };
+}
+
+// Сериализация конфига автоматизации для диспетчера (даты → ISO).
+function automationForDispatcherToDto(v: AutomationForDispatcher): {
+  enabled: boolean;
+  shouldRun: boolean;
+  limitKind: AutomationForDispatcher['limitKind'];
+  limitCount: number | null;
+  limitMinutes: number | null;
+  tasksCreated: number;
+  runStartedAt: string | null;
+  runStatus: AutomationForDispatcher['runStatus'];
+  pauseMinSeconds: number;
+  pauseMaxSeconds: number;
+  ralphMode: string;
+  nextCriterion: AutomationForDispatcher['nextCriterion'];
+} {
+  return {
+    enabled: v.enabled,
+    shouldRun: v.shouldRun,
+    limitKind: v.limitKind,
+    limitCount: v.limitCount,
+    limitMinutes: v.limitMinutes,
+    tasksCreated: v.tasksCreated,
+    runStartedAt: v.runStartedAt ? v.runStartedAt.toISOString() : null,
+    runStatus: v.runStatus,
+    pauseMinSeconds: v.pauseMinSeconds,
+    pauseMaxSeconds: v.pauseMaxSeconds,
+    ralphMode: v.ralphMode,
+    nextCriterion: v.nextCriterion,
   };
 }
 
@@ -1276,12 +1316,53 @@ export function agentApiRouter(deps: Deps): Router {
           ...projectToAgentDto(d.project, me),
           openTaskCount: d.openTaskCount,
           pendingAiPromptJobCount: d.pendingAiPromptJobCount,
+          // Включена ли автоматизация — чтобы диспетчер за один round-trip знал, какие
+          // проекты опрашивать GET'ом /automation (без тяжёлого запроса с промптами).
+          automationEnabled: d.automationEnabled,
         })),
       });
     } catch (e) {
       next(e);
     }
   });
+
+  // Конфиг автоматизации проекта для диспетчера: shouldRun + следующий критерий с промптом.
+  // Только назначенный диспетчер проекта (requireDispatcherAccess внутри use-case).
+  router.get(
+    '/projects/:projectId/automation',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const view = await deps.getAutomationForDispatcher.execute({
+          projectId,
+          userId: req.user!.id,
+        });
+        res.json(automationForDispatcherToDto(view));
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Диспетчер сообщает, что создал очередную задачу автоматизации. Сервер инкрементит
+  // счётчик, стартует прогон на первой задаче, продвигает round-robin, закрывает при лимите.
+  router.post(
+    '/projects/:projectId/automation/record-task',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const body = recordAutomationTaskBodySchema.parse(req.body);
+        const view = await deps.recordAutomationTask.execute({
+          projectId,
+          userId: req.user!.id,
+          taskId: body.taskId,
+        });
+        res.json(automationForDispatcherToDto(view));
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   // Назначить / снять Ralph-диспетчера проекта. owner-only через use-case (отдельная
   // проверка роли внутри SetProjectDispatcher). userId === null = снять диспетчера.

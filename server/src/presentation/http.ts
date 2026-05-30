@@ -160,6 +160,11 @@ import { fileSyncRouter } from './file-sync/routes.js';
 import type { FileSyncService } from '../application/file-sync/FileSyncService.js';
 import { agentDeviceRouter } from './agent/deviceRoutes.js';
 import { buildAiPromptRouter } from './ai-prompt/routes.js';
+import { buildAutomationRouter } from './automation/routes.js';
+import type { GetAutomationConfig } from '../application/automation/GetAutomationConfig.js';
+import type { SaveAutomationConfig } from '../application/automation/SaveAutomationConfig.js';
+import type { GetAutomationForDispatcher } from '../application/automation/GetAutomationForDispatcher.js';
+import type { RecordAutomationTask } from '../application/automation/RecordAutomationTask.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
@@ -377,6 +382,11 @@ type AppDeps = {
     readonly getMyAccount: GetMyAccount;
     readonly deleteProject: DeleteProject;
     readonly listMyDispatchedProjects: ListMyDispatchedProjects;
+    // Автоматизация проектов (см. план virtual-exploring-pascal.md).
+    readonly getAutomationConfig: GetAutomationConfig;
+    readonly saveAutomationConfig: SaveAutomationConfig;
+    readonly getAutomationForDispatcher: GetAutomationForDispatcher;
+    readonly recordAutomationTask: RecordAutomationTask;
     readonly setProjectDispatcher: SetProjectDispatcher;
     readonly getDelegatedGitToken: GetDelegatedGitToken;
     readonly rateLimiter: InMemoryRateLimiter;
@@ -548,6 +558,8 @@ export function createApp(deps: AppDeps): CreatedApp {
       getMyAccount: deps.agent.getMyAccount,
       deleteProject: deps.agent.deleteProject,
       listMyDispatchedProjects: deps.agent.listMyDispatchedProjects,
+      getAutomationForDispatcher: deps.agent.getAutomationForDispatcher,
+      recordAutomationTask: deps.agent.recordAutomationTask,
       setProjectDispatcher: deps.agent.setProjectDispatcher,
       getDelegatedGitToken: deps.agent.getDelegatedGitToken,
       rateLimiter: deps.agent.rateLimiter,
@@ -582,6 +594,16 @@ export function createApp(deps: AppDeps): CreatedApp {
     buildAiPromptRouter({
       enqueueAiPromptJob: deps.agent.enqueueAiPromptJob,
       waitForAiPromptJob: deps.agent.waitForAiPromptJob,
+    }),
+  );
+
+  // Автоматизация проектов (site-side, session-cookie auth): см. план
+  // virtual-exploring-pascal.md. GET/PUT /api/projects/:projectId/automation.
+  app.use(
+    '/api',
+    buildAutomationRouter({
+      getAutomationConfig: deps.agent.getAutomationConfig,
+      saveAutomationConfig: deps.agent.saveAutomationConfig,
     }),
   );
 
