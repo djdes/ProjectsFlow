@@ -76,6 +76,7 @@ function makeHarness(opts?: {
     },
     async answerInlineQuery() {},
     async setWebhook() {},
+    async setMyCommands() {},
     async deleteWebhook() {},
     async getUpdates() {
       return [];

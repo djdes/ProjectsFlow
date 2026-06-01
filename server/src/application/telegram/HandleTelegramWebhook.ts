@@ -253,7 +253,10 @@ export class HandleTelegramWebhook {
     const name = firstName ? `, ${firstName}` : '';
     await this.reply(
       chatId,
-      `✅ Привет${name}! Бот подключён. Теперь буду присылать уведомления по твоим задачам.\n\nКоманды: /pending — открытые уточнения, /pause — остановить уведомления, /help — справка.`,
+      `✅ Готово${name}! Бот подключён ко всему твоему аккаунту — доступны все проекты.\n\n` +
+        `📝 Чтобы создать задачу, просто напиши мне текст — она уйдёт во «Входящие». ` +
+        `Для конкретного проекта: <code>+Проект текст</code>.\n\n` +
+        `Все возможности — /help`,
     );
   }
 
@@ -326,19 +329,28 @@ export class HandleTelegramWebhook {
   }
 
   private async handleHelp(chatId: number): Promise<void> {
+    const bot = this.deps.botUsername ? `@${this.deps.botUsername}` : '@бот';
     await this.reply(
       chatId,
-      `<b>Что я умею:</b>\n` +
-        `• Просто напиши текст — создам задачу во «Входящие».\n` +
-        `• <code>+Проект текст задачи</code> — создам в нужном проекте (подскажу кнопками).\n` +
-        `• <code>+Проект текст @Коллега</code> — делегирую коллеге (он примет/откажет).\n` +
-        `• Ответь reply'ем на карточку задачи — добавлю комментарий.\n\n` +
+      `🤖 <b>ProjectsFlow-бот</b>\n\n` +
+        `<b>Создавай задачи прямо отсюда — заходить в проекты не нужно:</b>\n\n` +
+        `📥 <b>Во «Входящие»</b> — просто напиши текст:\n` +
+        `   <code>Купить домен для лендинга</code>\n\n` +
+        `📁 <b>В конкретный проект</b> — добавь <code>+Проект</code> в начало:\n` +
+        `   <code>+ScanFlow поправить парсинг чеков</code>\n` +
+        `   <i>имя подскажу кнопками, если совпадёт несколько</i>\n\n` +
+        `👤 <b>Делегировать коллеге</b> — добавь <code>@Имя</code> в конец:\n` +
+        `   <code>+DocsFlow обновить шаблон @Олег</code>\n` +
+        `   <i>коллега получит кнопки «Принять / Отказать»</i>\n\n` +
+        `⚡ <b>Из любого чата</b> — набери <code>${bot} текст задачи</code> и выбери проект из списка.\n\n` +
+        `💬 <b>Комментарий</b> — ответь (reply) на карточку задачи от бота. Участники получат уведомление.\n\n` +
         `<b>Команды:</b>\n` +
-        `/tasks — мои проекты и задачи (просмотр + комментарий)\n` +
-        `/pending — задачи в статусе «На уточнении»\n` +
-        `/pause — отключить все уведомления\n` +
-        `/start — подключение (после привязки на /profile)\n` +
-        `/help — эта справка`,
+        `/tasks — мои проекты и задачи\n` +
+        `/pending — задачи «На уточнении»\n` +
+        `/pause — выключить уведомления\n` +
+        `/start — переподключить бота\n` +
+        `/help — эта справка\n\n` +
+        `🔗 <i>Telegram привязан ко всему аккаунту сразу — доступны все твои проекты.</i>`,
     );
   }
 
@@ -439,10 +451,17 @@ export class HandleTelegramWebhook {
 
   private async handleBrowseCallback(cq: TelegramCallbackQuery): Promise<void> {
     const data = cq.data ?? '';
-    const chatId = cq.message?.chat.id;
+    // В личном чате chat.id === from.id. Для «старых» сообщений (>48ч) Telegram НЕ
+    // присылает cq.message — берём chat из from.id, иначе кнопки старого /tasks ложно
+    // ругались бы «Привяжи Telegram», хотя аккаунт привязан. См.
+    // core.telegram.org/bots/api#callbackquery («message ... not available if too old»).
+    const chatId = cq.message?.chat.id ?? cq.from.id;
     const userId = await this.deps.users.findUserIdByTelegramUserId(cq.from.id);
-    if (!userId || chatId === undefined) {
-      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Привяжи Telegram (/start).', showAlert: true });
+    if (!userId) {
+      await this.deps.client.answerCallbackQuery(cq.id, {
+        text: 'Сначала привяжи Telegram: в профиле на сайте нажми «Login with Telegram», затем отправь /start.',
+        showAlert: true,
+      });
       return;
     }
     // bt:p:<projectId> | bt:t:<taskId>

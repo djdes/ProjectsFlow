@@ -16,6 +16,13 @@ export type InlineKeyboardMarkup = {
   readonly inline_keyboard: ReadonlyArray<ReadonlyArray<InlineKeyboardButton>>;
 };
 
+// Команда для меню бота (setMyCommands). command — без слэша, lowercase, ≤32 символа;
+// description ≤256. См. https://core.telegram.org/bots/api#botcommand
+export type TelegramBotCommand = {
+  readonly command: string;
+  readonly description: string;
+};
+
 export type SendMessageInput = {
   readonly chatId: number;
   readonly text: string;
@@ -117,6 +124,8 @@ export interface TelegramClient {
   // Регистрация webhook'а на старте сервера. Идемпотентно — TG перезаписывает.
   // secret_token валидируется в webhook handler через X-Telegram-Bot-Api-Secret-Token.
   setWebhook(url: string, secretToken: string): Promise<void>;
+  // Меню команд бота (кнопка «/» и Menu в TG-клиенте). Идемпотентно. Best-effort.
+  setMyCommands(commands: readonly TelegramBotCommand[]): Promise<void>;
   // Сброс webhook'а — для polling-mode (Telegram не даёт одновременно webhook+getUpdates,
   // иначе getUpdates вернёт 409 Conflict).
   deleteWebhook(): Promise<void>;

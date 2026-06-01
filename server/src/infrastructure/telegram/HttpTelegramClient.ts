@@ -8,6 +8,7 @@ import {
   type EditMessageTextInput,
   type SendMessageInput,
   type SendMessageResult,
+  type TelegramBotCommand,
   type TelegramClient,
   type TelegramUpdate,
 } from '../../application/telegram/TelegramClient.js';
@@ -170,6 +171,15 @@ export class HttpTelegramClient implements TelegramClient {
     if (!res.ok || !body?.ok) {
       throw new Error(`setWebhook failed: ${body?.description ?? res.status}`);
     }
+  }
+
+  async setMyCommands(commands: readonly TelegramBotCommand[]): Promise<void> {
+    // Best-effort: меню команд — приятный бонус, его сбой не должен ронять старт.
+    await this.tgFetch('/setMyCommands', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commands }),
+    }).catch(() => {});
   }
 
   async deleteWebhook(): Promise<void> {

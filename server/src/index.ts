@@ -1394,6 +1394,18 @@ const server = app.listen(config.port, () => {
   // auto = webhook если задан URL+secret, иначе polling. Полезно для хостингов где
   // inbound от Telegram блокируется — там webhook никогда не доставит апдейты.
   const tgMode = (process.env['TELEGRAM_MODE'] || 'auto').toLowerCase();
+  if (telegramBotToken) {
+    // Меню команд бота (кнопка «/» в TG-клиенте) — discoverability функционала. Best-effort.
+    void telegramClient
+      .setMyCommands([
+        { command: 'tasks', description: 'Мои проекты и задачи' },
+        { command: 'pending', description: 'Задачи на уточнении' },
+        { command: 'pause', description: 'Выключить уведомления' },
+        { command: 'help', description: 'Что умеет бот' },
+        { command: 'start', description: 'Подключить бота' },
+      ])
+      .catch((err) => console.warn('[projectsflow] telegram setMyCommands failed:', err));
+  }
   if (!telegramBotToken) {
     console.log('[projectsflow] telegram bot: DISABLED (missing TELEGRAM_BOT_TOKEN)');
   } else if (
