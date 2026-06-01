@@ -1,4 +1,4 @@
-import { Router, type NextFunction, type Request, type Response } from 'express';
+import { Router, raw, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import type { ListProjects } from '../../application/project/ListProjects.js';
 import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
@@ -36,6 +36,7 @@ import {
   AiPromptJobNotFoundError,
   AiPromptProjectHasNoDispatcherError,
 } from '../../domain/ai-prompt/errors.js';
+import type { UploadTaskAttachment } from '../../application/task/UploadTaskAttachment.js';
 import type { AiPromptJob } from '../../domain/ai-prompt/AiPromptJob.js';
 import type { PendingAiPromptJob } from '../../application/ai-prompt/AiPromptJobRepository.js';
 import type { AckRalphCancel } from '../../application/task/AckRalphCancel.js';
@@ -124,6 +125,8 @@ type Deps = {
   readonly completeAiPromptJob: CompleteAiPromptJob;
   readonly enqueueAiPromptJob: EnqueueAiPromptJob;
   readonly waitForAiPromptJob: WaitForAiPromptJob;
+  readonly uploadTaskAttachment: UploadTaskAttachment;
+  readonly maxAttachmentBytes: number;
   readonly ackRalphCancel: AckRalphCancel;
   readonly checkRepoUsage: CheckRepoUsage;
   readonly requestRepoAccess: RequestRepoAccess;
@@ -1116,6 +1119,43 @@ export function agentApiRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  // === Загрузка вложения к задаче для AGENT-клиентов (PFCompanion) ===
+  // Веб грузит multipart (web-only). Тут — сырые байты (octet-stream), filename/mimeType в query,
+  // чтобы не раздувать через base64/JSON-лимит. Тот же use-case + лимит размера, что и веб.
+  // Требует manage_attachments у проекта (owner/editor). Картинки из буфера и файлы шлёт клиент.
+  router.post(
+    '/projects/:projectId/tasks/:taskId/attachments',
+    raw({ type: () => true, limit: deps.maxAttachmentBytes + 1024 }),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const fnQ = req.query['filename'];
+        const mtQ = req.query['mimeType'];
+        const filename = typeof fnQ === 'string' && fnQ.length > 0 ? fnQ : 'attachment.bin';
+        const mimeType = typeof mtQ === 'string' && mtQ.length > 0 ? mtQ : 'application/octet-stream';
+        const data = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+        if (data.byteLength === 0) {
+          res.status(400).json({ error: 'no_file', message: 'Пустое вложение' });
+          return;
+        }
+        const att = await deps.uploadTaskAttachment.execute({
+          projectId,
+          ownerUserId: req.user!.id,
+          taskId,
+          filename,
+          mimeType,
+          data,
+        });
+        res.status(201).json({
+          attachment: { id: att.id, filename: att.filename, mimeType: att.mimeType, sizeBytes: att.sizeBytes },
+        });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   // Ralph диспетчер ack-ит cancel: сбрасывает флаг ralph_cancel_requested_at чтобы UI
   // убрал «Отмена запрошена»-badge. Идемпотентно. См. spec C:/www/ralph/prompts/task-ralph-cancel.md §5.

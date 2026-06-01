@@ -560,6 +560,8 @@ export function createApp(deps: AppDeps): CreatedApp {
       completeAiPromptJob: deps.agent.completeAiPromptJob,
       enqueueAiPromptJob: deps.agent.enqueueAiPromptJob,
       waitForAiPromptJob: deps.agent.waitForAiPromptJob,
+      uploadTaskAttachment: deps.tasks.uploadAttachment,
+      maxAttachmentBytes: deps.tasks.maxAttachmentBytes,
       ackRalphCancel: deps.agent.ackRalphCancel,
       checkRepoUsage: deps.agent.checkRepoUsage,
       requestRepoAccess: deps.agent.requestRepoAccess,
