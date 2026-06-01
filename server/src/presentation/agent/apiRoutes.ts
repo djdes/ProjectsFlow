@@ -28,6 +28,14 @@ import type { WriteKbDocument } from '../../application/kb/WriteKbDocument.js';
 import type { ListPendingAiPromptJobs } from '../../application/ai-prompt/ListPendingAiPromptJobs.js';
 import type { ClaimAiPromptJob } from '../../application/ai-prompt/ClaimAiPromptJob.js';
 import type { CompleteAiPromptJob } from '../../application/ai-prompt/CompleteAiPromptJob.js';
+import { AiPromptRateLimitedError, type EnqueueAiPromptJob } from '../../application/ai-prompt/EnqueueAiPromptJob.js';
+import type { WaitForAiPromptJob } from '../../application/ai-prompt/WaitForAiPromptJob.js';
+import {
+  AiPromptDispatcherNotConfiguredError,
+  AiPromptJobAccessDeniedError,
+  AiPromptJobNotFoundError,
+  AiPromptProjectHasNoDispatcherError,
+} from '../../domain/ai-prompt/errors.js';
 import type { AiPromptJob } from '../../domain/ai-prompt/AiPromptJob.js';
 import type { PendingAiPromptJob } from '../../application/ai-prompt/AiPromptJobRepository.js';
 import type { AckRalphCancel } from '../../application/task/AckRalphCancel.js';
@@ -114,6 +122,8 @@ type Deps = {
   readonly listPendingAiPromptJobs: ListPendingAiPromptJobs;
   readonly claimAiPromptJob: ClaimAiPromptJob;
   readonly completeAiPromptJob: CompleteAiPromptJob;
+  readonly enqueueAiPromptJob: EnqueueAiPromptJob;
+  readonly waitForAiPromptJob: WaitForAiPromptJob;
   readonly ackRalphCancel: AckRalphCancel;
   readonly checkRepoUsage: CheckRepoUsage;
   readonly requestRepoAccess: RequestRepoAccess;
@@ -306,6 +316,24 @@ const completeAiPromptJobBodySchema = z
     (b) => (b.ok ? true : Boolean(b.error && b.error.trim().length > 0)),
     { message: 'error required when ok=false', path: ['error'] },
   );
+
+// AI-prompt-job submit/poll для AGENT-клиентов (PFCompanion) — зеркало web-схем (ai-prompt/routes.ts).
+const enqueueAiPromptBodySchema = z.object({
+  text: z.string().trim().min(1, 'text must be 1..5000 chars').max(5000, 'text must be 1..5000 chars'),
+  projectId: z
+    .string()
+    .uuid('projectId must be uuid')
+    .nullable()
+    .optional()
+    .transform((v) => v ?? null),
+});
+const aiPromptWaitQuerySchema = z.object({
+  wait: z
+    .string()
+    .optional()
+    .transform((v) => (v ? parseInt(v, 10) : 25))
+    .pipe(z.number().int().min(1).max(60)),
+});
 
 type PendingAiPromptJobDto = {
   id: string;
@@ -1045,6 +1073,49 @@ export function agentApiRouter(deps: Deps): Router {
       }
     },
   );
+
+  // === AI Prompt Jobs — SUBMIT + POLL для AGENT-клиентов (PFCompanion desktop) ===
+  // Зеркало web-роутов /api/ai/prompt-jobs (presentation/ai-prompt/routes.ts), но под agent-токеном
+  // (Bearer). Десктоп-клиент шлёт промпт → диспетчер (тот же поток pending/claim/complete выше)
+  // улучшает текст → клиент long-poll'ит результат. Требует работающего диспетчера у проекта.
+  router.post('/ai-prompt-jobs', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = enqueueAiPromptBodySchema.parse(req.body);
+      const job = await deps.enqueueAiPromptJob.execute({
+        userId: req.user!.id,
+        text: body.text,
+        projectId: body.projectId,
+      });
+      res.status(201).json({ jobId: job.id, status: job.status, createdAt: job.createdAt.toISOString() });
+    } catch (e) {
+      if (e instanceof AiPromptRateLimitedError) { res.status(429).json({ error: 'rate_limited', message: e.message }); return; }
+      if (e instanceof AiPromptDispatcherNotConfiguredError) { res.status(503).json({ error: 'ai_not_configured', message: 'AI временно недоступен' }); return; }
+      if (e instanceof AiPromptProjectHasNoDispatcherError) { res.status(503).json({ error: 'no_dispatcher_for_project', message: 'У проекта не назначен диспетчер для AI-улучшений' }); return; }
+      next(e);
+    }
+  });
+
+  // GET /agent/ai-prompt-jobs/:jobId?wait=25 — long-poll результата (200 готово / 504 таймаут).
+  router.get('/ai-prompt-jobs/:jobId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const jobId = req.params['jobId'] as string;
+      const { wait } = aiPromptWaitQuerySchema.parse(req.query);
+      const job = await deps.waitForAiPromptJob.execute({ userId: req.user!.id, jobId, maxWaitMs: wait * 1000 });
+      if (job === null) { res.status(504).json({ error: 'timeout', jobId, status: 'queued' }); return; }
+      res.json({
+        jobId: job.id,
+        status: job.status,
+        improvedText: job.improvedText,
+        error: job.error,
+        createdAt: job.createdAt.toISOString(),
+        finishedAt: job.finishedAt ? job.finishedAt.toISOString() : null,
+      });
+    } catch (e) {
+      if (e instanceof AiPromptJobNotFoundError) { res.status(404).json({ error: 'job_not_found' }); return; }
+      if (e instanceof AiPromptJobAccessDeniedError) { res.status(403).json({ error: 'not_owner' }); return; }
+      next(e);
+    }
+  });
 
   // Ralph диспетчер ack-ит cancel: сбрасывает флаг ralph_cancel_requested_at чтобы UI
   // убрал «Отмена запрошена»-badge. Идемпотентно. См. spec C:/www/ralph/prompts/task-ralph-cancel.md §5.
