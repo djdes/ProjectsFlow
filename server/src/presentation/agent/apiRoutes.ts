@@ -2,6 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { z } from 'zod';
 import type { ListProjects } from '../../application/project/ListProjects.js';
 import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
+import type { DispatchCommentNotifications } from '../../application/notifications/DispatchCommentNotifications.js';
 import type { CreateProjectWithGit } from '../../application/project/CreateProjectWithGit.js';
 import type { UpdateProject } from '../../application/project/UpdateProject.js';
 import type { ListUserRepos } from '../../application/github/ListUserRepos.js';
@@ -138,6 +139,8 @@ type Deps = {
   readonly rateLimiter: InMemoryRateLimiter;
   // Email-оповещения команде (источник 'mcp' — действия агента). Fire-and-forget.
   readonly notifier: ProjectNotificationService;
+  // Оркестратор уведомлений по комментарию: email+TG адресно + журнал доставки.
+  readonly dispatchCommentNotifications: DispatchCommentNotifications;
   // Multi-user TG-уведомления (Ralph → @projectsflow_bot → юзер).
   readonly sendTelegramNotification: SendAgentTelegramNotification;
   readonly broadcastTelegramByTask: BroadcastTelegramNotificationByTask;
@@ -809,8 +812,27 @@ export function agentApiRouter(deps: Deps): Router {
           body: body.body,
           actorKind: 'agent',
           agentName,
+          // Agent-комменты адресуют всех (по mcp-prefs), без UI-выбора. notifyMode='all'.
+          notifyMode: 'all',
         });
-        void deps.notifier.onComment(projectId, req.user!.id, taskId, body.body, 'mcp').catch(() => {});
+        // Адресные уведомления (email + TG) + журнал доставки, источник 'mcp'.
+        // Для mcp дефолт comment_created — off: спама нет, но журнал зафиксирует
+        // skipped/pref_off, а упомянутые (@mention) получат email принудительно.
+        void deps.dispatchCommentNotifications
+          .execute({
+            projectId,
+            actorUserId: req.user!.id,
+            source: 'mcp',
+            audience: { mode: 'all' },
+            comment: {
+              id: comment.id,
+              taskId,
+              body: body.body,
+              actorKind: comment.actorKind,
+              agentName: comment.agentName,
+            },
+          })
+          .catch((err) => console.warn('[agent/comment-dispatch] failed:', err));
         deps.notifyCommentAdded(
           projectId,
           taskId,

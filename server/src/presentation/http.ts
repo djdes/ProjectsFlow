@@ -108,6 +108,8 @@ import type { MarkAllNotificationsRead } from '../application/notifications/Mark
 import type { Notification as NotificationEntity } from '../domain/notifications/Notification.js';
 import type { RealtimeEvent } from '../domain/realtime/RealtimeEvent.js';
 import type { ProjectNotificationService } from '../application/notifications/ProjectNotificationService.js';
+import type { DispatchCommentNotifications } from '../application/notifications/DispatchCommentNotifications.js';
+import type { GetCommentNotifications } from '../application/task/GetCommentNotifications.js';
 import type { ListAllProjects } from '../application/admin/ListAllProjects.js';
 import type { ListAllUsers } from '../application/admin/ListAllUsers.js';
 import type { ListUserProjectsWithDispatcher } from '../application/admin/ListUserProjectsWithDispatcher.js';
@@ -324,6 +326,8 @@ type AppDeps = {
     readonly tasks: TaskRepository;
     readonly maybeReopenForClarification: MaybeReopenForClarification;
     readonly broadcastTelegram: BroadcastTelegramNotificationByTask;
+    readonly dispatchCommentNotifications: DispatchCommentNotifications;
+    readonly getCommentNotifications: GetCommentNotifications;
     readonly projectRepo: ProjectRepository;
   };
   readonly delegations: {
@@ -393,6 +397,7 @@ type AppDeps = {
     readonly setProjectDispatcher: SetProjectDispatcher;
     readonly getDelegatedGitToken: GetDelegatedGitToken;
     readonly rateLimiter: InMemoryRateLimiter;
+    readonly dispatchCommentNotifications: DispatchCommentNotifications;
     readonly sendTelegramNotification: SendAgentTelegramNotification;
     readonly broadcastTelegramByTask: BroadcastTelegramNotificationByTask;
     readonly projects: ProjectRepository;
@@ -442,7 +447,10 @@ export function createApp(deps: AppDeps): CreatedApp {
   );
   app.use('/api/integrations/github', githubRouter(deps.github));
   app.use('/api/projects/:projectId/secrets', secretsRouter(deps.secrets));
-  app.use('/api/projects/:projectId/kb', kbRouter(deps.kb));
+  app.use(
+    '/api/projects/:projectId/kb',
+    kbRouter({ ...deps.kb, notifier: deps.notifications.projectNotifier }),
+  );
   app.use(
     '/api/projects/:projectId/tasks',
     tasksRouter({
@@ -579,6 +587,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       notifyStatusChanged: deps.tasks.notifyStatusChanged,
       taskRepo: deps.tasks.tasks,
       maybeReopenForClarification: deps.tasks.maybeReopenForClarification,
+      dispatchCommentNotifications: deps.agent.dispatchCommentNotifications,
       sendTelegramNotification: deps.agent.sendTelegramNotification,
       broadcastTelegramByTask: deps.agent.broadcastTelegramByTask,
       projects: deps.agent.projects,

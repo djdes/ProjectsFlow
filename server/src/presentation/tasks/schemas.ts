@@ -55,10 +55,19 @@ export const linkCommitSchema = z.object({
   sha: z.string().trim().regex(/^[0-9a-f]{7,40}$/i, { message: 'Невалидный SHA коммита' }),
 });
 
+// Адресация уведомления из композера. mode='all' (по умолчанию) — все участники;
+// 'selected' — только userIds; 'none' — никого. См. db/047 + DispatchCommentNotifications.
+export const notifyAudienceSchema = z.object({
+  mode: z.enum(['all', 'selected', 'none']),
+  userIds: z.array(z.string().uuid()).max(200).optional(),
+});
+
 // Лимит 10000 символов — на пару порядков больше типичного комментария, но защищает
 // от случайной вставки гигантского лога.
 export const createTaskCommentSchema = z.object({
   body: z.string().trim().min(1, 'Введите текст комментария').max(10000),
+  // Опционально: старые клиенты без поля → дефолт 'all' на роуте.
+  notify: notifyAudienceSchema.optional(),
 });
 
 // Agent-вариант: тот же body + optional agentName. Поле опциональное чтобы старые

@@ -1,15 +1,14 @@
 import { TaskCommentBodyEmptyError, TaskNotFoundError } from '../../domain/task/errors.js';
 import type { TaskComment, TaskCommentActorKind } from '../../domain/task/TaskComment.js';
+import type { CommentNotifyMode } from '../../domain/task/TaskComment.js';
 import type { NotificationRepository } from '../notifications/NotificationRepository.js';
-import type {
-  ProjectMemberRepository,
-  ProjectMemberWithUser,
-} from '../project/ProjectMemberRepository.js';
+import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
 import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
+import { parseMentions } from './parseMentions.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -30,26 +29,10 @@ export type CreateTaskCommentCommand = {
   // Agent-роутер передаёт 'agent' + agentName. См. spec comment-actor-kind.md.
   readonly actorKind?: TaskCommentActorKind;
   readonly agentName?: string | null;
+  // Режим адресации уведомления (из композера). По умолчанию 'all'. Сохраняется на
+  // комментарии для меню ⋮ «Кто уведомлён». Сама рассылка — в DispatchCommentNotifications.
+  readonly notifyMode?: CommentNotifyMode;
 };
-
-// Парсит @-mentions из body против списка members. Один член может быть упомянут
-// несколько раз — возвращаем уникальные user-id (исключая self). Алгоритм: для каждого
-// member'а ищем `@${displayName}` как substring (case-insensitive). Это просто и
-// предсказуемо: client-picker всегда вставляет exact-match по displayName.
-function parseMentions(
-  body: string,
-  members: readonly ProjectMemberWithUser[],
-  authorUserId: string,
-): string[] {
-  const lower = body.toLowerCase();
-  const seen = new Set<string>();
-  for (const m of members) {
-    if (m.userId === authorUserId) continue;
-    const needle = `@${m.user.displayName.toLowerCase()}`;
-    if (lower.includes(needle)) seen.add(m.userId);
-  }
-  return [...seen];
-}
 
 const EXCERPT_LIMIT = 80;
 
@@ -82,6 +65,7 @@ export class CreateTaskComment {
       body,
       actorKind: input.actorKind,
       agentName: input.agentName,
+      notifyMode: input.notifyMode,
     });
 
     // Mention-парсинг. Уведомления — best-effort: если что-то упадёт здесь, комментарий

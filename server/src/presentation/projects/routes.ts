@@ -434,6 +434,10 @@ export function projectsRouter(deps: Deps): Router {
         const userId = req.params['userId'];
         if (typeof id !== 'string' || typeof userId !== 'string') throw new ProjectNotFoundError();
         await deps.removeMember.execute(id, req.user!.id, userId);
+        // Оставшимся участникам — email «изменение в команде» (fire-and-forget).
+        void deps.notifier
+          .onMemberChanged(id, req.user!.id, 'удалил участника из проекта', 'team')
+          .catch(() => {});
         res.status(204).end();
       } catch (e) {
         next(e);

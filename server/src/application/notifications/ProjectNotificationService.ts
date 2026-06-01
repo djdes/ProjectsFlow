@@ -9,6 +9,7 @@ import {
 } from '../../domain/notifications/NotificationPrefs.js';
 import { renderActivityEmail, type ActivityEmailInput } from './emails/activityEmail.js';
 import { renderProjectDeletedEmail } from './emails/projectDeletedEmail.js';
+import { buildTaskUrl } from './taskUrl.js';
 
 type Deps = {
   readonly members: ProjectMemberRepository;
@@ -26,9 +27,9 @@ type TaskCtx = { readonly id: string; readonly description: string | null };
 export class ProjectNotificationService {
   constructor(private readonly deps: Deps) {}
 
-  private taskUrl(projectId: string, taskId: string): string {
-    const base = this.deps.appUrl.replace(/\/$/, '');
-    return `${base}/projects/${projectId}?task=${taskId}`;
+  // commentId (опц.) → добавляет якорь #comment-{id}: письмо ведёт на сам комментарий.
+  private taskUrl(projectId: string, taskId: string, commentId?: string): string {
+    return buildTaskUrl(this.deps.appUrl, projectId, taskId, commentId);
   }
 
   private projectUrl(projectId: string): string {

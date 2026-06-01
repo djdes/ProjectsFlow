@@ -29,10 +29,12 @@ import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { taskShortId, type Task } from '@/domain/task/Task';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
-import type { TaskComment } from '@/domain/task/TaskComment';
+import type { NotifyAudience, TaskComment } from '@/domain/task/TaskComment';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
+import { CommentActionsMenu } from '@/presentation/components/tasks/CommentActionsMenu';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { TaskCommitsSection } from './TaskCommitsSection';
 import { CommentBody } from './CommentBody';
@@ -68,7 +70,9 @@ type PendingFile = {
 
 export type TaskDrawerState =
   | { mode: 'create'; status: Task['status'] }
-  | { mode: 'edit'; task: Task };
+  // scrollToCommentId — deep-link из письма/TG (?task=X#comment-Y): после загрузки
+  // комментариев секция скроллит к нему и подсвечивает.
+  | { mode: 'edit'; task: Task; scrollToCommentId?: string };
 
 type Props = {
   state: TaskDrawerState | null;
@@ -485,6 +489,7 @@ export function TaskDrawer({
   );
 
   const task = state?.mode === 'edit' ? state.task : null;
+  const scrollToCommentId = state?.mode === 'edit' ? state.scrollToCommentId : undefined;
   const canEdit = !!task && task.status !== 'done';
 
   return (
@@ -624,6 +629,7 @@ export function TaskDrawer({
                   taskId={task.id}
                   onCommentCreatedRef={onCommentCreatedRef}
                   onFirstLoad={scrollBodyToBottom}
+                  scrollToCommentId={scrollToCommentId}
                 />
               </div>
             </div>
@@ -963,11 +969,14 @@ function TaskCommentsSection({
   // Дёргается один раз после первой успешной загрузки комментариев — drawer
   // использует это, чтобы скроллнуть body вниз (к последнему сообщению).
   onFirstLoad,
+  // Deep-link: id комментария, к которому надо скроллнуть после загрузки (?task=X#comment-Y).
+  scrollToCommentId,
 }: {
   projectId: string;
   taskId: string;
   onCommentCreatedRef?: React.MutableRefObject<((c: TaskComment) => void) | null>;
   onFirstLoad?: () => void;
+  scrollToCommentId?: string;
 }): React.ReactElement {
   const { taskRepository, projectRepository } = useContainer();
   const [comments, setComments] = useState<TaskComment[]>([]);
@@ -1005,6 +1014,21 @@ function TaskCommentsSection({
       cancelled = true;
     };
   }, [projectId, taskId, taskRepository, projectRepository, onFirstLoad]);
+
+  // Deep-link из письма/TG: ?task=X#comment-Y → скроллим к комментарию и подсвечиваем.
+  // id приходит пропом (KanbanBoard ловит его из hash до того как очистит ?task=).
+  useEffect(() => {
+    if (loading || !scrollToCommentId) return undefined;
+    if (!comments.some((c) => c.id === scrollToCommentId)) return undefined;
+    const t = window.setTimeout(() => {
+      const el = document.getElementById(`comment-${scrollToCommentId}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('pf-comment-flash');
+      window.setTimeout(() => el.classList.remove('pf-comment-flash'), 2000);
+    }, 60);
+    return () => window.clearTimeout(t);
+  }, [loading, comments, scrollToCommentId]);
 
   const handleUpdated = (updated: TaskComment): void => {
     setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
@@ -1100,6 +1124,8 @@ function CommentComposer({
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState(false);
+  // Адресация уведомления (по умолчанию — все участники).
+  const [notify, setNotify] = useState<NotifyAudience>({ mode: 'all' });
   const [mention, setMention] = useState<MentionState | null>(null);
   const [pickerIndex, setPickerIndex] = useState(0);
   const [pending, setPending] = useState<PendingFile[]>([]);
@@ -1201,7 +1227,7 @@ function CommentComposer({
     if ((trimmed.length === 0 && pending.length === 0) || submitting) return;
     setSubmitting(true);
     try {
-      const created = await taskRepository.createComment(projectId, taskId, trimmed || ' ');
+      const created = await taskRepository.createComment(projectId, taskId, trimmed || ' ', notify);
       const uploaded: TaskAttachment[] = [];
       for (const pf of pending) {
         try {
@@ -1367,7 +1393,16 @@ function CommentComposer({
         >
           Превью
         </button>
-        <span className="ml-auto text-[10px] text-muted-foreground/60">Markdown + HTML</span>
+        <div className="ml-auto">
+          <NotifyAudienceControl
+            projectId={projectId}
+            excludeUserId={currentUser?.id ?? null}
+            members={members}
+            value={notify}
+            onChange={setNotify}
+            disabled={submitting}
+          />
+        </div>
       </div>
     </div>
   );
@@ -1540,7 +1575,7 @@ function CommentItem({
   const initials = getInitials(displayName);
 
   return (
-    <li className="group flex items-start gap-2.5 py-1">
+    <li id={`comment-${comment.id}`} className="group flex scroll-mt-4 items-start gap-2.5 py-1">
       {isAgent ? (
         // Avatar заменён на «✻»-плашку — иконка Claude в peach-кружке, не путается с
         // юзер-аватаром Denis (он был источником путаницы в исходном issue).
@@ -1594,6 +1629,7 @@ function CommentItem({
             >
               <Trash2 className="size-3" />
             </Button>
+            <CommentActionsMenu projectId={projectId} taskId={taskId} comment={comment} />
           </div>
         </div>
         {editing ? (

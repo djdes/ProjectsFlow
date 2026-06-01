@@ -27,3 +27,7 @@ coverage/
 # Task attachments (картинки/скриншоты — хранятся на диске, не коммитим)
 uploads/
 */uploads/
+# TypeScript incremental build cache
+*.tsbuildinfo
+# file-sync runtime blob storage (контент-адресуемые блобы, создаются в рантайме)
+*/sync-blobs/

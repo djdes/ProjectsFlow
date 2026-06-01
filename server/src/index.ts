@@ -36,6 +36,9 @@ import { ReorderProjects } from './application/project/ReorderProjects.js';
 import { ToggleProjectFavorite } from './application/project/ToggleProjectFavorite.js';
 import { ReorderFavoriteProjects } from './application/project/ReorderFavoriteProjects.js';
 import { ProjectNotificationService } from './application/notifications/ProjectNotificationService.js';
+import { DispatchCommentNotifications } from './application/notifications/DispatchCommentNotifications.js';
+import { GetCommentNotifications } from './application/task/GetCommentNotifications.js';
+import { DrizzleCommentNotificationLogRepository } from './infrastructure/repositories/DrizzleCommentNotificationLogRepository.js';
 import { CreateProjectWithGit } from './application/project/CreateProjectWithGit.js';
 import { GetOrCreateInbox } from './application/project/GetOrCreateInbox.js';
 import { ListProjectMembers } from './application/project/ListProjectMembers.js';
@@ -449,6 +452,19 @@ const broadcastTelegramByTask = new BroadcastTelegramNotificationByTask({
   tasks: taskRepo,
   members: projectMemberRepo,
   send: sendAgentTelegramNotification,
+});
+// Журнал доставки уведомлений по комментарию + оркестратор (email + TG адресно).
+// Единый источник «кто уведомлён» — питает меню ⋮ у комментария.
+const commentNotificationLogRepo = new DrizzleCommentNotificationLogRepository(db);
+const dispatchCommentNotifications = new DispatchCommentNotifications({
+  members: projectMemberRepo,
+  projects: projectRepo,
+  tasks: taskRepo,
+  email: emailSender,
+  tgSend: sendAgentTelegramNotification,
+  log: commentNotificationLogRepo,
+  idGen: idGenerator,
+  appUrl: appBaseUrl,
 });
 // Polling-fallback: для хостингов где inbound от Telegram блокируется (типично RU).
 // Сам long-poll'ит getUpdates через тот же proxy.
@@ -941,6 +957,14 @@ const { app, devProxyUpgrade } = createApp({
     tasks: taskRepo,
     maybeReopenForClarification,
     broadcastTelegram: broadcastTelegramByTask,
+    dispatchCommentNotifications,
+    getCommentNotifications: new GetCommentNotifications({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      comments: taskCommentRepo,
+      log: commentNotificationLogRepo,
+    }),
     projectRepo,
   },
   delegations: {
@@ -1265,6 +1289,7 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
     }),
     rateLimiter: agentRateLimiter,
+    dispatchCommentNotifications,
     sendTelegramNotification: sendAgentTelegramNotification,
     broadcastTelegramByTask,
     projects: projectRepo,

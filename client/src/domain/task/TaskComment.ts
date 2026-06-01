@@ -13,6 +13,19 @@ export type KnownAgentName =
   | 'ralph-grillme'
   | 'ralph-verify';
 
+// Режим адресации уведомления, выбранный автором в композере. См. db/047.
+//   'all'      — уведомить всех участников;
+//   'selected' — только выбранных;
+//   'none'     — никого.
+export type CommentNotifyMode = 'all' | 'selected' | 'none';
+
+// Выбор аудитории из композера, уходит в POST /comments.
+export type NotifyAudience = {
+  readonly mode: CommentNotifyMode;
+  // Для mode==='selected' — выбранные user-id.
+  readonly userIds?: readonly string[];
+};
+
 export type TaskComment = {
   readonly id: string;
   readonly taskId: string;
@@ -25,6 +38,28 @@ export type TaskComment = {
   readonly actorKind: TaskCommentActorKind;
   // Конкретный agent (для UI-title). NULL если actorKind != 'agent'.
   readonly agentName: string | null;
+  // Режим адресации уведомления (для меню ⋮ «Кто уведомлён»). Fallback 'all'.
+  readonly notifyMode: CommentNotifyMode;
   // Вложения комментария (на list-эндпоинте). На create — пусто (грузятся отдельно).
   readonly attachments: TaskAttachment[];
+};
+
+// Строка журнала доставки уведомления (для меню ⋮ «Кто уведомлён»).
+export type CommentNotificationChannel = 'email' | 'telegram';
+export type CommentNotificationStatus = 'sent' | 'skipped' | 'failed';
+
+export type CommentNotification = {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly avatarUrl: string | null;
+  readonly channel: CommentNotificationChannel;
+  readonly status: CommentNotificationStatus;
+  readonly reason: string | null;
+  readonly createdAt: Date;
+};
+
+// Ответ read-эндпоинта «кто уведомлён»: режим + список доставок.
+export type CommentNotifications = {
+  readonly notifyMode: CommentNotifyMode;
+  readonly recipients: CommentNotification[];
 };

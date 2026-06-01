@@ -1,4 +1,8 @@
-import type { TaskComment, TaskCommentActorKind } from '../../domain/task/TaskComment.js';
+import type {
+  CommentNotifyMode,
+  TaskComment,
+  TaskCommentActorKind,
+} from '../../domain/task/TaskComment.js';
 
 export type CreateTaskCommentInput = {
   readonly id: string;
@@ -9,6 +13,8 @@ export type CreateTaskCommentInput = {
   readonly actorKind?: TaskCommentActorKind;
   // Конкретный agent (для UI title). NULL если actorKind != 'agent'.
   readonly agentName?: string | null;
+  // Режим адресации уведомления. DEFAULT 'all'. См. db/047.
+  readonly notifyMode?: CommentNotifyMode;
 };
 
 export type UpdateTaskCommentInput = {

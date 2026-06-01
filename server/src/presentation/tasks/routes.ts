@@ -26,6 +26,8 @@ import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { TaskComment } from '../../domain/task/TaskComment.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
+import type { DispatchCommentNotifications } from '../../application/notifications/DispatchCommentNotifications.js';
+import type { GetCommentNotifications } from '../../application/task/GetCommentNotifications.js';
 import type { TaskRepository } from '../../application/task/TaskRepository.js';
 import type { MaybeReopenForClarification } from '../../application/task/MaybeReopenForClarification.js';
 import type { BroadcastTelegramNotificationByTask } from '../../application/telegram/BroadcastTelegramNotificationByTask.js';
@@ -92,6 +94,10 @@ type Deps = {
   readonly notifier: ProjectNotificationService;
   // Telegram-рассылка всем участникам проекта по taskId. Fire-and-forget.
   readonly broadcastTelegram: BroadcastTelegramNotificationByTask;
+  // Оркестратор уведомлений по комментарию: email+TG адресно + журнал доставки.
+  readonly dispatchCommentNotifications: DispatchCommentNotifications;
+  // Чтение журнала «кто уведомлён» для меню ⋮ у комментария.
+  readonly getCommentNotifications: GetCommentNotifications;
   // Для получения имени проекта в TG-сообщениях.
   readonly projectRepo: ProjectRepository;
 };
@@ -558,11 +564,44 @@ export function tasksRouter(deps: Deps): Router {
     }
   });
 
+  // Журнал доставки уведомлений по комментарию — для меню ⋮ «Кто уведомлён».
+  router.get(
+    '/:taskId/comments/:commentId/notifications',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const taskId = req.params['taskId'] as string;
+        const commentId = req.params['commentId'] as string;
+        const view = await deps.getCommentNotifications.execute(
+          projectId,
+          req.user!.id,
+          taskId,
+          commentId,
+        );
+        res.json({
+          notifyMode: view.notifyMode,
+          recipients: view.recipients.map((r) => ({
+            userId: r.recipientUserId,
+            displayName: r.displayName,
+            avatarUrl: r.avatarUrl,
+            channel: r.channel,
+            status: r.status,
+            reason: r.reason,
+            createdAt: r.createdAt.toISOString(),
+          })),
+        });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
   router.post('/:taskId/comments', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const projectId = req.params['projectId'] as string;
       const taskId = req.params['taskId'] as string;
       const body = createTaskCommentSchema.parse(req.body);
+      const audience = body.notify ?? { mode: 'all' as const };
       const comment = await deps.createComment.execute({
         projectId,
         ownerUserId: req.user!.id,
@@ -570,6 +609,7 @@ export function tasksRouter(deps: Deps): Router {
         body: body.body,
         // Все человеческие роуты — actorKind='user' (default, но явно для читаемости).
         actorKind: 'user',
+        notifyMode: audience.mode,
       });
       deps.notifyTaskChanged(projectId);
       deps.notifyCommentAdded(
@@ -597,11 +637,24 @@ export function tasksRouter(deps: Deps): Router {
       } catch (err) {
         console.warn('[auto-reopen] failed for task', taskId, err);
       }
-      void deps.notifier.onComment(projectId, req.user!.id, taskId, body.body, 'team').catch(() => {});
-      fireTgBroadcast(deps, taskId, projectId, req.user!.id, (pn) =>
-        `💬 Новый комментарий в «${pn}»:\n<i>${tgExcerpt(body.body)}</i>`,
-        'comment_on_my_task',
-      );
+      // Адресные уведомления (email + Telegram) + журнал доставки. Один оркестратор
+      // вместо раздельных onComment/fireTgBroadcast — единый источник «кто уведомлён».
+      // Fire-and-forget: ошибки рассылки не влияют на ответ.
+      void deps.dispatchCommentNotifications
+        .execute({
+          projectId,
+          actorUserId: req.user!.id,
+          source: 'team',
+          audience,
+          comment: {
+            id: comment.id,
+            taskId,
+            body: body.body,
+            actorKind: comment.actorKind,
+            agentName: comment.agentName,
+          },
+        })
+        .catch((err) => console.warn('[tasks/comment-dispatch] failed:', err));
       res.status(201).json({ comment: commentToDto(comment) });
     } catch (e) {
       next(e);

@@ -54,7 +54,10 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
     if (!taskId) return;
     deepLinkedRef.current = true;
     const task = tasks.find((t) => t.id === taskId);
-    if (task) setDialog({ mode: 'edit', task });
+    // #comment-<id> из hash — ловим до очистки query (setSearchParams сбрасывает hash).
+    const hashMatch = /^#comment-(.+)$/.exec(window.location.hash);
+    const scrollToCommentId = hashMatch ? hashMatch[1] : undefined;
+    if (task) setDialog({ mode: 'edit', task, scrollToCommentId });
     const next = new URLSearchParams(searchParams);
     next.delete('task');
     setSearchParams(next, { replace: true });

@@ -11,8 +11,10 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { Task, TaskStatus } from '@/domain/task/Task';
-import type { TaskComment } from '@/domain/task/TaskComment';
+import type { NotifyAudience, TaskComment } from '@/domain/task/TaskComment';
 import { useContainer } from '@/infrastructure/di/container';
+import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import {
   extractClipboardFiles,
   isImageMime,
@@ -67,8 +69,11 @@ export function TaskDrawerComposer({
   onTaskChanged,
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
+  const { user: currentUser } = useCurrentUser();
   const [body, setBody] = useState('');
   const [pending, setPending] = useState<PendingFile[]>([]);
+  // Адресация уведомления (по умолчанию — все участники).
+  const [notify, setNotify] = useState<NotifyAudience>({ mode: 'all' });
   // На awaiting_clarification дефолт = «Воркеру»: юзер отвечает на ralph-question и
   // ожидаемое действие — продолжить работу. На остальных статусах берём из localStorage'а.
   const [target, setTarget] = useState<ComposerTarget>(() =>
@@ -127,6 +132,7 @@ export function TaskDrawerComposer({
         task.projectId,
         task.id,
         trimmed || ' ',
+        notify,
       );
       const uploaded = [];
       for (const pf of pending) {
@@ -227,19 +233,28 @@ export function TaskDrawerComposer({
         className="block w-full resize-none overflow-y-auto bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
       />
 
-      <div className="flex items-center justify-between gap-2 px-1.5 pb-1.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-7 text-muted-foreground hover:text-foreground"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={submitting}
-          aria-label="Прикрепить файл"
-          title="Прикрепить файл (или Ctrl+V)"
-        >
-          <Paperclip className="size-3.5" />
-        </Button>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1.5 pb-1.5">
+        <div className="flex items-center gap-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground hover:text-foreground"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={submitting}
+            aria-label="Прикрепить файл"
+            title="Прикрепить файл (или Ctrl+V)"
+          >
+            <Paperclip className="size-3.5" />
+          </Button>
+          <NotifyAudienceControl
+            projectId={task.projectId}
+            excludeUserId={currentUser?.id ?? null}
+            value={notify}
+            onChange={setNotify}
+            disabled={submitting}
+          />
+        </div>
 
         <div className="flex items-center gap-1.5">
           <div

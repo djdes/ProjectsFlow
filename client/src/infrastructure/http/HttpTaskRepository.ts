@@ -1,7 +1,12 @@
 import type { Task } from '@/domain/task/Task';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
-import type { TaskComment } from '@/domain/task/TaskComment';
+import type {
+  CommentNotification,
+  CommentNotifications,
+  NotifyAudience,
+  TaskComment,
+} from '@/domain/task/TaskComment';
 import type {
   CreateTaskInput,
   MoveTaskInput,
@@ -122,9 +127,21 @@ function commentFromDto(dto: CommentDto): TaskComment {
     // Fallback 'user' — старый backend без миграции 034 не присылает поле.
     actorKind: dto.actorKind ?? 'user',
     agentName: dto.agentName ?? null,
+    // Fallback 'all' — старый backend без db/047 не присылает поле.
+    notifyMode: dto.notifyMode ?? 'all',
     attachments: (dto.attachments ?? []).map(attachmentFromDto),
   };
 }
+
+type CommentNotificationDto = {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  channel: CommentNotification['channel'];
+  status: CommentNotification['status'];
+  reason: string | null;
+  createdAt: string;
+};
 
 export class HttpTaskRepository implements TaskRepository {
   async list(projectId: string): Promise<Task[]> {
@@ -215,12 +232,39 @@ export class HttpTaskRepository implements TaskRepository {
     );
     return comments.map(commentFromDto);
   }
-  async createComment(projectId: string, taskId: string, body: string): Promise<TaskComment> {
+  async createComment(
+    projectId: string,
+    taskId: string,
+    body: string,
+    notify?: NotifyAudience,
+  ): Promise<TaskComment> {
     const { comment } = await httpClient.post<{ comment: CommentDto }>(
       `/projects/${projectId}/tasks/${taskId}/comments`,
-      { body },
+      notify ? { body, notify } : { body },
     );
     return commentFromDto(comment);
+  }
+  async listCommentNotifications(
+    projectId: string,
+    taskId: string,
+    commentId: string,
+  ): Promise<CommentNotifications> {
+    const res = await httpClient.get<{
+      notifyMode: CommentNotifications['notifyMode'];
+      recipients: CommentNotificationDto[];
+    }>(`/projects/${projectId}/tasks/${taskId}/comments/${commentId}/notifications`);
+    return {
+      notifyMode: res.notifyMode,
+      recipients: res.recipients.map((r) => ({
+        userId: r.userId,
+        displayName: r.displayName,
+        avatarUrl: r.avatarUrl,
+        channel: r.channel,
+        status: r.status,
+        reason: r.reason,
+        createdAt: new Date(r.createdAt),
+      })),
+    };
   }
   async updateComment(
     projectId: string,

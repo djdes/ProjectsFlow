@@ -11,6 +11,7 @@ import type { BulkCreateCredential } from '../../application/kb/BulkCreateCreden
 import { parseBulkText, slugify } from '../../application/kb/BulkCreateCredential.js';
 import type { KbDocument, KbDocumentSummary } from '../../domain/kb/KbDocument.js';
 import type { Frontmatter } from '../../domain/kb/Frontmatter.js';
+import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { bulkCredentialSchema, connectKbSchema, writeDocSchema } from './schemas.js';
 
@@ -24,6 +25,8 @@ type Deps = {
   readonly writeKbDocument: WriteKbDocument;
   readonly deleteKbDocument: DeleteKbDocument;
   readonly bulkCreateCredential: BulkCreateCredential;
+  // Email «обновление базы знаний» участникам (fire-and-forget).
+  readonly notifier: ProjectNotificationService;
 };
 
 function summaryToDto(s: KbDocumentSummary) {
@@ -119,6 +122,9 @@ export function kbRouter(deps: Deps): Router {
         body: body.body,
         sha: body.sha,
       });
+      void deps.notifier
+        .onKbUpdated(projectId, req.user!.id, `обновил «${body.path}»`, 'team')
+        .catch(() => {});
       res.json(result);
     } catch (e) {
       next(e);

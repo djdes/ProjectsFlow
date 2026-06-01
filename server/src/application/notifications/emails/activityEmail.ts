@@ -14,6 +14,9 @@ export type ActivityEmailInput = {
   // Куда ведёт CTA-кнопка (обычно на задачу).
   readonly ctaUrl: string;
   readonly ctaLabel?: string;
+  // Только для type==='comment_created': письмо адресовано упомянутому (@mention) —
+  // меняем заголовок/тему на «Вас упомянули…». См. DispatchCommentNotifications.
+  readonly mentioned?: boolean;
 };
 
 function clip(s: string, max = 140): string {
@@ -49,10 +52,17 @@ export function renderActivityEmail(input: ActivityEmailInput): EmailMessage {
       text = `${input.actorDisplayName} завершил задачу в «${input.projectName}»: ${clip(input.taskExcerpt ?? '')}`;
       break;
     case 'comment_created':
-      heading = 'Новый комментарий';
-      subject = `Новый комментарий в «${input.projectName}»`;
-      bodyHtml = `<strong>${actor}</strong> прокомментировал задачу <span style="color:#0f172a;">${task}</span> в проекте <strong>«${project}»</strong>:<br/><span style="color:#0f172a;">${comment}</span>`;
-      text = `${input.actorDisplayName} прокомментировал задачу в «${input.projectName}»: ${clip(input.commentExcerpt ?? '')}`;
+      if (input.mentioned) {
+        heading = 'Вас упомянули';
+        subject = `Вас упомянули в «${input.projectName}»`;
+        bodyHtml = `<strong>${actor}</strong> упомянул вас в комментарии к задаче <span style="color:#0f172a;">${task}</span> в проекте <strong>«${project}»</strong>:<br/><span style="color:#0f172a;">${comment}</span>`;
+        text = `${input.actorDisplayName} упомянул вас в комментарии в «${input.projectName}»: ${clip(input.commentExcerpt ?? '')}`;
+      } else {
+        heading = 'Новый комментарий';
+        subject = `Новый комментарий в «${input.projectName}»`;
+        bodyHtml = `<strong>${actor}</strong> прокомментировал задачу <span style="color:#0f172a;">${task}</span> в проекте <strong>«${project}»</strong>:<br/><span style="color:#0f172a;">${comment}</span>`;
+        text = `${input.actorDisplayName} прокомментировал задачу в «${input.projectName}»: ${clip(input.commentExcerpt ?? '')}`;
+      }
       break;
     case 'member_changed':
       heading = 'Изменение в команде';

@@ -366,6 +366,9 @@ export const taskComments = mysqlTable(
     // Конкретный агент (ralph-dispatcher / ralph-worker / ralph-grillme / ralph-verify).
     // NULL для actor_kind != 'agent'. UI маппит на читаемый title.
     agentName: varchar('agent_name', { length: 64 }),
+    // Режим адресации уведомления, выбранный автором в композере: 'all' | 'selected' | 'none'.
+    // Питает меню ⋮ «Кто уведомлён» (отличить «Никто» от «всех отфильтровало»). См. db/047.
+    notifyMode: varchar('notify_mode', { length: 16 }).notNull().default('all'),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -374,6 +377,32 @@ export const taskComments = mysqlTable(
 
 export type TaskCommentRow = typeof taskComments.$inferSelect;
 export type NewTaskCommentRow = typeof taskComments.$inferInsert;
+
+// Журнал доставки уведомлений по комментарию (db/047). Кто каким каналом и с каким
+// исходом был уведомлён о конкретном комментарии. Пишется DispatchCommentNotifications,
+// читается endpoint'ом GET .../comments/:cid/notifications для меню ⋮ «Кто уведомлён».
+export const commentNotifications = mysqlTable(
+  'comment_notifications',
+  {
+    id: id(),
+    commentId: char('comment_id', { length: 36 }).notNull(),
+    recipientUserId: char('recipient_user_id', { length: 36 }).notNull(),
+    // 'email' | 'telegram'.
+    channel: varchar('channel', { length: 16 }).notNull(),
+    // 'sent' | 'skipped' | 'failed'.
+    status: varchar('status', { length: 16 }).notNull(),
+    // pref_off | not_linked | no_email | dedup | rate_limited | forbidden | <error>. NULL для 'sent'.
+    reason: varchar('reason', { length: 64 }),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_comment_notif').on(t.commentId, t.recipientUserId, t.channel),
+    index('idx_comment_notif_comment').on(t.commentId),
+  ],
+);
+
+export type CommentNotificationRow = typeof commentNotifications.$inferSelect;
+export type NewCommentNotificationRow = typeof commentNotifications.$inferInsert;
 
 export const taskCommits = mysqlTable(
   'task_commits',

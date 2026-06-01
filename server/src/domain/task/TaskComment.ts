@@ -12,6 +12,12 @@ export type KnownAgentName =
   | 'ralph-grillme'
   | 'ralph-verify';
 
+// Режим адресации уведомления, выбранный автором в композере. См. db/047.
+//   'all'      — уведомить всех участников (по их персональным prefs).
+//   'selected' — только выбранных (подмножество).
+//   'none'     — никого.
+export type CommentNotifyMode = 'all' | 'selected' | 'none';
+
 export type TaskComment = {
   readonly id: string;
   readonly taskId: string;
@@ -19,6 +25,8 @@ export type TaskComment = {
   readonly body: string;
   readonly actorKind: TaskCommentActorKind;
   readonly agentName: string | null;
+  // Режим адресации уведомления (для меню ⋮ «Кто уведомлён»). DEFAULT 'all'.
+  readonly notifyMode: CommentNotifyMode;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };
