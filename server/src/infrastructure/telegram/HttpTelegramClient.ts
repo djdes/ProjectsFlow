@@ -2,11 +2,14 @@
 // в Node 22 undici 6.x, и dispatcher от внешнего undici 8.x даёт «invalid onRequestStart
 // method»). Используем undici.fetch напрямую.
 import { fetch as undiciFetch, ProxyAgent, type Dispatcher } from 'undici';
-import type {
-  SendMessageInput,
-  SendMessageResult,
-  TelegramClient,
-  TelegramUpdate,
+import {
+  TELEGRAM_ALLOWED_UPDATES,
+  type AnswerInlineQueryInput,
+  type EditMessageTextInput,
+  type SendMessageInput,
+  type SendMessageResult,
+  type TelegramClient,
+  type TelegramUpdate,
 } from '../../application/telegram/TelegramClient.js';
 
 // Реальная реализация TelegramClient на fetch. Никаких ретраев внутри —
@@ -102,6 +105,56 @@ export class HttpTelegramClient implements TelegramClient {
     };
   }
 
+  // Редактирование текста+кнопок ранее отправленного сообщения. Best-effort: ошибки
+  // (сообщение слишком старое / уже удалено / «message is not modified») глотаем — это не
+  // критичный путь (конструктор просто не сможет «закрасить» карточку, но задача уже создана).
+  async editMessageText(input: EditMessageTextInput): Promise<void> {
+    await this.tgFetch('/editMessageText', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: input.chatId,
+        message_id: input.messageId,
+        text: input.text,
+        parse_mode: input.parseMode,
+        disable_web_page_preview: input.disableWebPagePreview,
+        reply_markup: input.replyMarkup,
+      }),
+    }).catch(() => {});
+  }
+
+  // Гасит «часики» на нажатой кнопке + опциональный тост/алерт. Best-effort.
+  async answerCallbackQuery(
+    callbackQueryId: string,
+    opts?: { text?: string; showAlert?: boolean },
+  ): Promise<void> {
+    await this.tgFetch('/answerCallbackQuery', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        text: opts?.text,
+        show_alert: opts?.showAlert,
+      }),
+    }).catch(() => {});
+  }
+
+  // Ответ на inline_query (Phase D). Best-effort.
+  async answerInlineQuery(input: AnswerInlineQueryInput): Promise<void> {
+    await this.tgFetch('/answerInlineQuery', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        inline_query_id: input.inlineQueryId,
+        results: input.results,
+        cache_time: input.cacheTime ?? 0,
+        is_personal: input.isPersonal,
+        switch_pm_text: input.switchPmText,
+        switch_pm_parameter: input.switchPmParameter,
+      }),
+    }).catch(() => {});
+  }
+
   async setWebhook(url: string, secretToken: string): Promise<void> {
     const res = await this.tgFetch('/setWebhook', {
       method: 'POST',
@@ -109,8 +162,8 @@ export class HttpTelegramClient implements TelegramClient {
       body: JSON.stringify({
         url,
         secret_token: secretToken,
-        // Только то что мы реально обрабатываем — снижает шум.
-        allowed_updates: ['message'],
+        // message + callback_query (кнопки конструктора) + inline_query (Phase D).
+        allowed_updates: TELEGRAM_ALLOWED_UPDATES,
       }),
     });
     const body = (await res.json().catch(() => null)) as TgResponse<true> | null;
@@ -132,7 +185,7 @@ export class HttpTelegramClient implements TelegramClient {
       body: JSON.stringify({
         offset,
         timeout: timeoutSeconds,
-        allowed_updates: ['message'],
+        allowed_updates: TELEGRAM_ALLOWED_UPDATES,
       }),
     });
     const body = (await res.json().catch(() => null)) as TgResponse<TelegramUpdate[]> | null;

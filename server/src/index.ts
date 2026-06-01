@@ -2,7 +2,7 @@
 
 import { db, pool } from './infrastructure/db/index.js';
 import { Argon2PasswordHasher } from './infrastructure/crypto/Argon2PasswordHasher.js';
-import { idGenerator } from './infrastructure/id/idGenerator.js';
+import { idGenerator, shortIdGenerator } from './infrastructure/id/idGenerator.js';
 import { FileSystemBlobStorage } from './infrastructure/storage/FileSystemBlobStorage.js';
 import { DrizzleFileSyncRepository } from './infrastructure/repositories/DrizzleFileSyncRepository.js';
 import { FileSyncService } from './application/file-sync/FileSyncService.js';
@@ -147,6 +147,9 @@ import { MaybeReopenForClarification } from './application/task/MaybeReopenForCl
 import { HttpTelegramClient } from './infrastructure/telegram/HttpTelegramClient.js';
 import { DrizzleTelegramOutboundRepository } from './infrastructure/repositories/DrizzleTelegramOutboundRepository.js';
 import { DrizzleTelegramRalphQuestionRepository } from './infrastructure/repositories/DrizzleTelegramRalphQuestionRepository.js';
+import { DrizzleTelegramTaskDraftRepository } from './infrastructure/repositories/DrizzleTelegramTaskDraftRepository.js';
+import { DrizzleTelegramTaskMessageRepository } from './infrastructure/repositories/DrizzleTelegramTaskMessageRepository.js';
+import { TelegramComposerService } from './application/telegram/composer/TelegramComposerService.js';
 import { ConnectTelegramAccount } from './application/telegram/ConnectTelegramAccount.js';
 import { GetTelegramStatus } from './application/telegram/GetTelegramStatus.js';
 import { SendAgentTelegramNotification } from './application/telegram/SendAgentTelegramNotification.js';
@@ -432,19 +435,66 @@ const createTaskCommentUseCase = new CreateTaskComment({
 });
 const maybeReopenForClarification = new MaybeReopenForClarification({ tasks: taskRepo });
 
-const handleTelegramWebhook = new HandleTelegramWebhook({
-  users: userRepo,
+// --- Telegram-конструктор задач (+проект текст @делегат) ---
+// Свои репо для черновиков конструктора (db/048) и маппинга task-сообщений (db/049).
+const telegramTaskDraftRepo = new DrizzleTelegramTaskDraftRepository(db);
+const telegramTaskMessageRepo = new DrizzleTelegramTaskMessageRepository(db);
+// Конструктору нужны те же use-case'ы что и HTTP/agent-роутерам; они собираются инлайн
+// внутри createApp(), а здесь нам нужны собственные экземпляры (use-case'ы stateless —
+// дубль безопасен). Делим только репозитории.
+const telegramComposer = new TelegramComposerService({
+  drafts: telegramTaskDraftRepo,
+  taskMessages: telegramTaskMessageRepo,
   members: projectMemberRepo,
-  tasks: taskRepo,
+  projects: projectRepo,
+  users: userRepo,
+  createTask: new CreateTask({
+    projects: projectRepo,
+    members: projectMemberRepo,
+    tasks: taskRepo,
+    delegations: taskDelegationRepo,
+    users: userRepo,
+    notifications: notificationRepo,
+    email: emailSender,
+    idGen: idGenerator,
+    appUrl: appBaseUrl,
+  }),
+  getOrCreateInbox: new GetOrCreateInbox({
+    repo: projectRepo,
+    members: projectMemberRepo,
+    idGen: idGenerator,
+  }),
+  accept: new AcceptTaskDelegation({
+    delegations: taskDelegationRepo,
+    users: userRepo,
+    notifications: notificationRepo,
+    idGen: idGenerator,
+  }),
+  decline: new DeclineTaskDelegation({
+    delegations: taskDelegationRepo,
+    tasks: taskRepo,
+    users: userRepo,
+    notifications: notificationRepo,
+    email: emailSender,
+    idGen: idGenerator,
+    appUrl: appBaseUrl,
+  }),
+  assignToProject: new AssignInboxTaskToProject({
+    tasks: taskRepo,
+    projects: projectRepo,
+    members: projectMemberRepo,
+    delegations: taskDelegationRepo,
+    users: userRepo,
+    notifications: notificationRepo,
+    email: emailSender,
+    idGen: idGenerator,
+    appUrl: appBaseUrl,
+  }),
+  sendNotification: sendAgentTelegramNotification,
   client: telegramClient,
+  idGen: idGenerator,
+  shortIdGen: shortIdGenerator,
   appUrl: appBaseUrl,
-  botUsername: telegramBotUsername,
-  ralphQuestionMessages: telegramRalphQuestionRepo,
-  createComment: createTaskCommentUseCase,
-  maybeReopenForClarification,
-  notifyTaskChanged,
-  notifyCommentAdded,
-  notifyStatusChanged,
 });
 // v2: fan-out по taskId — грузит задачу/members и переиспользует sendAgentTelegramNotification
 // per recipient (там уже все gates — link/started/prefs/dedup/audit).
@@ -465,6 +515,24 @@ const dispatchCommentNotifications = new DispatchCommentNotifications({
   log: commentNotificationLogRepo,
   idGen: idGenerator,
   appUrl: appBaseUrl,
+});
+// Собирается после composer + dispatchCommentNotifications — зависит от обоих.
+const handleTelegramWebhook = new HandleTelegramWebhook({
+  users: userRepo,
+  members: projectMemberRepo,
+  tasks: taskRepo,
+  client: telegramClient,
+  appUrl: appBaseUrl,
+  botUsername: telegramBotUsername,
+  ralphQuestionMessages: telegramRalphQuestionRepo,
+  taskMessages: telegramTaskMessageRepo,
+  createComment: createTaskCommentUseCase,
+  dispatchCommentNotifications,
+  composer: telegramComposer,
+  maybeReopenForClarification,
+  notifyTaskChanged,
+  notifyCommentAdded,
+  notifyStatusChanged,
 });
 // Polling-fallback: для хостингов где inbound от Telegram блокируется (типично RU).
 // Сам long-poll'ит getUpdates через тот же proxy.

@@ -1,17 +1,23 @@
-import type { TelegramClient } from './TelegramClient.js';
+import type { TelegramClient, InlineKeyboardMarkup } from './TelegramClient.js';
 import type { TelegramRalphQuestionRepository } from './TelegramRalphQuestionRepository.js';
+import type { TelegramTaskMessageRepository } from './TelegramTaskMessageRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { CreateTaskComment } from '../task/CreateTaskComment.js';
 import type { MaybeReopenForClarification } from '../task/MaybeReopenForClarification.js';
+import type { DispatchCommentNotifications } from '../notifications/DispatchCommentNotifications.js';
+import type {
+  TelegramComposerService,
+  TelegramCallbackQuery,
+} from './composer/TelegramComposerService.js';
 import {
   getAllTgPrefsResolved,
   type TelegramNotificationPrefs,
 } from '../../domain/telegram/TelegramNotificationPrefs.js';
 
 // Минимальный набор полей TG Update, которые мы реально обрабатываем (allowed_updates
-// = ['message']). Структура совпадает с Telegram Bot API:
+// = message + callback_query + inline_query). Структура совпадает с Telegram Bot API:
 // https://core.telegram.org/bots/api#update
 export type TelegramUpdate = {
   readonly update_id: number;
@@ -20,12 +26,20 @@ export type TelegramUpdate = {
     readonly from?: { readonly id: number; readonly username?: string; readonly first_name?: string };
     readonly chat: { readonly id: number; readonly type: string };
     readonly text?: string;
-    // Reply на наше сообщение → ловим как ralph-answer. См. spec
+    // Reply на наше сообщение → ловим как ralph-answer ИЛИ комментарий к задаче. См. spec
     // C:/www/ralph/prompts/telegram-reply-to-ralph-answer.md.
     readonly reply_to_message?: {
       readonly message_id: number;
       readonly from?: { readonly id: number; readonly is_bot?: boolean };
     };
+  };
+  // Нажатие inline-кнопки (конструктор задач, Принять/Отказать, /tasks-навигация).
+  readonly callback_query?: TelegramCallbackQuery;
+  // Inline-режим (Phase D): `@ProjectsFlow_Bot ...` в поле ввода.
+  readonly inline_query?: {
+    readonly id: string;
+    readonly from: { readonly id: number };
+    readonly query: string;
   };
 };
 
@@ -38,7 +52,13 @@ type Deps = {
   readonly botUsername: string | null;
   // Reply→ralph-answer ветка. См. spec telegram-reply-to-ralph-answer.md.
   readonly ralphQuestionMessages: TelegramRalphQuestionRepository;
+  // Reply→обычный комментарий: маппинг task-сообщений бота → задача (db/049).
+  readonly taskMessages: TelegramTaskMessageRepository;
   readonly createComment: CreateTaskComment;
+  // Рассылка email+TG участникам по комментарию (как HTTP-роут). Best-effort.
+  readonly dispatchCommentNotifications: DispatchCommentNotifications;
+  // Конструктор задач (+проект текст @делегат) + обработка кнопок конструктора/делегирования.
+  readonly composer: TelegramComposerService;
   readonly maybeReopenForClarification: MaybeReopenForClarification;
   // Live-обновление UI после auto-create комментария / auto-return статуса.
   // Best-effort — webhook не блокирует ответ на SSE.
@@ -66,6 +86,22 @@ export class HandleTelegramWebhook {
   constructor(private readonly deps: Deps) {}
 
   async execute(update: TelegramUpdate): Promise<void> {
+    // Нажатие inline-кнопки. `bt:` — навигация /tasks (наш handler); остальное (tp/td/tc/
+    // tx/da/dd) — конструктор задач/делегирование.
+    if (update.callback_query) {
+      const cq = update.callback_query;
+      if ((cq.data ?? '').startsWith('bt:')) return this.handleBrowseCallback(cq);
+      return this.deps.composer.handleCallback(cq);
+    }
+    // Inline-режим (Phase D).
+    if (update.inline_query) {
+      return this.handleInlineQuery(
+        update.inline_query.id,
+        update.inline_query.from.id,
+        update.inline_query.query,
+      );
+    }
+
     const msg = update.message;
     if (!msg || !msg.from || !msg.text) return;
 
@@ -73,19 +109,24 @@ export class HandleTelegramWebhook {
     const tgUserId = msg.from.id;
     const chatId = msg.chat.id;
 
-    // Reply→ralph-answer ловим ДО командного роутинга — юзер может reply'нуть на
-    // ralph-question просто текстом, без слэш-префикса (типичный TG UX).
+    // Reply→ralph-answer / комментарий ловим ДО командного роутинга — юзер может reply'нуть
+    // просто текстом, без слэш-префикса (типичный TG UX).
     if (msg.reply_to_message?.message_id) {
       return this.handleReply(tgUserId, chatId, msg.reply_to_message.message_id, text);
     }
 
-    // Routing по первому слову — это командный текст. Игнор остального.
+    // Routing по первому слову.
     const cmd = text.split(/\s+/, 1)[0]?.toLowerCase() ?? '';
     if (cmd === '/start') return this.handleStart(tgUserId, chatId, msg.from.first_name);
     if (cmd === '/pause') return this.handlePause(tgUserId, chatId);
     if (cmd === '/pending') return this.handlePending(tgUserId, chatId);
+    if (cmd === '/tasks') return this.handleTasks(tgUserId, chatId);
     if (cmd === '/help') return this.handleHelp(chatId);
-    // Прочие сообщения — игнор. Если юзер хочет ответить — пусть use reply на сообщение бота.
+    // Неизвестная slash-команда — не превращаем в задачу.
+    if (cmd.startsWith('/')) return this.handleHelp(chatId);
+    // Любой прочий текст → черновик задачи (фаза «любой текст = задача»). Без `+проекта`
+    // уходит во «Входящие»; с `+проект`/`@делегат` — конструктор уточнит кнопками.
+    return this.deps.composer.startFromMessage(tgUserId, chatId, text);
   }
 
   // Reply на наше сообщение → ralph-answer комментарий в задаче. Шаги:
@@ -104,13 +145,9 @@ export class HandleTelegramWebhook {
   ): Promise<void> {
     const mapping = await this.deps.ralphQuestionMessages.findByMessage(chatId, replyToMessageId);
     if (!mapping) {
-      // Reply не на наш ralph-question (например на /start, или старое сообщение, или
-      // вопрос которого мы не сохранили). Деликатно объясняем.
-      await this.reply(
-        chatId,
-        '↩️ Это сообщение не привязано к открытому вопросу Ralph. Ответы через reply работают только на свежие уточнения (`🤔 Ralph задал уточнение…`).',
-      );
-      return;
+      // Не ralph-question → пробуем как обычный комментарий к задаче (reply на карточку
+      // конструктора / делегирования / /tasks). См. handleTaskReplyComment.
+      return this.handleTaskReplyComment(tgUserId, chatId, replyToMessageId, text);
     }
 
     const senderUserId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
@@ -291,26 +328,257 @@ export class HandleTelegramWebhook {
   private async handleHelp(chatId: number): Promise<void> {
     await this.reply(
       chatId,
-      `<b>Команды бота:</b>\n` +
-        `/start — подключение (после привязки на /profile)\n` +
-        `/pending — список твоих задач в статусе «На уточнении»\n` +
+      `<b>Что я умею:</b>\n` +
+        `• Просто напиши текст — создам задачу во «Входящие».\n` +
+        `• <code>+Проект текст задачи</code> — создам в нужном проекте (подскажу кнопками).\n` +
+        `• <code>+Проект текст @Коллега</code> — делегирую коллеге (он примет/откажет).\n` +
+        `• Ответь reply'ем на карточку задачи — добавлю комментарий.\n\n` +
+        `<b>Команды:</b>\n` +
+        `/tasks — мои проекты и задачи (просмотр + комментарий)\n` +
+        `/pending — задачи в статусе «На уточнении»\n` +
         `/pause — отключить все уведомления\n` +
+        `/start — подключение (после привязки на /profile)\n` +
         `/help — эта справка`,
     );
   }
 
-  private async reply(chatId: number, text: string): Promise<void> {
+  // --- Reply на task-сообщение бота → обычный комментарий к задаче (db/049). ---
+  private async handleTaskReplyComment(
+    tgUserId: number,
+    chatId: number,
+    replyToMessageId: number,
+    text: string,
+  ): Promise<void> {
+    const map = await this.deps.taskMessages.findByMessage(chatId, replyToMessageId);
+    if (!map) {
+      await this.reply(
+        chatId,
+        '↩️ Это сообщение не привязано к задаче. Reply работает на карточки задач, делегирование и уточнения бота.',
+      );
+      return;
+    }
+    const senderUserId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
+    if (!senderUserId) {
+      await this.reply(chatId, '⚠️ Сначала привяжи Telegram через /profile.');
+      return;
+    }
+    if (text.trim().length === 0) {
+      await this.reply(chatId, '✍️ Пустой комментарий.');
+      return;
+    }
+
+    let comment;
+    try {
+      comment = await this.deps.createComment.execute({
+        projectId: map.projectId,
+        ownerUserId: senderUserId,
+        taskId: map.taskId,
+        body: text,
+        actorKind: 'user',
+        notifyMode: 'all',
+      });
+    } catch (err) {
+      const name = err instanceof Error ? err.constructor.name : '';
+      if (name === 'ProjectNotFoundError') {
+        await this.reply(chatId, '🚫 Нет доступа к этой задаче.');
+      } else if (name === 'TaskNotFoundError') {
+        await this.reply(chatId, '⚠️ Задача удалена.');
+      } else if (name === 'TaskCommentBodyEmptyError') {
+        await this.reply(chatId, '✍️ Пустой комментарий.');
+      } else {
+        console.warn('[tg-webhook] createComment (reply) failed:', err);
+        await this.reply(chatId, '❌ Не удалось сохранить комментарий.');
+      }
+      return;
+    }
+
+    // SSE: коммент мгновенно у всех участников.
+    this.deps.notifyCommentAdded(map.projectId, map.taskId, comment.id, senderUserId, 'user', null);
+    // Email + Telegram участникам — как HTTP-роут (tasks/routes.ts). Best-effort.
+    void this.deps.dispatchCommentNotifications
+      .execute({
+        projectId: map.projectId,
+        actorUserId: senderUserId,
+        source: 'team',
+        audience: { mode: 'all' },
+        comment: {
+          id: comment.id,
+          taskId: map.taskId,
+          body: text,
+          actorKind: 'user',
+          agentName: null,
+        },
+      })
+      .catch((e: unknown) => console.warn('[tg-webhook] dispatchCommentNotifications failed:', e));
+
+    await this.reply(chatId, '💬 Комментарий добавлен.');
+  }
+
+  // --- /tasks: просмотр проектов → задач → карточка с reply-комментированием. ---
+  private async handleTasks(tgUserId: number, chatId: number): Promise<void> {
+    const userId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
+    if (!userId) {
+      await this.reply(chatId, '⚠️ Сначала привяжи Telegram через /profile.');
+      return;
+    }
+    const projects = await this.deps.members.listProjectsForUser(userId);
+    if (projects.length === 0) {
+      await this.reply(chatId, '📭 У тебя пока нет проектов. Напиши текст — создам задачу во «Входящие».');
+      return;
+    }
+    const shown = projects.slice(0, BROWSE_LIMIT);
+    const rows = chunk2(
+      shown.map((p) => ({ text: p.name.slice(0, 40), callback_data: `bt:p:${p.id}` })),
+    );
+    const note =
+      projects.length > BROWSE_LIMIT
+        ? `\n\n<i>Показаны первые ${BROWSE_LIMIT} из ${projects.length} — остальные в интерфейсе.</i>`
+        : '';
+    await this.reply(chatId, `📂 <b>Выбери проект:</b>${note}`, { inline_keyboard: rows });
+  }
+
+  private async handleBrowseCallback(cq: TelegramCallbackQuery): Promise<void> {
+    const data = cq.data ?? '';
+    const chatId = cq.message?.chat.id;
+    const userId = await this.deps.users.findUserIdByTelegramUserId(cq.from.id);
+    if (!userId || chatId === undefined) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Привяжи Telegram (/start).', showAlert: true });
+      return;
+    }
+    // bt:p:<projectId> | bt:t:<taskId>
+    const body = data.slice('bt:'.length);
+    const kind = body.slice(0, 2);
+    const arg = body.slice(2);
+
+    if (kind === 'p:') {
+      const projectId = arg;
+      const membership = await this.deps.members.findForProject(projectId, userId);
+      if (!membership) {
+        await this.deps.client.answerCallbackQuery(cq.id, { text: 'Нет доступа к проекту.', showAlert: true });
+        return;
+      }
+      const tasks = (await this.deps.tasks.listByProject(projectId)).filter(
+        (t) => t.status !== 'done',
+      );
+      if (tasks.length === 0) {
+        await this.reply(chatId, '✨ В этом проекте нет открытых задач.');
+        await this.deps.client.answerCallbackQuery(cq.id);
+        return;
+      }
+      const shown = tasks.slice(0, BROWSE_LIMIT);
+      const rows = shown.map((t) => [
+        {
+          text: excerptShort(t.description, 56),
+          callback_data: `bt:t:${t.id}`,
+        },
+      ]);
+      const note =
+        tasks.length > BROWSE_LIMIT
+          ? `\n\n<i>Показаны первые ${BROWSE_LIMIT} из ${tasks.length}.</i>`
+          : '';
+      await this.reply(chatId, `📋 <b>Задачи:</b> (нажми, чтобы открыть)${note}`, {
+        inline_keyboard: rows,
+      });
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
+
+    if (kind === 't:') {
+      const taskId = arg;
+      const task = await this.deps.tasks.getById(taskId);
+      if (!task) {
+        await this.deps.client.answerCallbackQuery(cq.id, { text: 'Задача удалена.', showAlert: true });
+        return;
+      }
+      const membership = await this.deps.members.findForProject(task.projectId, userId);
+      if (!membership) {
+        await this.deps.client.answerCallbackQuery(cq.id, { text: 'Нет доступа к задаче.', showAlert: true });
+        return;
+      }
+      const base = this.deps.appUrl.replace(/\/$/, '');
+      const url = `${base}/projects/${task.projectId}?task=${task.id}`;
+      const body2 =
+        `📌 <b>Задача</b> (${escapeHtml(task.status)})\n` +
+        `${escapeHtml(excerptShort(task.description, 300))}\n\n` +
+        `<a href="${url}">Открыть в ProjectsFlow</a>\n\n` +
+        `↩️ Ответь reply'ем на это сообщение, чтобы добавить комментарий.`;
+      const messageId = await this.sendReturningId(chatId, body2);
+      if (messageId !== null) {
+        await this.deps.taskMessages.upsert({
+          tgChatId: chatId,
+          tgMessageId: messageId,
+          recipientUserId: userId,
+          taskId: task.id,
+          projectId: task.projectId,
+        });
+      }
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
+
+    await this.deps.client.answerCallbackQuery(cq.id);
+  }
+
+  // Inline-режим (Phase D): живой dropdown проектов/делегатов.
+  private async handleInlineQuery(
+    inlineQueryId: string,
+    tgUserId: number,
+    query: string,
+  ): Promise<void> {
+    await this.deps.composer.handleInlineQuery(inlineQueryId, tgUserId, query);
+  }
+
+  private async reply(
+    chatId: number,
+    text: string,
+    replyMarkup?: InlineKeyboardMarkup,
+  ): Promise<void> {
     try {
       await this.deps.client.sendMessage({
         chatId,
         text,
         parseMode: 'HTML',
         disableWebPagePreview: true,
+        replyMarkup,
       });
     } catch (err) {
       console.warn('[tg-webhook] reply failed', err);
     }
   }
+
+  // Как reply, но возвращает message_id (для маппинга task-сообщения в /tasks). null при ошибке.
+  private async sendReturningId(chatId: number, text: string): Promise<number | null> {
+    try {
+      const res = await this.deps.client.sendMessage({
+        chatId,
+        text,
+        parseMode: 'HTML',
+        disableWebPagePreview: true,
+      });
+      return res.kind === 'ok' ? res.messageId : null;
+    } catch (err) {
+      console.warn('[tg-webhook] sendReturningId failed', err);
+      return null;
+    }
+  }
+}
+
+// Максимум кнопок проектов/задач в /tasks (без пагинации в v1 — остальное в вебе).
+const BROWSE_LIMIT = 12;
+
+// Разбивка списка кнопок по 2 в ряд.
+function chunk2<T>(items: readonly T[]): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += 2) {
+    rows.push(items.slice(i, i + 2));
+  }
+  return rows;
+}
+
+function excerptShort(text: string | null, limit: number): string {
+  const s = (text ?? '').trim().replace(/\s+/g, ' ');
+  if (s.length === 0) return '(без описания)';
+  return s.length <= limit ? s : s.slice(0, limit - 1).trimEnd() + '…';
 }
 
 function escapeHtml(s: string): string {

@@ -20,6 +20,7 @@ import {
 } from 'drizzle-orm/mysql-core';
 import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
 import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
+import type { TelegramDraftOffered } from '../../application/telegram/TelegramTaskDraftRepository.js';
 
 // id-длина 36 = UUID v4 в строковой форме (8-4-4-4-12).
 const id = () => char('id', { length: 36 }).primaryKey();
@@ -110,6 +111,52 @@ export const telegramRalphQuestionMessages = mysqlTable(
 );
 
 export type TelegramRalphQuestionRow = typeof telegramRalphQuestionMessages.$inferSelect;
+
+// Серверный стейт многошагового конструктора задач в TG-боте (+проект текст @делегат).
+// callback_data ≤ 64 байт → в кнопках только короткий id + индексы, полный контекст здесь.
+// См. db/048. TTL ~30 мин (expires_at); getById возвращает null если истёк.
+export const telegramTaskDrafts = mysqlTable(
+  'telegram_task_drafts',
+  {
+    id: char('id', { length: 12 }).primaryKey(),
+    creatorUserId: char('creator_user_id', { length: 36 }).notNull(),
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
+    taskText: text('task_text'),
+    projectId: char('project_id', { length: 36 }),
+    delegateUserId: char('delegate_user_id', { length: 36 }),
+    delegationId: char('delegation_id', { length: 36 }),
+    // Предложенные projects/members для резолва index→UUID из callback_data.
+    offered: json('offered').$type<TelegramDraftOffered | null>(),
+    status: mysqlEnum('status', ['composing', 'confirmed', 'cancelled', 'expired'])
+      .notNull()
+      .default('composing'),
+    createdAt: createdAtCol(),
+    expiresAt: timestamp('expires_at').notNull(),
+  },
+  (t) => [
+    index('idx_ttd_creator').on(t.creatorUserId),
+    index('idx_ttd_expires').on(t.expiresAt),
+  ],
+);
+
+export type TelegramTaskDraftRow = typeof telegramTaskDrafts.$inferSelect;
+
+// Маппинг task-сообщений бота → task_id, для reply→комментарий (обобщение
+// telegram_ralph_question_messages). См. db/049.
+export const telegramTaskMessages = mysqlTable(
+  'telegram_task_messages',
+  {
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
+    tgMessageId: bigint('tg_message_id', { mode: 'number' }).notNull(),
+    recipientUserId: char('recipient_user_id', { length: 36 }).notNull(),
+    taskId: char('task_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    sentAt: timestamp('sent_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [index('idx_ttm_task').on(t.taskId)],
+);
+
+export type TelegramTaskMessageRow = typeof telegramTaskMessages.$inferSelect;
 
 export const sessions = mysqlTable(
   'sessions',
