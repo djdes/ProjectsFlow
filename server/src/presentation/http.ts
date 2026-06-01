@@ -161,6 +161,10 @@ import { agentTokensRouter } from './agent/tokensRoutes.js';
 import { agentApiRouter } from './agent/apiRoutes.js';
 import { fileSyncRouter } from './file-sync/routes.js';
 import type { FileSyncService } from '../application/file-sync/FileSyncService.js';
+import { liveAgentRouter } from './live/agentRoutes.js';
+import { liveUserRouter } from './live/routes.js';
+import type { LiveService } from '../application/live/LiveService.js';
+import type { LiveEventHub } from '../infrastructure/realtime/LiveEventHub.js';
 import { agentDeviceRouter } from './agent/deviceRoutes.js';
 import { buildAiPromptRouter } from './ai-prompt/routes.js';
 import { buildAutomationRouter } from './automation/routes.js';
@@ -168,6 +172,12 @@ import type { GetAutomationConfig } from '../application/automation/GetAutomatio
 import type { SaveAutomationConfig } from '../application/automation/SaveAutomationConfig.js';
 import type { GetAutomationForDispatcher } from '../application/automation/GetAutomationForDispatcher.js';
 import type { RecordAutomationTask } from '../application/automation/RecordAutomationTask.js';
+import { monitoringRouter } from './monitoring/routes.js';
+import type { ListServers } from '../application/monitoring/ListServers.js';
+import type { ManageServers } from '../application/monitoring/ManageServers.js';
+import type { MonitoringQueries } from '../application/monitoring/MonitoringQueries.js';
+import type { IngestAgentSnapshot } from '../application/monitoring/IngestAgentSnapshot.js';
+import type { ListMonitoredServers } from '../application/monitoring/ListMonitoredServers.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
@@ -183,6 +193,10 @@ type AppDeps = {
   readonly fileSync: {
     readonly service: FileSyncService;
     readonly maxBlobBytes: number;
+  };
+  readonly live: {
+    readonly service: LiveService;
+    readonly liveEventHub: LiveEventHub;
   };
   readonly projects: {
     readonly listProjects: ListProjects;
@@ -274,6 +288,11 @@ type AppDeps = {
     readonly getSecret: GetSecret;
     readonly deleteSecret: DeleteSecret;
     readonly listSecretKeys: ListSecretKeys;
+  };
+  readonly monitoring: {
+    readonly listServers: ListServers;
+    readonly manageServers: ManageServers;
+    readonly queries: MonitoringQueries;
   };
   readonly kb: {
     readonly initKbRepo: InitKbRepo;
@@ -394,6 +413,8 @@ type AppDeps = {
     readonly saveAutomationConfig: SaveAutomationConfig;
     readonly getAutomationForDispatcher: GetAutomationForDispatcher;
     readonly recordAutomationTask: RecordAutomationTask;
+    readonly ingestAgentSnapshot: IngestAgentSnapshot;
+    readonly listMonitoredServers: ListMonitoredServers;
     readonly setProjectDispatcher: SetProjectDispatcher;
     readonly getDelegatedGitToken: GetDelegatedGitToken;
     readonly rateLimiter: InMemoryRateLimiter;
@@ -447,6 +468,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   );
   app.use('/api/integrations/github', githubRouter(deps.github));
   app.use('/api/projects/:projectId/secrets', secretsRouter(deps.secrets));
+  app.use('/api/projects/:projectId/monitoring', monitoringRouter(deps.monitoring));
   app.use(
     '/api/projects/:projectId/kb',
     kbRouter({ ...deps.kb, notifier: deps.notifications.projectNotifier }),
@@ -458,6 +480,16 @@ export function createApp(deps: AppDeps): CreatedApp {
       notifier: deps.notifications.projectNotifier,
       assignToProject: deps.delegations.assignToProject,
       delegateExisting: deps.delegations.delegateExisting,
+    }),
+  );
+  // LIVE-вкладка (cookie requireAuth + requireProjectAccess внутри): read + SSE /stream.
+  // Пути роутера начинаются с /:projectId/tasks/:taskId/live/... — маунт под /api/projects
+  // ПОСЛЕ tasksRouter (несовпавшие /live/* пути проваливаются сюда).
+  app.use(
+    '/api/projects',
+    liveUserRouter({
+      service: deps.live.service,
+      liveEventHub: deps.live.liveEventHub,
     }),
   );
   app.use('/api/delegations', delegationsRouter(deps.delegations));
@@ -582,6 +614,8 @@ export function createApp(deps: AppDeps): CreatedApp {
       listMyDispatchedProjects: deps.agent.listMyDispatchedProjects,
       getAutomationForDispatcher: deps.agent.getAutomationForDispatcher,
       recordAutomationTask: deps.agent.recordAutomationTask,
+      ingestAgentSnapshot: deps.agent.ingestAgentSnapshot,
+      listMonitoredServers: deps.agent.listMonitoredServers,
       setProjectDispatcher: deps.agent.setProjectDispatcher,
       getDelegatedGitToken: deps.agent.getDelegatedGitToken,
       rateLimiter: deps.agent.rateLimiter,
@@ -607,6 +641,16 @@ export function createApp(deps: AppDeps): CreatedApp {
       service: deps.fileSync.service,
       authenticate: deps.agent.authenticateAgentToken,
       maxBlobBytes: deps.fileSync.maxBlobBytes,
+    }),
+  );
+
+  // LIVE ingest (Bearer, тот же authenticate): /api/agent/.../live/sessions(/:s/events|/finish).
+  // Маунтится отдельным роутером ПОСЛЕ agentApiRouter+fileSyncRouter (несовпавшие пути сюда).
+  app.use(
+    '/api/agent',
+    liveAgentRouter({
+      service: deps.live.service,
+      authenticate: deps.agent.authenticateAgentToken,
     }),
   );
 

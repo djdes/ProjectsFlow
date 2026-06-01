@@ -62,6 +62,14 @@ import type { RecordAutomationTask } from '../../application/automation/RecordAu
 import type { AutomationForDispatcher } from '../../application/automation/automationView.js';
 import type { SetProjectDispatcher } from '../../application/project/SetProjectDispatcher.js';
 import type { GetDelegatedGitToken } from '../../application/project/GetDelegatedGitToken.js';
+import type { IngestAgentSnapshot } from '../../application/monitoring/IngestAgentSnapshot.js';
+import type { ListMonitoredServers } from '../../application/monitoring/ListMonitoredServers.js';
+import { ingestSnapshotSchema } from '../monitoring/schemas.js';
+import type {
+  DbHealth,
+  LogTails,
+  SnapshotMetrics,
+} from '../../domain/monitoring/ServerSnapshot.js';
 import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemoryRateLimiter.js';
 import { normalizeGitUrl } from '../../application/project/gitUrl.js';
 import type { Frontmatter } from '../../domain/kb/Frontmatter.js';
@@ -147,6 +155,8 @@ type Deps = {
   readonly listMyDispatchedProjects: ListMyDispatchedProjects;
   readonly getAutomationForDispatcher: GetAutomationForDispatcher;
   readonly recordAutomationTask: RecordAutomationTask;
+  readonly ingestAgentSnapshot: IngestAgentSnapshot;
+  readonly listMonitoredServers: ListMonitoredServers;
   readonly setProjectDispatcher: SetProjectDispatcher;
   readonly getDelegatedGitToken: GetDelegatedGitToken;
   readonly rateLimiter: InMemoryRateLimiter;
@@ -1740,6 +1750,46 @@ export function agentApiRouter(deps: Deps): Router {
           skipped: result.skipped,
           delivered: result.delivered,
         });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // ===== Мониторинг серверов (agent-push сборщик) =====
+  // Список remote-серверов для сбора. Не-admin видит только серверы своих проектов.
+  router.get('/monitoring/servers', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const servers = await deps.listMonitoredServers.execute(
+        req.user!.id,
+        req.user!.isAdmin === true,
+      );
+      res.json({ servers });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Приём снимка от сборщика. Гейт manage_monitoring (owner) внутри use-case.
+  router.post(
+    '/projects/:projectId/monitoring/snapshots',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const body = ingestSnapshotSchema.parse(req.body);
+        const { snapshot, server } = await deps.ingestAgentSnapshot.execute({
+          projectId,
+          userId: req.user!.id,
+          agentTokenId: req.agentTokenId ?? null,
+          serverName: body.serverName,
+          collectedAt: new Date(body.collectedAt),
+          reachable: body.reachable,
+          metrics: (body.metrics ?? null) as SnapshotMetrics | null,
+          logs: (body.logs ?? null) as LogTails | null,
+          dbHealth: (body.dbHealth ?? null) as DbHealth | null,
+          errors: body.errors ?? null,
+        });
+        res.status(201).json({ ok: true, snapshotId: snapshot.id, serverId: server.id });
       } catch (e) {
         next(e);
       }

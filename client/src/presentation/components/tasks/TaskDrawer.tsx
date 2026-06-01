@@ -22,6 +22,7 @@ import {
   SheetDescription,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
@@ -38,6 +39,7 @@ import { CommentActionsMenu } from '@/presentation/components/tasks/CommentActio
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { TaskCommitsSection } from './TaskCommitsSection';
 import { CommentBody } from './CommentBody';
+import { LiveTab } from './LiveTab';
 import { ClaudeIcon } from './ClaudeIcon';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
 import {
@@ -294,6 +296,10 @@ export function TaskDrawer({
   // Коммиты по умолчанию свёрнуты — это вторичный контент, чтобы не отвлекал.
   // Раскрытие — клик по заголовку.
   const [commitsOpen, setCommitsOpen] = useState(false);
+  // Активная вкладка тела edit-режима: «Обсуждение» (комментарии) | LIVE (лента воркера).
+  const [activeTab, setActiveTab] = useState<'discussion' | 'live'>('discussion');
+  // Есть ли running LIVE-сессия (бейдж 🔴 на триггере вкладки). LiveTab сообщает через колбэк.
+  const [liveRunning, setLiveRunning] = useState(false);
   // Cache аттачей для header-row.
   const [headerAttachments, setHeaderAttachments] = useState<TaskAttachment[]>([]);
 
@@ -337,6 +343,8 @@ export function TaskDrawer({
     setError(null);
     setExpanded(false);
     setCommitsOpen(false);
+    setActiveTab('discussion');
+    setLiveRunning(false);
     setCreateDragActive(false);
     // При закрытии/смене диалога чистим pending — URL.revokeObjectURL для blob'ов.
     setPendingFiles((prev) => {
@@ -578,84 +586,132 @@ export function TaskDrawer({
               </div>
             </div>
 
-            {/* === SCROLLABLE BODY === */}
-            <div ref={bodyRef} className="space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
-              {canEdit ? (
-                <TaskDescriptionEditor
-                  key={task.id}
-                  projectId={task.projectId}
-                  taskId={task.id}
-                  initialDescription={task.description ?? ''}
-                  onSaved={() => onCommitsChange?.()}
-                />
-              ) : (
-                <div className="whitespace-pre-wrap rounded-md border border-dashed border-transparent p-2 text-sm leading-snug">
-                  {task.description?.trim() || (
-                    <span className="italic text-muted-foreground">Без описания</span>
-                  )}
-                </div>
-              )}
-
-              {showCommits && (
-                <div className="border-t pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setCommitsOpen((v) => !v)}
-                    className="flex w-full items-center gap-1.5 text-xs uppercase tracking-widest text-muted-foreground/70 hover:text-foreground"
-                    aria-expanded={commitsOpen}
-                  >
-                    <ChevronRight
-                      className={cn(
-                        'size-3.5 shrink-0 transition-transform',
-                        commitsOpen && 'rotate-90',
-                      )}
-                    />
-                    <span>Коммиты</span>
-                    {task.commitCount !== undefined && task.commitCount > 0 && (
-                      <span className="text-[10px] opacity-70">· {task.commitCount}</span>
+            {/* === SCROLLABLE BODY — вкладки Обсуждение | LIVE === */}
+            {/* Tabs занимает grid-строку minmax(0,1fr); каждая вкладка — свой scroll-контейнер.
+                forceMount на обеих вкладках, чтобы LiveTab жил в фоне (бейдж 🔴 / live-стрим
+                работают даже когда открыта «Обсуждение»). Неактивная скрыта через hidden. */}
+            <Tabs
+              value={activeTab}
+              onValueChange={(v: string) => setActiveTab(v as 'discussion' | 'live')}
+              className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
+            >
+              <div className="border-b px-4 pt-2 sm:px-6">
+                <TabsList className="h-8">
+                  <TabsTrigger value="discussion" className="text-xs">
+                    Обсуждение
+                  </TabsTrigger>
+                  <TabsTrigger value="live" className="text-xs">
+                    LIVE
+                    {liveRunning && (
+                      <span
+                        aria-hidden
+                        className="size-2 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.6)]"
+                      />
                     )}
-                  </button>
-                  {commitsOpen && (
-                    <div className="mt-3">
-                      <TaskCommitsSection task={task} onChange={() => onCommitsChange?.()} />
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              {/* Обсуждение — существующее тело. bodyRef + scrollBodyToBottom живут ТОЛЬКО здесь. */}
+              <TabsContent
+                value="discussion"
+                forceMount
+                className="min-h-0 overflow-hidden data-[state=inactive]:hidden"
+              >
+                <div ref={bodyRef} className="h-full space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
+                  {canEdit ? (
+                    <TaskDescriptionEditor
+                      key={task.id}
+                      projectId={task.projectId}
+                      taskId={task.id}
+                      initialDescription={task.description ?? ''}
+                      onSaved={() => onCommitsChange?.()}
+                    />
+                  ) : (
+                    <div className="whitespace-pre-wrap rounded-md border border-dashed border-transparent p-2 text-sm leading-snug">
+                      {task.description?.trim() || (
+                        <span className="italic text-muted-foreground">Без описания</span>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
 
-              <div className="border-t pt-4">
-                <TaskCommentsSection
+                  {showCommits && (
+                    <div className="border-t pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setCommitsOpen((v) => !v)}
+                        className="flex w-full items-center gap-1.5 text-xs uppercase tracking-widest text-muted-foreground/70 hover:text-foreground"
+                        aria-expanded={commitsOpen}
+                      >
+                        <ChevronRight
+                          className={cn(
+                            'size-3.5 shrink-0 transition-transform',
+                            commitsOpen && 'rotate-90',
+                          )}
+                        />
+                        <span>Коммиты</span>
+                        {task.commitCount !== undefined && task.commitCount > 0 && (
+                          <span className="text-[10px] opacity-70">· {task.commitCount}</span>
+                        )}
+                      </button>
+                      {commitsOpen && (
+                        <div className="mt-3">
+                          <TaskCommitsSection task={task} onChange={() => onCommitsChange?.()} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="border-t pt-4">
+                    <TaskCommentsSection
+                      projectId={task.projectId}
+                      taskId={task.id}
+                      onCommentCreatedRef={onCommentCreatedRef}
+                      onFirstLoad={scrollBodyToBottom}
+                      scrollToCommentId={scrollToCommentId}
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* LIVE — лента воркера. Свой scroll-контейнер внутри LiveTab. forceMount —
+                  чтобы live-стрим/бейдж работали даже на скрытой вкладке. */}
+              <TabsContent
+                value="live"
+                forceMount
+                className="min-h-0 overflow-hidden px-4 py-3 data-[state=inactive]:hidden sm:px-6"
+              >
+                <LiveTab
                   projectId={task.projectId}
                   taskId={task.id}
-                  onCommentCreatedRef={onCommentCreatedRef}
-                  onFirstLoad={scrollBodyToBottom}
-                  scrollToCommentId={scrollToCommentId}
+                  onRunningChange={setLiveRunning}
                 />
-              </div>
-            </div>
+              </TabsContent>
+            </Tabs>
 
-            {/* === STICKY FOOTER === */}
-            {task.status === 'in_progress' ? (
-              <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
-            ) : (
-              <>
-                {/* На awaiting_clarification — композер для ralph-answer'а + cancel под ним. */}
-                {task.status === 'awaiting_clarification' && (
-                  <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
-                )}
-                <TaskDrawerComposer
-                  task={task}
-                  backlogTail={backlogTail}
-                  todoTail={todoTail}
-                  onCommentCreated={(c) => {
-                    onCommentCreatedRef.current?.(c);
-                    scrollBodyToBottom();
-                    onCommitsChange?.();
-                  }}
-                  onTaskChanged={() => onCommitsChange?.()}
-                />
-              </>
-            )}
+            {/* === STICKY FOOTER — композер только на вкладке «Обсуждение» === */}
+            {activeTab === 'discussion' &&
+              (task.status === 'in_progress' ? (
+                <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
+              ) : (
+                <>
+                  {/* На awaiting_clarification — композер для ralph-answer'а + cancel под ним. */}
+                  {task.status === 'awaiting_clarification' && (
+                    <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
+                  )}
+                  <TaskDrawerComposer
+                    task={task}
+                    backlogTail={backlogTail}
+                    todoTail={todoTail}
+                    onCommentCreated={(c) => {
+                      onCommentCreatedRef.current?.(c);
+                      scrollBodyToBottom();
+                      onCommitsChange?.();
+                    }}
+                    onTaskChanged={() => onCommitsChange?.()}
+                  />
+                </>
+              ))}
           </>
         ) : (
           // === CREATE MODE === — Todoist-style: textarea + chips сверху, pills под

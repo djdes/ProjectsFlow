@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
 import { AppShell } from '@/presentation/layout/AppShell';
 import { ProjectPage } from '@/presentation/pages/ProjectPage';
 import { KbPage } from '@/presentation/pages/KbPage';
+import { MonitoringPage } from '@/presentation/pages/MonitoringPage';
 import { TasksPage } from '@/presentation/pages/TasksPage';
 import { InboxPage } from '@/presentation/pages/InboxPage';
 import { NotificationsPage } from '@/presentation/pages/NotificationsPage';
@@ -64,6 +65,7 @@ export const router = createBrowserRouter([
       // Обзор/настройки проекта (git, KB, команда) переехали на отдельный роут.
       { path: 'projects/:projectId/overview', element: <ProjectPage /> },
       { path: 'projects/:projectId/kb', element: <KbPage /> },
+      { path: 'projects/:projectId/monitoring', element: <MonitoringPage /> },
       { path: 'projects/:projectId/finance', element: <FinancePage /> },
       // Обратная совместимость со старыми ссылками на доску (напр. из уведомлений).
       { path: 'projects/:projectId/tasks', element: <LegacyTasksRedirect /> },

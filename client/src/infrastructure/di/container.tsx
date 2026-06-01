@@ -18,6 +18,8 @@ import { HttpAdminRepository } from '@/infrastructure/http/HttpAdminRepository';
 import { HttpEmployeeRepository } from '@/infrastructure/http/HttpEmployeeRepository';
 import { HttpProjectFinanceRepository } from '@/infrastructure/http/HttpProjectFinanceRepository';
 import { HttpTelegramRepository } from '@/infrastructure/http/HttpTelegramRepository';
+import { HttpMonitoringRepository } from '@/infrastructure/http/HttpMonitoringRepository';
+import { HttpLiveRepository } from '@/infrastructure/http/HttpLiveRepository';
 import { ImproveTaskDescription } from '@/application/ai/ImproveTaskDescription';
 import type { AiPromptRepository } from '@/application/ai/AiPromptRepository';
 import type { AutomationRepository } from '@/application/automation/AutomationRepository';
@@ -48,6 +50,8 @@ import type {
   ProjectFinanceRepository,
 } from '@/application/finance/FinanceRepository';
 import type { TelegramRepository } from '@/application/telegram/TelegramRepository';
+import type { MonitoringRepository } from '@/application/monitoring/MonitoringRepository';
+import type { LiveRepository } from '@/application/live/LiveRepository';
 import type { UserRepository } from '@/application/user/UserRepository';
 
 type Container = {
@@ -76,6 +80,8 @@ type Container = {
   employeeRepository: EmployeeRepository;
   projectFinanceRepository: ProjectFinanceRepository;
   telegramRepository: TelegramRepository;
+  monitoringRepository: MonitoringRepository;
+  liveRepository: LiveRepository;
   aiPromptRepository: AiPromptRepository;
   improveTaskDescription: ImproveTaskDescription;
   automationRepository: AutomationRepository;
@@ -102,6 +108,8 @@ function buildContainer(): Container {
   const employeeRepo = new HttpEmployeeRepository();
   const projectFinanceRepo = new HttpProjectFinanceRepository();
   const telegramRepo = new HttpTelegramRepository();
+  const monitoringRepo = new HttpMonitoringRepository();
+  const liveRepo = new HttpLiveRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -128,6 +136,8 @@ function buildContainer(): Container {
     employeeRepository: employeeRepo,
     projectFinanceRepository: projectFinanceRepo,
     telegramRepository: telegramRepo,
+    monitoringRepository: monitoringRepo,
+    liveRepository: liveRepo,
     aiPromptRepository: aiPromptRepo,
     improveTaskDescription: new ImproveTaskDescription(aiPromptRepo),
     automationRepository: automationRepo,

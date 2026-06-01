@@ -802,7 +802,163 @@ export class ApiClient {
       `/agent/projects/${encodeURIComponent(projectId)}/git-token`,
     );
   }
+
+  // --- мониторинг серверов (agent-push сборщик) ---
+  async listMonitoredServers(projectId?: string): Promise<MonitoredServer[]> {
+    const q = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+    const { servers } = await this.request<{ servers: MonitoredServer[] }>(
+      `/agent/monitoring/servers${q}`,
+    );
+    return servers;
+  }
+
+  async recordServerSnapshot(
+    projectId: string,
+    snapshot: ServerSnapshotPush,
+  ): Promise<{ ok: boolean; snapshotId: string; serverId: string }> {
+    return this.request<{ ok: boolean; snapshotId: string; serverId: string }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/monitoring/snapshots`,
+      { method: 'POST', body: snapshot },
+    );
+  }
+
+  // --- LIVE-стрим действий воркера ---
+  // Ingest-эндпоинты под /api/agent (Bearer requireAgentToken + requireDispatcherAccess).
+  // Шлём только определённые опциональные поля — старые серверы и валидаторы не должны
+  // спотыкаться на undefined/null лишних ключах.
+  async liveStartSession(
+    projectId: string,
+    taskId: string,
+    body: LiveStartSessionInput,
+  ): Promise<LiveStartSessionResult> {
+    const payload: Record<string, unknown> = { agentName: body.agentName };
+    if (body.attempt !== undefined) payload.attempt = body.attempt;
+    if (body.model !== undefined) payload.model = body.model;
+    if (body.headBefore !== undefined) payload.headBefore = body.headBefore;
+    return this.request<LiveStartSessionResult>(
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/live/sessions`,
+      { method: 'POST', body: payload },
+    );
+  }
+
+  async liveAppendEvents(
+    projectId: string,
+    taskId: string,
+    sessionId: string,
+    events: LiveEventInput[],
+  ): Promise<{ appended: number }> {
+    return this.request<{ appended: number }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/live/sessions/${encodeURIComponent(sessionId)}/events`,
+      { method: 'POST', body: { events } },
+    );
+  }
+
+  async liveFinishSession(
+    projectId: string,
+    taskId: string,
+    sessionId: string,
+    body: LiveFinishSessionInput,
+  ): Promise<{ ok: boolean }> {
+    const payload: Record<string, unknown> = { status: body.status };
+    if (body.headAfter !== undefined) payload.headAfter = body.headAfter;
+    if (body.costUsd !== undefined) payload.costUsd = body.costUsd;
+    if (body.tokensIn !== undefined) payload.tokensIn = body.tokensIn;
+    if (body.tokensOut !== undefined) payload.tokensOut = body.tokensOut;
+    if (body.fileDiffs !== undefined) payload.fileDiffs = body.fileDiffs;
+    return this.request<{ ok: boolean }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/live/sessions/${encodeURIComponent(sessionId)}/finish`,
+      { method: 'POST', body: payload },
+    );
+  }
 }
+
+// --- LIVE-стрим действий воркера (Cursor-style лента в карточке задачи) ---
+// Источник правды — REST из диспетчера (dispatch.ps1). Эти DTO дублируют контракт
+// для не-PowerShell агентов, которые стримят через MCP-тулы.
+
+export type LiveEventKind =
+  | 'assistant_text'
+  | 'tool_use'
+  | 'file_edit'
+  | 'file_write'
+  | 'bash'
+  | 'tool_error'
+  | 'diff_summary'
+  | 'file_diff'
+  | 'session_finished';
+
+export type LiveFileChange = 'added' | 'modified' | 'deleted' | 'renamed';
+
+export type LiveSessionStatus = 'completed' | 'failed' | 'timeout' | 'canceled';
+
+// Одно событие ленты. seq монотонно растёт в рамках задачи; payload — произвольный JSON.
+export type LiveEventInput = {
+  seq: number;
+  kind: string;
+  text?: string | null;
+  payload?: unknown;
+};
+
+// Полный git-дифф файла, прикрепляемый при финализации сессии.
+export type LiveFileDiffInput = {
+  path: string;
+  change: LiveFileChange;
+  additions: number;
+  deletions: number;
+  unifiedDiff?: string | null;
+  isBinary?: boolean;
+  truncated?: boolean;
+};
+
+export type LiveStartSessionInput = {
+  agentName: string;
+  attempt?: number;
+  model?: string | null;
+  headBefore?: string | null;
+};
+
+export type LiveStartSessionResult = {
+  sessionId: string;
+  baseSeq: number;
+};
+
+export type LiveFinishSessionInput = {
+  status: LiveSessionStatus;
+  headAfter?: string | null;
+  costUsd?: number | null;
+  tokensIn?: number | null;
+  tokensOut?: number | null;
+  fileDiffs?: LiveFileDiffInput[];
+};
+
+// Сервер мониторинга, который сборщик должен опросить по SSH.
+export type MonitoredServer = {
+  id: string;
+  projectId: string;
+  name: string;
+  kind: 'local' | 'remote';
+  host: string | null;
+  sshPort: number;
+  sshUser: string | null;
+  sshCredentialRef: string | null;
+  pm2ProcessNames: string[] | null;
+  nginxAccessLogPath: string | null;
+  nginxErrorLogPath: string | null;
+  deployPath: string | null;
+  collectIntervalSeconds: number;
+};
+
+// Снимок, который сборщик пушит в PF. metrics/logs — произвольно-структурированные
+// (сервер валидирует Zod-схемой). collectedAt — ISO-строка.
+export type ServerSnapshotPush = {
+  serverName: string;
+  collectedAt: string;
+  reachable: boolean;
+  metrics?: unknown;
+  logs?: unknown;
+  dbHealth?: unknown;
+  errors?: string[];
+};
 
 export class ApiError extends Error {
   constructor(

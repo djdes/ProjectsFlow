@@ -40,6 +40,9 @@
 //   - pf_list_my_dispatched_projects — проекты, где этот юзер — Ralph-диспетчер
 //   - pf_set_project_dispatcher      — назначить/снять диспетчера (owner-only)
 //   - pf_get_project_git_token       — делегированный GitHub-токен owner'а для git-операций
+//   - pf_live_start_session          — открыть LIVE-сессию стрима действий воркера по задаче
+//   - pf_live_append_events          — дослать батч событий (<=64) в LIVE-сессию
+//   - pf_live_finish_session         — финализировать LIVE-сессию (статус + стоимость + диффы)
 //
 // Установка в Claude Code:
 //   claude mcp add projectsflow npx -- -y @projectsflow/mcp-server
@@ -56,8 +59,25 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { loadConfig } from './config.js';
 import { ApiClient, ApiError } from './api.js';
+
+// Версия сервера читается из package.json в рантайме (а не хардкодом / import) —
+// rootDir=./src запрещает `import pkg from '../package.json'` (TS6059). Резолвим
+// относительно скомпилированного dist/index.js: ../package.json.
+function readPkgVersion(): string {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const pkgPath = join(here, '..', 'package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string };
+    return pkg.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
 
 // 'awaiting_clarification' — задача на паузе до действия человека (Ralph F11 Q&A).
 // 'manual' — колонка для задач, которые делает человек руками; вне pipeline'а агента.
@@ -940,6 +960,170 @@ const TOOLS = [
       '`plaintextAvailable: false`. No projectId needed — scope is the user behind the Bearer.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
+  {
+    name: 'pf_list_monitored_servers',
+    description:
+      'List the REMOTE servers that the monitoring collector should poll over SSH. Returns ' +
+      'connection metadata only (host, sshPort, sshUser, sshCredentialRef — an OPAQUE local ' +
+      'reference, NOT a secret; resolve the actual key on YOUR machine), plus pm2 process-name ' +
+      'filter, nginx log paths, deployPath and collectIntervalSeconds. Non-admin sees only ' +
+      "servers of projects they OWN (monitoring is owner-only); admin sees all. 'local' servers " +
+      'are EXCLUDED — the PF backend collects those directly. Used by the Ralph-style monitoring ' +
+      'collector loop (see monitor-collect.ps1). Optionally filter by projectId.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Optional project id to filter by' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_record_server_snapshot',
+    description:
+      'Push a collected metrics snapshot for a REMOTE server into ProjectsFlow. Gated by ' +
+      'manage_monitoring (owner). The server is resolved by (projectId, serverName) and ' +
+      'auto-created on first push (zero-config). Send reachable=false with no metrics when the ' +
+      'host is unreachable (this fires a down alert). `collectedAt` must be an ISO-8601 string, ' +
+      'strictly later than the last snapshot (non-monotonic / future timestamps are rejected). ' +
+      'Strip secrets from log tails before pushing — the server also redacts, but redact locally ' +
+      'too. metrics = { pm2: [...], system: {...} }; logs = { pm2Out, pm2Err, nginxAccess, ' +
+      'nginxError } each { available, lines?, bytes? }. Returns { ok, snapshotId, serverId }.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_monitored_servers)' },
+        serverName: { type: 'string', description: 'Server name (matches project_servers.name)' },
+        collectedAt: { type: 'string', description: 'ISO-8601 timestamp of collection' },
+        reachable: { type: 'boolean', description: 'Was the host reachable?' },
+        metrics: { type: ['object', 'null'], description: '{ pm2: [...], system: {...} }' },
+        logs: { type: ['object', 'null'], description: 'Redacted, truncated log tails' },
+        dbHealth: { type: ['object', 'null'], description: 'Optional DB health' },
+        errors: { type: 'array', items: { type: 'string' }, description: 'Collection errors' },
+      },
+      required: ['projectId', 'serverName', 'collectedAt', 'reachable'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_live_start_session',
+    description:
+      'Open a LIVE streaming session for a task — the Cursor-style action feed shown on the ' +
+      'task card while an agent works. Returns { sessionId, baseSeq }: use baseSeq as the first ' +
+      'event seq, then increment for every subsequent event. agentName is a short label ' +
+      '(e.g. "claude-agent"). attempt is the 1-based retry counter. headBefore is the git HEAD ' +
+      'SHA before work starts (used to compute the final diff). Primary path is the dispatcher ' +
+      'REST; this tool is for non-PowerShell agents.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
+        agentName: { type: 'string', description: 'Short agent label, e.g. "claude-agent"' },
+        attempt: { type: 'integer', description: '1-based retry counter (default 1)' },
+        model: { type: ['string', 'null'], description: 'Model id, e.g. "claude-opus-4-7"' },
+        headBefore: {
+          type: ['string', 'null'],
+          description: 'git HEAD SHA before work starts (40 hex) — used for the final diff',
+        },
+      },
+      required: ['projectId', 'taskId', 'agentName'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_live_append_events',
+    description:
+      'Append a batch of events (<=64) to an open LIVE session. Each event has a strictly ' +
+      'increasing seq (start from baseSeq returned by pf_live_start_session), a kind, and ' +
+      'optional text/payload. kind is one of: assistant_text (text), tool_use (payload ' +
+      '{name,brief}), file_edit (payload {path,edits:[{old,new}]}), file_write (payload ' +
+      '{path,content}), bash (payload {command}), tool_error (text), diff_summary, file_diff, ' +
+      'session_finished. Duplicate seqs are idempotent server-side. Returns { appended }. ' +
+      'Primary path is the dispatcher REST; this tool is for non-PowerShell agents.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
+        sessionId: { type: 'string', description: 'Session id from pf_live_start_session' },
+        events: {
+          type: 'array',
+          description: 'Batch of events, at most 64.',
+          maxItems: 64,
+          items: {
+            type: 'object',
+            properties: {
+              seq: { type: 'integer', description: 'Strictly increasing event sequence number' },
+              kind: {
+                type: 'string',
+                description:
+                  'Event kind: assistant_text | tool_use | file_edit | file_write | bash | ' +
+                  'tool_error | diff_summary | file_diff | session_finished',
+              },
+              text: { type: ['string', 'null'], description: 'Text payload (assistant_text, tool_error)' },
+              payload: { description: 'Structured payload (JSON) for tool/file/diff events' },
+            },
+            required: ['seq', 'kind'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['projectId', 'taskId', 'sessionId', 'events'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_live_finish_session',
+    description:
+      'Finalize a LIVE session: set its terminal status and attach optional cost/token totals ' +
+      'and per-file git diffs. status is one of completed | failed | timeout | canceled. ' +
+      'headAfter is the git HEAD SHA after work finished. fileDiffs is the full per-file diff ' +
+      "(change is added | modified | deleted | renamed) — large diffs should set truncated=true " +
+      'and binaries isBinary=true. Returns { ok }. Primary path is the dispatcher REST; this ' +
+      'tool is for non-PowerShell agents.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
+        sessionId: { type: 'string', description: 'Session id from pf_live_start_session' },
+        status: {
+          type: 'string',
+          enum: ['completed', 'failed', 'timeout', 'canceled'],
+          description: 'Terminal session status',
+        },
+        headAfter: { type: ['string', 'null'], description: 'git HEAD SHA after work finished (40 hex)' },
+        costUsd: { type: ['number', 'null'], description: 'API-equivalent cost in USD' },
+        tokensIn: { type: ['integer', 'null'], description: 'Total input tokens' },
+        tokensOut: { type: ['integer', 'null'], description: 'Total output tokens' },
+        fileDiffs: {
+          type: 'array',
+          description: 'Per-file git diffs computed at finish.',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'Repo-relative file path' },
+              change: {
+                type: 'string',
+                enum: ['added', 'modified', 'deleted', 'renamed'],
+                description: 'Kind of change',
+              },
+              additions: { type: 'integer', description: 'Added line count' },
+              deletions: { type: 'integer', description: 'Deleted line count' },
+              unifiedDiff: { type: ['string', 'null'], description: 'Unified diff text (may be capped)' },
+              isBinary: { type: 'boolean', description: 'true for binary files (diff omitted)' },
+              truncated: { type: 'boolean', description: 'true if unifiedDiff was capped' },
+            },
+            required: ['path', 'change', 'additions', 'deletions'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['projectId', 'taskId', 'sessionId', 'status'],
+      additionalProperties: false,
+    },
+  },
 ];
 
 // Input schemas для validation (zod вместо ручного парсинга).
@@ -967,6 +1151,80 @@ const UpdateProjectInputZ = z
   .refine((v) => v.name !== undefined || v.gitRepoUrl !== undefined, {
     message: 'нужно хотя бы одно поле (name или gitRepoUrl)',
   });
+const ListMonitoredServersInput = z.object({ projectId: z.string().min(1).optional() });
+const RecordServerSnapshotInput = z.object({
+  projectId: z.string().min(1),
+  serverName: z.string().min(1).max(120),
+  collectedAt: z.string().min(1),
+  reachable: z.boolean(),
+  metrics: z.unknown().optional(),
+  logs: z.unknown().optional(),
+  dbHealth: z.unknown().optional(),
+  errors: z.array(z.string()).optional(),
+});
+// --- LIVE-стрим действий воркера (Cursor-style лента) ---
+const LIVE_EVENT_KINDS = [
+  'assistant_text',
+  'tool_use',
+  'file_edit',
+  'file_write',
+  'bash',
+  'tool_error',
+  'diff_summary',
+  'file_diff',
+  'session_finished',
+] as const;
+const LIVE_SESSION_STATUS = ['completed', 'failed', 'timeout', 'canceled'] as const;
+const LIVE_FILE_CHANGE = ['added', 'modified', 'deleted', 'renamed'] as const;
+
+const LiveStartSessionInputZ = z.object({
+  projectId: z.string().min(1),
+  taskId: z.string().min(1),
+  agentName: z.string().trim().min(1).max(64),
+  attempt: z.number().int().min(1).optional(),
+  model: z.string().max(64).nullable().optional(),
+  headBefore: z.string().max(40).nullable().optional(),
+});
+const LiveAppendEventsInputZ = z.object({
+  projectId: z.string().min(1),
+  taskId: z.string().min(1),
+  sessionId: z.string().min(1),
+  events: z
+    .array(
+      z.object({
+        seq: z.number().int().nonnegative(),
+        kind: z.enum(LIVE_EVENT_KINDS),
+        text: z.string().nullable().optional(),
+        payload: z.unknown().optional(),
+      }),
+    )
+    .min(1)
+    .max(64),
+});
+const LiveFinishSessionInputZ = z.object({
+  projectId: z.string().min(1),
+  taskId: z.string().min(1),
+  sessionId: z.string().min(1),
+  status: z.enum(LIVE_SESSION_STATUS),
+  headAfter: z.string().max(40).nullable().optional(),
+  costUsd: z.number().nullable().optional(),
+  tokensIn: z.number().int().nullable().optional(),
+  tokensOut: z.number().int().nullable().optional(),
+  fileDiffs: z
+    .array(
+      z.object({
+        path: z.string().min(1),
+        change: z.enum(LIVE_FILE_CHANGE),
+        additions: z.number().int().nonnegative(),
+        deletions: z.number().int().nonnegative(),
+        unifiedDiff: z.string().nullable().optional(),
+        isBinary: z.boolean().optional(),
+        truncated: z.boolean().optional(),
+      }),
+    )
+    .optional(),
+});
+
 const ListCredentialsInput = z.object({ projectId: z.string().min(1) });
 const GetCredentialInput = z.object({
   projectId: z.string().min(1),
@@ -1121,7 +1379,7 @@ async function main(): Promise<void> {
   const api = new ApiClient(config);
 
   const server = new Server(
-    { name: 'projectsflow', version: '0.16.0' },
+    { name: 'projectsflow', version: readPkgVersion() },
     { capabilities: { tools: {} } },
   );
 
@@ -1430,6 +1688,61 @@ async function main(): Promise<void> {
             .parse(req.params.arguments ?? {});
           const token = await api.getProjectGitToken(input.projectId);
           return jsonResult(token);
+        }
+        case 'pf_list_monitored_servers': {
+          const input = ListMonitoredServersInput.parse(req.params.arguments ?? {});
+          const servers = await api.listMonitoredServers(input.projectId);
+          return jsonResult(servers);
+        }
+        case 'pf_record_server_snapshot': {
+          const input = RecordServerSnapshotInput.parse(req.params.arguments ?? {});
+          const result = await api.recordServerSnapshot(input.projectId, {
+            serverName: input.serverName,
+            collectedAt: input.collectedAt,
+            reachable: input.reachable,
+            metrics: input.metrics,
+            logs: input.logs,
+            dbHealth: input.dbHealth,
+            errors: input.errors,
+          });
+          return jsonResult(result);
+        }
+        case 'pf_live_start_session': {
+          const input = LiveStartSessionInputZ.parse(req.params.arguments ?? {});
+          const result = await api.liveStartSession(input.projectId, input.taskId, {
+            agentName: input.agentName,
+            attempt: input.attempt,
+            model: input.model,
+            headBefore: input.headBefore,
+          });
+          return jsonResult(result);
+        }
+        case 'pf_live_append_events': {
+          const input = LiveAppendEventsInputZ.parse(req.params.arguments ?? {});
+          const result = await api.liveAppendEvents(
+            input.projectId,
+            input.taskId,
+            input.sessionId,
+            input.events,
+          );
+          return jsonResult(result);
+        }
+        case 'pf_live_finish_session': {
+          const input = LiveFinishSessionInputZ.parse(req.params.arguments ?? {});
+          const result = await api.liveFinishSession(
+            input.projectId,
+            input.taskId,
+            input.sessionId,
+            {
+              status: input.status,
+              headAfter: input.headAfter,
+              costUsd: input.costUsd,
+              tokensIn: input.tokensIn,
+              tokensOut: input.tokensOut,
+              fileDiffs: input.fileDiffs,
+            },
+          );
+          return jsonResult(result);
         }
         default:
           return errorResult(`Unknown tool: ${name}`);

@@ -27,4 +27,14 @@ export type RealtimeEvent =
       readonly oldStatus: string;
       readonly newStatus: string;
       readonly actorUserId: string;
+    }
+  // LIVE-вкладка задачи: старт/финиш стрим-сессии Ralph-воркера. Несёт sessionId/status,
+  // чтобы клиент отрисовал бейдж 🔴 на карточке (running) и погасил его в конце. Полный
+  // firehose событий идёт НЕ сюда (per-user bus), а в task-scoped LiveEventHub (SSE /stream).
+  | {
+      readonly kind: 'live_session_changed';
+      readonly projectId: string;
+      readonly taskId: string;
+      readonly sessionId: string;
+      readonly status: 'running' | 'completed' | 'failed' | 'timeout' | 'canceled';
     };

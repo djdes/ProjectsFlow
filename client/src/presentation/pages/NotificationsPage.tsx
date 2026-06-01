@@ -101,6 +101,9 @@ export function NotificationsPage(): React.ReactElement {
     if (n.payload.type === 'task_assigned_to_project') {
       navigate(`/projects/${n.payload.projectId}`);
     }
+    if (n.payload.type === 'server_alert') {
+      navigate(`/projects/${n.payload.projectId}/monitoring`);
+    }
     // project_invite: переход — по кнопке «Принять» (handleAcceptInvite), не по строке.
   };
 
@@ -308,7 +311,7 @@ function NotificationRow({
       />
       <Avatar className="size-8 shrink-0">
         <AvatarFallback className="text-[11px]">
-          {getInitials(payload.actorDisplayName)}
+          {getInitials(payload.type === 'server_alert' ? payload.serverName : payload.actorDisplayName)}
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1 space-y-0.5">
@@ -420,6 +423,17 @@ function NotificationRow({
                 <span className="italic text-muted-foreground">«{payload.taskExcerpt}»</span>
               </>
             )}
+          </p>
+        )}
+
+        {payload.type === 'server_alert' && (
+          <p className="text-sm leading-snug">
+            {payload.alertStatus === 'resolved' ? '✅ ' : payload.severity === 'critical' ? '🔴 ' : '🟠 '}
+            <span className="font-medium">{payload.serverName}</span>
+            {' · '}
+            {payload.message}
+            {' · '}
+            <span className="text-muted-foreground">«{payload.projectName}»</span>
           </p>
         )}
 

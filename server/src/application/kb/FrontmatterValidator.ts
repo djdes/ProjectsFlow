@@ -2,7 +2,7 @@ import type { Frontmatter, KbDocumentType } from '../../domain/kb/Frontmatter.js
 import type { ValidationError } from '../../domain/kb/KbDocument.js';
 
 const VALID_TYPES = new Set<KbDocumentType>([
-  'credential', 'decision', 'service', 'schema', 'runbook', 'note', 'agent',
+  'credential', 'decision', 'service', 'schema', 'runbook', 'note', 'agent', 'monitoring',
 ]);
 
 const REF_KEY_RE = /_ref$/;

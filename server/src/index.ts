@@ -6,6 +6,9 @@ import { idGenerator, shortIdGenerator } from './infrastructure/id/idGenerator.j
 import { FileSystemBlobStorage } from './infrastructure/storage/FileSystemBlobStorage.js';
 import { DrizzleFileSyncRepository } from './infrastructure/repositories/DrizzleFileSyncRepository.js';
 import { FileSyncService } from './application/file-sync/FileSyncService.js';
+import { DrizzleLiveRepository } from './infrastructure/repositories/DrizzleLiveRepository.js';
+import { LiveService } from './application/live/LiveService.js';
+import { LiveEventHub } from './infrastructure/realtime/LiveEventHub.js';
 import { DrizzleUserRepository } from './infrastructure/repositories/DrizzleUserRepository.js';
 import { DrizzleSessionRepository } from './infrastructure/repositories/DrizzleSessionRepository.js';
 import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleProjectRepository.js';
@@ -181,6 +184,20 @@ import { DrizzleProjectFinanceRepository } from './infrastructure/repositories/D
 import { ManageEmployees } from './application/finance/ManageEmployees.js';
 import { ManageProjectFinance } from './application/finance/ManageProjectFinance.js';
 import { GetProjectFinance } from './application/finance/GetProjectFinance.js';
+import { DrizzleServerRepository } from './infrastructure/repositories/DrizzleServerRepository.js';
+import { DrizzleSnapshotRepository } from './infrastructure/repositories/DrizzleSnapshotRepository.js';
+import { DrizzleMonitoringAlertRepository } from './infrastructure/repositories/DrizzleMonitoringAlertRepository.js';
+import { ShellLocalServerCollector } from './infrastructure/monitoring/ShellLocalServerCollector.js';
+import { AlertNotificationDispatcher } from './application/monitoring/AlertNotificationDispatcher.js';
+import { EvaluateAlerts } from './application/monitoring/EvaluateAlerts.js';
+import { CollectLocalSnapshot } from './application/monitoring/CollectLocalSnapshot.js';
+import { IngestAgentSnapshot } from './application/monitoring/IngestAgentSnapshot.js';
+import { ListServers } from './application/monitoring/ListServers.js';
+import { ManageServers } from './application/monitoring/ManageServers.js';
+import { MonitoringQueries } from './application/monitoring/MonitoringQueries.js';
+import { ListMonitoredServers } from './application/monitoring/ListMonitoredServers.js';
+import { MonitoringKbSnapshotWriter } from './application/monitoring/MonitoringKbSnapshotWriter.js';
+import type { ServerSnapshot } from './domain/monitoring/ServerSnapshot.js';
 import { createApp } from './presentation/http.js';
 import { config, sessionTtlMs } from './presentation/config.js';
 
@@ -412,6 +429,7 @@ const TG_KIND_TO_PREF = {
   ralph_question_reminder: 'ralphQuestion',
   ralph_answer: 'ralphAnswer',
   ralph_answer_accepted: 'ralphAnswer',
+  server_alert: 'serverAlert',
 } as const;
 const sendAgentTelegramNotification = new SendAgentTelegramNotification({
   users: userRepo,
@@ -610,6 +628,20 @@ setInterval(
   10 * 60 * 1000,
 ).unref();
 
+// ===== LIVE-вкладка задачи (db/053): стрим действий Ralph-воркера =====
+// Task-scoped firehose live-событий (только для открытых SSE-вкладок; НЕ per-user bus).
+const liveEventHub = new LiveEventHub();
+const liveService = new LiveService({
+  repo: new DrizzleLiveRepository(db),
+  access: { projects: projectRepo, members: projectMemberRepo },
+  broadcaster: projectEventBroadcaster,
+  liveEventHub,
+  idGen: idGenerator,
+});
+// Startup-sweep: зависшие running-сессии (процесс упал, finish не доехал) → timeout.
+// Best-effort: ошибка не должна мешать старту сервера.
+void liveService.sweepStaleRunning().catch(() => {});
+
 const agentTokenHasher = new Sha256AgentTokenHasher();
 const agentDeviceCodeStore = new InMemoryAgentDeviceCodeStore();
 
@@ -622,6 +654,139 @@ setInterval(
   },
   5 * 60 * 1000,
 ).unref();
+
+// ===== Мониторинг серверов (миграции db/050-052) =====
+const serverRepo = new DrizzleServerRepository(db);
+const snapshotRepo = new DrizzleSnapshotRepository(db);
+const monitoringAlertRepo = new DrizzleMonitoringAlertRepository(db);
+const localServerCollector = new ShellLocalServerCollector();
+const alertNotificationDispatcher = new AlertNotificationDispatcher({
+  notifications: notificationRepo,
+  sendTelegram: sendAgentTelegramNotification,
+  idGen: idGenerator,
+});
+const evaluateAlerts = new EvaluateAlerts({
+  alerts: monitoringAlertRepo,
+  servers: serverRepo,
+  projects: projectRepo,
+  notifier: alertNotificationDispatcher,
+  idGen: idGenerator,
+  now,
+});
+// Хук: после сохранения любого снимка (local-collect / agent-ingest) оцениваем алерты.
+const onMonitoringSnapshotStored = (
+  snapshot: ServerSnapshot,
+  prev: ServerSnapshot | null,
+): void => {
+  void evaluateAlerts
+    .onSnapshotStored(snapshot, prev)
+    .catch((e) => console.warn('[monitoring] alert eval failed:', e));
+};
+const collectLocalSnapshot = new CollectLocalSnapshot({
+  servers: serverRepo,
+  snapshots: snapshotRepo,
+  collector: localServerCollector,
+  idGen: idGenerator,
+  now,
+  onSnapshotStored: onMonitoringSnapshotStored,
+});
+const ingestAgentSnapshot = new IngestAgentSnapshot({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  servers: serverRepo,
+  snapshots: snapshotRepo,
+  idGen: idGenerator,
+  now,
+  onSnapshotStored: onMonitoringSnapshotStored,
+});
+const manageServers = new ManageServers({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  servers: serverRepo,
+  idGen: idGenerator,
+  collectLocal: collectLocalSnapshot,
+  rateLimiter: agentRateLimiter,
+});
+const listServersUseCase = new ListServers({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  servers: serverRepo,
+  snapshots: snapshotRepo,
+});
+const monitoringQueries = new MonitoringQueries({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  servers: serverRepo,
+  snapshots: snapshotRepo,
+  alerts: monitoringAlertRepo,
+});
+const listMonitoredServers = new ListMonitoredServers({ servers: serverRepo });
+const monitoringKbSnapshotWriter = new MonitoringKbSnapshotWriter({
+  servers: serverRepo,
+  snapshots: snapshotRepo,
+  alerts: monitoringAlertRepo,
+  projects: projectRepo,
+  kb: kbStore,
+  writeKbDocument: new WriteKbDocument({
+    projects: projectRepo,
+    members: projectMemberRepo,
+    kb: kbStore,
+  }),
+});
+
+// Периодический local-collect: на win32-dev по умолчанию OFF (нет pm2/df), на linux-prod ON.
+// MONITOR_LOCAL_COLLECT=on|off — явный override.
+const monitoringLocalCollectEnabled =
+  process.env['MONITOR_LOCAL_COLLECT'] === 'on' ||
+  (process.platform !== 'win32' && process.env['MONITOR_LOCAL_COLLECT'] !== 'off');
+if (monitoringLocalCollectEnabled) {
+  setInterval(() => {
+    void (async () => {
+      const servers = await serverRepo.listEnabledByKind('local');
+      for (const s of servers) {
+        try {
+          await collectLocalSnapshot.collect(s, { force: true });
+        } catch (e) {
+          console.warn('[monitoring] local collect failed for', s.id, e);
+        }
+      }
+    })().catch((e) => console.warn('[monitoring] local collect loop error:', e));
+  }, 60 * 1000).unref();
+}
+// Прунинг старых снимков (TTL 30 дней по умолчанию).
+const SNAPSHOT_TTL_DAYS = Number(process.env['MONITOR_SNAPSHOT_TTL_DAYS'] ?? 30);
+setInterval(
+  () => {
+    const cutoff = new Date(Date.now() - SNAPSHOT_TTL_DAYS * 86_400 * 1000);
+    void snapshotRepo
+      .pruneOlderThan(cutoff, 500)
+      .then((n) => {
+        if (n > 0) console.log(`[monitoring] pruned ${n} old snapshots`);
+      })
+      .catch((e) => console.warn('[monitoring] prune error:', e));
+  },
+  10 * 60 * 1000,
+).unref();
+// Staleness-sweep: сервер замолчал → snapshot_stale.
+setInterval(
+  () => {
+    void evaluateAlerts
+      .sweepStaleness()
+      .catch((e) => console.warn('[monitoring] staleness sweep error:', e));
+  },
+  5 * 60 * 1000,
+).unref();
+// KB-снимки (markdown, только метрики). MONITOR_KB_SNAPSHOTS=off — выключить.
+if (process.env['MONITOR_KB_SNAPSHOTS'] !== 'off') {
+  setInterval(
+    () => {
+      void monitoringKbSnapshotWriter
+        .writeForAll()
+        .catch((e) => console.warn('[monitoring] kb snapshot error:', e));
+    },
+    60 * 60 * 1000,
+  ).unref();
+}
 
 const authDeps = {
   users: userRepo,
@@ -645,6 +810,10 @@ const { app, devProxyUpgrade } = createApp({
   fileSync: {
     service: fileSyncService,
     maxBlobBytes: SYNC_MAX_BLOB_BYTES,
+  },
+  live: {
+    service: liveService,
+    liveEventHub,
   },
   projects: {
     listProjects: new ListProjects(projectMemberRepo),
@@ -838,6 +1007,11 @@ const { app, devProxyUpgrade } = createApp({
     getSecret: new GetSecret({ projects: projectRepo, members: projectMemberRepo, repo: secretsRepo }),
     deleteSecret: new DeleteSecret({ projects: projectRepo, members: projectMemberRepo, repo: secretsRepo }),
     listSecretKeys: new ListSecretKeys({ projects: projectRepo, members: projectMemberRepo, repo: secretsRepo }),
+  },
+  monitoring: {
+    listServers: listServersUseCase,
+    manageServers,
+    queries: monitoringQueries,
   },
   kb: {
     initKbRepo: new InitKbRepo({
@@ -1344,6 +1518,8 @@ const { app, devProxyUpgrade } = createApp({
       automation: automationRepo,
       now,
     }),
+    ingestAgentSnapshot,
+    listMonitoredServers,
     setProjectDispatcher: new SetProjectDispatcher({
       projects: projectRepo,
       members: projectMemberRepo,

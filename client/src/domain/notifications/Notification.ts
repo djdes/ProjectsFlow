@@ -78,13 +78,28 @@ export type TaskAssignedToProjectPayload = {
   readonly actorDisplayName: string;
 };
 
+// Алерт мониторинга сервера. Прилетает владельцу; ведёт на вкладку «Мониторинг».
+export type ServerAlertPayload = {
+  readonly type: 'server_alert';
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly serverId: string;
+  readonly serverName: string;
+  readonly alertId: string;
+  readonly ruleKind: string;
+  readonly severity: 'info' | 'warning' | 'critical';
+  readonly alertStatus: 'firing' | 'resolved';
+  readonly message: string;
+};
+
 export type NotificationPayload =
   | CommentMentionPayload
   | ProjectInvitePayload
   | JoinRequestPayload
   | TaskDelegationPayload
   | TaskDelegationResolvedPayload
-  | TaskAssignedToProjectPayload;
+  | TaskAssignedToProjectPayload
+  | ServerAlertPayload;
 
 export type Notification = {
   readonly id: string;

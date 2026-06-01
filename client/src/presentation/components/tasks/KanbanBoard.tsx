@@ -22,6 +22,7 @@ import { TASK_STATUSES } from '@/domain/task/Task';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { useDoneSortOrder, type DoneSortOrder } from '@/presentation/hooks/useDoneSortOrder';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { LIVE_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { KanbanCard } from './KanbanCard';
 import { KanbanColumn } from './KanbanColumn';
 import { QuickAddTodo } from './QuickAddTodo';
@@ -131,6 +132,40 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     setSearchParams(next, { replace: true });
   }, [loading, tasks, searchParams, setSearchParams]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Множество taskId с активной (running) LIVE-сессией — для 🔴 точки на карточке.
+  // Обновляется по realtime-событию 'pf:live-changed' (debounce 100мс коалесцирует пачку).
+  const [liveTaskIds, setLiveTaskIds] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    // Накапливаем дельты и применяем разом (debounce), чтобы пачка start/finish не дёргала рендер.
+    const pending = new Map<string, boolean>();
+    const flush = (): void => {
+      timer = null;
+      if (pending.size === 0) return;
+      setLiveTaskIds((prev) => {
+        const next = new Set(prev);
+        for (const [taskId, running] of pending) {
+          if (running) next.add(taskId);
+          else next.delete(taskId);
+        }
+        pending.clear();
+        return next;
+      });
+    };
+    const onLive = (e: Event): void => {
+      const detail = (e as CustomEvent<{ projectId?: string; taskId?: string; status?: string }>)
+        .detail;
+      if (detail?.projectId !== projectId || !detail.taskId) return;
+      pending.set(detail.taskId, detail.status === 'running');
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(flush, 100);
+    };
+    window.addEventListener(LIVE_CHANGED_EVENT, onLive);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener(LIVE_CHANGED_EVENT, onLive);
+    };
+  }, [projectId]);
   // Позиция drop-индикатора: в какой колонке и над каким элементом находится курсор.
   // overId — id задачи (вставка перед ней) или 'column-{status}' (вставка в конец).
   const [dropTarget, setDropTarget] = useState<{
@@ -378,6 +413,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
               currentUserId={user?.id ?? null}
               activeId={activeId}
               dropTarget={dropTarget?.status === status ? dropTarget : null}
+              liveTaskIds={liveTaskIds}
               headerExtra={
                 status === 'done' ? (
                   <Button

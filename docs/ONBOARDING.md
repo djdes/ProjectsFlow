@@ -369,6 +369,27 @@ claude
 
 ---
 
+## 6.7 Монитор серверов локально (monitor-collect.ps1)
+
+Сбор метрик `remote`-серверов проектов (см. spec `2026-06-01-server-monitoring-design.md`).
+Отдельный от dispatch процесс-сборщик в `C:\www\ralph`:
+
+- `monitor-collect.ps1` — GET `/api/agent/monitoring/servers` → для каждого remote-сервера
+  SSH-проба (`pm2 jlist` + `df` + `/proc/*` + хвост nginx-логов) → POST снимка в
+  `/api/agent/projects/{id}/monitoring/snapshots`. `local`-серверы PF собирает сам (бэкенд
+  читает свой хост) — сборщик их пропускает.
+- **Предусловия:** OpenSSH-клиент (`ssh`) на машине сборщика; BatchMode SSH-ключ для
+  `sshUser@host` каждого сервера (ключи живут ЗДЕСЬ, в PF не уходят); agent-токен владельца
+  проекта в `mcp-projectsflow.json`.
+- **Конфиг:** блок `monitoring` в `config.local.json` (`enabled` по умолчанию `false`,
+  `intervalSeconds`, `sshClient`, `probeTimeoutSeconds`, `tailLines`, `tailMaxBytes`).
+- **Запуск:** разово `pwsh -File C:\www\ralph\monitor-collect.ps1 -Once`; в цикле — без `-Once`.
+  Логи — `C:\www\ralph\logs\monitor.log`. Тесты парсеров — `monitor-collect.tests.ps1` (Pester v5).
+- **VPS самого PF** мониторить через сборщик НЕ нужно: добавьте в проект `local`-сервер — его
+  читает бэкенд напрямую (env `MONITOR_LOCAL_COLLECT=on` если нужно форсить вне linux-prod).
+
+---
+
 ## 7. Типовые проблемы
 
 | Симптом | Причина / решение |

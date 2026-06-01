@@ -38,6 +38,8 @@ type Props = {
   activeId?: string | null;
   // Drop target для этой колонки (null = курсор не над этой колонкой).
   dropTarget?: { status: TaskStatus; overId: string } | null;
+  // taskId'ы с активной LIVE-сессией воркера — карточка рисует 🔴 точку.
+  liveTaskIds?: ReadonlySet<string>;
 };
 
 export function KanbanColumn({
@@ -57,6 +59,7 @@ export function KanbanColumn({
   currentUserId = null,
   activeId = null,
   dropTarget = null,
+  liveTaskIds,
 }: Props): React.ReactElement {
   // Droppable нужен чтобы можно было кинуть карточку в ПУСТУЮ колонку —
   // SortableContext один не реагирует на drop в empty list.
@@ -127,6 +130,7 @@ export function KanbanColumn({
                 lastDoneTaskId={lastDoneTaskId}
                 lastTodoTaskId={lastTodoTaskId}
                 currentUserId={currentUserId}
+                liveRunning={liveTaskIds?.has(t.id) ?? false}
               />
             </Fragment>
           ))}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { BookOpen, Bot, ChevronRight, Settings, Wallet } from 'lucide-react';
+import { Activity, BookOpen, Bot, ChevronRight, Settings, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useContainer } from '@/infrastructure/di/container';
@@ -10,11 +10,13 @@ import { AutomationDialog } from '@/presentation/components/project/AutomationDi
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
   const { data, loading, notFound } = useProject(projectId ?? '');
-  const { projectFinanceRepository } = useContainer();
+  const { projectFinanceRepository, monitoringRepository } = useContainer();
   // Гейт видимости кнопки «Финансы»: дёргаем summary только чтобы проверить доступ.
   // Сумму больше не показываем (раньше был чип в шапке), сам блок Доход/Расход/Прибыль
   // живёт на странице /finance.
   const [financeVisible, setFinanceVisible] = useState(false);
+  // Гейт кнопки «Мониторинг»: owner-only — пробуем list, при 403 кнопку не показываем.
+  const [monitoringVisible, setMonitoringVisible] = useState(false);
   const [automationOpen, setAutomationOpen] = useState(false);
 
   useEffect(() => {
@@ -24,8 +26,12 @@ export function TasksPage(): React.ReactElement {
       .getSummary(projectId)
       .then(() => { if (!cancelled) setFinanceVisible(true); })
       .catch(() => { /* нет доступа — кнопку не показываем */ });
+    monitoringRepository
+      .listServers(projectId)
+      .then(() => { if (!cancelled) setMonitoringVisible(true); })
+      .catch(() => { /* не owner — кнопку не показываем */ });
     return () => { cancelled = true; };
-  }, [projectId, projectFinanceRepository]);
+  }, [projectId, projectFinanceRepository, monitoringRepository]);
 
   if (loading) {
     return (
@@ -80,6 +86,14 @@ export function TasksPage(): React.ReactElement {
               База знаний
             </Link>
           </Button>
+          {monitoringVisible && (
+            <Button asChild variant="outline" size="sm">
+              <Link to={`/projects/${data.id}/monitoring`}>
+                <Activity className="size-4" />
+                Мониторинг
+              </Link>
+            </Button>
+          )}
           <Button asChild variant="outline" size="sm">
             <Link to={`/projects/${data.id}/overview`}>
               <Settings className="size-4" />

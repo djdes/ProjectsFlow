@@ -39,6 +39,8 @@ type Props = {
   lastTodoTaskId?: string | null;
   // Для DelegationBadge: чтобы определить «я создатель / я делегат».
   currentUserId?: string | null;
+  // У задачи активна LIVE-сессия воркера — рисуем пульсирующую 🔴 точку в углу карточки.
+  liveRunning?: boolean;
 };
 
 // Кастомный transition для reflow соседей при drag. Out-quart — плавнее дефолтного
@@ -60,6 +62,7 @@ export function KanbanCard({
   lastDoneTaskId = null,
   lastTodoTaskId = null,
   currentUserId = null,
+  liveRunning = false,
 }: Props): React.ReactElement {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -133,6 +136,14 @@ export function KanbanCard({
           isDragging && !preview && 'cursor-grabbing opacity-30',
         )}
       >
+        {/* 🔴 LIVE-индикатор: воркер прямо сейчас работает над задачей (есть running-сессия). */}
+        {liveRunning && !preview && (
+          <span
+            aria-label="Воркер работает над задачей"
+            title="Воркер работает над задачей"
+            className="absolute right-1.5 top-1.5 z-10 size-2 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.7)]"
+          />
+        )}
         {showCheckbox && !preview && (
           <div className="pt-0.5" onPointerDown={stopDrag}>
             <InboxCheckbox

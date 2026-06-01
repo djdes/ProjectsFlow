@@ -69,4 +69,24 @@ export class ProjectEventBroadcaster {
       });
     }
   }
+
+  // LIVE-сессия стартовала/завершилась — бейдж 🔴 на карточке задачи всем участникам.
+  // Лёгкое событие (без firehose ленты — та идёт в task-scoped LiveEventHub).
+  async broadcastLiveSessionChanged(
+    projectId: string,
+    taskId: string,
+    sessionId: string,
+    status: 'running' | 'completed' | 'failed' | 'timeout' | 'canceled',
+  ): Promise<void> {
+    const members = await this.deps.members.listByProject(projectId);
+    for (const m of members) {
+      this.deps.publisher.publish(m.userId, {
+        kind: 'live_session_changed',
+        projectId,
+        taskId,
+        sessionId,
+        status,
+      });
+    }
+  }
 }

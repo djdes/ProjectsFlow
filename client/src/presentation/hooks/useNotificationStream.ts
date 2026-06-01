@@ -8,8 +8,21 @@ export const NOTIFICATIONS_CHANGED_EVENT = 'pf:notifications-changed';
 // detail.projectId — в каком проекте произошло изменение.
 export const TASK_CHANGED_EVENT = 'pf:task-changed';
 export const PROJECT_CHANGED_EVENT = 'pf:project-changed';
+// Сменилось состояние LIVE-сессии воркера (start/finish). Канбан рисует 🔴 на карточке,
+// открытая LIVE-вкладка обновляет список сессий. detail = {projectId,taskId,sessionId,status}.
+export const LIVE_CHANGED_EVENT = 'pf:live-changed';
 
-type RealtimeEvent = { kind: 'task_changed' | 'project_changed'; projectId: string };
+type LiveSessionStatus = 'running' | 'completed' | 'failed' | 'timeout' | 'canceled';
+
+type RealtimeEvent =
+  | { kind: 'task_changed' | 'project_changed'; projectId: string }
+  | {
+      kind: 'live_session_changed';
+      projectId: string;
+      taskId: string;
+      sessionId: string;
+      status: LiveSessionStatus;
+    };
 
 type StreamPayload =
   | { type: 'comment_mention'; projectName: string; actorDisplayName: string }
@@ -51,6 +64,21 @@ export function useNotificationStream(): void {
     source.addEventListener('realtime', (event) => {
       try {
         const data = JSON.parse((event as MessageEvent).data) as RealtimeEvent;
+        if (data.kind === 'live_session_changed') {
+          // Бейдж 🔴 на карточке + рефреш открытой LIVE-вкладки. Кладём весь detail
+          // (taskId/sessionId/status), слушатели матчат по projectId+taskId.
+          window.dispatchEvent(
+            new CustomEvent(LIVE_CHANGED_EVENT, {
+              detail: {
+                projectId: data.projectId,
+                taskId: data.taskId,
+                sessionId: data.sessionId,
+                status: data.status,
+              },
+            }),
+          );
+          return;
+        }
         const name = data.kind === 'project_changed' ? PROJECT_CHANGED_EVENT : TASK_CHANGED_EVENT;
         window.dispatchEvent(new CustomEvent(name, { detail: { projectId: data.projectId } }));
       } catch {

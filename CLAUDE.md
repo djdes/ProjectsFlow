@@ -205,6 +205,30 @@ Workflow: фича → ветка → merge в `main` → `npm run deploy` (по
 9. **Если есть ProjectsFlow MCP** — перед коммитом синкай с kanban-задачами по ритуалу
    выше. Не молча: всегда подтверждай move у юзера через AskUserQuestion.
 
+## LIVE-вкладка задачи (стрим действий Ralph-воркера)
+
+Cursor-style лента действий воркера (`claude -p`) в реальном времени + replay при переоткрытии.
+Сервер (Clean Arch, зеркало file-sync):
+
+- **Данные:** миграция `db/053_live_sessions.sql` — таблица `live_sessions` (метаданные/статус/
+  base_seq/стоимость/HEAD'ы) + nullable `task_progress_events.session_id`. События переиспользуют
+  ту же append-only `task_progress_events` (UNIQUE(task_id, seq), идемпотентность через `ER_DUP_ENTRY`).
+  Финальный git-дифф — это события `kind='file_diff'`/`diff_summary`, не отдельная таблица.
+- **Слои:** `domain/live/{LiveSession,LiveEvent,LiveFileDiff,errors}`, `application/live/{LiveRepository(port),
+  LiveService}`, `infrastructure/repositories/DrizzleLiveRepository` (`parseJsonCol`, DECIMAL/BIGINT → `Number()`),
+  `infrastructure/realtime/LiveEventHub` (task-scoped firehose, зеркало `RealtimeHub`),
+  `presentation/live/{agentRoutes,routes}`.
+- **Ingest (Bearer, `requireDispatcherAccess`)** под `/api/agent`: `POST .../tasks/:t/live/sessions`,
+  `.../sessions/:s/events` (батч ≤64), `.../sessions/:s/finish`.
+- **Read (cookie, `requireProjectAccess('read_project')`)** под `/api/projects`:
+  `GET .../live/sessions`, `.../sessions/:s/events?afterSeq=&limit=`, `.../sessions/:s/file-diffs`,
+  `.../sessions/:s/stream` (SSE: replay из БД `seq>afterSeq` → subscribe `LiveEventHub(taskId)`;
+  `event: live`/`live_end`; гейт доступа ДО `writeHead`; 410 если сессия завершилась >5 мин назад).
+- **Realtime-бейдж 🔴:** `RealtimeEvent` union `live_session_changed`; `ProjectEventBroadcaster.broadcastLiveSessionChanged`
+  фанаутит участникам на start/finish (лёгкое событие — НЕ firehose; полная лента только в открытую SSE-вкладку).
+- **Startup-sweep:** `liveService.sweepStaleRunning()` переводит зависшие `running` (процесс упал) → `timeout`.
+- Wiring — `index.ts` (`liveEventHub`/`liveService`), mounts — `presentation/http.ts`.
+
 ## Типовые проблемы
 
 | Симптом | Решение |

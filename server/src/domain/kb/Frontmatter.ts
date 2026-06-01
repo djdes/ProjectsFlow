@@ -9,7 +9,8 @@ export type KbDocumentType =
   | 'schema'
   | 'runbook'
   | 'note'
-  | 'agent';
+  | 'agent'
+  | 'monitoring';
 
 export const KB_FOLDERS: Record<KbDocumentType, string> = {
   credential: 'credentials',
@@ -19,4 +20,6 @@ export const KB_FOLDERS: Record<KbDocumentType, string> = {
   runbook: 'runbooks',
   note: 'notes',
   agent: 'agents',
+  // Авто-генерируемые снимки мониторинга (только метрики, без логов).
+  monitoring: 'monitoring',
 };

@@ -4,6 +4,7 @@ import {
   boolean,
   char,
   date,
+  decimal,
   double,
   index,
   int,
@@ -21,6 +22,11 @@ import {
 import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
 import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
 import type { TelegramDraftOffered } from '../../application/telegram/TelegramTaskDraftRepository.js';
+import type {
+  SnapshotMetrics,
+  LogTails,
+  DbHealth,
+} from '../../domain/monitoring/ServerSnapshot.js';
 
 // id-длина 36 = UUID v4 в строковой форме (8-4-4-4-12).
 const id = () => char('id', { length: 36 }).primaryKey();
@@ -854,6 +860,120 @@ export const syncFileEntries = mysqlTable(
 );
 export type SyncFileEntryRow = typeof syncFileEntries.$inferSelect;
 
+// ============================================================================
+// Мониторинг серверов — миграции db/050-052. Серверы проекта (local/remote),
+// time-series снимки метрик (pm2/nginx/диск/система) и алерты с state-machine.
+// См. spec 2026-06-01-server-monitoring-design.md.
+// ============================================================================
+
+export const projectServers = mysqlTable(
+  'project_servers',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    name: varchar('name', { length: 120 }).notNull(),
+    kind: mysqlEnum('kind', ['local', 'remote']).notNull().default('remote'),
+    host: varchar('host', { length: 255 }),
+    sshPort: int('ssh_port').notNull().default(22),
+    sshUser: varchar('ssh_user', { length: 120 }),
+    sshCredentialRef: varchar('ssh_credential_ref', { length: 500 }),
+    pm2ProcessNames: json('pm2_process_names').$type<string[] | null>(),
+    nginxAccessLogPath: varchar('nginx_access_log_path', { length: 500 }),
+    nginxErrorLogPath: varchar('nginx_error_log_path', { length: 500 }),
+    deployPath: varchar('deploy_path', { length: 500 }),
+    enabled: boolean('enabled').notNull().default(true),
+    collectIntervalSeconds: int('collect_interval_seconds').notNull().default(300),
+    lastSnapshotAt: timestamp('last_snapshot_at'),
+    lastStatus: varchar('last_status', { length: 16 }),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_project_server_name').on(t.projectId, t.name),
+    index('idx_project_server_project_kind').on(t.projectId, t.kind),
+  ],
+);
+export type ProjectServerRow = typeof projectServers.$inferSelect;
+export type NewProjectServerRow = typeof projectServers.$inferInsert;
+
+export const serverSnapshots = mysqlTable(
+  'server_snapshots',
+  {
+    id: id(),
+    serverId: char('server_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    collectedAt: timestamp('collected_at').notNull(),
+    source: mysqlEnum('source', ['local', 'agent']).notNull(),
+    status: varchar('status', { length: 16 }).notNull(),
+    reachable: boolean('reachable').notNull().default(true),
+    metrics: json('metrics').$type<SnapshotMetrics | null>(),
+    logs: json('logs').$type<LogTails | null>(),
+    dbHealth: json('db_health').$type<DbHealth | null>(),
+    errors: json('errors').$type<string[] | null>(),
+    cpuLoad1: double('cpu_load1'),
+    cpuLoad5: double('cpu_load5'),
+    cpuLoad15: double('cpu_load15'),
+    memUsedPct: double('mem_used_pct'),
+    diskUsedPct: double('disk_used_pct'),
+    pm2Online: tinyint('pm2_online'),
+    pm2RestartTotal: int('pm2_restart_total'),
+    pushedByUserId: char('pushed_by_user_id', { length: 36 }),
+    agentTokenId: char('agent_token_id', { length: 36 }),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_snapshot_server_time').on(t.serverId, t.collectedAt),
+    index('idx_snapshot_server_time').on(t.serverId, t.collectedAt),
+    index('idx_snapshot_project_time').on(t.projectId, t.collectedAt),
+    index('idx_snapshot_collected').on(t.collectedAt),
+  ],
+);
+export type ServerSnapshotRow = typeof serverSnapshots.$inferSelect;
+export type NewServerSnapshotRow = typeof serverSnapshots.$inferInsert;
+
+export const serverAlertRules = mysqlTable(
+  'server_alert_rules',
+  {
+    projectId: char('project_id', { length: 36 }).notNull(),
+    ruleKind: varchar('rule_kind', { length: 32 }).notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    threshold: double('threshold'),
+    severity: varchar('severity', { length: 16 }).notNull().default('warning'),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.ruleKind] })],
+);
+export type ServerAlertRuleRow = typeof serverAlertRules.$inferSelect;
+
+export const serverAlerts = mysqlTable(
+  'server_alerts',
+  {
+    id: id(),
+    serverId: char('server_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    ruleKind: varchar('rule_kind', { length: 32 }).notNull(),
+    dedupKey: varchar('dedup_key', { length: 191 }).notNull().default(''),
+    activeDedup: varchar('active_dedup', { length: 191 }),
+    severity: varchar('severity', { length: 16 }).notNull().default('warning'),
+    status: mysqlEnum('status', ['firing', 'resolved']).notNull().default('firing'),
+    message: text('message').notNull(),
+    details: json('details').$type<Record<string, unknown> | null>(),
+    firstSeenAt: timestamp('first_seen_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    lastSeenAt: timestamp('last_seen_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    resolvedAt: timestamp('resolved_at'),
+    lastNotifiedAt: timestamp('last_notified_at'),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_alert_active').on(t.serverId, t.ruleKind, t.activeDedup),
+    index('idx_alert_project_status').on(t.projectId, t.status),
+    index('idx_alert_server').on(t.serverId),
+  ],
+);
+export type ServerAlertRow = typeof serverAlerts.$inferSelect;
+export type NewServerAlertRow = typeof serverAlerts.$inferInsert;
+
 export const syncChangeSets = mysqlTable(
   'sync_change_sets',
   {
@@ -909,6 +1029,8 @@ export const taskProgressEvents = mysqlTable(
     id: autoId(),
     taskId: char('task_id', { length: 36 }).notNull(),
     projectId: char('project_id', { length: 36 }).notNull(),
+    // Привязка к live_sessions.id (nullable: file-sync companion-события её не ставят).
+    sessionId: char('session_id', { length: 36 }),
     seq: int('seq').notNull(),
     kind: varchar('kind', { length: 32 }).notNull(),
     text: text('text'),
@@ -919,6 +1041,49 @@ export const taskProgressEvents = mysqlTable(
     uniqueIndex('uq_tpe_task_seq').on(t.taskId, t.seq),
     index('idx_tpe_task').on(t.taskId),
     index('idx_tpe_created').on(t.createdAt),
+    index('idx_tpe_session').on(t.sessionId, t.seq),
   ],
 );
 export type TaskProgressEventRow = typeof taskProgressEvents.$inferSelect;
+
+// ============================================================================
+// LIVE-вкладка задачи: стрим действий Ralph-воркера (db/053). Одна таблица метаданных
+// сессии; события переиспользуют task_progress_events (session_id). См. план
+// effervescent-sleeping-parasol.
+// ============================================================================
+
+export const liveSessions = mysqlTable(
+  'live_sessions',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    taskId: char('task_id', { length: 36 }).notNull(),
+    agentName: varchar('agent_name', { length: 64 }),
+    attempt: int('attempt').notNull().default(1),
+    status: mysqlEnum('status', ['running', 'completed', 'failed', 'timeout', 'canceled'])
+      .notNull()
+      .default('running'),
+    model: varchar('model', { length: 64 }),
+    headBefore: char('head_before', { length: 40 }),
+    headAfter: char('head_after', { length: 40 }),
+    // DECIMAL/BIGINT возвращаются из mysql2 строками → Number() в репозитории.
+    costUsd: decimal('cost_usd', { precision: 10, scale: 4 }),
+    tokensIn: bigint('tokens_in', { mode: 'number' }),
+    tokensOut: bigint('tokens_out', { mode: 'number' }),
+    baseSeq: int('base_seq').notNull().default(0),
+    lastSeq: int('last_seq').notNull().default(0),
+    eventCount: int('event_count').notNull().default(0),
+    startedAt: timestamp('started_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    endedAt: timestamp('ended_at'),
+    expiresAt: timestamp('expires_at'),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    index('idx_ls_task').on(t.taskId, t.startedAt),
+    index('idx_ls_status').on(t.status),
+    index('idx_ls_expires').on(t.expiresAt),
+  ],
+);
+export type LiveSessionRow = typeof liveSessions.$inferSelect;
+export type NewLiveSessionRow = typeof liveSessions.$inferInsert;

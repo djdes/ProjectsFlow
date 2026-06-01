@@ -91,6 +91,17 @@ import {
   EmployeeNotFoundError,
   FinanceValidationError,
 } from '../../domain/finance/errors.js';
+import {
+  LogPathNotAllowedError,
+  NotLocalServerError,
+  ServerNameInvalidError,
+  ServerNotFoundError,
+  SnapshotIngestInvalidError,
+} from '../../domain/monitoring/errors.js';
+import {
+  LiveSessionNotFoundError,
+  LiveSessionGoneError,
+} from '../../domain/live/errors.js';
 
 type ErrorPayload = {
   error: string;
@@ -514,6 +525,38 @@ export function errorHandler(
   }
   if (err instanceof NotAssignedDispatcherError) {
     res.status(403).json({ error: 'not_assigned_dispatcher' });
+    return;
+  }
+
+  // --- мониторинг серверов ---
+  if (err instanceof ServerNotFoundError) {
+    res.status(404).json({ error: 'server_not_found' });
+    return;
+  }
+  if (err instanceof ServerNameInvalidError) {
+    res.status(400).json({ error: 'server_name_invalid', message: err.message });
+    return;
+  }
+  if (err instanceof SnapshotIngestInvalidError) {
+    res.status(422).json({ error: 'snapshot_ingest_invalid', message: err.reason });
+    return;
+  }
+  if (err instanceof NotLocalServerError) {
+    res.status(409).json({ error: 'not_local_server', message: err.message });
+    return;
+  }
+  if (err instanceof LogPathNotAllowedError) {
+    res.status(403).json({ error: 'log_path_not_allowed' });
+    return;
+  }
+
+  // --- LIVE-вкладка ---
+  if (err instanceof LiveSessionNotFoundError) {
+    res.status(404).json({ error: 'live_session_not_found' });
+    return;
+  }
+  if (err instanceof LiveSessionGoneError) {
+    res.status(410).json({ error: 'live_session_gone', message: err.message });
     return;
   }
 

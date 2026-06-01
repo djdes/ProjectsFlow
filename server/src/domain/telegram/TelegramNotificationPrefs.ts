@@ -7,7 +7,8 @@ export type TelegramNotifKind =
   | 'statusChange'      // изменение статуса моей задачи
   | 'ralphQuestion'     // вопрос от Ralph-агента (ralph-question marker)
   | 'ralphAnswer'       // ответ на мой вопрос (обычно уже знаю — дефолт off)
-  | 'taskDone';         // моя задача успешно завершена агентом
+  | 'taskDone'          // моя задача успешно завершена агентом
+  | 'serverAlert';      // алерт мониторинга сервера (диск/процесс/рестарты)
 
 export type TelegramNotificationPrefs = Partial<Record<TelegramNotifKind, boolean>>;
 
@@ -20,6 +21,7 @@ const DEFAULTS: Required<TelegramNotificationPrefs> = {
   ralphQuestion: true,
   ralphAnswer: false,
   taskDone: true,
+  serverAlert: true,
 };
 
 export function resolveTgPref(
@@ -40,5 +42,6 @@ export function getAllTgPrefsResolved(
     ralphQuestion: resolveTgPref(prefs, 'ralphQuestion'),
     ralphAnswer: resolveTgPref(prefs, 'ralphAnswer'),
     taskDone: resolveTgPref(prefs, 'taskDone'),
+    serverAlert: resolveTgPref(prefs, 'serverAlert'),
   };
 }
