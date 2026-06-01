@@ -33,6 +33,21 @@ function affected(result: unknown): number {
   return (result as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
 }
 
+// MariaDB хранит JSON как LONGTEXT → mysql2 возвращает СТРОКУ, а не объект/массив
+// (drizzle-orm не парсит json-колонки: нет mapFromDriverValue). На MySQL 8/9 приходит
+// уже распарсенное. Нормализуем оба случая. Тот же приём, что в DrizzleNotificationRepository.
+function parseJsonCol<T>(v: unknown, fallback: T): T {
+  if (v === null || v === undefined) return fallback;
+  if (typeof v === 'string') {
+    try {
+      return JSON.parse(v) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return v as T;
+}
+
 function toWorkspace(r: SyncWorkspaceRow): SyncWorkspace {
   return {
     id: r.id,
@@ -41,7 +56,7 @@ function toWorkspace(r: SyncWorkspaceRow): SyncWorkspace {
     baseSnapshotId: r.baseSnapshotId ?? null,
     baseVersion: Number(r.baseVersion),
     dispatcherHeadSnapshotId: r.dispatcherHeadSnapshotId ?? null,
-    ignoreSet: (r.ignoreSetJson as string[]) ?? [],
+    ignoreSet: parseJsonCol<string[]>(r.ignoreSetJson, []),
     ignoreSetHash: r.ignoreSetHash,
     isCaseSensitive: r.isCaseSensitive === 1,
     clientProtocolVersion: r.clientProtocolVersion,
@@ -74,7 +89,7 @@ function toSession(r: SyncSessionRow): SyncSession {
     baseSnapshotId: r.baseSnapshotId,
     resultSnapshotId: r.resultSnapshotId ?? null,
     status: r.status,
-    conflictJson: r.conflictJson ?? null,
+    conflictJson: parseJsonCol<unknown>(r.conflictJson, null),
     idempotencyKey: r.idempotencyKey ?? null,
   };
 }
@@ -304,7 +319,7 @@ export class DrizzleFileSyncRepository implements FileSyncRepository {
     const row = rows[0];
     if (!row) return null;
     return {
-      ops: row.changesJson as ChangeOp[],
+      ops: parseJsonCol<ChangeOp[]>(row.changesJson, []),
       counts: { added: row.addedCount, modified: row.modifiedCount, deleted: row.deletedCount },
     };
   }
@@ -421,7 +436,7 @@ export class DrizzleFileSyncRepository implements FileSyncRepository {
       seq: r.seq,
       kind: r.kind,
       text: r.text ?? null,
-      payload: r.payload ?? null,
+      payload: parseJsonCol<unknown>(r.payload, null),
       createdAt: r.createdAt,
     }));
   }
