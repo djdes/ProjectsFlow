@@ -40,6 +40,66 @@ function validateName(name: string): string {
   return n;
 }
 
+// SSRF-защита: бэкенд сам ходит по health_url с прод-VPS, поэтому цель задаёт editor.
+// Блокируем loopback / private / link-local / metadata-хосты и нестандартные порты,
+// чтобы health-проверку нельзя было превратить в зонд внутренней сети (169.254.169.254,
+// 127.0.0.1:4317 — сам бэкенд, RFC1918 LAN). Проверка на этапе записи; остаточный риск
+// DNS-rebind (TOCTOU) для FQDN считаем приемлемым в v1.
+function isBlockedHost(rawHost: string): boolean {
+  // IPv6-литерал в URL.hostname приходит в скобках — снимаем их.
+  const host = rawHost.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+
+  // IPv4-литерал.
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (v4) {
+    const o = v4.slice(1).map(Number);
+    if (o.some((n) => n > 255)) return true; // мусорный литерал — блокируем
+    const [a, b] = o as [number, number, number, number];
+    if (a === 0 || a === 127 || a === 10) return true; // 0/8, loopback, private
+    if (a === 169 && b === 254) return true; // link-local + cloud metadata
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16/12
+    if (a === 192 && b === 168) return true; // 192.168/16
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64/10
+    return false;
+  }
+
+  // IPv6-литерал (включая IPv4-mapped ::ffff:a.b.c.d).
+  if (host.includes(':')) {
+    if (host === '::1' || host === '::') return true; // loopback / unspecified
+    if (host.startsWith('fc') || host.startsWith('fd')) return true; // ULA fc00::/7
+    if (/^fe[89ab]/.test(host)) return true; // link-local fe80::/10
+    const mapped = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(host);
+    if (mapped) return isBlockedHost(mapped[1] as string);
+    return false;
+  }
+
+  return false;
+}
+
+function validateHealthUrl(url: string | null | undefined): string | null {
+  if (url === null || url === undefined || url.trim() === '') return null;
+  const u = url.trim();
+  if (u.length > 500) throw new ServerNameInvalidError('health_url: слишком длинный');
+  let parsed: URL;
+  try {
+    parsed = new URL(u);
+  } catch {
+    throw new ServerNameInvalidError('health_url: некорректный URL');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new ServerNameInvalidError('health_url: нужен http(s):// URL');
+  }
+  // Только стандартные веб-порты — иначе health-проба превращается в порт-сканер.
+  if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') {
+    throw new ServerNameInvalidError('health_url: допустимы только порты 80 и 443');
+  }
+  if (isBlockedHost(parsed.hostname)) {
+    throw new ServerNameInvalidError('health_url: внутренние/приватные адреса запрещены');
+  }
+  return u;
+}
+
 export class ManageServers {
   constructor(private readonly deps: Deps) {}
 
@@ -65,6 +125,7 @@ export class ManageServers {
       nginxAccessLogPath: validatePath(input.nginxAccessLogPath, 'nginx_access_log_path'),
       nginxErrorLogPath: validatePath(input.nginxErrorLogPath, 'nginx_error_log_path'),
       deployPath: validatePath(input.deployPath, 'deploy_path'),
+      healthUrl: validateHealthUrl(input.healthUrl),
       enabled: input.enabled ?? true,
       collectIntervalSeconds: input.collectIntervalSeconds ?? 300,
     });
@@ -89,6 +150,7 @@ export class ManageServers {
       nginxAccessLogPath: validatePath(patch.nginxAccessLogPath, 'nginx_access_log_path'),
       nginxErrorLogPath: validatePath(patch.nginxErrorLogPath, 'nginx_error_log_path'),
       deployPath: validatePath(patch.deployPath, 'deploy_path'),
+      healthUrl: validateHealthUrl(patch.healthUrl),
       enabled: patch.enabled ?? true,
       collectIntervalSeconds: patch.collectIntervalSeconds ?? 300,
     };

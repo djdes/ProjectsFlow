@@ -12,6 +12,7 @@ export const serverConfigSchema = z.object({
   nginxAccessLogPath: z.string().max(500).nullish(),
   nginxErrorLogPath: z.string().max(500).nullish(),
   deployPath: z.string().max(500).nullish(),
+  healthUrl: z.string().max(500).nullish(),
   enabled: z.boolean().optional(),
   collectIntervalSeconds: z.number().int().min(30).max(86400).optional(),
 });
@@ -29,7 +30,14 @@ export const alertRulesSchema = z.object({
   rules: z
     .array(
       z.object({
-        ruleKind: z.enum(['process_down', 'disk_usage', 'restart_spike', 'snapshot_stale']),
+        ruleKind: z.enum([
+          'process_down',
+          'disk_usage',
+          'restart_spike',
+          'snapshot_stale',
+          'http_down',
+          'ssl_expiry',
+        ]),
         enabled: z.boolean(),
         threshold: z.number().nullable(),
         severity: z.enum(['info', 'warning', 'critical']),
@@ -123,7 +131,31 @@ export const ingestSnapshotSchema = z
     collectedAt: z.string().datetime(),
     reachable: z.boolean(),
     metrics: z
-      .object({ pm2: z.array(pm2ProcSchema).max(200), system: systemSchema })
+      .object({
+        pm2: z.array(pm2ProcSchema).max(200),
+        system: systemSchema,
+        http: z
+          .object({
+            url: z.string().max(500),
+            ok: z.boolean(),
+            statusCode: z.number().nullable(),
+            latencyMs: z.number().nullable(),
+            error: z.string().max(300).nullable().optional(),
+          })
+          .strict()
+          .nullable()
+          .optional(),
+        ssl: z
+          .object({
+            host: z.string().max(255),
+            daysLeft: z.number().nullable(),
+            expiresAt: z.string().max(40).nullable(),
+            error: z.string().max(300).nullable().optional(),
+          })
+          .strict()
+          .nullable()
+          .optional(),
+      })
       .strict()
       .nullable()
       .optional(),

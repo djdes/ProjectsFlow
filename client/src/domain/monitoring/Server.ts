@@ -15,6 +15,7 @@ export type MonitoringServer = {
   readonly nginxAccessLogPath: string | null;
   readonly nginxErrorLogPath: string | null;
   readonly deployPath: string | null;
+  readonly healthUrl: string | null;
   readonly enabled: boolean;
   readonly collectIntervalSeconds: number;
   readonly lastSnapshotAt: Date | null;
@@ -25,6 +26,22 @@ export type MonitoringServer = {
 export type ServerWithLatest = {
   readonly server: MonitoringServer;
   readonly latest: ServerSnapshot | null;
+};
+
+// Сводка «здоровье всех проектов».
+export type OverviewServer = {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: ServerKind;
+  readonly status: ServerHealthStatus;
+  readonly lastSnapshotAt: Date | null;
+};
+
+export type OverviewProject = {
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly servers: OverviewServer[];
+  readonly activeAlerts: number;
 };
 
 // Поля, которые форма отправляет на сервер при создании/редактировании.
@@ -39,6 +56,7 @@ export type ServerConfigInput = {
   readonly nginxAccessLogPath?: string | null;
   readonly nginxErrorLogPath?: string | null;
   readonly deployPath?: string | null;
+  readonly healthUrl?: string | null;
   readonly enabled?: boolean;
   readonly collectIntervalSeconds?: number;
 };

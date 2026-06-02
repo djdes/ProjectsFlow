@@ -916,6 +916,7 @@ export const projectServers = mysqlTable(
     index('idx_project_server_project_kind').on(t.projectId, t.kind),
   ],
 );
+    healthUrl: varchar('health_url', { length: 500 }),
 export type ProjectServerRow = typeof projectServers.$inferSelect;
 export type NewProjectServerRow = typeof projectServers.$inferInsert;
 

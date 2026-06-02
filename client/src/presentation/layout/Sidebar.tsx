@@ -1,5 +1,5 @@
 import { Link, NavLink } from 'react-router-dom';
-import { Bell, Inbox, PanelLeft, Plus, Search, Shield } from 'lucide-react';
+import { Activity, Bell, Inbox, PanelLeft, Plus, Search, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAddTaskDialog } from '@/presentation/components/forms/AddTaskDialogProvider';
 import { useGlobalSearch } from '@/presentation/components/search/GlobalSearchProvider';
@@ -21,7 +21,7 @@ export function Sidebar({ onToggleCollapse }: SidebarProps): React.ReactElement 
   const { user } = useCurrentUser();
 
   return (
-    <aside className="grid h-full grid-rows-[auto_auto_auto_auto_1fr_auto] gap-3 border-r bg-card/40 p-3">
+    <aside className="grid h-full grid-rows-[auto_auto_auto_auto_auto_1fr_auto] gap-3 border-r bg-card/40 p-3">
       {/* Шапка: лого + колокольчик уведомлений + тоггл панели */}
       <div className="flex items-center gap-1">
         <Link
@@ -110,6 +110,27 @@ export function Sidebar({ onToggleCollapse }: SidebarProps): React.ReactElement 
             )}
             <Inbox className="size-4 shrink-0 text-muted-foreground" />
             <span className="flex-1 truncate">Входящие</span>
+          </>
+        )}
+      </NavLink>
+
+      <NavLink
+        to="/monitoring"
+        className={({ isActive }) =>
+          cn(
+            'group relative flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+            'hover:bg-muted',
+            isActive && 'bg-accent text-accent-foreground',
+          )
+        }
+      >
+        {({ isActive }) => (
+          <>
+            {isActive && (
+              <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-primary" />
+            )}
+            <Activity className="size-4 shrink-0 text-muted-foreground" />
+            <span className="flex-1 truncate">Мониторинг</span>
           </>
         )}
       </NavLink>

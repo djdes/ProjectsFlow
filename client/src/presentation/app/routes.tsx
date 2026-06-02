@@ -3,6 +3,7 @@ import { AppShell } from '@/presentation/layout/AppShell';
 import { ProjectPage } from '@/presentation/pages/ProjectPage';
 import { KbPage } from '@/presentation/pages/KbPage';
 import { MonitoringPage } from '@/presentation/pages/MonitoringPage';
+import { MonitoringOverviewPage } from '@/presentation/pages/MonitoringOverviewPage';
 import { TasksPage } from '@/presentation/pages/TasksPage';
 import { InboxPage } from '@/presentation/pages/InboxPage';
 import { NotificationsPage } from '@/presentation/pages/NotificationsPage';
@@ -60,6 +61,7 @@ export const router = createBrowserRouter([
       // Старые ссылки на /inbox редиректим на канонический «/».
       { path: 'inbox', element: <Navigate to="/" replace /> },
       { path: 'notifications', element: <NotificationsPage /> },
+      { path: 'monitoring', element: <MonitoringOverviewPage /> },
       // Доска задач — «дом» проекта: при входе сразу показываем kanban.
       { path: 'projects/:projectId', element: <TasksPage /> },
       // Обзор/настройки проекта (git, KB, команда) переехали на отдельный роут.

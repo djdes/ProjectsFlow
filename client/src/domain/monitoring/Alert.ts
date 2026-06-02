@@ -1,6 +1,12 @@
 export type AlertSeverity = 'info' | 'warning' | 'critical';
 export type AlertStatus = 'firing' | 'resolved';
-export type AlertRuleKind = 'process_down' | 'disk_usage' | 'restart_spike' | 'snapshot_stale';
+export type AlertRuleKind =
+  | 'process_down'
+  | 'disk_usage'
+  | 'restart_spike'
+  | 'snapshot_stale'
+  | 'http_down'
+  | 'ssl_expiry';
 
 export type AlertRule = {
   readonly ruleKind: AlertRuleKind;

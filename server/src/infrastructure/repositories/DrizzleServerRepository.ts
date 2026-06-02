@@ -24,6 +24,7 @@ function toServer(r: ProjectServerRow): ProjectServer {
     nginxAccessLogPath: r.nginxAccessLogPath ?? null,
     nginxErrorLogPath: r.nginxErrorLogPath ?? null,
     deployPath: r.deployPath ?? null,
+    healthUrl: r.healthUrl ?? null,
     enabled: r.enabled,
     collectIntervalSeconds: r.collectIntervalSeconds,
     lastSnapshotAt: r.lastSnapshotAt ?? null,
@@ -115,6 +116,7 @@ export class DrizzleServerRepository implements ServerRepository {
       nginxAccessLogPath: input.nginxAccessLogPath,
       nginxErrorLogPath: input.nginxErrorLogPath,
       deployPath: input.deployPath,
+      healthUrl: input.healthUrl,
       enabled: input.enabled,
       collectIntervalSeconds: input.collectIntervalSeconds,
     });
@@ -135,6 +137,7 @@ export class DrizzleServerRepository implements ServerRepository {
     if (patch.nginxAccessLogPath !== undefined) set['nginxAccessLogPath'] = patch.nginxAccessLogPath;
     if (patch.nginxErrorLogPath !== undefined) set['nginxErrorLogPath'] = patch.nginxErrorLogPath;
     if (patch.deployPath !== undefined) set['deployPath'] = patch.deployPath;
+    if (patch.healthUrl !== undefined) set['healthUrl'] = patch.healthUrl;
     if (patch.enabled !== undefined) set['enabled'] = patch.enabled;
     if (patch.collectIntervalSeconds !== undefined) {
       set['collectIntervalSeconds'] = patch.collectIntervalSeconds;

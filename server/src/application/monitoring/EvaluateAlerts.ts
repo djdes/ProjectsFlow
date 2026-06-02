@@ -28,7 +28,13 @@ type Deps = {
   readonly rules?: MonitoringAlertRuleRepository;
 };
 
-const SNAPSHOT_RULES: AlertKind[] = ['process_down', 'disk_usage', 'restart_spike'];
+const SNAPSHOT_RULES: AlertKind[] = [
+  'process_down',
+  'disk_usage',
+  'restart_spike',
+  'http_down',
+  'ssl_expiry',
+];
 const STALENESS_RULES: AlertKind[] = ['snapshot_stale'];
 
 // Оценка правил и согласование с журналом алертов (state-machine firing/resolved + дедуп).

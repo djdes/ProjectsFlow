@@ -73,9 +73,28 @@ export type LogTails = {
   readonly nginxError: LogTail | null;
 };
 
+// Синтетическая HTTP-проверка (uptime). ok=false → http_down.
+export type HttpCheck = {
+  readonly url: string;
+  readonly ok: boolean;
+  readonly statusCode: number | null;
+  readonly latencyMs: number | null;
+  readonly error?: string | null;
+};
+
+// Проверка SSL-сертификата (если health_url по https). daysLeft < порога → ssl_expiry.
+export type SslCheck = {
+  readonly host: string;
+  readonly daysLeft: number | null;
+  readonly expiresAt: string | null;
+  readonly error?: string | null;
+};
+
 export type SnapshotMetrics = {
   readonly pm2: ReadonlyArray<Pm2ProcessSnapshot>;
   readonly system: SystemSnapshot | null;
+  readonly http?: HttpCheck | null;
+  readonly ssl?: SslCheck | null;
 };
 
 export type SnapshotSource = 'local' | 'agent';

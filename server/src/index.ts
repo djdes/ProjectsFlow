@@ -193,6 +193,7 @@ import { ShellLocalServerCollector } from './infrastructure/monitoring/ShellLoca
 import { MysqlDbHealthProbe } from './infrastructure/monitoring/MysqlDbHealthProbe.js';
 import { DrizzleMonitoringAlertRuleRepository } from './infrastructure/repositories/DrizzleMonitoringAlertRuleRepository.js';
 import { ManageAlertRules } from './application/monitoring/ManageAlertRules.js';
+import { GetMonitoringOverview } from './application/monitoring/GetMonitoringOverview.js';
 import { AlertNotificationDispatcher } from './application/monitoring/AlertNotificationDispatcher.js';
 import { EvaluateAlerts } from './application/monitoring/EvaluateAlerts.js';
 import { CollectLocalSnapshot } from './application/monitoring/CollectLocalSnapshot.js';
@@ -737,6 +738,12 @@ const manageAlertRules = new ManageAlertRules({
   rules: monitoringAlertRuleRepo,
 });
 const listMonitoredServers = new ListMonitoredServers({ servers: serverRepo });
+const monitoringOverview = new GetMonitoringOverview({
+  listProjects: new ListProjects(projectMemberRepo),
+  servers: serverRepo,
+  snapshots: snapshotRepo,
+  alerts: monitoringAlertRepo,
+});
 const monitoringKbSnapshotWriter = new MonitoringKbSnapshotWriter({
   servers: serverRepo,
   snapshots: snapshotRepo,
@@ -756,10 +763,17 @@ const monitoringLocalCollectEnabled =
   process.env['MONITOR_LOCAL_COLLECT'] === 'on' ||
   (process.platform !== 'win32' && process.env['MONITOR_LOCAL_COLLECT'] !== 'off');
 if (monitoringLocalCollectEnabled) {
+  // Тик каждые 30с; конкретный сервер собираем не чаще его collect_interval_seconds.
+  const localCollectLast = new Map<string, number>();
   setInterval(() => {
     void (async () => {
       const servers = await serverRepo.listEnabledByKind('local');
+      const nowMs = Date.now();
       for (const s of servers) {
+        const last = localCollectLast.get(s.id) ?? 0;
+        const intervalMs = Math.max(30, s.collectIntervalSeconds) * 1000;
+        if (nowMs - last < intervalMs) continue;
+        localCollectLast.set(s.id, nowMs);
         try {
           await collectLocalSnapshot.collect(s, { force: true });
         } catch (e) {
@@ -767,7 +781,7 @@ if (monitoringLocalCollectEnabled) {
         }
       }
     })().catch((e) => console.warn('[monitoring] local collect loop error:', e));
-  }, 60 * 1000).unref();
+  }, 30 * 1000).unref();
 }
 // Прунинг старых снимков (TTL 30 дней по умолчанию).
 const SNAPSHOT_TTL_DAYS = Number(process.env['MONITOR_SNAPSHOT_TTL_DAYS'] ?? 30);
@@ -1029,6 +1043,7 @@ const { app, devProxyUpgrade } = createApp({
     manageServers,
     queries: monitoringQueries,
     manageAlertRules,
+    overview: monitoringOverview,
   },
   kb: {
     initKbRepo: new InitKbRepo({

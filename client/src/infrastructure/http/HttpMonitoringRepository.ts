@@ -1,5 +1,6 @@
 import type {
   MonitoringServer,
+  OverviewProject,
   ServerConfigInput,
   ServerWithLatest,
 } from '@/domain/monitoring/Server';
@@ -142,5 +143,19 @@ export class HttpMonitoringRepository implements MonitoringRepository {
       { rules },
     );
     return res.rules;
+  }
+
+  async getOverview(): Promise<OverviewProject[]> {
+    type RawOv = Omit<OverviewProject, 'servers'> & {
+      servers: { id: string; name: string; kind: 'local' | 'remote'; status: OverviewProject['servers'][number]['status']; lastSnapshotAt: string | null }[];
+    };
+    const { projects } = await httpClient.get<{ projects: RawOv[] }>(`/monitoring/overview`);
+    return projects.map((p) => ({
+      ...p,
+      servers: p.servers.map((s) => ({
+        ...s,
+        lastSnapshotAt: s.lastSnapshotAt ? new Date(s.lastSnapshotAt) : null,
+      })),
+    }));
   }
 }

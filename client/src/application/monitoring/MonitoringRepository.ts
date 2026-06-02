@@ -1,4 +1,9 @@
-import type { MonitoringServer, ServerConfigInput, ServerWithLatest } from '@/domain/monitoring/Server';
+import type {
+  MonitoringServer,
+  OverviewProject,
+  ServerConfigInput,
+  ServerWithLatest,
+} from '@/domain/monitoring/Server';
 import type { LogKind, LogTail, ServerSnapshot, TrendPoint } from '@/domain/monitoring/Snapshot';
 import type { AlertRule, ServerAlert } from '@/domain/monitoring/Alert';
 
@@ -21,4 +26,5 @@ export interface MonitoringRepository {
   muteServer(projectId: string, serverId: string, minutes: number | null): Promise<MonitoringServer>;
   getAlertRules(projectId: string): Promise<AlertRule[]>;
   saveAlertRules(projectId: string, rules: AlertRule[]): Promise<AlertRule[]>;
+  getOverview(): Promise<OverviewProject[]>;
 }

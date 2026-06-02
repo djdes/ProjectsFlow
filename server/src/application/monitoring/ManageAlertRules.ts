@@ -14,10 +14,17 @@ type Deps = {
   readonly rules: MonitoringAlertRuleRepository;
 };
 
-const ALL_KINDS: AlertKind[] = ['process_down', 'disk_usage', 'restart_spike', 'snapshot_stale'];
+const ALL_KINDS: AlertKind[] = [
+  'process_down',
+  'disk_usage',
+  'restart_spike',
+  'snapshot_stale',
+  'http_down',
+  'ssl_expiry',
+];
 
 function defaultSeverity(kind: AlertKind): AlertSeverity {
-  return kind === 'process_down' ? 'critical' : 'warning';
+  return kind === 'process_down' || kind === 'http_down' ? 'critical' : 'warning';
 }
 
 // Чтение/запись per-project порогов алертов. get отдаёт смердженный набор (дефолты +

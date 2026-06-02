@@ -1,4 +1,10 @@
-export type AlertKind = 'disk_usage' | 'process_down' | 'restart_spike' | 'snapshot_stale';
+export type AlertKind =
+  | 'disk_usage'
+  | 'process_down'
+  | 'restart_spike'
+  | 'snapshot_stale'
+  | 'http_down'
+  | 'ssl_expiry';
 export type AlertSeverity = 'info' | 'warning' | 'critical';
 export type AlertStatus = 'firing' | 'resolved';
 

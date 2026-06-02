@@ -175,11 +175,12 @@ import type { GetAutomationConfig } from '../application/automation/GetAutomatio
 import type { SaveAutomationConfig } from '../application/automation/SaveAutomationConfig.js';
 import type { GetAutomationForDispatcher } from '../application/automation/GetAutomationForDispatcher.js';
 import type { RecordAutomationTask } from '../application/automation/RecordAutomationTask.js';
-import { monitoringRouter } from './monitoring/routes.js';
+import { monitoringRouter, monitoringOverviewRouter } from './monitoring/routes.js';
 import type { ListServers } from '../application/monitoring/ListServers.js';
 import type { ManageServers } from '../application/monitoring/ManageServers.js';
 import type { MonitoringQueries } from '../application/monitoring/MonitoringQueries.js';
 import type { ManageAlertRules } from '../application/monitoring/ManageAlertRules.js';
+import type { GetMonitoringOverview } from '../application/monitoring/GetMonitoringOverview.js';
 import type { IngestAgentSnapshot } from '../application/monitoring/IngestAgentSnapshot.js';
 import type { ListMonitoredServers } from '../application/monitoring/ListMonitoredServers.js';
 import './types.js'; // глобальное расширение Express.Request
@@ -298,6 +299,7 @@ type AppDeps = {
     readonly manageServers: ManageServers;
     readonly queries: MonitoringQueries;
     readonly manageAlertRules: ManageAlertRules;
+    readonly overview: GetMonitoringOverview;
   };
   readonly kb: {
     readonly initKbRepo: InitKbRepo;
@@ -476,6 +478,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/integrations/github', githubRouter(deps.github));
   app.use('/api/projects/:projectId/secrets', secretsRouter(deps.secrets));
   app.use('/api/projects/:projectId/monitoring', monitoringRouter(deps.monitoring));
+  app.use('/api/monitoring', monitoringOverviewRouter({ overview: deps.monitoring.overview }));
   app.use(
     '/api/projects/:projectId/kb',
     kbRouter({ ...deps.kb, notifier: deps.notifications.projectNotifier }),

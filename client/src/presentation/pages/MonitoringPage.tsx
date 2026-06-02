@@ -11,6 +11,7 @@ import { ServerCard } from '@/presentation/components/monitoring/ServerCard';
 import { AlertList } from '@/presentation/components/monitoring/AlertList';
 import { AddServerDialog } from '@/presentation/components/monitoring/AddServerDialog';
 import { AlertRulesDialog } from '@/presentation/components/monitoring/AlertRulesDialog';
+import { IncidentHistory } from '@/presentation/components/monitoring/IncidentHistory';
 
 export function MonitoringPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -22,6 +23,7 @@ export function MonitoringPage(): React.ReactElement {
   const { servers, alerts, loading, error, forbidden, lastUpdated, reload } = useMonitoring(pid);
   const [addOpen, setAddOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   return (
     <div className="flex h-full flex-col gap-4 p-4 sm:gap-6 sm:p-6">
@@ -130,10 +132,30 @@ export function MonitoringPage(): React.ReactElement {
               </CardContent>
             </Card>
           )}
+
+          {servers && servers.length > 0 && (
+            <Card>
+              <CardHeader>
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen((v) => !v)}
+                  className="flex items-center gap-1 text-left text-base font-semibold hover:text-foreground"
+                >
+                  <ChevronRight className={historyOpen ? 'size-4 rotate-90 transition-transform' : 'size-4 transition-transform'} />
+                  История инцидентов
+                </button>
+              </CardHeader>
+              {historyOpen && (
+                <CardContent>
+                  <IncidentHistory projectId={pid} />
+                </CardContent>
+              )}
+            </Card>
+          )}
         </>
       )}
 
-      <AddServerDialog projectId={pid} open={addOpen} onOpenChange={setAddOpen} onCreated={reload} />
+      <AddServerDialog projectId={pid} open={addOpen} onOpenChange={setAddOpen} onSaved={reload} />
       <AlertRulesDialog projectId={pid} open={rulesOpen} onOpenChange={setRulesOpen} />
     </div>
   );

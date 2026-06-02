@@ -14,6 +14,7 @@ export type NewServerInput = {
   readonly nginxAccessLogPath: string | null;
   readonly nginxErrorLogPath: string | null;
   readonly deployPath: string | null;
+  readonly healthUrl: string | null;
   readonly enabled: boolean;
   readonly collectIntervalSeconds: number;
 };

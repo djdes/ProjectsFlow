@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import { promises as fs } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import * as os from 'node:os';
+import * as tls from 'node:tls';
 import type {
   LocalCollectResult,
   LocalServerCollector,
@@ -10,10 +11,12 @@ import type {
 import type { ProjectServer } from '../../domain/monitoring/ProjectServer.js';
 import type {
   DiskUsage,
+  HttpCheck,
   LogTail,
   LogTails,
   Pm2ProcessSnapshot,
   SnapshotMetrics,
+  SslCheck,
   SystemSnapshot,
 } from '../../domain/monitoring/ServerSnapshot.js';
 import { redactSecrets } from '../../domain/monitoring/redactSecrets.js';
@@ -41,8 +44,9 @@ export class ShellLocalServerCollector implements LocalServerCollector {
     const pm2 = await this.collectPm2(server, errors);
     const system = await this.collectSystem(errors);
     const logs = await this.collectLogs(server, pm2.rawByName, errors);
+    const { http, ssl } = await this.collectHttpSsl(server);
 
-    const metrics: SnapshotMetrics = { pm2: pm2.processes, system };
+    const metrics: SnapshotMetrics = { pm2: pm2.processes, system, http, ssl };
     return { reachable: true, metrics, logs, errors };
   }
 
@@ -290,6 +294,72 @@ export class ShellLocalServerCollector implements LocalServerCollector {
       errors.push(`log ${path}: ${errMsg(err)}`);
       return { available: false, reason: 'error' };
     }
+  }
+
+  // Синтетическая HTTP-проверка + (для https) срок SSL-сертификата.
+  private async collectHttpSsl(
+    server: ProjectServer,
+  ): Promise<{ http: HttpCheck | null; ssl: SslCheck | null }> {
+    if (!server.healthUrl) return { http: null, ssl: null };
+    const url = server.healthUrl;
+    let http: HttpCheck;
+    const t0 = Date.now();
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        redirect: 'manual',
+        signal: AbortSignal.timeout(CMD_TIMEOUT_MS),
+      });
+      http = {
+        url,
+        ok: res.status >= 200 && res.status < 400,
+        statusCode: res.status,
+        latencyMs: Date.now() - t0,
+      };
+    } catch (err) {
+      http = { url, ok: false, statusCode: null, latencyMs: Date.now() - t0, error: errMsg(err) };
+    }
+
+    let ssl: SslCheck | null = null;
+    try {
+      const u = new URL(url);
+      if (u.protocol === 'https:') {
+        ssl = await this.checkSsl(u.hostname, u.port ? Number(u.port) : 443);
+      }
+    } catch {
+      /* skip */
+    }
+    return { http, ssl };
+  }
+
+  private checkSsl(host: string, port: number): Promise<SslCheck> {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (r: SslCheck): void => {
+        if (done) return;
+        done = true;
+        resolve(r);
+      };
+      const socket = tls.connect(
+        { host, port, servername: host, timeout: CMD_TIMEOUT_MS, rejectUnauthorized: false },
+        () => {
+          const cert = socket.getPeerCertificate();
+          socket.end();
+          if (!cert || !cert.valid_to) {
+            finish({ host, daysLeft: null, expiresAt: null, error: 'no cert' });
+            return;
+          }
+          const expires = new Date(cert.valid_to);
+          const daysLeft = Math.floor((expires.getTime() - Date.now()) / 86_400_000);
+          finish({ host, daysLeft, expiresAt: expires.toISOString() });
+        },
+      );
+      socket.on('error', (e) => finish({ host, daysLeft: null, expiresAt: null, error: e.message }));
+      socket.on('timeout', () => {
+        socket.destroy();
+        finish({ host, daysLeft: null, expiresAt: null, error: 'timeout' });
+      });
+    });
   }
 
   private isAllowed(path: string): boolean {

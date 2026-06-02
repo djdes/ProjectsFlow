@@ -138,6 +138,23 @@ export function LogTailViewer({
     URL.revokeObjectURL(url);
   };
 
+  // Аналитика nginx access-лога: разбивка по классам HTTP-кодов в текущем хвосте.
+  const nginxSummary = useMemo(() => {
+    if (kind !== 'nginx_access' || !log?.lines) return null;
+    const c = { total: 0, c2: 0, c3: 0, c4: 0, c5: 0 };
+    for (const line of log.lines.split('\n')) {
+      const m = line.match(/"\s(\d{3})\s/) ?? line.match(/\s([1-5]\d\d)\s/);
+      if (!m) continue;
+      c.total += 1;
+      const d = m[1]![0];
+      if (d === '2') c.c2 += 1;
+      else if (d === '3') c.c3 += 1;
+      else if (d === '4') c.c4 += 1;
+      else if (d === '5') c.c5 += 1;
+    }
+    return c.total > 0 ? c : null;
+  }, [kind, log]);
+
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-1">
@@ -198,6 +215,16 @@ export function LogTailViewer({
           </Button>
         </div>
       </div>
+
+      {nginxSummary && (
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="text-muted-foreground">в хвосте: {nginxSummary.total}</span>
+          <span className="text-emerald-600 dark:text-emerald-400">2xx: {nginxSummary.c2}</span>
+          <span className="text-sky-600 dark:text-sky-400">3xx: {nginxSummary.c3}</span>
+          <span className="text-amber-600 dark:text-amber-400">4xx: {nginxSummary.c4}</span>
+          <span className="text-red-600 dark:text-red-400">5xx: {nginxSummary.c5}</span>
+        </div>
+      )}
 
       {hasContent ? (
         <LogBody text={log!.lines!} filter={filter} errorsOnly={errorsOnly} className="max-h-72" />

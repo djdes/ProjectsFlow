@@ -76,6 +76,7 @@ export class IngestAgentSnapshot {
         nginxAccessLogPath: null,
         nginxErrorLogPath: null,
         deployPath: null,
+        healthUrl: null,
         enabled: true,
         collectIntervalSeconds: 300,
       });

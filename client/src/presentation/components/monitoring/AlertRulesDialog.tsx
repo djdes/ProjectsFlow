@@ -18,9 +18,18 @@ const RULE_META: Record<AlertRuleKind, { label: string; unit?: string; hasThresh
   disk_usage: { label: 'Диск заполнен выше порога', unit: '%', hasThreshold: true },
   restart_spike: { label: 'Всплеск рестартов pm2 (прирост за снимок)', unit: 'раз', hasThreshold: true },
   snapshot_stale: { label: 'Нет свежих метрик дольше', unit: 'мин', hasThreshold: true },
+  http_down: { label: 'HTTP/uptime-проверка не прошла', hasThreshold: false },
+  ssl_expiry: { label: 'SSL-сертификат истекает (осталось ≤)', unit: 'дн', hasThreshold: true },
 };
 
-const ORDER: AlertRuleKind[] = ['process_down', 'disk_usage', 'restart_spike', 'snapshot_stale'];
+const ORDER: AlertRuleKind[] = [
+  'process_down',
+  'http_down',
+  'disk_usage',
+  'restart_spike',
+  'ssl_expiry',
+  'snapshot_stale',
+];
 
 export function AlertRulesDialog({
   projectId,

@@ -17,11 +17,15 @@ export type ResolvedRule = {
 };
 export type AlertRuleConfig = Readonly<Record<AlertKind, ResolvedRule>>;
 
+export const DEFAULT_SSL_EXPIRY_DAYS = 14; // алерт если до истечения сертификата ≤ N дней
+
 export const DEFAULT_RULE_CONFIG: AlertRuleConfig = {
   process_down: { enabled: true, threshold: null, severity: 'critical' },
   disk_usage: { enabled: true, threshold: DEFAULT_DISK_USAGE_PCT, severity: 'warning' },
   restart_spike: { enabled: true, threshold: DEFAULT_RESTART_SPIKE, severity: 'warning' },
   snapshot_stale: { enabled: true, threshold: DEFAULT_SNAPSHOT_STALE_MINUTES, severity: 'warning' },
+  http_down: { enabled: true, threshold: null, severity: 'critical' },
+  ssl_expiry: { enabled: true, threshold: DEFAULT_SSL_EXPIRY_DAYS, severity: 'warning' },
 };
 
 // Мердж строк server_alert_rules (per-project) поверх дефолтов. Отсутствующие — дефолт.
@@ -38,6 +42,8 @@ export function resolveRuleConfig(
     disk_usage: { ...DEFAULT_RULE_CONFIG.disk_usage },
     restart_spike: { ...DEFAULT_RULE_CONFIG.restart_spike },
     snapshot_stale: { ...DEFAULT_RULE_CONFIG.snapshot_stale },
+    http_down: { ...DEFAULT_RULE_CONFIG.http_down },
+    ssl_expiry: { ...DEFAULT_RULE_CONFIG.ssl_expiry },
   };
   for (const o of overrides) {
     if (o.ruleKind in cfg) {
@@ -139,6 +145,40 @@ export function evaluateSnapshotConditions(input: {
           details: { process: p.name, delta, total: p.restarts },
         });
       }
+    }
+  }
+
+  // http_down: синтетическая HTTP-проверка (если задан health_url). Дебаунс — требуем
+  // два подряд неудачных снимка, чтобы единичный сбой при деплое (502 на секунду /
+  // таймаут) не поднимал critical-алерт с рассылкой в почту и Telegram.
+  const httpFailedNow = !!input.metrics.http && !input.metrics.http.ok;
+  const httpFailedPrev = !!input.prevMetrics?.http && !input.prevMetrics.http.ok;
+  if (cfg.http_down.enabled && input.metrics.http && httpFailedNow && httpFailedPrev) {
+    const h = input.metrics.http;
+    conditions.push({
+      ruleKind: 'http_down',
+      dedupKey: '',
+      severity: cfg.http_down.severity,
+      message: `HTTP-проверка не прошла: ${h.statusCode ?? h.error ?? 'недоступно'} (${h.url})`,
+      details: { url: h.url, statusCode: h.statusCode, error: h.error ?? null },
+    });
+  }
+
+  // ssl_expiry: сертификат истекает/истёк.
+  if (cfg.ssl_expiry.enabled && input.metrics.ssl && input.metrics.ssl.daysLeft !== null) {
+    const s = input.metrics.ssl;
+    const threshold = cfg.ssl_expiry.threshold ?? DEFAULT_SSL_EXPIRY_DAYS;
+    if (s.daysLeft! <= threshold) {
+      conditions.push({
+        ruleKind: 'ssl_expiry',
+        dedupKey: s.host,
+        severity: s.daysLeft! <= 0 ? 'critical' : cfg.ssl_expiry.severity,
+        message:
+          s.daysLeft! <= 0
+            ? `SSL-сертификат ${s.host} истёк`
+            : `SSL-сертификат ${s.host} истекает через ${s.daysLeft} дн.`,
+        details: { host: s.host, daysLeft: s.daysLeft, expiresAt: s.expiresAt },
+      });
     }
   }
 

@@ -19,6 +19,8 @@ export type ProjectServer = {
   readonly nginxAccessLogPath: string | null;
   readonly nginxErrorLogPath: string | null;
   readonly deployPath: string | null;
+  // URL для HTTP/uptime-проверки (и SSL, если https). NULL = выключено.
+  readonly healthUrl: string | null;
   readonly enabled: boolean;
   readonly collectIntervalSeconds: number;
   readonly lastSnapshotAt: Date | null;
@@ -42,6 +44,7 @@ export type ServerConfigInput = {
   readonly nginxAccessLogPath?: string | null;
   readonly nginxErrorLogPath?: string | null;
   readonly deployPath?: string | null;
+  readonly healthUrl?: string | null;
   readonly enabled?: boolean;
   readonly collectIntervalSeconds?: number;
 };

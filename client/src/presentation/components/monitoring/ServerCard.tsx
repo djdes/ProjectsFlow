@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Bell, BellOff, ChevronDown, RefreshCw, Server, Trash2 } from 'lucide-react';
+import { Bell, BellOff, ChevronDown, Pencil, RefreshCw, Server, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { relativeTime } from '@/lib/relativeTime';
 import { useContainer } from '@/infrastructure/di/container';
 import type { ServerWithLatest } from '@/domain/monitoring/Server';
@@ -9,7 +10,10 @@ import { StatusBadge, PmStatusBadge } from './StatusBadge';
 import { ResourceBar } from './ResourceBar';
 import { LogTailViewer } from './LogTailViewer';
 import { ServerTrends } from './ServerTrends';
+import { AddServerDialog } from './AddServerDialog';
 import { fmtBytes, fmtDuration } from './format';
+
+const RECENT_RESTART_MS = 10 * 60 * 1000;
 
 export function ServerCard({
   projectId,
@@ -27,10 +31,13 @@ export function ServerCard({
   const [busy, setBusy] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [showTrends, setShowTrends] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   // isMuted считаем в эффекте (Date.now() нельзя в render — react-hooks/purity).
   const [isMuted, setIsMuted] = useState(false);
   const metrics = latest?.metrics ?? null;
   const system = metrics?.system ?? null;
+  const http = metrics?.http ?? null;
+  const ssl = metrics?.ssl ?? null;
 
   useEffect(() => {
     setIsMuted(server.mutedUntil !== null && server.mutedUntil.getTime() > Date.now());
@@ -100,6 +107,16 @@ export function ServerCard({
             <Button
               variant="ghost"
               size="icon"
+              onClick={() => setShowSettings(true)}
+              disabled={busy}
+              aria-label="Настройки сервера"
+              title="Настройки сервера"
+            >
+              <Pencil className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => void toggleMute()}
               disabled={busy}
               aria-label={isMuted ? 'Включить алерты' : 'Заглушить на час'}
@@ -114,6 +131,39 @@ export function ServerCard({
         )}
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* HTTP / SSL проверки */}
+        {(http || (ssl && ssl.daysLeft !== null)) && (
+          <div className="flex flex-wrap gap-2 text-xs">
+            {http && (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium',
+                  http.ok
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-red-500/15 text-red-600 dark:text-red-400',
+                )}
+              >
+                HTTP {http.statusCode ?? http.error ?? '—'}
+                {http.latencyMs !== null ? ` · ${http.latencyMs}мс` : ''}
+              </span>
+            )}
+            {ssl && ssl.daysLeft !== null && (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium',
+                  ssl.daysLeft <= 14
+                    ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+                    : ssl.daysLeft <= 30
+                      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                      : 'bg-muted text-muted-foreground',
+                )}
+              >
+                SSL {ssl.daysLeft} дн
+              </span>
+            )}
+          </div>
+        )}
+
         {/* pm2 */}
         <div>
           <h4 className="mb-2 text-sm font-medium">Процессы pm2</h4>
@@ -135,7 +185,21 @@ export function ServerCard({
                     <tr key={p.name} className="border-t border-border/40">
                       <td className="py-1.5 pr-3 font-medium">{p.name}</td>
                       <td className="py-1.5 pr-3"><PmStatusBadge status={p.status} /></td>
-                      <td className="py-1.5 pr-3 tabular-nums">{fmtDuration(p.uptimeMs)}</td>
+                      <td
+                        className={cn(
+                          'py-1.5 pr-3 tabular-nums',
+                          p.uptimeMs !== null && p.uptimeMs < RECENT_RESTART_MS
+                            ? 'font-medium text-amber-600 dark:text-amber-400'
+                            : '',
+                        )}
+                        title={
+                          p.uptimeMs !== null && p.uptimeMs < RECENT_RESTART_MS
+                            ? 'Недавно перезапущен'
+                            : undefined
+                        }
+                      >
+                        {fmtDuration(p.uptimeMs)}
+                      </td>
                       <td className="py-1.5 pr-3 tabular-nums">{p.restarts ?? '—'}</td>
                       <td className="py-1.5 pr-3 tabular-nums">{p.cpuPct === null ? '—' : `${p.cpuPct}%`}</td>
                       <td className="py-1.5 tabular-nums">{fmtBytes(p.memoryBytes)}</td>
@@ -280,6 +344,16 @@ export function ServerCard({
           )}
         </div>
       </CardContent>
+
+      {canManage && (
+        <AddServerDialog
+          projectId={projectId}
+          open={showSettings}
+          onOpenChange={setShowSettings}
+          onSaved={onChanged}
+          editServer={server}
+        />
+      )}
     </Card>
   );
 }

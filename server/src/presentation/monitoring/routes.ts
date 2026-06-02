@@ -3,6 +3,7 @@ import type { ListServers } from '../../application/monitoring/ListServers.js';
 import type { ManageServers } from '../../application/monitoring/ManageServers.js';
 import type { MonitoringQueries } from '../../application/monitoring/MonitoringQueries.js';
 import type { ManageAlertRules } from '../../application/monitoring/ManageAlertRules.js';
+import type { GetMonitoringOverview } from '../../application/monitoring/GetMonitoringOverview.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
   alertRulesSchema,
@@ -187,5 +188,20 @@ export function monitoringRouter(deps: Deps): Router {
     }
   });
 
+  return router;
+}
+
+// Глобальный (кросс-проектный) роутер сводки. Монтируется на /api/monitoring.
+export function monitoringOverviewRouter(deps: { overview: GetMonitoringOverview }): Router {
+  const router = Router();
+  router.use(requireAuth);
+  router.get('/overview', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projects = await deps.overview.execute(req.user!.id);
+      res.json({ projects });
+    } catch (e) {
+      next(e);
+    }
+  });
   return router;
 }
