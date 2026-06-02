@@ -11,8 +11,13 @@ UPDATE task_delegations td
 -- ON DELETE SET NULL (не CASCADE): сохраняем историю делегаций, если делегатор удалит
 -- аккаунт. При NULL-делегаторе creatorUserId COALESCE'ится на projects.owner_id, поэтому
 -- осиротевшую pending-делегацию сможет отозвать владелец проекта (легитимная инстанция).
--- IF NOT EXISTS — чтобы повторный прогон файла (если runner упал между ALTER и записью
--- в _migrations) не падал с errno 1826 «Duplicate foreign key constraint name».
+--
+-- Идемпотентность через DROP ... IF EXISTS + ADD (а НЕ «ADD CONSTRAINT IF NOT EXISTS»:
+-- такого синтаксиса для FK в MariaDB нет — он валит прогон с ER_PARSE_ERROR). Если
+-- предыдущий прогон создал FK, но упал до записи в _migrations — DROP снимет его, ADD
+-- пересоздаст. На чистой БД DROP IF EXISTS — no-op.
 ALTER TABLE task_delegations
-  ADD CONSTRAINT IF NOT EXISTS fk_td_delegator FOREIGN KEY (delegator_user_id)
+  DROP FOREIGN KEY IF EXISTS fk_td_delegator;
+ALTER TABLE task_delegations
+  ADD CONSTRAINT fk_td_delegator FOREIGN KEY (delegator_user_id)
     REFERENCES users(id) ON DELETE SET NULL;
