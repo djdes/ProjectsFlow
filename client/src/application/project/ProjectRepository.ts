@@ -2,6 +2,7 @@ import type { Project } from '@/domain/project/Project';
 import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
 import type { ProjectInvite, ProjectInviteRole } from '@/domain/project/ProjectInvite';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
+import type { KanbanBoardSettings } from '@/domain/kanban/KanbanSettings';
 
 // v0.15: per-member opt-in. У каждого члена проекта своя независимая делегация.
 // `mine` — статус CALLER-а в этом проекте. `all` — видно только owner'у:
@@ -149,6 +150,11 @@ export interface ProjectRepository {
   // Пер-участниковые настройки email-оповещений (свои, по проекту).
   getNotificationPrefs(projectId: string): Promise<NotificationPrefs>;
   setNotificationPrefs(projectId: string, prefs: NotificationPrefs): Promise<NotificationPrefs>;
+
+  // Общая (на весь проект) кастомизация канбан-доски: цвета/переименования/скрытие колонок.
+  // Write — editor+ (сервер вернёт 403 для viewer). {} = дефолты.
+  getKanbanSettings(projectId: string): Promise<KanbanBoardSettings>;
+  setKanbanSettings(projectId: string, settings: KanbanBoardSettings): Promise<KanbanBoardSettings>;
 
   // Дедуплицированный список user'ов, с которыми caller состоит в общих проектах
   // (без caller'а самого). Используется UI-дропдауном «делегировать» во входящих.

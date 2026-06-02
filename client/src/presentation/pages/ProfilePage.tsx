@@ -31,6 +31,7 @@ import { EmployeesCard } from '@/presentation/components/finance/EmployeesCard';
 import { TelegramSection } from '@/presentation/components/profile/TelegramSection';
 import { ProjectsShareCard } from '@/presentation/components/profile/ProjectsShareCard';
 import { NotificationDefaultsCard } from '@/presentation/components/profile/NotificationDefaultsCard';
+import { KanbanColorsCard } from '@/presentation/components/profile/KanbanColorsCard';
 import { getInitials } from '@/presentation/layout/projectIcons';
 
 function PersonalDataCard(): React.ReactElement {
@@ -262,6 +263,7 @@ export function ProfilePage(): React.ReactElement {
       <ProjectsShareCard />
       <EmployeesCard />
       <NotificationDefaultsCard />
+      <KanbanColorsCard />
       <TelegramSection />
       <GithubAccountSection />
       <AgentAccessCard />

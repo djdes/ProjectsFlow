@@ -215,4 +215,20 @@ export class DrizzleUserRepository implements UserRepository {
       .set({ defaultNotificationPrefs: prefs })
       .where(eq(users.id, userId));
   }
+
+  async getDefaultKanbanColors(userId: string): Promise<import('../../domain/kanban/KanbanSettings.js').KanbanDefaultColors | null> {
+    const rows = await this.db
+      .select({ colors: users.defaultKanbanColors })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return rows[0]?.colors ?? null;
+  }
+
+  async setDefaultKanbanColors(userId: string, colors: import('../../domain/kanban/KanbanSettings.js').KanbanDefaultColors): Promise<void> {
+    await this.db
+      .update(users)
+      .set({ defaultKanbanColors: colors })
+      .where(eq(users.id, userId));
+  }
 }

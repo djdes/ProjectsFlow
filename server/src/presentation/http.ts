@@ -153,6 +153,7 @@ import { attachmentBinaryRouter } from './tasks/attachmentBinaryRoutes.js';
 import { inboxRouter } from './inbox/routes.js';
 import { meTelegramRouter } from './me/telegramRoutes.js';
 import { meNotificationPrefsRouter } from './me/notificationPrefsRoutes.js';
+import { meKanbanColorsRouter } from './me/kanbanColorsRoutes.js';
 import { sharedMembersRouter } from './me/sharedMembersRoutes.js';
 import { telegramWebhookRouter } from './telegram/webhookRoutes.js';
 import { invitesRouter } from './invites/routes.js';
@@ -521,6 +522,10 @@ export function createApp(deps: AppDeps): CreatedApp {
       users: deps.telegram.users,
       members: deps.projects.members,
     }),
+  );
+  app.use(
+    '/api/me/kanban-colors',
+    meKanbanColorsRouter({ users: deps.telegram.users }),
   );
   app.use(
     '/api/me/shared-members',

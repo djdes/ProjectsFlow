@@ -2,6 +2,7 @@ import type { User, UserWithSecrets } from '../../domain/user/User.js';
 import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
 import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
+import type { KanbanDefaultColors } from '../../domain/kanban/KanbanSettings.js';
 
 // Поля, приходящие из Login Widget — сохраняются как есть. tg_chat_id/tg_started_at
 // заполняются позже из webhook'а /start.
@@ -60,4 +61,9 @@ export interface UserRepository {
   // Глобальные дефолтные email-notification prefs (NULL = системные дефолты).
   getDefaultNotificationPrefs(userId: string): Promise<NotificationPrefs | null>;
   setDefaultNotificationPrefs(userId: string, prefs: NotificationPrefs): Promise<void>;
+
+  // Персональная карта дефолтных цветов канбан-колонок (NULL = встроенные дефолты).
+  // Применяется как fallback ко всем проектам юзера, резолвится на лету в UI.
+  getDefaultKanbanColors(userId: string): Promise<KanbanDefaultColors | null>;
+  setDefaultKanbanColors(userId: string, colors: KanbanDefaultColors): Promise<void>;
 }

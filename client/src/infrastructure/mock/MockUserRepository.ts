@@ -1,5 +1,6 @@
 import type { User } from '@/domain/user/User';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
+import type { KanbanDefaultColors } from '@/domain/kanban/KanbanSettings';
 import type { UserRepository, UpdateProfileInput } from '@/application/user/UserRepository';
 import { seedUser } from './seed-data';
 
@@ -33,5 +34,16 @@ export class MockUserRepository implements UserRepository {
 
   applyDefaultNotificationPrefsToAll(): Promise<number> {
     return delay(3);
+  }
+
+  private defaultKanbanColors: KanbanDefaultColors = {};
+
+  getDefaultKanbanColors(): Promise<KanbanDefaultColors> {
+    return delay(this.defaultKanbanColors);
+  }
+
+  setDefaultKanbanColors(colors: KanbanDefaultColors): Promise<KanbanDefaultColors> {
+    this.defaultKanbanColors = colors;
+    return delay(this.defaultKanbanColors);
   }
 }

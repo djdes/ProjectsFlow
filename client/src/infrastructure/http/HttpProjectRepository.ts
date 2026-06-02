@@ -14,6 +14,7 @@ import type {
 } from '@/application/project/ProjectRepository';
 import type { UpdateProjectInput } from '@/application/project/ProjectRepository';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
+import type { KanbanBoardSettings } from '@/domain/kanban/KanbanSettings';
 import { HttpError, httpClient } from './httpClient';
 
 type ProjectDto = {
@@ -232,6 +233,24 @@ export class HttpProjectRepository implements ProjectRepository {
       { prefs },
     );
     return saved;
+  }
+
+  async getKanbanSettings(projectId: string): Promise<KanbanBoardSettings> {
+    const { settings } = await httpClient.get<{ settings?: KanbanBoardSettings }>(
+      `/projects/${projectId}/kanban-settings`,
+    );
+    return settings ?? {};
+  }
+
+  async setKanbanSettings(
+    projectId: string,
+    settings: KanbanBoardSettings,
+  ): Promise<KanbanBoardSettings> {
+    const { settings: saved } = await httpClient.put<{ settings?: KanbanBoardSettings }>(
+      `/projects/${projectId}/kanban-settings`,
+      { settings },
+    );
+    return saved ?? {};
   }
 
   async listMembers(projectId: string): Promise<ProjectMember[]> {

@@ -25,6 +25,7 @@ import type {
   ProjectRepository,
   UpdateProjectInput,
 } from '../../application/project/ProjectRepository.js';
+import type { KanbanBoardSettings } from '../../domain/kanban/KanbanSettings.js';
 
 function toProject(row: ProjectRow): Project {
   return {
@@ -164,6 +165,23 @@ export class DrizzleProjectRepository implements ProjectRepository {
       .set({ dispatcherUserId: null })
       .where(eq(projects.dispatcherUserId, userId));
     return (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
+  }
+
+  async getKanbanSettings(projectId: string): Promise<KanbanBoardSettings | null> {
+    const rows = await this.db
+      .select({ settings: projects.kanbanSettings })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+    return rows[0]?.settings ?? null;
+  }
+
+  async setKanbanSettings(projectId: string, settings: KanbanBoardSettings): Promise<void> {
+    // Полная замена JSON-блоба — клиент присылает уже смерженную карту.
+    await this.db
+      .update(projects)
+      .set({ kanbanSettings: settings })
+      .where(eq(projects.id, projectId));
   }
 
   async deleteCascade(projectId: string): Promise<void> {

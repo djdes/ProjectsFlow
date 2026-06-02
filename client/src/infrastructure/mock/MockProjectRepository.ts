@@ -10,6 +10,7 @@ import type {
   UpdateProjectInput,
 } from '@/application/project/ProjectRepository';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
+import type { KanbanBoardSettings } from '@/domain/kanban/KanbanSettings';
 import { seedProjects } from './seed-data';
 
 const LATENCY_MS = 120;
@@ -64,6 +65,17 @@ export class MockProjectRepository implements ProjectRepository {
 
   async setNotificationPrefs(_projectId: string, prefs: NotificationPrefs): Promise<NotificationPrefs> {
     return delay(prefs);
+  }
+
+  private kanbanSettings: KanbanBoardSettings = {};
+
+  async getKanbanSettings(): Promise<KanbanBoardSettings> {
+    return delay(this.kanbanSettings);
+  }
+
+  async setKanbanSettings(_projectId: string, settings: KanbanBoardSettings): Promise<KanbanBoardSettings> {
+    this.kanbanSettings = settings;
+    return delay(this.kanbanSettings);
   }
 
   async reorder(orderedIds: readonly string[]): Promise<void> {

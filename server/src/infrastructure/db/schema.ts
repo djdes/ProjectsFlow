@@ -20,6 +20,10 @@ import {
   varchar,
 } from 'drizzle-orm/mysql-core';
 import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
+import type {
+  KanbanBoardSettings,
+  KanbanDefaultColors,
+} from '../../domain/kanban/KanbanSettings.js';
 import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
 import type { TelegramDraftOffered } from '../../application/telegram/TelegramTaskDraftRepository.js';
 import type {
@@ -62,6 +66,8 @@ export const users = mysqlTable(
     tgPairedAt: timestamp('tg_paired_at'),
     tgNotificationPrefs: json('tg_notification_prefs').$type<TelegramNotificationPrefs | null>(),
     defaultNotificationPrefs: json('default_notification_prefs').$type<NotificationPrefs | null>(),
+    // Персональная карта дефолтных цветов канбан-колонок — fallback для всех проектов юзера. См. db/057.
+    defaultKanbanColors: json('default_kanban_colors').$type<KanbanDefaultColors | null>(),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -201,6 +207,9 @@ export const projects = mysqlTable(
     // активный agent-токен. На revoke последнего токена — auto-NULL во всех
     // dispatched-проектах (см. RevokeAgentToken). См. db/028.
     dispatcherUserId: char('dispatcher_user_id', { length: 36 }),
+    // Общая (на весь проект) кастомизация канбан-колонок: цвет / переименованный заголовок /
+    // флаг скрытия. Карта status→{color,label,hidden}. NULL = встроенные дефолты. См. db/057.
+    kanbanSettings: json('kanban_settings').$type<KanbanBoardSettings | null>(),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },

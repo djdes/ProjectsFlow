@@ -39,6 +39,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import {
   createInviteSchema,
   createProjectSchema,
+  kanbanSettingsSchema,
   notificationPrefsSchema,
   reorderFavoritesSchema,
   reorderProjectsSchema,
@@ -377,6 +378,48 @@ export function projectsRouter(deps: Deps): Router {
         const prefs = notificationPrefsSchema.parse(req.body?.prefs ?? req.body);
         await deps.members.setNotificationPrefs(id, req.user!.id, prefs);
         res.json({ prefs });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Kanban settings (общие на проект) ----------------------------------------
+  // Read — любой участник проекта. Write — editor+ (это shared-состояние доски,
+  // viewer его менять не может). Цвета/переименования/скрытие колонок.
+  router.get(
+    '/:id/kanban-settings',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params.id;
+        if (typeof id !== 'string') throw new ProjectNotFoundError();
+        const membership = await deps.members.findForProject(id, req.user!.id);
+        if (!membership) throw new ProjectNotFoundError();
+        const settings = await deps.projects.getKanbanSettings(id);
+        res.json({ settings: settings ?? {} });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  router.put(
+    '/:id/kanban-settings',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params.id;
+        if (typeof id !== 'string') throw new ProjectNotFoundError();
+        const membership = await deps.members.findForProject(id, req.user!.id);
+        if (!membership) throw new ProjectNotFoundError();
+        if (membership.role === 'viewer') {
+          res.status(403).json({ error: 'Недостаточно прав для изменения настроек доски' });
+          return;
+        }
+        const settings = kanbanSettingsSchema.parse(req.body?.settings ?? req.body);
+        await deps.projects.setKanbanSettings(id, settings);
+        // Доска — shared: сигналим остальным участникам, чтобы их вкладки перечитали настройки.
+        deps.notifyProjectChanged(id);
+        res.json({ settings });
       } catch (e) {
         next(e);
       }

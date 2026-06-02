@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { KANBAN_COLORS, VISIBLE_KANBAN_STATUSES } from '../../domain/kanban/KanbanSettings.js';
 
 export const createProjectSchema = z.object({
   name: z.string().trim().min(1, 'Введите название').max(80),
@@ -68,6 +69,26 @@ const NOTIF_EVENT_TYPES = [
 export const notificationPrefsSchema = z.record(
   z.enum(NOTIF_EVENT_TYPES),
   z.object({ team: z.boolean(), mcp: z.boolean() }),
+);
+
+// Кастомизация одной канбан-колонки: цвет / переименованный заголовок / флаг скрытия.
+// Все поля опциональны — отсутствие = «дефолт». label триммим и ограничиваем длину.
+const kanbanColumnSettingsSchema = z.object({
+  color: z.enum(KANBAN_COLORS).optional(),
+  label: z.string().trim().max(40).optional(),
+  hidden: z.boolean().optional(),
+});
+
+// Общие настройки доски: карта status→{color,label,hidden}. Ключи — только видимые колонки.
+export const kanbanSettingsSchema = z.record(
+  z.enum(VISIBLE_KANBAN_STATUSES),
+  kanbanColumnSettingsSchema,
+);
+
+// Глобальная карта дефолтных цветов колонок (профиль юзера): status→color.
+export const kanbanDefaultColorsSchema = z.record(
+  z.enum(VISIBLE_KANBAN_STATUSES),
+  z.enum(KANBAN_COLORS),
 );
 
 export type CreateProjectBody = z.infer<typeof createProjectSchema>;

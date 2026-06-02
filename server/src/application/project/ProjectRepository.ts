@@ -1,4 +1,5 @@
 import type { Project } from '../../domain/project/Project.js';
+import type { KanbanBoardSettings } from '../../domain/kanban/KanbanSettings.js';
 
 export type CreateProjectInput = {
   readonly id: string;
@@ -52,4 +53,9 @@ export interface ProjectRepository {
   // когда у юзера revoked последний активный токен — он перестал быть ralph-capable,
   // нельзя оставлять его диспетчером.
   clearDispatcherForUser(userId: string): Promise<number>;
+
+  // Общая (на весь проект) кастомизация канбан-доски. NULL в БД ⇒ null здесь ⇒ дефолты в UI.
+  // setKanbanSettings полностью заменяет JSON-блоб (клиент шлёт уже смерженную карту).
+  getKanbanSettings(projectId: string): Promise<KanbanBoardSettings | null>;
+  setKanbanSettings(projectId: string, settings: KanbanBoardSettings): Promise<void>;
 }

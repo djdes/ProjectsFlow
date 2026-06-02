@@ -1,5 +1,6 @@
 import type { User } from '@/domain/user/User';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
+import type { KanbanDefaultColors } from '@/domain/kanban/KanbanSettings';
 import type {
   UpdateProfileInput,
   UserRepository,
@@ -49,6 +50,19 @@ export class HttpUserRepository implements UserRepository {
   async applyDefaultNotificationPrefsToAll(): Promise<number> {
     const { applied } = await httpClient.post<{ applied: number }>('/me/notification-prefs/apply-all', {});
     return applied;
+  }
+
+  async getDefaultKanbanColors(): Promise<KanbanDefaultColors> {
+    const { colors } = await httpClient.get<{ colors?: KanbanDefaultColors }>('/me/kanban-colors');
+    return colors ?? {};
+  }
+
+  async setDefaultKanbanColors(colors: KanbanDefaultColors): Promise<KanbanDefaultColors> {
+    const { colors: saved } = await httpClient.put<{ colors?: KanbanDefaultColors }>(
+      '/me/kanban-colors',
+      { colors },
+    );
+    return saved ?? {};
   }
 }
 

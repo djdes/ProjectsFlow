@@ -25,9 +25,19 @@ import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { LIVE_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { KanbanCard } from './KanbanCard';
 import { KanbanColumn } from './KanbanColumn';
+import { KanbanColumnMenu } from './KanbanColumnMenu';
+import { KanbanHiddenColumnsMenu } from './KanbanHiddenColumnsMenu';
+import { KANBAN_COLOR_CLASSES } from './kanbanColors';
 import { QuickAddTodo } from './QuickAddTodo';
 import { STATUS_LABEL } from './statusLabels';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
+import { useKanbanSettings } from '@/presentation/hooks/useKanbanSettings';
+import {
+  VISIBLE_KANBAN_STATUSES,
+  isColumnHidden,
+  resolveColumnColor,
+  resolveColumnLabel,
+} from '@/domain/kanban/KanbanSettings';
 
 type Props = {
   projectId: string;
@@ -112,6 +122,9 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   // (у inbox нет git-репо, так что коммиты скрыты). Единственный сигнал — этого хватает.
   const isInbox = !showCommits;
   const isShared = !isInbox && (memberCount ?? 0) > 1;
+  // Общие (на проект) настройки доски: цвета/переименования/скрытие колонок + глобальные
+  // дефолтные цвета юзера. Резолв цвета/подписи делаем на лету при рендере колонок.
+  const { settings, defaults, setColor, setLabel, setHidden } = useKanbanSettings(projectId);
   const [dialog, setDialog] = useState<TaskDrawerState | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   // Deep-link из email-кнопки: ?task=<id> открывает диалог задачи (один раз после загрузки).
@@ -375,10 +388,17 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     return <p className="text-sm text-destructive">{error}</p>;
   }
 
+  // Скрытые колонки исключаем из рендера (задачи скрытых статусов остаются в `grouped`,
+  // поэтому drag-математика в handleDragEnd не ломается). Скрытые перечисляем в меню доски.
+  const shownStatuses = VISIBLE_KANBAN_STATUSES.filter((s) => !isColumnHidden(settings?.[s]));
+  const hiddenColumns = VISIBLE_KANBAN_STATUSES.filter((s) => isColumnHidden(settings?.[s])).map(
+    (s) => ({ status: s, label: resolveColumnLabel(settings?.[s], STATUS_LABEL[s]) }),
+  );
+
   return (
-    // pb-32 — резерв под floating QuickAddTodo (fixed snizu): иначе нижние карточки
-    // прикрываются виджетом при скролле до конца.
-    <div className="space-y-6 pb-32">
+    // Доска занимает оставшуюся высоту экрана (родитель страницы — flex h-full flex-col),
+    // колонки скроллятся внутри себя (Todoist-стиль). pb на ряду — резерв под floating-композер.
+    <div className="flex min-h-0 flex-1 flex-col">
       <DndContext
         sensors={sensors}
         measuring={MEASURING_CONFIG}
@@ -394,50 +414,75 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         {/* На мобиле колонки занимают почти всю ширину и «прилипают» при свайпе
             (snap), на десктопе — обычный горизонтальный ряд. Drag между колонками
             работает в обоих режимах: все колонки в DOM, просто проскроллены. */}
-        <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 sm:snap-none">
-          {VISIBLE_STATUSES.map((status) => (
-            <KanbanColumn
-              key={status}
-              status={status}
-              label={STATUS_LABEL[status]}
-              tasks={hideDone && status === 'done' ? [] : grouped[status]}
-              onCreate={(s) => setDialog({ mode: 'create', status: s })}
-              onEdit={(t) => setDialog({ mode: 'edit', task: t })}
-              onDelete={handleDelete}
-              showShortId={showCommits}
-              onQuickPromote={status === 'backlog' ? handleQuickPromote : undefined}
-              onTaskChanged={() => void refetch()}
-              showCheckbox={isInbox}
-              lastDoneTaskId={lastDoneTaskId}
-              lastTodoTaskId={lastTodoTaskId}
-              currentUserId={user?.id ?? null}
-              activeId={activeId}
-              dropTarget={dropTarget?.status === status ? dropTarget : null}
-              liveTaskIds={liveTaskIds}
-              headerExtra={
-                status === 'done' ? (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-6"
-                    onClick={toggleDoneOrder}
-                    aria-label={
-                      doneOrder === 'newest'
-                        ? 'Сейчас сверху новые. Показать сначала старые'
-                        : 'Сейчас сверху старые. Показать сначала новые'
-                    }
-                    title={doneOrder === 'newest' ? 'Сверху новые' : 'Сверху старые'}
-                  >
-                    {doneOrder === 'newest' ? (
-                      <ArrowDownNarrowWide className="size-4" />
-                    ) : (
-                      <ArrowUpNarrowWide className="size-4" />
-                    )}
-                  </Button>
-                ) : undefined
-              }
-            />
-          ))}
+        <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-4 overflow-x-auto pb-24 sm:snap-none sm:pb-28">
+          {shownStatuses.map((status) => {
+            const perColumn = settings?.[status];
+            const color = resolveColumnColor(perColumn, defaults?.[status], status);
+            const label = resolveColumnLabel(perColumn, STATUS_LABEL[status]);
+            return (
+              <KanbanColumn
+                key={status}
+                status={status}
+                label={label}
+                tasks={hideDone && status === 'done' ? [] : grouped[status]}
+                onCreate={(s) => setDialog({ mode: 'create', status: s })}
+                onEdit={(t) => setDialog({ mode: 'edit', task: t })}
+                onDelete={handleDelete}
+                showShortId={showCommits}
+                onQuickPromote={status === 'backlog' ? handleQuickPromote : undefined}
+                onTaskChanged={() => void refetch()}
+                showCheckbox={isInbox}
+                lastDoneTaskId={lastDoneTaskId}
+                lastTodoTaskId={lastTodoTaskId}
+                currentUserId={user?.id ?? null}
+                activeId={activeId}
+                dropTarget={dropTarget?.status === status ? dropTarget : null}
+                liveTaskIds={liveTaskIds}
+                colorClasses={KANBAN_COLOR_CLASSES[color]}
+                onInlineCreate={(input) => create({ ...input, status: input.status ?? status })}
+                isInbox={isInbox}
+                isShared={isShared}
+                aiProjectId={isInbox ? null : projectId}
+                composerStorageKey={`pf:quick-add:${projectId}:${status}`}
+                columnMenu={
+                  <KanbanColumnMenu
+                    status={status}
+                    currentColor={color}
+                    currentLabel={label}
+                    onColor={(c) => setColor(status, c)}
+                    onLabel={(l) => setLabel(status, l)}
+                    onHide={() => setHidden(status, true)}
+                  />
+                }
+                headerExtra={
+                  status === 'done' ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-6"
+                      onClick={toggleDoneOrder}
+                      aria-label={
+                        doneOrder === 'newest'
+                          ? 'Сейчас сверху новые. Показать сначала старые'
+                          : 'Сейчас сверху старые. Показать сначала новые'
+                      }
+                      title={doneOrder === 'newest' ? 'Сверху новые' : 'Сверху старые'}
+                    >
+                      {doneOrder === 'newest' ? (
+                        <ArrowDownNarrowWide className="size-4" />
+                      ) : (
+                        <ArrowUpNarrowWide className="size-4" />
+                      )}
+                    </Button>
+                  ) : undefined
+                }
+              />
+            );
+          })}
+          <KanbanHiddenColumnsMenu
+            hidden={hiddenColumns}
+            onShow={(status) => setHidden(status, false)}
+          />
         </div>
         <DragOverlay dropAnimation={DROP_ANIMATION}>
           {activeTask ? (
