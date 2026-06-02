@@ -1,16 +1,12 @@
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 
-// Кастомный diff-рендер БЕЗ внешних либ (jsdiff/word-diff — опц. v2).
-// Заточен под тёмную «Cursor/VS Code»-палитру LIVE-вкладки (рендерится внутри .dark-скоупа).
+// Кастомный diff-рендер БЕЗ внешних либ. Тема-адаптивный: светлая (мягкая «Cursor light»,
+// не белая) и тёмная («Cursor dark»). Контент всегда plaintext (текстовые ноды) —
+// НИКОГДА не инжектим HTML, диффы содержат произвольный код.
 //
-//  mode='hunks'   — две колонки «было | стало» (CSS-grid), monospace, нумерация строк.
-//                   Для real-time Edit/MultiEdit-хунков (old_string → new_string).
-//  mode='unified' — единая колонка с +/- раскраской и двойной нумерацией (old|new),
-//                   как в GitHub/Cursor. Для финального git unified-диффа файла.
-//
-// Контент всегда рендерится как plaintext (текстовые ноды) — НИКОГДА не инжектим HTML,
-// диффы могут содержать произвольный код пользователя.
+//  mode='hunks'   — две колонки «было | стало» (CSS-grid), нумерация строк.
+//  mode='unified' — единая колонка с +/- раскраской и двойной нумерацией (old|new).
 type HunksProps = {
   mode: 'hunks';
   before: string;
@@ -33,7 +29,6 @@ export function DiffView(props: Props): React.ReactElement {
   return <HunkDiff before={props.before} after={props.after} className={props.className} />;
 }
 
-// === hunks: две колонки «было | стало», каждая с нумерацией строк ===
 function HunkDiff({
   before,
   after,
@@ -49,7 +44,7 @@ function HunkDiff({
   return (
     <div
       className={cn(
-        'grid grid-cols-2 gap-px overflow-hidden rounded-md border border-white/10 bg-white/10 font-mono text-[11px] leading-[1.55]',
+        'grid grid-cols-2 gap-px overflow-hidden rounded-md border border-zinc-200 bg-zinc-200 font-mono text-[11px] leading-[1.55] dark:border-white/10 dark:bg-white/10',
         className,
       )}
     >
@@ -71,30 +66,34 @@ function DiffColumn({
   const isDel = tone === 'del';
   const isEmpty = lines.length === 0 || (lines.length === 1 && lines[0]!.length === 0);
   return (
-    <div className={cn('overflow-x-auto', isDel ? 'bg-[#2d1618]' : 'bg-[#0f231a]')}>
+    <div className={cn('overflow-x-auto', isDel ? 'bg-rose-50 dark:bg-[#2d1618]' : 'bg-emerald-50 dark:bg-[#0f231a]')}>
       <div
         className={cn(
-          'sticky left-0 top-0 z-[1] border-b border-white/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider backdrop-blur',
-          isDel ? 'bg-[#2d1618]/90 text-[#f48771]' : 'bg-[#0f231a]/90 text-[#7ee787]',
+          'sticky left-0 top-0 z-[1] border-b px-2 py-1 text-[10px] font-semibold uppercase tracking-wider backdrop-blur',
+          isDel
+            ? 'border-rose-200 bg-rose-50/90 text-rose-600 dark:border-white/10 dark:bg-[#2d1618]/90 dark:text-[#f48771]'
+            : 'border-emerald-200 bg-emerald-50/90 text-emerald-700 dark:border-white/10 dark:bg-[#0f231a]/90 dark:text-[#7ee787]',
         )}
       >
         {title}
       </div>
       {isEmpty ? (
-        <div className="px-2 py-1 text-[10px] italic text-[#8b949e]">(пусто)</div>
+        <div className="px-2 py-1 text-[10px] italic text-zinc-400 dark:text-[#8b949e]">(пусто)</div>
       ) : (
         <div className="min-w-full py-0.5">
           {lines.map((ln, i) => (
-          <div key={i} className="flex">
-            <span className="w-8 shrink-0 select-none px-1 text-right text-[#5a6169]">{i + 1}</span>
-            <pre
-              className={cn(
-                'm-0 flex-1 whitespace-pre px-2',
-                isDel ? 'text-[#e5b3b3]' : 'text-[#a6e3b8]',
-              )}
-            >
-              {ln.length > 0 ? ln : ' '}
-            </pre>
+            <div key={i} className="flex">
+              <span className="w-8 shrink-0 select-none px-1 text-right text-zinc-500 dark:text-[#5a6169]">
+                {i + 1}
+              </span>
+              <pre
+                className={cn(
+                  'm-0 flex-1 whitespace-pre px-2',
+                  isDel ? 'text-rose-700 dark:text-[#e5b3b3]' : 'text-emerald-800 dark:text-[#a6e3b8]',
+                )}
+              >
+                {ln.length > 0 ? ln : ' '}
+              </pre>
             </div>
           ))}
         </div>
@@ -103,7 +102,6 @@ function DiffColumn({
   );
 }
 
-// === unified: единая колонка, двойная нумерация (old|new), +/- раскраска ===
 type ULine = {
   text: string;
   type: 'add' | 'del' | 'ctx' | 'hunk' | 'meta';
@@ -149,7 +147,6 @@ function parseUnified(diff: string): ULine[] {
       oldNo += 1;
       continue;
     }
-    // контекст (' ' или пустая строка)
     out.push({ text: line, type: 'ctx', oldNo, newNo });
     oldNo += 1;
     newNo += 1;
@@ -169,7 +166,7 @@ function UnifiedDiff({
   return (
     <div
       className={cn(
-        'overflow-x-auto rounded-md border border-white/10 bg-[#181818] font-mono text-[11px] leading-[1.55]',
+        'overflow-x-auto rounded-md border border-zinc-200 bg-white font-mono text-[11px] leading-[1.55] dark:border-white/10 dark:bg-[#181818]',
         className,
       )}
     >
@@ -177,28 +174,28 @@ function UnifiedDiff({
         {lines.map((l, i) => {
           const rowBg =
             l.type === 'add'
-              ? 'bg-[#0f231a]'
+              ? 'bg-emerald-50 dark:bg-[#0f231a]'
               : l.type === 'del'
-                ? 'bg-[#2d1618]'
+                ? 'bg-rose-50 dark:bg-[#2d1618]'
                 : l.type === 'hunk'
-                  ? 'bg-[#15243a]'
+                  ? 'bg-sky-50 dark:bg-[#15243a]'
                   : '';
           const textCls =
             l.type === 'add'
-              ? 'text-[#7ee787]'
+              ? 'text-emerald-700 dark:text-[#7ee787]'
               : l.type === 'del'
-                ? 'text-[#f48771]'
+                ? 'text-rose-700 dark:text-[#f48771]'
                 : l.type === 'hunk'
-                  ? 'text-[#58a6ff]'
+                  ? 'text-sky-600 dark:text-[#58a6ff]'
                   : l.type === 'meta'
-                    ? 'text-[#5a6169]'
-                    : 'text-[#c9d1d9]';
+                    ? 'text-zinc-500 dark:text-[#5a6169]'
+                    : 'text-zinc-700 dark:text-[#c9d1d9]';
           return (
             <div key={i} className={cn('flex', rowBg)}>
-              <span className="w-9 shrink-0 select-none border-r border-white/5 px-1 text-right text-[10px] text-[#5a6169]">
+              <span className="w-9 shrink-0 select-none border-r border-zinc-200 px-1 text-right text-[10px] text-zinc-400 dark:border-white/5 dark:text-[#5a6169]">
                 {l.oldNo ?? ''}
               </span>
-              <span className="w-9 shrink-0 select-none border-r border-white/5 px-1 text-right text-[10px] text-[#5a6169]">
+              <span className="w-9 shrink-0 select-none border-r border-zinc-200 px-1 text-right text-[10px] text-zinc-400 dark:border-white/5 dark:text-[#5a6169]">
                 {l.newNo ?? ''}
               </span>
               <pre className={cn('m-0 flex-1 whitespace-pre px-2', textCls)}>

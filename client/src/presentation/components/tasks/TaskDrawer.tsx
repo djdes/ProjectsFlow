@@ -679,7 +679,7 @@ export function TaskDrawer({
               <TabsContent
                 value="live"
                 forceMount
-                className="min-h-0 overflow-hidden data-[state=inactive]:hidden"
+                className="flex min-h-0 flex-col overflow-hidden data-[state=inactive]:hidden"
               >
                 <LiveTab
                   task={task}
