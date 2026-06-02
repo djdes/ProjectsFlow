@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { relativeTime } from '@/lib/relativeTime';
 import { useProject } from '@/presentation/hooks/useProject';
+import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useMonitoring } from '@/presentation/hooks/useMonitoring';
 import { ServerCard } from '@/presentation/components/monitoring/ServerCard';
 import { AlertList } from '@/presentation/components/monitoring/AlertList';
@@ -14,6 +15,9 @@ export function MonitoringPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
   const pid = projectId ?? '';
   const { data } = useProject(pid);
+  const { user } = useCurrentUser();
+  // Смотреть может любой участник; управлять (добавить/удалить/собрать) — editor+ или admin.
+  const canManage = data?.role === 'editor' || data?.role === 'owner' || user?.isAdmin === true;
   const { servers, alerts, loading, error, forbidden, lastUpdated, reload } = useMonitoring(pid);
   const [addOpen, setAddOpen] = useState(false);
 
@@ -43,7 +47,7 @@ export function MonitoringPage(): React.ReactElement {
             <span className="text-sm text-muted-foreground">обновлено {relativeTime(lastUpdated)}</span>
           )}
         </div>
-        {!forbidden && (
+        {!forbidden && canManage && (
           <Button size="sm" onClick={() => setAddOpen(true)}>
             <Plus className="size-4" />
             Добавить сервер
@@ -54,7 +58,7 @@ export function MonitoringPage(): React.ReactElement {
       {forbidden ? (
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground">
-            Мониторинг доступен только владельцу проекта.
+            Мониторинг доступен участникам проекта.
           </CardContent>
         </Card>
       ) : (
@@ -86,21 +90,35 @@ export function MonitoringPage(): React.ReactElement {
           ) : servers && servers.length > 0 ? (
             <div className="grid gap-4">
               {servers.map((item) => (
-                <ServerCard key={item.server.id} projectId={pid} item={item} onChanged={reload} />
+                <ServerCard
+                  key={item.server.id}
+                  projectId={pid}
+                  item={item}
+                  canManage={canManage}
+                  onChanged={reload}
+                />
               ))}
             </div>
           ) : (
             <Card>
               <CardContent className="space-y-3 py-10 text-center">
                 <p className="text-muted-foreground">Серверов пока нет.</p>
-                <p className="text-sm text-muted-foreground">
-                  Добавьте «local» — хост самого ProjectsFlow (читается напрямую), либо «remote» —
-                  удалённый сервер, метрики которого пушит агент-сборщик.
-                </p>
-                <Button size="sm" onClick={() => setAddOpen(true)}>
-                  <Plus className="size-4" />
-                  Добавить сервер
-                </Button>
+                {canManage ? (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Добавьте «local» — хост самого ProjectsFlow (читается напрямую), либо «remote» —
+                      удалённый сервер, метрики которого пушит агент-сборщик.
+                    </p>
+                    <Button size="sm" onClick={() => setAddOpen(true)}>
+                      <Plus className="size-4" />
+                      Добавить сервер
+                    </Button>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Серверы добавляют участники с правами редактора.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}

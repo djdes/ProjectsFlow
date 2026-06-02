@@ -33,8 +33,8 @@ export type ProjectAction =
   | 'set_git_token_delegation'
   // file-sync: пуш/ack снепшотов и управление workspace со стороны клиента-владельца.
   | 'manage_file_sync'
-  // Мониторинг серверов: просмотр метрик/логов/алертов и управление серверами.
-  // Owner-only (чувствительные ops-данные, как финансы). См. spec server-monitoring-design.md.
+  // Мониторинг серверов: просмотр метрик/логов/алертов (все участники) и управление
+  // серверами (editor+). См. spec server-monitoring-design.md.
   | 'view_monitoring'
   | 'manage_monitoring';
 
@@ -79,9 +79,10 @@ const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   // file-sync: клиент-владелец пушит снепшоты / делает ack (editor+). Байтовые операции
   // СО СТОРОНЫ ДИСПЕТЧЕРА гейтятся отдельно через requireDispatcherAccess (не ролью).
   manage_file_sync: 'editor',
-  // Мониторинг — owner-only: логи/метрики сервера = чувствительные данные (как финансы).
-  view_monitoring: 'owner',
-  manage_monitoring: 'owner',
+  // Мониторинг: смотреть метрики/логи/алерты может любой участник проекта (read-mostly).
+  // Управление серверами (добавить/изменить/удалить, on-demand сбор, agent-ingest) — editor+.
+  view_monitoring: 'viewer',
+  manage_monitoring: 'editor',
 };
 
 const ROLE_LEVEL: Record<ProjectRole, number> = { viewer: 0, editor: 1, owner: 2 };

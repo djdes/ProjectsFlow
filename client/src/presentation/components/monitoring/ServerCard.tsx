@@ -13,10 +13,12 @@ import { fmtBytes, fmtDuration } from './format';
 export function ServerCard({
   projectId,
   item,
+  canManage,
   onChanged,
 }: {
   projectId: string;
   item: ServerWithLatest;
+  canManage: boolean;
   onChanged: () => void;
 }): React.ReactElement {
   const { monitoringRepository } = useContainer();
@@ -64,17 +66,19 @@ export function ServerCard({
             {server.host ? ` · ${server.host}` : ''}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {server.kind === 'local' && (
-            <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={busy}>
-              <RefreshCw className={busy ? 'size-4 animate-spin' : 'size-4'} />
-              Обновить
+        {canManage && (
+          <div className="flex shrink-0 items-center gap-1">
+            {server.kind === 'local' && (
+              <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={busy}>
+                <RefreshCw className={busy ? 'size-4 animate-spin' : 'size-4'} />
+                Обновить
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={() => void remove()} disabled={busy} aria-label="Удалить сервер">
+              <Trash2 className="size-4" />
             </Button>
-          )}
-          <Button variant="ghost" size="icon" onClick={() => void remove()} disabled={busy} aria-label="Удалить сервер">
-            <Trash2 className="size-4" />
-          </Button>
-        </div>
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {/* pm2 */}
