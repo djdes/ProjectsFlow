@@ -20,6 +20,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/sonner';
+import { CommentBody } from '@/presentation/components/tasks/CommentBody';
 import { useContainer } from '@/infrastructure/di/container';
 import { useProjects } from '@/presentation/hooks/useProjects';
 import {
@@ -378,8 +379,8 @@ export function AiComposeDialog({
 
                 {/* Управляемая область */}
                 {!distribute ? (
-                  <div className="min-h-0 flex-1 whitespace-pre-wrap break-words rounded-lg border bg-muted/30 px-3 py-2.5 text-sm leading-relaxed">
-                    {joinedDoc(activeTab)}
+                  <div className="rounded-lg border bg-muted/30 px-3 py-2.5">
+                    <CommentBody body={joinedDoc(activeTab)} />
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -447,17 +448,18 @@ export function AiComposeDialog({
                                 </select>
                               </div>
 
-                              <div>
-                                <div
-                                  className={cn(
-                                    'whitespace-pre-wrap break-words px-1.5 text-xs leading-relaxed text-muted-foreground',
-                                    isOpen
-                                      ? 'max-h-56 overflow-y-auto rounded-md border bg-muted/30 p-2'
-                                      : 'line-clamp-2',
-                                  )}
-                                >
-                                  {body}
-                                </div>
+                              <div className="px-1.5">
+                                {isOpen ? (
+                                  <div className="max-h-56 overflow-y-auto rounded-md border bg-muted/30 p-2">
+                                    <CommentBody body={body} />
+                                  </div>
+                                ) : isLong ? (
+                                  <div className="max-h-[3.25rem] overflow-hidden [-webkit-mask-image:linear-gradient(to_bottom,#000_55%,transparent)] [mask-image:linear-gradient(to_bottom,#000_55%,transparent)]">
+                                    <CommentBody body={body} />
+                                  </div>
+                                ) : (
+                                  <CommentBody body={body} />
+                                )}
                                 {isLong && (
                                   <button
                                     type="button"
