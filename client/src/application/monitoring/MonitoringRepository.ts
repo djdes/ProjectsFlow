@@ -1,6 +1,6 @@
 import type { MonitoringServer, ServerConfigInput, ServerWithLatest } from '@/domain/monitoring/Server';
 import type { LogKind, LogTail, ServerSnapshot, TrendPoint } from '@/domain/monitoring/Snapshot';
-import type { ServerAlert } from '@/domain/monitoring/Alert';
+import type { AlertRule, ServerAlert } from '@/domain/monitoring/Alert';
 
 export type HistoryOptions = {
   readonly since?: Date;
@@ -18,4 +18,7 @@ export interface MonitoringRepository {
   createServer(projectId: string, input: ServerConfigInput): Promise<MonitoringServer>;
   updateServer(projectId: string, serverId: string, input: ServerConfigInput): Promise<MonitoringServer>;
   deleteServer(projectId: string, serverId: string): Promise<void>;
+  muteServer(projectId: string, serverId: string, minutes: number | null): Promise<MonitoringServer>;
+  getAlertRules(projectId: string): Promise<AlertRule[]>;
+  saveAlertRules(projectId: string, rules: AlertRule[]): Promise<AlertRule[]>;
 }

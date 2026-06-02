@@ -3,19 +3,11 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth.js';
 import type { UserRepository } from '../../application/user/UserRepository.js';
 import type { ProjectMemberRepository } from '../../application/project/ProjectMemberRepository.js';
+import { NOTIF_EVENT_TYPES, type NotifEventType } from '../../domain/notifications/NotificationPrefs.js';
 
-const NOTIF_EVENT_TYPES = [
-  'task_created',
-  'task_done',
-  'status_changed',
-  'comment_created',
-  'member_changed',
-  'commit_linked',
-  'kb_updated',
-] as const;
-
+// Источник правды по типам — domain NOTIF_EVENT_TYPES (включая 'server_alert'); не дублируем.
 const notificationPrefsSchema = z.record(
-  z.enum(NOTIF_EVENT_TYPES),
+  z.enum(NOTIF_EVENT_TYPES as unknown as [NotifEventType, ...NotifEventType[]]),
   z.object({ team: z.boolean(), mcp: z.boolean() }),
 );
 

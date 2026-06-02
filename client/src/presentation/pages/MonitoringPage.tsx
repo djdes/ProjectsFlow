@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Activity, ChevronRight, Plus } from 'lucide-react';
+import { Activity, BellRing, ChevronRight, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { relativeTime } from '@/lib/relativeTime';
@@ -10,6 +10,7 @@ import { useMonitoring } from '@/presentation/hooks/useMonitoring';
 import { ServerCard } from '@/presentation/components/monitoring/ServerCard';
 import { AlertList } from '@/presentation/components/monitoring/AlertList';
 import { AddServerDialog } from '@/presentation/components/monitoring/AddServerDialog';
+import { AlertRulesDialog } from '@/presentation/components/monitoring/AlertRulesDialog';
 
 export function MonitoringPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -20,6 +21,7 @@ export function MonitoringPage(): React.ReactElement {
   const canManage = data?.role === 'editor' || data?.role === 'owner' || user?.isAdmin === true;
   const { servers, alerts, loading, error, forbidden, lastUpdated, reload } = useMonitoring(pid);
   const [addOpen, setAddOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   return (
     <div className="flex h-full flex-col gap-4 p-4 sm:gap-6 sm:p-6">
@@ -48,10 +50,16 @@ export function MonitoringPage(): React.ReactElement {
           )}
         </div>
         {!forbidden && canManage && (
-          <Button size="sm" onClick={() => setAddOpen(true)}>
-            <Plus className="size-4" />
-            Добавить сервер
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setRulesOpen(true)}>
+              <BellRing className="size-4" />
+              Настройки алертов
+            </Button>
+            <Button size="sm" onClick={() => setAddOpen(true)}>
+              <Plus className="size-4" />
+              Добавить сервер
+            </Button>
+          </div>
         )}
       </div>
 
@@ -126,6 +134,7 @@ export function MonitoringPage(): React.ReactElement {
       )}
 
       <AddServerDialog projectId={pid} open={addOpen} onOpenChange={setAddOpen} onCreated={reload} />
+      <AlertRulesDialog projectId={pid} open={rulesOpen} onOpenChange={setRulesOpen} />
     </div>
   );
 }

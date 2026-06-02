@@ -27,9 +27,22 @@ export type SystemSnapshot = {
   readonly load5: number | null;
   readonly load15: number | null;
   readonly cpuCount: number | null;
+  // Мгновенная загрузка CPU всей машины, % (по двум семплам /proc/stat). Optional —
+  // старые снимки/remote без поля.
+  readonly cpuUsedPct?: number | null;
   readonly memTotalBytes: number | null;
   readonly memUsedBytes: number | null;
   readonly memUsedPct: number | null;
+  // Swap (из /proc/meminfo). Optional.
+  readonly swapTotalBytes?: number | null;
+  readonly swapUsedBytes?: number | null;
+  readonly swapUsedPct?: number | null;
+  // Сетевой I/O (кумулятивные счётчики /proc/net/dev, сумма по не-lo). Optional.
+  readonly netRxBytes?: number | null;
+  readonly netTxBytes?: number | null;
+  // Число процессов и открытых файловых дескрипторов в системе. Optional.
+  readonly processCount?: number | null;
+  readonly openFds?: number | null;
   readonly uptimeSeconds: number | null;
   readonly disks: ReadonlyArray<DiskUsage>;
 };
@@ -38,6 +51,11 @@ export type DbHealth = {
   readonly reachable: boolean;
   readonly connections: number | null;
   readonly sizeBytes: number | null;
+  // Расширенные метрики MariaDB. Optional — заполняются для local-сервера.
+  readonly maxConnections?: number | null;
+  readonly uptimeSeconds?: number | null;
+  readonly slowQueries?: number | null;
+  readonly version?: string | null;
 };
 
 // Хвост лога. available=false → причина в reason; иначе lines (редактирован+усечён).

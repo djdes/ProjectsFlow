@@ -94,6 +94,7 @@ export class ShellLocalServerCollector implements LocalServerCollector {
     const free = os.freemem();
     const used = total - free;
     const disks = await this.collectDisks(errors);
+    const extra = await this.collectProcMetrics();
     return {
       load1: round2(load[0] ?? 0),
       load5: round2(load[1] ?? 0),
@@ -104,7 +105,101 @@ export class ShellLocalServerCollector implements LocalServerCollector {
       memUsedPct: total > 0 ? round2((used / total) * 100) : null,
       uptimeSeconds: Math.floor(os.uptime()),
       disks,
+      ...extra,
     };
+  }
+
+  // Доп. метрики из /proc (Linux): swap, CPU%, сеть, процессы, FD. Всё best-effort.
+  private async collectProcMetrics(): Promise<Partial<SystemSnapshot>> {
+    if (process.platform === 'win32') return {};
+    const out: {
+      cpuUsedPct?: number | null;
+      swapTotalBytes?: number | null;
+      swapUsedBytes?: number | null;
+      swapUsedPct?: number | null;
+      netRxBytes?: number | null;
+      netTxBytes?: number | null;
+      processCount?: number | null;
+      openFds?: number | null;
+    } = {};
+
+    try {
+      const mem = await fs.readFile('/proc/meminfo', 'utf8');
+      const kb = (key: string): number | null => {
+        const m = mem.match(new RegExp(`^${key}:\\s+(\\d+)`, 'm'));
+        return m ? Number(m[1]) * 1024 : null;
+      };
+      const st = kb('SwapTotal');
+      const sf = kb('SwapFree');
+      if (st !== null) {
+        out.swapTotalBytes = st;
+        if (sf !== null) {
+          out.swapUsedBytes = st - sf;
+          out.swapUsedPct = st > 0 ? round2(((st - sf) / st) * 100) : 0;
+        }
+      }
+    } catch {
+      /* нет /proc/meminfo — пропускаем */
+    }
+
+    try {
+      out.cpuUsedPct = await this.cpuUsedPct();
+    } catch {
+      /* skip */
+    }
+
+    try {
+      const dev = await fs.readFile('/proc/net/dev', 'utf8');
+      let rx = 0;
+      let tx = 0;
+      for (const line of dev.split('\n')) {
+        const m = line.match(/^\s*([\w-]+):\s*(.+)$/);
+        if (!m || m[1] === 'lo') continue;
+        const cols = m[2]!.trim().split(/\s+/).map(Number);
+        rx += cols[0] ?? 0;
+        tx += cols[8] ?? 0;
+      }
+      out.netRxBytes = rx;
+      out.netTxBytes = tx;
+    } catch {
+      /* skip */
+    }
+
+    try {
+      const entries = await fs.readdir('/proc');
+      out.processCount = entries.filter((e) => /^\d+$/.test(e)).length;
+    } catch {
+      /* skip */
+    }
+
+    try {
+      const fnr = await fs.readFile('/proc/sys/fs/file-nr', 'utf8');
+      const n = Number(fnr.trim().split(/\s+/)[0]);
+      if (Number.isFinite(n)) out.openFds = n;
+    } catch {
+      /* skip */
+    }
+
+    return out;
+  }
+
+  // Мгновенная загрузка CPU всей машины (%) по двум семплам /proc/stat с паузой 100мс.
+  private async cpuUsedPct(): Promise<number | null> {
+    const sample = async (): Promise<{ idle: number; total: number }> => {
+      const stat = await fs.readFile('/proc/stat', 'utf8');
+      const first = stat.split('\n')[0] ?? '';
+      const parts = first.trim().split(/\s+/).slice(1).map(Number);
+      const idle = (parts[3] ?? 0) + (parts[4] ?? 0); // idle + iowait
+      const total = parts.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+      return { idle, total };
+    };
+    const a = await sample();
+    await new Promise((r) => setTimeout(r, 100));
+    const b = await sample();
+    const dt = b.total - a.total;
+    const di = b.idle - a.idle;
+    if (dt <= 0) return null;
+    return round2((1 - di / dt) * 100);
   }
 
   private async collectDisks(errors: string[]): Promise<DiskUsage[]> {

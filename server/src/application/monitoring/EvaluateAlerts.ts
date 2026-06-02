@@ -1,16 +1,20 @@
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { ServerRepository } from './ServerRepository.js';
 import type { MonitoringAlertRepository } from './MonitoringAlertRepository.js';
+import type { MonitoringAlertRuleRepository } from './MonitoringAlertRuleRepository.js';
 import type { MonitoringAlertNotifier } from './MonitoringAlertNotifier.js';
 import type { ProjectServer } from '../../domain/monitoring/ProjectServer.js';
 import type { ServerSnapshot } from '../../domain/monitoring/ServerSnapshot.js';
 import type { AlertKind, ServerAlert } from '../../domain/monitoring/Alert.js';
 import {
   ALERT_RENOTIFY_MS,
+  DEFAULT_RULE_CONFIG,
   DEFAULT_SNAPSHOT_STALE_MINUTES,
   evaluateSnapshotConditions,
+  resolveRuleConfig,
   stalenessCondition,
   type AlertCondition,
+  type AlertRuleConfig,
 } from '../../domain/monitoring/alertRules.js';
 
 type Deps = {
@@ -20,7 +24,8 @@ type Deps = {
   readonly notifier: MonitoringAlertNotifier;
   readonly idGen: () => string;
   readonly now: () => Date;
-  readonly staleMinutes?: number;
+  // Per-project оверрайды порогов (optional — без репо берутся дефолты).
+  readonly rules?: MonitoringAlertRuleRepository;
 };
 
 const SNAPSHOT_RULES: AlertKind[] = ['process_down', 'disk_usage', 'restart_spike'];
@@ -38,30 +43,45 @@ export class EvaluateAlerts {
     if (server) await this.evaluateForSnapshot(server, snapshot, prev);
   }
 
+  private async loadConfig(projectId: string): Promise<AlertRuleConfig> {
+    if (!this.deps.rules) return DEFAULT_RULE_CONFIG;
+    try {
+      return resolveRuleConfig(await this.deps.rules.listByProject(projectId));
+    } catch {
+      return DEFAULT_RULE_CONFIG;
+    }
+  }
+
   async evaluateForSnapshot(
     server: ProjectServer,
     snapshot: ServerSnapshot,
     prev: ServerSnapshot | null,
   ): Promise<void> {
+    const config = await this.loadConfig(server.projectId);
     const conditions = evaluateSnapshotConditions({
       reachable: snapshot.reachable,
       metrics: snapshot.metrics,
       prevMetrics: prev?.metrics ?? null,
+      config,
     });
     await this.reconcile(server, conditions, SNAPSHOT_RULES);
   }
 
   // Server-level staleness: для каждого enabled-сервера, если последний снимок старше порога —
-  // поднимаем snapshot_stale, иначе тушим.
+  // поднимаем snapshot_stale, иначе тушим. Порог/enabled — из per-project правил.
   async sweepStaleness(): Promise<void> {
-    const staleMin = this.deps.staleMinutes ?? DEFAULT_SNAPSHOT_STALE_MINUTES;
-    const staleMs = staleMin * 60 * 1000;
     const now = this.deps.now().getTime();
     const servers = await this.deps.servers.listEnabled();
     for (const s of servers) {
-      const isStale = s.lastSnapshotAt ? now - s.lastSnapshotAt.getTime() > staleMs : false;
-      const conditions = isStale ? [stalenessCondition(staleMin)] : [];
       try {
+        const config = await this.loadConfig(s.projectId);
+        const rule = config.snapshot_stale;
+        const staleMin = rule.threshold ?? DEFAULT_SNAPSHOT_STALE_MINUTES;
+        const isStale =
+          rule.enabled && s.lastSnapshotAt
+            ? now - s.lastSnapshotAt.getTime() > staleMin * 60 * 1000
+            : false;
+        const conditions = isStale ? [stalenessCondition(staleMin, rule.severity)] : [];
         await this.reconcile(s, conditions, STALENESS_RULES);
       } catch (err) {
         console.warn('[monitoring-alert] staleness sweep failed for', s.id, err);
@@ -81,6 +101,12 @@ export class EvaluateAlerts {
     const activeByKey = new Map(active.map((a) => [`${a.ruleKind}:${a.dedupKey}`, a]));
     const seen = new Set<string>();
     const now = this.deps.now();
+    // «Тихий час»: алерты пишем в журнал, но уведомления подавляем.
+    const muted = server.mutedUntil != null && server.mutedUntil.getTime() > now.getTime();
+    const notify = async (alert: ServerAlert): Promise<void> => {
+      if (muted) return;
+      await this.deps.notifier.notify({ server, project, alert });
+    };
 
     for (const c of conditions) {
       const key = `${c.ruleKind}:${c.dedupKey}`;
@@ -104,18 +130,14 @@ export class EvaluateAlerts {
           createdAt: now,
         };
         await this.deps.alerts.insert(alert);
-        await this.deps.notifier.notify({ server, project, alert });
+        await notify(alert);
       } else {
         await this.deps.alerts.touchLastSeen(existing.id, now);
         // Повторное уведомление по всё ещё горящему алерту — не чаще ALERT_RENOTIFY_MS.
         const lastNotified = existing.lastNotifiedAt?.getTime() ?? 0;
-        if (now.getTime() - lastNotified > ALERT_RENOTIFY_MS) {
+        if (!muted && now.getTime() - lastNotified > ALERT_RENOTIFY_MS) {
           await this.deps.alerts.markNotified(existing.id, now);
-          await this.deps.notifier.notify({
-            server,
-            project,
-            alert: { ...existing, lastSeenAt: now, lastNotifiedAt: now },
-          });
+          await notify({ ...existing, lastSeenAt: now, lastNotifiedAt: now });
         }
       }
     }
@@ -126,11 +148,7 @@ export class EvaluateAlerts {
       const key = `${a.ruleKind}:${a.dedupKey}`;
       if (!seen.has(key)) {
         await this.deps.alerts.resolve(a.id, now);
-        await this.deps.notifier.notify({
-          server,
-          project,
-          alert: { ...a, status: 'resolved', resolvedAt: now },
-        });
+        await notify({ ...a, status: 'resolved', resolvedAt: now });
       }
     }
   }

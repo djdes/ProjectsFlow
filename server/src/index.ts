@@ -189,6 +189,9 @@ import { DrizzleServerRepository } from './infrastructure/repositories/DrizzleSe
 import { DrizzleSnapshotRepository } from './infrastructure/repositories/DrizzleSnapshotRepository.js';
 import { DrizzleMonitoringAlertRepository } from './infrastructure/repositories/DrizzleMonitoringAlertRepository.js';
 import { ShellLocalServerCollector } from './infrastructure/monitoring/ShellLocalServerCollector.js';
+import { MysqlDbHealthProbe } from './infrastructure/monitoring/MysqlDbHealthProbe.js';
+import { DrizzleMonitoringAlertRuleRepository } from './infrastructure/repositories/DrizzleMonitoringAlertRuleRepository.js';
+import { ManageAlertRules } from './application/monitoring/ManageAlertRules.js';
 import { AlertNotificationDispatcher } from './application/monitoring/AlertNotificationDispatcher.js';
 import { EvaluateAlerts } from './application/monitoring/EvaluateAlerts.js';
 import { CollectLocalSnapshot } from './application/monitoring/CollectLocalSnapshot.js';
@@ -660,17 +663,22 @@ setInterval(
 const serverRepo = new DrizzleServerRepository(db);
 const snapshotRepo = new DrizzleSnapshotRepository(db);
 const monitoringAlertRepo = new DrizzleMonitoringAlertRepository(db);
+const monitoringAlertRuleRepo = new DrizzleMonitoringAlertRuleRepository(db);
 const localServerCollector = new ShellLocalServerCollector();
 const alertNotificationDispatcher = new AlertNotificationDispatcher({
   notifications: notificationRepo,
   sendTelegram: sendAgentTelegramNotification,
+  members: projectMemberRepo,
+  email: emailSender,
   idGen: idGenerator,
+  appUrl: appBaseUrl,
 });
 const evaluateAlerts = new EvaluateAlerts({
   alerts: monitoringAlertRepo,
   servers: serverRepo,
   projects: projectRepo,
   notifier: alertNotificationDispatcher,
+  rules: monitoringAlertRuleRepo,
   idGen: idGenerator,
   now,
 });
@@ -689,6 +697,7 @@ const collectLocalSnapshot = new CollectLocalSnapshot({
   collector: localServerCollector,
   idGen: idGenerator,
   now,
+  dbHealthProbe: new MysqlDbHealthProbe(pool),
   onSnapshotStored: onMonitoringSnapshotStored,
 });
 const ingestAgentSnapshot = new IngestAgentSnapshot({
@@ -720,6 +729,11 @@ const monitoringQueries = new MonitoringQueries({
   servers: serverRepo,
   snapshots: snapshotRepo,
   alerts: monitoringAlertRepo,
+});
+const manageAlertRules = new ManageAlertRules({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  rules: monitoringAlertRuleRepo,
 });
 const listMonitoredServers = new ListMonitoredServers({ servers: serverRepo });
 const monitoringKbSnapshotWriter = new MonitoringKbSnapshotWriter({
@@ -1013,6 +1027,7 @@ const { app, devProxyUpgrade } = createApp({
     listServers: listServersUseCase,
     manageServers,
     queries: monitoringQueries,
+    manageAlertRules,
   },
   kb: {
     initKbRepo: new InitKbRepo({

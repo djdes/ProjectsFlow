@@ -88,6 +88,12 @@ export function renderActivityEmail(input: ActivityEmailInput): EmailMessage {
       bodyHtml = `<strong>${actor}</strong> обновил базу знаний проекта <strong>«${project}»</strong>${detail ? `: <span style="color:#0f172a;">${detail}</span>` : ''}.`;
       text = `${input.actorDisplayName} обновил базу знаний «${input.projectName}»`;
       break;
+    case 'server_alert':
+      heading = 'Алерт сервера';
+      subject = `Алерт сервера в «${input.projectName}»`;
+      bodyHtml = `Сервер <strong>${actor}</strong> в проекте <strong>«${project}»</strong>:<br/><span style="color:#0f172a;">${detail}</span>`;
+      text = `Алерт сервера ${input.actorDisplayName} в «${input.projectName}»: ${clip(input.detail ?? '')}`;
+      break;
   }
 
   return renderEmailLayout({

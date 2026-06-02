@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ChevronDown, RefreshCw, Server, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Bell, BellOff, ChevronDown, RefreshCw, Server, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { relativeTime } from '@/lib/relativeTime';
@@ -8,6 +8,7 @@ import type { ServerWithLatest } from '@/domain/monitoring/Server';
 import { StatusBadge, PmStatusBadge } from './StatusBadge';
 import { ResourceBar } from './ResourceBar';
 import { LogTailViewer } from './LogTailViewer';
+import { ServerTrends } from './ServerTrends';
 import { fmtBytes, fmtDuration } from './format';
 
 export function ServerCard({
@@ -25,8 +26,15 @@ export function ServerCard({
   const { server, latest } = item;
   const [busy, setBusy] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [showTrends, setShowTrends] = useState(false);
+  // isMuted считаем в эффекте (Date.now() нельзя в render — react-hooks/purity).
+  const [isMuted, setIsMuted] = useState(false);
   const metrics = latest?.metrics ?? null;
   const system = metrics?.system ?? null;
+
+  useEffect(() => {
+    setIsMuted(server.mutedUntil !== null && server.mutedUntil.getTime() > Date.now());
+  }, [server.mutedUntil]);
 
   const refresh = async (): Promise<void> => {
     setBusy(true);
@@ -49,6 +57,16 @@ export function ServerCard({
     }
   };
 
+  const toggleMute = async (): Promise<void> => {
+    setBusy(true);
+    try {
+      await monitoringRepository.muteServer(projectId, server.id, isMuted ? null : 60);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
@@ -64,6 +82,11 @@ export function ServerCard({
           <p className="text-xs text-muted-foreground">
             {latest ? `обновлено ${relativeTime(latest.collectedAt)}` : 'нет данных'}
             {server.host ? ` · ${server.host}` : ''}
+            {isMuted && server.mutedUntil && (
+              <span className="ml-1 text-amber-600 dark:text-amber-400">
+                · 🔕 тихо до {server.mutedUntil.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
           </p>
         </div>
         {canManage && (
@@ -74,6 +97,16 @@ export function ServerCard({
                 Обновить
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => void toggleMute()}
+              disabled={busy}
+              aria-label={isMuted ? 'Включить алерты' : 'Заглушить на час'}
+              title={isMuted ? 'Включить алерты' : 'Заглушить алерты на час'}
+            >
+              {isMuted ? <BellOff className="size-4 text-amber-500" /> : <Bell className="size-4" />}
+            </Button>
             <Button variant="ghost" size="icon" onClick={() => void remove()} disabled={busy} aria-label="Удалить сервер">
               <Trash2 className="size-4" />
             </Button>
@@ -120,11 +153,25 @@ export function ServerCard({
         {system && (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
+              {typeof system.cpuUsedPct === 'number' && (
+                <ResourceBar
+                  label="CPU"
+                  pct={system.cpuUsedPct}
+                  sub={system.cpuCount ? `${system.cpuCount} ядер` : undefined}
+                />
+              )}
               <ResourceBar
                 label="Память"
                 pct={system.memUsedPct}
                 sub={`${fmtBytes(system.memUsedBytes)} / ${fmtBytes(system.memTotalBytes)}`}
               />
+              {typeof system.swapTotalBytes === 'number' && system.swapTotalBytes > 0 && (
+                <ResourceBar
+                  label="Swap"
+                  pct={system.swapUsedPct ?? null}
+                  sub={`${fmtBytes(system.swapUsedBytes)} / ${fmtBytes(system.swapTotalBytes)}`}
+                />
+              )}
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Load average</span>
                 <span className="font-medium tabular-nums">
@@ -137,6 +184,15 @@ export function ServerCard({
                   {system.uptimeSeconds === null ? '—' : fmtDuration(system.uptimeSeconds * 1000)}
                 </span>
               </div>
+              {(system.netRxBytes != null || system.processCount != null || system.openFds != null) && (
+                <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                  {system.netRxBytes != null && (
+                    <span>Сеть ↓{fmtBytes(system.netRxBytes)} ↑{fmtBytes(system.netTxBytes)}</span>
+                  )}
+                  {system.processCount != null && <span>процессов: {system.processCount}</span>}
+                  {system.openFds != null && <span>FD: {system.openFds}</span>}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               {system.disks.length > 0 ? (
@@ -150,11 +206,62 @@ export function ServerCard({
           </div>
         )}
 
+        {/* база данных */}
+        {latest?.dbHealth?.reachable && (
+          <div className="rounded-md border border-border/60 p-3">
+            <h4 className="mb-2 text-sm font-medium">
+              База данных{latest.dbHealth.version ? ` · ${latest.dbHealth.version}` : ''}
+            </h4>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+              <div>
+                <div className="text-muted-foreground">Соединения</div>
+                <div className="font-medium tabular-nums">
+                  {latest.dbHealth.connections ?? '—'}
+                  {latest.dbHealth.maxConnections ? ` / ${latest.dbHealth.maxConnections}` : ''}
+                </div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Размер</div>
+                <div className="font-medium tabular-nums">{fmtBytes(latest.dbHealth.sizeBytes)}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Аптайм</div>
+                <div className="font-medium tabular-nums">
+                  {latest.dbHealth.uptimeSeconds ? fmtDuration(latest.dbHealth.uptimeSeconds * 1000) : '—'}
+                </div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Slow queries</div>
+                <div className="font-medium tabular-nums">{latest.dbHealth.slowQueries ?? '—'}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {latest?.errors && latest.errors.length > 0 && (
           <p className="text-xs text-amber-600 dark:text-amber-400">
             Ошибки сбора: {latest.errors.join('; ')}
           </p>
         )}
+
+        {/* тренды */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowTrends((v) => !v)}
+            className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            <ChevronDown
+              className={showTrends ? 'size-4 rotate-180 transition-transform' : 'size-4 transition-transform'}
+            />
+            Тренды
+          </button>
+          {showTrends && (
+            <div className="mt-2">
+              <ServerTrends projectId={projectId} serverId={server.id} />
+            </div>
+          )}
+        </div>
 
         {/* логи */}
         <div>

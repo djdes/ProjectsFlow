@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import { KANBAN_COLORS, VISIBLE_KANBAN_STATUSES } from '../../domain/kanban/KanbanSettings.js';
+import { NOTIF_EVENT_TYPES, type NotifEventType } from '../../domain/notifications/NotificationPrefs.js';
+
+const NOTIF_EVENT_TYPES_TUPLE = NOTIF_EVENT_TYPES as unknown as [NotifEventType, ...NotifEventType[]];
 
 export const createProjectSchema = z.object({
   name: z.string().trim().min(1, 'Введите название').max(80),
@@ -54,20 +57,10 @@ export const reorderFavoritesSchema = z.object({
   orderedIds: z.array(z.string().min(1)).min(1),
 });
 
-// Пер-участниковые настройки оповещений: карта тип→{team,mcp}. Ключи валидируем как
-// известные типы; неизвестные отсекаем (passthrough off).
-const NOTIF_EVENT_TYPES = [
-  'task_created',
-  'task_done',
-  'status_changed',
-  'comment_created',
-  'member_changed',
-  'commit_linked',
-  'kb_updated',
-] as const;
-
+// Пер-участниковые настройки оповещений: карта тип→{team,mcp}. Источник типов —
+// domain NOTIF_EVENT_TYPES (включая 'server_alert'); неизвестные ключи отсекаем.
 export const notificationPrefsSchema = z.record(
-  z.enum(NOTIF_EVENT_TYPES),
+  z.enum(NOTIF_EVENT_TYPES_TUPLE),
   z.object({ team: z.boolean(), mcp: z.boolean() }),
 );
 

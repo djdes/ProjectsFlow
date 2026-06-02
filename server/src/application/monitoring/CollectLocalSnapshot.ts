@@ -1,6 +1,7 @@
 import type { ServerRepository } from './ServerRepository.js';
 import type { SnapshotRepository } from './SnapshotRepository.js';
 import type { LocalServerCollector } from './LocalServerCollector.js';
+import type { DbHealthProbe } from './DbHealthProbe.js';
 import type { ProjectServer } from '../../domain/monitoring/ProjectServer.js';
 import {
   computeServerStatus,
@@ -19,6 +20,8 @@ type Deps = {
   readonly now: () => Date;
   // TTL короткого кэша для on-demand чтения (анти-DoS на shell-out). По умолчанию 20с.
   readonly cacheTtlMs?: number;
+  // Зонд метрик БД (MariaDB) — заполняет dbHealth для local-сервера. Optional.
+  readonly dbHealthProbe?: DbHealthProbe;
   readonly onSnapshotStored?: SnapshotStoredHook;
 };
 
@@ -42,6 +45,9 @@ export class CollectLocalSnapshot {
     const status = computeServerStatus(result.reachable, metrics);
     const collectedAt = this.deps.now();
     const prev = await this.deps.snapshots.getLatestBefore(server.id, collectedAt);
+    const dbHealth = this.deps.dbHealthProbe
+      ? await this.deps.dbHealthProbe.probe().catch(() => null)
+      : null;
 
     const snapshot = await this.deps.snapshots.insert({
       id: this.deps.idGen(),
@@ -54,7 +60,7 @@ export class CollectLocalSnapshot {
       metrics,
       // Серверная редакция секретов — defense in depth (collector тоже мог редактировать).
       logs: redactLogTails(result.logs),
-      dbHealth: null,
+      dbHealth,
       errors: result.errors.length > 0 ? result.errors : null,
       pushedByUserId: null,
       agentTokenId: null,

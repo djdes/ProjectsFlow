@@ -23,6 +23,8 @@ export type ProjectServer = {
   readonly collectIntervalSeconds: number;
   readonly lastSnapshotAt: Date | null;
   readonly lastStatus: ServerHealthStatus | null;
+  // «Тихий час»: до этого момента алерты записываются, но уведомления не шлются. NULL = активен.
+  readonly mutedUntil: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };

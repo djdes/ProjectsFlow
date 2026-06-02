@@ -118,6 +118,22 @@ export class ManageServers {
     return this.deps.collectLocal.collect(server, { force: true });
   }
 
+  // «Тихий час»: заглушить уведомления по серверу на N минут (null = снять заглушку).
+  async setMute(
+    projectId: string,
+    serverId: string,
+    userId: string,
+    minutes: number | null,
+  ): Promise<ProjectServer> {
+    await requireProjectAccess(this.deps, projectId, userId, 'manage_monitoring');
+    await this.ensureServer(projectId, serverId);
+    const mutedUntil =
+      minutes && minutes > 0 ? new Date(Date.now() + minutes * 60_000) : null;
+    const updated = await this.deps.servers.update(serverId, { mutedUntil });
+    if (!updated) throw new ServerNotFoundError();
+    return updated;
+  }
+
   private async ensureServer(projectId: string, serverId: string): Promise<ProjectServer> {
     const server = await this.deps.servers.getById(serverId);
     if (!server || server.projectId !== projectId) throw new ServerNotFoundError();

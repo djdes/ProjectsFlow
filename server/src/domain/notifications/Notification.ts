@@ -89,7 +89,7 @@ export type TaskAssignedToProjectPayload = {
   readonly actorDisplayName: string;
 };
 
-// Алерт мониторинга сервера. Прилетает владельцу проекта при firing/resolved.
+// Алерт мониторинга сервера. Прилетает участникам проекта при firing/resolved.
 // Клиент ведёт на вкладку «Мониторинг» проекта.
 export type ServerAlertPayload = {
   readonly type: 'server_alert';

@@ -9,7 +9,8 @@ export type NotifEventType =
   | 'comment_created'
   | 'member_changed'
   | 'commit_linked'
-  | 'kb_updated';
+  | 'kb_updated'
+  | 'server_alert';
 
 export const NOTIF_EVENT_TYPES: readonly NotifEventType[] = [
   'task_created',
@@ -19,6 +20,7 @@ export const NOTIF_EVENT_TYPES: readonly NotifEventType[] = [
   'member_changed',
   'commit_linked',
   'kb_updated',
+  'server_alert',
 ];
 
 export type NotifSource = 'team' | 'mcp';

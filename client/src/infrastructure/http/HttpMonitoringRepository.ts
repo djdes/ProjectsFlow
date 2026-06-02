@@ -9,12 +9,15 @@ import type {
   ServerSnapshot,
   TrendPoint,
 } from '@/domain/monitoring/Snapshot';
-import type { ServerAlert } from '@/domain/monitoring/Alert';
+import type { AlertRule, ServerAlert } from '@/domain/monitoring/Alert';
 import type { HistoryOptions, MonitoringRepository } from '@/application/monitoring/MonitoringRepository';
 import { httpClient } from './httpClient';
 
 // Сервер отдаёт даты как ISO-строки → маппим в Date на границе адаптера.
-type RawServer = Omit<MonitoringServer, 'lastSnapshotAt'> & { lastSnapshotAt: string | null };
+type RawServer = Omit<MonitoringServer, 'lastSnapshotAt' | 'mutedUntil'> & {
+  lastSnapshotAt: string | null;
+  mutedUntil: string | null;
+};
 type RawSnapshot = Omit<ServerSnapshot, 'collectedAt'> & { collectedAt: string };
 type RawAlert = Omit<ServerAlert, 'firstSeenAt' | 'lastSeenAt' | 'resolvedAt'> & {
   firstSeenAt: string;
@@ -24,7 +27,11 @@ type RawAlert = Omit<ServerAlert, 'firstSeenAt' | 'lastSeenAt' | 'resolvedAt'> &
 type RawTrend = Omit<TrendPoint, 'collectedAt'> & { collectedAt: string };
 
 function mapServer(r: RawServer): MonitoringServer {
-  return { ...r, lastSnapshotAt: r.lastSnapshotAt ? new Date(r.lastSnapshotAt) : null };
+  return {
+    ...r,
+    lastSnapshotAt: r.lastSnapshotAt ? new Date(r.lastSnapshotAt) : null,
+    mutedUntil: r.mutedUntil ? new Date(r.mutedUntil) : null,
+  };
 }
 function mapSnapshot(r: RawSnapshot | null): ServerSnapshot | null {
   return r ? { ...r, collectedAt: new Date(r.collectedAt) } : null;
@@ -112,5 +119,28 @@ export class HttpMonitoringRepository implements MonitoringRepository {
 
   async deleteServer(projectId: string, serverId: string): Promise<void> {
     await httpClient.delete<void>(`/projects/${projectId}/monitoring/servers/${serverId}`);
+  }
+
+  async muteServer(projectId: string, serverId: string, minutes: number | null): Promise<MonitoringServer> {
+    const { server } = await httpClient.post<{ server: RawServer }>(
+      `/projects/${projectId}/monitoring/servers/${serverId}/mute`,
+      { minutes },
+    );
+    return mapServer(server);
+  }
+
+  async getAlertRules(projectId: string): Promise<AlertRule[]> {
+    const { rules } = await httpClient.get<{ rules: AlertRule[] }>(
+      `/projects/${projectId}/monitoring/alert-rules`,
+    );
+    return rules;
+  }
+
+  async saveAlertRules(projectId: string, rules: AlertRule[]): Promise<AlertRule[]> {
+    const res = await httpClient.put<{ rules: AlertRule[] }>(
+      `/projects/${projectId}/monitoring/alert-rules`,
+      { rules },
+    );
+    return res.rules;
   }
 }

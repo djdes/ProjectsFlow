@@ -18,7 +18,10 @@ export type NewServerInput = {
   readonly collectIntervalSeconds: number;
 };
 
-export type UpdateServerPatch = Partial<Omit<NewServerInput, 'id' | 'projectId'>>;
+export type UpdateServerPatch = Partial<Omit<NewServerInput, 'id' | 'projectId'>> & {
+  // mutedUntil не входит в NewServerInput (не задаётся на create) — только через update/mute.
+  readonly mutedUntil?: Date | null;
+};
 
 export interface ServerRepository {
   listByProject(projectId: string): Promise<ProjectServer[]>;

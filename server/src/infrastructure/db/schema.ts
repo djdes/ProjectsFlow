@@ -901,6 +901,7 @@ export const projectServers = mysqlTable(
     collectIntervalSeconds: int('collect_interval_seconds').notNull().default(300),
     lastSnapshotAt: timestamp('last_snapshot_at'),
     lastStatus: varchar('last_status', { length: 16 }),
+    mutedUntil: timestamp('muted_until'),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },

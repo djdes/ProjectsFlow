@@ -24,6 +24,25 @@ export const historyQuerySchema = z.object({
 
 export const logKindSchema = z.enum(['pm2_out', 'pm2_err', 'nginx_access', 'nginx_error']);
 
+// Пороги алертов (PUT /alert-rules).
+export const alertRulesSchema = z.object({
+  rules: z
+    .array(
+      z.object({
+        ruleKind: z.enum(['process_down', 'disk_usage', 'restart_spike', 'snapshot_stale']),
+        enabled: z.boolean(),
+        threshold: z.number().nullable(),
+        severity: z.enum(['info', 'warning', 'critical']),
+      }),
+    )
+    .max(20),
+});
+
+// «Тихий час» (POST /servers/:id/mute). minutes=null снимает заглушку. ≤ 7 дней.
+export const muteSchema = z.object({
+  minutes: z.number().int().min(0).max(10080).nullable(),
+});
+
 // query-маппинг → ключ LogTails.
 export const LOG_KIND_TO_KEY = {
   pm2_out: 'pm2Out',
@@ -61,9 +80,17 @@ const systemSchema = z
     load5: z.number().nullable(),
     load15: z.number().nullable(),
     cpuCount: z.number().int().nullable(),
+    cpuUsedPct: z.number().nullable().optional(),
     memTotalBytes: z.number().nullable(),
     memUsedBytes: z.number().nullable(),
     memUsedPct: z.number().nullable(),
+    swapTotalBytes: z.number().nullable().optional(),
+    swapUsedBytes: z.number().nullable().optional(),
+    swapUsedPct: z.number().nullable().optional(),
+    netRxBytes: z.number().nullable().optional(),
+    netTxBytes: z.number().nullable().optional(),
+    processCount: z.number().nullable().optional(),
+    openFds: z.number().nullable().optional(),
     uptimeSeconds: z.number().nullable(),
     disks: z.array(diskSchema).max(50),
   })
@@ -106,6 +133,10 @@ export const ingestSnapshotSchema = z
         reachable: z.boolean(),
         connections: z.number().nullable(),
         sizeBytes: z.number().nullable(),
+        maxConnections: z.number().nullable().optional(),
+        uptimeSeconds: z.number().nullable().optional(),
+        slowQueries: z.number().nullable().optional(),
+        version: z.string().max(100).nullable().optional(),
       })
       .strict()
       .nullable()

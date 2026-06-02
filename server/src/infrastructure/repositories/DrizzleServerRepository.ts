@@ -28,6 +28,7 @@ function toServer(r: ProjectServerRow): ProjectServer {
     collectIntervalSeconds: r.collectIntervalSeconds,
     lastSnapshotAt: r.lastSnapshotAt ?? null,
     lastStatus: (r.lastStatus as ServerHealthStatus | null) ?? null,
+    mutedUntil: r.mutedUntil ?? null,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };
@@ -138,6 +139,7 @@ export class DrizzleServerRepository implements ServerRepository {
     if (patch.collectIntervalSeconds !== undefined) {
       set['collectIntervalSeconds'] = patch.collectIntervalSeconds;
     }
+    if (patch.mutedUntil !== undefined) set['mutedUntil'] = patch.mutedUntil;
     if (Object.keys(set).length > 0) {
       await this.db.update(projectServers).set(set).where(eq(projectServers.id, serverId));
     }

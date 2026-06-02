@@ -19,6 +19,7 @@ export type MonitoringServer = {
   readonly collectIntervalSeconds: number;
   readonly lastSnapshotAt: Date | null;
   readonly lastStatus: ServerHealthStatus | null;
+  readonly mutedUntil: Date | null;
 };
 
 export type ServerWithLatest = {

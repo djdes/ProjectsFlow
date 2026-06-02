@@ -23,11 +23,29 @@ export type SystemSnapshot = {
   readonly load5: number | null;
   readonly load15: number | null;
   readonly cpuCount: number | null;
+  readonly cpuUsedPct?: number | null;
   readonly memTotalBytes: number | null;
   readonly memUsedBytes: number | null;
   readonly memUsedPct: number | null;
+  readonly swapTotalBytes?: number | null;
+  readonly swapUsedBytes?: number | null;
+  readonly swapUsedPct?: number | null;
+  readonly netRxBytes?: number | null;
+  readonly netTxBytes?: number | null;
+  readonly processCount?: number | null;
+  readonly openFds?: number | null;
   readonly uptimeSeconds: number | null;
   readonly disks: ReadonlyArray<DiskUsage>;
+};
+
+export type DbHealth = {
+  readonly reachable: boolean;
+  readonly connections: number | null;
+  readonly sizeBytes: number | null;
+  readonly maxConnections?: number | null;
+  readonly uptimeSeconds?: number | null;
+  readonly slowQueries?: number | null;
+  readonly version?: string | null;
 };
 
 export type LogTail = {
@@ -51,6 +69,7 @@ export type ServerSnapshot = {
   readonly status: ServerHealthStatus;
   readonly reachable: boolean;
   readonly metrics: SnapshotMetrics | null;
+  readonly dbHealth: DbHealth | null;
   readonly errors: ReadonlyArray<string> | null;
 };
 

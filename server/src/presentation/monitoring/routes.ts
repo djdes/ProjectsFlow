@@ -2,10 +2,13 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import type { ListServers } from '../../application/monitoring/ListServers.js';
 import type { ManageServers } from '../../application/monitoring/ManageServers.js';
 import type { MonitoringQueries } from '../../application/monitoring/MonitoringQueries.js';
+import type { ManageAlertRules } from '../../application/monitoring/ManageAlertRules.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
+  alertRulesSchema,
   historyQuerySchema,
   logKindSchema,
+  muteSchema,
   serverConfigSchema,
   LOG_KIND_TO_KEY,
 } from './schemas.js';
@@ -14,10 +17,12 @@ type Deps = {
   readonly listServers: ListServers;
   readonly manageServers: ManageServers;
   readonly queries: MonitoringQueries;
+  readonly manageAlertRules: ManageAlertRules;
 };
 
 // Session-роутер мониторинга, монтируется на /api/projects/:projectId/monitoring.
-// Все эндпоинты owner-only (внутри use-case'ов через view_monitoring/manage_monitoring).
+// Чтение — view_monitoring (любой участник), мутации — manage_monitoring (editor+);
+// гейты внутри use-case'ов.
 export function monitoringRouter(deps: Deps): Router {
   const router = Router({ mergeParams: true });
   router.use(requireAuth);
@@ -141,6 +146,42 @@ export function monitoringRouter(deps: Deps): Router {
       const activeOnly = req.query['active'] === '1' || req.query['active'] === 'true';
       const alerts = await deps.queries.listAlerts(pid(req), req.user!.id, activeOnly);
       res.json({ alerts });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Пороги алертов (per-project). GET — view, PUT — manage.
+  router.get('/alert-rules', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const rules = await deps.manageAlertRules.get(pid(req), req.user!.id);
+      res.json({ rules });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.put('/alert-rules', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = alertRulesSchema.parse(req.body);
+      const rules = await deps.manageAlertRules.save(pid(req), req.user!.id, [...body.rules]);
+      res.json({ rules });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // «Тихий час» — заглушить уведомления по серверу на N минут (manage).
+  router.post('/servers/:serverId/mute', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = muteSchema.parse(req.body);
+      const server = await deps.manageServers.setMute(
+        pid(req),
+        req.params['serverId'] as string,
+        req.user!.id,
+        body.minutes,
+      );
+      res.json({ server });
     } catch (e) {
       next(e);
     }

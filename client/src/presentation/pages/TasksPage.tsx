@@ -15,8 +15,10 @@ export function TasksPage(): React.ReactElement {
   // Сумму больше не показываем (раньше был чип в шапке), сам блок Доход/Расход/Прибыль
   // живёт на странице /finance.
   const [financeVisible, setFinanceVisible] = useState(false);
-  // Гейт кнопки «Мониторинг»: owner-only — пробуем list, при 403 кнопку не показываем.
+  // Гейт кнопки «Мониторинг»: видна участникам — пробуем list, при 403 не показываем.
   const [monitoringVisible, setMonitoringVisible] = useState(false);
+  // Число активных алертов — для бейджа на кнопке.
+  const [monitoringAlerts, setMonitoringAlerts] = useState(0);
   const [automationOpen, setAutomationOpen] = useState(false);
 
   useEffect(() => {
@@ -29,7 +31,11 @@ export function TasksPage(): React.ReactElement {
     monitoringRepository
       .listServers(projectId)
       .then(() => { if (!cancelled) setMonitoringVisible(true); })
-      .catch(() => { /* не owner — кнопку не показываем */ });
+      .catch(() => { /* нет доступа — кнопку не показываем */ });
+    monitoringRepository
+      .listAlerts(projectId, true)
+      .then((a) => { if (!cancelled) setMonitoringAlerts(a.length); })
+      .catch(() => { /* нет доступа — без бейджа */ });
     return () => { cancelled = true; };
   }, [projectId, projectFinanceRepository, monitoringRepository]);
 
@@ -91,6 +97,11 @@ export function TasksPage(): React.ReactElement {
               <Link to={`/projects/${data.id}/monitoring`}>
                 <Activity className="size-4" />
                 Мониторинг
+                {monitoringAlerts > 0 && (
+                  <span className="ml-1 inline-flex min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                    {monitoringAlerts}
+                  </span>
+                )}
               </Link>
             </Button>
           )}

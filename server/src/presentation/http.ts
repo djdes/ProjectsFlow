@@ -178,6 +178,7 @@ import { monitoringRouter } from './monitoring/routes.js';
 import type { ListServers } from '../application/monitoring/ListServers.js';
 import type { ManageServers } from '../application/monitoring/ManageServers.js';
 import type { MonitoringQueries } from '../application/monitoring/MonitoringQueries.js';
+import type { ManageAlertRules } from '../application/monitoring/ManageAlertRules.js';
 import type { IngestAgentSnapshot } from '../application/monitoring/IngestAgentSnapshot.js';
 import type { ListMonitoredServers } from '../application/monitoring/ListMonitoredServers.js';
 import './types.js'; // глобальное расширение Express.Request
@@ -295,6 +296,7 @@ type AppDeps = {
     readonly listServers: ListServers;
     readonly manageServers: ManageServers;
     readonly queries: MonitoringQueries;
+    readonly manageAlertRules: ManageAlertRules;
   };
   readonly kb: {
     readonly initKbRepo: InitKbRepo;
