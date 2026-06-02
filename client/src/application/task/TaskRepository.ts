@@ -34,6 +34,9 @@ export type MoveTaskInput = {
   readonly targetStatus: TaskStatus;
   readonly beforeTaskId: string | null;
   readonly afterTaskId: string | null;
+  // Снятие галочки «выполнено»: вернуть прежний статус (status_before_done) — сервер
+  // сам резолвит цель, targetStatus игнорируется. См. db/055, server MoveTask.
+  readonly restore?: boolean;
 };
 
 export type SyncCommitsResult = {

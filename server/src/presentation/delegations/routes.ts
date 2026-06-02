@@ -3,15 +3,18 @@ import type { AcceptTaskDelegation } from '../../application/task/AcceptTaskDele
 import type { DeclineTaskDelegation } from '../../application/task/DeclineTaskDelegation.js';
 import type { WithdrawTaskDelegation } from '../../application/task/WithdrawTaskDelegation.js';
 import type { ListMyPendingDelegations } from '../../application/task/ListMyPendingDelegations.js';
+import type { ListTasksAssignedToMe } from '../../application/task/ListTasksAssignedToMe.js';
 import type { TaskDelegation } from '../../domain/task/TaskDelegation.js';
 import type { DelegationWithTaskInfo } from '../../application/task/TaskDelegationRepository.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { toDto as taskToDto } from '../tasks/routes.js';
 
 type Deps = {
   readonly accept: AcceptTaskDelegation;
   readonly decline: DeclineTaskDelegation;
   readonly withdraw: WithdrawTaskDelegation;
   readonly listPending: ListMyPendingDelegations;
+  readonly listAssignedToMe: ListTasksAssignedToMe;
 };
 
 type DelegationDto = {
@@ -53,6 +56,32 @@ export function delegationsRouter(deps: Deps): Router {
     try {
       const items = await deps.listPending.execute(req.user!.id);
       res.json({ delegations: items.map(pendingToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // GET /api/delegations/assigned-to-me — все активные (pending|accepted) делегации НА
+  // caller'а по всем проектам, для блока «Поручено мне». Группировку делает клиент.
+  r.get('/assigned-to-me', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const items = await deps.listAssignedToMe.execute(req.user!.id);
+      res.json({
+        items: items.map((v) => ({
+          // counts вмерживаем в task (toDto подхватит их как у TaskWithCounts) —
+          // клиент рисует строку тем же TaskListRow.
+          task: taskToDto({
+            ...v.task,
+            commitCount: v.commitCount,
+            attachmentCount: v.attachmentCount,
+            commentCount: v.commentCount,
+          }),
+          projectId: v.projectId,
+          projectName: v.projectName,
+          isInbox: v.isInbox,
+          canModify: v.canModify,
+        })),
+      });
     } catch (e) {
       next(e);
     }

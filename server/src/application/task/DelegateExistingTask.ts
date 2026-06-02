@@ -1,15 +1,17 @@
 import {
   AlreadyDelegatedError,
   DelegateNotInSharedMembersError,
-  DelegationOnNonInboxError,
+  DelegateNotProjectMemberError,
   NotCreatorError,
   SelfDelegationError,
   TaskNotFoundError,
 } from '../../domain/task/errors.js';
+import { can } from '../../domain/project/permissions.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TaskDelegation } from '../../domain/task/TaskDelegation.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
+import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
@@ -46,12 +48,25 @@ export class DelegateExistingTask {
     if (!task) throw new TaskNotFoundError(taskId);
 
     const project = await this.deps.projects.getById(task.projectId);
-    if (!project?.isInbox) throw new DelegationOnNonInboxError();
-    if (project.ownerId !== creatorUserId) throw new NotCreatorError();
+    if (!project) throw new TaskNotFoundError(taskId);
 
-    const shared = await this.deps.members.listSharedUsers(creatorUserId);
-    if (!shared.find((u) => u.id === delegateUserId)) {
-      throw new DelegateNotInSharedMembersError();
+    if (project.isInbox) {
+      // Inbox: делегировать может только владелец инбокса, делегату — любому из общих
+      // проектов (он будет видеть задачу как accepted-delegate, не будучи членом инбокса).
+      if (project.ownerId !== creatorUserId) throw new NotCreatorError();
+      const shared = await this.deps.members.listSharedUsers(creatorUserId);
+      if (!shared.find((u) => u.id === delegateUserId)) {
+        throw new DelegateNotInSharedMembersError();
+      }
+    } else {
+      // Именованный проект: делегатор — с правом delegate_task (editor+); делегат —
+      // участник-редактор этого проекта, иначе примет, но получит 403 на move/выполнение
+      // (requireTaskModifyAccess non-inbox = requireProjectAccess('move_task')).
+      await requireProjectAccess(this.deps, project.id, creatorUserId, 'delegate_task');
+      const membership = await this.deps.members.findForProject(project.id, delegateUserId);
+      if (!membership || !can(membership.role, 'move_task')) {
+        throw new DelegateNotProjectMemberError();
+      }
     }
 
     const active = await this.deps.delegations.findActiveForTask(taskId);
@@ -61,6 +76,7 @@ export class DelegateExistingTask {
       id: this.deps.idGen(),
       taskId,
       delegateUserId,
+      delegatorUserId: creatorUserId,
     });
 
     void this.notifyDelegated(created, task, creatorUserId).catch((err: unknown) => {

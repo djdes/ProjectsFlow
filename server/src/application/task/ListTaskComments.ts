@@ -3,7 +3,8 @@ import type { TaskComment } from '../../domain/task/TaskComment.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
-import { requireProjectAccess } from '../project/projectAccess.js';
+import { requireTaskReadAccess } from './taskAuthorization.js';
+import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
@@ -19,6 +20,7 @@ type Deps = {
   readonly tasks: TaskRepository;
   readonly comments: TaskCommentRepository;
   readonly attachments: TaskAttachmentRepository;
+  readonly delegations: TaskDelegationRepository;
 };
 
 export class ListTaskComments {
@@ -29,7 +31,7 @@ export class ListTaskComments {
     ownerUserId: string,
     taskId: string,
   ): Promise<TaskCommentWithAttachments[]> {
-    await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project');
+    await requireTaskReadAccess(this.deps, projectId, taskId, ownerUserId);
     const task = await this.deps.tasks.getById(taskId);
     if (!task || task.projectId !== projectId) throw new TaskNotFoundError(taskId);
     const comments = await this.deps.comments.listByTask(taskId);

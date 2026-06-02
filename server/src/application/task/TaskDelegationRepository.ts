@@ -2,17 +2,34 @@ import type {
   TaskDelegation,
   TaskDelegationStatus,
 } from '../../domain/task/TaskDelegation.js';
+import type { ProjectRole } from '../../domain/project/ProjectMembership.js';
 
 export type CreateDelegationInput = {
   readonly id: string;
   readonly taskId: string;
   readonly delegateUserId: string;
+  // Кто делегирует. Required (compile-time): новые строки всегда знают делегатора.
+  readonly delegatorUserId: string;
 };
 
 // Pending-делегация для блока «делегировано мне» сверху inbox. Включает превью
 // описания задачи (joined) чтобы UI не делал второй fetch для рендера списка.
 export type DelegationWithTaskInfo = TaskDelegation & {
   readonly taskExcerpt: string;
+};
+
+// Строка для блока «Поручено мне»: id задачи, её активная делегация на меня, контекст
+// проекта (для группировки) + моя роль в этом проекте (для расчёта canModify в use-case).
+// Полный Task use-case достаёт батчем через TaskRepository.listByIds (DRY — единый toTask).
+// delegateRole = null для inbox-проекта (я не member) ИЛИ если меня убрали из именованного
+// проекта — такие строки ListTasksAssignedToMe отбрасывает.
+export type AssignedDelegationRow = {
+  readonly taskId: string;
+  readonly delegation: TaskDelegation;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly isInbox: boolean;
+  readonly delegateRole: ProjectRole | null;
 };
 
 export interface TaskDelegationRepository {
@@ -27,6 +44,10 @@ export interface TaskDelegationRepository {
   setStatus(id: string, status: TaskDelegationStatus): Promise<TaskDelegation | null>;
   // Список pending для конкретного делегата — для верхнего блока в inbox.
   listPendingForDelegate(userId: string): Promise<DelegationWithTaskInfo[]>;
+  // Все активные (pending|accepted) делегации НА этого пользователя, по всем проектам —
+  // для блока «Поручено мне». Авторизация встроена (фильтр delegate_user_id = userId);
+  // taskId извне НЕ принимается (защита от IDOR).
+  listAssignedTo(userId: string): Promise<AssignedDelegationRow[]>;
   // Активные делегации для набора taskId — для list-tasks join'а.
   listActiveForTasks(
     taskIds: readonly string[],

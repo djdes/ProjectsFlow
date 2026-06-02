@@ -356,6 +356,9 @@ export const tasks = mysqlTable(
     ])
       .notNull()
       .default('todo'),
+    // Статус задачи до перехода в 'done' — для восстановления прежней колонки при снятии
+    // галочки «выполнено». VARCHAR(24) (не enum) — forward-compat. NULL = нет снапшота. db/055.
+    statusBeforeDone: varchar('status_before_done', { length: 24 }),
     // Float-position для дешёвой вставки между двумя соседями — без массового UPDATE.
     position: double('position').notNull().default(0),
     // Режим работы Ralph по задаче. См. db/035 и domain RalphMode.
@@ -661,6 +664,9 @@ export const taskDelegations = mysqlTable(
     id: id(),
     taskId: char('task_id', { length: 36 }).notNull(),
     delegateUserId: char('delegate_user_id', { length: 36 }).notNull(),
+    // Кто делегировал. NULL только у legacy/осиротевших строк (db/054 бэкфилл +
+    // db/056 FK ON DELETE SET NULL). НЕ .notNull() — иначе ломаются чтения legacy-NULL.
+    delegatorUserId: char('delegator_user_id', { length: 36 }),
     status: mysqlEnum('status', [
       'pending',
       'accepted',
@@ -676,6 +682,7 @@ export const taskDelegations = mysqlTable(
   (t) => [
     index('idx_task_status').on(t.taskId, t.status),
     index('idx_delegate_status').on(t.delegateUserId, t.status),
+    index('idx_delegator_status').on(t.delegatorUserId, t.status),
   ],
 );
 

@@ -2,7 +2,8 @@ import { TaskAttachmentNotFoundError } from '../../domain/task/errors.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
-import { requireProjectAccess } from '../project/projectAccess.js';
+import { requireTaskReadAccess } from './taskAuthorization.js';
+import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { AttachmentStorage, ReadResult } from './AttachmentStorage.js';
@@ -13,6 +14,7 @@ type Deps = {
   readonly tasks: TaskRepository;
   readonly attachments: TaskAttachmentRepository;
   readonly storage: AttachmentStorage;
+  readonly delegations: TaskDelegationRepository;
 };
 
 export type GetTaskAttachmentResult = {
@@ -31,7 +33,7 @@ export class GetTaskAttachment {
     if (!att) throw new TaskAttachmentNotFoundError(attachmentId);
     const task = await this.deps.tasks.getById(att.taskId);
     if (!task) throw new TaskAttachmentNotFoundError(attachmentId);
-    await requireProjectAccess(this.deps, task.projectId, ownerUserId, 'read_project');
+    await requireTaskReadAccess(this.deps, task.projectId, att.taskId, ownerUserId);
     const data = await this.deps.storage.read(att.storageKey);
     if (!data) throw new TaskAttachmentNotFoundError(attachmentId);
     return { attachment: att, data };

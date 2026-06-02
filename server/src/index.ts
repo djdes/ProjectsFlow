@@ -99,6 +99,7 @@ import { AcceptTaskDelegation } from './application/task/AcceptTaskDelegation.js
 import { DeclineTaskDelegation } from './application/task/DeclineTaskDelegation.js';
 import { WithdrawTaskDelegation } from './application/task/WithdrawTaskDelegation.js';
 import { ListMyPendingDelegations } from './application/task/ListMyPendingDelegations.js';
+import { ListTasksAssignedToMe } from './application/task/ListTasksAssignedToMe.js';
 import { AssignInboxTaskToProject } from './application/task/AssignInboxTaskToProject.js';
 import { DelegateExistingTask } from './application/task/DelegateExistingTask.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
@@ -1116,6 +1117,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
+      delegations: taskDelegationRepo,
     }),
     syncTaskCommits: new SyncTaskCommits({
       projects: projectRepo,
@@ -1150,6 +1152,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
+      delegations: taskDelegationRepo,
     }),
     getAttachment: new GetTaskAttachment({
       projects: projectRepo,
@@ -1157,6 +1160,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
+      delegations: taskDelegationRepo,
     }),
     listComments: new ListTaskComments({
       projects: projectRepo,
@@ -1164,6 +1168,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       comments: taskCommentRepo,
       attachments: taskAttachmentRepo,
+      delegations: taskDelegationRepo,
     }),
     createComment: createTaskCommentUseCase,
     updateComment: new UpdateTaskComment({
@@ -1206,6 +1211,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       comments: taskCommentRepo,
       log: commentNotificationLogRepo,
+      delegations: taskDelegationRepo,
     }),
     projectRepo,
   },
@@ -1227,6 +1233,13 @@ const { app, devProxyUpgrade } = createApp({
     }),
     withdraw: new WithdrawTaskDelegation({ delegations: taskDelegationRepo }),
     listPending: new ListMyPendingDelegations(taskDelegationRepo),
+    listAssignedToMe: new ListTasksAssignedToMe({
+      delegations: taskDelegationRepo,
+      tasks: taskRepo,
+      taskCommits: taskCommitRepo,
+      attachments: taskAttachmentRepo,
+      comments: taskCommentRepo,
+    }),
     assignToProject: new AssignInboxTaskToProject({
       tasks: taskRepo,
       projects: projectRepo,
@@ -1442,6 +1455,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
+      delegations: taskDelegationRepo,
     }),
     syncTaskCommits: new SyncTaskCommits({
       projects: projectRepo,

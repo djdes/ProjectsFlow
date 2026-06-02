@@ -130,7 +130,7 @@ type TaskDto = Omit<
   delegation: TaskDelegationDto | null;
 };
 
-function toDto(t: Task | TaskWithCounts): TaskDto {
+export function toDto(t: Task | TaskWithCounts): TaskDto {
   // Извлекаем delegation отдельно: дату надо отдельно сериализовать; rest нельзя
   // спрэдить как есть (там Date-объекты).
   const { delegation: _delegationOriginal, ...rest } = t;
@@ -327,6 +327,7 @@ export function tasksRouter(deps: Deps): Router {
         targetStatus: body.targetStatus,
         beforeTaskId: body.beforeTaskId,
         afterTaskId: body.afterTaskId,
+        restore: body.restore,
       });
       deps.notifyTaskChanged(projectId);
       if (before && before.status !== task.status) {

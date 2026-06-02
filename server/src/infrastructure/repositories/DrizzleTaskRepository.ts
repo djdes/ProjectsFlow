@@ -1,7 +1,13 @@
-import { and, asc, eq, max, min, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, max, min, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { projects, taskDelegations, tasks, users, type TaskRow } from '../db/schema.js';
-import type { RalphMode, Task, TaskPriority, TaskStatus } from '../../domain/task/Task.js';
+import {
+  TASK_STATUSES,
+  type RalphMode,
+  type Task,
+  type TaskPriority,
+  type TaskStatus,
+} from '../../domain/task/Task.js';
 import type {
   CreateTaskInput,
   TaskRepository,
@@ -13,12 +19,19 @@ type TaskRowJoined = TaskRow & {
   cancelByDisplayName: string | null;
 };
 
+// status_before_done — VARCHAR в БД, поэтому валидируем против enum (а не голый cast):
+// невалидное/legacy значение читаем как null (фолбэк восстановления — 'todo').
+function asTaskStatus(v: string | null | undefined): TaskStatus | null {
+  return v && (TASK_STATUSES as readonly string[]).includes(v) ? (v as TaskStatus) : null;
+}
+
 function toTask(row: TaskRowJoined): Task {
   return {
     id: row.id,
     projectId: row.projectId,
     description: row.description ?? null,
     status: row.status as TaskStatus,
+    statusBeforeDone: asTaskStatus(row.statusBeforeDone),
     position: row.position,
     // VARCHAR в БД, cast в domain enum. Дефолт 'normal' — соответствует SQL DEFAULT,
     // защита от unexpected значений (если миграция/ручной UPDATE проставит чушь).
@@ -52,6 +65,7 @@ export class DrizzleTaskRepository implements TaskRepository {
         projectId: tasks.projectId,
         description: tasks.description,
         status: tasks.status,
+        statusBeforeDone: tasks.statusBeforeDone,
         position: tasks.position,
         ralphMode: tasks.ralphMode,
         ralphCancelRequestedAt: tasks.ralphCancelRequestedAt,
@@ -70,6 +84,12 @@ export class DrizzleTaskRepository implements TaskRepository {
     const rows = await this.baseSelect()
       .where(eq(tasks.projectId, projectId))
       .orderBy(asc(tasks.status), asc(tasks.position), asc(tasks.id));
+    return rows.map((r) => toTask(r as TaskRowJoined));
+  }
+
+  async listByIds(taskIds: readonly string[]): Promise<Task[]> {
+    if (taskIds.length === 0) return [];
+    const rows = await this.baseSelect().where(inArray(tasks.id, [...taskIds]));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
 
@@ -115,10 +135,20 @@ export class DrizzleTaskRepository implements TaskRepository {
 
   async update(taskId: string, patch: UpdateTaskPatch): Promise<Task | null> {
     const set: Partial<
-      Pick<TaskRow, 'description' | 'status' | 'position' | 'ralphMode' | 'deadline' | 'priority'>
+      Pick<
+        TaskRow,
+        | 'description'
+        | 'status'
+        | 'statusBeforeDone'
+        | 'position'
+        | 'ralphMode'
+        | 'deadline'
+        | 'priority'
+      >
     > = {};
     if (patch.description !== undefined) set.description = patch.description;
     if (patch.status !== undefined) set.status = patch.status;
+    if (patch.statusBeforeDone !== undefined) set.statusBeforeDone = patch.statusBeforeDone;
     if (patch.position !== undefined) set.position = patch.position;
     if (patch.ralphMode !== undefined) set.ralphMode = patch.ralphMode;
     if (patch.deadline !== undefined) set.deadline = patch.deadline;
@@ -172,9 +202,10 @@ export class DrizzleTaskRepository implements TaskRepository {
   }
 
   async moveToProject(taskId: string, targetProjectId: string): Promise<Task | null> {
+    // Снимок status_before_done относился к колонкам старого проекта — чистим при переносе.
     await this.db
       .update(tasks)
-      .set({ projectId: targetProjectId })
+      .set({ projectId: targetProjectId, statusBeforeDone: null })
       .where(eq(tasks.id, taskId));
     return this.getById(taskId);
   }

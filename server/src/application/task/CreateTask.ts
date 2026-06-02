@@ -1,10 +1,11 @@
 import {
   AlreadyDelegatedError,
   DelegateNotInSharedMembersError,
-  DelegationOnNonInboxError,
+  DelegateNotProjectMemberError,
   SelfDelegationError,
   TaskDescriptionEmptyError,
 } from '../../domain/task/errors.js';
+import { can } from '../../domain/project/permissions.js';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '../../domain/task/Task.js';
 import type { TaskDelegation } from '../../domain/task/TaskDelegation.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
@@ -98,14 +99,21 @@ export class CreateTask {
   ): Promise<TaskDelegation> {
     if (delegateUserId === creatorUserId) throw new SelfDelegationError();
 
-    // Только inbox можно делегировать (см. spec out-of-scope).
     const project = await this.deps.projects.getById(projectId);
-    if (!project?.isInbox) throw new DelegationOnNonInboxError();
-
-    // Security: делегат должен быть в shared-members caller'а.
-    const shared = await this.deps.members.listSharedUsers(creatorUserId);
-    if (!shared.find((u) => u.id === delegateUserId)) {
-      throw new DelegateNotInSharedMembersError();
+    if (project && !project.isInbox) {
+      // Именованный проект: делегатор — с правом delegate_task (editor+); делегат —
+      // участник-редактор этого проекта.
+      await requireProjectAccess(this.deps, project.id, creatorUserId, 'delegate_task');
+      const membership = await this.deps.members.findForProject(project.id, delegateUserId);
+      if (!membership || !can(membership.role, 'move_task')) {
+        throw new DelegateNotProjectMemberError();
+      }
+    } else {
+      // Inbox (или защитный фолбэк): делегат должен быть в shared-members caller'а.
+      const shared = await this.deps.members.listSharedUsers(creatorUserId);
+      if (!shared.find((u) => u.id === delegateUserId)) {
+        throw new DelegateNotInSharedMembersError();
+      }
     }
 
     // Гонка: ничтожно мала (новая задача только что создана), но check на всякий.
@@ -116,6 +124,7 @@ export class CreateTask {
       id: this.deps.idGen(),
       taskId,
       delegateUserId,
+      delegatorUserId: creatorUserId,
     });
 
     // Best-effort notification + email. Не блокируют успех create.

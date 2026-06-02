@@ -61,6 +61,9 @@ export type Task = {
   readonly projectId: string;
   readonly description: string | null;
   readonly status: TaskStatus;
+  // Статус до перехода в 'done' — для восстановления прежней колонки при снятии галочки.
+  // null = нет снапшота. Заполняется backend'ом (db/055). Optional на проводе.
+  readonly statusBeforeDone: TaskStatus | null;
   readonly position: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;

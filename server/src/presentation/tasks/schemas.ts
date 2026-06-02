@@ -48,6 +48,9 @@ export const moveTaskSchema = z.object({
   targetStatus: taskStatusSchema,
   beforeTaskId: z.string().nullable(),
   afterTaskId: z.string().nullable(),
+  // Снятие галочки «выполнено»: вернуть прежний статус (status_before_done), а не
+  // targetStatus — сервер сам резолвит. См. MoveTask, db/055.
+  restore: z.boolean().optional(),
 });
 
 // Полный SHA — 40 hex. Принимаем и короткий (минимум 7) — GitHub API сам резолвит.

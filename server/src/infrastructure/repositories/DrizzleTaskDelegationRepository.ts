@@ -1,7 +1,8 @@
-import { aliasedTable, and, eq, inArray } from 'drizzle-orm';
+import { aliasedTable, and, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { projects, taskDelegations, tasks, users } from '../db/schema.js';
 import type {
+  AssignedDelegationRow,
   CreateDelegationInput,
   DelegationWithTaskInfo,
   TaskDelegationRepository,
@@ -10,17 +11,24 @@ import type {
   TaskDelegation,
   TaskDelegationStatus,
 } from '../../domain/task/TaskDelegation.js';
+import type { ProjectRole } from '../../domain/project/ProjectMembership.js';
 
 const TASK_EXCERPT_LEN = 120;
 const ACTIVE_STATUSES: readonly TaskDelegationStatus[] = ['pending', 'accepted'];
 
+// Сырой ряд join'а. Делегатор = delegator_user_id (persisted, db/054; для legacy-строк
+// backfill = owner проекта), фолбэк-id — projects.owner_id. Имя делегатора берём
+// корелированным подзапросом (а НЕ leftJoin'ом aliasedTable — он ломает type-inference
+// Drizzle, даёт never[]); фолбэк имени — owner проекта (ownerUser innerJoin). COALESCE в JS.
 type DelegationRowRaw = {
   id: string;
   taskId: string;
   delegateUserId: string;
   delegateDisplayName: string;
-  creatorUserId: string;
-  creatorDisplayName: string;
+  delegatorUserId: string | null;
+  ownerId: string;
+  delegatorDisplayName: string | null;
+  ownerDisplayName: string;
   status: TaskDelegationStatus;
   createdAt: Date;
   respondedAt: Date | null;
@@ -32,22 +40,33 @@ function toDomain(r: DelegationRowRaw): TaskDelegation {
     taskId: r.taskId,
     delegateUserId: r.delegateUserId,
     delegateDisplayName: r.delegateDisplayName,
-    creatorUserId: r.creatorUserId,
-    creatorDisplayName: r.creatorDisplayName,
+    creatorUserId: r.delegatorUserId ?? r.ownerId,
+    creatorDisplayName: r.delegatorDisplayName ?? r.ownerDisplayName,
     status: r.status,
     createdAt: r.createdAt,
     respondedAt: r.respondedAt,
   };
 }
 
+// Имя делегатора по delegator_user_id — корелированный подзапрос (без лишнего join'а).
+const delegatorNameSql = sql<
+  string | null
+>`(SELECT du.display_name FROM users du WHERE du.id = ${taskDelegations.delegatorUserId})`;
+
 export class DrizzleTaskDelegationRepository implements TaskDelegationRepository {
   constructor(private readonly db: Database) {}
 
   async create(input: CreateDelegationInput): Promise<TaskDelegation> {
+    // Runtime-guard: новые строки всегда знают делегатора (порт требует это compile-time,
+    // но страхуемся от any-каста на границе).
+    if (!input.delegatorUserId) {
+      throw new Error('createDelegation: delegatorUserId is required');
+    }
     await this.db.insert(taskDelegations).values({
       id: input.id,
       taskId: input.taskId,
       delegateUserId: input.delegateUserId,
+      delegatorUserId: input.delegatorUserId,
       status: 'pending',
     });
     const created = await this.getById(input.id);
@@ -89,15 +108,17 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
 
   async listPendingForDelegate(userId: string): Promise<DelegationWithTaskInfo[]> {
     const delegateUser = aliasedTable(users, 'delegate_user');
-    const creatorUser = aliasedTable(users, 'creator_user');
+    const ownerUser = aliasedTable(users, 'owner_user');
     const rows = await this.db
       .select({
         id: taskDelegations.id,
         taskId: taskDelegations.taskId,
         delegateUserId: taskDelegations.delegateUserId,
         delegateDisplayName: delegateUser.displayName,
-        creatorUserId: projects.ownerId,
-        creatorDisplayName: creatorUser.displayName,
+        delegatorUserId: taskDelegations.delegatorUserId,
+        ownerId: projects.ownerId,
+        delegatorDisplayName: delegatorNameSql,
+        ownerDisplayName: ownerUser.displayName,
         status: taskDelegations.status,
         createdAt: taskDelegations.createdAt,
         respondedAt: taskDelegations.respondedAt,
@@ -107,7 +128,7 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
       .innerJoin(delegateUser, eq(delegateUser.id, taskDelegations.delegateUserId))
       .innerJoin(tasks, eq(tasks.id, taskDelegations.taskId))
       .innerJoin(projects, eq(projects.id, tasks.projectId))
-      .innerJoin(creatorUser, eq(creatorUser.id, projects.ownerId))
+      .innerJoin(ownerUser, eq(ownerUser.id, projects.ownerId))
       .where(
         and(
           eq(taskDelegations.delegateUserId, userId),
@@ -116,17 +137,7 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
       );
 
     return rows.map((r) => ({
-      ...toDomain({
-        id: r.id,
-        taskId: r.taskId,
-        delegateUserId: r.delegateUserId,
-        delegateDisplayName: r.delegateDisplayName,
-        creatorUserId: r.creatorUserId,
-        creatorDisplayName: r.creatorDisplayName,
-        status: r.status,
-        createdAt: r.createdAt,
-        respondedAt: r.respondedAt,
-      }),
+      ...toDomain(r),
       taskExcerpt: (r.taskDescription ?? '').slice(0, TASK_EXCERPT_LEN),
     }));
   }
@@ -148,19 +159,22 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
     return map;
   }
 
-  // Базовый join: delegate (users) + tasks + projects (для creator owner_id) + creator (users).
-  // Используем aliasedTable чтобы дважды join'ить users без коллизии имён.
+  // Базовый join (4 innerJoin'а — как было исторически; leftJoin aliasedTable ломает
+  // inference): delegate + tasks + projects + owner. Имя делегатора — подзапрос. Строка
+  // никогда не пропадает: findActiveForTask/getById/listActiveForTasks гейтят авторизацию.
   private selectJoined() {
     const delegateUser = aliasedTable(users, 'delegate_user');
-    const creatorUser = aliasedTable(users, 'creator_user');
+    const ownerUser = aliasedTable(users, 'owner_user');
     return this.db
       .select({
         id: taskDelegations.id,
         taskId: taskDelegations.taskId,
         delegateUserId: taskDelegations.delegateUserId,
         delegateDisplayName: delegateUser.displayName,
-        creatorUserId: projects.ownerId,
-        creatorDisplayName: creatorUser.displayName,
+        delegatorUserId: taskDelegations.delegatorUserId,
+        ownerId: projects.ownerId,
+        delegatorDisplayName: delegatorNameSql,
+        ownerDisplayName: ownerUser.displayName,
         status: taskDelegations.status,
         createdAt: taskDelegations.createdAt,
         respondedAt: taskDelegations.respondedAt,
@@ -169,6 +183,53 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
       .innerJoin(delegateUser, eq(delegateUser.id, taskDelegations.delegateUserId))
       .innerJoin(tasks, eq(tasks.id, taskDelegations.taskId))
       .innerJoin(projects, eq(projects.id, tasks.projectId))
-      .innerJoin(creatorUser, eq(creatorUser.id, projects.ownerId));
+      .innerJoin(ownerUser, eq(ownerUser.id, projects.ownerId));
+  }
+
+  // Все активные (pending|accepted) делегации НА userId по всем проектам — для блока
+  // «Поручено мне». Лёгкие строки (id задачи + делегация + контекст проекта + моя роль);
+  // полный Task use-case достаёт батчем через TaskRepository.listByIds. Имя делегатора и
+  // моя роль — корелированные подзапросы (без 5-го/left join'а, который ломает inference).
+  async listAssignedTo(userId: string): Promise<AssignedDelegationRow[]> {
+    const delegateUser = aliasedTable(users, 'delegate_user');
+    const ownerUser = aliasedTable(users, 'owner_user');
+    const rows = await this.db
+      .select({
+        id: taskDelegations.id,
+        taskId: taskDelegations.taskId,
+        delegateUserId: taskDelegations.delegateUserId,
+        delegateDisplayName: delegateUser.displayName,
+        delegatorUserId: taskDelegations.delegatorUserId,
+        ownerId: projects.ownerId,
+        delegatorDisplayName: delegatorNameSql,
+        ownerDisplayName: ownerUser.displayName,
+        status: taskDelegations.status,
+        createdAt: taskDelegations.createdAt,
+        respondedAt: taskDelegations.respondedAt,
+        projectId: projects.id,
+        projectName: projects.name,
+        isInbox: projects.isInbox,
+        delegateRole: sql<ProjectRole | null>`(SELECT pm.role FROM project_members pm WHERE pm.project_id = ${projects.id} AND pm.user_id = ${userId} LIMIT 1)`,
+      })
+      .from(taskDelegations)
+      .innerJoin(delegateUser, eq(delegateUser.id, taskDelegations.delegateUserId))
+      .innerJoin(tasks, eq(tasks.id, taskDelegations.taskId))
+      .innerJoin(projects, eq(projects.id, tasks.projectId))
+      .innerJoin(ownerUser, eq(ownerUser.id, projects.ownerId))
+      .where(
+        and(
+          eq(taskDelegations.delegateUserId, userId),
+          inArray(taskDelegations.status, [...ACTIVE_STATUSES]),
+        ),
+      );
+
+    return rows.map((r) => ({
+      taskId: r.taskId,
+      delegation: toDomain(r),
+      projectId: r.projectId,
+      projectName: r.projectName,
+      isInbox: Boolean(r.isInbox),
+      delegateRole: r.delegateRole ?? null,
+    }));
   }
 }

@@ -44,6 +44,10 @@ export type Task = {
   readonly projectId: string;
   readonly description: string | null;
   readonly status: TaskStatus;
+  // Статус задачи до перехода в 'done'. Снимок ставится при move→done, очищается при
+  // move из done. Снятие галочки «выполнено» восстанавливает его (фолбэк 'todo', если
+  // null/нерасстанавливаемый). См. db/055, MoveTask.
+  readonly statusBeforeDone: TaskStatus | null;
   readonly position: number;
   readonly ralphMode: RalphMode;
   // Pull-based cancel: момент когда юзер запросил отмену Ralph-работы (NULL = нет

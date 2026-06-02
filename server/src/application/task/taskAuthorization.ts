@@ -55,6 +55,38 @@ export async function requireTaskModifyAccess(
   return { project, isDelegate: false };
 }
 
+// Read-операции (комментарии, вложения, коммиты) — та же inbox-aware семантика, что и
+// modify: для inbox разрешён creator ИЛИ accepted-delegate, для именованного проекта —
+// обычный requireProjectAccess('read_project'). Чинит баг: inbox-делегат (никогда не member
+// inbox-проекта создателя) иначе получал 404 на ListTaskComments/Attachments/Commits, хотя
+// блок «Поручено мне» показывает их счётчики. Для именованных проектов делегат — editor+
+// member, поэтому requireProjectAccess проходит штатно.
+export async function requireTaskReadAccess(
+  deps: TaskAccessDeps,
+  projectId: string,
+  taskId: string,
+  userId: string,
+): Promise<TaskAccessResult> {
+  const project = await deps.projects.getById(projectId);
+  if (!project) throw new ProjectNotFoundError();
+
+  if (project.isInbox) {
+    if (project.ownerId === userId) return { project, isDelegate: false };
+    const delegation = await deps.delegations.findActiveForTask(taskId);
+    if (
+      delegation &&
+      delegation.status === 'accepted' &&
+      delegation.delegateUserId === userId
+    ) {
+      return { project, isDelegate: true };
+    }
+    throw new ProjectNotFoundError();
+  }
+
+  await requireProjectAccess(deps, projectId, userId, 'read_project');
+  return { project, isDelegate: false };
+}
+
 // Delete-операции для inbox-задач — только creator (не accepted-delegate).
 export async function requireTaskDeleteAccess(
   deps: TaskAccessDeps,

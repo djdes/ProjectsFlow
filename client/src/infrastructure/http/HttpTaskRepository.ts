@@ -28,7 +28,7 @@ type DelegationDto = {
   respondedAt: string | null;
 };
 
-type TaskDto = Omit<
+export type TaskDto = Omit<
   Task,
   | 'createdAt'
   | 'updatedAt'
@@ -39,9 +39,12 @@ type TaskDto = Omit<
   | 'delegation'
   | 'deadline'
   | 'priority'
+  | 'statusBeforeDone'
 > & {
   createdAt: string;
   updatedAt: string;
+  // Optional — старый backend без db/055 не присылает.
+  statusBeforeDone?: import('@/domain/task/Task').TaskStatus | null;
   // Optional на проводе — старый backend без миграции 035 не присылает.
   ralphMode?: import('@/domain/task/Task').RalphMode;
   // Optional — старый backend без 037 не отдаёт эти поля.
@@ -70,11 +73,12 @@ type CommentDto = Omit<TaskComment, 'createdAt' | 'updatedAt' | 'attachments'> &
   attachments?: AttachmentDto[];
 };
 
-function fromDto(dto: TaskDto): Task {
+export function fromDto(dto: TaskDto): Task {
   return {
     ...dto,
     createdAt: new Date(dto.createdAt),
     updatedAt: new Date(dto.updatedAt),
+    statusBeforeDone: dto.statusBeforeDone ?? null,
     // Graceful default — backend без 035 продолжает работать (mode = текущее поведение).
     ralphMode: dto.ralphMode ?? 'normal',
     ralphCancelRequestedAt: dto.ralphCancelRequestedAt

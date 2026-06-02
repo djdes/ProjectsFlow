@@ -20,6 +20,7 @@ export type ProjectAction =
   | 'delete_own_comment'
   | 'delete_any_comment'
   | 'link_commit'
+  | 'delegate_task'
   | 'manage_kb'
   | 'manage_attachments'
   | 'invite_member'
@@ -50,6 +51,11 @@ const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   delete_own_comment: 'viewer',
   delete_any_comment: 'editor',
   link_commit: 'editor',
+  // Поручить задачу другому участнику проекта (человеку). Отдельно от
+  // delegate_task_to_agent (роутинг на Ralph) и move_task — чтобы правки одного
+  // не меняли молча другое. Делегатор — editor+; делегат тоже должен быть editor+
+  // (иначе примет, но не сможет двигать/выполнять). См. DelegateExistingTask.
+  delegate_task: 'editor',
   manage_kb: 'editor',
   manage_attachments: 'editor',
   // Приглашать новых участников может editor (и owner): помогает командам с горизонтальной

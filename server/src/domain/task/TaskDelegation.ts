@@ -1,6 +1,11 @@
-// Делегирование одной inbox-задачи одному пользователю. См. db/039.
+// Делегирование одной задачи одному пользователю. См. db/039, db/054.
+// Работает для inbox-задач И задач именованных проектов (см. DelegateExistingTask).
 // One-to-one: одна активная (pending|accepted) делегация на task. Архивные/declined/
 // withdrawn остаются для истории.
+//
+// creatorUserId/creatorDisplayName = делегатор. Источник — персистентная колонка
+// task_delegations.delegator_user_id (db/054); для legacy-NULL строк репозиторий
+// фолбэчит на projects.owner_id через COALESCE.
 //
 // Mirrored: client/src/domain/task/TaskDelegation.ts.
 

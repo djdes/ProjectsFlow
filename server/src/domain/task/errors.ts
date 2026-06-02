@@ -64,19 +64,22 @@ export class SelfDelegationError extends Error {
   }
 }
 
-export class DelegationOnNonInboxError extends Error {
-  readonly status = 400;
-  constructor() {
-    super('Делегировать можно только задачи во «Входящих»');
-    this.name = 'DelegationOnNonInboxError';
-  }
-}
-
 export class DelegateNotInSharedMembersError extends Error {
   readonly status = 403;
   constructor() {
     super('Этому пользователю нельзя делегировать (он не в общих проектах)');
     this.name = 'DelegateNotInSharedMembersError';
+  }
+}
+
+// Делегирование задачи именованного проекта: делегат должен быть участником-редактором
+// этого проекта (editor+), иначе примет задачу, но получит 403 на move/выполнение
+// (см. requireTaskModifyAccess: non-inbox ветка = обычный requireProjectAccess('move_task')).
+export class DelegateNotProjectMemberError extends Error {
+  readonly status = 403;
+  constructor() {
+    super('Делегировать можно только участнику-редактору этого проекта');
+    this.name = 'DelegateNotProjectMemberError';
   }
 }
 

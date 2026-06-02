@@ -17,6 +17,8 @@ export type CreateTaskInput = {
 export type UpdateTaskPatch = {
   readonly description?: string | null;
   readonly status?: TaskStatus;
+  // Снимок статуса до 'done'. null = очистить. undefined = не менять. См. db/055, MoveTask.
+  readonly statusBeforeDone?: TaskStatus | null;
   readonly position?: number;
   readonly ralphMode?: RalphMode;
   // null = очистить deadline. undefined = не менять.
@@ -27,6 +29,9 @@ export type UpdateTaskPatch = {
 
 export interface TaskRepository {
   listByProject(projectId: string): Promise<Task[]>;
+  // Батч-выборка задач по id (для блока «Поручено мне» — задачи из разных проектов).
+  // Порядок результата не гарантируется; вызывающий строит Map по id.
+  listByIds(taskIds: readonly string[]): Promise<Task[]>;
   /**
    * Inbox-задачи (из ЧУЖИХ inbox-проектов), где caller — accepted-делегат.
    * Используется ListTasks для inbox-view'а делегата: он должен видеть в своём

@@ -42,7 +42,9 @@ export class ListTasks {
     // в inbox создателя.
     if (project.isInbox && project.ownerId === ownerUserId) {
       const delegatedToMe = await this.deps.tasks.listAcceptedDelegatedTo(ownerUserId);
-      tasks = [...tasks, ...delegatedToMe];
+      // Set-дедуп по id (защитно — источники не должны пересекаться, но страхуемся).
+      const seen = new Set(tasks.map((t) => t.id));
+      tasks = [...tasks, ...delegatedToMe.filter((t) => !seen.has(t.id))];
     }
 
     const ids = tasks.map((t) => t.id);
