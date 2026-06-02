@@ -10,20 +10,8 @@ import type {
 } from '../../application/user/UserRepository.js';
 import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
-
-// MariaDB отдаёт JSON-колонку (longtext) СТРОКОЙ, а не объектом — Drizzle json() это не
-// нормализует. Парсим сами (см. parseJsonCol в DrizzleLiveRepository / DrizzleFileSyncRepository).
-function parseJsonCol<T>(v: unknown, fallback: T): T {
-  if (v === null || v === undefined) return fallback;
-  if (typeof v === 'string') {
-    try {
-      return JSON.parse(v) as T;
-    } catch {
-      return fallback;
-    }
-  }
-  return v as T;
-}
+import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
+import { parseJsonCol } from './jsonCol.js';
 
 function toUser(row: UserRow): User {
   return {
@@ -132,7 +120,7 @@ export class DrizzleUserRepository implements UserRepository {
       tgChatId: r.tgChatId ?? null,
       tgStartedAt: r.tgStartedAt ?? null,
       tgPairedAt: r.tgPairedAt ?? null,
-      prefs: r.tgNotificationPrefs ?? null,
+      prefs: parseJsonCol<TelegramNotificationPrefs | null>(r.tgNotificationPrefs, null),
     };
   }
 
@@ -220,7 +208,7 @@ export class DrizzleUserRepository implements UserRepository {
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
-    return rows[0]?.prefs ?? null;
+    return parseJsonCol<NotificationPrefs | null>(rows[0]?.prefs, null);
   }
 
   async setDefaultNotificationPrefs(userId: string, prefs: import('../../domain/notifications/NotificationPrefs.js').NotificationPrefs): Promise<void> {

@@ -3,6 +3,7 @@ import type { Database } from '../db/index.js';
 import { serverAlerts, type ServerAlertRow } from '../db/schema.js';
 import type { MonitoringAlertRepository } from '../../application/monitoring/MonitoringAlertRepository.js';
 import type { AlertKind, AlertSeverity, ServerAlert } from '../../domain/monitoring/Alert.js';
+import { parseJsonCol } from './jsonCol.js';
 
 function toAlert(r: ServerAlertRow): ServerAlert {
   return {
@@ -14,7 +15,7 @@ function toAlert(r: ServerAlertRow): ServerAlert {
     severity: r.severity as AlertSeverity,
     status: r.status,
     message: r.message,
-    details: r.details ?? null,
+    details: parseJsonCol<Record<string, unknown> | null>(r.details, null),
     firstSeenAt: r.firstSeenAt,
     lastSeenAt: r.lastSeenAt,
     resolvedAt: r.resolvedAt ?? null,

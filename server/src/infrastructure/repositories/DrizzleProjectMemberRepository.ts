@@ -22,6 +22,7 @@ import type {
   ProjectWithRole,
   SharedUser,
 } from '../../application/project/ProjectMemberRepository.js';
+import { parseJsonCol } from './jsonCol.js';
 
 function toMembership(row: ProjectMemberRow): ProjectMembership {
   return {
@@ -81,7 +82,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     return rows.map((r) => ({
       ...toMembership(r.member),
       user: toUser(r.user),
-      notificationPrefs: r.member.notificationPrefs ?? null,
+      notificationPrefs: parseJsonCol<NotificationPrefs | null>(r.member.notificationPrefs, null),
     }));
   }
 
@@ -161,7 +162,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       .from(projectMembers)
       .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)))
       .limit(1);
-    return rows[0]?.prefs ?? null;
+    return parseJsonCol<NotificationPrefs | null>(rows[0]?.prefs, null);
   }
 
   async setNotificationPrefs(

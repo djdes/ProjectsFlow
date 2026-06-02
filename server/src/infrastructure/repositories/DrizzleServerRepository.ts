@@ -8,6 +8,7 @@ import type {
 } from '../../application/monitoring/ServerRepository.js';
 import type { ProjectServer, ServerKind } from '../../domain/monitoring/ProjectServer.js';
 import type { ServerHealthStatus } from '../../domain/monitoring/ServerSnapshot.js';
+import { parseJsonCol } from './jsonCol.js';
 
 function toServer(r: ProjectServerRow): ProjectServer {
   return {
@@ -19,7 +20,7 @@ function toServer(r: ProjectServerRow): ProjectServer {
     sshPort: r.sshPort,
     sshUser: r.sshUser ?? null,
     sshCredentialRef: r.sshCredentialRef ?? null,
-    pm2ProcessNames: r.pm2ProcessNames ?? null,
+    pm2ProcessNames: parseJsonCol<string[] | null>(r.pm2ProcessNames, null),
     nginxAccessLogPath: r.nginxAccessLogPath ?? null,
     nginxErrorLogPath: r.nginxErrorLogPath ?? null,
     deployPath: r.deployPath ?? null,

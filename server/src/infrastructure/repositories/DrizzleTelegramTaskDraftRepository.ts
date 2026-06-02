@@ -3,10 +3,12 @@ import type { Database } from '../db/index.js';
 import { telegramTaskDrafts, type TelegramTaskDraftRow } from '../db/schema.js';
 import type {
   CreateTelegramTaskDraftInput,
+  TelegramDraftOffered,
   TelegramTaskDraft,
   TelegramTaskDraftPatch,
   TelegramTaskDraftRepository,
 } from '../../application/telegram/TelegramTaskDraftRepository.js';
+import { parseJsonCol } from './jsonCol.js';
 
 function toDomain(r: TelegramTaskDraftRow): TelegramTaskDraft {
   return {
@@ -17,7 +19,7 @@ function toDomain(r: TelegramTaskDraftRow): TelegramTaskDraft {
     projectId: r.projectId,
     delegateUserId: r.delegateUserId,
     delegationId: r.delegationId,
-    offered: r.offered ?? null,
+    offered: parseJsonCol<TelegramDraftOffered | null>(r.offered, null),
     status: r.status,
     createdAt: r.createdAt,
     expiresAt: r.expiresAt,

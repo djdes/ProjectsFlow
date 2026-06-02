@@ -9,9 +9,13 @@ import type {
 } from '../../application/monitoring/SnapshotRepository.js';
 import {
   snapshotIndexColumns,
+  type DbHealth,
+  type LogTails,
   type ServerHealthStatus,
   type ServerSnapshot,
+  type SnapshotMetrics,
 } from '../../domain/monitoring/ServerSnapshot.js';
+import { parseJsonCol } from './jsonCol.js';
 
 function toSnapshot(r: ServerSnapshotRow): ServerSnapshot {
   return {
@@ -22,10 +26,10 @@ function toSnapshot(r: ServerSnapshotRow): ServerSnapshot {
     source: r.source,
     status: r.status as ServerHealthStatus,
     reachable: r.reachable,
-    metrics: r.metrics ?? null,
-    logs: r.logs ?? null,
-    dbHealth: r.dbHealth ?? null,
-    errors: r.errors ?? null,
+    metrics: parseJsonCol<SnapshotMetrics | null>(r.metrics, null),
+    logs: parseJsonCol<LogTails | null>(r.logs, null),
+    dbHealth: parseJsonCol<DbHealth | null>(r.dbHealth, null),
+    errors: parseJsonCol<string[] | null>(r.errors, null),
     createdAt: r.createdAt,
   };
 }
