@@ -40,7 +40,8 @@ const saveBodySchema = z
       .transform((v) => v ?? null),
     pauseMinSeconds: z.number().int().min(0).max(86_400),
     pauseMaxSeconds: z.number().int().min(0).max(86_400),
-    ralphMode: z.string().trim().min(1).max(16).optional().default('silent'),
+    // Автоматизация ВСЕГДА в тихом режиме — режим заперт на 'silent' (диспетчер тоже форсит).
+    ralphMode: z.literal('silent').optional().default('silent'),
     criteria: z.array(criterionSchema).max(20),
   })
   .refine((b) => b.pauseMaxSeconds >= b.pauseMinSeconds, {

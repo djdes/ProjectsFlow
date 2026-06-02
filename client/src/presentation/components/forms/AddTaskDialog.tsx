@@ -240,7 +240,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
               id="task-desc"
               ref={descRef}
               rows={3}
-              maxLength={5000}
+              maxLength={50000}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."

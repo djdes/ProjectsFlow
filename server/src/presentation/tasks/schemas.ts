@@ -25,7 +25,9 @@ const prioritySchema = z
   .nullable();
 
 export const createTaskSchema = z.object({
-  description: z.string().trim().min(1, 'Введите описание').max(5000),
+  // Лимит 50000 — фактически «без ограничения по объёму» для задач автоматизации
+  // (крупные/сложные ТЗ). Колонка tasks.description — MEDIUMTEXT (db/058).
+  description: z.string().trim().min(1, 'Введите описание').max(50000),
   status: taskStatusSchema.optional(),
   ralphMode: ralphModeSchema.optional(),
   // Опциональное one-to-one делегирование (только для inbox-задач). UUID юзера.
@@ -37,7 +39,7 @@ export const createTaskSchema = z.object({
 
 export const updateTaskSchema = z
   .object({
-    description: z.string().trim().min(1).max(5000).optional(),
+    description: z.string().trim().min(1).max(50000).optional(),
     ralphMode: ralphModeSchema.optional(),
     deadline: deadlineSchema.optional(),
     priority: prioritySchema.optional(),

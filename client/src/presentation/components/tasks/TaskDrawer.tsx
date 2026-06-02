@@ -787,7 +787,7 @@ export function TaskDrawer({
                   ref={descRef}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  maxLength={5000}
+                  maxLength={50000}
                   rows={4}
                   placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
                   className="block w-full resize-none bg-transparent text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none"
@@ -967,7 +967,7 @@ function TaskDescriptionEditor({
           onChange={(e) => setDraft(e.target.value)}
           onBlur={() => void save()}
           onKeyDown={handleKeyDown}
-          maxLength={5000}
+          maxLength={50000}
           rows={6}
           disabled={saving}
           className="block w-full resize-none rounded-md border border-transparent bg-transparent p-2 text-sm leading-snug focus:outline-none disabled:opacity-50"

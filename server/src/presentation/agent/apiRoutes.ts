@@ -244,7 +244,7 @@ const recordAutomationTaskBodySchema = z.object({
 
 const updateTaskAgentSchema = z
   .object({
-    description: z.string().trim().min(1).max(10_000).optional(),
+    description: z.string().trim().min(1).max(50_000).optional(),
     // Worker может выставить режим (например 'silent' → дальше работает без вопросов).
     ralphMode: z.enum(['normal', 'silent', 'grillme']).optional(),
     // Срок выполнения 'YYYY-MM-DD'. null = очистить. См. db/041.
