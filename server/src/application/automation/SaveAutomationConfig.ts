@@ -1,4 +1,11 @@
-import type { AutomationConfig, LimitKind } from '../../domain/automation/Automation.js';
+import type {
+  AutomationConfig,
+  DeployMethod,
+  GitAuthorMode,
+  LimitKind,
+} from '../../domain/automation/Automation.js';
+import { InsufficientProjectRoleError } from '../../domain/project/errors.js';
+import { can } from '../../domain/project/permissions.js';
 import { requireProjectAccess, type ProjectAccessDeps } from '../project/projectAccess.js';
 import type { AutomationRepository } from './AutomationRepository.js';
 import { defaultAutomationConfig, mergeCriteriaWithDefaults } from './criteria.js';
@@ -17,6 +24,13 @@ export type SaveAutomationCommand = {
   readonly pauseMinSeconds: number;
   readonly pauseMaxSeconds: number;
   readonly ralphMode: string;
+  readonly gitAuthorMode: GitAuthorMode;
+  readonly gitAuthorName: string | null;
+  readonly gitAuthorEmail: string | null;
+  readonly ignoreClaudeMd: boolean;
+  readonly ultracodeReviewEnabled: boolean;
+  readonly deployMethod: DeployMethod;
+  readonly deployCommand: string | null;
   readonly criteria: ReadonlyArray<{
     readonly key: string;
     readonly enabled: boolean;
@@ -34,10 +48,32 @@ export class SaveAutomationConfig {
   constructor(private readonly deps: Deps) {}
 
   async execute(input: SaveAutomationCommand): Promise<AutomationConfig> {
-    await requireProjectAccess(this.deps, input.projectId, input.userId, 'update_project');
+    const access = await requireProjectAccess(
+      this.deps,
+      input.projectId,
+      input.userId,
+      'update_project',
+    );
 
     const prev = await this.deps.automation.getConfig(input.projectId);
     const wasEnabled = prev?.enabled ?? false;
+
+    // Публикация/деплой — owner-only при ИЗМЕНЕНИИ. Editor может править критерии/лимиты,
+    // но не git-автора/игнор-CLAUDE.md/UltraCode/деплой (deployCommand = произвольный shell
+    // на хосте диспетчера; owner-mode раскрывает email владельца). Сверяем с текущими
+    // значениями (или дефолтами): если ничего из публикации не меняется — editor проходит.
+    const baseline = prev ?? defaultAutomationConfig(input.projectId);
+    const publishChanged =
+      input.gitAuthorMode !== baseline.gitAuthorMode ||
+      (input.gitAuthorName ?? null) !== (baseline.gitAuthorName ?? null) ||
+      (input.gitAuthorEmail ?? null) !== (baseline.gitAuthorEmail ?? null) ||
+      input.ignoreClaudeMd !== baseline.ignoreClaudeMd ||
+      input.ultracodeReviewEnabled !== baseline.ultracodeReviewEnabled ||
+      input.deployMethod !== baseline.deployMethod ||
+      (input.deployCommand ?? null) !== (baseline.deployCommand ?? null);
+    if (publishChanged && !can(access.membership.role, 'set_publish_settings')) {
+      throw new InsufficientProjectRoleError(access.membership.role, 'set_publish_settings');
+    }
 
     await this.deps.automation.saveConfig(input.projectId, {
       enabled: input.enabled,
@@ -47,6 +83,13 @@ export class SaveAutomationConfig {
       pauseMinSeconds: input.pauseMinSeconds,
       pauseMaxSeconds: input.pauseMaxSeconds,
       ralphMode: input.ralphMode,
+      gitAuthorMode: input.gitAuthorMode,
+      gitAuthorName: input.gitAuthorName,
+      gitAuthorEmail: input.gitAuthorEmail,
+      ignoreClaudeMd: input.ignoreClaudeMd,
+      ultracodeReviewEnabled: input.ultracodeReviewEnabled,
+      deployMethod: input.deployMethod,
+      deployCommand: input.deployCommand,
       criteria: input.criteria,
     });
 

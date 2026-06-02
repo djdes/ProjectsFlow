@@ -43,6 +43,14 @@ export type AutomationForDispatcher = {
   pauseMinSeconds: number;
   pauseMaxSeconds: number;
   ralphMode: string;
+  // Публикация/деплой (db/061): воркер применяет к коммиту/пушу/деплою.
+  gitAuthorMode: 'bot' | 'owner' | 'custom';
+  gitAuthorName: string | null;
+  gitAuthorEmail: string | null;
+  ignoreClaudeMd: boolean;
+  ultracodeReviewEnabled: boolean;
+  deployMethod: 'github_auto' | 'ssh_manual' | 'none';
+  deployCommand: string | null;
   nextCriterion: AutomationDispatcherCriterion | null;
 };
 

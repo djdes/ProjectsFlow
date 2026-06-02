@@ -759,6 +759,19 @@ export const projectAutomation = mysqlTable('project_automation', {
   pauseMinSeconds: int('pause_min_seconds').notNull().default(60),
   pauseMaxSeconds: int('pause_max_seconds').notNull().default(300),
   ralphMode: varchar('ralph_mode', { length: 16 }).notNull().default('silent'),
+  // Настройки публикации/деплоя воркера (db/061). От чьего имени коммитить:
+  gitAuthorMode: mysqlEnum('git_author_mode', ['bot', 'owner', 'custom']).notNull().default('bot'),
+  gitAuthorName: varchar('git_author_name', { length: 120 }),
+  gitAuthorEmail: varchar('git_author_email', { length: 254 }),
+  // Обходить commit-ритуал CLAUDE.md проекта (без Co-Authored-By, без kanban-синка).
+  ignoreClaudeMd: boolean('ignore_claude_md').notNull().default(false),
+  // Блокирующая UltraCode-проверка совместимости перед push в прод.
+  ultracodeReviewEnabled: boolean('ultracode_review_enabled').notNull().default(false),
+  // Как деплоить после успешной задачи: автодеплой GitHub / своя ssh-команда / никак.
+  deployMethod: mysqlEnum('deploy_method', ['github_auto', 'ssh_manual', 'none'])
+    .notNull()
+    .default('github_auto'),
+  deployCommand: varchar('deploy_command', { length: 500 }),
   runStatus: mysqlEnum('run_status', ['idle', 'running', 'completed', 'stopped'])
     .notNull()
     .default('idle'),
@@ -903,6 +916,7 @@ export const projectServers = mysqlTable(
     nginxAccessLogPath: varchar('nginx_access_log_path', { length: 500 }),
     nginxErrorLogPath: varchar('nginx_error_log_path', { length: 500 }),
     deployPath: varchar('deploy_path', { length: 500 }),
+    healthUrl: varchar('health_url', { length: 500 }),
     enabled: boolean('enabled').notNull().default(true),
     collectIntervalSeconds: int('collect_interval_seconds').notNull().default(300),
     lastSnapshotAt: timestamp('last_snapshot_at'),
@@ -916,7 +930,6 @@ export const projectServers = mysqlTable(
     index('idx_project_server_project_kind').on(t.projectId, t.kind),
   ],
 );
-    healthUrl: varchar('health_url', { length: 500 }),
 export type ProjectServerRow = typeof projectServers.$inferSelect;
 export type NewProjectServerRow = typeof projectServers.$inferInsert;
 

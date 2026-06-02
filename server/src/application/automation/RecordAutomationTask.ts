@@ -1,15 +1,18 @@
 import type { AutomationConfig } from '../../domain/automation/Automation.js';
 import { requireDispatcherAccess, type ProjectAccessDeps } from '../project/projectAccess.js';
+import type { UserRepository } from '../user/UserRepository.js';
 import type { AutomationRepository } from './AutomationRepository.js';
 import {
   buildDispatcherView,
   isWithinLimit,
   type AutomationForDispatcher,
+  type ResolvedGitAuthor,
 } from './automationView.js';
 import { defaultAutomationConfig, mergeCriteriaWithDefaults } from './criteria.js';
 
 type Deps = ProjectAccessDeps & {
   readonly automation: AutomationRepository;
+  readonly users: UserRepository;
   readonly now: () => Date;
 };
 
@@ -24,13 +27,22 @@ export class RecordAutomationTask {
     userId: string;
     taskId: string;
   }): Promise<AutomationForDispatcher> {
-    await requireDispatcherAccess(this.deps, input.projectId, input.userId);
+    const project = await requireDispatcherAccess(this.deps, input.projectId, input.userId);
 
     const config = await this.deps.automation.getConfig(input.projectId);
     if (!config) {
       // Нет конфига — записывать нечего (диспетчер не должен был сюда дойти).
       return buildDispatcherView(defaultAutomationConfig(input.projectId), this.deps.now());
     }
+
+    // Идентичность владельца нужна только при gitAuthorMode='owner' (иначе undefined).
+    const owner: ResolvedGitAuthor | undefined =
+      config.gitAuthorMode === 'owner'
+        ? await this.deps.users.getById(project.ownerId).then((u) => ({
+            name: u?.displayName ?? null,
+            email: u?.email ?? null,
+          }))
+        : undefined;
 
     const merged = mergeCriteriaWithDefaults(config.criteria);
     const enabledCount = merged.filter((c) => c.enabled).length;
@@ -51,8 +63,8 @@ export class RecordAutomationTask {
     // Лимит достигнут после инкремента → закрываем прогон.
     if (updated.runStatus === 'running' && !isWithinLimit(updated, now)) {
       await this.deps.automation.setRunStatus(input.projectId, 'completed');
-      return buildDispatcherView({ ...updated, runStatus: 'completed' }, now);
+      return buildDispatcherView({ ...updated, runStatus: 'completed' }, now, owner);
     }
-    return buildDispatcherView(updated, now);
+    return buildDispatcherView(updated, now, owner);
   }
 }

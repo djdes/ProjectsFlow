@@ -56,6 +56,13 @@ export class DrizzleAutomationRepository implements AutomationRepository {
         pauseMinSeconds: input.pauseMinSeconds,
         pauseMaxSeconds: input.pauseMaxSeconds,
         ralphMode: input.ralphMode,
+        gitAuthorMode: input.gitAuthorMode,
+        gitAuthorName: input.gitAuthorName,
+        gitAuthorEmail: input.gitAuthorEmail,
+        ignoreClaudeMd: input.ignoreClaudeMd,
+        ultracodeReviewEnabled: input.ultracodeReviewEnabled,
+        deployMethod: input.deployMethod,
+        deployCommand: input.deployCommand,
       })
       .onDuplicateKeyUpdate({
         set: {
@@ -66,6 +73,13 @@ export class DrizzleAutomationRepository implements AutomationRepository {
           pauseMinSeconds: input.pauseMinSeconds,
           pauseMaxSeconds: input.pauseMaxSeconds,
           ralphMode: input.ralphMode,
+          gitAuthorMode: input.gitAuthorMode,
+          gitAuthorName: input.gitAuthorName,
+          gitAuthorEmail: input.gitAuthorEmail,
+          ignoreClaudeMd: input.ignoreClaudeMd,
+          ultracodeReviewEnabled: input.ultracodeReviewEnabled,
+          deployMethod: input.deployMethod,
+          deployCommand: input.deployCommand,
         },
       });
 
@@ -158,6 +172,13 @@ function rowToConfigBase(row: ProjectAutomationRow): Omit<AutomationConfig, 'cri
     pauseMinSeconds: row.pauseMinSeconds,
     pauseMaxSeconds: row.pauseMaxSeconds,
     ralphMode: row.ralphMode,
+    gitAuthorMode: row.gitAuthorMode,
+    gitAuthorName: row.gitAuthorName ?? null,
+    gitAuthorEmail: row.gitAuthorEmail ?? null,
+    ignoreClaudeMd: row.ignoreClaudeMd,
+    ultracodeReviewEnabled: row.ultracodeReviewEnabled,
+    deployMethod: row.deployMethod,
+    deployCommand: row.deployCommand ?? null,
     runStatus: row.runStatus,
     runStartedAt: row.runStartedAt ?? null,
     tasksCreated: row.tasksCreated,

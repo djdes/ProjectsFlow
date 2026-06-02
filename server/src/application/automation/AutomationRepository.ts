@@ -1,6 +1,8 @@
 import type {
   AutomationConfig,
   AutomationRunStatus,
+  DeployMethod,
+  GitAuthorMode,
   LimitKind,
 } from '../../domain/automation/Automation.js';
 
@@ -14,6 +16,14 @@ export type SaveAutomationInput = {
   readonly pauseMinSeconds: number;
   readonly pauseMaxSeconds: number;
   readonly ralphMode: string;
+  // Публикация/деплой (db/061).
+  readonly gitAuthorMode: GitAuthorMode;
+  readonly gitAuthorName: string | null;
+  readonly gitAuthorEmail: string | null;
+  readonly ignoreClaudeMd: boolean;
+  readonly ultracodeReviewEnabled: boolean;
+  readonly deployMethod: DeployMethod;
+  readonly deployCommand: string | null;
   // run_status выставляется отдельно (resetRun/markStopped) — здесь не трогаем.
   readonly criteria: ReadonlyArray<{
     readonly key: string;

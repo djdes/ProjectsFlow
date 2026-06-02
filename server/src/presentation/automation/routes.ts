@@ -42,11 +42,51 @@ const saveBodySchema = z
     pauseMaxSeconds: z.number().int().min(0).max(86_400),
     // Автоматизация ВСЕГДА в тихом режиме — режим заперт на 'silent' (диспетчер тоже форсит).
     ralphMode: z.literal('silent').optional().default('silent'),
+    // Публикация/деплой (db/061). Опциональны с дефолтами — старый клиент не падает.
+    gitAuthorMode: z.enum(['bot', 'owner', 'custom']).optional().default('bot'),
+    gitAuthorName: z
+      .string()
+      .trim()
+      .max(120)
+      // Без кавычек/переводов строк: значение подставляется в `git config user.name "..."`
+      // и в промпт воркера — иначе вектор инъекции (email уже ограничен .email()).
+      .regex(/^[^\r\n"]*$/, 'Имя автора не должно содержать кавычки и переводы строк')
+      .nullable()
+      .optional()
+      .transform((v) => (v && v.trim().length > 0 ? v : null)),
+    gitAuthorEmail: z
+      .string()
+      .trim()
+      .email()
+      .max(254)
+      .nullable()
+      .optional()
+      .transform((v) => (v && v.trim().length > 0 ? v : null)),
+    ignoreClaudeMd: z.boolean().optional().default(false),
+    ultracodeReviewEnabled: z.boolean().optional().default(false),
+    deployMethod: z.enum(['github_auto', 'ssh_manual', 'none']).optional().default('github_auto'),
+    deployCommand: z
+      .string()
+      .trim()
+      .max(500)
+      .nullable()
+      .optional()
+      .transform((v) => (v && v.trim().length > 0 ? v : null)),
     criteria: z.array(criterionSchema).max(20),
   })
   .refine((b) => b.pauseMaxSeconds >= b.pauseMinSeconds, {
     message: 'pauseMaxSeconds must be >= pauseMinSeconds',
     path: ['pauseMaxSeconds'],
+  })
+  // custom-автор требует и имя, и email.
+  .refine((b) => b.gitAuthorMode !== 'custom' || (!!b.gitAuthorName && !!b.gitAuthorEmail), {
+    message: 'gitAuthorName and gitAuthorEmail are required when gitAuthorMode is custom',
+    path: ['gitAuthorName'],
+  })
+  // ssh_manual требует команду деплоя.
+  .refine((b) => b.deployMethod !== 'ssh_manual' || !!b.deployCommand, {
+    message: 'deployCommand is required when deployMethod is ssh_manual',
+    path: ['deployCommand'],
   });
 
 type Deps = {
@@ -93,6 +133,13 @@ export function buildAutomationRouter(deps: Deps): Router {
           pauseMinSeconds: body.pauseMinSeconds,
           pauseMaxSeconds: body.pauseMaxSeconds,
           ralphMode: body.ralphMode,
+          gitAuthorMode: body.gitAuthorMode,
+          gitAuthorName: body.gitAuthorName,
+          gitAuthorEmail: body.gitAuthorEmail,
+          ignoreClaudeMd: body.ignoreClaudeMd,
+          ultracodeReviewEnabled: body.ultracodeReviewEnabled,
+          deployMethod: body.deployMethod,
+          deployCommand: body.deployCommand,
           criteria: body.criteria,
         });
         res.json(automationConfigToDto(config));
@@ -113,6 +160,13 @@ function automationConfigToDto(config: AutomationConfig): {
   pauseMinSeconds: number;
   pauseMaxSeconds: number;
   ralphMode: string;
+  gitAuthorMode: AutomationConfig['gitAuthorMode'];
+  gitAuthorName: string | null;
+  gitAuthorEmail: string | null;
+  ignoreClaudeMd: boolean;
+  ultracodeReviewEnabled: boolean;
+  deployMethod: AutomationConfig['deployMethod'];
+  deployCommand: string | null;
   runStatus: AutomationConfig['runStatus'];
   runStartedAt: string | null;
   tasksCreated: number;
@@ -133,6 +187,13 @@ function automationConfigToDto(config: AutomationConfig): {
     pauseMinSeconds: config.pauseMinSeconds,
     pauseMaxSeconds: config.pauseMaxSeconds,
     ralphMode: config.ralphMode,
+    gitAuthorMode: config.gitAuthorMode,
+    gitAuthorName: config.gitAuthorName,
+    gitAuthorEmail: config.gitAuthorEmail,
+    ignoreClaudeMd: config.ignoreClaudeMd,
+    ultracodeReviewEnabled: config.ultracodeReviewEnabled,
+    deployMethod: config.deployMethod,
+    deployCommand: config.deployCommand,
     runStatus: config.runStatus,
     runStartedAt: config.runStartedAt ? config.runStartedAt.toISOString() : null,
     tasksCreated: config.tasksCreated,

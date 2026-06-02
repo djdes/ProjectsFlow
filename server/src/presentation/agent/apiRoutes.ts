@@ -412,6 +412,13 @@ function automationForDispatcherToDto(v: AutomationForDispatcher): {
   pauseMinSeconds: number;
   pauseMaxSeconds: number;
   ralphMode: string;
+  gitAuthorMode: AutomationForDispatcher['gitAuthorMode'];
+  gitAuthorName: string | null;
+  gitAuthorEmail: string | null;
+  ignoreClaudeMd: boolean;
+  ultracodeReviewEnabled: boolean;
+  deployMethod: AutomationForDispatcher['deployMethod'];
+  deployCommand: string | null;
   nextCriterion: AutomationForDispatcher['nextCriterion'];
 } {
   return {
@@ -426,6 +433,13 @@ function automationForDispatcherToDto(v: AutomationForDispatcher): {
     pauseMinSeconds: v.pauseMinSeconds,
     pauseMaxSeconds: v.pauseMaxSeconds,
     ralphMode: v.ralphMode,
+    gitAuthorMode: v.gitAuthorMode,
+    gitAuthorName: v.gitAuthorName,
+    gitAuthorEmail: v.gitAuthorEmail,
+    ignoreClaudeMd: v.ignoreClaudeMd,
+    ultracodeReviewEnabled: v.ultracodeReviewEnabled,
+    deployMethod: v.deployMethod,
+    deployCommand: v.deployCommand,
     nextCriterion: v.nextCriterion,
   };
 }

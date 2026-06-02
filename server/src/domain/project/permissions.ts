@@ -31,6 +31,10 @@ export type ProjectAction =
   | 'manage_finance'
   | 'set_project_dispatcher'
   | 'set_git_token_delegation'
+  // Настройки публикации/деплоя автоматизации (git-автор, игнор CLAUDE.md, UltraCode-гейт,
+  // метод/команда деплоя). Owner-only: deployCommand = произвольный shell на хосте диспетчера,
+  // gitAuthorMode='owner' раскрывает email владельца в публичных коммитах. См. db/061.
+  | 'set_publish_settings'
   // file-sync: пуш/ack снепшотов и управление workspace со стороны клиента-владельца.
   | 'manage_file_sync'
   // Мониторинг серверов: просмотр метрик/логов/алертов (все участники) и управление
@@ -76,6 +80,9 @@ const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   // Admin может через admin-bypass — НО granter остаётся = project.ownerId
   // (admin делегирует НЕ свой токен; см. SetGitTokenDelegation use-case).
   set_git_token_delegation: 'owner',
+  // Публикация/деплой автоматизации — только владелец (RCE-поверхность deployCommand +
+  // раскрытие email владельца). Editor может сохранять критерии/лимиты, но не эти поля.
+  set_publish_settings: 'owner',
   // file-sync: клиент-владелец пушит снепшоты / делает ack (editor+). Байтовые операции
   // СО СТОРОНЫ ДИСПЕТЧЕРА гейтятся отдельно через requireDispatcherAccess (не ролью).
   manage_file_sync: 'editor',

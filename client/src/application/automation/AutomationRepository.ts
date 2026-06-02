@@ -1,4 +1,9 @@
-import type { AutomationConfig, AutomationLimitKind } from '@/domain/automation/AutomationConfig';
+import type {
+  AutomationConfig,
+  AutomationLimitKind,
+  DeployMethod,
+  GitAuthorMode,
+} from '@/domain/automation/AutomationConfig';
 
 export type SaveAutomationInput = {
   readonly enabled: boolean;
@@ -8,6 +13,13 @@ export type SaveAutomationInput = {
   readonly pauseMinSeconds: number;
   readonly pauseMaxSeconds: number;
   readonly ralphMode: string;
+  readonly gitAuthorMode: GitAuthorMode;
+  readonly gitAuthorName: string | null;
+  readonly gitAuthorEmail: string | null;
+  readonly ignoreClaudeMd: boolean;
+  readonly ultracodeReviewEnabled: boolean;
+  readonly deployMethod: DeployMethod;
+  readonly deployCommand: string | null;
   readonly criteria: ReadonlyArray<{
     readonly key: string;
     readonly enabled: boolean;

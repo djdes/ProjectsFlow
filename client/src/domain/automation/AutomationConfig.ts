@@ -5,6 +5,12 @@ export type AutomationLimitKind = 'count' | 'time';
 
 export type AutomationRunStatus = 'idle' | 'running' | 'completed' | 'stopped';
 
+// От чьего имени воркер коммитит автоправки: фикс. бот / владелец / заданные вручную.
+export type GitAuthorMode = 'bot' | 'owner' | 'custom';
+
+// Как деплоить после успешной задачи: автодеплой GitHub / своя ssh-команда / никак.
+export type DeployMethod = 'github_auto' | 'ssh_manual' | 'none';
+
 export type AutomationCriterion = {
   readonly key: string;
   readonly label: string;
@@ -23,6 +29,14 @@ export type AutomationConfig = {
   readonly pauseMinSeconds: number;
   readonly pauseMaxSeconds: number;
   readonly ralphMode: string;
+  // Публикация/деплой (db/061).
+  readonly gitAuthorMode: GitAuthorMode;
+  readonly gitAuthorName: string | null;
+  readonly gitAuthorEmail: string | null;
+  readonly ignoreClaudeMd: boolean;
+  readonly ultracodeReviewEnabled: boolean;
+  readonly deployMethod: DeployMethod;
+  readonly deployCommand: string | null;
   // Прогресс (read-only из БД).
   readonly runStatus: AutomationRunStatus;
   readonly runStartedAt: string | null;

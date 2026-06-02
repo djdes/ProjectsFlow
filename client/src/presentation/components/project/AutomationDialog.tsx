@@ -17,6 +17,8 @@ import { useContainer } from '@/infrastructure/di/container';
 import type {
   AutomationConfig,
   AutomationLimitKind,
+  DeployMethod,
+  GitAuthorMode,
 } from '@/domain/automation/AutomationConfig';
 
 type Props = {
@@ -42,6 +44,14 @@ type Draft = {
   limitMinutes: number;
   pauseMinMinutes: number;
   pauseMaxMinutes: number;
+  // Публикация/деплой.
+  gitAuthorMode: GitAuthorMode;
+  gitAuthorName: string;
+  gitAuthorEmail: string;
+  ignoreClaudeMd: boolean;
+  ultracodeReviewEnabled: boolean;
+  deployMethod: DeployMethod;
+  deployCommand: string;
   criteria: DraftCriterion[];
 };
 
@@ -60,6 +70,13 @@ function toDraft(config: AutomationConfig): Draft {
     limitMinutes: config.limitMinutes ?? 60,
     pauseMinMinutes: Math.max(1, Math.round(config.pauseMinSeconds / 60)),
     pauseMaxMinutes: Math.max(1, Math.round(config.pauseMaxSeconds / 60)),
+    gitAuthorMode: config.gitAuthorMode,
+    gitAuthorName: config.gitAuthorName ?? '',
+    gitAuthorEmail: config.gitAuthorEmail ?? '',
+    ignoreClaudeMd: config.ignoreClaudeMd,
+    ultracodeReviewEnabled: config.ultracodeReviewEnabled,
+    deployMethod: config.deployMethod,
+    deployCommand: config.deployCommand ?? 'npm run deploy',
     criteria: config.criteria.map((c) => ({
       key: c.key,
       label: c.label,
@@ -139,6 +156,17 @@ export function AutomationDialog({
       setError('Выберите хотя бы один критерий');
       return;
     }
+    if (
+      draft.gitAuthorMode === 'custom' &&
+      (draft.gitAuthorName.trim().length === 0 || draft.gitAuthorEmail.trim().length === 0)
+    ) {
+      setError('Укажите имя и email для своего git-автора');
+      return;
+    }
+    if (draft.deployMethod === 'ssh_manual' && draft.deployCommand.trim().length === 0) {
+      setError('Укажите команду деплоя для SSH-метода');
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -151,6 +179,16 @@ export function AutomationDialog({
         pauseMinSeconds: draft.pauseMinMinutes * 60,
         pauseMaxSeconds: draft.pauseMaxMinutes * 60,
         ralphMode: 'silent',
+        gitAuthorMode: draft.gitAuthorMode,
+        gitAuthorName:
+          draft.gitAuthorMode === 'custom' ? draft.gitAuthorName.trim() : null,
+        gitAuthorEmail:
+          draft.gitAuthorMode === 'custom' ? draft.gitAuthorEmail.trim() : null,
+        ignoreClaudeMd: draft.ignoreClaudeMd,
+        ultracodeReviewEnabled: draft.ultracodeReviewEnabled,
+        deployMethod: draft.deployMethod,
+        deployCommand:
+          draft.deployMethod === 'ssh_manual' ? draft.deployCommand.trim() : null,
         criteria: draft.criteria.map((c) => ({
           key: c.key,
           enabled: c.enabled,
@@ -347,6 +385,148 @@ export function AutomationDialog({
                 />
                 <span className="text-muted-foreground">мин</span>
               </div>
+            </div>
+
+            {/* Автор git-коммитов */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Автор git-коммитов
+              </p>
+              <RadioGroup
+                value={draft.gitAuthorMode}
+                onValueChange={(v) => update({ gitAuthorMode: v as GitAuthorMode })}
+                className="gap-2"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="bot" id="author-bot" />
+                  <Label htmlFor="author-bot" className="text-sm font-normal">
+                    Бот ProjectsFlow
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="owner" id="author-owner" />
+                  <Label htmlFor="author-owner" className="text-sm font-normal">
+                    Владелец проекта
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="custom" id="author-custom" />
+                  <Label htmlFor="author-custom" className="text-sm font-normal">
+                    Своё имя и email
+                  </Label>
+                </div>
+              </RadioGroup>
+              {draft.gitAuthorMode === 'custom' && (
+                <div className="space-y-2 rounded-md border px-3 py-2.5">
+                  <div className="space-y-1">
+                    <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Имя автора
+                    </Label>
+                    <Input
+                      value={draft.gitAuthorName}
+                      maxLength={120}
+                      placeholder="Напр. ProjectsFlow Bot"
+                      onChange={(e) => update({ gitAuthorName: e.target.value })}
+                      className="h-8"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Email автора
+                    </Label>
+                    <Input
+                      type="email"
+                      value={draft.gitAuthorEmail}
+                      maxLength={254}
+                      placeholder="bot@example.com"
+                      onChange={(e) => update({ gitAuthorEmail: e.target.value })}
+                      className="h-8"
+                    />
+                  </div>
+                </div>
+              )}
+              {draft.gitAuthorMode === 'owner' && (
+                <p className="text-[11px] text-muted-foreground">
+                  В публичных коммитах будут видны имя и email владельца проекта.
+                </p>
+              )}
+            </div>
+
+            {/* Игнорировать ритуал CLAUDE.md */}
+            <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+              <div className="pr-3">
+                <Label className="text-sm font-medium">Игнорировать ритуал CLAUDE.md</Label>
+                <p className="text-xs text-muted-foreground">
+                  Воркер не добавит «Co-Authored-By» и пропустит kanban-ритуал проекта — коммит
+                  только под выбранным автором.
+                </p>
+              </div>
+              <Switch
+                checked={draft.ignoreClaudeMd}
+                onCheckedChange={(v) => update({ ignoreClaudeMd: v })}
+                aria-label="Игнорировать ритуал CLAUDE.md"
+              />
+            </div>
+
+            {/* UltraCode review-гейт */}
+            <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+              <div className="pr-3">
+                <Label className="text-sm font-medium">Проверка UltraCode перед прод-пушем</Label>
+                <p className="text-xs text-muted-foreground">
+                  Перед push в прод — проверка совместимости от Claude Opus. При найденных проблемах
+                  задача блокируется, push и деплой не выполняются.
+                </p>
+              </div>
+              <Switch
+                checked={draft.ultracodeReviewEnabled}
+                onCheckedChange={(v) => update({ ultracodeReviewEnabled: v })}
+                aria-label="Проверка UltraCode перед прод-пушем"
+              />
+            </div>
+
+            {/* Деплой */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Деплой в прод
+              </p>
+              <RadioGroup
+                value={draft.deployMethod}
+                onValueChange={(v) => update({ deployMethod: v as DeployMethod })}
+                className="gap-2"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="github_auto" id="deploy-github" />
+                  <Label htmlFor="deploy-github" className="text-sm font-normal">
+                    Автодеплой GitHub (по push)
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="ssh_manual" id="deploy-ssh" />
+                  <Label htmlFor="deploy-ssh" className="text-sm font-normal">
+                    Своя команда (build + ssh-деплой)
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="none" id="deploy-none" />
+                  <Label htmlFor="deploy-none" className="text-sm font-normal">
+                    Не деплоить
+                  </Label>
+                </div>
+              </RadioGroup>
+              {draft.deployMethod === 'ssh_manual' && (
+                <div className="space-y-1">
+                  <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Команда деплоя (в корне проекта, после каждой задачи)
+                  </Label>
+                  <Input
+                    value={draft.deployCommand}
+                    maxLength={500}
+                    placeholder="npm run deploy"
+                    onChange={(e) => update({ deployCommand: e.target.value })}
+                    className="h-8 font-mono text-xs"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Прогресс */}

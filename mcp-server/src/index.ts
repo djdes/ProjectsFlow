@@ -849,8 +849,14 @@ const TOOLS = [
       'dispatched project has 0 open tasks and automationEnabled=true (from ' +
       'pf_list_my_dispatched_projects). If shouldRun=true and nextCriterion is set: run Claude ' +
       'with nextCriterion.systemPrompt (+ userHint) to produce ONE task description, create the ' +
-      'task (status=todo, ralphMode from config), then call pf_record_automation_task. Only the ' +
-      "project's assigned dispatcher may call this (403 otherwise).",
+      'task (status=todo, ralphMode from config), then call pf_record_automation_task. The ' +
+      'response also carries per-project publish/deploy settings the worker must honor on every ' +
+      'run: gitAuthorMode/gitAuthorName/gitAuthorEmail (commit identity — name/email already ' +
+      "resolved; 'bot' means use the fixed agent identity), ignoreClaudeMd (skip the project's " +
+      'CLAUDE.md commit ritual / Co-Authored-By when true), ultracodeReviewEnabled (run a ' +
+      'blocking compatibility review before push), and deployMethod/deployCommand (github_auto = ' +
+      'do nothing, ssh_manual = run deployCommand after each successful push, none = no deploy). ' +
+      "Only the project's assigned dispatcher may call this (403 otherwise).",
     inputSchema: {
       type: 'object',
       properties: {
