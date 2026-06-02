@@ -1,5 +1,14 @@
 import { useMemo, useRef, useState } from 'react';
-import { Check, Loader2, Sparkles, X } from 'lucide-react';
+import {
+  BrainCircuit,
+  Check,
+  ChevronDown,
+  FolderInput,
+  Loader2,
+  Sparkles,
+  Wand2,
+  X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -53,6 +62,11 @@ type Row = {
 
 const INBOX_VALUE = '__inbox__';
 
+const TAB_HINT: Record<TabKey, string> = {
+  simple: 'Простыми словами и аккуратно — смысл без изменений.',
+  advanced: 'Развёрнуто: цель → шаги → критерии, с учётом базы знаний проекта.',
+};
+
 // Кнопка «AI» в композере: вместо одного результата открывает диалог с ДВУМЯ вариантами
 // переработки («Простой»/«Продвинутый») на вкладках и опциональным распределением
 // разбитых задач по проектам (чекбокс → список-ревью → создание).
@@ -72,6 +86,7 @@ export function AiComposeDialog({
   const [activeTab, setActiveTab] = useState<TabKey>('simple');
   const [distribute, setDistribute] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [errorMsg, setErrorMsg] = useState('');
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   // Монотонный счётчик: «Отмена»/закрытие инкрементит → поздний результат отбрасывается.
@@ -86,12 +101,16 @@ export function AiComposeDialog({
   const canDistribute =
     !!result && (result.segments.length >= 2 || result.segments.some((s) => s.projectId !== null));
 
+  const toggleExpand = (id: string): void =>
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+
   const start = async (): Promise<void> => {
     if (disabled || trimmed.length === 0) return;
     const reqId = ++reqIdRef.current;
     setResult(null);
     setErrorMsg('');
     setActiveTab('simple');
+    setExpanded({});
     setProgress(null);
     setPhase('loading');
     try {
@@ -206,7 +225,9 @@ export function AiComposeDialog({
           ? progress
             ? `Создано ${progress.done} из ${progress.total}…`
             : 'Создаём…'
-          : 'Сравни «Простой» и «Продвинутый». Можно применить один вариант в поле или распределить задачи по проектам.';
+          : 'Сравни «Простой» и «Продвинутый». Можно применить вариант в поле или распределить задачи по проектам.';
+
+  const segCount = result?.segments.length ?? 0;
 
   return (
     <>
@@ -247,96 +268,155 @@ export function AiComposeDialog({
               {errorMsg}
             </p>
           ) : phase === 'loading' || (phase === 'creating' && !result) ? (
-            <div className="flex min-h-[12rem] items-center justify-center gap-2 text-muted-foreground">
-              <Loader2 className="size-5 animate-spin" />
-              Генерация…
+            <div className="flex min-h-[14rem] flex-col items-center justify-center gap-3 text-muted-foreground">
+              <div className="relative">
+                <div className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
+                <div className="relative grid size-12 place-items-center rounded-full bg-primary/10">
+                  <Sparkles className="size-6 animate-pulse text-primary" />
+                </div>
+              </div>
+              <span className="text-sm">Генерация двух вариантов…</span>
             </div>
           ) : result ? (
             <div className="flex min-h-0 flex-1 flex-col gap-3">
-              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
-                <TabsList>
-                  <TabsTrigger value="simple">Простой</TabsTrigger>
-                  <TabsTrigger value="advanced">Продвинутый</TabsTrigger>
-                </TabsList>
-              </Tabs>
+              {/* Вкладки вариантов с иконками + подсказка активного режима */}
+              <div className="space-y-1.5">
+                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="simple" className="gap-1.5">
+                      <Wand2 className="size-3.5" />
+                      Простой
+                    </TabsTrigger>
+                    <TabsTrigger value="advanced" className="gap-1.5">
+                      <BrainCircuit className="size-3.5" />
+                      Продвинутый
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                <p className="px-0.5 text-xs text-muted-foreground">{TAB_HINT[activeTab]}</p>
+              </div>
 
               {!distribute ? (
-                <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words rounded-md border bg-background px-3 py-2 text-sm max-sm:max-h-64 sm:min-h-[14rem]">
-                  {joinedDoc(activeTab)}
+                <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+                  <span className="px-0.5 text-xs font-medium text-muted-foreground">
+                    Текст для вставки в поле
+                  </span>
+                  <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words rounded-md border bg-background px-3 py-2 text-sm max-sm:max-h-60 sm:min-h-[14rem]">
+                    {joinedDoc(activeTab)}
+                  </div>
                 </div>
               ) : (
-                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded-md border bg-muted/20 p-2 max-sm:max-h-72 sm:min-h-[14rem]">
-                  {rows.map((row) => {
-                    const seg = result.segments.find((s) => s.id === row.id);
-                    if (!seg) return null;
-                    return (
-                      <div
-                        key={row.id}
-                        className={cn(
-                          'rounded-md border bg-background p-2 transition-opacity',
-                          row.include ? '' : 'opacity-50',
-                        )}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            checked={row.include}
-                            onCheckedChange={(c) =>
-                              setRows((prev) =>
-                                prev.map((r) => (r.id === row.id ? { ...r, include: c === true } : r)),
-                              )
-                            }
-                            aria-label="Создавать эту задачу"
-                          />
-                          <input
-                            value={row.title}
-                            onChange={(e) =>
-                              setRows((prev) =>
-                                prev.map((r) => (r.id === row.id ? { ...r, title: e.target.value } : r)),
-                              )
-                            }
-                            placeholder="Заголовок задачи"
-                            className="min-w-0 flex-1 rounded border bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                          />
-                          <select
-                            value={row.projectId ?? INBOX_VALUE}
-                            onChange={(e) =>
-                              setRows((prev) =>
-                                prev.map((r) =>
-                                  r.id === row.id
-                                    ? { ...r, projectId: e.target.value === INBOX_VALUE ? null : e.target.value }
-                                    : r,
-                                ),
-                              )
-                            }
-                            className="max-w-[40%] shrink-0 rounded border bg-background px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                            title="Проект назначения"
-                          >
-                            <option value={INBOX_VALUE}>Без проекта (Входящие)</option>
-                            {realProjects.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name}
-                              </option>
-                            ))}
-                          </select>
+                <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+                  <span className="px-0.5 text-xs font-medium text-muted-foreground">
+                    {segCount} {pluralTasks(segCount)} — проверь заголовок, проект и текст
+                  </span>
+                  <div className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded-md border bg-muted/20 p-2 max-sm:max-h-[22rem] sm:min-h-[14rem]">
+                    {rows.map((row) => {
+                      const seg = result.segments.find((s) => s.id === row.id);
+                      if (!seg) return null;
+                      const body = bodyFor(seg, activeTab);
+                      const isLong = body.trim().length > 140;
+                      const isOpen = !!expanded[row.id];
+                      return (
+                        <div
+                          key={row.id}
+                          className={cn(
+                            'rounded-md border bg-background p-2 transition-opacity',
+                            row.include ? '' : 'opacity-45',
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={row.include}
+                              onCheckedChange={(c) =>
+                                setRows((prev) =>
+                                  prev.map((r) => (r.id === row.id ? { ...r, include: c === true } : r)),
+                                )
+                              }
+                              aria-label="Создавать эту задачу"
+                            />
+                            <input
+                              value={row.title}
+                              onChange={(e) =>
+                                setRows((prev) =>
+                                  prev.map((r) => (r.id === row.id ? { ...r, title: e.target.value } : r)),
+                                )
+                              }
+                              placeholder="Заголовок задачи"
+                              className="min-w-0 flex-1 rounded border bg-transparent px-2 py-1 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-ring"
+                            />
+                          </div>
+
+                          <div className="mt-2 flex items-center gap-1.5 pl-6">
+                            <FolderInput className="size-3.5 shrink-0 text-muted-foreground" />
+                            <select
+                              value={row.projectId ?? INBOX_VALUE}
+                              onChange={(e) =>
+                                setRows((prev) =>
+                                  prev.map((r) =>
+                                    r.id === row.id
+                                      ? { ...r, projectId: e.target.value === INBOX_VALUE ? null : e.target.value }
+                                      : r,
+                                  ),
+                                )
+                              }
+                              className="min-w-0 flex-1 rounded border bg-background px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                              title="Проект назначения"
+                            >
+                              <option value={INBOX_VALUE}>Без проекта (Входящие)</option>
+                              {realProjects.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="mt-2 pl-6">
+                            <div
+                              className={cn(
+                                'whitespace-pre-wrap break-words text-xs text-muted-foreground',
+                                isOpen
+                                  ? 'max-h-60 overflow-y-auto rounded border bg-muted/30 p-2'
+                                  : 'line-clamp-2',
+                              )}
+                            >
+                              {body}
+                            </div>
+                            {isLong && (
+                              <button
+                                type="button"
+                                onClick={() => toggleExpand(row.id)}
+                                className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                              >
+                                <ChevronDown
+                                  className={cn('size-3 transition-transform', isOpen && 'rotate-180')}
+                                />
+                                {isOpen ? 'Свернуть' : 'Показать полностью'}
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <p className="mt-1.5 line-clamp-3 whitespace-pre-wrap break-words pl-6 text-xs text-muted-foreground">
-                          {bodyFor(seg, activeTab)}
-                        </p>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
               {canDistribute && (
-                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border bg-muted/30 px-3 py-2.5 text-sm transition-colors hover:bg-muted/50">
                   <Checkbox
                     checked={distribute}
                     onCheckedChange={(c) => setDistribute(c === true)}
                     disabled={phase === 'creating'}
                   />
-                  Распределить по проектам — {includedCount}{' '}
-                  {pluralTasks(includedCount)}
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <FolderInput className="size-4 text-primary" />
+                    Распределить по проектам
+                  </span>
+                  <span className="ml-auto rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                    {includedCount} {pluralTasks(includedCount)}
+                  </span>
                 </label>
               )}
             </div>
@@ -351,7 +431,7 @@ export function AiComposeDialog({
             {phase === 'creating' && (
               <Button type="button" variant="ghost" disabled>
                 <Loader2 className="mr-1.5 size-4 animate-spin" />
-                Создаём…
+                {progress ? `Создаём ${progress.done}/${progress.total}…` : 'Создаём…'}
               </Button>
             )}
             {phase === 'preview' && (
@@ -395,6 +475,7 @@ export function AiComposeDialog({
   );
 }
 
+// Винительный падеж — основной CTA «Создать N задачу/задачи/задач».
 function pluralTasks(n: number): string {
   const mod10 = n % 10;
   const mod100 = n % 100;
