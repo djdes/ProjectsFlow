@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, lte } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { serverSnapshots, type ServerSnapshotRow } from '../db/schema.js';
 import type {
@@ -91,23 +91,21 @@ export class DrizzleSnapshotRepository implements SnapshotRepository {
   }
 
   async listLatestPerServer(projectId: string): Promise<Map<string, ServerSnapshot>> {
-    const maxRows = await this.db
-      .select({
-        serverId: serverSnapshots.serverId,
-        mx: sql<Date>`MAX(${serverSnapshots.collectedAt})`,
-      })
+    // Сначала distinct server_id (groupBy без агрегата), потом getLatest по каждому.
+    // НЕ берём MAX(collected_at) и не биндим его обратно в eq(): mysql2 отдаёт
+    // агрегат TIMESTAMP строкой, а Drizzle на bind'е timestamp-колонки зовёт
+    // value.toISOString() → TypeError. getLatest сравнивает по самой колонке (desc+limit1),
+    // без обратного bind'а — безопасно.
+    const idRows = await this.db
+      .select({ serverId: serverSnapshots.serverId })
       .from(serverSnapshots)
       .where(eq(serverSnapshots.projectId, projectId))
       .groupBy(serverSnapshots.serverId);
 
     const map = new Map<string, ServerSnapshot>();
-    for (const r of maxRows) {
-      const [row] = await this.db
-        .select()
-        .from(serverSnapshots)
-        .where(and(eq(serverSnapshots.serverId, r.serverId), eq(serverSnapshots.collectedAt, r.mx)))
-        .limit(1);
-      if (row) map.set(r.serverId, toSnapshot(row));
+    for (const { serverId } of idRows) {
+      const snap = await this.getLatest(serverId);
+      if (snap) map.set(serverId, snap);
     }
     return map;
   }
