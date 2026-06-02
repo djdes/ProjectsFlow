@@ -679,12 +679,20 @@ export function TaskDrawer({
               <TabsContent
                 value="live"
                 forceMount
-                className="min-h-0 overflow-hidden px-4 py-3 data-[state=inactive]:hidden sm:px-6"
+                className="min-h-0 overflow-hidden data-[state=inactive]:hidden"
               >
                 <LiveTab
-                  projectId={task.projectId}
-                  taskId={task.id}
+                  task={task}
+                  attachments={headerAttachments}
+                  active={activeTab === 'live'}
+                  backlogTail={backlogTail}
+                  todoTail={todoTail}
                   onRunningChange={setLiveRunning}
+                  onCommentCreated={(c) => {
+                    onCommentCreatedRef.current?.(c);
+                    onCommitsChange?.();
+                  }}
+                  onTaskChanged={() => onCommitsChange?.()}
                 />
               </TabsContent>
             </Tabs>
