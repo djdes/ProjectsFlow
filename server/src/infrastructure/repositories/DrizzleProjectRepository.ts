@@ -27,6 +27,21 @@ import type {
 } from '../../application/project/ProjectRepository.js';
 import type { KanbanBoardSettings } from '../../domain/kanban/KanbanSettings.js';
 
+// MariaDB отдаёт JSON-колонку (longtext) СТРОКОЙ, а не распарсенным объектом (в отличие от
+// нативного JSON в MySQL). Drizzle json() это не нормализует — парсим сами. См. одноимённый
+// хелпер в DrizzleLiveRepository / DrizzleFileSyncRepository.
+function parseJsonCol<T>(v: unknown, fallback: T): T {
+  if (v === null || v === undefined) return fallback;
+  if (typeof v === 'string') {
+    try {
+      return JSON.parse(v) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return v as T;
+}
+
 function toProject(row: ProjectRow): Project {
   return {
     id: row.id,
@@ -173,7 +188,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
       .from(projects)
       .where(eq(projects.id, projectId))
       .limit(1);
-    return rows[0]?.settings ?? null;
+    return parseJsonCol<KanbanBoardSettings | null>(rows[0]?.settings, null);
   }
 
   async setKanbanSettings(projectId: string, settings: KanbanBoardSettings): Promise<void> {

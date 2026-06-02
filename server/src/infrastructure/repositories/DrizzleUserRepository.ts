@@ -11,6 +11,20 @@ import type {
 import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
 
+// MariaDB отдаёт JSON-колонку (longtext) СТРОКОЙ, а не объектом — Drizzle json() это не
+// нормализует. Парсим сами (см. parseJsonCol в DrizzleLiveRepository / DrizzleFileSyncRepository).
+function parseJsonCol<T>(v: unknown, fallback: T): T {
+  if (v === null || v === undefined) return fallback;
+  if (typeof v === 'string') {
+    try {
+      return JSON.parse(v) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return v as T;
+}
+
 function toUser(row: UserRow): User {
   return {
     id: row.id,
@@ -222,7 +236,10 @@ export class DrizzleUserRepository implements UserRepository {
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
-    return rows[0]?.colors ?? null;
+    return parseJsonCol<import('../../domain/kanban/KanbanSettings.js').KanbanDefaultColors | null>(
+      rows[0]?.colors,
+      null,
+    );
   }
 
   async setDefaultKanbanColors(userId: string, colors: import('../../domain/kanban/KanbanSettings.js').KanbanDefaultColors): Promise<void> {

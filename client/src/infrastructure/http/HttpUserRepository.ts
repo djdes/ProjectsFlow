@@ -53,8 +53,17 @@ export class HttpUserRepository implements UserRepository {
   }
 
   async getDefaultKanbanColors(): Promise<KanbanDefaultColors> {
-    const { colors } = await httpClient.get<{ colors?: KanbanDefaultColors }>('/me/kanban-colors');
-    return colors ?? {};
+    const { colors } = await httpClient.get<{ colors?: unknown }>('/me/kanban-colors');
+    // Защита от строкового значения JSON-колонки (старый сервер): нормализуем в объект.
+    let val: unknown = colors;
+    if (typeof val === 'string') {
+      try {
+        val = JSON.parse(val);
+      } catch {
+        return {};
+      }
+    }
+    return val && typeof val === 'object' && !Array.isArray(val) ? (val as KanbanDefaultColors) : {};
   }
 
   async setDefaultKanbanColors(colors: KanbanDefaultColors): Promise<KanbanDefaultColors> {

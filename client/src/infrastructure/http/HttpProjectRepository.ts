@@ -17,6 +17,20 @@ import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs
 import type { KanbanBoardSettings } from '@/domain/kanban/KanbanSettings';
 import { HttpError, httpClient } from './httpClient';
 
+// Нормализует значение JSON-колонки в plain-объект: парсит строку (MariaDB longtext),
+// отсекает не-объекты/массивы. Возвращает {} для всего невалидного.
+function asPlainObject<T>(v: unknown): T {
+  let val = v;
+  if (typeof val === 'string') {
+    try {
+      val = JSON.parse(val);
+    } catch {
+      return {} as T;
+    }
+  }
+  return val && typeof val === 'object' && !Array.isArray(val) ? (val as T) : ({} as T);
+}
+
 type ProjectDto = {
   id: string;
   ownerId: string;
@@ -236,10 +250,12 @@ export class HttpProjectRepository implements ProjectRepository {
   }
 
   async getKanbanSettings(projectId: string): Promise<KanbanBoardSettings> {
-    const { settings } = await httpClient.get<{ settings?: KanbanBoardSettings }>(
+    const { settings } = await httpClient.get<{ settings?: unknown }>(
       `/projects/${projectId}/kanban-settings`,
     );
-    return settings ?? {};
+    // Защита: старый сервер (до фикса) мог отдать JSON-колонку строкой — парсим/нормализуем
+    // в объект, иначе спред строки в хук'е даст мусорные числовые ключи.
+    return asPlainObject<KanbanBoardSettings>(settings);
   }
 
   async setKanbanSettings(
