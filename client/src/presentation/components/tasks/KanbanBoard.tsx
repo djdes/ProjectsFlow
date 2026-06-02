@@ -118,8 +118,10 @@ function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStat
 export function KanbanBoard({ projectId, showCommits = true, projectName, hideDone = false, memberCount }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const { user } = useCurrentUser();
-  // showCheckbox = «это inbox-board». Inbox-board задаётся через showCommits=false
-  // (у inbox нет git-репо, так что коммиты скрыты). Единственный сигнал — этого хватает.
+  // isInbox = это inbox-board (задаётся через showCommits=false — у inbox нет git-репо).
+  // Чекбокс «выполнено» показываем на ВСЕХ досках (inbox и проекты): клик → done,
+  // снятие → restore прежней колонки (status_before_done). Сервер сам гейтит право
+  // (move_task=editor): viewer получит 403 + revert, как и при drag'е.
   const isInbox = !showCommits;
   const isShared = !isInbox && (memberCount ?? 0) > 1;
   // Общие (на проект) настройки доски: цвета/переименования/скрытие колонок + глобальные
@@ -431,7 +433,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
                 showShortId={showCommits}
                 onQuickPromote={status === 'backlog' ? handleQuickPromote : undefined}
                 onTaskChanged={() => void refetch()}
-                showCheckbox={isInbox}
+                showCheckbox
                 lastDoneTaskId={lastDoneTaskId}
                 lastTodoTaskId={lastTodoTaskId}
                 currentUserId={user?.id ?? null}

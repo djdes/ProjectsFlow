@@ -151,7 +151,7 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
               key={t.id}
               task={t}
               showShortId={showCommits}
-              showCheckbox={!showCommits}
+              showCheckbox
               currentUserId={user?.id ?? null}
               lastDoneTaskId={lastDoneTaskId}
               lastTodoTaskId={lastTodoTaskId}
