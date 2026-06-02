@@ -3,6 +3,7 @@ import {
   BrainCircuit,
   Check,
   ChevronDown,
+  FileText,
   FolderInput,
   Loader2,
   Sparkles,
@@ -14,8 +15,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -67,9 +66,29 @@ const TAB_HINT: Record<TabKey, string> = {
   advanced: 'Развёрнуто: цель → шаги → критерии, с учётом базы знаний проекта.',
 };
 
-// Кнопка «AI» в композере: вместо одного результата открывает диалог с ДВУМЯ вариантами
-// переработки («Простой»/«Продвинутый») на вкладках и опциональным распределением
-// разбитых задач по проектам (чекбокс → список-ревью → создание).
+// Круглый чек-индикатор выбора задачи: Radix Checkbox со скруглением в круг + заливкой
+// primary. Заметно красивее дефолтного квадрата, сохраняет доступность/фокус.
+function RoundCheck({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof Checkbox>): React.ReactElement {
+  return (
+    <Checkbox
+      className={cn(
+        'size-5 rounded-full border-2 border-muted-foreground/35 bg-background shadow-none transition-all duration-200',
+        'data-[state=checked]:border-primary data-[state=checked]:bg-primary',
+        'data-[state=unchecked]:hover:border-primary/60',
+        '[&_svg]:size-3',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+// Кнопка «AI» в композере: открывает диалог с ДВУМЯ вариантами переработки
+// («Простой»/«Продвинутый») на вкладках, переключателем режима «в поле / по проектам»
+// и списком-ревью для распределения разбитых задач по проектам.
 export function AiComposeDialog({
   text,
   projectId,
@@ -103,6 +122,9 @@ export function AiComposeDialog({
 
   const toggleExpand = (id: string): void =>
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  const setInclude = (id: string, include: boolean): void =>
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, include } : r)));
 
   const start = async (): Promise<void> => {
     if (disabled || trimmed.length === 0) return;
@@ -207,7 +229,7 @@ export function AiComposeDialog({
     setPhase('idle');
   };
 
-  const title =
+  const headerTitle =
     phase === 'loading'
       ? 'AI готовит варианты…'
       : phase === 'creating'
@@ -216,18 +238,14 @@ export function AiComposeDialog({
           ? 'AI не смог обработать'
           : 'Переработка текста';
 
-  const subtitle =
-    phase === 'loading'
-      ? 'Два варианта + разбивка по проектам. Это занимает до 1–2 минут — можно отменить.'
-      : phase === 'error'
-        ? 'Текст остался без изменений.'
-        : phase === 'creating'
-          ? progress
-            ? `Создано ${progress.done} из ${progress.total}…`
-            : 'Создаём…'
-          : 'Сравни «Простой» и «Продвинутый». Можно применить вариант в поле или распределить задачи по проектам.';
-
-  const segCount = result?.segments.length ?? 0;
+  const headerHint =
+    phase === 'preview'
+      ? 'Сравни варианты — примени в поле или распредели по проектам.'
+      : phase === 'creating'
+        ? 'Создаём выбранные задачи…'
+        : phase === 'error'
+          ? 'Текст остался без изменений.'
+          : 'Два варианта + разбивка по проектам. Это 1–2 минуты — можно отменить.';
 
   return (
     <>
@@ -254,63 +272,117 @@ export function AiComposeDialog({
           if (!open && phase !== 'creating') dismiss();
         }}
       >
-        <DialogContent className="flex max-h-[88dvh] flex-col gap-4 sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 pr-6">
-              <Sparkles className="size-4 shrink-0 text-primary" />
-              {title}
-            </DialogTitle>
-            <DialogDescription>{subtitle}</DialogDescription>
-          </DialogHeader>
-
-          {phase === 'error' ? (
-            <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {errorMsg}
-            </p>
-          ) : phase === 'loading' || (phase === 'creating' && !result) ? (
-            <div className="flex min-h-[14rem] flex-col items-center justify-center gap-3 text-muted-foreground">
-              <div className="relative">
-                <div className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
-                <div className="relative grid size-12 place-items-center rounded-full bg-primary/10">
-                  <Sparkles className="size-6 animate-pulse text-primary" />
-                </div>
-              </div>
-              <span className="text-sm">Генерация двух вариантов…</span>
+        <DialogContent className="flex max-h-[88dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+          {/* HEADER — компактная sticky-шапка в одну смысловую строку */}
+          <div className="flex shrink-0 items-start gap-2.5 border-b px-4 py-3 pr-12">
+            <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md bg-primary/10">
+              <Sparkles className="size-3.5 text-primary" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="truncate text-[15px] font-semibold leading-tight">
+                {headerTitle}
+              </DialogTitle>
+              <DialogDescription className="mt-0.5 line-clamp-2 text-xs leading-snug">
+                {headerHint}
+              </DialogDescription>
             </div>
-          ) : result ? (
-            <div className="flex min-h-0 flex-1 flex-col gap-3">
-              {/* Вкладки вариантов с иконками + подсказка активного режима */}
-              <div className="space-y-1.5">
-                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="simple" className="gap-1.5">
-                      <Wand2 className="size-3.5" />
-                      Простой
-                    </TabsTrigger>
-                    <TabsTrigger value="advanced" className="gap-1.5">
-                      <BrainCircuit className="size-3.5" />
-                      Продвинутый
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
-                <p className="px-0.5 text-xs text-muted-foreground">{TAB_HINT[activeTab]}</p>
-              </div>
+            {phase === 'creating' && progress && (
+              <span className="mt-0.5 shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-primary">
+                {progress.done}/{progress.total}
+              </span>
+            )}
+            {phase === 'loading' && (
+              <Loader2 className="mt-1 size-4 shrink-0 animate-spin text-primary" />
+            )}
+          </div>
 
-              {!distribute ? (
-                <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-                  <span className="px-0.5 text-xs font-medium text-muted-foreground">
-                    Текст для вставки в поле
+          {/* BODY — единственная скроллируемая область */}
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
+            {phase === 'loading' || (phase === 'creating' && !result) ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center text-muted-foreground">
+                <div className="relative">
+                  <span className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
+                  <span className="relative grid size-14 place-items-center rounded-full bg-primary/10">
+                    <Sparkles className="size-7 animate-pulse text-primary" />
                   </span>
-                  <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words rounded-md border bg-background px-3 py-2 text-sm max-sm:max-h-60 sm:min-h-[14rem]">
+                </div>
+                <p className="text-sm font-medium text-foreground">Генерация двух вариантов…</p>
+                <p className="text-xs">Обычно 1–2 минуты. Можно отменить.</p>
+              </div>
+            ) : phase === 'error' ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center">
+                <span className="grid size-14 place-items-center rounded-full bg-destructive/10">
+                  <X className="size-7 text-destructive" />
+                </span>
+                <p className="text-sm font-medium text-foreground">AI не смог обработать</p>
+                <p className="max-w-sm text-xs text-muted-foreground">{errorMsg}</p>
+              </div>
+            ) : result ? (
+              <>
+                {/* Вкладки варианта + подсказка режима */}
+                <div className="space-y-1.5">
+                  <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="simple" className="gap-1.5">
+                        <Wand2 className="size-3.5" />
+                        Простой
+                      </TabsTrigger>
+                      <TabsTrigger value="advanced" className="gap-1.5">
+                        <BrainCircuit className="size-3.5" />
+                        Продвинутый
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                  <p className="px-0.5 text-xs text-muted-foreground">{TAB_HINT[activeTab]}</p>
+                </div>
+
+                {/* Переключатель режима — сегмент-контрол ВЫШЕ управляемой области */}
+                {canDistribute && (
+                  <div className="grid grid-cols-2 gap-1 rounded-xl border bg-muted/50 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setDistribute(false)}
+                      className={cn(
+                        'flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-all',
+                        !distribute
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      <FileText className="size-3.5" />
+                      В одно поле
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDistribute(true)}
+                      className={cn(
+                        'flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-all',
+                        distribute
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      <FolderInput className="size-3.5" />
+                      По проектам
+                      <span
+                        className={cn(
+                          'rounded-full px-1.5 text-[10px] font-semibold tabular-nums',
+                          distribute ? 'bg-primary/15 text-primary' : 'bg-muted-foreground/15',
+                        )}
+                      >
+                        {includedCount}
+                      </span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Управляемая область */}
+                {!distribute ? (
+                  <div className="min-h-0 flex-1 whitespace-pre-wrap break-words rounded-lg border bg-muted/30 px-3 py-2.5 text-sm leading-relaxed">
                     {joinedDoc(activeTab)}
                   </div>
-                </div>
-              ) : (
-                <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-                  <span className="px-0.5 text-xs font-medium text-muted-foreground">
-                    {segCount} {pluralTasks(segCount)} — проверь заголовок, проект и текст
-                  </span>
-                  <div className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded-md border bg-muted/20 p-2 max-sm:max-h-[22rem] sm:min-h-[14rem]">
+                ) : (
+                  <div className="space-y-2">
                     {rows.map((row) => {
                       const seg = result.segments.find((s) => s.id === row.id);
                       if (!seg) return null;
@@ -321,123 +393,117 @@ export function AiComposeDialog({
                         <div
                           key={row.id}
                           className={cn(
-                            'rounded-md border bg-background p-2 transition-opacity',
-                            row.include ? '' : 'opacity-45',
+                            'rounded-xl border p-2.5 transition-all duration-200',
+                            row.include
+                              ? 'border-primary/40 bg-primary/[0.04] shadow-sm'
+                              : 'border-border bg-background opacity-60 hover:opacity-100',
                           )}
                         >
-                          <div className="flex items-center gap-2">
-                            <Checkbox
+                          <div className="flex items-start gap-2.5">
+                            <RoundCheck
                               checked={row.include}
-                              onCheckedChange={(c) =>
-                                setRows((prev) =>
-                                  prev.map((r) => (r.id === row.id ? { ...r, include: c === true } : r)),
-                                )
-                              }
+                              onCheckedChange={(c) => setInclude(row.id, c === true)}
+                              className="mt-1.5"
                               aria-label="Создавать эту задачу"
                             />
-                            <input
-                              value={row.title}
-                              onChange={(e) =>
-                                setRows((prev) =>
-                                  prev.map((r) => (r.id === row.id ? { ...r, title: e.target.value } : r)),
-                                )
-                              }
-                              placeholder="Заголовок задачи"
-                              className="min-w-0 flex-1 rounded border bg-transparent px-2 py-1 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-ring"
-                            />
-                          </div>
+                            <div className="min-w-0 flex-1 space-y-2">
+                              <input
+                                value={row.title}
+                                onChange={(e) =>
+                                  setRows((prev) =>
+                                    prev.map((r) => (r.id === row.id ? { ...r, title: e.target.value } : r)),
+                                  )
+                                }
+                                placeholder="Заголовок задачи"
+                                className="w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm font-semibold focus:border-input focus:bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                              />
 
-                          <div className="mt-2 flex items-center gap-1.5 pl-6">
-                            <FolderInput className="size-3.5 shrink-0 text-muted-foreground" />
-                            <select
-                              value={row.projectId ?? INBOX_VALUE}
-                              onChange={(e) =>
-                                setRows((prev) =>
-                                  prev.map((r) =>
-                                    r.id === row.id
-                                      ? { ...r, projectId: e.target.value === INBOX_VALUE ? null : e.target.value }
-                                      : r,
-                                  ),
-                                )
-                              }
-                              className="min-w-0 flex-1 rounded border bg-background px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                              title="Проект назначения"
-                            >
-                              <option value={INBOX_VALUE}>Без проекта (Входящие)</option>
-                              {realProjects.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
+                              <div className="flex items-center gap-1.5 rounded-md border bg-background pl-2">
+                                <FolderInput className="size-3.5 shrink-0 text-muted-foreground" />
+                                <select
+                                  value={row.projectId ?? INBOX_VALUE}
+                                  onChange={(e) =>
+                                    setRows((prev) =>
+                                      prev.map((r) =>
+                                        r.id === row.id
+                                          ? {
+                                              ...r,
+                                              projectId:
+                                                e.target.value === INBOX_VALUE ? null : e.target.value,
+                                            }
+                                          : r,
+                                      ),
+                                    )
+                                  }
+                                  className="min-w-0 flex-1 cursor-pointer rounded-md bg-transparent py-1 pr-1.5 text-xs focus:outline-none"
+                                  title="Проект назначения"
+                                >
+                                  <option value={INBOX_VALUE}>Без проекта (Входящие)</option>
+                                  {realProjects.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
 
-                          <div className="mt-2 pl-6">
-                            <div
-                              className={cn(
-                                'whitespace-pre-wrap break-words text-xs text-muted-foreground',
-                                isOpen
-                                  ? 'max-h-60 overflow-y-auto rounded border bg-muted/30 p-2'
-                                  : 'line-clamp-2',
-                              )}
-                            >
-                              {body}
+                              <div>
+                                <div
+                                  className={cn(
+                                    'whitespace-pre-wrap break-words px-1.5 text-xs leading-relaxed text-muted-foreground',
+                                    isOpen
+                                      ? 'max-h-56 overflow-y-auto rounded-md border bg-muted/30 p-2'
+                                      : 'line-clamp-2',
+                                  )}
+                                >
+                                  {body}
+                                </div>
+                                {isLong && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleExpand(row.id)}
+                                    className="ml-1.5 mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                                  >
+                                    <ChevronDown
+                                      className={cn('size-3 transition-transform', isOpen && 'rotate-180')}
+                                    />
+                                    {isOpen ? 'Свернуть' : 'Показать полностью'}
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                            {isLong && (
-                              <button
-                                type="button"
-                                onClick={() => toggleExpand(row.id)}
-                                className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-                              >
-                                <ChevronDown
-                                  className={cn('size-3 transition-transform', isOpen && 'rotate-180')}
-                                />
-                                {isOpen ? 'Свернуть' : 'Показать полностью'}
-                              </button>
-                            )}
                           </div>
                         </div>
                       );
                     })}
                   </div>
-                </div>
-              )}
+                )}
+              </>
+            ) : null}
+          </div>
 
-              {canDistribute && (
-                <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border bg-muted/30 px-3 py-2.5 text-sm transition-colors hover:bg-muted/50">
-                  <Checkbox
-                    checked={distribute}
-                    onCheckedChange={(c) => setDistribute(c === true)}
-                    disabled={phase === 'creating'}
-                  />
-                  <span className="flex items-center gap-1.5 font-medium">
-                    <FolderInput className="size-4 text-primary" />
-                    Распределить по проектам
-                  </span>
-                  <span className="ml-auto rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                    {includedCount} {pluralTasks(includedCount)}
-                  </span>
-                </label>
-              )}
-            </div>
-          ) : null}
-
-          <DialogFooter className="gap-2">
+          {/* FOOTER — sticky, действия зависят от фазы */}
+          <div
+            className={cn(
+              'flex shrink-0 items-center gap-2 border-t px-4 py-3',
+              phase === 'preview' || phase === 'error' ? 'justify-between' : 'justify-end',
+            )}
+          >
             {phase === 'loading' && (
-              <Button type="button" variant="ghost" onClick={dismiss}>
+              <Button type="button" variant="ghost" onClick={dismiss} className="gap-1.5">
+                <X className="size-4" />
                 Отмена
               </Button>
             )}
             {phase === 'creating' && (
-              <Button type="button" variant="ghost" disabled>
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              <Button type="button" variant="ghost" disabled className="gap-1.5">
+                <Loader2 className="size-4 animate-spin" />
                 {progress ? `Создаём ${progress.done}/${progress.total}…` : 'Создаём…'}
               </Button>
             )}
             {phase === 'preview' && (
               <>
-                <Button type="button" variant="ghost" onClick={dismiss} className="gap-1.5">
-                  <X className="size-4" />
+                <Button type="button" variant="ghost" onClick={dismiss}>
                   Отмена
                 </Button>
                 {distribute ? (
@@ -468,7 +534,7 @@ export function AiComposeDialog({
                 </Button>
               </>
             )}
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </>
