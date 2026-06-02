@@ -9,12 +9,14 @@ import { HttpError, httpClient } from './httpClient';
 type EnqueueResponse = {
   jobId: string;
   status: AiPromptJobResult['status'];
+  mode?: AiPromptJobResult['mode'];
   createdAt: string;
 };
 
 type WaitResponse = {
   jobId: string;
   status: AiPromptJobResult['status'];
+  mode?: AiPromptJobResult['mode'];
   improvedText: string | null;
   error: string | null;
   createdAt: string;
@@ -32,6 +34,7 @@ export class HttpAiPromptRepository implements AiPromptRepository {
       const res = await httpClient.post<EnqueueResponse>('/ai/prompt-jobs', {
         text: input.text,
         projectId: input.projectId,
+        mode: input.mode,
       });
       return { jobId: res.jobId };
     } catch (e) {
@@ -50,6 +53,7 @@ export class HttpAiPromptRepository implements AiPromptRepository {
       return {
         jobId: res.jobId,
         status: res.status,
+        mode: res.mode,
         improvedText: res.improvedText,
         error: res.error,
       };

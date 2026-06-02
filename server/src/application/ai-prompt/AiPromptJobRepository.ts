@@ -1,9 +1,14 @@
-import type { AiPromptJob, AiPromptJobStatus } from '../../domain/ai-prompt/AiPromptJob.js';
+import type {
+  AiPromptJob,
+  AiPromptJobMode,
+  AiPromptJobStatus,
+} from '../../domain/ai-prompt/AiPromptJob.js';
 
 export type NewAiPromptJobInput = {
   readonly createdBy: string;
   readonly projectId: string | null;
   readonly dispatcherUserId: string;
+  readonly mode: AiPromptJobMode;
   readonly inputText: string;
   readonly kbContext: string | null;
 };

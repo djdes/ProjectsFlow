@@ -134,6 +134,7 @@ import type { WaitForAiPromptJob } from '../application/ai-prompt/WaitForAiPromp
 import type { ListPendingAiPromptJobs } from '../application/ai-prompt/ListPendingAiPromptJobs.js';
 import type { ClaimAiPromptJob } from '../application/ai-prompt/ClaimAiPromptJob.js';
 import type { CompleteAiPromptJob } from '../application/ai-prompt/CompleteAiPromptJob.js';
+import type { GetAiPromptKbBundle } from '../application/ai-prompt/GetAiPromptKbBundle.js';
 import type { AckRalphCancel } from '../application/task/AckRalphCancel.js';
 import type { ProjectMemberRepository } from '../application/project/ProjectMemberRepository.js';
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
@@ -393,6 +394,7 @@ type AppDeps = {
     readonly listPendingAiPromptJobs: ListPendingAiPromptJobs;
     readonly claimAiPromptJob: ClaimAiPromptJob;
     readonly completeAiPromptJob: CompleteAiPromptJob;
+    readonly getAiPromptKbBundle: GetAiPromptKbBundle;
     readonly ackRalphCancel: AckRalphCancel;
     readonly checkRepoUsage: CheckRepoUsage;
     readonly requestRepoAccess: RequestRepoAccess;
@@ -599,6 +601,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       listPendingAiPromptJobs: deps.agent.listPendingAiPromptJobs,
       claimAiPromptJob: deps.agent.claimAiPromptJob,
       completeAiPromptJob: deps.agent.completeAiPromptJob,
+      getAiPromptKbBundle: deps.agent.getAiPromptKbBundle,
       enqueueAiPromptJob: deps.agent.enqueueAiPromptJob,
       waitForAiPromptJob: deps.agent.waitForAiPromptJob,
       uploadTaskAttachment: deps.tasks.uploadAttachment,

@@ -228,6 +228,8 @@ export type AiPromptJobClaimed = {
   id: string;
   projectId: string | null;
   status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  // 'improve' (legacy) | 'compose' (2 варианта + разбивка по проектам).
+  mode?: 'improve' | 'compose';
   // Текст от юзера (1..5000 символов).
   inputText: string;
   // Опциональный KB-контекст, пре-собранный сервером.

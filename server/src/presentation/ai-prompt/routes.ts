@@ -20,6 +20,8 @@ const enqueueBodySchema = z.object({
     .nullable()
     .optional()
     .transform((v) => v ?? null),
+  // 'improve' (legacy, default) | 'compose' (2 варианта + разбивка по проектам).
+  mode: z.enum(['improve', 'compose']).optional(),
 });
 
 const waitQuerySchema = z.object({
@@ -46,10 +48,12 @@ export function buildAiPromptRouter(deps: Deps): Router {
         userId: req.user!.id,
         text: body.text,
         projectId: body.projectId,
+        mode: body.mode,
       });
       res.status(201).json({
         jobId: job.id,
         status: job.status,
+        mode: job.mode,
         createdAt: job.createdAt.toISOString(),
       });
     } catch (e) {
@@ -110,6 +114,7 @@ export function buildAiPromptRouter(deps: Deps): Router {
 function aiPromptJobToDto(job: AiPromptJob): {
   jobId: string;
   status: AiPromptJob['status'];
+  mode: AiPromptJob['mode'];
   improvedText: string | null;
   error: string | null;
   createdAt: string;
@@ -118,6 +123,7 @@ function aiPromptJobToDto(job: AiPromptJob): {
   return {
     jobId: job.id,
     status: job.status,
+    mode: job.mode,
     improvedText: job.improvedText,
     error: job.error,
     createdAt: job.createdAt.toISOString(),

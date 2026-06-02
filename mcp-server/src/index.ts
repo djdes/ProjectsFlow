@@ -584,7 +584,8 @@ const TOOLS = [
     name: 'pf_complete_ai_prompt_job',
     description:
       'Finalize an AI-prompt-improvement job. ok=true requires improvedText (the rewritten task ' +
-      'description, ≤5000 chars). ok=false requires error (short reason, ≤500 chars, e.g. ' +
+      'description for "improve" mode, or a JSON result string for "compose" mode; ≤600000 chars). ' +
+      'ok=false requires error (short reason, ≤500 chars, e.g. ' +
       '"claude_api_overloaded" or "rate_limited"). Server then unblocks the frontend long-poll ' +
       'and returns the result to the user. Idempotency: do NOT retry on 409 ' +
       '"ai_prompt_job_not_in_running_state" — the job has been cancelled by server cleanup or ' +
@@ -596,7 +597,7 @@ const TOOLS = [
         ok: { type: 'boolean', description: 'true if Claude produced a valid rewrite' },
         improvedText: {
           type: ['string', 'null'],
-          description: 'Rewritten task description (≤5000 chars). Required when ok=true.',
+          description: 'Rewritten task description / compose JSON result (≤600000 chars). Required when ok=true.',
         },
         error: {
           type: ['string', 'null'],
@@ -1317,7 +1318,8 @@ const ClaimAiPromptJobInput = z.object({
 const CompleteAiPromptJobInput = z.object({
   jobId: z.string().min(1),
   ok: z.boolean(),
-  improvedText: z.string().max(5000).nullable().optional(),
+  // 600000: compose-результат — большая JSON-строка (2 варианта + сегменты).
+  improvedText: z.string().max(600000).nullable().optional(),
   error: z.string().max(500).nullable().optional(),
 });
 

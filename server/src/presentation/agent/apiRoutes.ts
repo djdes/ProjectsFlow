@@ -28,6 +28,7 @@ import type { WriteKbDocument } from '../../application/kb/WriteKbDocument.js';
 import type { ListPendingAiPromptJobs } from '../../application/ai-prompt/ListPendingAiPromptJobs.js';
 import type { ClaimAiPromptJob } from '../../application/ai-prompt/ClaimAiPromptJob.js';
 import type { CompleteAiPromptJob } from '../../application/ai-prompt/CompleteAiPromptJob.js';
+import type { GetAiPromptKbBundle } from '../../application/ai-prompt/GetAiPromptKbBundle.js';
 import { AiPromptRateLimitedError, type EnqueueAiPromptJob } from '../../application/ai-prompt/EnqueueAiPromptJob.js';
 import type { WaitForAiPromptJob } from '../../application/ai-prompt/WaitForAiPromptJob.js';
 import {
@@ -131,6 +132,7 @@ type Deps = {
   readonly listPendingAiPromptJobs: ListPendingAiPromptJobs;
   readonly claimAiPromptJob: ClaimAiPromptJob;
   readonly completeAiPromptJob: CompleteAiPromptJob;
+  readonly getAiPromptKbBundle: GetAiPromptKbBundle;
   readonly enqueueAiPromptJob: EnqueueAiPromptJob;
   readonly waitForAiPromptJob: WaitForAiPromptJob;
   readonly uploadTaskAttachment: UploadTaskAttachment;
@@ -318,7 +320,9 @@ function commentToDto(c: TaskComment): CommentDto {
 const completeAiPromptJobBodySchema = z
   .object({
     ok: z.boolean(),
-    improvedText: z.string().max(5000).nullable().optional(),
+    // 600000: compose-режим возвращает большую JSON-строку (2 варианта + сегменты);
+    // improve кладёт plain-текст (обычно ≤2000). Колонка improved_text — MEDIUMTEXT (db/060).
+    improvedText: z.string().max(600000).nullable().optional(),
     error: z.string().max(500).nullable().optional(),
   })
   .refine(
@@ -339,6 +343,12 @@ const enqueueAiPromptBodySchema = z.object({
     .nullable()
     .optional()
     .transform((v) => v ?? null),
+  mode: z.enum(['improve', 'compose']).optional(),
+});
+
+// Тело kb-bundle: список projectId'ов, по которым диспетчер просит ПОЛНУЮ KB (compose pass-2).
+const aiPromptKbBundleBodySchema = z.object({
+  projectIds: z.array(z.string().uuid()).max(10),
 });
 const aiPromptWaitQuerySchema = z.object({
   wait: z
@@ -368,6 +378,8 @@ type AiPromptJobDto = {
   id: string;
   projectId: string | null;
   status: AiPromptJob['status'];
+  // 'improve' | 'compose' — ralph по нему выбирает промпт и кол-во проходов Claude.
+  mode: AiPromptJob['mode'];
   inputText: string;
   kbContext: string | null;
   claimedAt: string | null;
@@ -379,6 +391,7 @@ function aiPromptJobToAgentDto(j: AiPromptJob): AiPromptJobDto {
     id: j.id,
     projectId: j.projectId,
     status: j.status,
+    mode: j.mode,
     inputText: j.inputText,
     kbContext: j.kbContext,
     claimedAt: j.claimedAt ? j.claimedAt.toISOString() : null,
@@ -1087,6 +1100,26 @@ export function agentApiRouter(deps: Deps): Router {
     },
   );
 
+  // compose pass-2: диспетчер (между двумя проходами Claude) просит ПОЛНУЮ KB
+  // задетектированных проектов. Тело { projectIds }. KB читается от имени создателя job'а.
+  router.post(
+    '/ai-prompt-jobs/:jobId/kb-bundle',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const jobId = req.params['jobId'] as string;
+        const body = aiPromptKbBundleBodySchema.parse(req.body);
+        const result = await deps.getAiPromptKbBundle.execute({
+          userId: req.user!.id,
+          jobId,
+          projectIds: body.projectIds,
+        });
+        res.json(result);
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
   // === AI Prompt Jobs — SUBMIT + POLL для AGENT-клиентов (PFCompanion desktop) ===
   // Зеркало web-роутов /api/ai/prompt-jobs (presentation/ai-prompt/routes.ts), но под agent-токеном
   // (Bearer). Десктоп-клиент шлёт промпт → диспетчер (тот же поток pending/claim/complete выше)
@@ -1098,8 +1131,9 @@ export function agentApiRouter(deps: Deps): Router {
         userId: req.user!.id,
         text: body.text,
         projectId: body.projectId,
+        mode: body.mode,
       });
-      res.status(201).json({ jobId: job.id, status: job.status, createdAt: job.createdAt.toISOString() });
+      res.status(201).json({ jobId: job.id, status: job.status, mode: job.mode, createdAt: job.createdAt.toISOString() });
     } catch (e) {
       if (e instanceof AiPromptRateLimitedError) { res.status(429).json({ error: 'rate_limited', message: e.message }); return; }
       if (e instanceof AiPromptDispatcherNotConfiguredError) { res.status(503).json({ error: 'ai_not_configured', message: 'AI временно недоступен' }); return; }
@@ -1118,6 +1152,7 @@ export function agentApiRouter(deps: Deps): Router {
       res.json({
         jobId: job.id,
         status: job.status,
+        mode: job.mode,
         improvedText: job.improvedText,
         error: job.error,
         createdAt: job.createdAt.toISOString(),

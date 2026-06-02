@@ -110,6 +110,7 @@ import { WaitForAiPromptJob } from './application/ai-prompt/WaitForAiPromptJob.j
 import { ListPendingAiPromptJobs } from './application/ai-prompt/ListPendingAiPromptJobs.js';
 import { ClaimAiPromptJob } from './application/ai-prompt/ClaimAiPromptJob.js';
 import { CompleteAiPromptJob } from './application/ai-prompt/CompleteAiPromptJob.js';
+import { GetAiPromptKbBundle } from './application/ai-prompt/GetAiPromptKbBundle.js';
 import { AiPromptJobCleanup } from './application/ai-prompt/AiPromptJobCleanup.js';
 import { DrizzleAutomationRepository } from './infrastructure/repositories/DrizzleAutomationRepository.js';
 import { GetAutomationConfig } from './application/automation/GetAutomationConfig.js';
@@ -1413,6 +1414,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       aiPromptJobs: aiPromptJobRepo,
+      listProjects: new ListProjects(projectMemberRepo),
       listKbDocuments: new ListKbDocuments({
         projects: projectRepo,
         members: projectMemberRepo,
@@ -1433,6 +1435,21 @@ const { app, devProxyUpgrade } = createApp({
     listPendingAiPromptJobs: new ListPendingAiPromptJobs({ aiPromptJobs: aiPromptJobRepo }),
     claimAiPromptJob: new ClaimAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
     completeAiPromptJob: new CompleteAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
+    getAiPromptKbBundle: new GetAiPromptKbBundle({
+      aiPromptJobs: aiPromptJobRepo,
+      projects: projectRepo,
+      members: projectMemberRepo,
+      listKbDocuments: new ListKbDocuments({
+        projects: projectRepo,
+        members: projectMemberRepo,
+        kb: kbStore,
+      }),
+      getKbDocument: new GetKbDocument({
+        projects: projectRepo,
+        members: projectMemberRepo,
+        kb: kbStore,
+      }),
+    }),
     ackRalphCancel: new AckRalphCancel({ tasks: taskRepo }),
     checkRepoUsage: new CheckRepoUsage({
       projects: projectRepo,

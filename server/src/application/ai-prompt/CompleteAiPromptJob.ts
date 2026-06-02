@@ -5,7 +5,9 @@ import {
 } from '../../domain/ai-prompt/errors.js';
 import type { AiPromptJobRepository } from './AiPromptJobRepository.js';
 
-const MAX_IMPROVED_TEXT = 5000;
+// 600000: compose-результат — большая JSON-строка (2 варианта + сегменты). improve кладёт
+// plain-текст (обычно ≤2000). Колонка improved_text — MEDIUMTEXT (db/060), вмещает с запасом.
+const MAX_IMPROVED_TEXT = 600000;
 const MAX_ERROR = 500;
 
 type Deps = {

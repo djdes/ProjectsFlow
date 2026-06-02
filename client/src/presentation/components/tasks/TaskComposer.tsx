@@ -16,7 +16,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { cn } from '@/lib/utils';
 import { RalphModeSelect } from './RalphMode';
 import { DelegateSelect } from './DelegateSelect';
-import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
+import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
 import {
   extractClipboardFiles,
   isImageMime,
@@ -345,10 +345,16 @@ export function TaskComposer({
               )}
             </button>
           )}
-          <AiImproveButton
+          <AiComposeDialog
             text={text}
             projectId={aiProjectId}
             onImproved={setText}
+            onDistributed={() => {
+              // Задачи распределены и созданы напрямую — очищаем композер.
+              setText('');
+              try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+            }}
+            ralphMode={ralphMode}
             disabled={submitting}
             compact
           />

@@ -9,6 +9,7 @@ import {
   index,
   int,
   json,
+  mediumtext,
   mysqlEnum,
   mysqlTable,
   primaryKey,
@@ -713,12 +714,17 @@ export const aiPromptJobs = mysqlTable(
     status: mysqlEnum('status', ['queued', 'running', 'succeeded', 'failed', 'cancelled'])
       .notNull()
       .default('queued'),
+    // Режим job'а: 'improve' (legacy — одиночное улучшение текста, plain в improved_text)
+    // | 'compose' (новое — 2 варианта + разбивка по проектам, JSON-строка в improved_text).
+    // См. db/060_ai_prompt_compose.sql.
+    mode: mysqlEnum('mode', ['improve', 'compose']).notNull().default('improve'),
     inputText: text('input_text').notNull(),
-    // MEDIUMTEXT в Drizzle отсутствует как отдельный тип, но text() мапит на MariaDB
-    // TEXT (до 65535 байт). Пре-собранный KB в MAX_TOTAL=30000 символов уверенно
-    // влезает; если в будущем поднимем лимит — миграцией поменяем на MEDIUMTEXT.
-    kbContext: text('kb_context'),
-    improvedText: text('improved_text'),
+    // MEDIUMTEXT (db/060): для compose в kb_context кладутся дайджесты всех проектов-
+    // кандидатов (до ~60K символов); legacy improve кладёт KB одного проекта (≤30K).
+    kbContext: mediumtext('kb_context'),
+    // MEDIUMTEXT (db/060): compose-результат (2 варианта + сегменты) — большая JSON-строка,
+    // cap на уровне приложения = 600000 символов. improve кладёт plain-текст ≤600000.
+    improvedText: mediumtext('improved_text'),
     error: varchar('error', { length: 500 }),
     claimedAt: timestamp('claimed_at'),
     finishedAt: timestamp('finished_at'),

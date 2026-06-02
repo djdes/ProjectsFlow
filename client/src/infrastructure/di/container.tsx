@@ -21,6 +21,7 @@ import { HttpTelegramRepository } from '@/infrastructure/http/HttpTelegramReposi
 import { HttpMonitoringRepository } from '@/infrastructure/http/HttpMonitoringRepository';
 import { HttpLiveRepository } from '@/infrastructure/http/HttpLiveRepository';
 import { ImproveTaskDescription } from '@/application/ai/ImproveTaskDescription';
+import { ComposeTasks } from '@/application/ai/ComposeTasks';
 import type { AiPromptRepository } from '@/application/ai/AiPromptRepository';
 import type { AutomationRepository } from '@/application/automation/AutomationRepository';
 import { SearchTasks } from '@/application/task/SearchTasks';
@@ -84,6 +85,7 @@ type Container = {
   liveRepository: LiveRepository;
   aiPromptRepository: AiPromptRepository;
   improveTaskDescription: ImproveTaskDescription;
+  composeTasks: ComposeTasks;
   automationRepository: AutomationRepository;
   userRepository: UserRepository;
 };
@@ -140,6 +142,7 @@ function buildContainer(): Container {
     liveRepository: liveRepo,
     aiPromptRepository: aiPromptRepo,
     improveTaskDescription: new ImproveTaskDescription(aiPromptRepo),
+    composeTasks: new ComposeTasks(aiPromptRepo),
     automationRepository: automationRepo,
     userRepository: userRepo,
   };

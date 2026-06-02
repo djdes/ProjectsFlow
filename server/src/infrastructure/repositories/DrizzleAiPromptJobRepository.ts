@@ -21,6 +21,7 @@ export class DrizzleAiPromptJobRepository implements AiPromptJobRepository {
       projectId: input.projectId,
       dispatcherUserId: input.dispatcherUserId,
       status: 'queued',
+      mode: input.mode,
       inputText: input.inputText,
       kbContext: input.kbContext,
     });
@@ -157,6 +158,7 @@ function rowToJob(row: AiPromptJobRow): AiPromptJob {
     projectId: row.projectId ?? null,
     dispatcherUserId: row.dispatcherUserId,
     status: row.status,
+    mode: row.mode,
     inputText: row.inputText,
     kbContext: row.kbContext ?? null,
     improvedText: row.improvedText ?? null,

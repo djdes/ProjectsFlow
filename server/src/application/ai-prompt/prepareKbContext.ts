@@ -11,12 +11,22 @@ type Deps = {
   readonly getKbDocument: GetKbDocument;
 };
 
+// Опциональные лимиты сборки — для compose-дайджеста передаём меньшие значения
+// (1-2 документа, ~800 символов на документ), чтобы уместить дайджесты МНОГИХ
+// проектов в один промпт. По умолчанию — «жирный» бандл одного проекта (legacy improve).
+export type KbContextLimits = {
+  readonly maxDocs?: number;
+  readonly maxPerDoc?: number;
+  readonly maxTotal?: number;
+};
+
 /**
  * Собирает компактный текстовый KB-бандл из первых N документов проекта,
- * чтобы передать его в Claude как контекст. Ограничения:
+ * чтобы передать его в Claude как контекст. Лимиты по умолчанию:
  * - максимум 12 документов;
  * - максимум 4000 символов на документ (хвост обрезается);
  * - максимум 30000 символов суммарно.
+ * Можно переопределить через `limits` (см. prepareComposeContext — короткие дайджесты).
  *
  * Если проект без KB или произошла ошибка получения списка — возвращает null
  * (best-effort: AI всё равно сработает, просто без KB-контекста).
@@ -25,8 +35,13 @@ export async function prepareKbContext(
   project: Project,
   userId: string,
   deps: Deps,
+  limits?: KbContextLimits,
 ): Promise<string | null> {
   if (project.kbKind === 'none') return null;
+
+  const maxDocs = limits?.maxDocs ?? MAX_DOCS;
+  const maxPerDoc = limits?.maxPerDoc ?? MAX_PER_DOC;
+  const maxTotal = limits?.maxTotal ?? MAX_TOTAL;
 
   let summaries;
   try {
@@ -36,12 +51,12 @@ export async function prepareKbContext(
   }
   if (summaries.length === 0) return null;
 
-  const top = summaries.slice(0, MAX_DOCS);
+  const top = summaries.slice(0, maxDocs);
   const parts: string[] = [];
   let total = 0;
 
   for (const summary of top) {
-    if (total >= MAX_TOTAL) break;
+    if (total >= maxTotal) break;
     let body: string;
     let title: string;
     try {
@@ -53,13 +68,13 @@ export async function prepareKbContext(
       continue;
     }
 
-    if (body.length > MAX_PER_DOC) {
-      body = body.slice(0, MAX_PER_DOC) + '\n…(truncated)';
+    if (body.length > maxPerDoc) {
+      body = body.slice(0, maxPerDoc) + '\n…(truncated)';
     }
 
     const part = `## ${title} (${summary.path})\n\n${body}`;
-    if (total + part.length > MAX_TOTAL) {
-      parts.push(part.slice(0, MAX_TOTAL - total) + '\n…(truncated)');
+    if (total + part.length > maxTotal) {
+      parts.push(part.slice(0, maxTotal - total) + '\n…(truncated)');
       break;
     }
     parts.push(part);
