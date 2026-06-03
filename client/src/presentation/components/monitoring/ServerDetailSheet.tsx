@@ -11,6 +11,9 @@ import type { ServerAlert } from '@/domain/monitoring/Alert';
 import { StatusBadge } from './StatusBadge';
 import { ResourceBar } from './ResourceBar';
 import { Pm2Table } from './Pm2Table';
+import { Pm2List } from './Pm2List';
+import { StatusTimeline } from './StatusTimeline';
+import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { SystemGrid } from './SystemGrid';
 import { DbHealthCard } from './DbHealthCard';
 import { LogTailViewer } from './LogTailViewer';
@@ -46,10 +49,18 @@ export function ServerDetailSheet({
   const [busy, setBusy] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  // На мобиле детали открываем снизу (bottom-sheet), на десктопе — справа.
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+  // «Сейчас» для StatusTimeline — фиксируем в эффекте (Date.now() в render нельзя — purity).
+  const [nowMs, setNowMs] = useState(0);
 
   useEffect(() => {
     setIsMuted(server?.mutedUntil != null && server.mutedUntil.getTime() > Date.now());
   }, [server?.mutedUntil]);
+
+  useEffect(() => {
+    if (open) setNowMs(Date.now());
+  }, [open, latest?.collectedAt]);
 
   const refresh = async (): Promise<void> => {
     if (!server) return;
@@ -96,8 +107,11 @@ export function ServerDetailSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       {server && (
         <SheetContent
-          side="right"
-          className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl lg:max-w-3xl"
+          side={isDesktop ? 'right' : 'bottom'}
+          className={cn(
+            'flex flex-col gap-0 p-0',
+            isDesktop ? 'w-full sm:max-w-2xl lg:max-w-3xl' : 'h-[88vh]',
+          )}
         >
           <SheetHeader className="space-y-2 border-b p-4 text-left">
             <div className="flex items-center gap-2 pr-8">
@@ -163,6 +177,7 @@ export function ServerDetailSheet({
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               <TabsContent value="overview" className="mt-0 space-y-4">
+                <StatusTimeline projectId={projectId} serverId={server.id} nowMs={nowMs} />
                 {(http || (ssl && ssl.daysLeft !== null)) && (
                   <div className="flex flex-wrap gap-2 text-xs">
                     {http && (
@@ -219,7 +234,12 @@ export function ServerDetailSheet({
               </TabsContent>
 
               <TabsContent value="processes" className="mt-0">
-                <Pm2Table pm2={metrics?.pm2 ?? []} />
+                <div className="hidden md:block">
+                  <Pm2Table pm2={metrics?.pm2 ?? []} />
+                </div>
+                <div className="md:hidden">
+                  <Pm2List pm2={metrics?.pm2 ?? []} />
+                </div>
               </TabsContent>
 
               <TabsContent value="metrics" className="mt-0 space-y-4">

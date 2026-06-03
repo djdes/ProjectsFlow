@@ -55,14 +55,19 @@ function LogBody({
   errorsOnly: boolean;
   className?: string;
 }): React.ReactElement {
+  // classify() — regex-тяжёлая; считаем ОДИН раз на текст (не на каждый ввод фильтра).
+  const classified = useMemo(
+    () => text.split('\n').map((l) => ({ l, sev: classify(l) })),
+    [text],
+  );
   const lines = useMemo(() => {
     const f = filter.trim().toLowerCase();
-    return text.split('\n').filter((l) => {
-      if (errorsOnly && classify(l) !== 'error') return false;
+    return classified.filter(({ l, sev }) => {
+      if (errorsOnly && sev !== 'error') return false;
       if (f && !l.toLowerCase().includes(f)) return false;
       return true;
     });
-  }, [text, filter, errorsOnly]);
+  }, [classified, filter, errorsOnly]);
 
   const ref = useRef<HTMLPreElement>(null);
   useEffect(() => {
@@ -78,8 +83,8 @@ function LogBody({
       {lines.length === 0 ? (
         <span className="text-muted-foreground">Нет строк по фильтру</span>
       ) : (
-        lines.map((l, i) => (
-          <div key={i} className={SEV_CLS[classify(l)]}>
+        lines.map(({ l, sev }, i) => (
+          <div key={i} className={SEV_CLS[sev]}>
             {l || ' '}
           </div>
         ))
@@ -100,8 +105,15 @@ export function LogTailViewer({
   const [log, setLog] = useState<LogTail | null>(null);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('');
+  // Дебаунс фильтра (350мс): инпут отзывчив, тяжёлая фильтрация лога не дёргается на каждый символ.
+  const [debouncedFilter, setDebouncedFilter] = useState('');
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedFilter(filter), 350);
+    return () => clearTimeout(t);
+  }, [filter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -227,7 +239,7 @@ export function LogTailViewer({
       )}
 
       {hasContent ? (
-        <LogBody text={log!.lines!} filter={filter} errorsOnly={errorsOnly} className="max-h-72" />
+        <LogBody text={log!.lines!} filter={debouncedFilter} errorsOnly={errorsOnly} className="max-h-72" />
       ) : (
         <pre className="max-h-72 overflow-auto rounded-md bg-muted/50 p-3 text-xs leading-relaxed">
           {placeholder}
@@ -267,7 +279,7 @@ export function LogTailViewer({
           {hasContent ? (
             <LogBody
               text={log!.lines!}
-              filter={filter}
+              filter={debouncedFilter}
               errorsOnly={errorsOnly}
               className="max-h-[70vh]"
             />
