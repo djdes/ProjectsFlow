@@ -11,8 +11,35 @@ import type {
   TrendPoint,
 } from '@/domain/monitoring/Snapshot';
 import type { AlertRule, ServerAlert } from '@/domain/monitoring/Alert';
+import type { MonitoringAnalysisResult, MonitoringAnalysisType } from '@/domain/monitoring/Analysis';
 import type { HistoryOptions, MonitoringRepository } from '@/application/monitoring/MonitoringRepository';
-import { httpClient } from './httpClient';
+import { HttpError, httpClient } from './httpClient';
+
+type RawAnalysis = {
+  jobId: string;
+  serverId: string;
+  status: MonitoringAnalysisResult['status'];
+  analysisType: MonitoringAnalysisType;
+  resultMarkdown: string | null;
+  error: string | null;
+  costUsd: number | null;
+  createdAt: string;
+  finishedAt: string | null;
+};
+
+function mapAnalysis(r: RawAnalysis): MonitoringAnalysisResult {
+  return {
+    jobId: r.jobId,
+    serverId: r.serverId,
+    status: r.status,
+    analysisType: r.analysisType,
+    resultMarkdown: r.resultMarkdown,
+    error: r.error,
+    costUsd: r.costUsd,
+    createdAt: new Date(r.createdAt),
+    finishedAt: r.finishedAt ? new Date(r.finishedAt) : null,
+  };
+}
 
 // Сервер отдаёт даты как ISO-строки → маппим в Date на границе адаптера.
 type RawServer = Omit<MonitoringServer, 'lastSnapshotAt' | 'mutedUntil'> & {
@@ -157,5 +184,51 @@ export class HttpMonitoringRepository implements MonitoringRepository {
         lastSnapshotAt: s.lastSnapshotAt ? new Date(s.lastSnapshotAt) : null,
       })),
     }));
+  }
+
+  async enqueueAnalysis(
+    projectId: string,
+    serverId: string,
+    analysisType: MonitoringAnalysisType,
+  ): Promise<{ jobId: string }> {
+    const res = await httpClient.post<{ jobId: string }>(`/monitoring/analysis-jobs`, {
+      projectId,
+      serverId,
+      analysisType,
+    });
+    return { jobId: res.jobId };
+  }
+
+  async waitAnalysis(jobId: string, waitSeconds = 50): Promise<MonitoringAnalysisResult> {
+    try {
+      const r = await httpClient.get<RawAnalysis>(
+        `/monitoring/analysis-jobs/${encodeURIComponent(jobId)}?wait=${waitSeconds}`,
+      );
+      return mapAnalysis(r);
+    } catch (e) {
+      // 504 — long-poll истёк, анализ ещё идёт. Возвращаем «running», вызывающий повторит.
+      if (e instanceof HttpError && e.status === 504) {
+        return {
+          jobId,
+          serverId: '',
+          status: 'running',
+          analysisType: 'snapshot',
+          resultMarkdown: null,
+          error: null,
+          costUsd: null,
+          createdAt: new Date(),
+          finishedAt: null,
+        };
+      }
+      throw e;
+    }
+  }
+
+  async listAnalysisHistory(projectId: string, serverId: string): Promise<MonitoringAnalysisResult[]> {
+    const params = new URLSearchParams({ projectId, serverId });
+    const { jobs } = await httpClient.get<{ jobs: RawAnalysis[] }>(
+      `/monitoring/analysis-history?${params.toString()}`,
+    );
+    return jobs.map(mapAnalysis);
   }
 }

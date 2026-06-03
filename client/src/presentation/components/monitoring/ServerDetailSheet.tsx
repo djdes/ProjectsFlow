@@ -16,6 +16,7 @@ import { DbHealthCard } from './DbHealthCard';
 import { LogTailViewer } from './LogTailViewer';
 import { ServerTrends } from './ServerTrends';
 import { AlertList } from './AlertList';
+import { AnalyzeServerPanel } from './AnalyzeServerPanel';
 import { AddServerDialog } from './AddServerDialog';
 import { fmtDuration } from './format';
 import { sslTone, toneChipClass } from './health';
@@ -235,9 +236,7 @@ export function ServerDetailSheet({
               </TabsContent>
 
               <TabsContent value="ai" className="mt-0">
-                <div className="rounded-md border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
-                  AI-разбор логов и метрик появится здесь — диагностика причины по одному клику.
-                </div>
+                <AnalyzeServerPanel projectId={projectId} serverId={server.id} canManage={canManage} />
               </TabsContent>
             </div>
           </Tabs>

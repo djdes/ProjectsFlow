@@ -252,6 +252,42 @@ export type CompleteAiPromptJobInput = {
   error?: string | null;
 };
 
+// AI-анализ мониторинга через диспетчера (db/063).
+export type MonitoringAnalysisKind = 'snapshot' | 'logs' | 'alert' | 'digest';
+
+export type PendingMonitoringAnalysisJob = {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  serverId: string;
+  serverName: string | null;
+  analysisType: MonitoringAnalysisKind;
+  createdAt: string;
+};
+
+export type MonitoringAnalysisJobClaimed = {
+  id: string;
+  projectId: string;
+  serverId: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  analysisType: MonitoringAnalysisKind;
+  alertId: string | null;
+  note: string | null;
+  // Пред-собранный markdown-контекст: снимок/логи/алерты/тренд. Анализируй его — ничего не до-запрашивай.
+  context: string | null;
+  claimedAt: string | null;
+  createdAt: string;
+};
+
+export type CompleteMonitoringAnalysisJobInput = {
+  ok: boolean;
+  resultMarkdown?: string | null;
+  error?: string | null;
+  costUsd?: number | null;
+  tokensIn?: number | null;
+  tokensOut?: number | null;
+};
+
 export type RepoUsageResult = {
   ownership: 'none' | 'self' | 'other';
   requestTarget: string | null;
@@ -635,6 +671,31 @@ export class ApiClient {
   async completeAiPromptJob(jobId: string, input: CompleteAiPromptJobInput): Promise<void> {
     await this.request<void>(
       `/agent/ai-prompt-jobs/${encodeURIComponent(jobId)}/complete`,
+      { method: 'POST', body: input },
+    );
+  }
+
+  async listPendingMonitoringAnalysisJobs(limit: number): Promise<PendingMonitoringAnalysisJob[]> {
+    const { jobs } = await this.request<{ jobs: PendingMonitoringAnalysisJob[] }>(
+      `/agent/pending-monitoring-analysis-jobs?limit=${limit}`,
+    );
+    return jobs;
+  }
+
+  async claimMonitoringAnalysisJob(jobId: string): Promise<MonitoringAnalysisJobClaimed> {
+    const { job } = await this.request<{ job: MonitoringAnalysisJobClaimed }>(
+      `/agent/monitoring-analysis-jobs/${encodeURIComponent(jobId)}/claim`,
+      { method: 'POST', body: {} },
+    );
+    return job;
+  }
+
+  async completeMonitoringAnalysisJob(
+    jobId: string,
+    input: CompleteMonitoringAnalysisJobInput,
+  ): Promise<void> {
+    await this.request<void>(
+      `/agent/monitoring-analysis-jobs/${encodeURIComponent(jobId)}/complete`,
       { method: 'POST', body: input },
     );
   }

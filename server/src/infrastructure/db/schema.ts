@@ -745,6 +745,48 @@ export type AiPromptJobRow = typeof aiPromptJobs.$inferSelect;
 export type NewAiPromptJobRow = typeof aiPromptJobs.$inferInsert;
 
 // ============================================================================
+// monitoring_analysis_jobs — миграция db/063. AI-анализ мониторинга через диспетчера.
+// Зеркало ai_prompt_jobs: сайт кладёт job с пред-собранным контекстом, Ralph пикапит
+// через MCP, анализирует и возвращает markdown-отчёт. project_id/server_id — NOT NULL.
+// ============================================================================
+export const monitoringAnalysisJobs = mysqlTable(
+  'monitoring_analysis_jobs',
+  {
+    id: id(),
+    createdBy: fkUserId('created_by'),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    serverId: char('server_id', { length: 36 }).notNull(),
+    dispatcherUserId: char('dispatcher_user_id', { length: 36 }).notNull(),
+    status: mysqlEnum('status', ['queued', 'running', 'succeeded', 'failed', 'cancelled'])
+      .notNull()
+      .default('queued'),
+    analysisType: mysqlEnum('analysis_type', ['snapshot', 'logs', 'alert', 'digest'])
+      .notNull()
+      .default('snapshot'),
+    alertId: char('alert_id', { length: 36 }),
+    context: mediumtext('context'),
+    note: text('note'),
+    resultMarkdown: mediumtext('result_markdown'),
+    error: varchar('error', { length: 500 }),
+    costUsd: decimal('cost_usd', { precision: 10, scale: 4 }),
+    tokensIn: bigint('tokens_in', { mode: 'number' }),
+    tokensOut: bigint('tokens_out', { mode: 'number' }),
+    claimedAt: timestamp('claimed_at'),
+    finishedAt: timestamp('finished_at'),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    index('idx_maj_dispatcher_status').on(t.dispatcherUserId, t.status, t.createdAt),
+    index('idx_maj_server_created').on(t.serverId, t.createdAt),
+    index('idx_maj_status_created').on(t.status, t.createdAt),
+  ],
+);
+
+export type MonitoringAnalysisJobRow = typeof monitoringAnalysisJobs.$inferSelect;
+export type NewMonitoringAnalysisJobRow = typeof monitoringAnalysisJobs.$inferInsert;
+
+// ============================================================================
 // project_automation — миграция db/045. Автоматизация: если у проекта нет открытых
 // задач, диспетчер (ralph) сам генерирует и выполняет задачи по выбранным критериям.
 // Сайт хранит конфиг + редактируемые промпты, считает лимит и round-robin критериев.

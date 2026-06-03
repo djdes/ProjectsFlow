@@ -183,6 +183,13 @@ import type { ManageAlertRules } from '../application/monitoring/ManageAlertRule
 import type { GetMonitoringOverview } from '../application/monitoring/GetMonitoringOverview.js';
 import type { IngestAgentSnapshot } from '../application/monitoring/IngestAgentSnapshot.js';
 import type { ListMonitoredServers } from '../application/monitoring/ListMonitoredServers.js';
+import { monitoringAnalysisRouter } from './monitoring-analysis/routes.js';
+import type { EnqueueMonitoringAnalysisJob } from '../application/monitoring-analysis/EnqueueMonitoringAnalysisJob.js';
+import type { WaitForMonitoringAnalysisJob } from '../application/monitoring-analysis/WaitForMonitoringAnalysisJob.js';
+import type { ListServerAnalysisHistory } from '../application/monitoring-analysis/ListServerAnalysisHistory.js';
+import type { ListPendingMonitoringAnalysisJobs } from '../application/monitoring-analysis/ListPendingMonitoringAnalysisJobs.js';
+import type { ClaimMonitoringAnalysisJob } from '../application/monitoring-analysis/ClaimMonitoringAnalysisJob.js';
+import type { CompleteMonitoringAnalysisJob } from '../application/monitoring-analysis/CompleteMonitoringAnalysisJob.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
@@ -300,6 +307,10 @@ type AppDeps = {
     readonly queries: MonitoringQueries;
     readonly manageAlertRules: ManageAlertRules;
     readonly overview: GetMonitoringOverview;
+    // AI-анализ мониторинга (db/063) — web-эндпоинты enqueue/long-poll/история.
+    readonly analysisEnqueue: EnqueueMonitoringAnalysisJob;
+    readonly analysisWaitFor: WaitForMonitoringAnalysisJob;
+    readonly analysisHistory: ListServerAnalysisHistory;
   };
   readonly kb: {
     readonly initKbRepo: InitKbRepo;
@@ -397,6 +408,10 @@ type AppDeps = {
     readonly claimAiPromptJob: ClaimAiPromptJob;
     readonly completeAiPromptJob: CompleteAiPromptJob;
     readonly getAiPromptKbBundle: GetAiPromptKbBundle;
+    // AI-анализ мониторинга (db/063) — dispatcher poll/claim/complete (Bearer).
+    readonly listPendingMonitoringAnalysisJobs: ListPendingMonitoringAnalysisJobs;
+    readonly claimMonitoringAnalysisJob: ClaimMonitoringAnalysisJob;
+    readonly completeMonitoringAnalysisJob: CompleteMonitoringAnalysisJob;
     readonly ackRalphCancel: AckRalphCancel;
     readonly checkRepoUsage: CheckRepoUsage;
     readonly requestRepoAccess: RequestRepoAccess;
@@ -479,6 +494,14 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/projects/:projectId/secrets', secretsRouter(deps.secrets));
   app.use('/api/projects/:projectId/monitoring', monitoringRouter(deps.monitoring));
   app.use('/api/monitoring', monitoringOverviewRouter({ overview: deps.monitoring.overview }));
+  app.use(
+    '/api/monitoring',
+    monitoringAnalysisRouter({
+      enqueue: deps.monitoring.analysisEnqueue,
+      waitFor: deps.monitoring.analysisWaitFor,
+      history: deps.monitoring.analysisHistory,
+    }),
+  );
   app.use(
     '/api/projects/:projectId/kb',
     kbRouter({ ...deps.kb, notifier: deps.notifications.projectNotifier }),
@@ -607,6 +630,9 @@ export function createApp(deps: AppDeps): CreatedApp {
       getAiPromptKbBundle: deps.agent.getAiPromptKbBundle,
       enqueueAiPromptJob: deps.agent.enqueueAiPromptJob,
       waitForAiPromptJob: deps.agent.waitForAiPromptJob,
+      listPendingMonitoringAnalysisJobs: deps.agent.listPendingMonitoringAnalysisJobs,
+      claimMonitoringAnalysisJob: deps.agent.claimMonitoringAnalysisJob,
+      completeMonitoringAnalysisJob: deps.agent.completeMonitoringAnalysisJob,
       uploadTaskAttachment: deps.tasks.uploadAttachment,
       maxAttachmentBytes: deps.tasks.maxAttachmentBytes,
       ackRalphCancel: deps.agent.ackRalphCancel,

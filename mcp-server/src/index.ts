@@ -609,6 +609,66 @@ const TOOLS = [
     },
   },
   {
+    name: 'pf_list_pending_monitoring_analysis_jobs',
+    description:
+      'List queued monitoring AI-analysis jobs where current user is the dispatcher, oldest first. ' +
+      'A project member clicked "Разобрать через AI" on a server snapshot/logs/alert and the site ' +
+      'wants the dispatcher to diagnose it. Each item has projectId/projectName, serverId/serverName, ' +
+      'analysisType (snapshot|logs|alert|digest) and createdAt. Time-sensitive: the user long-polls ' +
+      'up to 25s. If empty, no work to do.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', description: 'Max jobs to return (default 10, max 50)' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_claim_monitoring_analysis_job',
+    description:
+      'Atomically claim a queued monitoring AI-analysis job. Returns the full job including `context` ' +
+      '— a pre-assembled markdown bundle (server config, latest snapshot metrics, active alerts, ' +
+      'recent trend, and log tails for logs/alert types). Analyze THAT context directly; you do NOT ' +
+      'need to fetch snapshots/logs yourself. analysisType tells you the focus: snapshot=general ' +
+      'health diagnosis, logs=parse log tails for errors, alert=explain why the alert fired. On 409 ' +
+      'another session won — skip. You have ~5 min before cleanup cancels stuck jobs. Write a concise ' +
+      'Russian markdown report: what is healthy, what is suspicious, likely root cause, 2-3 concrete actions.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string', description: 'Job id (from pf_list_pending_monitoring_analysis_jobs)' },
+      },
+      required: ['jobId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_complete_monitoring_analysis_job',
+    description:
+      'Finalize a monitoring AI-analysis job. ok=true requires resultMarkdown (the diagnosis report, ' +
+      'Russian markdown, ≤300000 chars). ok=false requires error (short reason ≤500 chars). Optionally ' +
+      'report costUsd/tokensIn/tokensOut so the UI can show the analysis cost. Server then unblocks the ' +
+      'web long-poll. Do NOT retry on 409 (job cancelled by cleanup/user) — drop it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string', description: 'Job id' },
+        ok: { type: 'boolean', description: 'true if Claude produced a valid analysis' },
+        resultMarkdown: {
+          type: ['string', 'null'],
+          description: 'Diagnosis report in Russian markdown (≤300000 chars). Required when ok=true.',
+        },
+        error: { type: ['string', 'null'], description: 'Short error reason (≤500 chars). Required when ok=false.' },
+        costUsd: { type: ['number', 'null'], description: 'Optional run cost in USD.' },
+        tokensIn: { type: ['integer', 'null'], description: 'Optional input tokens.' },
+        tokensOut: { type: ['integer', 'null'], description: 'Optional output tokens.' },
+      },
+      required: ['jobId', 'ok'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pf_get_project',
     description:
       'Fetch metadata for a single project: id, name, status, hasKb, gitRepoUrl. Returns ' +
@@ -1329,6 +1389,24 @@ const CompleteAiPromptJobInput = z.object({
   error: z.string().max(500).nullable().optional(),
 });
 
+const ListPendingMonitoringAnalysisJobsInput = z.object({
+  limit: z.number().int().min(1).max(50).optional(),
+});
+
+const ClaimMonitoringAnalysisJobInput = z.object({
+  jobId: z.string().min(1),
+});
+
+const CompleteMonitoringAnalysisJobInput = z.object({
+  jobId: z.string().min(1),
+  ok: z.boolean(),
+  resultMarkdown: z.string().max(300000).nullable().optional(),
+  error: z.string().max(500).nullable().optional(),
+  costUsd: z.number().nullable().optional(),
+  tokensIn: z.number().int().nullable().optional(),
+  tokensOut: z.number().int().nullable().optional(),
+});
+
 const GetProjectInput = z.object({ projectId: z.string().min(1) });
 const ListMembersInput = z.object({ projectId: z.string().min(1) });
 const SearchTasksInput = z.object({ query: z.string().trim().min(2).max(200) });
@@ -1575,6 +1653,28 @@ async function main(): Promise<void> {
             ok: input.ok,
             improvedText: input.improvedText ?? null,
             error: input.error ?? null,
+          });
+          return jsonResult({ ok: true });
+        }
+        case 'pf_list_pending_monitoring_analysis_jobs': {
+          const input = ListPendingMonitoringAnalysisJobsInput.parse(req.params.arguments ?? {});
+          const jobs = await api.listPendingMonitoringAnalysisJobs(input.limit ?? 10);
+          return jsonResult(jobs);
+        }
+        case 'pf_claim_monitoring_analysis_job': {
+          const input = ClaimMonitoringAnalysisJobInput.parse(req.params.arguments ?? {});
+          const job = await api.claimMonitoringAnalysisJob(input.jobId);
+          return jsonResult(job);
+        }
+        case 'pf_complete_monitoring_analysis_job': {
+          const input = CompleteMonitoringAnalysisJobInput.parse(req.params.arguments ?? {});
+          await api.completeMonitoringAnalysisJob(input.jobId, {
+            ok: input.ok,
+            resultMarkdown: input.resultMarkdown ?? null,
+            error: input.error ?? null,
+            costUsd: input.costUsd ?? null,
+            tokensIn: input.tokensIn ?? null,
+            tokensOut: input.tokensOut ?? null,
           });
           return jsonResult({ ok: true });
         }

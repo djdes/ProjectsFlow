@@ -112,6 +112,14 @@ import { ClaimAiPromptJob } from './application/ai-prompt/ClaimAiPromptJob.js';
 import { CompleteAiPromptJob } from './application/ai-prompt/CompleteAiPromptJob.js';
 import { GetAiPromptKbBundle } from './application/ai-prompt/GetAiPromptKbBundle.js';
 import { AiPromptJobCleanup } from './application/ai-prompt/AiPromptJobCleanup.js';
+import { DrizzleMonitoringAnalysisJobRepository } from './infrastructure/repositories/DrizzleMonitoringAnalysisJobRepository.js';
+import { EnqueueMonitoringAnalysisJob } from './application/monitoring-analysis/EnqueueMonitoringAnalysisJob.js';
+import { WaitForMonitoringAnalysisJob } from './application/monitoring-analysis/WaitForMonitoringAnalysisJob.js';
+import { ListServerAnalysisHistory } from './application/monitoring-analysis/ListServerAnalysisHistory.js';
+import { ListPendingMonitoringAnalysisJobs } from './application/monitoring-analysis/ListPendingMonitoringAnalysisJobs.js';
+import { ClaimMonitoringAnalysisJob } from './application/monitoring-analysis/ClaimMonitoringAnalysisJob.js';
+import { CompleteMonitoringAnalysisJob } from './application/monitoring-analysis/CompleteMonitoringAnalysisJob.js';
+import { MonitoringAnalysisJobCleanup } from './application/monitoring-analysis/MonitoringAnalysisJobCleanup.js';
 import { DrizzleAutomationRepository } from './infrastructure/repositories/DrizzleAutomationRepository.js';
 import { GetAutomationConfig } from './application/automation/GetAutomationConfig.js';
 import { SaveAutomationConfig } from './application/automation/SaveAutomationConfig.js';
@@ -744,6 +752,51 @@ const monitoringOverview = new GetMonitoringOverview({
   snapshots: snapshotRepo,
   alerts: monitoringAlertRepo,
 });
+// AI-анализ мониторинга через диспетчера (db/063) — зеркало ai_prompt_jobs.
+const monitoringAnalysisJobRepo = new DrizzleMonitoringAnalysisJobRepository(db);
+const enqueueMonitoringAnalysisJob = new EnqueueMonitoringAnalysisJob({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  servers: serverRepo,
+  snapshots: snapshotRepo,
+  alerts: monitoringAlertRepo,
+  monitoringAnalysisJobs: monitoringAnalysisJobRepo,
+  rateLimiter: agentRateLimiter,
+});
+const waitForMonitoringAnalysisJob = new WaitForMonitoringAnalysisJob({
+  monitoringAnalysisJobs: monitoringAnalysisJobRepo,
+  isAdmin: async (userId) => (await userRepo.getById(userId))?.isAdmin ?? false,
+});
+const listServerAnalysisHistory = new ListServerAnalysisHistory({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  servers: serverRepo,
+  monitoringAnalysisJobs: monitoringAnalysisJobRepo,
+});
+const listPendingMonitoringAnalysisJobs = new ListPendingMonitoringAnalysisJobs({
+  monitoringAnalysisJobs: monitoringAnalysisJobRepo,
+});
+const claimMonitoringAnalysisJob = new ClaimMonitoringAnalysisJob({
+  monitoringAnalysisJobs: monitoringAnalysisJobRepo,
+});
+const completeMonitoringAnalysisJob = new CompleteMonitoringAnalysisJob({
+  monitoringAnalysisJobs: monitoringAnalysisJobRepo,
+});
+// Housekeeping каждые 60 сек (зеркало ai-prompt cleanup).
+const monitoringAnalysisJobCleanup = new MonitoringAnalysisJobCleanup({
+  monitoringAnalysisJobs: monitoringAnalysisJobRepo,
+});
+setInterval(() => {
+  void monitoringAnalysisJobCleanup
+    .runOnce(new Date())
+    .then((r) => {
+      if (r.cancelled > 0 || r.deleted > 0) {
+        console.log(`[monitoring-analysis-cleanup] cancelled=${r.cancelled} deleted=${r.deleted}`);
+      }
+    })
+    .catch((err) => console.warn('[monitoring-analysis-cleanup] failed:', err));
+}, 60 * 1000).unref();
+
 const monitoringKbSnapshotWriter = new MonitoringKbSnapshotWriter({
   servers: serverRepo,
   snapshots: snapshotRepo,
@@ -1044,6 +1097,9 @@ const { app, devProxyUpgrade } = createApp({
     queries: monitoringQueries,
     manageAlertRules,
     overview: monitoringOverview,
+    analysisEnqueue: enqueueMonitoringAnalysisJob,
+    analysisWaitFor: waitForMonitoringAnalysisJob,
+    analysisHistory: listServerAnalysisHistory,
   },
   kb: {
     initKbRepo: new InitKbRepo({
@@ -1450,6 +1506,9 @@ const { app, devProxyUpgrade } = createApp({
     listPendingAiPromptJobs: new ListPendingAiPromptJobs({ aiPromptJobs: aiPromptJobRepo }),
     claimAiPromptJob: new ClaimAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
     completeAiPromptJob: new CompleteAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
+    listPendingMonitoringAnalysisJobs,
+    claimMonitoringAnalysisJob,
+    completeMonitoringAnalysisJob,
     getAiPromptKbBundle: new GetAiPromptKbBundle({
       aiPromptJobs: aiPromptJobRepo,
       projects: projectRepo,

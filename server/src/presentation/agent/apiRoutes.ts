@@ -31,6 +31,11 @@ import type { CompleteAiPromptJob } from '../../application/ai-prompt/CompleteAi
 import type { GetAiPromptKbBundle } from '../../application/ai-prompt/GetAiPromptKbBundle.js';
 import { AiPromptRateLimitedError, type EnqueueAiPromptJob } from '../../application/ai-prompt/EnqueueAiPromptJob.js';
 import type { WaitForAiPromptJob } from '../../application/ai-prompt/WaitForAiPromptJob.js';
+import type { ListPendingMonitoringAnalysisJobs } from '../../application/monitoring-analysis/ListPendingMonitoringAnalysisJobs.js';
+import type { ClaimMonitoringAnalysisJob } from '../../application/monitoring-analysis/ClaimMonitoringAnalysisJob.js';
+import type { CompleteMonitoringAnalysisJob } from '../../application/monitoring-analysis/CompleteMonitoringAnalysisJob.js';
+import type { MonitoringAnalysisJob } from '../../domain/monitoring-analysis/MonitoringAnalysisJob.js';
+import type { PendingMonitoringAnalysisJob } from '../../application/monitoring-analysis/MonitoringAnalysisJobRepository.js';
 import {
   AiPromptDispatcherNotConfiguredError,
   AiPromptJobAccessDeniedError,
@@ -135,6 +140,9 @@ type Deps = {
   readonly getAiPromptKbBundle: GetAiPromptKbBundle;
   readonly enqueueAiPromptJob: EnqueueAiPromptJob;
   readonly waitForAiPromptJob: WaitForAiPromptJob;
+  readonly listPendingMonitoringAnalysisJobs: ListPendingMonitoringAnalysisJobs;
+  readonly claimMonitoringAnalysisJob: ClaimMonitoringAnalysisJob;
+  readonly completeMonitoringAnalysisJob: CompleteMonitoringAnalysisJob;
   readonly uploadTaskAttachment: UploadTaskAttachment;
   readonly maxAttachmentBytes: number;
   readonly ackRalphCancel: AckRalphCancel;
@@ -1175,6 +1183,94 @@ export function agentApiRouter(deps: Deps): Router {
     } catch (e) {
       if (e instanceof AiPromptJobNotFoundError) { res.status(404).json({ error: 'job_not_found' }); return; }
       if (e instanceof AiPromptJobAccessDeniedError) { res.status(403).json({ error: 'not_owner' }); return; }
+      next(e);
+    }
+  });
+
+  // === AI-анализ мониторинга — dispatcher poll/claim/complete (db/063) ===
+  // Зеркало pending/claim/complete ai-prompt'а: Ralph поллит, забирает job с пред-собранным
+  // контекстом (снимок/логи/алерты/тренд), анализирует через Claude, возвращает markdown.
+  const completeMonitoringAnalysisBodySchema = z
+    .object({
+      ok: z.boolean(),
+      resultMarkdown: z.string().max(300000).nullable().optional(),
+      error: z.string().max(500).nullable().optional(),
+      costUsd: z.number().nullable().optional(),
+      tokensIn: z.number().int().nullable().optional(),
+      tokensOut: z.number().int().nullable().optional(),
+    })
+    .refine((b) => (b.ok ? Boolean(b.resultMarkdown && b.resultMarkdown.trim().length > 0) : true), {
+      message: 'resultMarkdown required when ok=true',
+      path: ['resultMarkdown'],
+    })
+    .refine((b) => (b.ok ? true : Boolean(b.error && b.error.trim().length > 0)), {
+      message: 'error required when ok=false',
+      path: ['error'],
+    });
+
+  const pendingMonitoringAnalysisToDto = (p: PendingMonitoringAnalysisJob): Record<string, unknown> => ({
+    id: p.id,
+    projectId: p.projectId,
+    projectName: p.projectName,
+    serverId: p.serverId,
+    serverName: p.serverName,
+    analysisType: p.analysisType,
+    createdAt: p.createdAt.toISOString(),
+  });
+
+  const monitoringAnalysisToAgentDto = (j: MonitoringAnalysisJob): Record<string, unknown> => ({
+    id: j.id,
+    projectId: j.projectId,
+    serverId: j.serverId,
+    status: j.status,
+    analysisType: j.analysisType,
+    alertId: j.alertId,
+    note: j.note,
+    context: j.context,
+    claimedAt: j.claimedAt ? j.claimedAt.toISOString() : null,
+    createdAt: j.createdAt.toISOString(),
+  });
+
+  router.get('/pending-monitoring-analysis-jobs', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const limitParam = req.query['limit'];
+      const limit = typeof limitParam === 'string' ? parseInt(limitParam, 10) : undefined;
+      const jobs = await deps.listPendingMonitoringAnalysisJobs.execute({
+        userId: req.user!.id,
+        limit: Number.isFinite(limit) ? limit : undefined,
+      });
+      res.json({ jobs: jobs.map(pendingMonitoringAnalysisToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/monitoring-analysis-jobs/:jobId/claim', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const jobId = req.params['jobId'] as string;
+      const job = await deps.claimMonitoringAnalysisJob.execute({ userId: req.user!.id, jobId });
+      res.json({ job: monitoringAnalysisToAgentDto(job) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/monitoring-analysis-jobs/:jobId/complete', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const jobId = req.params['jobId'] as string;
+      const body = completeMonitoringAnalysisBodySchema.parse(req.body);
+      await deps.completeMonitoringAnalysisJob.execute({
+        userId: req.user!.id,
+        jobId,
+        ok: body.ok,
+        resultMarkdown: body.resultMarkdown ?? null,
+        error: body.error ?? null,
+        costUsd: body.costUsd ?? null,
+        tokensIn: body.tokensIn ?? null,
+        tokensOut: body.tokensOut ?? null,
+      });
+      res.status(204).end();
+    } catch (e) {
       next(e);
     }
   });
