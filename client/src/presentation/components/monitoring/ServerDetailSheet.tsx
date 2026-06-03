@@ -13,6 +13,7 @@ import { ResourceBar } from './ResourceBar';
 import { Pm2Table } from './Pm2Table';
 import { Pm2List } from './Pm2List';
 import { StatusTimeline } from './StatusTimeline';
+import { SlaSummary } from './SlaSummary';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { SystemGrid } from './SystemGrid';
 import { DbHealthCard } from './DbHealthCard';
@@ -178,6 +179,7 @@ export function ServerDetailSheet({
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               <TabsContent value="overview" className="mt-0 space-y-4">
                 <StatusTimeline projectId={projectId} serverId={server.id} nowMs={nowMs} />
+                <SlaSummary projectId={projectId} serverId={server.id} nowMs={nowMs} />
                 {(http || (ssl && ssl.daysLeft !== null)) && (
                   <div className="flex flex-wrap gap-2 text-xs">
                     {http && (
