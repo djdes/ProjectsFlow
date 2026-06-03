@@ -210,6 +210,10 @@ export type CreateTaskInput = {
 export type UpdateTaskInput = {
   description?: string;
   ralphMode?: RalphMode;
+  // Приоритет 1..4 (1=urgent, 4=low). null очищает. undefined — не менять.
+  priority?: number | null;
+  // Дедлайн 'YYYY-MM-DD'. null очищает. undefined — не менять.
+  deadline?: string | null;
 };
 
 export type WriteKbDocInput = {
@@ -783,6 +787,8 @@ export class ApiClient {
     const body: Record<string, unknown> = {};
     if (patch.description !== undefined) body.description = patch.description;
     if (patch.ralphMode !== undefined) body.ralphMode = patch.ralphMode;
+    if (patch.priority !== undefined) body.priority = patch.priority;
+    if (patch.deadline !== undefined) body.deadline = patch.deadline;
     const { task } = await this.request<{ task: Task }>(
       `/agent/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`,
       { method: 'PATCH', body },

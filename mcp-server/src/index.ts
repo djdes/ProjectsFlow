@@ -763,8 +763,9 @@ const TOOLS = [
   {
     name: 'pf_update_task',
     description:
-      "Update a task's description (markdown) and/or Ralph mode. Requires editor+ role. " +
-      'Returns the updated task. Pass at least one of `description` or `ralphMode`.',
+      "Update a task's description (markdown), Ralph mode, priority and/or deadline. Requires " +
+      'editor+ role. Returns the updated task. Pass at least one of `description`, `ralphMode`, ' +
+      '`priority` or `deadline`. Use for triage: set priority/deadline on raw backlog cards.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -772,7 +773,7 @@ const TOOLS = [
         taskId: { type: 'string', description: 'Task id (from pf_list_tasks)' },
         description: {
           type: 'string',
-          description: 'New task description (markdown), 1-10000 chars. Omit if only changing ralphMode.',
+          description: 'New task description (markdown), 1-10000 chars. Omit to leave unchanged.',
         },
         ralphMode: {
           type: 'string',
@@ -780,6 +781,14 @@ const TOOLS = [
           description:
             "New Ralph mode for this task. 'normal' | 'silent' | 'grillme' " +
             '(see pf_create_task for semantics). Omit to leave unchanged.',
+        },
+        priority: {
+          type: ['integer', 'null'],
+          description: 'Priority 1..4 (1=urgent, 4=low). null clears it. Omit to leave unchanged.',
+        },
+        deadline: {
+          type: ['string', 'null'],
+          description: "Deadline 'YYYY-MM-DD'. null clears it. Omit to leave unchanged.",
         },
       },
       required: ['projectId', 'taskId'],
@@ -1426,10 +1435,21 @@ const UpdateTaskInputZ = z
     taskId: z.string().min(1),
     description: z.string().trim().min(1).max(10_000).optional(),
     ralphMode: z.enum(['normal', 'silent', 'grillme']).optional(),
+    priority: z.number().int().min(1).max(4).nullable().optional(),
+    deadline: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'deadline must be YYYY-MM-DD')
+      .nullable()
+      .optional(),
   })
-  .refine((o) => o.description !== undefined || o.ralphMode !== undefined, {
-    message: 'Pass at least one of `description` or `ralphMode`.',
-  });
+  .refine(
+    (o) =>
+      o.description !== undefined ||
+      o.ralphMode !== undefined ||
+      o.priority !== undefined ||
+      o.deadline !== undefined,
+    { message: 'Pass at least one of `description`, `ralphMode`, `priority` or `deadline`.' },
+  );
 const DeleteTaskInputZ = z.object({
   projectId: z.string().min(1),
   taskId: z.string().min(1),
@@ -1713,6 +1733,8 @@ async function main(): Promise<void> {
           const task = await api.updateTask(input.projectId, input.taskId, {
             description: input.description,
             ralphMode: input.ralphMode,
+            priority: input.priority,
+            deadline: input.deadline,
           });
           return jsonResult(task);
         }
