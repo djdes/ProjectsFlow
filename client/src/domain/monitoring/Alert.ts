@@ -28,3 +28,24 @@ export type ServerAlert = {
   readonly lastSeenAt: Date;
   readonly resolvedAt: Date | null;
 };
+
+// Запись кросс-проектного Alert Center (алерт + имена проекта/сервера).
+export type AlertCenterEntry = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly serverId: string;
+  readonly serverName: string | null;
+  readonly ruleKind: string;
+  readonly severity: AlertSeverity;
+  readonly status: AlertStatus;
+  readonly message: string;
+  readonly firstSeenAt: Date;
+  readonly lastSeenAt: Date;
+  readonly resolvedAt: Date | null;
+};
+
+export type AlertCenter = {
+  readonly active: AlertCenterEntry[];
+  readonly recent: AlertCenterEntry[];
+};

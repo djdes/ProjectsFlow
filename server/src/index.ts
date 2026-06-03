@@ -202,6 +202,7 @@ import { MysqlDbHealthProbe } from './infrastructure/monitoring/MysqlDbHealthPro
 import { DrizzleMonitoringAlertRuleRepository } from './infrastructure/repositories/DrizzleMonitoringAlertRuleRepository.js';
 import { ManageAlertRules } from './application/monitoring/ManageAlertRules.js';
 import { GetMonitoringOverview } from './application/monitoring/GetMonitoringOverview.js';
+import { GetAlertCenter } from './application/monitoring/GetAlertCenter.js';
 import { AlertNotificationDispatcher } from './application/monitoring/AlertNotificationDispatcher.js';
 import { EvaluateAlerts } from './application/monitoring/EvaluateAlerts.js';
 import { CollectLocalSnapshot } from './application/monitoring/CollectLocalSnapshot.js';
@@ -757,6 +758,11 @@ const monitoringOverview = new GetMonitoringOverview({
   snapshots: snapshotRepo,
   alerts: monitoringAlertRepo,
 });
+const monitoringAlertCenter = new GetAlertCenter({
+  listProjects: new ListProjects(projectMemberRepo),
+  servers: serverRepo,
+  alerts: monitoringAlertRepo,
+});
 // AI-анализ мониторинга через диспетчера (db/063) — зеркало ai_prompt_jobs.
 const monitoringAnalysisJobRepo = new DrizzleMonitoringAnalysisJobRepository(db);
 const enqueueMonitoringAnalysisJob = new EnqueueMonitoringAnalysisJob({
@@ -1102,6 +1108,7 @@ const { app, devProxyUpgrade } = createApp({
     queries: monitoringQueries,
     manageAlertRules,
     overview: monitoringOverview,
+    alertCenter: monitoringAlertCenter,
     analysisEnqueue: enqueueMonitoringAnalysisJob,
     analysisWaitFor: waitForMonitoringAnalysisJob,
     analysisHistory: listServerAnalysisHistory,

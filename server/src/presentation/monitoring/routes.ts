@@ -4,6 +4,7 @@ import type { ManageServers } from '../../application/monitoring/ManageServers.j
 import type { MonitoringQueries } from '../../application/monitoring/MonitoringQueries.js';
 import type { ManageAlertRules } from '../../application/monitoring/ManageAlertRules.js';
 import type { GetMonitoringOverview } from '../../application/monitoring/GetMonitoringOverview.js';
+import type { AlertCenterItem, GetAlertCenter } from '../../application/monitoring/GetAlertCenter.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
   alertRulesSchema,
@@ -191,14 +192,43 @@ export function monitoringRouter(deps: Deps): Router {
   return router;
 }
 
+function alertCenterItemToDto(a: AlertCenterItem): Record<string, unknown> {
+  return {
+    id: a.id,
+    projectId: a.projectId,
+    projectName: a.projectName,
+    serverId: a.serverId,
+    serverName: a.serverName,
+    ruleKind: a.ruleKind,
+    severity: a.severity,
+    status: a.status,
+    message: a.message,
+    firstSeenAt: a.firstSeenAt.toISOString(),
+    lastSeenAt: a.lastSeenAt.toISOString(),
+    resolvedAt: a.resolvedAt ? a.resolvedAt.toISOString() : null,
+  };
+}
+
 // Глобальный (кросс-проектный) роутер сводки. Монтируется на /api/monitoring.
-export function monitoringOverviewRouter(deps: { overview: GetMonitoringOverview }): Router {
+export function monitoringOverviewRouter(deps: {
+  overview: GetMonitoringOverview;
+  alertCenter: GetAlertCenter;
+}): Router {
   const router = Router();
   router.use(requireAuth);
   router.get('/overview', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const projects = await deps.overview.execute(req.user!.id);
       res.json({ projects });
+    } catch (e) {
+      next(e);
+    }
+  });
+  // Кросс-проектный Alert Center: { active, recent }.
+  router.get('/alerts', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { active, recent } = await deps.alertCenter.execute(req.user!.id);
+      res.json({ active: active.map(alertCenterItemToDto), recent: recent.map(alertCenterItemToDto) });
     } catch (e) {
       next(e);
     }

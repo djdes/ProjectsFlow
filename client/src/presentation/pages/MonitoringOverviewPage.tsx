@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Activity } from 'lucide-react';
+import { Activity, BellRing } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useContainer } from '@/infrastructure/di/container';
 import type { OverviewProject } from '@/domain/monitoring/Server';
@@ -36,11 +37,26 @@ export function MonitoringOverviewPage(): React.ReactElement {
     };
   }, [monitoringRepository]);
 
+  const totalAlerts = (projects ?? []).reduce((sum, p) => sum + p.activeAlerts, 0);
+
   return (
     <div className="flex h-full flex-col gap-4 p-4 sm:gap-6 sm:p-6">
-      <div className="flex items-center gap-2">
-        <Activity className="size-6" />
-        <h1 className="text-3xl font-semibold tracking-tight">Мониторинг — все проекты</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Activity className="size-6" />
+          <h1 className="text-3xl font-semibold tracking-tight">Мониторинг — все проекты</h1>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link to="/monitoring/alerts">
+            <BellRing className="size-4" />
+            Алерты
+            {totalAlerts > 0 && (
+              <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
+                {totalAlerts}
+              </span>
+            )}
+          </Link>
+        </Button>
       </div>
 
       {error && (

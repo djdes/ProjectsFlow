@@ -10,7 +10,7 @@ import type {
   ServerSnapshot,
   TrendPoint,
 } from '@/domain/monitoring/Snapshot';
-import type { AlertRule, ServerAlert } from '@/domain/monitoring/Alert';
+import type { AlertCenter, AlertCenterEntry, AlertRule, ServerAlert } from '@/domain/monitoring/Alert';
 import type { MonitoringAnalysisResult, MonitoringAnalysisType } from '@/domain/monitoring/Analysis';
 import type { HistoryOptions, MonitoringRepository } from '@/application/monitoring/MonitoringRepository';
 import { HttpError, httpClient } from './httpClient';
@@ -184,6 +184,24 @@ export class HttpMonitoringRepository implements MonitoringRepository {
         lastSnapshotAt: s.lastSnapshotAt ? new Date(s.lastSnapshotAt) : null,
       })),
     }));
+  }
+
+  async getAlertCenter(): Promise<AlertCenter> {
+    type RawEntry = Omit<AlertCenterEntry, 'firstSeenAt' | 'lastSeenAt' | 'resolvedAt'> & {
+      firstSeenAt: string;
+      lastSeenAt: string;
+      resolvedAt: string | null;
+    };
+    const map = (e: RawEntry): AlertCenterEntry => ({
+      ...e,
+      firstSeenAt: new Date(e.firstSeenAt),
+      lastSeenAt: new Date(e.lastSeenAt),
+      resolvedAt: e.resolvedAt ? new Date(e.resolvedAt) : null,
+    });
+    const { active, recent } = await httpClient.get<{ active: RawEntry[]; recent: RawEntry[] }>(
+      `/monitoring/alerts`,
+    );
+    return { active: active.map(map), recent: recent.map(map) };
   }
 
   async enqueueAnalysis(

@@ -5,7 +5,7 @@ import type {
   ServerWithLatest,
 } from '@/domain/monitoring/Server';
 import type { LogKind, LogTail, ServerSnapshot, TrendPoint } from '@/domain/monitoring/Snapshot';
-import type { AlertRule, ServerAlert } from '@/domain/monitoring/Alert';
+import type { AlertCenter, AlertRule, ServerAlert } from '@/domain/monitoring/Alert';
 import type { MonitoringAnalysisResult, MonitoringAnalysisType } from '@/domain/monitoring/Analysis';
 
 export type HistoryOptions = {
@@ -28,6 +28,7 @@ export interface MonitoringRepository {
   getAlertRules(projectId: string): Promise<AlertRule[]>;
   saveAlertRules(projectId: string, rules: AlertRule[]): Promise<AlertRule[]>;
   getOverview(): Promise<OverviewProject[]>;
+  getAlertCenter(): Promise<AlertCenter>;
   // AI-анализ мониторинга (db/063): enqueue → long-poll результата → история.
   enqueueAnalysis(
     projectId: string,
