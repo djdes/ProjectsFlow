@@ -112,6 +112,7 @@ import { ClaimAiPromptJob } from './application/ai-prompt/ClaimAiPromptJob.js';
 import { CompleteAiPromptJob } from './application/ai-prompt/CompleteAiPromptJob.js';
 import { GetAiPromptKbBundle } from './application/ai-prompt/GetAiPromptKbBundle.js';
 import { AiPromptJobCleanup } from './application/ai-prompt/AiPromptJobCleanup.js';
+import { resolveDefaultAiDispatcher } from './application/ai-prompt/resolveDefaultAiDispatcher.js';
 import { DrizzleMonitoringAnalysisJobRepository } from './infrastructure/repositories/DrizzleMonitoringAnalysisJobRepository.js';
 import { EnqueueMonitoringAnalysisJob } from './application/monitoring-analysis/EnqueueMonitoringAnalysisJob.js';
 import { WaitForMonitoringAnalysisJob } from './application/monitoring-analysis/WaitForMonitoringAnalysisJob.js';
@@ -336,22 +337,28 @@ const resolveDefaultDispatcher = (): Promise<string | null> =>
   pickDefaultDispatcherUserId(userRepo, agentTokenRepo);
 
 // AI prompt-improvement: дефолтный диспетчер для Inbox-задач (без projectId).
-// AI_PROMPT_DEFAULT_DISPATCHER_EMAIL → userId. Кешируем на 60 сек чтобы не лазить
-// каждый раз в БД, но и подхватывать revoke токенов и переименования email'а.
+// Логика — в resolveDefaultAiDispatcher: явный AI_PROMPT_DEFAULT_DISPATCHER_EMAIL (если
+// у юзера есть активный токен) → иначе фоллбэк на первого админа с активным токеном
+// (дежурный Ralph-диспетчер). Фоллбэк = «работает из коробки» даже без env.
+// Кешируем на 60 сек: не лазим в БД на каждый enqueue, но подхватываем revoke токенов
+// и переименования email'а.
 const aiPromptDefaultDispatcherEmail = (
   process.env['AI_PROMPT_DEFAULT_DISPATCHER_EMAIL'] ?? ''
 ).trim().toLowerCase();
 let aiPromptDispatcherCache: { userId: string | null; cachedAt: number } | null = null;
 const AI_PROMPT_DISPATCHER_CACHE_TTL_MS = 60 * 1000;
 const resolveDefaultAiDispatcherUserId = async (): Promise<string | null> => {
-  if (!aiPromptDefaultDispatcherEmail) return null;
   const now = Date.now();
   if (aiPromptDispatcherCache && now - aiPromptDispatcherCache.cachedAt < AI_PROMPT_DISPATCHER_CACHE_TTL_MS) {
     return aiPromptDispatcherCache.userId;
   }
-  const user = await userRepo.getByEmail(aiPromptDefaultDispatcherEmail);
-  aiPromptDispatcherCache = { userId: user?.id ?? null, cachedAt: now };
-  return aiPromptDispatcherCache.userId;
+  const userId = await resolveDefaultAiDispatcher({
+    email: aiPromptDefaultDispatcherEmail,
+    users: userRepo,
+    agentTokens: agentTokenRepo,
+  });
+  aiPromptDispatcherCache = { userId, cachedAt: now };
+  return userId;
 };
 
 // Periodic cleanup для ai_prompt_jobs (каждые 60 сек). Лог только когда что-то сделано —
