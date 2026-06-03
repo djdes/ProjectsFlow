@@ -62,6 +62,34 @@ const RUN_STATUS_LABEL: Record<AutomationConfig['runStatus'], string> = {
   stopped: 'остановлена',
 };
 
+// Дефолтная команда деплоя — она же placeholder поля ssh_manual (один источник, чтобы
+// seed и плейсхолдер не разъехались).
+const DEFAULT_DEPLOY_COMMAND = 'npm run deploy';
+
+// Строка-тумблер «заголовок + описание + Switch» в едином оформлении. Три настройки
+// автоматизации делят одинаковую разметку — держим её здесь.
+function SwitchRow({
+  title,
+  description,
+  checked,
+  onCheckedChange,
+}: {
+  title: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (v: boolean) => void;
+}): React.ReactElement {
+  return (
+    <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+      <div className="pr-3">
+        <Label className="text-sm font-medium">{title}</Label>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label={title} />
+    </div>
+  );
+}
+
 function toDraft(config: AutomationConfig): Draft {
   return {
     enabled: config.enabled,
@@ -76,7 +104,7 @@ function toDraft(config: AutomationConfig): Draft {
     ignoreClaudeMd: config.ignoreClaudeMd,
     ultracodeReviewEnabled: config.ultracodeReviewEnabled,
     deployMethod: config.deployMethod,
-    deployCommand: config.deployCommand ?? 'npm run deploy',
+    deployCommand: config.deployCommand ?? DEFAULT_DEPLOY_COMMAND,
     criteria: config.criteria.map((c) => ({
       key: c.key,
       label: c.label,
@@ -234,19 +262,12 @@ export function AutomationDialog({
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Мастер-переключатель */}
-            <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
-              <div>
-                <Label className="text-sm font-medium">Включить автоматизацию</Label>
-                <p className="text-xs text-muted-foreground">
-                  Диспетчер начнёт работать на этом проекте.
-                </p>
-              </div>
-              <Switch
-                checked={draft.enabled}
-                onCheckedChange={(v) => update({ enabled: v })}
-                aria-label="Включить автоматизацию"
-              />
-            </div>
+            <SwitchRow
+              title="Включить автоматизацию"
+              description="Диспетчер начнёт работать на этом проекте."
+              checked={draft.enabled}
+              onCheckedChange={(v) => update({ enabled: v })}
+            />
 
             {!hasDispatcher && (
               <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
@@ -453,36 +474,20 @@ export function AutomationDialog({
             </div>
 
             {/* Игнорировать ритуал CLAUDE.md */}
-            <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
-              <div className="pr-3">
-                <Label className="text-sm font-medium">Игнорировать ритуал CLAUDE.md</Label>
-                <p className="text-xs text-muted-foreground">
-                  Воркер не добавит «Co-Authored-By» и пропустит kanban-ритуал проекта — коммит
-                  только под выбранным автором.
-                </p>
-              </div>
-              <Switch
-                checked={draft.ignoreClaudeMd}
-                onCheckedChange={(v) => update({ ignoreClaudeMd: v })}
-                aria-label="Игнорировать ритуал CLAUDE.md"
-              />
-            </div>
+            <SwitchRow
+              title="Игнорировать ритуал CLAUDE.md"
+              description="Воркер не добавит «Co-Authored-By» и пропустит kanban-ритуал проекта — коммит только под выбранным автором."
+              checked={draft.ignoreClaudeMd}
+              onCheckedChange={(v) => update({ ignoreClaudeMd: v })}
+            />
 
             {/* UltraCode review-гейт */}
-            <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
-              <div className="pr-3">
-                <Label className="text-sm font-medium">Проверка UltraCode перед прод-пушем</Label>
-                <p className="text-xs text-muted-foreground">
-                  Перед push в прод — проверка совместимости от Claude Opus. При найденных проблемах
-                  задача блокируется, push и деплой не выполняются.
-                </p>
-              </div>
-              <Switch
-                checked={draft.ultracodeReviewEnabled}
-                onCheckedChange={(v) => update({ ultracodeReviewEnabled: v })}
-                aria-label="Проверка UltraCode перед прод-пушем"
-              />
-            </div>
+            <SwitchRow
+              title="Проверка UltraCode перед прод-пушем"
+              description="Перед push в прод — проверка совместимости от Claude Opus. При найденных проблемах задача блокируется, push и деплой не выполняются."
+              checked={draft.ultracodeReviewEnabled}
+              onCheckedChange={(v) => update({ ultracodeReviewEnabled: v })}
+            />
 
             {/* Деплой */}
             <div className="space-y-2">
@@ -521,7 +526,7 @@ export function AutomationDialog({
                   <Input
                     value={draft.deployCommand}
                     maxLength={500}
-                    placeholder="npm run deploy"
+                    placeholder={DEFAULT_DEPLOY_COMMAND}
                     onChange={(e) => update({ deployCommand: e.target.value })}
                     className="h-8 font-mono text-xs"
                   />

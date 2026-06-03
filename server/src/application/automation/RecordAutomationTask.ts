@@ -6,9 +6,9 @@ import {
   buildDispatcherView,
   isWithinLimit,
   type AutomationForDispatcher,
-  type ResolvedGitAuthor,
 } from './automationView.js';
 import { defaultAutomationConfig, mergeCriteriaWithDefaults } from './criteria.js';
+import { resolveOwnerAuthor } from './resolveOwnerAuthor.js';
 
 type Deps = ProjectAccessDeps & {
   readonly automation: AutomationRepository;
@@ -36,13 +36,7 @@ export class RecordAutomationTask {
     }
 
     // Идентичность владельца нужна только при gitAuthorMode='owner' (иначе undefined).
-    const owner: ResolvedGitAuthor | undefined =
-      config.gitAuthorMode === 'owner'
-        ? await this.deps.users.getById(project.ownerId).then((u) => ({
-            name: u?.displayName ?? null,
-            email: u?.email ?? null,
-          }))
-        : undefined;
+    const owner = await resolveOwnerAuthor(this.deps.users, project.ownerId, config.gitAuthorMode);
 
     const merged = mergeCriteriaWithDefaults(config.criteria);
     const enabledCount = merged.filter((c) => c.enabled).length;

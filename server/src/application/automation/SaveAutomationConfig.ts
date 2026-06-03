@@ -65,12 +65,12 @@ export class SaveAutomationConfig {
     const baseline = prev ?? defaultAutomationConfig(input.projectId);
     const publishChanged =
       input.gitAuthorMode !== baseline.gitAuthorMode ||
-      (input.gitAuthorName ?? null) !== (baseline.gitAuthorName ?? null) ||
-      (input.gitAuthorEmail ?? null) !== (baseline.gitAuthorEmail ?? null) ||
+      input.gitAuthorName !== baseline.gitAuthorName ||
+      input.gitAuthorEmail !== baseline.gitAuthorEmail ||
       input.ignoreClaudeMd !== baseline.ignoreClaudeMd ||
       input.ultracodeReviewEnabled !== baseline.ultracodeReviewEnabled ||
       input.deployMethod !== baseline.deployMethod ||
-      (input.deployCommand ?? null) !== (baseline.deployCommand ?? null);
+      input.deployCommand !== baseline.deployCommand;
     if (publishChanged && !can(access.membership.role, 'set_publish_settings')) {
       throw new InsufficientProjectRoleError(access.membership.role, 'set_publish_settings');
     }
