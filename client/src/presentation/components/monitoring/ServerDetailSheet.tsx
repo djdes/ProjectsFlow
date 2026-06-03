@@ -14,6 +14,7 @@ import { Pm2Table } from './Pm2Table';
 import { Pm2List } from './Pm2List';
 import { StatusTimeline } from './StatusTimeline';
 import { SlaSummary } from './SlaSummary';
+import { CapacityForecast } from './CapacityForecast';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { SystemGrid } from './SystemGrid';
 import { DbHealthCard } from './DbHealthCard';
@@ -247,6 +248,7 @@ export function ServerDetailSheet({
               <TabsContent value="metrics" className="mt-0 space-y-4">
                 {system ? <SystemGrid system={system} /> : <p className="text-sm text-muted-foreground">Нет данных.</p>}
                 {latest?.dbHealth?.reachable && <DbHealthCard db={latest.dbHealth} />}
+                <CapacityForecast projectId={projectId} serverId={server.id} />
               </TabsContent>
 
               <TabsContent value="logs" className="mt-0">
