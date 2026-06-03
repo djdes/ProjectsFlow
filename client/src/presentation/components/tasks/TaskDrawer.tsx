@@ -39,6 +39,7 @@ import { CommentActionsMenu } from '@/presentation/components/tasks/CommentActio
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { TaskCommitsSection } from './TaskCommitsSection';
 import { CommentBody } from './CommentBody';
+import { Markdown } from '@/presentation/components/markdown/Markdown';
 import { LiveTab } from './LiveTab';
 import { ClaudeIcon } from './ClaudeIcon';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
@@ -593,7 +594,7 @@ export function TaskDrawer({
             <Tabs
               value={activeTab}
               onValueChange={(v: string) => setActiveTab(v as 'discussion' | 'live')}
-              className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
+              className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
             >
               <div className="border-b px-4 pt-2 sm:px-6">
                 <TabsList className="h-8">
@@ -628,8 +629,10 @@ export function TaskDrawer({
                       onSaved={() => onCommitsChange?.()}
                     />
                   ) : (
-                    <div className="whitespace-pre-wrap rounded-md border border-dashed border-transparent p-2 text-sm leading-snug">
-                      {task.description?.trim() || (
+                    <div className="rounded-md border border-dashed border-transparent p-2 text-sm leading-snug">
+                      {task.description?.trim() ? (
+                        <Markdown>{task.description}</Markdown>
+                      ) : (
                         <span className="italic text-muted-foreground">Без описания</span>
                       )}
                     </div>
@@ -702,8 +705,11 @@ export function TaskDrawer({
               (task.status === 'in_progress' ? (
                 <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
               ) : (
-                <>
-                  {/* На awaiting_clarification — композер для ralph-answer'а + cancel под ним. */}
+                // Один grid-ребёнок (строка 3): иначе на awaiting_clarification фрагмент
+                // из двух элементов создаёт лишнюю неявную grid-строку и ломает раскладку
+                // [header / body(1fr) / footer].
+                <div>
+                  {/* На awaiting_clarification — композер для ralph-answer'а + cancel над ним. */}
                   {task.status === 'awaiting_clarification' && (
                     <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
                   )}
@@ -718,7 +724,7 @@ export function TaskDrawer({
                     }}
                     onTaskChanged={() => onCommitsChange?.()}
                   />
-                </>
+                </div>
               ))}
           </>
         ) : (
@@ -992,29 +998,44 @@ function TaskDescriptionEditor({
     );
   }
 
+  // Клик по тексту → режим редактирования, КРОМЕ клика по ссылке внутри markdown
+  // (ссылку открываем, а не уходим в edit). Контейнер — div, а не <button>: rendered
+  // markdown содержит блочные элементы (<p>/<ul>/<pre>), невалидные внутри <button>.
+  const handleDisplayClick = (e: React.MouseEvent<HTMLDivElement>): void => {
+    if ((e.target as HTMLElement).closest('a')) return;
+    enterEdit();
+  };
+  const handleDisplayKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      enterEdit();
+    }
+  };
+
   return (
-    <button
-      type="button"
-      onClick={enterEdit}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleDisplayClick}
+      onKeyDown={handleDisplayKeyDown}
       className={cn(
-        // p-2 + border 1px + text-sm + leading-snug — те же что у textarea выше.
-        'group flex w-full items-start gap-2 rounded-md border border-dashed border-transparent p-2 text-left text-sm leading-snug transition-colors hover:border-border hover:bg-muted/30',
+        // p-2 + border 1px — те же что у textarea выше, чтобы текст не «прыгал» при переключении.
+        'group flex w-full cursor-text items-start gap-2 rounded-md border border-dashed border-transparent p-2 text-left transition-colors hover:border-border hover:bg-muted/30',
       )}
       aria-label="Редактировать описание"
     >
-      <span
-        className={cn(
-          'min-w-0 flex-1 whitespace-pre-wrap break-words',
-          description.trim().length === 0 && 'italic text-muted-foreground',
-        )}
-      >
-        {description.trim().length > 0 ? description : 'Нажми, чтобы добавить описание…'}
-      </span>
+      {description.trim().length > 0 ? (
+        <Markdown className="min-w-0 flex-1">{description}</Markdown>
+      ) : (
+        <span className="min-w-0 flex-1 text-sm italic leading-snug text-muted-foreground">
+          Нажми, чтобы добавить описание…
+        </span>
+      )}
       <Pencil
         aria-hidden
         className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100"
       />
-    </button>
+    </div>
   );
 }
 

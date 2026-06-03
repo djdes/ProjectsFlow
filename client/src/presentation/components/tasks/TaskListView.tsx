@@ -4,6 +4,7 @@ import { GitCommit, ImageIcon, Loader2, MessageSquare, Pencil, Trash2 } from 'lu
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import type { Task, TaskStatus } from '@/domain/task/Task';
 import { taskShortId } from '@/domain/task/Task';
 import { useTasks } from '@/presentation/hooks/useTasks';
@@ -280,14 +281,19 @@ function TaskListRow({
         />
       )}
       <div className="min-w-0 flex-1">
-        <p
-          className={cn(
-            'line-clamp-2 whitespace-pre-wrap text-sm leading-snug',
-            isDone && 'text-muted-foreground line-through decoration-muted-foreground/40',
-          )}
-        >
-          {task.description ?? '—'}
-        </p>
+        {task.description?.trim() ? (
+          <Markdown
+            className={cn(
+              MARKDOWN_COMPACT,
+              'line-clamp-2',
+              isDone && 'line-through opacity-60',
+            )}
+          >
+            {task.description}
+          </Markdown>
+        ) : (
+          <p className="text-sm leading-snug text-muted-foreground">—</p>
+        )}
         {hasBadges && (
           <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground">
             {showShortId && (

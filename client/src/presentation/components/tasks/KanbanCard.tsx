@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { ArrowRight, GitCommit, ImageIcon, MessageSquare, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import type { Task } from '@/domain/task/Task';
 import { taskShortId } from '@/domain/task/Task';
 import { ClaudeIcon } from './ClaudeIcon';
@@ -155,15 +156,19 @@ export function KanbanCard({
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p
-            className={cn(
-              'line-clamp-3 whitespace-pre-wrap text-sm leading-snug',
-              task.status === 'done' &&
-                'text-muted-foreground line-through decoration-muted-foreground/40',
-            )}
-          >
-            {task.description ?? '—'}
-          </p>
+          {task.description?.trim() ? (
+            <Markdown
+              className={cn(
+                MARKDOWN_COMPACT,
+                'line-clamp-3',
+                task.status === 'done' && 'line-through opacity-60',
+              )}
+            >
+              {task.description}
+            </Markdown>
+          ) : (
+            <p className="text-sm leading-snug text-muted-foreground">—</p>
+          )}
           {(showShortId ||
             (task.commitCount ?? 0) > 0 ||
             (task.attachmentCount ?? 0) > 0 ||

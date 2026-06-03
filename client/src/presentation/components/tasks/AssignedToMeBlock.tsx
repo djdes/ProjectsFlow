@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { getInitials } from '@/presentation/layout/projectIcons';
@@ -198,14 +199,19 @@ function AcceptedRow({
         disabledTitle="Вы больше не редактор этого проекта"
       />
       <div className="min-w-0 flex-1">
-        <p
-          className={cn(
-            'line-clamp-2 whitespace-pre-wrap text-sm leading-snug',
-            isDone && 'text-muted-foreground line-through decoration-muted-foreground/40',
-          )}
-        >
-          {item.description ?? '—'}
-        </p>
+        {item.description?.trim() ? (
+          <Markdown
+            className={cn(
+              MARKDOWN_COMPACT,
+              'line-clamp-2',
+              isDone && 'line-through opacity-60',
+            )}
+          >
+            {item.description}
+          </Markdown>
+        ) : (
+          <p className="text-sm leading-snug text-muted-foreground">—</p>
+        )}
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
           {currentUserId && (
             <DelegationBadge delegation={item.delegation} currentUserId={currentUserId} />
