@@ -18,6 +18,7 @@ export type ResolvedRule = {
 export type AlertRuleConfig = Readonly<Record<AlertKind, ResolvedRule>>;
 
 export const DEFAULT_SSL_EXPIRY_DAYS = 14; // алерт если до истечения сертификата ≤ N дней
+export const DEFAULT_ANOMALY_SIGMA = 3; // отклонение метрики > k·σ от baseline считаем аномалией
 
 export const DEFAULT_RULE_CONFIG: AlertRuleConfig = {
   process_down: { enabled: true, threshold: null, severity: 'critical' },
@@ -26,6 +27,8 @@ export const DEFAULT_RULE_CONFIG: AlertRuleConfig = {
   snapshot_stale: { enabled: true, threshold: DEFAULT_SNAPSHOT_STALE_MINUTES, severity: 'warning' },
   http_down: { enabled: true, threshold: null, severity: 'critical' },
   ssl_expiry: { enabled: true, threshold: DEFAULT_SSL_EXPIRY_DAYS, severity: 'warning' },
+  // metric_anomaly: threshold = k (число σ). Производится отдельным sweep'ом (не per-snapshot).
+  metric_anomaly: { enabled: true, threshold: DEFAULT_ANOMALY_SIGMA, severity: 'warning' },
 };
 
 // Мердж строк server_alert_rules (per-project) поверх дефолтов. Отсутствующие — дефолт.
@@ -44,6 +47,7 @@ export function resolveRuleConfig(
     snapshot_stale: { ...DEFAULT_RULE_CONFIG.snapshot_stale },
     http_down: { ...DEFAULT_RULE_CONFIG.http_down },
     ssl_expiry: { ...DEFAULT_RULE_CONFIG.ssl_expiry },
+    metric_anomaly: { ...DEFAULT_RULE_CONFIG.metric_anomaly },
   };
   for (const o of overrides) {
     if (o.ruleKind in cfg) {

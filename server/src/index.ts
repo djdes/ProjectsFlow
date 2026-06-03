@@ -687,6 +687,7 @@ const alertNotificationDispatcher = new AlertNotificationDispatcher({
 const evaluateAlerts = new EvaluateAlerts({
   alerts: monitoringAlertRepo,
   servers: serverRepo,
+  snapshots: snapshotRepo,
   projects: projectRepo,
   notifier: alertNotificationDispatcher,
   rules: monitoringAlertRuleRepo,
@@ -873,6 +874,15 @@ setInterval(
       .catch((e) => console.warn('[monitoring] staleness sweep error:', e));
   },
   5 * 60 * 1000,
+).unref();
+// Anomaly-sweep: ползущая деградация метрик (baseline + σ). Реже staleness — нужна история.
+setInterval(
+  () => {
+    void evaluateAlerts
+      .sweepAnomalies()
+      .catch((e) => console.warn('[monitoring] anomaly sweep error:', e));
+  },
+  10 * 60 * 1000,
 ).unref();
 // KB-снимки (markdown, только метрики). MONITOR_KB_SNAPSHOTS=off — выключить.
 if (process.env['MONITOR_KB_SNAPSHOTS'] !== 'off') {

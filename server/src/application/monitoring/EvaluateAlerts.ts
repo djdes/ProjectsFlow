@@ -1,6 +1,8 @@
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { ServerRepository } from './ServerRepository.js';
+import type { SnapshotRepository } from './SnapshotRepository.js';
 import type { MonitoringAlertRepository } from './MonitoringAlertRepository.js';
+import { detectAnomaly } from '../../domain/monitoring/anomaly.js';
 import type { MonitoringAlertRuleRepository } from './MonitoringAlertRuleRepository.js';
 import type { MonitoringAlertNotifier } from './MonitoringAlertNotifier.js';
 import type { ProjectServer } from '../../domain/monitoring/ProjectServer.js';
@@ -20,6 +22,7 @@ import {
 type Deps = {
   readonly alerts: MonitoringAlertRepository;
   readonly servers: ServerRepository;
+  readonly snapshots: SnapshotRepository;
   readonly projects: ProjectRepository;
   readonly notifier: MonitoringAlertNotifier;
   readonly idGen: () => string;
@@ -42,6 +45,16 @@ const SNAPSHOT_RULES: AlertKind[] = [
   'ssl_expiry',
 ];
 const STALENESS_RULES: AlertKind[] = ['snapshot_stale'];
+const ANOMALY_RULES: AlertKind[] = ['metric_anomaly'];
+// Метрики, по которым ищем аномалии (ползущая деградация). Ключи — поля TrendPoint.
+const ANOMALY_METRICS: { key: 'memUsedPct' | 'cpuLoad1'; label: string }[] = [
+  { key: 'memUsedPct', label: 'память %' },
+  { key: 'cpuLoad1', label: 'load (1m)' },
+];
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
 
 // Оценка правил и согласование с журналом алертов (state-machine firing/resolved + дедуп).
 // Вызывается: (1) на каждый сохранённый снимок через onSnapshotStored-хук; (2) периодически
@@ -97,6 +110,42 @@ export class EvaluateAlerts {
         await this.reconcile(s, conditions, STALENESS_RULES);
       } catch (err) {
         console.warn('[monitoring-alert] staleness sweep failed for', s.id, err);
+      }
+    }
+  }
+
+  // Sweep аномалий: для каждого сервера строим baseline по 24ч-истории метрики и флагуем
+  // устойчивое отклонение > k·σ. Адаптивно к серверу (без ручных порогов). Запускается по
+  // интервалу (нужна история — в per-snapshot не оценить). reconcile тушит, когда аномалия ушла.
+  async sweepAnomalies(): Promise<void> {
+    const since = new Date(this.deps.now().getTime() - 24 * 3600 * 1000);
+    const servers = await this.deps.servers.listEnabled();
+    for (const s of servers) {
+      try {
+        const config = await this.loadConfig(s.projectId);
+        const rule = config.metric_anomaly;
+        if (!rule.enabled) continue;
+        const k = rule.threshold ?? 3;
+        const points = await this.deps.snapshots.getHistory(s.id, { since, limit: 500 });
+        const conditions: AlertCondition[] = [];
+        for (const m of ANOMALY_METRICS) {
+          const res = detectAnomaly(
+            points.map((p) => p[m.key]),
+            { k, minConsecutive: 3, minPoints: 24 },
+          );
+          if (res?.isAnomaly) {
+            conditions.push({
+              ruleKind: 'metric_anomaly',
+              dedupKey: m.key,
+              severity: rule.severity,
+              message: `Аномалия: ${m.label} = ${round1(res.last)} (база ${round1(res.mean)}±${round1(res.stddev)}, >${k}σ)`,
+              details: { metric: m.key, last: res.last, mean: res.mean, stddev: res.stddev, k },
+            });
+          }
+        }
+        await this.reconcile(s, conditions, ANOMALY_RULES);
+      } catch (err) {
+        console.warn('[monitoring-alert] anomaly sweep failed for', s.id, err);
       }
     }
   }

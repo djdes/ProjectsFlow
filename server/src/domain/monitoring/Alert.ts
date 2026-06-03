@@ -4,7 +4,9 @@ export type AlertKind =
   | 'restart_spike'
   | 'snapshot_stale'
   | 'http_down'
-  | 'ssl_expiry';
+  | 'ssl_expiry'
+  // Аномалия метрики (адаптивный baseline, sweep — не per-snapshot). См. domain/monitoring/anomaly.ts.
+  | 'metric_anomaly';
 export type AlertSeverity = 'info' | 'warning' | 'critical';
 export type AlertStatus = 'firing' | 'resolved';
 
