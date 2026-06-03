@@ -70,6 +70,14 @@ export class ProjectEventBroadcaster {
     }
   }
 
+  // Сохранён снимок мониторинга — участники проекта мгновенно перекрашивают статус сервера.
+  async broadcastSnapshotStored(projectId: string, serverId: string, status: string): Promise<void> {
+    const members = await this.deps.members.listByProject(projectId);
+    for (const m of members) {
+      this.deps.publisher.publish(m.userId, { kind: 'snapshot_stored', projectId, serverId, status });
+    }
+  }
+
   // LIVE-сессия стартовала/завершилась — бейдж 🔴 на карточке задачи всем участникам.
   // Лёгкое событие (без firehose ленты — та идёт в task-scoped LiveEventHub).
   async broadcastLiveSessionChanged(

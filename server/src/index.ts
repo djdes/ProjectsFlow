@@ -706,6 +706,10 @@ const onMonitoringSnapshotStored = (
   void evaluateAlerts
     .onSnapshotStored(snapshot, prev)
     .catch((e) => console.warn('[monitoring] alert eval failed:', e));
+  // Лёгкий realtime-сигнал участникам: страница «Мониторинг» перекрасит статус без polling'а.
+  void projectEventBroadcaster
+    .broadcastSnapshotStored(snapshot.projectId, snapshot.serverId, snapshot.status)
+    .catch(() => {});
 };
 const collectLocalSnapshot = new CollectLocalSnapshot({
   servers: serverRepo,

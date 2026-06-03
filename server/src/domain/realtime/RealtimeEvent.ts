@@ -37,4 +37,12 @@ export type RealtimeEvent =
       readonly taskId: string;
       readonly sessionId: string;
       readonly status: 'running' | 'completed' | 'failed' | 'timeout' | 'canceled';
+    }
+  // Сохранён снимок мониторинга — страница «Мониторинг» мгновенно перекрашивает статус
+  // без 15с-polling'а; полный снимок клиент догружает рефетчем. detail={projectId,serverId,status}.
+  | {
+      readonly kind: 'snapshot_stored';
+      readonly projectId: string;
+      readonly serverId: string;
+      readonly status: string;
     };

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useContainer } from '@/infrastructure/di/container';
+import { MONITORING_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { HttpError } from '@/lib/HttpError';
 import type { ServerWithLatest } from '@/domain/monitoring/Server';
 import type { ServerAlert } from '@/domain/monitoring/Alert';
@@ -14,9 +15,10 @@ export type MonitoringState = {
   reload: () => void;
 };
 
-// Загружает серверы + активные алерты и поллит с интервалом (пауза на скрытой вкладке).
+// Загружает серверы + активные алерты. Live-обновление через SSE-событие snapshot_stored
+// (мгновенный рефетч при новом снимке); polling остаётся safety-net'ом с большим интервалом.
 // forbidden=true → у юзера нет доступа (не owner/admin) — страница покажет отказ.
-export function useMonitoring(projectId: string, pollMs = 15000): MonitoringState {
+export function useMonitoring(projectId: string, pollMs = 60000): MonitoringState {
   const { monitoringRepository } = useContainer();
   const [servers, setServers] = useState<ServerWithLatest[] | null>(null);
   const [alerts, setAlerts] = useState<ServerAlert[]>([]);
@@ -67,6 +69,23 @@ export function useMonitoring(projectId: string, pollMs = 15000): MonitoringStat
       if (timer) clearTimeout(timer);
     };
   }, [monitoringRepository, projectId, pollMs, version]);
+
+  // Live: SSE-событие snapshot_stored по этому проекту → мгновенный рефетч (дебаунс 400мс,
+  // несколько серверов = несколько событий подряд схлопываются в один reload).
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onChange = (e: Event): void => {
+      const detail = (e as CustomEvent<{ projectId?: string }>).detail;
+      if (detail?.projectId && detail.projectId !== projectId) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setVersion((v) => v + 1), 400);
+    };
+    window.addEventListener(MONITORING_CHANGED_EVENT, onChange);
+    return () => {
+      window.removeEventListener(MONITORING_CHANGED_EVENT, onChange);
+      if (timer) clearTimeout(timer);
+    };
+  }, [projectId]);
 
   return {
     servers,

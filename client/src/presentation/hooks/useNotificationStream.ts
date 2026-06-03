@@ -11,6 +11,8 @@ export const PROJECT_CHANGED_EVENT = 'pf:project-changed';
 // Сменилось состояние LIVE-сессии воркера (start/finish). Канбан рисует 🔴 на карточке,
 // открытая LIVE-вкладка обновляет список сессий. detail = {projectId,taskId,sessionId,status}.
 export const LIVE_CHANGED_EVENT = 'pf:live-changed';
+// Сохранён снимок мониторинга — страница «Мониторинг» рефетчит/перекрашивает. detail={projectId,serverId,status}.
+export const MONITORING_CHANGED_EVENT = 'pf:monitoring-changed';
 
 type LiveSessionStatus = 'running' | 'completed' | 'failed' | 'timeout' | 'canceled';
 
@@ -22,7 +24,8 @@ type RealtimeEvent =
       taskId: string;
       sessionId: string;
       status: LiveSessionStatus;
-    };
+    }
+  | { kind: 'snapshot_stored'; projectId: string; serverId: string; status: string };
 
 type StreamPayload =
   | { type: 'comment_mention'; projectName: string; actorDisplayName: string }
@@ -75,6 +78,14 @@ export function useNotificationStream(): void {
                 sessionId: data.sessionId,
                 status: data.status,
               },
+            }),
+          );
+          return;
+        }
+        if (data.kind === 'snapshot_stored') {
+          window.dispatchEvent(
+            new CustomEvent(MONITORING_CHANGED_EVENT, {
+              detail: { projectId: data.projectId, serverId: data.serverId, status: data.status },
             }),
           );
           return;
