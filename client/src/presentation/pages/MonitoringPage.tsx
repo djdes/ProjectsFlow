@@ -1,17 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Activity, BellRing, ChevronRight, Plus } from 'lucide-react';
+import { Activity, ChevronRight, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { relativeTime } from '@/lib/relativeTime';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useMonitoring } from '@/presentation/hooks/useMonitoring';
-import { ServerCard } from '@/presentation/components/monitoring/ServerCard';
+import { ServerRow, type RowDensity } from '@/presentation/components/monitoring/ServerRow';
+import { ServerDetailSheet } from '@/presentation/components/monitoring/ServerDetailSheet';
+import { ProjectHealthSummary } from '@/presentation/components/monitoring/ProjectHealthSummary';
 import { AlertList } from '@/presentation/components/monitoring/AlertList';
 import { AddServerDialog } from '@/presentation/components/monitoring/AddServerDialog';
 import { AlertRulesDialog } from '@/presentation/components/monitoring/AlertRulesDialog';
 import { IncidentHistory } from '@/presentation/components/monitoring/IncidentHistory';
+
+const DENSITY_KEY = 'pf:monitoring:density';
 
 export function MonitoringPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -24,6 +27,21 @@ export function MonitoringPage(): React.ReactElement {
   const [addOpen, setAddOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [density, setDensity] = useState<RowDensity>('detailed');
+
+  // Плотность строк — персистим (как тему). Читаем из localStorage в эффекте (не в render).
+  useEffect(() => {
+    const v = localStorage.getItem(DENSITY_KEY);
+    if (v === 'compact' || v === 'detailed') setDensity(v);
+  }, []);
+  const changeDensity = (d: RowDensity): void => {
+    setDensity(d);
+    localStorage.setItem(DENSITY_KEY, d);
+  };
+
+  const openItem = servers?.find((s) => s.server.id === openId) ?? null;
+  const alertsFor = (serverId: string): typeof alerts => alerts.filter((a) => a.serverId === serverId);
 
   return (
     <div className="flex h-full flex-col gap-4 p-4 sm:gap-6 sm:p-6">
@@ -43,26 +61,9 @@ export function MonitoringPage(): React.ReactElement {
         <span className="text-foreground">Мониторинг</span>
       </nav>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Activity className="size-6" />
-          <h1 className="text-3xl font-semibold tracking-tight">Мониторинг</h1>
-          {lastUpdated && (
-            <span className="text-sm text-muted-foreground">обновлено {relativeTime(lastUpdated)}</span>
-          )}
-        </div>
-        {!forbidden && canManage && (
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setRulesOpen(true)}>
-              <BellRing className="size-4" />
-              Настройки алертов
-            </Button>
-            <Button size="sm" onClick={() => setAddOpen(true)}>
-              <Plus className="size-4" />
-              Добавить сервер
-            </Button>
-          </div>
-        )}
+      <div className="flex items-center gap-2">
+        <Activity className="size-6" />
+        <h1 className="text-3xl font-semibold tracking-tight">Мониторинг</h1>
       </div>
 
       {forbidden ? (
@@ -81,6 +82,19 @@ export function MonitoringPage(): React.ReactElement {
             </Card>
           )}
 
+          {servers && servers.length > 0 && (
+            <ProjectHealthSummary
+              servers={servers}
+              alerts={alerts}
+              lastUpdated={lastUpdated}
+              canManage={canManage}
+              density={density}
+              onDensityChange={changeDensity}
+              onAddServer={() => setAddOpen(true)}
+              onOpenRules={() => setRulesOpen(true)}
+            />
+          )}
+
           {alerts.length > 0 && (
             <Card>
               <CardHeader>
@@ -93,19 +107,19 @@ export function MonitoringPage(): React.ReactElement {
           )}
 
           {loading && !servers ? (
-            <div className="space-y-3">
-              <div className="h-32 animate-pulse rounded-lg bg-muted" />
-              <div className="h-32 animate-pulse rounded-lg bg-muted" />
+            <div className="space-y-2">
+              <div className="h-16 animate-pulse rounded-lg bg-muted" />
+              <div className="h-16 animate-pulse rounded-lg bg-muted" />
             </div>
           ) : servers && servers.length > 0 ? (
-            <div className="grid gap-4">
+            <div className="grid grid-cols-1 gap-2 2xl:grid-cols-2">
               {servers.map((item) => (
-                <ServerCard
+                <ServerRow
                   key={item.server.id}
-                  projectId={pid}
                   item={item}
-                  canManage={canManage}
-                  onChanged={reload}
+                  density={density}
+                  alerts={alertsFor(item.server.id)}
+                  onOpen={() => setOpenId(item.server.id)}
                 />
               ))}
             </div>
@@ -125,9 +139,7 @@ export function MonitoringPage(): React.ReactElement {
                     </Button>
                   </>
                 ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Серверы добавляют участники с правами редактора.
-                  </p>
+                  <p className="text-sm text-muted-foreground">Серверы добавляют участники с правами редактора.</p>
                 )}
               </CardContent>
             </Card>
@@ -141,7 +153,9 @@ export function MonitoringPage(): React.ReactElement {
                   onClick={() => setHistoryOpen((v) => !v)}
                   className="flex items-center gap-1 text-left text-base font-semibold hover:text-foreground"
                 >
-                  <ChevronRight className={historyOpen ? 'size-4 rotate-90 transition-transform' : 'size-4 transition-transform'} />
+                  <ChevronRight
+                    className={historyOpen ? 'size-4 rotate-90 transition-transform' : 'size-4 transition-transform'}
+                  />
                   История инцидентов
                 </button>
               </CardHeader>
@@ -155,6 +169,17 @@ export function MonitoringPage(): React.ReactElement {
         </>
       )}
 
+      <ServerDetailSheet
+        projectId={pid}
+        item={openItem}
+        alerts={openItem ? alertsFor(openItem.server.id) : []}
+        open={openId !== null}
+        onOpenChange={(o) => {
+          if (!o) setOpenId(null);
+        }}
+        canManage={canManage}
+        onChanged={reload}
+      />
       <AddServerDialog projectId={pid} open={addOpen} onOpenChange={setAddOpen} onSaved={reload} />
       <AlertRulesDialog projectId={pid} open={rulesOpen} onOpenChange={setRulesOpen} />
     </div>

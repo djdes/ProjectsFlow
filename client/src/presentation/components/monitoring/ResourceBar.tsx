@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils';
+import { barFillClass, pctTone } from './health';
 
-// Лейбл + горизонтальный прогресс-бар. Цвет зависит от заполненности (warn/critical).
+// Лейбл + горизонтальный прогресс-бар. Цвет зависит от заполненности (warn/critical) — см. health.ts.
 export function ResourceBar({
   label,
   pct,
@@ -11,14 +12,7 @@ export function ResourceBar({
   sub?: string;
 }): React.ReactElement {
   const value = pct === null || !Number.isFinite(pct) ? null : Math.max(0, Math.min(100, pct));
-  const color =
-    value === null
-      ? 'bg-muted-foreground/30'
-      : value >= 90
-        ? 'bg-red-500'
-        : value >= 75
-          ? 'bg-amber-500'
-          : 'bg-sky-500';
+  const color = barFillClass(pctTone(value));
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between text-xs">

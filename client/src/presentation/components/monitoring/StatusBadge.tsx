@@ -1,19 +1,14 @@
 import { cn } from '@/lib/utils';
 import type { ServerHealthStatus } from '@/domain/monitoring/Snapshot';
 import type { AlertSeverity } from '@/domain/monitoring/Alert';
+import { severityChipClass, statusTone, toneChipClass } from './health';
 
-const STATUS_META: Record<ServerHealthStatus, { label: string; cls: string }> = {
-  ok: { label: 'OK', cls: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' },
-  degraded: { label: 'Внимание', cls: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
-  down: { label: 'Недоступен', cls: 'bg-red-500/15 text-red-600 dark:text-red-400' },
-  stale: { label: 'Устарел', cls: 'bg-muted text-muted-foreground' },
-  unknown: { label: 'Нет данных', cls: 'bg-muted text-muted-foreground' },
-};
-
-const SEVERITY_META: Record<AlertSeverity, string> = {
-  info: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
-  warning: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-  critical: 'bg-red-500/15 text-red-600 dark:text-red-400',
+const STATUS_LABEL: Record<ServerHealthStatus, string> = {
+  ok: 'OK',
+  degraded: 'Внимание',
+  down: 'Недоступен',
+  stale: 'Устарел',
+  unknown: 'Нет данных',
 };
 
 function Pill({ className, children }: { className: string; children: React.ReactNode }): React.ReactElement {
@@ -25,21 +20,13 @@ function Pill({ className, children }: { className: string; children: React.Reac
 }
 
 export function StatusBadge({ status }: { status: ServerHealthStatus }): React.ReactElement {
-  const meta = STATUS_META[status] ?? STATUS_META.unknown;
-  return <Pill className={meta.cls}>{meta.label}</Pill>;
+  return <Pill className={toneChipClass(statusTone(status))}>{STATUS_LABEL[status] ?? STATUS_LABEL.unknown}</Pill>;
 }
 
 export function SeverityBadge({ severity }: { severity: AlertSeverity }): React.ReactElement {
-  return <Pill className={SEVERITY_META[severity] ?? SEVERITY_META.info}>{severity}</Pill>;
+  return <Pill className={severityChipClass(severity)}>{severity}</Pill>;
 }
 
 export function PmStatusBadge({ status }: { status: string }): React.ReactElement {
-  const ok = status === 'online';
-  return (
-    <Pill
-      className={ok ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/15 text-red-600 dark:text-red-400'}
-    >
-      {status}
-    </Pill>
-  );
+  return <Pill className={toneChipClass(status === 'online' ? 'ok' : 'crit')}>{status}</Pill>;
 }
