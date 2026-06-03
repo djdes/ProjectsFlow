@@ -1,4 +1,5 @@
 import type { ServerHealthStatus, ServerSnapshot } from './Snapshot';
+import type { AlertSeverity } from './Alert';
 
 export type ServerKind = 'local' | 'remote';
 
@@ -42,6 +43,8 @@ export type OverviewProject = {
   readonly projectName: string;
   readonly servers: OverviewServer[];
   readonly activeAlerts: number;
+  readonly worstSeverity: AlertSeverity | null;
+  readonly worstStatus: ServerHealthStatus;
 };
 
 // Поля, которые форма отправляет на сервер при создании/редактировании.

@@ -18,6 +18,18 @@ export type OverviewProject = {
   readonly projectName: string;
   readonly servers: OverviewServer[];
   readonly activeAlerts: number;
+  // Худшая severity активных алертов проекта (для сортировки/фильтра on-call). null — нет алертов.
+  readonly worstSeverity: 'critical' | 'warning' | 'info' | null;
+  // Худший статус серверов проекта (для сортировки «где горит» выше).
+  readonly worstStatus: ServerHealthStatus;
+};
+
+const STATUS_RANK: Record<ServerHealthStatus, number> = {
+  down: 4,
+  degraded: 3,
+  stale: 2,
+  unknown: 1,
+  ok: 0,
 };
 
 type Deps = {
@@ -41,17 +53,31 @@ export class GetMonitoringOverview {
       if (servers.length === 0) continue;
       const latest = await this.deps.snapshots.listLatestPerServer(p.id);
       const active = await this.deps.alerts.listActiveByProject(p.id);
+      const serverViews = servers.map((s) => ({
+        id: s.id,
+        name: s.name,
+        kind: s.kind,
+        status: latest.get(s.id)?.status ?? s.lastStatus ?? 'unknown',
+        lastSnapshotAt: s.lastSnapshotAt,
+      }));
+      const worstSeverity = active.some((a) => a.severity === 'critical')
+        ? 'critical'
+        : active.some((a) => a.severity === 'warning')
+          ? 'warning'
+          : active.length > 0
+            ? 'info'
+            : null;
+      const worstStatus = serverViews.reduce<ServerHealthStatus>(
+        (worst, s) => (STATUS_RANK[s.status] > STATUS_RANK[worst] ? s.status : worst),
+        'ok',
+      );
       out.push({
         projectId: p.id,
         projectName: p.name,
-        servers: servers.map((s) => ({
-          id: s.id,
-          name: s.name,
-          kind: s.kind,
-          status: latest.get(s.id)?.status ?? s.lastStatus ?? 'unknown',
-          lastSnapshotAt: s.lastSnapshotAt,
-        })),
+        servers: serverViews,
         activeAlerts: active.length,
+        worstSeverity,
+        worstStatus,
       });
     }
     return out;
