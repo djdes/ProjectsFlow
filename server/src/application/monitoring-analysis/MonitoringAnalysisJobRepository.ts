@@ -32,6 +32,8 @@ export type MonitoringAnalysisJobRepository = {
   listPendingForDispatcher(userId: string, limit: number): Promise<PendingMonitoringAnalysisJob[]>;
   /** История анализов сервера (succeeded в первую очередь полезны), createdAt desc. */
   listByServer(serverId: string, limit: number): Promise<MonitoringAnalysisJob[]>;
+  /** Есть ли уже job по этому alertId — дедуп авто-анализа (один на алерт). */
+  existsForAlert(alertId: string): Promise<boolean>;
   /** Атомарный claim: UPDATE WHERE id=? AND status='queued' → running. null если не удался. */
   claimById(jobId: string): Promise<MonitoringAnalysisJob | null>;
   complete(input: {

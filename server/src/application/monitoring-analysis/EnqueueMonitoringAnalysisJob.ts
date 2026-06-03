@@ -78,4 +78,36 @@ export class EnqueueMonitoringAnalysisJob {
       note: input.note ? input.note.slice(0, MAX_NOTE) : null,
     });
   }
+
+  // Системный (не-пользовательский) путь: авто-анализ при critical-алерте. Без rate-limit и
+  // permission-гейта (триггерит сам монитор). Дедуп: один авто-job на alertId. createdBy =
+  // диспетчер (он же выполняет). Возвращает null, если у проекта нет диспетчера или дубль.
+  async enqueueAuto(input: {
+    projectId: string;
+    serverId: string;
+    alertId: string;
+  }): Promise<MonitoringAnalysisJob | null> {
+    const project = await this.deps.projects.getById(input.projectId);
+    if (!project?.dispatcherUserId) return null;
+    if (await this.deps.monitoringAnalysisJobs.existsForAlert(input.alertId)) return null;
+
+    const server = await this.deps.servers.getById(input.serverId);
+    if (!server || server.projectId !== input.projectId) return null;
+
+    const context = await prepareMonitoringContext(this.deps, {
+      serverId: input.serverId,
+      projectId: input.projectId,
+      analysisType: 'alert',
+    });
+    return this.deps.monitoringAnalysisJobs.create({
+      createdBy: project.dispatcherUserId,
+      projectId: input.projectId,
+      serverId: input.serverId,
+      dispatcherUserId: project.dispatcherUserId,
+      analysisType: 'alert',
+      alertId: input.alertId,
+      context,
+      note: 'Авто-анализ: сработал critical-алерт',
+    });
+  }
 }

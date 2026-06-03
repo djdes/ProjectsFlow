@@ -691,6 +691,11 @@ const evaluateAlerts = new EvaluateAlerts({
   rules: monitoringAlertRuleRepo,
   idGen: idGenerator,
   now,
+  // Авто-анализ critical-алерта через диспетчера (db/063). enqueueMonitoringAnalysisJob
+  // объявлен ниже — замыкание вызывается в рантайме (при алерте), не при инициализации.
+  autoAnalyzeCriticalAlert: async (input) => {
+    await enqueueMonitoringAnalysisJob.enqueueAuto(input);
+  },
 });
 // Хук: после сохранения любого снимка (local-collect / agent-ingest) оцениваем алерты.
 const onMonitoringSnapshotStored = (

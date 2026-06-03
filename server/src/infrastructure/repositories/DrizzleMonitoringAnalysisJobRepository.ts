@@ -88,6 +88,15 @@ export class DrizzleMonitoringAnalysisJobRepository implements MonitoringAnalysi
     return rows.map(rowToJob);
   }
 
+  async existsForAlert(alertId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: monitoringAnalysisJobs.id })
+      .from(monitoringAnalysisJobs)
+      .where(eq(monitoringAnalysisJobs.alertId, alertId))
+      .limit(1);
+    return Boolean(row);
+  }
+
   async claimById(jobId: string): Promise<MonitoringAnalysisJob | null> {
     const result = await this.db
       .update(monitoringAnalysisJobs)

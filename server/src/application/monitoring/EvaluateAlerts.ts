@@ -26,6 +26,12 @@ type Deps = {
   readonly now: () => Date;
   // Per-project оверрайды порогов (optional — без репо берутся дефолты).
   readonly rules?: MonitoringAlertRuleRepository;
+  // Авто-анализ при первом firing critical-алерта (optional). Best-effort, не блокирует.
+  readonly autoAnalyzeCriticalAlert?: (input: {
+    projectId: string;
+    serverId: string;
+    alertId: string;
+  }) => Promise<void>;
 };
 
 const SNAPSHOT_RULES: AlertKind[] = [
@@ -137,6 +143,18 @@ export class EvaluateAlerts {
         };
         await this.deps.alerts.insert(alert);
         await notify(alert);
+        // Авто-анализ через диспетчера при критическом алерте (best-effort, дедуп внутри).
+        if (alert.severity === 'critical' && this.deps.autoAnalyzeCriticalAlert) {
+          try {
+            await this.deps.autoAnalyzeCriticalAlert({
+              projectId: server.projectId,
+              serverId: server.id,
+              alertId: alert.id,
+            });
+          } catch (err) {
+            console.warn('[monitoring-alert] auto-analyze failed for', alert.id, err);
+          }
+        }
       } else {
         await this.deps.alerts.touchLastSeen(existing.id, now);
         // Повторное уведомление по всё ещё горящему алерту — не чаще ALERT_RENOTIFY_MS.
