@@ -535,6 +535,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
                 onSelectAll={handleSelectAll}
                 onSelectNone={handleSelectNone}
                 onExitSelection={exitSelection}
+                onEnterSelection={() => enterSelection(status)}
                 columnMenu={
                   <KanbanColumnMenu
                     status={status}

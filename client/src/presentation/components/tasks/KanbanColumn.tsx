@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { AnimatePresence } from 'motion/react';
-import { Plus, X } from 'lucide-react';
+import { ListChecks, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { cn } from '@/lib/utils';
@@ -79,6 +79,8 @@ type Props = {
   onSelectAll?: () => void;
   onSelectNone?: () => void;
   onExitSelection?: () => void;
+  // Прямой вход в режим выделения из шапки (минуя меню-троеточие).
+  onEnterSelection?: () => void;
 };
 
 export function KanbanColumn({
@@ -112,6 +114,7 @@ export function KanbanColumn({
   onSelectAll,
   onSelectNone,
   onExitSelection,
+  onEnterSelection,
 }: Props): React.ReactElement {
   // Droppable нужен чтобы можно было кинуть карточку в ПУСТУЮ колонку —
   // SortableContext один не реагирует на drop в empty list.
@@ -195,6 +198,18 @@ export function KanbanColumn({
             </div>
             <div className="flex items-center gap-0.5">
               {headerExtra}
+              {onEnterSelection && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-6"
+                  onClick={onEnterSelection}
+                  aria-label="Выделить задачи"
+                  title="Выделить задачи"
+                >
+                  <ListChecks className="size-4" />
+                </Button>
+              )}
               {columnMenu}
               <Button
                 variant="ghost"
