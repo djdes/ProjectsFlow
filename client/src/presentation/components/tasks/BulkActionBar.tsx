@@ -67,8 +67,12 @@ export function BulkActionBar({
   bulk,
   onExit,
 }: Props): React.ReactElement | null {
-  const { projectRepository, taskRepository } = useContainer();
+  const { projectRepository, taskRepository, digestSettingsRepository } = useContainer();
   const [members, setMembers] = useState<SharedMember[] | null>(null);
+  const [group, setGroup] = useState<{ chatId: number | null; title: string | null }>({
+    chatId: null,
+    title: null,
+  });
   const [busy, setBusy] = useState(false);
   // Открытый канал отправки (диалог получателей) + индикатор отправки.
   const [exportChannel, setExportChannel] = useState<Exclude<DigestChannel, 'clipboard'> | null>(null);
@@ -95,6 +99,22 @@ export function BulkActionBar({
       cancelled = true;
     };
   }, [projectRepository, projectId, isInbox, currentUserId]);
+
+  // Telegram-группа проекта (для опции «В группу» при отправке в Telegram).
+  useEffect(() => {
+    let cancelled = false;
+    digestSettingsRepository
+      .get(projectId)
+      .then((s) => {
+        if (!cancelled) setGroup({ chatId: s.telegramGroupChatId, title: s.telegramGroupTitle });
+      })
+      .catch(() => {
+        /* нет настроек — опции группы просто не будет */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [digestSettingsRepository, projectId]);
 
   const count = selectedIds.length;
   if (count === 0) return null;
@@ -380,6 +400,8 @@ export function BulkActionBar({
         members={members}
         busy={exporting}
         onSend={(r) => void handleSend(r)}
+        allowGroup={exportChannel === 'telegram' && group.chatId !== null}
+        groupTitle={group.title}
       />
     </>
   );

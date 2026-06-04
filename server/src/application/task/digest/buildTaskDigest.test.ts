@@ -154,9 +154,37 @@ test('renderDigestTelegram: valid escaped HTML, length cap on overflow', () => {
   const many = Array.from({ length: 40 }, (_, i) =>
     task({ id: `t${i}`, description: `Задача ${i} ` + 'x'.repeat(150), priority: 2 }),
   );
-  const big = renderDigestTelegram(buildDigestModel(many, baseOpts), 1000);
+  const big = renderDigestTelegram(buildDigestModel(many, baseOpts), { maxLen: 1000 });
   assert.ok(big.length <= 1200);
   assert.ok(big.includes('полностью на сайте'));
+});
+
+test('status grouping: groups by visible column; in_progress folds into «Воркер»', () => {
+  const tasks = [
+    task({ id: 't1', description: 'В черновике', status: 'backlog', position: 1 }),
+    task({ id: 't2', description: 'В работе', status: 'in_progress', position: 1 }),
+    task({ id: 't3', description: 'Воркер ждёт', status: 'todo', position: 2 }),
+  ];
+  const m = buildDigestModel(tasks, { ...baseOpts, grouping: { by: 'status', statuses: ['backlog', 'todo'] } });
+  assert.deepEqual(m.groups.map((g) => g.heading), ['Черновики', 'Воркер']);
+  // in_progress сворачивается в «Воркер» вместе с todo (сорт по position).
+  assert.deepEqual(m.groups[1]!.items.map((i) => i.name), ['В работе', 'Воркер ждёт']);
+});
+
+test('renderDigestTelegram assigneeFirst: исполнитель в начале задачи', () => {
+  const tasks = [
+    task({
+      id: 't1', description: 'Задача', priority: 1,
+      delegation: {
+        id: 'd', taskId: 't1', delegateUserId: 'u', delegateDisplayName: 'Борис',
+        creatorUserId: 'c', creatorDisplayName: 'Я', status: 'pending', createdAt: new Date(), respondedAt: null,
+      },
+    }),
+    task({ id: 't2', description: 'Ничья', priority: 1 }),
+  ];
+  const tg = renderDigestTelegram(buildDigestModel(tasks, baseOpts), { assigneeFirst: true });
+  assert.ok(tg.includes('👤 Борис — <a'));
+  assert.ok(tg.includes('👤 — <a')); // не делегирована → «—»
 });
 
 test('renderDigestHtml: escapes and builds links', () => {

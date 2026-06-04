@@ -5,6 +5,8 @@ import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { EmailSender } from '../notifications/EmailSender.js';
 import type { SendAgentTelegramNotification } from '../telegram/SendAgentTelegramNotification.js';
+import type { TelegramClient } from '../telegram/TelegramClient.js';
+import type { DigestSettingsRepository } from '../digest/DigestSettingsRepository.js';
 import {
   buildDigestModel,
   renderDigestHtml,
@@ -14,7 +16,11 @@ import {
 } from './digest/buildTaskDigest.js';
 
 export type DigestChannel = 'clipboard' | 'email' | 'telegram';
-export type DigestRecipient = { readonly kind: 'self' } | { readonly kind: 'user'; readonly userId: string };
+export type DigestRecipient =
+  | { readonly kind: 'self' }
+  | { readonly kind: 'user'; readonly userId: string }
+  // Telegram-группа проекта (chat_id из настроек дайджеста). Только для channel='telegram'.
+  | { readonly kind: 'group' };
 
 export type ExportTasksDigestCommand = {
   readonly projectId: string;
@@ -45,6 +51,9 @@ type Deps = {
   readonly users: UserRepository;
   readonly email: EmailSender;
   readonly telegram: SendAgentTelegramNotification;
+  // Прямая отправка в Telegram-группу (chat_id из настроек), минуя per-user lookup.
+  readonly telegramClient: TelegramClient;
+  readonly settings: DigestSettingsRepository;
   readonly appUrl: string;
 };
 
@@ -103,6 +112,30 @@ export class ExportTasksDigest {
     const seen = new Set<string>();
 
     for (const r of cmd.recipients) {
+      // Telegram-группа: шлём напрямую в chat_id, с исполнителем в начале задачи.
+      if (r.kind === 'group') {
+        if (cmd.channel !== 'telegram') {
+          skipped.push({ userId: 'group', reason: 'group_telegram_only' });
+          continue;
+        }
+        if (seen.has('group')) continue;
+        seen.add('group');
+        const settings = await this.deps.settings.getByProject(cmd.projectId);
+        if (settings.telegramGroupChatId === null) {
+          skipped.push({ userId: 'group', reason: 'no_group' });
+          continue;
+        }
+        const groupHtml = renderDigestTelegram(model, { assigneeFirst: true });
+        const res = await this.deps.telegramClient.sendMessage({
+          chatId: settings.telegramGroupChatId,
+          text: groupHtml,
+          parseMode: 'HTML',
+          disableWebPagePreview: true,
+        });
+        if (res.kind === 'ok') delivered.push({ userId: 'group', channel: 'telegram' });
+        else skipped.push({ userId: 'group', reason: res.kind });
+        continue;
+      }
       const userId = r.kind === 'self' ? cmd.ownerUserId : r.userId;
       if (seen.has(userId)) continue;
       seen.add(userId);

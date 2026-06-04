@@ -104,6 +104,9 @@ export function NotificationsPage(): React.ReactElement {
     if (n.payload.type === 'server_alert') {
       navigate(`/projects/${n.payload.projectId}/monitoring`);
     }
+    if (n.payload.type === 'daily_digest') {
+      navigate(`/projects/${n.payload.projectId}`);
+    }
     // project_invite: переход — по кнопке «Принять» (handleAcceptInvite), не по строке.
   };
 
@@ -311,7 +314,13 @@ function NotificationRow({
       />
       <Avatar className="size-8 shrink-0">
         <AvatarFallback className="text-[11px]">
-          {getInitials(payload.type === 'server_alert' ? payload.serverName : payload.actorDisplayName)}
+          {getInitials(
+            payload.type === 'server_alert'
+              ? payload.serverName
+              : payload.type === 'daily_digest'
+                ? payload.projectName
+                : payload.actorDisplayName,
+          )}
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1 space-y-0.5">
@@ -434,6 +443,15 @@ function NotificationRow({
             {payload.message}
             {' · '}
             <span className="text-muted-foreground">«{payload.projectName}»</span>
+          </p>
+        )}
+
+        {payload.type === 'daily_digest' && (
+          <p className="text-sm leading-snug">
+            🗂️ Ежедневная сводка по{' '}
+            <span className="font-medium">«{payload.projectName}»</span>
+            {' · '}
+            {payload.taskCount} задач
           </p>
         )}
 

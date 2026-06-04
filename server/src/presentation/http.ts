@@ -69,6 +69,9 @@ import type { DeleteKbDocument } from '../application/kb/DeleteKbDocument.js';
 import type { BulkCreateCredential } from '../application/kb/BulkCreateCredential.js';
 import type { ListTasks } from '../application/task/ListTasks.js';
 import type { ExportTasksDigest } from '../application/task/ExportTasksDigest.js';
+import type { GetDigestSettings } from '../application/digest/GetDigestSettings.js';
+import type { SaveDigestSettings } from '../application/digest/SaveDigestSettings.js';
+import { digestRouter } from './digest/routes.js';
 import type { SearchTasks } from '../application/task/SearchTasks.js';
 import type { CreateTask } from '../application/task/CreateTask.js';
 import type { UpdateTask } from '../application/task/UpdateTask.js';
@@ -371,6 +374,10 @@ type AppDeps = {
     readonly getCommentNotifications: GetCommentNotifications;
     readonly projectRepo: ProjectRepository;
   };
+  readonly digest: {
+    readonly get: GetDigestSettings;
+    readonly save: SaveDigestSettings;
+  };
   readonly delegations: {
     readonly accept: AcceptTaskDelegation;
     readonly decline: DeclineTaskDelegation;
@@ -532,6 +539,8 @@ export function createApp(deps: AppDeps): CreatedApp {
       liveEventHub: deps.live.liveEventHub,
     }),
   );
+  // Настройки дайджеста проекта: Telegram-группа + ежедневная сводка.
+  app.use('/api/projects', digestRouter(deps.digest));
   app.use('/api/delegations', delegationsRouter(deps.delegations));
   app.use('/api/search', searchRouter(deps.search));
   app.use('/api/admin', adminRouter(deps.admin));

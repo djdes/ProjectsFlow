@@ -1,4 +1,4 @@
-import type { TaskPriority } from './Task.js';
+import type { TaskPriority, TaskStatus } from './Task.js';
 
 // Приоритет в дайджесте: словесный label + цветной эмодзи-маркер (нотация P1..P4 убрана).
 export const PRIORITY_DIGEST_META: Record<TaskPriority, { label: string; emoji: string }> = {
@@ -9,6 +9,22 @@ export const PRIORITY_DIGEST_META: Record<TaskPriority, { label: string; emoji: 
 };
 
 export const NO_PRIORITY_LABEL = 'Без приоритета';
+
+// Подписи колонок для группировки сводки по статусу (совпадают с client statusLabels).
+export const STATUS_DIGEST_LABEL: Record<TaskStatus, string> = {
+  backlog: 'Черновики',
+  manual: 'Вручную',
+  todo: 'Воркер',
+  in_progress: 'В работе',
+  awaiting_clarification: 'На уточнении',
+  done: 'Готово',
+};
+
+// Визуальная колонка: in_progress/awaiting_clarification живут в колонке «Воркер» (todo).
+export function toVisibleStatus(status: TaskStatus): TaskStatus {
+  if (status === 'in_progress' || status === 'awaiting_clarification') return 'todo';
+  return status;
+}
 
 // Заголовок группы: «🟠 Приоритет: Высокий» или «Без приоритета».
 export function priorityHeading(p: TaskPriority | null): string {

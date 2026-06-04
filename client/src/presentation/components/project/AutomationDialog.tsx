@@ -20,6 +20,11 @@ import type {
   DeployMethod,
   GitAuthorMode,
 } from '@/domain/automation/AutomationConfig';
+import type {
+  DigestChannelKind,
+  DigestTgTarget,
+} from '@/application/digest/DigestSettingsRepository';
+import type { TaskStatus } from '@/domain/task/Task';
 
 type Props = {
   open: boolean;
@@ -65,6 +70,37 @@ const RUN_STATUS_LABEL: Record<AutomationConfig['runStatus'], string> = {
 // Дефолтная команда деплоя — она же placeholder поля ssh_manual (один источник, чтобы
 // seed и плейсхолдер не разъехались).
 const DEFAULT_DEPLOY_COMMAND = 'npm run deploy';
+
+// Колонки-кандидаты для ежедневной сводки (визуальные статусы канбана).
+const DIGEST_STATUS_OPTIONS: { status: TaskStatus; label: string }[] = [
+  { status: 'backlog', label: 'Черновики' },
+  { status: 'manual', label: 'Вручную' },
+  { status: 'todo', label: 'Воркер' },
+  { status: 'done', label: 'Готово' },
+];
+
+const DIGEST_CHANNEL_OPTIONS: { key: DigestChannelKind; label: string }[] = [
+  { key: 'email', label: 'Почта' },
+  { key: 'telegram', label: 'Telegram' },
+  { key: 'notification', label: 'Уведомления на сайте' },
+];
+
+// Черновик настроек дайджеста (group chat_id храним строкой — допускаем '-100…').
+type DigestDraft = {
+  groupChatId: string;
+  groupTitle: string;
+  enabled: boolean;
+  hour: number;
+  minute: number;
+  recipientUserIds: string[];
+  channels: DigestChannelKind[];
+  tgTargets: DigestTgTarget[];
+  statuses: TaskStatus[];
+};
+
+function toggle<T>(arr: T[], v: T): T[] {
+  return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
+}
 
 // Строка-тумблер «заголовок + описание + Switch» в едином оформлении. Три настройки
 // автоматизации делят одинаковую разметку — держим её здесь.
@@ -123,11 +159,13 @@ export function AutomationDialog({
   projectId,
   hasDispatcher,
 }: Props): React.ReactElement {
-  const { automationRepository } = useContainer();
+  const { automationRepository, digestSettingsRepository, projectRepository } = useContainer();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [digest, setDigest] = useState<DigestDraft | null>(null);
+  const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
   const [runInfo, setRunInfo] = useState<Pick<
     AutomationConfig,
     'runStatus' | 'tasksCreated'
@@ -138,12 +176,29 @@ export function AutomationDialog({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    automationRepository
-      .get(projectId)
-      .then((config) => {
+    Promise.all([
+      automationRepository.get(projectId),
+      digestSettingsRepository.get(projectId),
+      projectRepository.listMembers(projectId).catch(() => []),
+    ])
+      .then(([config, digestSettings, memberList]) => {
         if (cancelled) return;
         setDraft(toDraft(config));
         setRunInfo({ runStatus: config.runStatus, tasksCreated: config.tasksCreated });
+        setMembers(memberList.map((m) => ({ id: m.userId, name: m.user.displayName })));
+        setDigest({
+          groupChatId: digestSettings.telegramGroupChatId === null
+            ? ''
+            : String(digestSettings.telegramGroupChatId),
+          groupTitle: digestSettings.telegramGroupTitle ?? '',
+          enabled: digestSettings.daily.enabled,
+          hour: digestSettings.daily.hour,
+          minute: digestSettings.daily.minute,
+          recipientUserIds: digestSettings.daily.recipientUserIds,
+          channels: digestSettings.daily.channels,
+          tgTargets: digestSettings.daily.tgTargets,
+          statuses: digestSettings.daily.statuses,
+        });
       })
       .catch((e) => {
         if (!cancelled) setError(`Не удалось загрузить настройки: ${(e as Error).message}`);
@@ -154,7 +209,11 @@ export function AutomationDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, projectId, automationRepository]);
+  }, [open, projectId, automationRepository, digestSettingsRepository, projectRepository]);
+
+  const updateDigest = (patch: Partial<DigestDraft>): void => {
+    setDigest((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
 
   const update = (patch: Partial<Draft>): void => {
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -195,6 +254,14 @@ export function AutomationDialog({
       setError('Укажите команду деплоя для SSH-метода');
       return;
     }
+    if (digest && digest.groupChatId.trim() !== '' && !Number.isInteger(Number(digest.groupChatId.trim()))) {
+      setError('ID Telegram-группы должен быть целым числом (для групп он отрицательный)');
+      return;
+    }
+    if (digest && digest.enabled && digest.recipientUserIds.length === 0 && !digest.tgTargets.includes('group')) {
+      setError('Выберите получателей ежедневной сводки (или отправку в группу)');
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -225,6 +292,22 @@ export function AutomationDialog({
         })),
       });
       setRunInfo({ runStatus: updated.runStatus, tasksCreated: updated.tasksCreated });
+      if (digest) {
+        const chatId = digest.groupChatId.trim() === '' ? null : Number(digest.groupChatId.trim());
+        await digestSettingsRepository.save(projectId, {
+          telegramGroupChatId: chatId,
+          telegramGroupTitle: digest.groupTitle.trim() || null,
+          daily: {
+            enabled: digest.enabled,
+            hour: digest.hour,
+            minute: digest.minute,
+            recipientUserIds: digest.recipientUserIds,
+            channels: digest.channels,
+            tgTargets: digest.tgTargets,
+            statuses: digest.statuses,
+          },
+        });
+      }
       onOpenChange(false);
       toast.success(
         draft.enabled ? 'Автоматизация включена' : 'Настройки автоматизации сохранены',
@@ -533,6 +616,155 @@ export function AutomationDialog({
                 </div>
               )}
             </div>
+
+            {/* Telegram-группа проекта */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Telegram-группа проекта
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    chat_id
+                  </Label>
+                  <Input
+                    value={digest?.groupChatId ?? ''}
+                    placeholder="-1003920622527"
+                    onChange={(e) => updateDigest({ groupChatId: e.target.value })}
+                    className="h-8 font-mono text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Название (опц.)
+                  </Label>
+                  <Input
+                    value={digest?.groupTitle ?? ''}
+                    placeholder="Команда проекта"
+                    maxLength={255}
+                    onChange={(e) => updateDigest({ groupTitle: e.target.value })}
+                    className="h-8"
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Бот ProjectsFlow_Bot должен быть в группе. chat_id групп отрицательный
+                (супергруппа начинается с −100). Появится опцией «В группу» при экспорте задач.
+              </p>
+            </div>
+
+            {/* Ежедневная сводка по задачам */}
+            <SwitchRow
+              title="Ежедневная сводка по задачам"
+              description="Каждый день в заданное время — сводка по выбранным колонкам выбранным получателям."
+              checked={digest?.enabled ?? false}
+              onCheckedChange={(v) => updateDigest({ enabled: v })}
+            />
+            {digest?.enabled && (
+              <div className="space-y-3 rounded-md border px-3 py-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Время (МSK)</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={digest.hour}
+                    onChange={(e) =>
+                      updateDigest({ hour: Math.min(23, Math.max(0, Number(e.target.value) || 0)) })
+                    }
+                    className="h-8 w-16"
+                  />
+                  <span>:</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={digest.minute}
+                    onChange={(e) =>
+                      updateDigest({ minute: Math.min(59, Math.max(0, Number(e.target.value) || 0)) })
+                    }
+                    className="h-8 w-16"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Кому
+                  </Label>
+                  {members.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Нет участников проекта.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-1">
+                      {members.map((m) => (
+                        <label key={m.id} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={digest.recipientUserIds.includes(m.id)}
+                            onCheckedChange={() =>
+                              updateDigest({ recipientUserIds: toggle(digest.recipientUserIds, m.id) })
+                            }
+                          />
+                          <span className="truncate">{m.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Куда
+                  </Label>
+                  <div className="flex flex-wrap gap-3">
+                    {DIGEST_CHANNEL_OPTIONS.map((c) => (
+                      <label key={c.key} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={digest.channels.includes(c.key)}
+                          onCheckedChange={() => updateDigest({ channels: toggle(digest.channels, c.key) })}
+                        />
+                        <span>{c.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {digest.channels.includes('telegram') && (
+                    <div className="flex flex-wrap gap-3 pl-1 pt-1">
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Checkbox
+                          checked={digest.tgTargets.includes('personal')}
+                          onCheckedChange={() =>
+                            updateDigest({ tgTargets: toggle(digest.tgTargets, 'personal') })
+                          }
+                        />
+                        <span>в личку каждому</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Checkbox
+                          checked={digest.tgTargets.includes('group')}
+                          onCheckedChange={() => updateDigest({ tgTargets: toggle(digest.tgTargets, 'group') })}
+                        />
+                        <span>в группу</span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Какие колонки
+                  </Label>
+                  <div className="flex flex-wrap gap-3">
+                    {DIGEST_STATUS_OPTIONS.map((s) => (
+                      <label key={s.status} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={digest.statuses.includes(s.status)}
+                          onCheckedChange={() => updateDigest({ statuses: toggle(digest.statuses, s.status) })}
+                        />
+                        <span>{s.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Прогресс */}
             {runInfo && runInfo.runStatus !== 'idle' && (

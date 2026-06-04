@@ -13,8 +13,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import type { SharedMember } from '@/application/project/ProjectRepository';
 import type { DigestRecipient } from '@/application/task/TaskRepository';
 
-// Ключ «себя» в множестве выбора (не пересекается с UUID участников).
+// Ключи-сентинелы в множестве выбора (не пересекаются с UUID участников).
 const SELF_KEY = 'self';
+const GROUP_KEY = '__group__';
 
 type Props = {
   open: boolean;
@@ -24,6 +25,9 @@ type Props = {
   members: SharedMember[] | null;
   busy: boolean;
   onSend: (recipients: DigestRecipient[]) => void;
+  // Telegram-группа проекта (показываем строку «В группу», если настроена + это ТГ).
+  allowGroup?: boolean;
+  groupTitle?: string | null;
 };
 
 // Диалог выбора получателей дайджеста: «Я» (предвыбран) + участники проекта.
@@ -35,6 +39,8 @@ export function RecipientPickerDialog({
   members,
   busy,
   onSend,
+  allowGroup = false,
+  groupTitle,
 }: Props): React.ReactElement {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set([SELF_KEY]));
 
@@ -53,7 +59,11 @@ export function RecipientPickerDialog({
   };
 
   const recipients: DigestRecipient[] = [...selected].map((key) =>
-    key === SELF_KEY ? { kind: 'self' } : { kind: 'user', userId: key },
+    key === SELF_KEY
+      ? { kind: 'self' }
+      : key === GROUP_KEY
+        ? { kind: 'group' }
+        : { kind: 'user', userId: key },
   );
 
   return (
@@ -66,6 +76,14 @@ export function RecipientPickerDialog({
 
         <div className="max-h-[40dvh] space-y-1 overflow-y-auto">
           <Row checked={selected.has(SELF_KEY)} onToggle={() => toggle(SELF_KEY)} label="Я" hint="себе" />
+          {allowGroup && (
+            <Row
+              checked={selected.has(GROUP_KEY)}
+              onToggle={() => toggle(GROUP_KEY)}
+              label={groupTitle?.trim() || 'Telegram-группа проекта'}
+              hint="вся команда"
+            />
+          )}
           {(members ?? []).map((m) => (
             <Row
               key={m.id}

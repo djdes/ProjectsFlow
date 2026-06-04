@@ -142,6 +142,11 @@ import { GetAgentDeviceCodeInfo } from './application/agent/GetAgentDeviceCodeIn
 import { randomBytes } from 'node:crypto';
 import { ListTasks } from './application/task/ListTasks.js';
 import { ExportTasksDigest } from './application/task/ExportTasksDigest.js';
+import { DrizzleDigestSettingsRepository } from './infrastructure/repositories/DrizzleDigestSettingsRepository.js';
+import { GetDigestSettings } from './application/digest/GetDigestSettings.js';
+import { SaveDigestSettings } from './application/digest/SaveDigestSettings.js';
+import { SendDailyDigest } from './application/digest/SendDailyDigest.js';
+import { DailyDigestScheduler } from './infrastructure/scheduler/DailyDigestScheduler.js';
 import { SearchTasks } from './application/task/SearchTasks.js';
 import { DrizzleTaskSearchRepository } from './infrastructure/repositories/DrizzleTaskSearchRepository.js';
 import { CreateTask } from './application/task/CreateTask.js';
@@ -302,6 +307,7 @@ const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
 const taskDelegationRepo = new DrizzleTaskDelegationRepository(db);
+const digestSettingsRepo = new DrizzleDigestSettingsRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const aiPromptJobRepo = new DrizzleAiPromptJobRepository(db);
 const automationRepo = new DrizzleAutomationRepository(db);
@@ -1350,9 +1356,23 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
       email: emailSender,
       telegram: sendAgentTelegramNotification,
+      telegramClient,
+      settings: digestSettingsRepo,
       appUrl: appBaseUrl,
     }),
     projectRepo,
+  },
+  digest: {
+    get: new GetDigestSettings({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      settings: digestSettingsRepo,
+    }),
+    save: new SaveDigestSettings({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      settings: digestSettingsRepo,
+    }),
   },
   delegations: {
     accept: new AcceptTaskDelegation({
@@ -1732,6 +1752,26 @@ const { app, devProxyUpgrade } = createApp({
     tokens: githubTokenRepo,
   },
 });
+
+// Ежедневная сводка по задачам (db/064). Полностью серверный планировщик: тик раз в
+// минуту, шлёт по выбранным каналам (почта / личный TG / группа / in-app уведомление).
+const dailyDigestScheduler = new DailyDigestScheduler({
+  settings: digestSettingsRepo,
+  send: new SendDailyDigest({
+    tasks: taskRepo,
+    delegations: taskDelegationRepo,
+    projects: projectRepo,
+    members: projectMemberRepo,
+    email: emailSender,
+    notifications: notificationRepo,
+    telegram: sendAgentTelegramNotification,
+    telegramClient,
+    settings: digestSettingsRepo,
+    appUrl: appBaseUrl,
+    idGen: idGenerator,
+  }),
+});
+dailyDigestScheduler.start();
 
 const server = app.listen(config.port, () => {
   console.log(

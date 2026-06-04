@@ -47,7 +47,11 @@ export type SyncCommitsResult = {
 
 // === Экспорт-дайджест выбранных задач (буфер / email / Telegram) ===
 export type DigestChannel = 'clipboard' | 'email' | 'telegram';
-export type DigestRecipient = { readonly kind: 'self' } | { readonly kind: 'user'; readonly userId: string };
+export type DigestRecipient =
+  | { readonly kind: 'self' }
+  | { readonly kind: 'user'; readonly userId: string }
+  // Telegram-группа проекта (chat_id из настроек). Только для channel='telegram'.
+  | { readonly kind: 'group' };
 export type TaskDigestInput = {
   readonly taskIds: string[];
   readonly channel: DigestChannel;

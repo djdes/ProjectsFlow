@@ -1,11 +1,13 @@
-import type { TaskPriority } from '../../../domain/task/Task.js';
+import type { TaskPriority, TaskStatus } from '../../../domain/task/Task.js';
 import type { TaskWithCounts } from '../ListTasks.js';
 import {
+  STATUS_DIGEST_LABEL,
   escapeHtml,
   formatDeadlineRu,
   markdownToRich,
   priorityHeading,
   splitDescription,
+  toVisibleStatus,
 } from '../../../domain/task/digestFormat.js';
 
 export type DigestAttachment = { readonly name: string; readonly url: string };
@@ -32,47 +34,66 @@ export type DigestModel = {
   readonly groups: DigestGroup[];
 };
 
+// Группировка: по приоритету (ручной экспорт) или по колонкам-статусам (сводка).
+export type DigestGrouping =
+  | { readonly by: 'priority' }
+  | { readonly by: 'status'; readonly statuses: readonly TaskStatus[] };
+
 export type BuildDigestOptions = {
   readonly projectName: string;
   readonly appUrl: string;
   readonly isInbox: boolean;
   readonly attachmentsByTask: ReadonlyMap<string, DigestAttachment[]>;
+  // По умолчанию — по приоритету. Сводка использует { by: 'status', statuses }.
+  readonly grouping?: DigestGrouping;
   // Подменяемое «сейчас» для детерминированных тестов RU-дат.
   readonly now?: Date;
 };
 
 const PRIORITY_ORDER: readonly (TaskPriority | null)[] = [1, 2, 3, 4, null];
 
-// Сборка модели дайджеста. Группы по приоритету (P1→P4→без). Внутри приоритетных —
-// по position; без приоритета — по дате создания (старые первыми, №1 — самая старая).
+// Сборка модели дайджеста. Приоритетная группировка: P1→P4→без (внутри по position,
+// без приоритета — по дате создания, старые первыми). Статусная: по выбранным колонкам.
 export function buildDigestModel(
   tasks: readonly TaskWithCounts[],
   opts: BuildDigestOptions,
 ): DigestModel {
   const base = opts.appUrl.replace(/\/+$/, '');
+  const grouping = opts.grouping ?? { by: 'priority' };
+  const mapItem = (t: TaskWithCounts): DigestItem => {
+    const { name, body } = splitDescription(t.description);
+    const linkBase = `${base}/${opts.isInbox ? 'inbox' : `projects/${t.projectId}`}?task=${t.id}`;
+    return {
+      name,
+      body,
+      deadline: t.deadline ? formatDeadlineRu(t.deadline, opts.now) : null,
+      assignee: t.delegation?.delegateDisplayName ?? null,
+      openLink: linkBase,
+      doneLink: `${linkBase}&done=1`,
+      attachments: [...(opts.attachmentsByTask.get(t.id) ?? [])],
+    };
+  };
+
   const groups: DigestGroup[] = [];
-  for (const pr of PRIORITY_ORDER) {
-    const inGroup = tasks.filter((t) => (t.priority ?? null) === pr);
-    if (inGroup.length === 0) continue;
-    inGroup.sort(
-      pr === null
-        ? (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
-        : (a, b) => a.position - b.position,
-    );
-    const items: DigestItem[] = inGroup.map((t) => {
-      const { name, body } = splitDescription(t.description);
-      const linkBase = `${base}/${opts.isInbox ? 'inbox' : `projects/${t.projectId}`}?task=${t.id}`;
-      return {
-        name,
-        body,
-        deadline: t.deadline ? formatDeadlineRu(t.deadline, opts.now) : null,
-        assignee: t.delegation?.delegateDisplayName ?? null,
-        openLink: linkBase,
-        doneLink: `${linkBase}&done=1`,
-        attachments: [...(opts.attachmentsByTask.get(t.id) ?? [])],
-      };
-    });
-    groups.push({ priority: pr, heading: priorityHeading(pr), items });
+  if (grouping.by === 'status') {
+    for (const st of grouping.statuses) {
+      const inGroup = tasks
+        .filter((t) => toVisibleStatus(t.status) === st)
+        .sort((a, b) => a.position - b.position);
+      if (inGroup.length === 0) continue;
+      groups.push({ priority: null, heading: STATUS_DIGEST_LABEL[st], items: inGroup.map(mapItem) });
+    }
+  } else {
+    for (const pr of PRIORITY_ORDER) {
+      const inGroup = tasks.filter((t) => (t.priority ?? null) === pr);
+      if (inGroup.length === 0) continue;
+      inGroup.sort(
+        pr === null
+          ? (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
+          : (a, b) => a.position - b.position,
+      );
+      groups.push({ priority: pr, heading: priorityHeading(pr), items: inGroup.map(mapItem) });
+    }
   }
   return { projectName: opts.projectName, count: tasks.length, groups };
 }
@@ -140,7 +161,13 @@ export function renderDigestHtml(m: DigestModel): string {
 }
 
 // Telegram (parse_mode HTML). Урезаем на границе задач, чтобы не превысить 4096.
-export function renderDigestTelegram(m: DigestModel, maxLen = 3800): string {
+// assigneeFirst — для отправки в группу: каждая задача начинается с исполнителя
+// «👤 Анна — …» (или «👤 — …», если не делегирована).
+export function renderDigestTelegram(
+  m: DigestModel,
+  opts: { maxLen?: number; assigneeFirst?: boolean } = {},
+): string {
+  const maxLen = opts.maxLen ?? 3800;
   const segs: string[] = [
     `<b>Задачи — ${m.count} · ${escapeHtml(`Проект «${m.projectName}»`)}</b>`,
   ];
@@ -154,9 +181,15 @@ export function renderDigestTelegram(m: DigestModel, maxLen = 3800): string {
       const it = g.items[i]!;
       const meta: string[] = [];
       if (it.deadline) meta.push(`⏰ ${escapeHtml(it.deadline)}`);
-      if (it.assignee) meta.push(`👤 ${escapeHtml(it.assignee)}`);
+      // assigneeFirst: исполнитель в начале строки, иначе — в мете.
+      if (!opts.assigneeFirst && it.assignee) meta.push(`👤 ${escapeHtml(it.assignee)}`);
+      const prefix = opts.assigneeFirst
+        ? it.assignee
+          ? `👤 ${escapeHtml(it.assignee)} — `
+          : '👤 — '
+        : '';
       const itemLines: string[] = [
-        `${i + 1}. <a href="${escapeHtml(it.openLink)}">${escapeHtml(
+        `${i + 1}. ${prefix}<a href="${escapeHtml(it.openLink)}">${escapeHtml(
           it.name,
         )}</a> · <a href="${escapeHtml(it.doneLink)}">✓ Готово</a>`,
       ];

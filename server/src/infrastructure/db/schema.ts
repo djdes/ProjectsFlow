@@ -844,6 +844,25 @@ export const projectAutomationCriteria = mysqlTable(
 export type ProjectAutomationCriterionRow = typeof projectAutomationCriteria.$inferSelect;
 export type NewProjectAutomationCriterionRow = typeof projectAutomationCriteria.$inferInsert;
 
+// Настройки дайджеста проекта (db/064): Telegram-группа + ежедневная сводка.
+export const projectDigestSettings = mysqlTable('project_digest_settings', {
+  projectId: char('project_id', { length: 36 }).primaryKey(),
+  telegramGroupChatId: bigint('telegram_group_chat_id', { mode: 'number' }),
+  telegramGroupTitle: varchar('telegram_group_title', { length: 255 }),
+  dailyEnabled: boolean('daily_enabled').notNull().default(false),
+  dailyHour: tinyint('daily_hour').notNull().default(9),
+  dailyMinute: tinyint('daily_minute').notNull().default(0),
+  dailyRecipients: json('daily_recipients').$type<string[] | null>(),
+  dailyChannels: json('daily_channels').$type<string[] | null>(),
+  dailyTgTargets: json('daily_tg_targets').$type<string[] | null>(),
+  dailyStatuses: json('daily_statuses').$type<string[] | null>(),
+  dailyLastSentOn: date('daily_last_sent_on', { mode: 'string' }),
+  updatedAt: updatedAtCol(),
+});
+
+export type ProjectDigestSettingsRow = typeof projectDigestSettings.$inferSelect;
+export type NewProjectDigestSettingsRow = typeof projectDigestSettings.$inferInsert;
+
 // ============================================================================
 // file-sync — миграция db/044. Кастомная (не-git) синхронизация папок:
 // контент-адресуемые блобы + снепшоты + change-set'ы + round-trip сессии + лента

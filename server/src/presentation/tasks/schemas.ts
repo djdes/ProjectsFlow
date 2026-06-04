@@ -102,6 +102,7 @@ export const delegateTaskSchema = z.object({
 const digestRecipientSchema = z.union([
   z.object({ kind: z.literal('self') }),
   z.object({ kind: z.literal('user'), userId: z.string().uuid() }),
+  z.object({ kind: z.literal('group') }),
 ]);
 
 export const exportDigestSchema = z

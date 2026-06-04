@@ -92,6 +92,14 @@ export type ServerAlertPayload = {
   readonly message: string;
 };
 
+// Ежедневная сводка по проекту (канал «Уведомления на сайте»). Ведёт на проект.
+export type DailyDigestPayload = {
+  readonly type: 'daily_digest';
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly taskCount: number;
+};
+
 export type NotificationPayload =
   | CommentMentionPayload
   | ProjectInvitePayload
@@ -99,7 +107,8 @@ export type NotificationPayload =
   | TaskDelegationPayload
   | TaskDelegationResolvedPayload
   | TaskAssignedToProjectPayload
-  | ServerAlertPayload;
+  | ServerAlertPayload
+  | DailyDigestPayload;
 
 export type Notification = {
   readonly id: string;
