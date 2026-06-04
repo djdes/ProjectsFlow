@@ -11,6 +11,8 @@ import type {
   CreateTaskInput,
   MoveTaskInput,
   SyncCommitsResult,
+  TaskDigestInput,
+  TaskDigestResult,
   TaskRepository,
   UpdateTaskInput,
 } from '@/application/task/TaskRepository';
@@ -317,5 +319,9 @@ export class HttpTaskRepository implements TaskRepository {
       { delegateUserId },
     );
     return fromDto(task);
+  }
+
+  async digest(projectId: string, input: TaskDigestInput): Promise<TaskDigestResult> {
+    return httpClient.post<TaskDigestResult>(`/projects/${projectId}/tasks/digest`, input);
   }
 }

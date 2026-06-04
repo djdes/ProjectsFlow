@@ -240,10 +240,12 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   };
 
   // Esc выходит из режима выделения (слушаем только пока режим активен).
+  // defaultPrevented пропускаем: открытый Radix-дропдаун/диалог уже обработал Esc
+  // (закрылся) и вызвал preventDefault — не хотим заодно гасить весь режим.
   useEffect(() => {
     if (selectionStatus === null) return;
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') exitSelection();
+      if (e.key === 'Escape' && !e.defaultPrevented) exitSelection();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

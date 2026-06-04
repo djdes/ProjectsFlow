@@ -20,6 +20,7 @@ import type { RequestRalphCancel } from '../../application/task/RequestRalphCanc
 import type { RevokeRalphCancel } from '../../application/task/RevokeRalphCancel.js';
 import type { AssignInboxTaskToProject } from '../../application/task/AssignInboxTaskToProject.js';
 import type { DelegateExistingTask } from '../../application/task/DelegateExistingTask.js';
+import type { ExportTasksDigest } from '../../application/task/ExportTasksDigest.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
@@ -37,6 +38,7 @@ import {
   createTaskCommentSchema,
   createTaskSchema,
   delegateTaskSchema,
+  exportDigestSchema,
   linkCommitSchema,
   moveTaskSchema,
   updateTaskCommentSchema,
@@ -64,6 +66,8 @@ type Deps = {
   readonly revokeRalphCancel: RevokeRalphCancel;
   readonly assignToProject: AssignInboxTaskToProject;
   readonly delegateExisting: DelegateExistingTask;
+  // Экспорт выбранных задач в дайджест (буфер/email/Telegram).
+  readonly exportDigest: ExportTasksDigest;
   readonly maxAttachmentBytes: number;
   // Live-обновление: сигнал «в проекте изменились задачи» всем участникам (SSE).
   // Best-effort, не блокирует ответ.
@@ -286,6 +290,25 @@ export function tasksRouter(deps: Deps): Router {
         'comment_on_my_task',
       );
       res.status(201).json({ task: toDto(task) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // POST /digest — экспорт выбранных задач: text для буфера, отправка на email/в Telegram.
+  // Серверный рендер из авторитетных данных; доступ — read_project (внутри ListTasks).
+  router.post('/digest', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projectId = req.params['projectId'] as string;
+      const body = exportDigestSchema.parse(req.body);
+      const result = await deps.exportDigest.execute({
+        projectId,
+        ownerUserId: req.user!.id,
+        taskIds: body.taskIds,
+        channel: body.channel,
+        recipients: body.recipients ?? [],
+      });
+      res.json(result);
     } catch (e) {
       next(e);
     }

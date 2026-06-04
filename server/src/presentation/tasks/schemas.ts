@@ -98,6 +98,23 @@ export const delegateTaskSchema = z.object({
   delegateUserId: z.string().uuid(),
 });
 
+// POST /digest — экспорт выбранных задач (буфер / email / Telegram).
+const digestRecipientSchema = z.union([
+  z.object({ kind: z.literal('self') }),
+  z.object({ kind: z.literal('user'), userId: z.string().uuid() }),
+]);
+
+export const exportDigestSchema = z
+  .object({
+    taskIds: z.array(z.string().uuid()).min(1).max(500),
+    channel: z.enum(['clipboard', 'email', 'telegram']),
+    recipients: z.array(digestRecipientSchema).max(50).optional(),
+  })
+  .refine((o) => o.channel === 'clipboard' || (o.recipients?.length ?? 0) > 0, {
+    message: 'Для отправки укажите хотя бы одного получателя',
+    path: ['recipients'],
+  });
+
 export type CreateTaskBody = z.infer<typeof createTaskSchema>;
 export type UpdateTaskBody = z.infer<typeof updateTaskSchema>;
 export type MoveTaskBody = z.infer<typeof moveTaskSchema>;

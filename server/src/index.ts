@@ -141,6 +141,7 @@ import { PollAgentDeviceToken } from './application/agent/PollAgentDeviceToken.j
 import { GetAgentDeviceCodeInfo } from './application/agent/GetAgentDeviceCodeInfo.js';
 import { randomBytes } from 'node:crypto';
 import { ListTasks } from './application/task/ListTasks.js';
+import { ExportTasksDigest } from './application/task/ExportTasksDigest.js';
 import { SearchTasks } from './application/task/SearchTasks.js';
 import { DrizzleTaskSearchRepository } from './infrastructure/repositories/DrizzleTaskSearchRepository.js';
 import { CreateTask } from './application/task/CreateTask.js';
@@ -1332,6 +1333,23 @@ const { app, devProxyUpgrade } = createApp({
       comments: taskCommentRepo,
       log: commentNotificationLogRepo,
       delegations: taskDelegationRepo,
+    }),
+    exportDigest: new ExportTasksDigest({
+      listTasks: new ListTasks({
+        projects: projectRepo,
+        members: projectMemberRepo,
+        tasks: taskRepo,
+        taskCommits: taskCommitRepo,
+        attachments: taskAttachmentRepo,
+        comments: taskCommentRepo,
+        delegations: taskDelegationRepo,
+      }),
+      projects: projectRepo,
+      members: projectMemberRepo,
+      users: userRepo,
+      email: emailSender,
+      telegram: sendAgentTelegramNotification,
+      appUrl: appBaseUrl,
     }),
     projectRepo,
   },

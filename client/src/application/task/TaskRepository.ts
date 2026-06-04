@@ -45,6 +45,24 @@ export type SyncCommitsResult = {
   readonly scannedCount: number;
 };
 
+// === Экспорт-дайджест выбранных задач (буфер / email / Telegram) ===
+export type DigestChannel = 'clipboard' | 'email' | 'telegram';
+export type DigestRecipient = { readonly kind: 'self' } | { readonly kind: 'user'; readonly userId: string };
+export type TaskDigestInput = {
+  readonly taskIds: string[];
+  readonly channel: DigestChannel;
+  // Обязателен для email/telegram; для clipboard игнорируется.
+  readonly recipients?: DigestRecipient[];
+};
+export type TaskDigestResult = {
+  // Plain-text дайджест (для буфера; для email/telegram тоже возвращается).
+  readonly text: string;
+  readonly delivery?: {
+    readonly delivered: { userId: string; channel: string }[];
+    readonly skipped: { userId: string; reason: string }[];
+  };
+};
+
 export interface TaskRepository {
   list(projectId: string): Promise<Task[]>;
   create(projectId: string, input: CreateTaskInput): Promise<Task>;
@@ -101,4 +119,7 @@ export interface TaskRepository {
   // delegateUserId должен быть в shared-members caller'а; задача должна быть inbox
   // и без активной делегации.
   delegate(projectId: string, taskId: string, delegateUserId: string): Promise<Task>;
+  // Экспорт выбранных задач в дайджест: вернуть текст (буфер) и/или отправить
+  // на email / в Telegram. Сервер рендерит из авторитетных данных.
+  digest(projectId: string, input: TaskDigestInput): Promise<TaskDigestResult>;
 }

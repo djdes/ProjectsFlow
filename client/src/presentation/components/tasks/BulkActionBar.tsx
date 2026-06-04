@@ -4,9 +4,12 @@ import {
   CalendarOff,
   ChevronDown,
   Columns3,
+  Copy,
   Flag,
   Loader2,
+  Mail,
   Send,
+  SendHorizontal,
   Trash2,
   X,
 } from 'lucide-react';
@@ -31,6 +34,9 @@ import {
   type TaskStatus,
 } from '@/domain/task/Task';
 import { DeadlinePicker } from './DeadlinePicker';
+import { RecipientPickerDialog } from './RecipientPickerDialog';
+import { copyTextFromPromise } from './copyToClipboard';
+import type { DigestChannel, DigestRecipient } from '@/application/task/TaskRepository';
 import type { BulkResult, BulkTaskActions } from '@/presentation/hooks/useBulkTaskActions';
 
 const ALL_PRIORITIES: readonly TaskPriority[] = [1, 2, 3, 4];
@@ -61,9 +67,12 @@ export function BulkActionBar({
   bulk,
   onExit,
 }: Props): React.ReactElement | null {
-  const { projectRepository } = useContainer();
+  const { projectRepository, taskRepository } = useContainer();
   const [members, setMembers] = useState<SharedMember[] | null>(null);
   const [busy, setBusy] = useState(false);
+  // Открытый канал отправки (диалог получателей) + индикатор отправки.
+  const [exportChannel, setExportChannel] = useState<Exclude<DigestChannel, 'clipboard'> | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   // Подгружаем участников для делегирования (как в DelegateTaskButton).
   useEffect(() => {
@@ -113,18 +122,55 @@ export function BulkActionBar({
     void run('Удалено', () => bulk.remove(selectedIds));
   };
 
+  const disabled = busy || exporting;
+
+  // Копирование: запрос стартует синхронно в onClick (сохраняем user-gesture для буфера).
+  const handleCopy = (): void => {
+    if (disabled) return;
+    const produce = taskRepository
+      .digest(projectId, { taskIds: selectedIds, channel: 'clipboard' })
+      .then((r) => r.text);
+    void copyTextFromPromise(produce)
+      .then(() => toast.success('Скопировано в буфер'))
+      .catch(() => toast.error('Не удалось скопировать'));
+  };
+
+  // Отправка дайджеста выбранным получателям (email/Telegram).
+  const handleSend = async (recipients: DigestRecipient[]): Promise<void> => {
+    if (!exportChannel || exporting) return;
+    setExporting(true);
+    try {
+      const res = await taskRepository.digest(projectId, {
+        taskIds: selectedIds,
+        channel: exportChannel,
+        recipients,
+      });
+      const sent = res.delivery?.delivered.length ?? 0;
+      const skipped = res.delivery?.skipped.length ?? 0;
+      if (sent > 0 && skipped === 0) toast.success(`Отправлено: ${sent}`);
+      else if (sent > 0) toast.success(`Отправлено: ${sent}, пропущено: ${skipped}`);
+      else toast.error(skipped > 0 ? `Не доставлено (пропущено ${skipped})` : 'Не отправлено');
+      setExportChannel(null);
+    } catch (e) {
+      toast.error(`Не удалось отправить: ${(e as Error).message}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-3">
-      <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-xl border bg-card/95 p-1.5 shadow-2xl backdrop-blur supports-[backdrop-filter]:bg-card/80">
+    <>
+      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-3">
+        <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-xl border bg-card/95 p-1.5 shadow-2xl backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <span className="px-2 text-xs font-medium tabular-nums">
-          {busy ? <Loader2 className="inline size-3.5 animate-spin" /> : `Выбрано ${count}`}
+          {disabled ? <Loader2 className="inline size-3.5 animate-spin" /> : `Выбрано ${count}`}
         </span>
         <span className="mx-0.5 h-5 w-px bg-border" aria-hidden />
 
         {/* Делегировать */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" disabled={busy} className="h-8 gap-1.5 px-2 text-xs">
+            <Button variant="ghost" size="sm" disabled={disabled} className="h-8 gap-1.5 px-2 text-xs">
               <Send className="size-3.5" />
               Делегировать
               <ChevronDown className="size-3 opacity-60" />
@@ -161,7 +207,7 @@ export function BulkActionBar({
         {/* Дедлайн: выбрать дату (нативный пикер) + снять срок */}
         <DeadlinePicker
           value={null}
-          disabled={busy}
+          disabled={disabled}
           onChange={(d) => {
             if (d) void run('Срок задан', () => bulk.setDeadline(selectedIds, d));
           }}
@@ -169,7 +215,7 @@ export function BulkActionBar({
         <Button
           variant="ghost"
           size="icon"
-          disabled={busy}
+          disabled={disabled}
           className="size-8 text-muted-foreground hover:text-foreground"
           onClick={() => void run('Срок снят', () => bulk.setDeadline(selectedIds, null))}
           aria-label="Снять срок у выбранных"
@@ -181,7 +227,7 @@ export function BulkActionBar({
         {/* Приоритет */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" disabled={busy} className="h-8 gap-1.5 px-2 text-xs">
+            <Button variant="ghost" size="sm" disabled={disabled} className="h-8 gap-1.5 px-2 text-xs">
               <Flag className="size-3.5" />
               Приоритет
               <ChevronDown className="size-3 opacity-60" />
@@ -214,7 +260,7 @@ export function BulkActionBar({
         {/* В колонку */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" disabled={busy} className="h-8 gap-1.5 px-2 text-xs">
+            <Button variant="ghost" size="sm" disabled={disabled} className="h-8 gap-1.5 px-2 text-xs">
               <Columns3 className="size-3.5" />
               В колонку
               <ChevronDown className="size-3 opacity-60" />
@@ -235,7 +281,7 @@ export function BulkActionBar({
         {/* Ralph-режим */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" disabled={busy} className="h-8 gap-1.5 px-2 text-xs">
+            <Button variant="ghost" size="sm" disabled={disabled} className="h-8 gap-1.5 px-2 text-xs">
               <Bot className="size-3.5" />
               Ralph
               <ChevronDown className="size-3 opacity-60" />
@@ -265,11 +311,45 @@ export function BulkActionBar({
 
         <span className="mx-0.5 h-5 w-px bg-border" aria-hidden />
 
+        {/* Экспорт: копировать / на почту / в Telegram */}
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          className="h-8 gap-1.5 px-2 text-xs"
+          onClick={handleCopy}
+        >
+          <Copy className="size-3.5" />
+          Скопировать
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          className="h-8 gap-1.5 px-2 text-xs"
+          onClick={() => setExportChannel('email')}
+        >
+          <Mail className="size-3.5" />
+          На почту
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          className="h-8 gap-1.5 px-2 text-xs"
+          onClick={() => setExportChannel('telegram')}
+        >
+          <SendHorizontal className="size-3.5" />
+          В Telegram
+        </Button>
+
+        <span className="mx-0.5 h-5 w-px bg-border" aria-hidden />
+
         {/* Удалить */}
         <Button
           variant="ghost"
           size="sm"
-          disabled={busy}
+          disabled={disabled}
           className="h-8 gap-1.5 px-2 text-xs text-destructive hover:text-destructive"
           onClick={handleDelete}
         >
@@ -288,7 +368,20 @@ export function BulkActionBar({
         >
           <X className="size-4" />
         </Button>
+        </div>
       </div>
-    </div>
+
+      <RecipientPickerDialog
+        open={exportChannel !== null}
+        onOpenChange={(o) => {
+          if (!o) setExportChannel(null);
+        }}
+        title={exportChannel === 'email' ? 'Отправить на почту' : 'Отправить в Telegram'}
+        description="Дайджест выбранных задач уйдёт отмеченным получателям."
+        members={members}
+        busy={exporting}
+        onSend={(r) => void handleSend(r)}
+      />
+    </>
   );
 }

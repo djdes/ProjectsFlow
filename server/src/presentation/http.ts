@@ -68,6 +68,7 @@ import type { WriteKbDocument } from '../application/kb/WriteKbDocument.js';
 import type { DeleteKbDocument } from '../application/kb/DeleteKbDocument.js';
 import type { BulkCreateCredential } from '../application/kb/BulkCreateCredential.js';
 import type { ListTasks } from '../application/task/ListTasks.js';
+import type { ExportTasksDigest } from '../application/task/ExportTasksDigest.js';
 import type { SearchTasks } from '../application/task/SearchTasks.js';
 import type { CreateTask } from '../application/task/CreateTask.js';
 import type { UpdateTask } from '../application/task/UpdateTask.js';
@@ -345,6 +346,7 @@ type AppDeps = {
     readonly deleteComment: DeleteTaskComment;
     readonly requestRalphCancel: RequestRalphCancel;
     readonly revokeRalphCancel: RevokeRalphCancel;
+    readonly exportDigest: ExportTasksDigest;
     readonly maxAttachmentBytes: number;
     readonly notifyTaskChanged: (projectId: string) => void;
     readonly notifyCommentAdded: (
