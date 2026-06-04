@@ -72,7 +72,6 @@ export function PrioritySelect({
             >
               <span className={cn('size-2.5 rounded-full', m.dotColor)} aria-hidden />
               <span>{m.label}</span>
-              <span className="ml-auto text-[10px] text-muted-foreground">{m.short}</span>
             </DropdownMenuItem>
           );
         })}

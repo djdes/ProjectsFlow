@@ -1,30 +1,36 @@
 import type { TaskPriority } from './Task.js';
 
-// Метаданные приоритета для дайджеста: short (P1..P4), русский label, эмодзи-маркер.
-// Цвета-эмодзи синхронизированы с client PRIORITY_META (rose/orange/blue/slate).
-export const PRIORITY_DIGEST_META: Record<TaskPriority, { short: string; label: string; emoji: string }> = {
-  1: { short: 'P1', label: 'Срочно', emoji: '🔴' },
-  2: { short: 'P2', label: 'Высокий', emoji: '🟠' },
-  3: { short: 'P3', label: 'Средний', emoji: '🔵' },
-  4: { short: 'P4', label: 'Низкий', emoji: '⚪' },
+// Приоритет в дайджесте: словесный label + цветной эмодзи-маркер (нотация P1..P4 убрана).
+export const PRIORITY_DIGEST_META: Record<TaskPriority, { label: string; emoji: string }> = {
+  1: { label: 'Срочно', emoji: '🔴' },
+  2: { label: 'Высокий', emoji: '🟠' },
+  3: { label: 'Средний', emoji: '🔵' },
+  4: { label: 'Низкий', emoji: '⚪' },
 };
 
 export const NO_PRIORITY_LABEL = 'Без приоритета';
 
-// Имя задачи = первая непустая строка описания, очищенная от inline-markdown, ≤ maxLen.
-// У задачи нет поля title — описание (markdown) единственный носитель «названия».
-export function taskNameFromDescription(description: string | null, maxLen = 80): string {
-  const raw = (description ?? '').replace(/\r/g, '');
-  const firstLine = raw
-    .split('\n')
-    .map((l) => l.trim())
-    .find((l) => l.length > 0);
-  const stripped = stripMarkdownInline(firstLine ?? '');
-  if (stripped.length === 0) return '(без описания)';
-  return stripped.length <= maxLen ? stripped : stripped.slice(0, maxLen - 1).trimEnd() + '…';
+// Заголовок группы: «🟠 Приоритет: Высокий» или «Без приоритета».
+export function priorityHeading(p: TaskPriority | null): string {
+  if (p === null) return NO_PRIORITY_LABEL;
+  const m = PRIORITY_DIGEST_META[p];
+  return `${m.emoji} Приоритет: ${m.label}`;
 }
 
-// Грубая чистка inline-markdown одной строки-заголовка (заголовки/буллеты/ссылки/код/жирный).
+// Делит описание на заголовок-анкор (первая непустая строка, очищенная от markdown —
+// она же текст кликабельной ссылки) и тело (всё остальное как есть, с markdown-вёрсткой).
+// Не обрезаем: пользователь хочет полный текст задачи (см. фидбэк).
+export function splitDescription(description: string | null): { name: string; body: string } {
+  const lines = (description ?? '').replace(/\r/g, '').split('\n');
+  const idx = lines.findIndex((l) => l.trim().length > 0);
+  if (idx === -1) return { name: '(без описания)', body: '' };
+  const stripped = stripMarkdownInline(lines[idx]!.trim());
+  const name = stripped.length === 0 ? '(без описания)' : stripped;
+  const body = lines.slice(idx + 1).join('\n').trim();
+  return { name, body };
+}
+
+// Грубая чистка inline-markdown одной строки-заголовка.
 function stripMarkdownInline(s: string): string {
   return s
     .replace(/^#{1,6}\s+/, '')
@@ -67,12 +73,101 @@ export function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-// Экранирование спецсимволов Telegram MarkdownV2 (вне ссылочного URL).
-export function escapeMarkdownV2(s: string): string {
-  return s.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, (c) => '\\' + c);
+// Инлайн-markdown → безопасный HTML: ссылки, **жирный**, *курсив*, `код`.
+// Текст экранируется ПЕРВЫМ, поэтому теги всегда сбалансированы и валидны (важно для
+// Telegram HTML — иначе bot API вернёт 400).
+function inlineMd(s: string): string {
+  let t = escapeHtml(s);
+  t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
+  t = t.replace(/\*\*([^*\n]+?)\*\*/g, '<b>$1</b>');
+  t = t.replace(/`([^`\n]+?)`/g, '<code>$1</code>');
+  t = t.replace(/\*([^*\n]+?)\*/g, '<i>$1</i>');
+  return t;
 }
 
-// Экранирование URL внутри inline-ссылки MarkdownV2 [текст](url): только ) и \.
-export function escapeMarkdownV2Url(url: string): string {
-  return url.replace(/[)\\]/g, (c) => '\\' + c);
+// markdown тела задачи → HTML. mode='email' — блочный (<p>/<ul>/<pre>);
+// mode='telegram' — инлайн-теги + переводы строк (Telegram HTML не знает блочных тегов).
+export function markdownToRich(md: string, mode: 'email' | 'telegram'): string {
+  const lines = (md ?? '').replace(/\r/g, '').split('\n');
+  const out: string[] = [];
+  let inUl = false;
+  let inCode = false;
+  let code: string[] = [];
+
+  const closeUl = (): void => {
+    if (inUl && mode === 'email') out.push('</ul>');
+    inUl = false;
+  };
+
+  for (const line of lines) {
+    if (/^\s*```/.test(line)) {
+      if (!inCode) {
+        closeUl();
+        inCode = true;
+        code = [];
+      } else {
+        inCode = false;
+        const c = escapeHtml(code.join('\n'));
+        out.push(
+          mode === 'email'
+            ? `<pre style="background:#f1f5f9;padding:8px;border-radius:6px;overflow:auto;font-size:12px;white-space:pre-wrap;">${c}</pre>`
+            : `<pre>${c}</pre>`,
+        );
+      }
+      continue;
+    }
+    if (inCode) {
+      code.push(line);
+      continue;
+    }
+
+    const t = line.trim();
+    if (t === '') {
+      closeUl();
+      if (mode === 'email') out.push('<div style="height:6px"></div>');
+      else out.push('');
+      continue;
+    }
+
+    const h = /^(#{1,6})\s+(.+)$/.exec(t);
+    if (h) {
+      closeUl();
+      const x = inlineMd(h[2]!);
+      out.push(mode === 'email' ? `<p style="margin:6px 0 2px;font-weight:600">${x}</p>` : `<b>${x}</b>`);
+      continue;
+    }
+
+    const bullet = /^[-*+]\s+(.+)$/.exec(t);
+    if (bullet) {
+      const x = inlineMd(bullet[1]!);
+      if (mode === 'email') {
+        if (!inUl) {
+          out.push('<ul style="margin:2px 0;padding-left:20px">');
+          inUl = true;
+        }
+        out.push(`<li>${x}</li>`);
+      } else {
+        out.push(`• ${x}`);
+      }
+      continue;
+    }
+
+    const num = /^(\d+)\.\s+(.+)$/.exec(t);
+    if (num) {
+      closeUl();
+      const x = inlineMd(num[2]!);
+      out.push(mode === 'email' ? `<p style="margin:1px 0">${escapeHtml(num[1]!)}. ${x}</p>` : `${num[1]}. ${x}`);
+      continue;
+    }
+
+    closeUl();
+    const x = inlineMd(t);
+    out.push(mode === 'email' ? `<p style="margin:2px 0">${x}</p>` : x);
+  }
+  closeUl();
+  if (inCode) {
+    const c = escapeHtml(code.join('\n'));
+    out.push(`<pre>${c}</pre>`);
+  }
+  return mode === 'email' ? out.join('') : out.join('\n');
 }

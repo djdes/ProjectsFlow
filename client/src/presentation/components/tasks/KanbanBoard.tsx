@@ -150,12 +150,24 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     // Ловим #comment-<id> из hash ДО очистки query (setSearchParams сбрасывает hash).
     const hashMatch = /^#comment-(.+)$/.exec(window.location.hash);
     const scrollToCommentId = hashMatch ? hashMatch[1] : undefined;
-    if (task) setDialog({ mode: 'edit', task, scrollToCommentId });
-    // Чистим query, чтобы повторное открытие/refetch не дёргали диалог.
+    // ?done=1 — «✓ Готово»-ссылка из дайджеста: переносим задачу в «Готово».
+    // С подтверждением: защита от случайного клика и префетча почтовых сканеров
+    // (действие идёт в уже авторизованной сессии, право write_project гейтит сервер).
+    if (task && searchParams.get('done') === '1') {
+      if (window.confirm('Перенести задачу в «Готово»?')) {
+        void move(task.id, { targetStatus: 'done', beforeTaskId: null, afterTaskId: null })
+          .then(() => toast.success('Задача перенесена в «Готово»'))
+          .catch((err) => toast.error(`Не удалось: ${(err as Error).message}`));
+      }
+    } else if (task) {
+      setDialog({ mode: 'edit', task, scrollToCommentId });
+    }
+    // Чистим query, чтобы повторное открытие/refetch не дёргали диалог/перенос.
     const next = new URLSearchParams(searchParams);
     next.delete('task');
+    next.delete('done');
     setSearchParams(next, { replace: true });
-  }, [loading, tasks, searchParams, setSearchParams]);
+  }, [loading, tasks, searchParams, setSearchParams, move]);
   const [activeId, setActiveId] = useState<string | null>(null);
   // Множество taskId с активной (running) LIVE-сессией — для 🔴 точки на карточке.
   // Обновляется по realtime-событию 'pf:live-changed' (debounce 100мс коалесцирует пачку).

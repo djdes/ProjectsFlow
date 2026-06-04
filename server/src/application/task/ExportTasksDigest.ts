@@ -1,14 +1,16 @@
 import type { ListTasks } from './ListTasks.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
+import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { EmailSender } from '../notifications/EmailSender.js';
 import type { SendAgentTelegramNotification } from '../telegram/SendAgentTelegramNotification.js';
 import {
   buildDigestModel,
   renderDigestHtml,
-  renderDigestMarkdownV2,
-  renderDigestText,
+  renderDigestMarkdown,
+  renderDigestTelegram,
+  type DigestAttachment,
 } from './digest/buildTaskDigest.js';
 
 export type DigestChannel = 'clipboard' | 'email' | 'telegram';
@@ -39,6 +41,7 @@ type Deps = {
   readonly listTasks: ListTasks;
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
+  readonly attachments: TaskAttachmentRepository;
   readonly users: UserRepository;
   readonly email: EmailSender;
   readonly telegram: SendAgentTelegramNotification;
@@ -61,8 +64,25 @@ export class ExportTasksDigest {
     const projectName = project?.name ?? 'проект';
     const isInbox = project?.isInbox ?? false;
 
-    const model = buildDigestModel(selected, { projectName, appUrl: this.deps.appUrl, isInbox });
-    const text = renderDigestText(model);
+    // Вложения каждой выбранной задачи — ссылками (буфер/почта/ТГ единообразно).
+    const base = this.deps.appUrl.replace(/\/+$/, '');
+    const attachmentsByTask = new Map<string, DigestAttachment[]>();
+    for (const t of selected) {
+      const atts = await this.deps.attachments.listByTask(t.id);
+      attachmentsByTask.set(
+        t.id,
+        atts.map((a) => ({ name: a.filename, url: `${base}/api/attachments/${a.id}` })),
+      );
+    }
+
+    const model = buildDigestModel(selected, {
+      projectName,
+      appUrl: this.deps.appUrl,
+      isInbox,
+      attachmentsByTask,
+    });
+    // text — Markdown (для буфера; добавляем и к ответу email/telegram).
+    const text = renderDigestMarkdown(model);
 
     if (cmd.channel === 'clipboard') {
       return { text };
@@ -76,7 +96,7 @@ export class ExportTasksDigest {
 
     const subject = `Задачи (${model.count}) · ${projectName}`;
     const html = renderDigestHtml(model);
-    const markdown = renderDigestMarkdownV2(model);
+    const telegramHtml = renderDigestTelegram(model);
 
     const delivered: { userId: string; channel: DigestChannel }[] = [];
     const skipped: { userId: string; reason: string }[] = [];
@@ -111,8 +131,8 @@ export class ExportTasksDigest {
       } else {
         const res = await this.deps.telegram.execute({
           userId,
-          text: markdown,
-          parseMode: 'MarkdownV2',
+          text: telegramHtml,
+          parseMode: 'HTML',
           kind: 'task_digest',
           // Пользователь явно нажал «отправить» — не глушим 60с-дедупом.
           skipDedupCheck: true,

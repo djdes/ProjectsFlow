@@ -21,7 +21,7 @@ export function PriorityBadge({ priority, className }: Props): React.ReactElemen
       title={`Приоритет: ${meta.label}`}
     >
       <span className={cn('size-2 rounded-full', meta.dotColor)} aria-hidden />
-      {meta.short}
+      {meta.label}
     </span>
   );
 }

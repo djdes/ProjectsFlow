@@ -243,8 +243,7 @@ export function BulkActionBar({
                   onClick={() => void run('Приоритет задан', () => bulk.setPriority(selectedIds, p))}
                 >
                   <span className={cn('size-2 rounded-full', meta.dotColor)} aria-hidden />
-                  <span className={meta.textColor}>{meta.short}</span>
-                  <span className="ml-auto text-[11px] text-muted-foreground">{meta.label}</span>
+                  <span className={meta.textColor}>{meta.label}</span>
                 </DropdownMenuItem>
               );
             })}

@@ -1346,6 +1346,7 @@ const { app, devProxyUpgrade } = createApp({
       }),
       projects: projectRepo,
       members: projectMemberRepo,
+      attachments: taskAttachmentRepo,
       users: userRepo,
       email: emailSender,
       telegram: sendAgentTelegramNotification,

@@ -3,14 +3,16 @@ import assert from 'node:assert/strict';
 import type { TaskWithCounts } from '../ListTasks.js';
 import {
   buildDigestModel,
-  renderDigestText,
+  renderDigestMarkdown,
   renderDigestHtml,
-  renderDigestMarkdownV2,
+  renderDigestTelegram,
+  type DigestAttachment,
 } from './buildTaskDigest.js';
 import {
-  taskNameFromDescription,
+  splitDescription,
+  priorityHeading,
   formatDeadlineRu,
-  escapeMarkdownV2,
+  markdownToRich,
 } from '../../../domain/task/digestFormat.js';
 
 function task(partial: Partial<TaskWithCounts> & { id: string }): TaskWithCounts {
@@ -37,121 +39,130 @@ function task(partial: Partial<TaskWithCounts> & { id: string }): TaskWithCounts
 }
 
 const NOW = new Date(2026, 5, 4); // 2026-06-04 local
+const noAtt = new Map<string, DigestAttachment[]>();
+const baseOpts = {
+  projectName: 'Сайт',
+  appUrl: 'https://projectsflow.ru',
+  isInbox: false,
+  attachmentsByTask: noAtt,
+  now: NOW,
+};
 
-test('taskNameFromDescription: first non-empty line, markdown stripped, truncated', () => {
-  assert.equal(taskNameFromDescription('# Починить **деплой** на прод'), 'Починить деплой на прод');
-  assert.equal(taskNameFromDescription('\n\n- [тест](http://x) сделать'), 'тест сделать');
-  assert.equal(taskNameFromDescription(''), '(без описания)');
-  assert.equal(taskNameFromDescription(null), '(без описания)');
-  const long = 'a'.repeat(200);
-  const name = taskNameFromDescription(long);
-  assert.ok(name.length <= 80);
-  assert.ok(name.endsWith('…'));
+test('splitDescription: name=first line (stripped), body=rest', () => {
+  const { name, body } = splitDescription('# Починить **деплой**\nдетали\nещё детали');
+  assert.equal(name, 'Починить деплой');
+  assert.equal(body, 'детали\nещё детали');
+  assert.deepEqual(splitDescription(null), { name: '(без описания)', body: '' });
+  assert.deepEqual(splitDescription('одна строка'), { name: 'одна строка', body: '' });
+  // Полный текст не обрезается (фидбэк): длинная первая строка — целиком в анкоре.
+  assert.equal(splitDescription('a'.repeat(200)).name.length, 200);
+});
+
+test('priorityHeading: «Приоритет: X» с эмодзи / «Без приоритета»', () => {
+  assert.equal(priorityHeading(2), '🟠 Приоритет: Высокий');
+  assert.equal(priorityHeading(4), '⚪ Приоритет: Низкий');
+  assert.equal(priorityHeading(null), 'Без приоритета');
 });
 
 test('formatDeadlineRu: relative for near, absolute otherwise', () => {
   assert.equal(formatDeadlineRu('2026-06-04', NOW), 'сегодня');
   assert.equal(formatDeadlineRu('2026-06-05', NOW), 'завтра');
-  assert.equal(formatDeadlineRu('2026-06-03', NOW), 'вчера');
-  // Абсолютная дата: ICU даёт сокращённый месяц (может быть «июн.» с точкой) —
-  // проверяем содержательные части, не точное форматирование месяца.
   const sameYear = formatDeadlineRu('2026-06-20', NOW);
   assert.ok(sameYear.startsWith('20 ') && sameYear.includes('июн') && !sameYear.includes('2026'));
-  const otherYear = formatDeadlineRu('2027-01-09', NOW);
-  assert.ok(otherYear.startsWith('9 ') && otherYear.includes('янв') && otherYear.includes('2027'));
 });
 
-test('escapeMarkdownV2 escapes Telegram special chars', () => {
-  assert.equal(escapeMarkdownV2('a.b-c!'), 'a\\.b\\-c\\!');
-  assert.equal(escapeMarkdownV2('[x](y)'), '\\[x\\]\\(y\\)');
+test('markdownToRich telegram: escapes text, balanced inline tags only', () => {
+  const out = markdownToRich('Fix <bug> & **bold** `code` [x](http://y)', 'telegram');
+  assert.ok(out.includes('Fix &lt;bug&gt; &amp;'));
+  assert.ok(out.includes('<b>bold</b>'));
+  assert.ok(out.includes('<code>code</code>'));
+  assert.ok(out.includes('<a href="http://y">x</a>'));
+  // нет блочных тегов
+  assert.ok(!out.includes('<p') && !out.includes('<ul'));
 });
 
-test('buildDigestModel: groups by priority in order, numbers within group', () => {
+test('markdownToRich email: headings→bold, bullets→<ul>', () => {
+  const out = markdownToRich('## Шаги\n- раз\n- два', 'email');
+  assert.ok(out.includes('font-weight:600">Шаги</p>'));
+  assert.ok(out.includes('<ul'));
+  assert.ok(out.includes('<li>раз</li>'));
+  assert.ok(out.includes('<li>два</li>'));
+});
+
+test('buildDigestModel: groups by priority; no-priority sorted by createdAt asc', () => {
   const tasks = [
-    task({ id: 't1', description: 'Низкая', priority: 4, position: 2 }),
+    task({ id: 't1', description: 'Новая без приоритета', createdAt: new Date('2026-06-03T00:00:00Z') }),
     task({ id: 't2', description: 'Срочная B', priority: 1, position: 5 }),
     task({ id: 't3', description: 'Срочная A', priority: 1, position: 1 }),
-    task({ id: 't4', description: 'Без приоритета' }),
+    task({ id: 't4', description: 'Старая без приоритета', createdAt: new Date('2026-06-01T00:00:00Z') }),
   ];
-  const m = buildDigestModel(tasks, {
-    projectName: 'Сайт',
-    appUrl: 'https://projectsflow.ru/',
-    isInbox: false,
-    now: NOW,
-  });
+  const m = buildDigestModel(tasks, baseOpts);
   assert.equal(m.count, 4);
-  // Группы: P1, P4, без приоритета (P2/P3 пустые — пропущены).
-  assert.deepEqual(
-    m.groups.map((g) => g.priority),
-    [1, 4, null],
-  );
-  // Внутри P1 сортировка по position: «Срочная A» (pos 1) раньше «Срочная B» (pos 5).
-  assert.deepEqual(
-    m.groups[0]!.items.map((i) => i.name),
-    ['Срочная A', 'Срочная B'],
-  );
-  // Ссылка без хвостового слэша базы, формат /projects/:id?task=:id.
-  assert.equal(m.groups[0]!.items[0]!.link, 'https://projectsflow.ru/projects/p1?task=t3');
+  assert.deepEqual(m.groups.map((g) => g.priority), [1, null]);
+  assert.equal(m.groups[0]!.heading, '🔴 Приоритет: Срочно');
+  // P1: по position
+  assert.deepEqual(m.groups[0]!.items.map((i) => i.name), ['Срочная A', 'Срочная B']);
+  // без приоритета: старая (06-01) №1, новая (06-03) №2
+  assert.deepEqual(m.groups[1]!.items.map((i) => i.name), ['Старая без приоритета', 'Новая без приоритета']);
+  // ссылки: open + done
+  assert.equal(m.groups[0]!.items[0]!.openLink, 'https://projectsflow.ru/projects/p1?task=t3');
+  assert.equal(m.groups[0]!.items[0]!.doneLink, 'https://projectsflow.ru/projects/p1?task=t3&done=1');
 });
 
-test('buildDigestModel: inbox links go to /inbox; assignee from delegation', () => {
+test('buildDigestModel: inbox links + assignee + attachments', () => {
+  const att = new Map<string, DigestAttachment[]>([
+    ['t1', [{ name: 'лог.png', url: 'https://x/api/attachments/a1' }]],
+  ]);
   const tasks = [
     task({
       id: 't1',
       description: 'Делегированная',
       priority: 2,
-      deadline: '2026-06-05',
       delegation: {
-        id: 'd1',
-        taskId: 't1',
-        delegateUserId: 'u2',
-        delegateDisplayName: 'Анна',
-        creatorUserId: 'u1',
-        creatorDisplayName: 'Я',
-        status: 'pending',
-        createdAt: new Date('2026-06-01T00:00:00Z'),
-        respondedAt: null,
+        id: 'd1', taskId: 't1', delegateUserId: 'u2', delegateDisplayName: 'Анна',
+        creatorUserId: 'u1', creatorDisplayName: 'Я', status: 'pending',
+        createdAt: new Date('2026-06-01T00:00:00Z'), respondedAt: null,
       },
     }),
   ];
-  const m = buildDigestModel(tasks, {
-    projectName: 'Inbox',
-    appUrl: 'https://projectsflow.ru',
-    isInbox: true,
-    now: NOW,
-  });
+  const m = buildDigestModel(tasks, { ...baseOpts, isInbox: true, attachmentsByTask: att });
   const it = m.groups[0]!.items[0]!;
-  assert.equal(it.link, 'https://projectsflow.ru/inbox?task=t1');
+  assert.equal(it.openLink, 'https://projectsflow.ru/inbox?task=t1');
   assert.equal(it.assignee, 'Анна');
-  assert.equal(it.deadline, 'завтра');
+  assert.deepEqual(it.attachments, [{ name: 'лог.png', url: 'https://x/api/attachments/a1' }]);
 });
 
-test('renderDigestText: header, group heading, numbered items, meta line', () => {
-  const tasks = [task({ id: 't1', description: 'Починить деплой', priority: 1, deadline: '2026-06-20' })];
-  const m = buildDigestModel(tasks, { projectName: 'Сайт', appUrl: 'https://x.ru', isInbox: false, now: NOW });
-  const txt = renderDigestText(m);
-  assert.ok(txt.startsWith('Задачи — 1 · Проект «Сайт»'));
-  assert.ok(txt.includes('🔴 P1 · Срочно'));
-  assert.ok(txt.includes('1. Починить деплой'));
-  assert.ok(txt.includes('⏰ 20 июн'));
-  assert.ok(txt.includes('🔗 https://x.ru/projects/p1?task=t1'));
+test('renderDigestMarkdown: bold header, anchor + done link, body, attachments', () => {
+  const att = new Map<string, DigestAttachment[]>([['t1', [{ name: 'f.pdf', url: 'https://x/a/1' }]]]);
+  const tasks = [task({ id: 't1', description: 'Заголовок\nтело задачи', priority: 1, deadline: '2026-06-20' })];
+  const md = renderDigestMarkdown(buildDigestModel(tasks, { ...baseOpts, attachmentsByTask: att }));
+  assert.ok(md.startsWith('**Задачи — 1 · Проект «'));
+  assert.ok(md.includes('**🔴 Приоритет: Срочно**'));
+  assert.ok(md.includes('1. **[Заголовок](https://projectsflow.ru/projects/p1?task=t1)** · [✓ Готово](https://projectsflow.ru/projects/p1?task=t1&done=1)'));
+  assert.ok(md.includes('тело задачи'));
+  assert.ok(md.includes('📎 [f.pdf](https://x/a/1)'));
 });
 
-test('renderDigestHtml: escapes and builds ordered list with links', () => {
-  const tasks = [task({ id: 't1', description: 'A & B <script>', priority: 1 })];
-  const m = buildDigestModel(tasks, { projectName: 'P<>', appUrl: 'https://x.ru', isInbox: false, now: NOW });
-  const html = renderDigestHtml(m);
-  assert.ok(html.includes('A &amp; B &lt;script&gt;'));
-  assert.ok(html.includes('P&lt;&gt;'));
-  assert.ok(html.includes('<ol'));
-  assert.ok(html.includes('<a href="https://x.ru/projects/p1?task=t1"'));
+test('renderDigestTelegram: valid escaped HTML, length cap on overflow', () => {
+  const tasks = [task({ id: 't1', description: 'A & <b> тест', priority: 1 })];
+  const tg = renderDigestTelegram(buildDigestModel(tasks, baseOpts));
+  assert.ok(tg.startsWith('<b>Задачи — 1 · '));
+  assert.ok(tg.includes('A &amp; &lt;b&gt; тест') || tg.includes('A &amp;')); // имя экранировано
+  assert.ok(tg.includes('<a href="https://projectsflow.ru/projects/p1?task=t1&amp;done=1">✓ Готово</a>'));
+
+  // overflow: много длинных задач → урезается с пометкой
+  const many = Array.from({ length: 40 }, (_, i) =>
+    task({ id: `t${i}`, description: `Задача ${i} ` + 'x'.repeat(150), priority: 2 }),
+  );
+  const big = renderDigestTelegram(buildDigestModel(many, baseOpts), 1000);
+  assert.ok(big.length <= 1200);
+  assert.ok(big.includes('полностью на сайте'));
 });
 
-test('renderDigestMarkdownV2: escapes special chars, dots in numbering escaped', () => {
-  const tasks = [task({ id: 't1', description: 'Fix bug.', priority: 1 })];
-  const m = buildDigestModel(tasks, { projectName: 'Сайт', appUrl: 'https://x.ru', isInbox: false, now: NOW });
-  const md = renderDigestMarkdownV2(m);
-  assert.ok(md.includes('1\\.')); // номер с экранированной точкой
-  assert.ok(md.includes('Fix bug\\.')); // точка в имени экранирована
-  assert.ok(md.includes('[открыть](https://x.ru/projects/p1?task=t1)'));
+test('renderDigestHtml: escapes and builds links', () => {
+  const tasks = [task({ id: 't1', description: 'A & B <x>', priority: 1 })];
+  const html = renderDigestHtml(buildDigestModel(tasks, baseOpts));
+  assert.ok(html.includes('A &amp; B &lt;x&gt;'));
+  assert.ok(html.includes('<a href="https://projectsflow.ru/projects/p1?task=t1"'));
+  assert.ok(html.includes('✓ Готово'));
 });

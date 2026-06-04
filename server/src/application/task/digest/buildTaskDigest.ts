@@ -1,21 +1,23 @@
 import type { TaskPriority } from '../../../domain/task/Task.js';
 import type { TaskWithCounts } from '../ListTasks.js';
 import {
-  NO_PRIORITY_LABEL,
-  PRIORITY_DIGEST_META,
   escapeHtml,
-  escapeMarkdownV2,
-  escapeMarkdownV2Url,
   formatDeadlineRu,
-  taskNameFromDescription,
+  markdownToRich,
+  priorityHeading,
+  splitDescription,
 } from '../../../domain/task/digestFormat.js';
 
-// Один элемент дайджеста — готовые к рендеру поля (имя, RU-дедлайн, исполнитель, ссылка).
+export type DigestAttachment = { readonly name: string; readonly url: string };
+
 export type DigestItem = {
-  readonly name: string;
+  readonly name: string; // первая строка описания — текст анкора
+  readonly body: string; // остальное описание (markdown, сохраняем вёрстку)
   readonly deadline: string | null;
   readonly assignee: string | null;
-  readonly link: string;
+  readonly openLink: string; // ?task=… — открыть задачу
+  readonly doneLink: string; // ?task=…&done=1 — перенести в «Готово»
+  readonly attachments: DigestAttachment[];
 };
 
 export type DigestGroup = {
@@ -34,14 +36,15 @@ export type BuildDigestOptions = {
   readonly projectName: string;
   readonly appUrl: string;
   readonly isInbox: boolean;
+  readonly attachmentsByTask: ReadonlyMap<string, DigestAttachment[]>;
   // Подменяемое «сейчас» для детерминированных тестов RU-дат.
   readonly now?: Date;
 };
 
-// Порядок групп: P1→P2→P3→P4, затем «без приоритета».
 const PRIORITY_ORDER: readonly (TaskPriority | null)[] = [1, 2, 3, 4, null];
 
-// Сборка модели дайджеста: группировка по приоритету, сортировка внутри по position.
+// Сборка модели дайджеста. Группы по приоритету (P1→P4→без). Внутри приоритетных —
+// по position; без приоритета — по дате создания (старые первыми, №1 — самая старая).
 export function buildDigestModel(
   tasks: readonly TaskWithCounts[],
   opts: BuildDigestOptions,
@@ -49,40 +52,50 @@ export function buildDigestModel(
   const base = opts.appUrl.replace(/\/+$/, '');
   const groups: DigestGroup[] = [];
   for (const pr of PRIORITY_ORDER) {
-    const inGroup = tasks
-      .filter((t) => (t.priority ?? null) === pr)
-      .sort((a, b) => a.position - b.position);
+    const inGroup = tasks.filter((t) => (t.priority ?? null) === pr);
     if (inGroup.length === 0) continue;
-    const heading =
+    inGroup.sort(
       pr === null
-        ? NO_PRIORITY_LABEL
-        : `${PRIORITY_DIGEST_META[pr].emoji} ${PRIORITY_DIGEST_META[pr].short} · ${PRIORITY_DIGEST_META[pr].label}`;
-    const items: DigestItem[] = inGroup.map((t) => ({
-      name: taskNameFromDescription(t.description),
-      deadline: t.deadline ? formatDeadlineRu(t.deadline, opts.now) : null,
-      assignee: t.delegation?.delegateDisplayName ?? null,
-      link: `${base}/${opts.isInbox ? 'inbox' : `projects/${t.projectId}`}?task=${t.id}`,
-    }));
-    groups.push({ priority: pr, heading, items });
+        ? (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
+        : (a, b) => a.position - b.position,
+    );
+    const items: DigestItem[] = inGroup.map((t) => {
+      const { name, body } = splitDescription(t.description);
+      const linkBase = `${base}/${opts.isInbox ? 'inbox' : `projects/${t.projectId}`}?task=${t.id}`;
+      return {
+        name,
+        body,
+        deadline: t.deadline ? formatDeadlineRu(t.deadline, opts.now) : null,
+        assignee: t.delegation?.delegateDisplayName ?? null,
+        openLink: linkBase,
+        doneLink: `${linkBase}&done=1`,
+        attachments: [...(opts.attachmentsByTask.get(t.id) ?? [])],
+      };
+    });
+    groups.push({ priority: pr, heading: priorityHeading(pr), items });
   }
   return { projectName: opts.projectName, count: tasks.length, groups };
 }
 
-// === Рендереры (чистые функции от модели → строка в нужном формате) ===
+// === Рендереры ===
 
-// Plain-text — для буфера обмена.
-export function renderDigestText(m: DigestModel): string {
-  const lines: string[] = [`Задачи — ${m.count} · Проект «${m.projectName}»`];
+// Markdown — для буфера обмена (имя-анкор жирным, ✓Готово-ссылка, полное тело, вложения).
+export function renderDigestMarkdown(m: DigestModel): string {
+  const lines: string[] = [`**Задачи — ${m.count} · Проект «${m.projectName}»**`];
   for (const g of m.groups) {
     lines.push('');
-    lines.push(g.heading);
+    lines.push(`**${g.heading}**`);
     g.items.forEach((it, i) => {
-      lines.push(`${i + 1}. ${it.name}`);
+      lines.push('');
+      lines.push(`${i + 1}. **[${it.name}](${it.openLink})** · [✓ Готово](${it.doneLink})`);
       const meta: string[] = [];
       if (it.deadline) meta.push(`⏰ ${it.deadline}`);
       if (it.assignee) meta.push(`👤 ${it.assignee}`);
-      meta.push(`🔗 ${it.link}`);
-      lines.push(`   ${meta.join(' · ')}`);
+      if (meta.length) lines.push(meta.join(' · '));
+      if (it.body) lines.push(it.body);
+      if (it.attachments.length) {
+        lines.push(it.attachments.map((a) => `📎 [${a.name}](${a.url})`).join(' · '));
+      }
     });
   }
   return lines.join('\n');
@@ -90,48 +103,85 @@ export function renderDigestText(m: DigestModel): string {
 
 // HTML — для письма.
 export function renderDigestHtml(m: DigestModel): string {
-  const parts: string[] = [
+  const p: string[] = [
     '<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0f172a;line-height:1.5;">',
-    `<p style="font-size:15px;font-weight:600;margin:0 0 12px;">Задачи — ${m.count} · Проект «${escapeHtml(
+    `<p style="font-size:15px;font-weight:700;margin:0 0 12px;">Задачи — ${m.count} · Проект «${escapeHtml(
       m.projectName,
     )}»</p>`,
   ];
   for (const g of m.groups) {
-    parts.push(
-      `<p style="font-size:13px;font-weight:600;margin:14px 0 6px;">${escapeHtml(g.heading)}</p>`,
-    );
-    parts.push('<ol style="margin:0;padding:0 0 0 18px;">');
-    for (const it of g.items) {
+    p.push(`<p style="font-size:13px;font-weight:600;margin:16px 0 8px;">${escapeHtml(g.heading)}</p>`);
+    g.items.forEach((it, i) => {
+      p.push('<div style="margin:0 0 16px;border-left:3px solid #e2e8f0;padding-left:10px;">');
+      p.push(
+        `<div style="font-weight:600;">${i + 1}. <a href="${escapeHtml(
+          it.openLink,
+        )}" style="color:#2563eb;text-decoration:none;">${escapeHtml(
+          it.name,
+        )}</a> · <a href="${escapeHtml(it.doneLink)}" style="color:#16a34a;text-decoration:none;">✓ Готово</a></div>`,
+      );
       const meta: string[] = [];
       if (it.deadline) meta.push(`⏰ ${escapeHtml(it.deadline)}`);
       if (it.assignee) meta.push(`👤 ${escapeHtml(it.assignee)}`);
-      meta.push(`<a href="${escapeHtml(it.link)}" style="color:#2563eb;text-decoration:none;">открыть</a>`);
-      parts.push(
-        `<li style="margin:0 0 8px;">${escapeHtml(it.name)}<br>` +
-          `<span style="color:#64748b;font-size:12px;">${meta.join(' · ')}</span></li>`,
-      );
-    }
-    parts.push('</ol>');
-  }
-  parts.push('</div>');
-  return parts.join('');
-}
-
-// Telegram MarkdownV2 — для бота.
-export function renderDigestMarkdownV2(m: DigestModel): string {
-  const e = escapeMarkdownV2;
-  const lines: string[] = [`*Задачи — ${e(String(m.count))} · ${e(`Проект «${m.projectName}»`)}*`];
-  for (const g of m.groups) {
-    lines.push('');
-    lines.push(`*${e(g.heading)}*`);
-    g.items.forEach((it, i) => {
-      lines.push(`${e(`${i + 1}.`)} ${e(it.name)}`);
-      const meta: string[] = [];
-      if (it.deadline) meta.push(`⏰ ${e(it.deadline)}`);
-      if (it.assignee) meta.push(`👤 ${e(it.assignee)}`);
-      meta.push(`[${e('открыть')}](${escapeMarkdownV2Url(it.link)})`);
-      lines.push(`   ${meta.join(' · ')}`);
+      if (meta.length) p.push(`<div style="color:#64748b;font-size:12px;margin:2px 0;">${meta.join(' · ')}</div>`);
+      if (it.body) p.push(`<div style="font-size:13px;margin:4px 0;">${markdownToRich(it.body, 'email')}</div>`);
+      if (it.attachments.length) {
+        p.push(
+          `<div style="font-size:12px;margin:4px 0;">${it.attachments
+            .map((a) => `📎 <a href="${escapeHtml(a.url)}" style="color:#2563eb;">${escapeHtml(a.name)}</a>`)
+            .join(' · ')}</div>`,
+        );
+      }
+      p.push('</div>');
     });
   }
-  return lines.join('\n');
+  p.push('</div>');
+  return p.join('');
+}
+
+// Telegram (parse_mode HTML). Урезаем на границе задач, чтобы не превысить 4096.
+export function renderDigestTelegram(m: DigestModel, maxLen = 3800): string {
+  const segs: string[] = [
+    `<b>Задачи — ${m.count} · ${escapeHtml(`Проект «${m.projectName}»`)}</b>`,
+  ];
+  let used = segs[0]!.length;
+  let cut = false;
+  for (const g of m.groups) {
+    if (cut) break;
+    const headingSeg = `\n\n<b>${escapeHtml(g.heading)}</b>`;
+    let headingAdded = false;
+    for (let i = 0; i < g.items.length; i++) {
+      const it = g.items[i]!;
+      const meta: string[] = [];
+      if (it.deadline) meta.push(`⏰ ${escapeHtml(it.deadline)}`);
+      if (it.assignee) meta.push(`👤 ${escapeHtml(it.assignee)}`);
+      const itemLines: string[] = [
+        `${i + 1}. <a href="${escapeHtml(it.openLink)}">${escapeHtml(
+          it.name,
+        )}</a> · <a href="${escapeHtml(it.doneLink)}">✓ Готово</a>`,
+      ];
+      if (meta.length) itemLines.push(meta.join(' · '));
+      if (it.body) itemLines.push(markdownToRich(it.body, 'telegram'));
+      if (it.attachments.length) {
+        itemLines.push(
+          it.attachments.map((a) => `📎 <a href="${escapeHtml(a.url)}">${escapeHtml(a.name)}</a>`).join(' · '),
+        );
+      }
+      const itemSeg = '\n\n' + itemLines.join('\n');
+      const add = (headingAdded ? 0 : headingSeg.length) + itemSeg.length;
+      if (used + add > maxLen) {
+        cut = true;
+        break;
+      }
+      if (!headingAdded) {
+        segs.push(headingSeg);
+        used += headingSeg.length;
+        headingAdded = true;
+      }
+      segs.push(itemSeg);
+      used += itemSeg.length;
+    }
+  }
+  if (cut) segs.push('\n\n…(сообщение длинное — полностью на сайте)');
+  return segs.join('');
 }
