@@ -64,6 +64,7 @@ import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
 import { STATUS_LABEL } from './statusLabels';
 import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
+import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
 
 type PendingFile = {
   readonly id: string;
@@ -896,6 +897,10 @@ function TaskDescriptionEditor({
   const [draft, setDraft] = useState(initialDescription);
   const [saving, setSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Клик по AI открывает Radix-диалог, который перехватывает фокус → textarea получает
+  // blur. Этот флаг (взводится на mousedown по AI) гасит blur-save, чтобы не было лишней
+  // записи и преждевременного сворачивания: запись делает сам AI-flow.
+  const aiOpeningRef = useRef(false);
 
   // Если родитель открыл другой task — синхронизируем initial внутрь.
   useEffect(() => {
@@ -904,14 +909,33 @@ function TaskDescriptionEditor({
     setEditing(false);
   }, [initialDescription, taskId]);
 
+  // Авто-высота: поле ровно по содержимому (без пустой «коробки»), но не выше 60vh —
+  // длинное описание скроллится внутри поля, а не распирает весь дровер.
+  const autosize = useCallback((): void => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const sh = el.scrollHeight;
+    if (sh === 0) return; // скрытое поддерево (display:none) — не схлопываем в 0
+    const max = Math.round(window.innerHeight * 0.6);
+    el.style.height = `${Math.min(sh, max)}px`;
+    el.style.overflowY = sh > max ? 'auto' : 'hidden';
+  }, []);
+
   useEffect(() => {
     if (editing && textareaRef.current) {
       const el = textareaRef.current;
       el.focus();
       // Курсор в конец — стандартный UX «продолжить писать».
       el.setSelectionRange(el.value.length, el.value.length);
+      autosize();
     }
-  }, [editing]);
+  }, [editing, autosize]);
+
+  // Подгоняем высоту, когда draft меняется извне (например, AI подставил текст).
+  useEffect(() => {
+    if (editing) autosize();
+  }, [draft, editing, autosize]);
 
   const enterEdit = (): void => {
     setDraft(description);
@@ -945,9 +969,43 @@ function TaskDescriptionEditor({
     }
   };
 
+  // AI «Применить» (одно поле) → сразу пишем в задачу (без ручного Ctrl+Enter).
+  const applyAndSave = async (next: string): Promise<void> => {
+    const trimmed = next.trim();
+    if (trimmed.length === 0) return;
+    if (trimmed === description.trim()) {
+      // AI вернул то же самое — не дёргаем сервер, просто свернёмся.
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await taskRepository.update(projectId, taskId, { description: trimmed });
+      setDescription(updated.description ?? '');
+      setDraft(updated.description ?? '');
+      setEditing(false);
+      onSaved();
+    } catch (e) {
+      toast.error(`Не удалось сохранить: ${(e as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const cancel = (): void => {
     setDraft(description);
     setEditing(false);
+  };
+
+  // blur textarea → сохранить, КРОМЕ случая, когда фокус ушёл в открывшийся AI-диалог
+  // (там своя запись). aiOpeningRef — на случай, если relatedTarget пуст (программный фокус).
+  const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>): void => {
+    const next = e.relatedTarget as HTMLElement | null;
+    if (aiOpeningRef.current || (next && next.closest('[role="dialog"]'))) {
+      aiOpeningRef.current = false;
+      return;
+    }
+    void save();
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -962,42 +1020,6 @@ function TaskDescriptionEditor({
     }
   };
 
-  if (editing) {
-    return (
-      <div className="space-y-1">
-        {/* Сетка из border+padding+leading должна 1-в-1 совпадать с display-режимом ниже,
-            иначе текст «прыгает» вверх/вниз при переключении. */}
-        <textarea
-          ref={textareaRef}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => void save()}
-          onKeyDown={handleKeyDown}
-          maxLength={50000}
-          rows={6}
-          disabled={saving}
-          className="block w-full resize-none rounded-md border border-transparent bg-transparent p-2 text-sm leading-snug focus:outline-none disabled:opacity-50"
-        />
-        <div className="flex items-center gap-2">
-          <p className="text-[11px] text-muted-foreground">
-            Ctrl+Enter — сохранить, Esc — отменить. {saving && '…'}
-          </p>
-          {/* onMouseDown preventDefault не даёт blur сработать на textarea (и не сохранит
-              черновик раньше времени), пока AI работает над текстом. */}
-          <div className="ml-auto" onMouseDown={(e) => e.preventDefault()}>
-            <AiImproveButton
-              text={draft}
-              projectId={projectId}
-              onImproved={setDraft}
-              disabled={saving}
-              compact
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // Клик по тексту → режим редактирования, КРОМЕ клика по ссылке внутри markdown
   // (ссылку открываем, а не уходим в edit). Контейнер — div, а не <button>: rendered
   // markdown содержит блочные элементы (<p>/<ul>/<pre>), невалидные внутри <button>.
@@ -1006,6 +1028,8 @@ function TaskDescriptionEditor({
     enterEdit();
   };
   const handleDisplayKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
+    // Enter/Space на ссылке внутри markdown — открываем ссылку, а не уходим в edit.
+    if ((e.target as HTMLElement).closest('a')) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       enterEdit();
@@ -1013,28 +1037,82 @@ function TaskDescriptionEditor({
   };
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={handleDisplayClick}
-      onKeyDown={handleDisplayKeyDown}
-      className={cn(
-        // p-2 + border 1px — те же что у textarea выше, чтобы текст не «прыгал» при переключении.
-        'group flex w-full cursor-text items-start gap-2 rounded-md border border-dashed border-transparent p-2 text-left transition-colors hover:border-border hover:bg-muted/30',
-      )}
-      aria-label="Редактировать описание"
-    >
-      {description.trim().length > 0 ? (
-        <Markdown className="min-w-0 flex-1">{description}</Markdown>
-      ) : (
-        <span className="min-w-0 flex-1 text-sm italic leading-snug text-muted-foreground">
-          Нажми, чтобы добавить описание…
+    <div className="space-y-1.5">
+      {/* Шапка описания: AI-кнопка ВСЕГДА видна (и в показе, и в правке), не двигается
+          при переключении режимов и работает над тем, что сейчас на экране. */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground/70">
+          Описание
         </span>
+        {/* preventDefault — клик по AI не уводит фокус мгновенно; aiOpeningRef гасит
+            blur-save, который иначе сработает, когда Radix-диалог перехватит фокус. */}
+        <div
+          onMouseDown={(e) => {
+            e.preventDefault();
+            aiOpeningRef.current = true;
+            // Подстраховка: если диалог не открылся (кнопка disabled) — снять флаг,
+            // чтобы не подавить следующий настоящий blur.
+            window.setTimeout(() => {
+              aiOpeningRef.current = false;
+            }, 300);
+          }}
+        >
+          <AiComposeDialog
+            text={editing ? draft : description}
+            projectId={projectId}
+            editTask={{ projectId, taskId }}
+            onImproved={(next) => void applyAndSave(next)}
+            onDistributed={() => onSaved()}
+            disabled={saving}
+            compact
+          />
+        </div>
+      </div>
+
+      {editing ? (
+        <div className="space-y-1">
+          {/* Безрамочное авто-растущее поле: padding/leading/шрифт 1-в-1 с display ниже,
+              чтобы текст не «прыгал» при переключении. */}
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            maxLength={50000}
+            rows={1}
+            disabled={saving}
+            className="block max-h-[60vh] w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent p-2 text-sm leading-snug focus:outline-none disabled:opacity-50"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Ctrl+Enter — сохранить, Esc — отменить. {saving && '…'}
+          </p>
+        </div>
+      ) : (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={handleDisplayClick}
+          onKeyDown={handleDisplayKeyDown}
+          className={cn(
+            // p-2 + border 1px — те же, что у textarea, чтобы текст не «прыгал» при переключении.
+            'group flex w-full cursor-text items-start gap-2 rounded-md border border-dashed border-transparent p-2 text-left transition-colors hover:border-border hover:bg-muted/30',
+          )}
+          aria-label="Редактировать описание"
+        >
+          {description.trim().length > 0 ? (
+            <Markdown className="min-w-0 flex-1">{description}</Markdown>
+          ) : (
+            <span className="min-w-0 flex-1 text-sm italic leading-snug text-muted-foreground">
+              Нажми, чтобы добавить описание…
+            </span>
+          )}
+          <Pencil
+            aria-hidden
+            className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100"
+          />
+        </div>
       )}
-      <Pencil
-        aria-hidden
-        className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100"
-      />
     </div>
   );
 }

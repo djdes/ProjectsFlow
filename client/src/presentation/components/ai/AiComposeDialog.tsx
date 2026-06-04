@@ -47,6 +47,12 @@ type Props = {
   readonly disabled?: boolean;
   /** Компактная кнопка (для композера). */
   readonly compact?: boolean;
+  /**
+   * Контекст правки существующей задачи. Если задан — режим «По проектам» обновляет
+   * ЭТУ задачу для сегмента её проекта (без дубля), остальные проекты → новые задачи;
+   * текущая задача НИКОГДА не удаляется.
+   */
+  readonly editTask?: { readonly projectId: string; readonly taskId: string };
 };
 
 type Phase = 'idle' | 'loading' | 'preview' | 'error' | 'creating';
@@ -98,6 +104,7 @@ export function AiComposeDialog({
   ralphMode = 'normal',
   disabled,
   compact,
+  editTask,
 }: Props): React.ReactElement {
   const { composeTasks, taskRepository, projectRepository } = useContainer();
   const { data: projects } = useProjects();
@@ -148,8 +155,13 @@ export function AiComposeDialog({
           include: true,
         })),
       );
-      // Распределение по умолчанию включаем, когда оно осмысленно (мультипроект / явная привязка).
-      setDistribute(res.segments.length >= 2 || res.segments.some((s) => s.projectId !== null));
+      // Распределение по умолчанию включаем, когда оно осмысленно. В режиме правки
+      // «осмысленно» = AI предложил ДРУГОЙ проект (сигнал «относится к другому»);
+      // привязка к текущему проекту — это просто «применить на месте».
+      const suggestsOtherProject = editTask
+        ? res.segments.some((s) => s.projectId !== null && s.projectId !== editTask.projectId)
+        : res.segments.some((s) => s.projectId !== null);
+      setDistribute(res.segments.length >= 2 || suggestsOtherProject);
       setPhase('preview');
     } catch (err) {
       if (reqId !== reqIdRef.current) return;
@@ -205,6 +217,10 @@ export function AiComposeDialog({
       }
     }
 
+    // edit-aware: ПЕРВАЯ включённая строка, чей проект совпадает с текущей задачей,
+    // ОБНОВЛЯЕТ её (без дубля). Остальные — создаются как новые. Текущую не удаляем.
+    let currentUpdated = false;
+
     let ok = 0;
     setProgress({ done: 0, total: included.length });
     for (const r of included) {
@@ -214,17 +230,36 @@ export function AiComposeDialog({
       const title = r.title.trim();
       const description = title ? `**${title}**\n\n${body}` : body;
       const targetId = r.projectId ?? inboxId!;
+      const updatesCurrent = !!editTask && !currentUpdated && targetId === editTask.projectId;
       try {
-        await taskRepository.create(targetId, { description, status: 'todo', ralphMode });
+        if (updatesCurrent) {
+          await taskRepository.update(editTask!.projectId, editTask!.taskId, { description });
+          currentUpdated = true;
+        } else {
+          await taskRepository.create(targetId, { description, status: 'todo', ralphMode });
+        }
         ok += 1;
       } catch (e) {
-        toast.error(`Не удалось создать «${title || 'задача'}»: ${(e as Error).message}`);
+        const verb = updatesCurrent ? 'обновить' : 'создать';
+        toast.error(`Не удалось ${verb} «${title || 'задача'}»: ${(e as Error).message}`);
       }
       setProgress({ done: ok, total: included.length });
     }
 
     if (ok > 0) {
-      toast.success(ok === included.length ? `Создано задач: ${ok}` : `Создано ${ok} из ${included.length}`);
+      if (currentUpdated) {
+        const created = ok - 1;
+        toast.success(
+          created > 0 ? `Задача обновлена, создано ещё: ${created}` : 'Задача обновлена',
+        );
+      } else if (editTask) {
+        // Правка, но ни один сегмент не привязан к текущему проекту — её не трогали.
+        toast.success(`Создано задач: ${ok}. Текущая задача не изменена.`);
+      } else {
+        toast.success(
+          ok === included.length ? `Создано задач: ${ok}` : `Создано ${ok} из ${included.length}`,
+        );
+      }
     }
     onDistributed?.();
     setPhase('idle');
