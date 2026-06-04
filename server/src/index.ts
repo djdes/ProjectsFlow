@@ -146,6 +146,7 @@ import { DrizzleDigestSettingsRepository } from './infrastructure/repositories/D
 import { GetDigestSettings } from './application/digest/GetDigestSettings.js';
 import { SaveDigestSettings } from './application/digest/SaveDigestSettings.js';
 import { SendDailyDigest } from './application/digest/SendDailyDigest.js';
+import { TriggerDailyDigestNow } from './application/digest/TriggerDailyDigestNow.js';
 import { DailyDigestScheduler } from './infrastructure/scheduler/DailyDigestScheduler.js';
 import { SearchTasks } from './application/task/SearchTasks.js';
 import { DrizzleTaskSearchRepository } from './infrastructure/repositories/DrizzleTaskSearchRepository.js';
@@ -919,6 +920,22 @@ const authDeps = {
   now,
 };
 
+// Ежедневная сводка (db/064): один общий SendDailyDigest для планировщика и кнопки
+// «Отправить сейчас». Полностью серверная рассылка (почта / личный TG / группа / in-app).
+const sendDailyDigest = new SendDailyDigest({
+  tasks: taskRepo,
+  delegations: taskDelegationRepo,
+  projects: projectRepo,
+  members: projectMemberRepo,
+  email: emailSender,
+  notifications: notificationRepo,
+  telegram: sendAgentTelegramNotification,
+  telegramClient,
+  settings: digestSettingsRepo,
+  appUrl: appBaseUrl,
+  idGen: idGenerator,
+});
+
 const { app, devProxyUpgrade } = createApp({
   auth: {
     register: new Register(authDeps),
@@ -1373,6 +1390,11 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       settings: digestSettingsRepo,
     }),
+    sendNow: new TriggerDailyDigestNow({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      send: sendDailyDigest,
+    }),
   },
   delegations: {
     accept: new AcceptTaskDelegation({
@@ -1757,19 +1779,7 @@ const { app, devProxyUpgrade } = createApp({
 // минуту, шлёт по выбранным каналам (почта / личный TG / группа / in-app уведомление).
 const dailyDigestScheduler = new DailyDigestScheduler({
   settings: digestSettingsRepo,
-  send: new SendDailyDigest({
-    tasks: taskRepo,
-    delegations: taskDelegationRepo,
-    projects: projectRepo,
-    members: projectMemberRepo,
-    email: emailSender,
-    notifications: notificationRepo,
-    telegram: sendAgentTelegramNotification,
-    telegramClient,
-    settings: digestSettingsRepo,
-    appUrl: appBaseUrl,
-    idGen: idGenerator,
-  }),
+  send: sendDailyDigest,
 });
 dailyDigestScheduler.start();
 

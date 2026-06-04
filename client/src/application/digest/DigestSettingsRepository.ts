@@ -30,4 +30,6 @@ export type SaveDigestSettingsInput = {
 export interface DigestSettingsRepository {
   get(projectId: string): Promise<DigestSettings>;
   save(projectId: string, input: SaveDigestSettingsInput): Promise<DigestSettings>;
+  // Отправить сводку немедленно (по текущим сохранённым настройкам). Возвращает число задач.
+  sendNow(projectId: string): Promise<{ taskCount: number }>;
 }

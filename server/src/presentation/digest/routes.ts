@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth.js';
 import type { GetDigestSettings } from '../../application/digest/GetDigestSettings.js';
 import type { SaveDigestSettings } from '../../application/digest/SaveDigestSettings.js';
+import type { TriggerDailyDigestNow } from '../../application/digest/TriggerDailyDigestNow.js';
 
 const taskStatusSchema = z.enum([
   'backlog',
@@ -31,6 +32,7 @@ const saveSchema = z.object({
 type Deps = {
   readonly get: GetDigestSettings;
   readonly save: SaveDigestSettings;
+  readonly sendNow: TriggerDailyDigestNow;
 };
 
 // Настройки дайджеста проекта: Telegram-группа + ежедневная сводка.
@@ -57,6 +59,16 @@ export function digestRouter(deps: Deps): Router {
         daily: body.daily,
       });
       res.json({ settings });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Отправить сводку немедленно (тест) — по текущим сохранённым настройкам.
+  router.post('/:projectId/digest-settings/send-now', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await deps.sendNow.execute(req.params['projectId'] as string, req.user!.id);
+      res.json(result);
     } catch (e) {
       next(e);
     }

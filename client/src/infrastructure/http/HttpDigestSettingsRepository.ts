@@ -20,4 +20,12 @@ export class HttpDigestSettingsRepository implements DigestSettingsRepository {
     );
     return settings;
   }
+
+  async sendNow(projectId: string): Promise<{ taskCount: number }> {
+    return httpClient.post<{ taskCount: number }>(
+      `/projects/${projectId}/digest-settings/send-now`,
+      {},
+    );
+  }
 }
+

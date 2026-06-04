@@ -36,18 +36,20 @@ type Deps = {
 export class SendDailyDigest {
   constructor(private readonly deps: Deps) {}
 
-  async execute(projectId: string): Promise<void> {
+  // force=true — отправить немедленно даже если сводка выключена (кнопка «Отправить сейчас»).
+  // Возвращает число задач в сводке (0 = нечего слать / выключено).
+  async execute(projectId: string, opts: { force?: boolean } = {}): Promise<{ taskCount: number }> {
     const settings = await this.deps.settings.getByProject(projectId);
     const cfg = settings.daily;
-    if (!cfg.enabled) return;
+    if (!opts.force && !cfg.enabled) return { taskCount: 0 };
 
     const project = await this.deps.projects.getById(projectId);
-    if (!project) return;
+    if (!project) return { taskCount: 0 };
 
     const all = await this.deps.tasks.listByProject(projectId);
     const wanted = new Set(cfg.statuses);
     const selected = all.filter((t) => wanted.has(toVisibleStatus(t.status)));
-    if (selected.length === 0) return;
+    if (selected.length === 0) return { taskCount: 0 };
 
     const delegations = await this.deps.delegations.listActiveForTasks(selected.map((t) => t.id));
     const enriched: TaskWithCounts[] = selected.map((t) => ({
@@ -119,5 +121,7 @@ export class SendDailyDigest {
         })
         .catch((e) => console.warn('[daily-digest] tg group failed', e));
     }
+
+    return { taskCount: selected.length };
   }
 }

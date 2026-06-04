@@ -71,6 +71,7 @@ import type { ListTasks } from '../application/task/ListTasks.js';
 import type { ExportTasksDigest } from '../application/task/ExportTasksDigest.js';
 import type { GetDigestSettings } from '../application/digest/GetDigestSettings.js';
 import type { SaveDigestSettings } from '../application/digest/SaveDigestSettings.js';
+import type { TriggerDailyDigestNow } from '../application/digest/TriggerDailyDigestNow.js';
 import { digestRouter } from './digest/routes.js';
 import type { SearchTasks } from '../application/task/SearchTasks.js';
 import type { CreateTask } from '../application/task/CreateTask.js';
@@ -377,6 +378,7 @@ type AppDeps = {
   readonly digest: {
     readonly get: GetDigestSettings;
     readonly save: SaveDigestSettings;
+    readonly sendNow: TriggerDailyDigestNow;
   };
   readonly delegations: {
     readonly accept: AcceptTaskDelegation;

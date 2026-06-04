@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Bot, Loader2 } from 'lucide-react';
+import { Bot, Loader2, Send } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,7 @@ import type {
 import type {
   DigestChannelKind,
   DigestTgTarget,
+  SaveDigestSettingsInput,
 } from '@/application/digest/DigestSettingsRepository';
 import type { TaskStatus } from '@/domain/task/Task';
 
@@ -102,6 +103,23 @@ function toggle<T>(arr: T[], v: T): T[] {
   return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
 }
 
+// Черновик → payload сохранения (chat_id строкой → number|null).
+function digestToPayload(d: DigestDraft): SaveDigestSettingsInput {
+  return {
+    telegramGroupChatId: d.groupChatId.trim() === '' ? null : Number(d.groupChatId.trim()),
+    telegramGroupTitle: d.groupTitle.trim() || null,
+    daily: {
+      enabled: d.enabled,
+      hour: d.hour,
+      minute: d.minute,
+      recipientUserIds: d.recipientUserIds,
+      channels: d.channels,
+      tgTargets: d.tgTargets,
+      statuses: d.statuses,
+    },
+  };
+}
+
 // Строка-тумблер «заголовок + описание + Switch» в едином оформлении. Три настройки
 // автоматизации делят одинаковую разметку — держим её здесь.
 function SwitchRow({
@@ -166,6 +184,7 @@ export function AutomationDialog({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [digest, setDigest] = useState<DigestDraft | null>(null);
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
+  const [sendingNow, setSendingNow] = useState(false);
   const [runInfo, setRunInfo] = useState<Pick<
     AutomationConfig,
     'runStatus' | 'tasksCreated'
@@ -293,20 +312,7 @@ export function AutomationDialog({
       });
       setRunInfo({ runStatus: updated.runStatus, tasksCreated: updated.tasksCreated });
       if (digest) {
-        const chatId = digest.groupChatId.trim() === '' ? null : Number(digest.groupChatId.trim());
-        await digestSettingsRepository.save(projectId, {
-          telegramGroupChatId: chatId,
-          telegramGroupTitle: digest.groupTitle.trim() || null,
-          daily: {
-            enabled: digest.enabled,
-            hour: digest.hour,
-            minute: digest.minute,
-            recipientUserIds: digest.recipientUserIds,
-            channels: digest.channels,
-            tgTargets: digest.tgTargets,
-            statuses: digest.statuses,
-          },
-        });
+        await digestSettingsRepository.save(projectId, digestToPayload(digest));
       }
       onOpenChange(false);
       toast.success(
@@ -316,6 +322,31 @@ export function AutomationDialog({
       setError(`Не удалось сохранить: ${(err as Error).message}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // «Отправить сейчас»: сохраняет текущие настройки и шлёт сводку немедленно (тест).
+  const handleSendNow = async (): Promise<void> => {
+    if (!digest || sendingNow) return;
+    if (digest.groupChatId.trim() !== '' && !Number.isInteger(Number(digest.groupChatId.trim()))) {
+      setError('ID Telegram-группы должен быть целым числом (для групп он отрицательный)');
+      return;
+    }
+    if (digest.recipientUserIds.length === 0 && !digest.tgTargets.includes('group')) {
+      setError('Выберите получателей сводки (или отправку в группу)');
+      return;
+    }
+    setSendingNow(true);
+    setError(null);
+    try {
+      await digestSettingsRepository.save(projectId, digestToPayload(digest));
+      const res = await digestSettingsRepository.sendNow(projectId);
+      if (res.taskCount > 0) toast.success(`Сводка отправлена (${res.taskCount} задач)`);
+      else toast.message('В выбранных колонках нет задач — отправлять нечего');
+    } catch (e) {
+      setError(`Не удалось отправить: ${(e as Error).message}`);
+    } finally {
+      setSendingNow(false);
     }
   };
 
@@ -762,6 +793,26 @@ export function AutomationDialog({
                       </label>
                     ))}
                   </div>
+                </div>
+
+                <div className="flex items-center gap-2 border-t pt-2.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={sendingNow || saving}
+                    onClick={() => void handleSendNow()}
+                  >
+                    {sendingNow ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Send className="size-4" />
+                    )}
+                    Отправить сейчас
+                  </Button>
+                  <span className="text-[11px] text-muted-foreground">
+                    сохранит настройки и отправит сводку сразу
+                  </span>
                 </div>
               </div>
             )}
