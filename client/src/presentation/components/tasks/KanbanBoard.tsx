@@ -217,7 +217,11 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   const anchorRef = useRef<string | null>(null); // якорь для Shift-диапазона
   const bulk = useBulkTaskActions({ projectId, update, move, remove, refetch });
   // Визуальный порядок карточек активной колонки — для диапазона и «выделить всё».
-  const selectionOrderedIds = selectionStatus ? grouped[selectionStatus].map((t) => t.id) : [];
+  // Должен совпадать с тем, что реально отрисовано: при hideDone done-колонка пуста.
+  const selectionOrderedIds =
+    selectionStatus && !(hideDone && selectionStatus === 'done')
+      ? grouped[selectionStatus].map((t) => t.id)
+      : [];
 
   const enterSelection = (status: VisibleKanbanStatus): void => {
     setSelectionStatus(status);
@@ -230,10 +234,20 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     anchorRef.current = null;
   }, []);
   const handleSelectToggle = (taskId: string, mods: SelectModifiers): void => {
-    setSelectedIds((prev) => nextSelection(prev, taskId, mods, selectionOrderedIds, anchorRef.current));
-    anchorRef.current = nextAnchor(taskId, mods, anchorRef.current);
+    // Валидируем якорь: после bulk-операций / внешних (SSE) изменений он мог указывать
+    // на исчезнувшую карточку — тогда трактуем как «нет якоря» и начинаем диапазон
+    // заново от кликнутой (иначе Shift молча деградировал бы в одиночный тогл навсегда).
+    const anchor =
+      anchorRef.current && selectionOrderedIds.includes(anchorRef.current)
+        ? anchorRef.current
+        : null;
+    setSelectedIds((prev) => nextSelection(prev, taskId, mods, selectionOrderedIds, anchor));
+    anchorRef.current = nextAnchor(taskId, mods, anchor);
   };
-  const handleSelectAll = (): void => setSelectedIds(selectAll(selectionOrderedIds));
+  const handleSelectAll = (): void => {
+    setSelectedIds(selectAll(selectionOrderedIds));
+    anchorRef.current = null;
+  };
   const handleSelectNone = (): void => {
     setSelectedIds(selectNone());
     anchorRef.current = null;
@@ -250,6 +264,12 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [selectionStatus, exitSelection]);
+
+  // hideDone скрывает done-колонку целиком — выходим из выделения, чтобы не оставлять
+  // «подвисший» режим (счётчик и кнопки) на пустой невидимой колонке.
+  useEffect(() => {
+    if (hideDone && selectionStatus === 'done') exitSelection();
+  }, [hideDone, selectionStatus, exitSelection]);
   // Последняя задача в backlog/todo — нужна footer-композеру в TaskDrawer'е для
   // beforeTaskId при move'е через переключатель «В черновики / Воркеру».
   const backlogTail = grouped.backlog[grouped.backlog.length - 1] ?? null;
