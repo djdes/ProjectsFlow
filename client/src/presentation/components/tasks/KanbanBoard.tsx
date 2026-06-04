@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   DndContext,
@@ -20,12 +20,21 @@ import { toast } from '@/components/ui/sonner';
 import type { Task, TaskStatus } from '@/domain/task/Task';
 import { TASK_STATUSES } from '@/domain/task/Task';
 import { useTasks } from '@/presentation/hooks/useTasks';
+import { useBulkTaskActions } from '@/presentation/hooks/useBulkTaskActions';
 import { useDoneSortOrder, type DoneSortOrder } from '@/presentation/hooks/useDoneSortOrder';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { LIVE_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { KanbanCard } from './KanbanCard';
 import { KanbanColumn } from './KanbanColumn';
 import { KanbanColumnMenu } from './KanbanColumnMenu';
+import { BulkActionBar } from './BulkActionBar';
+import {
+  nextAnchor,
+  nextSelection,
+  selectAll,
+  selectNone,
+  type SelectModifiers,
+} from './selection/selectionReducer';
 import { KanbanHiddenColumnsMenu } from './KanbanHiddenColumnsMenu';
 import { KANBAN_COLOR_CLASSES } from './kanbanColors';
 import { QuickAddTodo } from './QuickAddTodo';
@@ -37,6 +46,7 @@ import {
   isColumnHidden,
   resolveColumnColor,
   resolveColumnLabel,
+  type VisibleKanbanStatus,
 } from '@/domain/kanban/KanbanSettings';
 
 type Props = {
@@ -199,6 +209,45 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   const { order: doneOrder, toggle: toggleDoneOrder } = useDoneSortOrder();
   const grouped = useMemo(() => groupByStatus(tasks, doneOrder), [tasks, doneOrder]);
   const activeTask = activeId ? tasks.find((t) => t.id === activeId) ?? null : null;
+
+  // === Мультивыделение (scoped к одной колонке) ===
+  // selectionStatus — колонка в режиме выделения (null = режим выключен).
+  const [selectionStatus, setSelectionStatus] = useState<VisibleKanbanStatus | null>(null);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const anchorRef = useRef<string | null>(null); // якорь для Shift-диапазона
+  const bulk = useBulkTaskActions({ projectId, update, move, remove, refetch });
+  // Визуальный порядок карточек активной колонки — для диапазона и «выделить всё».
+  const selectionOrderedIds = selectionStatus ? grouped[selectionStatus].map((t) => t.id) : [];
+
+  const enterSelection = (status: VisibleKanbanStatus): void => {
+    setSelectionStatus(status);
+    setSelectedIds(new Set());
+    anchorRef.current = null;
+  };
+  const exitSelection = useCallback((): void => {
+    setSelectionStatus(null);
+    setSelectedIds(new Set());
+    anchorRef.current = null;
+  }, []);
+  const handleSelectToggle = (taskId: string, mods: SelectModifiers): void => {
+    setSelectedIds((prev) => nextSelection(prev, taskId, mods, selectionOrderedIds, anchorRef.current));
+    anchorRef.current = nextAnchor(taskId, mods, anchorRef.current);
+  };
+  const handleSelectAll = (): void => setSelectedIds(selectAll(selectionOrderedIds));
+  const handleSelectNone = (): void => {
+    setSelectedIds(selectNone());
+    anchorRef.current = null;
+  };
+
+  // Esc выходит из режима выделения (слушаем только пока режим активен).
+  useEffect(() => {
+    if (selectionStatus === null) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') exitSelection();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectionStatus, exitSelection]);
   // Последняя задача в backlog/todo — нужна footer-композеру в TaskDrawer'е для
   // beforeTaskId при move'е через переключатель «В черновики / Воркеру».
   const backlogTail = grouped.backlog[grouped.backlog.length - 1] ?? null;
@@ -446,6 +495,12 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
                 isShared={isShared}
                 aiProjectId={isInbox ? null : projectId}
                 composerStorageKey={`pf:quick-add:${projectId}:${status}`}
+                selectionMode={selectionStatus === status}
+                selectedIds={selectionStatus === status ? selectedIds : undefined}
+                onSelectToggle={handleSelectToggle}
+                onSelectAll={handleSelectAll}
+                onSelectNone={handleSelectNone}
+                onExitSelection={exitSelection}
                 columnMenu={
                   <KanbanColumnMenu
                     status={status}
@@ -454,6 +509,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
                     onColor={(c) => setColor(status, c)}
                     onLabel={(l) => setLabel(status, l)}
                     onHide={() => setHidden(status, true)}
+                    onSelect={() => enterSelection(status)}
                   />
                 }
                 headerExtra={
@@ -541,13 +597,32 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
       />
 
       {/* Floating quick-add (position: fixed). DOM-позиция значения не имеет —
-          важно лишь чтобы компонент был смонтирован. */}
-      <QuickAddTodo
-        isInbox={isInbox}
-        isShared={isShared}
-        aiProjectId={isInbox ? null : projectId}
-        onCreate={(input) => create({ ...input, status: input.status ?? 'todo' })}
-      />
+          важно лишь чтобы компонент был смонтирован. Скрываем во время выделения,
+          чтобы не конкурировать с панелью массовых действий. */}
+      {selectionStatus === null && (
+        <QuickAddTodo
+          isInbox={isInbox}
+          isShared={isShared}
+          aiProjectId={isInbox ? null : projectId}
+          onCreate={(input) => create({ ...input, status: input.status ?? 'todo' })}
+        />
+      )}
+
+      {/* Панель массовых действий — поверх доски, когда выбрана хотя бы одна задача. */}
+      {selectionStatus !== null && selectedIds.size > 0 && (
+        <BulkActionBar
+          selectedIds={selectionOrderedIds.filter((id) => selectedIds.has(id))}
+          projectId={projectId}
+          isInbox={isInbox}
+          currentUserId={user?.id ?? null}
+          moveTargets={shownStatuses.map((s) => ({
+            status: s,
+            label: resolveColumnLabel(settings?.[s], STATUS_LABEL[s]),
+          }))}
+          bulk={bulk}
+          onExit={exitSelection}
+        />
+      )}
     </div>
   );
 }

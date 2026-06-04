@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { AnimatePresence } from 'motion/react';
-import { Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { cn } from '@/lib/utils';
@@ -10,6 +10,7 @@ import { KanbanCard } from './KanbanCard';
 import { DropIndicatorLine } from './DropIndicatorLine';
 import { TaskComposer } from './TaskComposer';
 import { STATUS_SUBTITLE } from './statusLabels';
+import type { SelectModifiers } from './selection/selectionReducer';
 
 export type KanbanColumnColorClasses = {
   readonly pill: string;
@@ -69,6 +70,15 @@ type Props = {
   aiProjectId?: string | null;
   // Уникальный ключ черновика для inline-композера этой колонки.
   composerStorageKey?: string;
+  // === Режим мультивыделения (включается из меню колонки) ===
+  // Активен ли режим выделения для ЭТОЙ колонки.
+  selectionMode?: boolean;
+  // Множество выбранных id (глобальное, но в режиме содержит только id этой колонки).
+  selectedIds?: ReadonlySet<string>;
+  onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
+  onSelectAll?: () => void;
+  onSelectNone?: () => void;
+  onExitSelection?: () => void;
 };
 
 export function KanbanColumn({
@@ -96,6 +106,12 @@ export function KanbanColumn({
   isShared = false,
   aiProjectId = null,
   composerStorageKey,
+  selectionMode = false,
+  selectedIds,
+  onSelectToggle,
+  onSelectAll,
+  onSelectNone,
+  onExitSelection,
 }: Props): React.ReactElement {
   // Droppable нужен чтобы можно было кинуть карточку в ПУСТУЮ колонку —
   // SortableContext один не реагирует на drop в empty list.
@@ -112,42 +128,86 @@ export function KanbanColumn({
         colorClasses?.body ?? 'bg-muted/60 sm:bg-muted/30',
       )}
     >
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          {label.length > 0 && (
-            <div className="min-w-0">
-              <span
-                className={cn(
-                  'inline-block max-w-full truncate rounded px-1.5 py-0.5 text-xs font-medium uppercase tracking-widest',
-                  colorClasses?.pill ?? 'text-muted-foreground',
-                )}
+      <div
+        className={cn(
+          'flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2',
+          // Режим выделения: подсвечиваем шапку акцентом, чтобы было видно активную колонку.
+          selectionMode && 'bg-primary/10',
+        )}
+      >
+        {selectionMode ? (
+          <>
+            <span className="min-w-0 truncate text-xs font-medium">
+              Выбрано {selectedIds?.size ?? 0}
+            </span>
+            <div className="flex shrink-0 items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={onSelectAll}
               >
-                {label}
-              </span>
-              {STATUS_SUBTITLE[status] && (
-                <p className="truncate text-[10px] leading-tight text-muted-foreground/60">
-                  {STATUS_SUBTITLE[status]}
-                </p>
-              )}
+                Все
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={onSelectNone}
+              >
+                Никого
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                onClick={onExitSelection}
+                aria-label="Выйти из режима выделения"
+                title="Выйти (Esc)"
+              >
+                <X className="size-4" />
+              </Button>
             </div>
-          )}
-          <span className="shrink-0 rounded-full bg-background px-1.5 py-0.5 text-xs text-muted-foreground">
-            {tasks.length}
-          </span>
-        </div>
-        <div className="flex items-center gap-0.5">
-          {headerExtra}
-          {columnMenu}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6"
-            onClick={() => onCreate(status)}
-            aria-label="Добавить задачу"
-          >
-            <Plus className="size-4" />
-          </Button>
-        </div>
+          </>
+        ) : (
+          <>
+            <div className="flex min-w-0 items-center gap-2">
+              {label.length > 0 && (
+                <div className="min-w-0">
+                  <span
+                    className={cn(
+                      'inline-block max-w-full truncate rounded px-1.5 py-0.5 text-xs font-medium uppercase tracking-widest',
+                      colorClasses?.pill ?? 'text-muted-foreground',
+                    )}
+                  >
+                    {label}
+                  </span>
+                  {STATUS_SUBTITLE[status] && (
+                    <p className="truncate text-[10px] leading-tight text-muted-foreground/60">
+                      {STATUS_SUBTITLE[status]}
+                    </p>
+                  )}
+                </div>
+              )}
+              <span className="shrink-0 rounded-full bg-background px-1.5 py-0.5 text-xs text-muted-foreground">
+                {tasks.length}
+              </span>
+            </div>
+            <div className="flex items-center gap-0.5">
+              {headerExtra}
+              {columnMenu}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                onClick={() => onCreate(status)}
+                aria-label="Добавить задачу"
+              >
+                <Plus className="size-4" />
+              </Button>
+            </div>
+          </>
+        )}
       </div>
 
       <div
@@ -179,6 +239,9 @@ export function KanbanColumn({
                 lastTodoTaskId={lastTodoTaskId}
                 currentUserId={currentUserId}
                 liveRunning={liveTaskIds?.has(t.id) ?? false}
+                selectionMode={selectionMode}
+                selected={selectedIds?.has(t.id) ?? false}
+                onSelectToggle={onSelectToggle}
               />
             </Fragment>
           ))}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { EyeOff, MoreHorizontal } from 'lucide-react';
+import { EyeOff, ListChecks, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -21,6 +21,8 @@ type Props = {
   onColor: (color: KanbanColor) => void;
   onLabel: (label: string) => void;
   onHide: () => void;
+  // Включить режим мультивыделения карточек ЭТОЙ колонки (Telegram-стиль).
+  onSelect: () => void;
 };
 
 // Меню колонки (троеточие, как в Notion): переименование, выбор цвета, скрытие.
@@ -32,6 +34,7 @@ export function KanbanColumnMenu({
   onColor,
   onLabel,
   onHide,
+  onSelect,
 }: Props): React.ReactElement {
   const [open, setOpen] = useState(false);
   const [labelDraft, setLabelDraft] = useState(currentLabel);
@@ -103,6 +106,16 @@ export function KanbanColumnMenu({
         <div className="px-2 pb-1.5 pt-1">
           <KanbanColorPicker value={currentColor} onChange={onColor} />
         </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => {
+            setOpen(false);
+            onSelect();
+          }}
+        >
+          <ListChecks className="size-4" />
+          Выделить
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={handleHide}

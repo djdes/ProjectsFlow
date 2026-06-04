@@ -1,9 +1,10 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
-import { ArrowRight, GitCommit, ImageIcon, MessageSquare, Trash2 } from 'lucide-react';
+import { ArrowRight, Check, GitCommit, ImageIcon, MessageSquare, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import type { SelectModifiers } from './selection/selectionReducer';
 import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import type { Task } from '@/domain/task/Task';
 import { taskShortId } from '@/domain/task/Task';
@@ -42,6 +43,13 @@ type Props = {
   currentUserId?: string | null;
   // У задачи активна LIVE-сессия воркера — рисуем пульсирующую 🔴 точку в углу карточки.
   liveRunning?: boolean;
+  // Режим мультивыделения активен для колонки этой карточки. Тогда drag/drawer
+  // отключены, клик тогает выбор, слева — круглый чекбокс.
+  selectionMode?: boolean;
+  // Карточка сейчас в выборе (для подсветки + галки).
+  selected?: boolean;
+  // Тогл выбора с модификаторами клавиатуры (shift=диапазон, ctrl/cmd=точечно).
+  onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
 };
 
 // Кастомный transition для reflow соседей при drag. Out-quart — плавнее дефолтного
@@ -64,11 +72,16 @@ export function KanbanCard({
   lastTodoTaskId = null,
   currentUserId = null,
   liveRunning = false,
+  selectionMode = false,
+  selected = false,
+  onSelectToggle,
 }: Props): React.ReactElement {
+  // В режиме выделения карточка не таскается и не открывает дравер — клик тогает выбор.
+  const selecting = selectionMode && !preview;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: 'task', task },
-    disabled: preview,
+    disabled: preview || selecting,
     transition: DND_TRANSITION,
   });
 
@@ -95,17 +108,29 @@ export function KanbanCard({
       <div
         ref={setNodeRef}
         style={style}
-        {...attributes}
-        {...listeners}
-        onClick={() => {
+        {...(selecting ? {} : attributes)}
+        {...(selecting ? {} : listeners)}
+        onClick={(e) => {
+          if (preview) return;
+          // В режиме выделения клик тогает выбор (с учётом shift/ctrl/cmd), а не дравер.
+          if (selecting) {
+            onSelectToggle?.(task.id, {
+              shift: e.shiftKey,
+              meta: e.metaKey || e.ctrlKey,
+            });
+            return;
+          }
           // Открываем диалог только если это был именно клик, не drag.
           // PointerSensor activationConstraint distance:5 гарантирует, что drag-старт
           // съест pointermove'ы и onClick не выстрелит для drag'а; обычный клик долетит.
-          if (!preview) onEdit(task);
+          onEdit(task);
         }}
         role="button"
+        aria-pressed={selecting ? selected : undefined}
         className={cn(
           'group relative flex touch-none select-none items-start gap-2 rounded-md border bg-card p-3 shadow-md outline-none sm:shadow-sm',
+          // Подсветка выбранной карточки в режиме выделения.
+          selecting && selected && 'border-primary ring-2 ring-primary/60',
           // Базовый transition только для тех свойств, которые меняем CSS-ом —
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
           'transition-[box-shadow,border-color,opacity] duration-150 ease-out',
@@ -145,15 +170,30 @@ export function KanbanCard({
             className="absolute right-1.5 top-1.5 z-10 size-2 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.7)]"
           />
         )}
-        {showCheckbox && !preview && (
-          <div className="pt-0.5" onPointerDown={stopDrag}>
-            <InboxCheckbox
-              task={task}
-              lastDoneTaskId={lastDoneTaskId}
-              lastTodoTaskId={lastTodoTaskId}
-              onChanged={onTaskChanged}
-            />
-          </div>
+        {selecting ? (
+          <span
+            aria-hidden
+            className={cn(
+              'mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border-2 transition-colors',
+              selected
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-muted-foreground/40',
+            )}
+          >
+            {selected && <Check className="size-3" strokeWidth={3} />}
+          </span>
+        ) : (
+          showCheckbox &&
+          !preview && (
+            <div className="pt-0.5" onPointerDown={stopDrag}>
+              <InboxCheckbox
+                task={task}
+                lastDoneTaskId={lastDoneTaskId}
+                lastTodoTaskId={lastTodoTaskId}
+                onChanged={onTaskChanged}
+              />
+            </div>
+          )
         )}
         <div className="min-w-0 flex-1">
           {task.description?.trim() ? (
@@ -242,7 +282,11 @@ export function KanbanCard({
           )}
         </div>
         <div
-          className="flex shrink-0 gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
+          className={cn(
+            'flex shrink-0 gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100',
+            // В режиме выделения прячем точечные действия — они конфликтуют с тоглом.
+            selecting && 'hidden',
+          )}
           onPointerDown={stopDrag}
         >
           {onQuickPromote && !preview && (
