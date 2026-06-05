@@ -2,8 +2,18 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw';
-import rehypeSanitize from 'rehype-sanitize';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { cn } from '@/lib/utils';
+
+// Дефолтная схема rehype-sanitize уже разрешает <del>/<s> (~~зачёркнутый~~) и <blockquote>
+// (> цитата), но НЕ <u> — в markdown нет подчёркивания, поэтому меню форматирования пишет
+// сырой <u>…</u>. Расширяем whitelist тегов на 'u', чтобы подчёркивание рендерилось везде
+// (описания, комментарии, карточки, LIVE). Остальная XSS-санитизация (script/on*/javascript:)
+// остаётся нетронутой.
+const SANITIZE_SCHEMA = {
+  ...defaultSchema,
+  tagNames: [...(defaultSchema.tagNames ?? []), 'u'],
+};
 
 // Общий рендер markdown (GFM + перенос строк + безопасный html). Используется для
 // пользовательского ввода в мульти-юзер-проектах (описания задач, комментарии,
@@ -36,7 +46,7 @@ export function Markdown({
     <div className={cn(BASE_PROSE, className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
-        rehypePlugins={[rehypeRaw, rehypeSanitize]}
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, SANITIZE_SCHEMA]]}
       >
         {children}
       </ReactMarkdown>

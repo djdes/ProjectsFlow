@@ -14,6 +14,8 @@ import { toast } from '@/components/ui/sonner';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { useContainer } from '@/infrastructure/di/container';
 import { cn } from '@/lib/utils';
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
 import { RalphModeSelect } from './RalphMode';
 import { DelegateSelect } from './DelegateSelect';
 import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
@@ -93,6 +95,7 @@ export function TaskComposer({
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fmt = useTextFieldFormatting(textareaRef);
 
   // Авто-grow: сбрасываем height в auto, чтобы scrollHeight посчитался без «застрявшей»
   // высоты предыдущего рендера, потом задаём по содержимому (но не выше max).
@@ -282,18 +285,26 @@ export function TaskComposer({
         </Dialog>
       )}
 
-      <textarea
-        ref={textareaRef}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onPaste={handlePaste}
-        onKeyDown={handleKeyDown}
-        rows={1}
-        disabled={submitting}
-        placeholder={placeholder}
-        style={{ maxHeight: `${TEXTAREA_MAX_PX}px` }}
-        className="block w-full resize-none overflow-y-auto bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
-      />
+      <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
+        <ContextMenuTrigger asChild>
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onPaste={handlePaste}
+            onKeyDown={(e) => {
+              fmt.keyDownHandler(e);
+              if (!e.defaultPrevented) handleKeyDown(e);
+            }}
+            rows={1}
+            disabled={submitting}
+            placeholder={placeholder}
+            style={{ maxHeight: `${TEXTAREA_MAX_PX}px` }}
+            className="block w-full resize-none overflow-y-auto bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+          />
+        </ContextMenuTrigger>
+        {fmt.menuContent}
+      </ContextMenu>
 
       <div className={cn('flex items-center gap-1.5 px-1.5 pb-2', isInline && 'flex-wrap')}>
         <Button

@@ -22,11 +22,13 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useProjects } from '@/presentation/hooks/useProjects';
+import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
 import {
   extractClipboardFiles,
   isImageMime,
@@ -69,9 +71,14 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // autoFocus только на desktop — на мобильных клавиатура сразу перекрывает диалог.
+  // descRef — callback-ref (автофокус на десктопе). Параллельно держим объектный ref для
+  // меню форматирования (хук работает через .current).
+  const descNodeRef = useRef<HTMLTextAreaElement | null>(null);
   const descRef = useCallback((el: HTMLTextAreaElement | null) => {
+    descNodeRef.current = el;
     if (el && !window.matchMedia('(pointer: coarse)').matches) el.focus();
   }, []);
+  const fmt = useTextFieldFormatting(descNodeRef);
 
   useEffect(() => {
     if (!open) {
@@ -236,16 +243,22 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
               </div>
             )}
 
-            <textarea
-              id="task-desc"
-              ref={descRef}
-              rows={3}
-              maxLength={50000}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
-              className="block w-full resize-none bg-transparent text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none"
-            />
+            <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
+              <ContextMenuTrigger asChild>
+                <textarea
+                  id="task-desc"
+                  ref={descRef}
+                  rows={3}
+                  maxLength={50000}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  onKeyDown={fmt.keyDownHandler}
+                  placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
+                  className="block w-full resize-none bg-transparent text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none"
+                />
+              </ContextMenuTrigger>
+              {fmt.menuContent}
+            </ContextMenu>
           </div>
 
           {/* Ряд пилюль-кнопок под полем ввода. Все в одну строку (flex-wrap fallback

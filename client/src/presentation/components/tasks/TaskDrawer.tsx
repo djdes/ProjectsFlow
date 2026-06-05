@@ -40,6 +40,12 @@ import { getInitials } from '@/presentation/layout/projectIcons';
 import { TaskCommitsSection } from './TaskCommitsSection';
 import { CommentBody } from './CommentBody';
 import { Markdown } from '@/presentation/components/markdown/Markdown';
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
+import {
+  useTextFieldFormatting,
+  copyMarkdownForTelegram,
+  TelegramCopyButton,
+} from '@/presentation/hooks/useTextFieldFormatting';
 import { LiveTab } from './LiveTab';
 import { ClaudeIcon } from './ClaudeIcon';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
@@ -331,9 +337,13 @@ export function TaskDrawer({
     void taskRepository.listAttachments(projectId, id).then(setHeaderAttachments).catch(() => undefined);
   }, [state, taskRepository]);
   // autoFocus только на desktop — на мобильных клавиатура сразу перекрывает диалог.
+  // descNodeRef — объектный ref для меню форматирования (хук читает .current).
+  const descNodeRef = useRef<HTMLTextAreaElement | null>(null);
   const descRef = useCallback((el: HTMLTextAreaElement | null) => {
+    descNodeRef.current = el;
     if (el && !window.matchMedia('(pointer: coarse)').matches) el.focus();
   }, []);
+  const createDescFmt = useTextFieldFormatting(descNodeRef);
 
   useEffect(() => {
     if (!state) return;
@@ -789,16 +799,22 @@ export function TaskDrawer({
                     ))}
                   </div>
                 )}
-                <textarea
-                  id="task-desc"
-                  ref={descRef}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  maxLength={50000}
-                  rows={4}
-                  placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
-                  className="block w-full resize-none bg-transparent text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none"
-                />
+                <ContextMenu onOpenChange={createDescFmt.onMenuOpenChange}>
+                  <ContextMenuTrigger asChild>
+                    <textarea
+                      id="task-desc"
+                      ref={descRef}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      onKeyDown={createDescFmt.keyDownHandler}
+                      maxLength={50000}
+                      rows={4}
+                      placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
+                      className="block w-full resize-none bg-transparent text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none"
+                    />
+                  </ContextMenuTrigger>
+                  {createDescFmt.menuContent}
+                </ContextMenu>
               </div>
 
               {/* Пилюли-кнопки под полем: Priority, Deadline, Delegate, Вложение */}
@@ -897,6 +913,7 @@ function TaskDescriptionEditor({
   const [draft, setDraft] = useState(initialDescription);
   const [saving, setSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fmt = useTextFieldFormatting(textareaRef);
   // Клик по AI открывает Radix-диалог, который перехватывает фокус → textarea получает
   // blur. Этот флаг (взводится на mousedown по AI) гасит blur-save, чтобы не было лишней
   // записи и преждевременного сворачивания: запись делает сам AI-flow.
@@ -998,10 +1015,15 @@ function TaskDescriptionEditor({
   };
 
   // blur textarea → сохранить, КРОМЕ случая, когда фокус ушёл в открывшийся AI-диалог
-  // (там своя запись). aiOpeningRef — на случай, если relatedTarget пуст (программный фокус).
+  // (там своя запись) ИЛИ в меню форматирования (его открытие уводит фокус — иначе редактор
+  // схлопнулся бы до выбора пункта). aiOpeningRef/isMenuOpenRef — на случай пустого relatedTarget.
   const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>): void => {
     const next = e.relatedTarget as HTMLElement | null;
-    if (aiOpeningRef.current || (next && next.closest('[role="dialog"]'))) {
+    if (
+      aiOpeningRef.current ||
+      fmt.isMenuOpenRef.current ||
+      (next && next.closest('[role="dialog"],[role="menu"]'))
+    ) {
       aiOpeningRef.current = false;
       return;
     }
@@ -1044,28 +1066,35 @@ function TaskDescriptionEditor({
         <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground/70">
           Описание
         </span>
-        {/* preventDefault — клик по AI не уводит фокус мгновенно; aiOpeningRef гасит
-            blur-save, который иначе сработает, когда Radix-диалог перехватит фокус. */}
-        <div
-          onMouseDown={(e) => {
-            e.preventDefault();
-            aiOpeningRef.current = true;
-            // Подстраховка: если диалог не открылся (кнопка disabled) — снять флаг,
-            // чтобы не подавить следующий настоящий blur.
-            window.setTimeout(() => {
-              aiOpeningRef.current = false;
-            }, 300);
-          }}
-        >
-          <AiComposeDialog
-            text={editing ? draft : description}
-            projectId={projectId}
-            editTask={{ projectId, taskId }}
-            onImproved={(next) => void applyAndSave(next)}
-            onDistributed={() => onSaved()}
-            disabled={saving}
-            compact
-          />
+        <div className="flex items-center gap-0.5">
+          {/* Копирует текущий текст описания с вёрсткой → вставка в Telegram применит формат.
+              onMouseDown.preventDefault внутри кнопки не уводит фокус (без лишнего blur-save). */}
+          {(editing ? draft : description).trim().length > 0 && (
+            <TelegramCopyButton onCopy={() => copyMarkdownForTelegram(editing ? draft : description)} />
+          )}
+          {/* preventDefault — клик по AI не уводит фокус мгновенно; aiOpeningRef гасит
+              blur-save, который иначе сработает, когда Radix-диалог перехватит фокус. */}
+          <div
+            onMouseDown={(e) => {
+              e.preventDefault();
+              aiOpeningRef.current = true;
+              // Подстраховка: если диалог не открылся (кнопка disabled) — снять флаг,
+              // чтобы не подавить следующий настоящий blur.
+              window.setTimeout(() => {
+                aiOpeningRef.current = false;
+              }, 300);
+            }}
+          >
+            <AiComposeDialog
+              text={editing ? draft : description}
+              projectId={projectId}
+              editTask={{ projectId, taskId }}
+              onImproved={(next) => void applyAndSave(next)}
+              onDistributed={() => onSaved()}
+              disabled={saving}
+              compact
+            />
+          </div>
         </div>
       </div>
 
@@ -1073,17 +1102,25 @@ function TaskDescriptionEditor({
         <div className="space-y-1">
           {/* Безрамочное авто-растущее поле: padding/leading/шрифт 1-в-1 с display ниже,
               чтобы текст не «прыгал» при переключении. */}
-          <textarea
-            ref={textareaRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={handleBlur}
-            onKeyDown={handleKeyDown}
-            maxLength={50000}
-            rows={1}
-            disabled={saving}
-            className="block max-h-[60vh] w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent p-2 text-sm leading-snug focus:outline-none disabled:opacity-50"
-          />
+          <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
+            <ContextMenuTrigger asChild>
+              <textarea
+                ref={textareaRef}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={handleBlur}
+                onKeyDown={(e) => {
+                  fmt.keyDownHandler(e);
+                  if (!e.defaultPrevented) handleKeyDown(e);
+                }}
+                maxLength={50000}
+                rows={1}
+                disabled={saving}
+                className="block max-h-[60vh] w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent p-2 text-sm leading-snug focus:outline-none disabled:opacity-50"
+              />
+            </ContextMenuTrigger>
+            {fmt.menuContent}
+          </ContextMenu>
           <p className="text-[11px] text-muted-foreground">
             Ctrl+Enter — сохранить, Esc — отменить. {saving && '…'}
           </p>
@@ -1294,6 +1331,7 @@ function CommentComposer({
   const [pending, setPending] = useState<PendingFile[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fmt = useTextFieldFormatting(textareaRef);
 
   const addFiles = (raw: FileList | File[]): void => {
     const list = Array.from(raw);
@@ -1459,18 +1497,26 @@ function CommentComposer({
           )}
         </div>
       ) : (
-        <textarea
-          ref={textareaRef}
-          value={body}
-          onChange={handleChange}
-          onSelect={handleSelect}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          rows={2}
-          disabled={submitting}
-          placeholder="Написать комментарий… Markdown, файлы (Ctrl+V)"
-          className="block w-full resize-none rounded-md bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
-        />
+        <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
+          <ContextMenuTrigger asChild>
+            <textarea
+              ref={textareaRef}
+              value={body}
+              onChange={handleChange}
+              onSelect={handleSelect}
+              onKeyDown={(e) => {
+                fmt.keyDownHandler(e);
+                if (!e.defaultPrevented) handleKeyDown(e);
+              }}
+              onPaste={handlePaste}
+              rows={2}
+              disabled={submitting}
+              placeholder="Написать комментарий… Markdown, файлы (Ctrl+V)"
+              className="block w-full resize-none rounded-md bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+            />
+          </ContextMenuTrigger>
+          {fmt.menuContent}
+        </ContextMenu>
       )}
       <div className="absolute right-1.5 top-1.5 flex gap-0.5">
         <Button
@@ -1665,6 +1711,7 @@ function CommentItem({
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState<TaskAttachment | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fmt = useTextFieldFormatting(textareaRef);
 
   useEffect(() => {
     if (editing && textareaRef.current) {
@@ -1796,17 +1843,31 @@ function CommentItem({
           </div>
         </div>
         {editing ? (
-          <textarea
-            ref={textareaRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => void save()}
-            onKeyDown={handleKeyDown}
-            maxLength={10000}
-            rows={2}
-            disabled={saving}
-            className="mt-0.5 block w-full resize-none bg-transparent p-0 text-sm leading-snug focus:outline-none disabled:opacity-50"
-          />
+          <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
+            <ContextMenuTrigger asChild>
+              <textarea
+                ref={textareaRef}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                // blur-save, КРОМЕ ухода фокуса в меню форматирования (иначе правка
+                // схлопнулась бы при открытии меню).
+                onBlur={(e) => {
+                  const next = e.relatedTarget as HTMLElement | null;
+                  if (fmt.isMenuOpenRef.current || next?.closest('[role="menu"]')) return;
+                  void save();
+                }}
+                onKeyDown={(e) => {
+                  fmt.keyDownHandler(e);
+                  if (!e.defaultPrevented) handleKeyDown(e);
+                }}
+                maxLength={10000}
+                rows={2}
+                disabled={saving}
+                className="mt-0.5 block w-full resize-none bg-transparent p-0 text-sm leading-snug focus:outline-none disabled:opacity-50"
+              />
+            </ContextMenuTrigger>
+            {fmt.menuContent}
+          </ContextMenu>
         ) : (
           <div className="mt-0.5">
             <CommentBody body={comment.body} />

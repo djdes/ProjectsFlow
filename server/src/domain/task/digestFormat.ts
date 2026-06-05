@@ -89,13 +89,18 @@ export function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-// Инлайн-markdown → безопасный HTML: ссылки, **жирный**, *курсив*, `код`.
-// Текст экранируется ПЕРВЫМ, поэтому теги всегда сбалансированы и валидны (важно для
-// Telegram HTML — иначе bot API вернёт 400).
+// Инлайн-markdown → безопасный HTML: ссылки, **жирный**, ~~зачёркнутый~~, <u>подчёркнутый</u>,
+// *курсив*, `код`. Текст экранируется ПЕРВЫМ, поэтому теги всегда сбалансированы и валидны
+// (важно для Telegram HTML — иначе bot API вернёт 400). Набор форматов синхронизирован с
+// клиентским конвертером `client/src/lib/telegramHtml.ts` (меню форматирования полей задач).
 function inlineMd(s: string): string {
   let t = escapeHtml(s);
+  // Восстановить парный <u>…</u> (в markdown подчёркивания нет — меню пишет сырой тег).
+  // Контент внутри остаётся экранированным, поэтому XSS-безопасно. <u> поддерживает и Telegram.
+  t = t.replace(/&lt;u&gt;([\s\S]*?)&lt;\/u&gt;/g, '<u>$1</u>');
   t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
   t = t.replace(/\*\*([^*\n]+?)\*\*/g, '<b>$1</b>');
+  t = t.replace(/~~([^~\n]+?)~~/g, '<s>$1</s>');
   t = t.replace(/`([^`\n]+?)`/g, '<code>$1</code>');
   t = t.replace(/\*([^*\n]+?)\*/g, '<i>$1</i>');
   return t;
@@ -173,6 +178,18 @@ export function markdownToRich(md: string, mode: 'email' | 'telegram'): string {
       closeUl();
       const x = inlineMd(num[2]!);
       out.push(mode === 'email' ? `<p style="margin:1px 0">${escapeHtml(num[1]!)}. ${x}</p>` : `${num[1]}. ${x}`);
+      continue;
+    }
+
+    const quote = /^>\s?(.*)$/.exec(t);
+    if (quote) {
+      closeUl();
+      const x = inlineMd(quote[1]!);
+      out.push(
+        mode === 'email'
+          ? `<blockquote style="margin:4px 0;padding-left:10px;border-left:3px solid #cbd5e1;color:#475569">${x}</blockquote>`
+          : `<blockquote>${x}</blockquote>`,
+      );
       continue;
     }
 

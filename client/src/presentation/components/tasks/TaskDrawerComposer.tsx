@@ -14,6 +14,8 @@ import type { Task, TaskStatus } from '@/domain/task/Task';
 import type { NotifyAudience, TaskComment } from '@/domain/task/TaskComment';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import {
   extractClipboardFiles,
@@ -81,6 +83,7 @@ export function TaskDrawerComposer({
   );
   const [submitting, setSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fmt = useTextFieldFormatting(textareaRef);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useLayoutEffect(() => {
@@ -220,18 +223,26 @@ export function TaskDrawerComposer({
         </div>
       )}
 
-      <textarea
-        ref={textareaRef}
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        onPaste={handlePaste}
-        onKeyDown={handleKeyDown}
-        rows={1}
-        disabled={submitting}
-        placeholder="Написать комментарий… Markdown, файлы (Ctrl+V)"
-        style={{ maxHeight: `${TEXTAREA_MAX_PX}px` }}
-        className="block w-full resize-none overflow-y-auto bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
-      />
+      <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
+        <ContextMenuTrigger asChild>
+          <textarea
+            ref={textareaRef}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onPaste={handlePaste}
+            onKeyDown={(e) => {
+              fmt.keyDownHandler(e);
+              if (!e.defaultPrevented) handleKeyDown(e);
+            }}
+            rows={1}
+            disabled={submitting}
+            placeholder="Написать комментарий… Markdown, файлы (Ctrl+V)"
+            style={{ maxHeight: `${TEXTAREA_MAX_PX}px` }}
+            className="block w-full resize-none overflow-y-auto bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+          />
+        </ContextMenuTrigger>
+        {fmt.menuContent}
+      </ContextMenu>
 
       <div className="flex flex-wrap items-center justify-between gap-2 px-1.5 pb-1.5">
         <div className="flex items-center gap-1.5">

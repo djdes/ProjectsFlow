@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { GitCommit, ImageIcon, Loader2, MessageSquare, Pencil, Trash2 } from 'lucide-react';
+import { ImageIcon, Loader2, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
 import type { Task, TaskStatus } from '@/domain/task/Task';
-import { taskShortId } from '@/domain/task/Task';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import { RalphModeBadge } from './RalphMode';
 import { InboxCheckbox } from './InboxCheckbox';
 import { DelegationBadge } from './DelegationBadge';
-import { PriorityBadge } from './PriorityBadge';
 import { DeadlineBadge } from './DeadlineBadge';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
@@ -151,7 +151,6 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
             <TaskListRow
               key={t.id}
               task={t}
-              showShortId={showCommits}
               showCheckbox
               currentUserId={user?.id ?? null}
               lastDoneTaskId={lastDoneTaskId}
@@ -188,6 +187,8 @@ function QuickAddInput({
 }): React.ReactElement {
   const [value, setValue] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fmt = useTextFieldFormatting(textareaRef);
 
   const handleSubmit = async (): Promise<void> => {
     const trimmed = value.trim();
@@ -212,16 +213,25 @@ function QuickAddInput({
 
   return (
     <div className="relative rounded-lg border bg-card transition-colors focus-within:border-foreground/30 focus-within:bg-background">
-      <textarea
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        rows={1}
-        autoFocus
-        disabled={submitting}
-        placeholder="Что нужно сделать? Enter — добавить, Shift+Enter — новая строка"
-        className="block w-full resize-none rounded-lg bg-transparent px-4 py-3 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
-      />
+      <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
+        <ContextMenuTrigger asChild>
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              fmt.keyDownHandler(e);
+              if (!e.defaultPrevented) handleKeyDown(e);
+            }}
+            rows={1}
+            autoFocus
+            disabled={submitting}
+            placeholder="Что нужно сделать? Enter — добавить, Shift+Enter — новая строка"
+            className="block w-full resize-none rounded-lg bg-transparent px-4 py-3 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+          />
+        </ContextMenuTrigger>
+        {fmt.menuContent}
+      </ContextMenu>
       {submitting && (
         <Loader2 className="absolute right-3 top-3.5 size-4 animate-spin text-muted-foreground" />
       )}
@@ -231,7 +241,6 @@ function QuickAddInput({
 
 function TaskListRow({
   task,
-  showShortId,
   showCheckbox,
   currentUserId,
   lastDoneTaskId,
@@ -241,7 +250,6 @@ function TaskListRow({
   onChanged,
 }: {
   task: Task;
-  showShortId: boolean;
   showCheckbox: boolean;
   currentUserId: string | null;
   lastDoneTaskId: string | null;
@@ -253,12 +261,10 @@ function TaskListRow({
   const isDone = task.status === 'done';
   const hasDelegation = task.delegation !== null && task.delegation !== undefined;
   const hasBadges =
-    (task.commitCount ?? 0) > 0 ||
     (task.attachmentCount ?? 0) > 0 ||
     (task.commentCount ?? 0) > 0 ||
     task.ralphMode !== 'normal' ||
     hasDelegation ||
-    task.priority !== null ||
     task.deadline !== null;
 
   return (
@@ -296,13 +302,13 @@ function TaskListRow({
         )}
         {hasBadges && (
           <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground">
-            {showShortId && (
-              <span className="font-mono opacity-60">[{taskShortId(task.id)}]</span>
+            {task.delegation && currentUserId && (
+              <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
             )}
-            {(task.commitCount ?? 0) > 0 && (
-              <span className="flex items-center gap-1 rounded-full bg-blue-500/15 px-1.5 py-0.5 text-blue-600 dark:bg-blue-400/15 dark:text-blue-400">
-                <GitCommit className="size-2.5" />
-                {task.commitCount}
+            {(task.commentCount ?? 0) > 0 && (
+              <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-violet-600 dark:bg-violet-400/15 dark:text-violet-400">
+                <MessageSquare className="size-2.5" />
+                {task.commentCount}
               </span>
             )}
             {(task.attachmentCount ?? 0) > 0 && (
@@ -311,19 +317,7 @@ function TaskListRow({
                 {task.attachmentCount}
               </span>
             )}
-            {(task.commentCount ?? 0) > 0 && (
-              <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-violet-600 dark:bg-violet-400/15 dark:text-violet-400">
-                <MessageSquare className="size-2.5" />
-                {task.commentCount}
-              </span>
-            )}
             <RalphModeBadge mode={task.ralphMode} />
-            {task.delegation && currentUserId && (
-              <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
-            )}
-            {task.priority !== null && task.priority !== undefined && (
-              <PriorityBadge priority={task.priority} />
-            )}
             {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
             <span
               className="opacity-60"
@@ -334,7 +328,7 @@ function TaskListRow({
           </div>
         )}
       </div>
-      <div className="flex shrink-0 gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+      <div className="flex shrink-0 gap-0.5">
         <Button
           variant="ghost"
           size="icon"

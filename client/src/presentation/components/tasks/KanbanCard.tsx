@@ -1,18 +1,16 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
-import { ArrowRight, Check, GitCommit, ImageIcon, MessageSquare, Trash2 } from 'lucide-react';
+import { ArrowRight, Check, ImageIcon, MessageSquare, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SelectModifiers } from './selection/selectionReducer';
 import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import type { Task } from '@/domain/task/Task';
-import { taskShortId } from '@/domain/task/Task';
 import { ClaudeIcon } from './ClaudeIcon';
 import { DelegationBadge } from './DelegationBadge';
 import { InboxCheckbox } from './InboxCheckbox';
 import { RalphModeBadge } from './RalphMode';
-import { PriorityBadge } from './PriorityBadge';
 import { DeadlineBadge } from './DeadlineBadge';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { relativeTime } from '@/lib/relativeTime';
@@ -25,8 +23,9 @@ type Props = {
   // Когда true — рендерится для DragOverlay: без motion-layoutId (иначе конфликт двух
   // элементов с одинаковым id) и без sortable-хуков; плюс «приподнятый» вид.
   preview?: boolean;
-  // Показывать short-id [xxxxxxxx] на карточке. Для inbox-проекта скрываем — там
-  // нет git-репо, привязка коммитов через `[short-id]` бессмысленна.
+  // DEPRECATED: short-id больше не рендерится на карточке (убран по дизайну).
+  // Проп оставлен для совместимости с вызывателями (KanbanColumn/TaskListView),
+  // которые всё ещё его передают; здесь не используется.
   showShortId?: boolean;
   // Если задан — на карточке появится стрелка → справа, клик «промоутит» задачу
   // в TODO. Используется в backlog-колонке для быстрого triage без drag'а.
@@ -64,7 +63,6 @@ export function KanbanCard({
   onEdit,
   onDelete,
   preview = false,
-  showShortId = true,
   onQuickPromote,
   onTaskChanged,
   showCheckbox = false,
@@ -135,18 +133,20 @@ export function KanbanCard({
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
           'transition-[box-shadow,border-color,opacity] duration-150 ease-out',
           'hover:shadow-md',
-          // Priority-accent: левый цветной border 4px (rose/orange/blue/slate).
-          // Не конфликтует с border-amber-500 на todo — у TODO-карточек priority-border
-          // перекрывает amber слева, остальной border остаётся amber. Минимально инвазивно.
-          task.priority && `border-l-4 ${PRIORITY_META[task.priority].border}`,
+          // Priority-accent: тонкая (1px) цветная рамка вокруг ВСЕЙ карточки
+          // (rose/orange/blue/slate). Сам приоритет-пилюля убрана — цвет рамки и есть
+          // индикатор важности (меняется в дравере). База `border` выше даёт 1px
+          // нейтральной рамки для задач без приоритета.
+          task.priority && PRIORITY_META[task.priority].borderColor,
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
           // Status-аcent: TODO — пульсирующее янтарное неоновое «дыхание». Сообщает
           // «эта задача ждёт, чтобы её взяли в работу». Анимируется box-shadow
-          // (composited на GPU, без layout-reflow). Остальные статусы — нейтральный
-          // border-color (foreground/20 на hover).
-          !preview && task.status === 'todo'
-            ? 'border-amber-500/60 animate-todo-glow hover:border-amber-500/80'
-            : !preview && 'hover:border-foreground/20',
+          // (composited на GPU, без layout-reflow) — НЕ трогает border-color, поэтому
+          // цветная рамка приоритета остаётся видна и на todo-карточках.
+          !preview && task.status === 'todo' && 'animate-todo-glow',
+          // Hover-подсветка границы только для задач без приоритета — иначе перебивает
+          // цвет рамки приоритета.
+          !preview && task.status !== 'todo' && !task.priority && 'hover:border-foreground/20',
           preview
             ? // Карточка в DragOverlay: «приподнятый» вид — мощная тень, ring, выраженная
               // граница. Tilt/scale делаем НЕ здесь, а на motion-обёртке в KanbanBoard —
@@ -209,26 +209,23 @@ export function KanbanCard({
           ) : (
             <p className="text-sm leading-snug text-muted-foreground">—</p>
           )}
-          {(showShortId ||
-            (task.commitCount ?? 0) > 0 ||
-            (task.attachmentCount ?? 0) > 0 ||
+          {/* Мета-строка: делегирование → счётчики (💬/🖼) → ralph → дедлайн → статус.
+              Рендерим только если есть что показать (иначе остаётся лишь футер). */}
+          {((task.attachmentCount ?? 0) > 0 ||
             (task.commentCount ?? 0) > 0 ||
             task.ralphMode !== 'normal' ||
             task.status === 'in_progress' ||
             task.status === 'awaiting_clarification' ||
             !!task.delegation ||
-            task.priority !== null ||
             task.deadline !== null) && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
-              {showShortId && (
-                <span className="font-mono normal-case tracking-normal opacity-60">
-                  [{taskShortId(task.id)}]
-                </span>
+              {task.delegation && currentUserId && (
+                <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
               )}
-              {(task.commitCount ?? 0) > 0 && (
-                <span className="flex items-center gap-1 rounded-full bg-blue-500/15 px-1.5 py-0.5 text-blue-600 dark:bg-blue-400/15 dark:text-blue-400">
-                  <GitCommit className="size-2.5" />
-                  {task.commitCount}
+              {(task.commentCount ?? 0) > 0 && (
+                <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-violet-600 dark:bg-violet-400/15 dark:text-violet-400">
+                  <MessageSquare className="size-2.5" />
+                  {task.commentCount}
                 </span>
               )}
               {(task.attachmentCount ?? 0) > 0 && (
@@ -237,31 +234,13 @@ export function KanbanCard({
                   {task.attachmentCount}
                 </span>
               )}
-              {(task.commentCount ?? 0) > 0 && (
-                <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-violet-600 dark:bg-violet-400/15 dark:text-violet-400">
-                  <MessageSquare className="size-2.5" />
-                  {task.commentCount}
-                </span>
-              )}
               {/* Бейдж режима Ralph — только для не-дефолта (показывать каждой задаче '🤖 Обычный'
                   было бы шумом). Component сам возвращает null если showDefault=false и mode='normal'. */}
               <RalphModeBadge mode={task.ralphMode} />
-              {task.delegation && currentUserId && (
-                <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
-              )}
-              {task.priority !== null && task.priority !== undefined && (
-                <PriorityBadge priority={task.priority} />
-              )}
               {task.deadline && (
                 <DeadlineBadge deadline={task.deadline} status={task.status} />
               )}
-              <span
-                className="normal-case tracking-normal opacity-60"
-                title={task.createdAt.toLocaleString('ru-RU')}
-              >
-                {relativeTime(task.createdAt)}
-              </span>
-              {/* Status-бэйдж справа снизу для статусов, у которых нет своей колонки:
+              {/* Status-бэйдж справа для статусов, у которых нет своей колонки:
                   in_progress и awaiting_clarification визуально лежат в TODO. */}
               {task.status === 'in_progress' && (
                 <span className="ml-auto flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400">
@@ -280,43 +259,50 @@ export function KanbanCard({
               )}
             </div>
           )}
-        </div>
-        <div
-          className={cn(
-            'flex shrink-0 gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100',
-            // В режиме выделения прячем точечные действия — они конфликтуют с тоглом.
-            selecting && 'hidden',
-          )}
-          onPointerDown={stopDrag}
-        >
-          {onQuickPromote && !preview && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6 cursor-pointer text-muted-foreground hover:text-foreground"
-              onClick={(e) => {
-                e.stopPropagation();
-                onQuickPromote(task);
-              }}
-              aria-label="Передать воркеру"
-              title="Передать воркеру"
+          {/* Футер: дата слева, кнопки действий справа. Кнопки всегда видны на своих
+              местах (предсказуемая раскладка), кроме режима выделения (булк-действия
+              сверху) и drag-preview (чистый оверлей). */}
+          <div className="mt-2 flex items-center justify-between gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+            <span
+              className="normal-case tracking-normal opacity-60"
+              title={task.createdAt.toLocaleString('ru-RU')}
             >
-              <ArrowRight className="size-3.5" />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 cursor-pointer text-destructive hover:text-destructive"
-            onClick={(e) => {
-              // Чтобы клик по корзине не открыл диалог через onClick на родителе.
-              e.stopPropagation();
-              onDelete(task);
-            }}
-            aria-label="Удалить"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
+              {relativeTime(task.createdAt)}
+            </span>
+            <div
+              className={cn('flex shrink-0 gap-0.5', (selecting || preview) && 'hidden')}
+              onPointerDown={stopDrag}
+            >
+              {onQuickPromote && !preview && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-6 cursor-pointer text-muted-foreground hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onQuickPromote(task);
+                  }}
+                  aria-label="Передать воркеру"
+                  title="Передать воркеру"
+                >
+                  <ArrowRight className="size-3.5" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 cursor-pointer text-destructive hover:text-destructive"
+                onClick={(e) => {
+                  // Чтобы клик по корзине не открыл диалог через onClick на родителе.
+                  e.stopPropagation();
+                  onDelete(task);
+                }}
+                aria-label="Удалить"
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </Wrapper>

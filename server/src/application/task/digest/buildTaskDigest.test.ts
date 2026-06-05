@@ -89,6 +89,20 @@ test('markdownToRich email: headings→bold, bullets→<ul>', () => {
   assert.ok(out.includes('<li>два</li>'));
 });
 
+test('markdownToRich telegram: strike / underline / quote', () => {
+  const out = markdownToRich('~~старое~~ <u>важно</u>\n> цитата', 'telegram');
+  assert.ok(out.includes('<s>старое</s>'));
+  assert.ok(out.includes('<u>важно</u>'));
+  assert.ok(out.includes('<blockquote>цитата</blockquote>'));
+  // содержимое <u> не должно «протекать» сырым html
+  assert.ok(!out.includes('<script'));
+});
+
+test('markdownToRich email: quote → styled blockquote', () => {
+  const out = markdownToRich('> цитата', 'email');
+  assert.ok(out.includes('<blockquote') && out.includes('цитата</blockquote>'));
+});
+
 test('buildDigestModel: groups by priority; no-priority sorted by createdAt asc', () => {
   const tasks = [
     task({ id: 't1', description: 'Новая без приоритета', createdAt: new Date('2026-06-03T00:00:00Z') }),
