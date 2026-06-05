@@ -11,6 +11,12 @@ export type ComposeSegment = {
   readonly projectId: string | null;
   readonly projectName: string | null;
   readonly confidence: number;
+  // Исполнитель: userId, резолвнутый AI из списка участников проекта (editor+), или null.
+  readonly assigneeUserId: string | null;
+  // Сырое имя из текста («Олег») — для подсказки, когда userId не сматчился.
+  readonly assigneeName: string | null;
+  // Дедлайн 'YYYY-MM-DD' (только при явном сроке в тексте) или null.
+  readonly deadline: string | null;
 };
 
 export type ComposeResult = {
@@ -92,6 +98,15 @@ function toComposeError(e: unknown): ComposeTasksError {
   return new ComposeTasksError('unknown', e instanceof Error ? e.message : String(e));
 }
 
+// Дедлайн: строгий YYYY-MM-DD + проверка реального календаря (источник — LLM, может
+// выдать 2026-13-40). Невалидное → null, чтобы не утекало в DATE-колонку.
+function validDeadline(v: unknown): string | null {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  const [y, m, d] = v.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d ? v : null;
+}
+
 // Разбор JSON-результата compose: устойчив к ```-обёрткам и тексту вокруг JSON.
 export function parseComposeResult(raw: string): ComposeResult {
   let s = raw.trim();
@@ -132,6 +147,15 @@ export function parseComposeResult(raw: string): ComposeResult {
           ? (o['projectName'] as string)
           : null,
       confidence: typeof o['confidence'] === 'number' ? (o['confidence'] as number) : 0,
+      assigneeUserId:
+        typeof o['assigneeUserId'] === 'string' && o['assigneeUserId']
+          ? (o['assigneeUserId'] as string)
+          : null,
+      assigneeName:
+        typeof o['assigneeName'] === 'string' && o['assigneeName']
+          ? (o['assigneeName'] as string)
+          : null,
+      deadline: validDeadline(o['deadline']),
     };
   });
   if (segments.length === 0) {

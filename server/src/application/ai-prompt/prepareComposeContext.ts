@@ -1,6 +1,7 @@
 import type { ListProjects } from '../project/ListProjects.js';
 import type { ListKbDocuments } from '../kb/ListKbDocuments.js';
 import type { GetKbDocument } from '../kb/GetKbDocument.js';
+import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import { prepareKbContext } from './prepareKbContext.js';
 
 // Сколько проектов-кандидатов максимум кладём в контекст compose-job'а и общий потолок.
@@ -8,12 +9,26 @@ const MAX_PROJECTS = 40;
 const MAX_TOTAL_CHARS = 60_000;
 // Короткий дайджест на проект: 1-2 верхних документа KB, ~800 симв. каждый, ~1800 итог.
 const DIGEST_LIMITS = { maxDocs: 2, maxPerDoc: 800, maxTotal: 1800 } as const;
+// Сколько участников максимум перечисляем на проект (для авто-делегирования).
+const MAX_MEMBERS_PER_PROJECT = 20;
+// Отдельный потолок на ВСЕ строки участников: чтобы большие команды не вытесняли
+// KB-дайджесты из общего бюджета (они важнее для классификации проекта).
+const MAX_MEMBER_TOTAL_CHARS = 15_000;
 
 type Deps = {
   readonly listProjects: ListProjects;
   readonly listKbDocuments: ListKbDocuments;
   readonly getKbDocument: GetKbDocument;
+  readonly members: ProjectMemberRepository;
 };
+
+// Сегодняшняя дата в формате YYYY-MM-DD. Нужна модели, чтобы резолвить относительные
+// сроки («на сегодня», «до конца недели»). Считаем в фиксированной зоне продукта
+// (пользователи в РФ): UTC-сервер около полуночи иначе даёт «сегодня» на день вперёд.
+// en-CA форматирует дату ровно как YYYY-MM-DD.
+function todayIso(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(new Date());
+}
 
 export type ComposeCandidate = {
   readonly projectId: string;
@@ -52,7 +67,7 @@ export async function prepareComposeContext(
     .slice(0, MAX_PROJECTS);
   if (creatable.length === 0) return null;
 
-  // Дайджесты собираем параллельно (best-effort на каждый проект).
+  // Дайджесты + участники собираем параллельно (best-effort на каждый проект).
   const digests = await Promise.all(
     creatable.map(async (p) => {
       let digest: string | null = null;
@@ -61,7 +76,23 @@ export async function prepareComposeContext(
       } catch {
         digest = null;
       }
-      return { projectId: p.id, name: p.name, digest };
+      // Участники, кому МОЖНО делегировать проектную задачу: editor+ и не сам автор.
+      // (сервер так и так требует editor+ при делегировании в реальный проект).
+      let memberLine = '';
+      try {
+        const list = await deps.members.listByProject(p.id);
+        const eligible = list
+          .filter((m) => (m.role === 'editor' || m.role === 'owner') && m.userId !== userId)
+          .slice(0, MAX_MEMBERS_PER_PROJECT)
+          .map((m) => `[userId=${m.userId}] ${m.user.displayName}`);
+        memberLine =
+          eligible.length > 0
+            ? `Участники (кому можно делегировать): ${eligible.join('; ')}`
+            : 'Участники: делегировать некому';
+      } catch {
+        memberLine = '';
+      }
+      return { projectId: p.id, name: p.name, digest, memberLine };
     }),
   );
 
@@ -72,13 +103,20 @@ export async function prepareComposeContext(
 
   const parts: string[] = [];
   let total = 0;
+  let memberTotal = 0;
   for (const d of digests) {
     const body = d.digest && d.digest.trim().length > 0 ? d.digest.trim() : '(KB не подключена)';
-    const part = `[projectId=${d.projectId}] ${d.name}\n${body}`;
+    // Участники — со своим потолком, отдельно от KB (см. MAX_MEMBER_TOTAL_CHARS).
+    let memberPart = '';
+    if (d.memberLine && memberTotal + d.memberLine.length <= MAX_MEMBER_TOTAL_CHARS) {
+      memberPart = `${d.memberLine}\n`;
+      memberTotal += d.memberLine.length;
+    }
+    const part = `[projectId=${d.projectId}] ${d.name}\n${memberPart}${body}`;
     if (total + part.length > MAX_TOTAL_CHARS) {
-      // Дальше не лезем, но сам проект (хотя бы строкой имени) всё равно полезен —
-      // добавим усечённый заголовок без дайджеста, чтобы id остался доступен модели.
-      const header = `[projectId=${d.projectId}] ${d.name}\n(дайджест опущен — лимит контекста)`;
+      // Дальше не лезем, но сам проект (хотя бы имя + участники) всё равно полезен —
+      // добавим усечённый заголовок без дайджеста, чтобы id/исполнители остались модели.
+      const header = `[projectId=${d.projectId}] ${d.name}\n${memberPart}(дайджест опущен — лимит контекста)`;
       if (total + header.length <= MAX_TOTAL_CHARS) {
         parts.push(header);
         total += header.length;
@@ -89,6 +127,7 @@ export async function prepareComposeContext(
     total += part.length;
   }
 
-  const block = parts.join('\n\n---\n\n');
+  // «Сегодня» — в начале блока: модель резолвит относительные сроки от этой даты.
+  const block = `Сегодня: ${todayIso()}\n\n${parts.join('\n\n---\n\n')}`;
   return { block, candidates };
 }

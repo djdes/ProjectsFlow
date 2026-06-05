@@ -12,8 +12,9 @@ export type CreateTaskInput = {
   readonly status?: TaskStatus;
   // Режим работы Ralph. Если не передан — backend дефолтит 'normal'.
   readonly ralphMode?: RalphMode;
-  // Опциональное one-to-one делегирование (только для inbox-задач). UUID юзера
-  // из shared-members списка caller'а; null/undefined — обычная задача.
+  // Опциональное one-to-one делегирование. Для inbox-задач делегат — из shared-members
+  // caller'а; для задачи реального проекта — участник проекта с ролью editor+ (сервер
+  // валидирует). null/undefined — без делегата.
   readonly delegateUserId?: string | null;
   // Срок выполнения 'YYYY-MM-DD'. null = без deadline.
   readonly deadline?: string | null;
@@ -119,9 +120,9 @@ export interface TaskRepository {
   // Перенос inbox-задачи в реальный проект. Активная делегация (если была) →
   // archived; делегат получает email + notification. Только creator (owner inbox).
   assignToProject(projectId: string, taskId: string, targetProjectId: string): Promise<Task>;
-  // Делегировать уже созданную inbox-задачу (UI «Делегировать» на карточке).
-  // delegateUserId должен быть в shared-members caller'а; задача должна быть inbox
-  // и без активной делегации.
+  // Делегировать уже созданную задачу (UI «Делегировать» на карточке / AI-распределение).
+  // Для inbox delegateUserId — из shared-members caller'а; для реального проекта — участник
+  // с ролью editor+. Задача должна быть без активной делегации (иначе AlreadyDelegatedError).
   delegate(projectId: string, taskId: string, delegateUserId: string): Promise<Task>;
   // Экспорт выбранных задач в дайджест: вернуть текст (буфер) и/или отправить
   // на email / в Telegram. Сервер рендерит из авторитетных данных.
