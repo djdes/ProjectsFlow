@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import {
   Bold,
   Calendar,
+  ClipboardPaste,
   Code,
   Copy,
   Heading1,
@@ -195,6 +196,25 @@ export function useTextFieldFormatting(textareaRef: TextareaRef): UseTextFieldFo
     });
   }, [textareaRef, defer]);
 
+  // Вставка из буфера. navigator.clipboard.readText доступен в защищённом контексте по
+  // user-activation (клик по пункту меню). Firefox в веб-контенте readText не даёт — тогда
+  // подсказываем нативный Ctrl+V. Вставку делаем через replaceSelection (нативный undo).
+  const paste = useCallback((): void => {
+    const read = navigator.clipboard?.readText?.bind(navigator.clipboard);
+    if (!read) {
+      toast.error('Вставка недоступна — нажми Ctrl+V');
+      return;
+    }
+    void read()
+      .then((text) => {
+        const node = textareaRef.current;
+        if (!node || !text) return;
+        node.focus();
+        replaceSelection(node, text);
+      })
+      .catch(() => toast.error('Вставка недоступна — нажми Ctrl+V'));
+  }, [textareaRef]);
+
   const selectAll = useCallback((): void => {
     defer((node) => {
       node.focus();
@@ -276,6 +296,10 @@ export function useTextFieldFormatting(textareaRef: TextareaRef): UseTextFieldFo
       <ContextMenuItem onSelect={cut}>
         <Scissors />
         Вырезать
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={paste}>
+        <ClipboardPaste />
+        Вставить
       </ContextMenuItem>
       <ContextMenuItem onSelect={selectAll}>
         <TextSelect />

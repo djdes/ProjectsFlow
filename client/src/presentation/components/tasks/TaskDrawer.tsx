@@ -1014,6 +1014,24 @@ function TaskDescriptionEditor({
     setEditing(false);
   };
 
+  // Автосохранение при закрытии окна задачи. blur-save ловит клик мимо поля; этот unmount-хук —
+  // страховка, когда дровер закрывают/переключают задачу (key={task.id} → remount), не сняв
+  // фокус с textarea. Esc по-прежнему отменяет (cancel сбрасывает draft → editing=false → guard).
+  // latest-ref обновляем в эффекте (нельзя писать ref во время рендера).
+  const liveRef = useRef({ editing, saving, draft, description });
+  useEffect(() => {
+    liveRef.current = { editing, saving, draft, description };
+  });
+  useEffect(
+    () => () => {
+      const s = liveRef.current;
+      const trimmed = s.draft.trim();
+      if (!s.editing || s.saving || trimmed.length === 0 || trimmed === s.description.trim()) return;
+      void taskRepository.update(projectId, taskId, { description: trimmed }).catch(() => undefined);
+    },
+    [taskRepository, projectId, taskId],
+  );
+
   // blur textarea → сохранить, КРОМЕ случая, когда фокус ушёл в открывшийся AI-диалог
   // (там своя запись) ИЛИ в меню форматирования (его открытие уводит фокус — иначе редактор
   // схлопнулся бы до выбора пункта). aiOpeningRef/isMenuOpenRef — на случай пустого relatedTarget.
