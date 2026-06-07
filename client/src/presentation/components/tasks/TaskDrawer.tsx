@@ -8,7 +8,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { ChevronDown, ChevronRight, Download, FileText, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, FileText, Loader2, Map, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1504,6 +1504,23 @@ function CommentComposer({
 
   const showPicker = mention !== null && candidates.length > 0;
 
+  // Кнопка «🗺 Составить план»: постит комментарий-маркер ralph-plan-request. Ralph-диспетчер
+  // подхватит его, изучит репозиторий и пришлёт план реализации на одобрение (Telegram/дашборд).
+  const requestPlan = async (): Promise<void> => {
+    if (submitting) return;
+    try {
+      await taskRepository.createComment(
+        projectId,
+        taskId,
+        '🗺 Запрошен план реализации\n\n<!-- ralph-plan-request {"v":1} -->',
+        { mode: 'none' },
+      );
+      toast.success('План запрошен — Ralph составит и пришлёт на одобрение');
+    } catch (e) {
+      toast.error(`Не удалось запросить план: ${(e as Error).message}`);
+    }
+  };
+
   return (
     <div className="relative rounded-md border bg-card transition-colors focus-within:border-foreground/30">
       {preview ? (
@@ -1537,6 +1554,18 @@ function CommentComposer({
         </ContextMenu>
       )}
       <div className="absolute right-1.5 top-1.5 flex gap-0.5">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-7 text-muted-foreground hover:text-primary"
+          onClick={() => void requestPlan()}
+          disabled={submitting}
+          aria-label="Составить план"
+          title="Составить план — Ralph изучит код и пришлёт план на одобрение"
+        >
+          <Map className="size-3.5" />
+        </Button>
         <Button
           type="button"
           variant="ghost"
