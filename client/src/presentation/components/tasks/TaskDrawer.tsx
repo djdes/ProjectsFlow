@@ -46,6 +46,7 @@ import {
   copyMarkdownForTelegram,
   TelegramCopyButton,
 } from '@/presentation/hooks/useTextFieldFormatting';
+import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
 import { LiveTab } from './LiveTab';
 import { ClaudeIcon } from './ClaudeIcon';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
@@ -344,6 +345,8 @@ export function TaskDrawer({
     if (el && !window.matchMedia('(pointer: coarse)').matches) el.focus();
   }, []);
   const createDescFmt = useTextFieldFormatting(descNodeRef);
+  // Авто-рост поля описания новой задачи до 12 строк (site-wide правило).
+  useAutoGrowTextarea(descNodeRef, description, { minRows: 4 });
 
   useEffect(() => {
     if (!state) return;
@@ -1113,6 +1116,34 @@ function TaskDescriptionEditor({
               compact
             />
           </div>
+          {/* «Составить план»: постит маркер ralph-plan-request. Ralph изучит репозиторий,
+              пришлёт план на одобрение (Telegram/дашборд), затем воркер выполнит по плану. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground hover:text-primary"
+            disabled={saving}
+            title="Составить план — Ralph изучит код и пришлёт план на одобрение"
+            aria-label="Составить план"
+            onClick={() => {
+              void (async () => {
+                try {
+                  await taskRepository.createComment(
+                    projectId,
+                    taskId,
+                    '🗺 Запрошен план реализации\n\n<!-- ralph-plan-request {"v":1} -->',
+                    { mode: 'none' },
+                  );
+                  toast.success('План запрошен — Ralph составит и пришлёт на одобрение');
+                } catch (e) {
+                  toast.error(`Не удалось запросить план: ${(e as Error).message}`);
+                }
+              })();
+            }}
+          >
+            <Map className="size-4" />
+          </Button>
         </div>
       </div>
 
@@ -1350,6 +1381,8 @@ function CommentComposer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fmt = useTextFieldFormatting(textareaRef);
+  // Авто-рост поля комментария до 12 строк (site-wide правило).
+  useAutoGrowTextarea(textareaRef, body, { minRows: 2 });
 
   const addFiles = (raw: FileList | File[]): void => {
     const list = Array.from(raw);
@@ -1504,23 +1537,6 @@ function CommentComposer({
 
   const showPicker = mention !== null && candidates.length > 0;
 
-  // Кнопка «🗺 Составить план»: постит комментарий-маркер ralph-plan-request. Ralph-диспетчер
-  // подхватит его, изучит репозиторий и пришлёт план реализации на одобрение (Telegram/дашборд).
-  const requestPlan = async (): Promise<void> => {
-    if (submitting) return;
-    try {
-      await taskRepository.createComment(
-        projectId,
-        taskId,
-        '🗺 Запрошен план реализации\n\n<!-- ralph-plan-request {"v":1} -->',
-        { mode: 'none' },
-      );
-      toast.success('План запрошен — Ralph составит и пришлёт на одобрение');
-    } catch (e) {
-      toast.error(`Не удалось запросить план: ${(e as Error).message}`);
-    }
-  };
-
   return (
     <div className="relative rounded-md border bg-card transition-colors focus-within:border-foreground/30">
       {preview ? (
@@ -1554,18 +1570,6 @@ function CommentComposer({
         </ContextMenu>
       )}
       <div className="absolute right-1.5 top-1.5 flex gap-0.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-7 text-muted-foreground hover:text-primary"
-          onClick={() => void requestPlan()}
-          disabled={submitting}
-          aria-label="Составить план"
-          title="Составить план — Ralph изучит код и пришлёт план на одобрение"
-        >
-          <Map className="size-3.5" />
-        </Button>
         <Button
           type="button"
           variant="ghost"
@@ -1759,6 +1763,8 @@ function CommentItem({
   const [preview, setPreview] = useState<TaskAttachment | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fmt = useTextFieldFormatting(textareaRef);
+  // Авто-рост поля правки комментария до 12 строк (site-wide правило).
+  useAutoGrowTextarea(textareaRef, draft, { minRows: 2 });
 
   useEffect(() => {
     if (editing && textareaRef.current) {
