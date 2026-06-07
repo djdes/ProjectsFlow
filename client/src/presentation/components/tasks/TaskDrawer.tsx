@@ -39,6 +39,11 @@ import { CommentActionsMenu } from '@/presentation/components/tasks/CommentActio
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { TaskCommitsSection } from './TaskCommitsSection';
 import { CommentBody } from './CommentBody';
+import {
+  parseRalphQuestion,
+  answeredQidSet,
+  RalphAnswerControls,
+} from './RalphQuestionControls';
 import { Markdown } from '@/presentation/components/markdown/Markdown';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import {
@@ -1302,6 +1307,9 @@ function TaskCommentsSection({
     return undefined;
   }, [onCommentCreatedRef]);
 
+  // qid'ы, на которые уже есть ответ — чтобы прятать кнопки у отвеченных вопросов.
+  const answeredQids = answeredQidSet(comments);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -1324,6 +1332,8 @@ function TaskCommentsSection({
               projectId={projectId}
               taskId={taskId}
               comment={c}
+              answeredQids={answeredQids}
+              onAnswerCreated={handleCreated}
               onUpdated={handleUpdated}
               onDeleted={handleDeleted}
             />
@@ -1747,16 +1757,22 @@ function CommentItem({
   projectId,
   taskId,
   comment,
+  answeredQids,
+  onAnswerCreated,
   onUpdated,
   onDeleted,
 }: {
   projectId: string;
   taskId: string;
   comment: TaskComment;
+  answeredQids: Set<string>;
+  onAnswerCreated: (created: TaskComment) => void;
   onUpdated: (updated: TaskComment) => void;
   onDeleted: (id: string) => void;
 }): React.ReactElement {
   const { taskRepository } = useContainer();
+  // Вопрос Ralph (F11) в этом комментарии → инлайн-кнопки ответа (как в CLI/Telegram).
+  const ralphQuestion = parseRalphQuestion(comment.body);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(comment.body);
   const [saving, setSaving] = useState(false);
@@ -1924,6 +1940,14 @@ function CommentItem({
         ) : (
           <div className="mt-0.5">
             <CommentBody body={comment.body} />
+            {ralphQuestion && !answeredQids.has(ralphQuestion.qid) && (
+              <RalphAnswerControls
+                question={ralphQuestion}
+                projectId={projectId}
+                taskId={taskId}
+                onCreated={onAnswerCreated}
+              />
+            )}
           </div>
         )}
         {comment.attachments.length > 0 && (
