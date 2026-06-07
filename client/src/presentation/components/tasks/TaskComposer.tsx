@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type ClipboardEvent,
@@ -16,6 +15,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { cn } from '@/lib/utils';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
+import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
 import { RalphModeSelect } from './RalphMode';
 import { DelegateSelect } from './DelegateSelect';
 import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
@@ -60,9 +60,6 @@ type Props = {
   storageKey?: string;
 };
 
-// Max-height растущей textarea (~9 строк при text-sm/leading-snug).
-const TEXTAREA_MAX_PX = 192;
-
 // Композер задачи: авто-grow textarea, drop/paste/Ctrl+V файлов, Ralph-режим, делегирование,
 // AI-improve, Ctrl/Cmd+Enter — submit. Питает и floating-виджет, и inline-композер колонки.
 export function TaskComposer({
@@ -97,14 +94,8 @@ export function TaskComposer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fmt = useTextFieldFormatting(textareaRef);
 
-  // Авто-grow: сбрасываем height в auto, чтобы scrollHeight посчитался без «застрявшей»
-  // высоты предыдущего рендера, потом задаём по содержимому (но не выше max).
-  useLayoutEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_PX)}px`;
-  }, [text]);
+  // Авто-рост до 12 строк (site-wide правило), дальше внутренний скролл.
+  useAutoGrowTextarea(textareaRef, text, { minRows: 1 });
 
   useEffect(() => {
     if (autoFocus) textareaRef.current?.focus();
@@ -299,8 +290,7 @@ export function TaskComposer({
             rows={1}
             disabled={submitting}
             placeholder={placeholder}
-            style={{ maxHeight: `${TEXTAREA_MAX_PX}px` }}
-            className="block w-full resize-none overflow-y-auto bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+            className="block w-full resize-none bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
           />
         </ContextMenuTrigger>
         {fmt.menuContent}

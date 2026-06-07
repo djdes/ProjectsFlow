@@ -3,6 +3,7 @@ import { Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { AutoGrowTextarea } from '@/components/ui/auto-grow-textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
 import type { Frontmatter, KbDocument } from '@/domain/kb/KbDocument';
@@ -87,7 +88,7 @@ function FmField({ fieldKey, value, onChange }: FieldProps): React.ReactElement 
     return (
       <div className="space-y-1.5">
         <Label htmlFor={id}>{fieldKey} <span className="text-xs text-muted-foreground">(по одному на строку)</span></Label>
-        <textarea
+        <AutoGrowTextarea
           id={id}
           value={arr.join('\n')}
           onChange={(e) =>
@@ -98,7 +99,7 @@ function FmField({ fieldKey, value, onChange }: FieldProps): React.ReactElement 
                 .filter(Boolean),
             )
           }
-          rows={Math.max(3, arr.length + 1)}
+          minRows={Math.max(3, arr.length + 1)}
           className="w-full rounded-md border bg-background p-3 text-sm"
         />
       </div>

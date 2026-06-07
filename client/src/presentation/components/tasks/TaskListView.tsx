@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
+import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
 import type { Task, TaskStatus } from '@/domain/task/Task';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
@@ -189,6 +190,8 @@ function QuickAddInput({
   const [submitting, setSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fmt = useTextFieldFormatting(textareaRef);
+  // Авто-рост quick-add поля до 12 строк (site-wide правило).
+  useAutoGrowTextarea(textareaRef, value, { minRows: 1 });
 
   const handleSubmit = async (): Promise<void> => {
     const trimmed = value.trim();

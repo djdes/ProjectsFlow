@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useProjects } from '@/presentation/hooks/useProjects';
 import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
+import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
 import {
   extractClipboardFiles,
   isImageMime,
@@ -79,6 +80,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     if (el && !window.matchMedia('(pointer: coarse)').matches) el.focus();
   }, []);
   const fmt = useTextFieldFormatting(descNodeRef);
+  // Авто-рост поля описания до 12 строк (site-wide правило), дальше внутренний скролл.
+  useAutoGrowTextarea(descNodeRef, description, { minRows: 3 });
 
   useEffect(() => {
     if (!open) {

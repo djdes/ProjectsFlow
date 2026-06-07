@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
+import { AutoGrowTextarea } from '@/components/ui/auto-grow-textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
@@ -411,27 +412,27 @@ export function AutomationDialog({
                           <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
                             Системный промпт
                           </Label>
-                          <textarea
-                            rows={4}
+                          <AutoGrowTextarea
+                            minRows={4}
                             value={c.systemPrompt}
                             maxLength={8000}
                             onChange={(e) =>
                               updateCriterion(c.key, { systemPrompt: e.target.value })
                             }
-                            className="block w-full resize-y rounded-md border bg-transparent px-2 py-1.5 text-xs leading-snug focus:outline-none focus:ring-2 focus:ring-ring"
+                            className="block w-full rounded-md border bg-transparent px-2 py-1.5 text-xs leading-snug focus:outline-none focus:ring-2 focus:ring-ring"
                           />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
                             Уточнение (что именно хотите)
                           </Label>
-                          <textarea
-                            rows={2}
+                          <AutoGrowTextarea
+                            minRows={2}
                             value={c.userHint}
                             maxLength={2000}
                             placeholder="Напр. фичи лендинга: чат, фильтрации, маркетинг"
                             onChange={(e) => updateCriterion(c.key, { userHint: e.target.value })}
-                            className="block w-full resize-y rounded-md border bg-transparent px-2 py-1.5 text-xs leading-snug placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
+                            className="block w-full rounded-md border bg-transparent px-2 py-1.5 text-xs leading-snug placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
                           />
                         </div>
                       </div>

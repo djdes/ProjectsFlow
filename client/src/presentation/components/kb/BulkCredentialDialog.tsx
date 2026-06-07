@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AutoGrowTextarea } from '@/components/ui/auto-grow-textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
@@ -140,12 +141,12 @@ export function BulkCredentialDialog({
 
         <div className="space-y-2">
           <Label htmlFor="bulk-raw">Текст</Label>
-          <textarea
+          <AutoGrowTextarea
             id="bulk-raw"
             value={rawText}
             onChange={(e) => setRawText(e.target.value)}
             placeholder={EXAMPLE}
-            rows={8}
+            minRows={8}
             className="w-full rounded-md border bg-background p-3 font-mono text-sm"
           />
           <div className="flex flex-wrap items-center gap-2">

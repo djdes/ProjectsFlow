@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type ClipboardEvent,
@@ -15,6 +14,7 @@ import type { NotifyAudience, TaskComment } from '@/domain/task/TaskComment';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
+import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import {
@@ -61,8 +61,6 @@ function resolveMoveTarget(
   return current === 'todo' ? null : 'todo';
 }
 
-const TEXTAREA_MAX_PX = 192;
-
 export function TaskDrawerComposer({
   task,
   backlogTail,
@@ -86,12 +84,8 @@ export function TaskDrawerComposer({
   const fmt = useTextFieldFormatting(textareaRef);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useLayoutEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_PX)}px`;
-  }, [body]);
+  // Авто-рост до 12 строк (site-wide правило), дальше внутренний скролл.
+  useAutoGrowTextarea(textareaRef, body, { minRows: 1 });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -237,8 +231,7 @@ export function TaskDrawerComposer({
             rows={1}
             disabled={submitting}
             placeholder="Написать комментарий… Markdown, файлы (Ctrl+V)"
-            style={{ maxHeight: `${TEXTAREA_MAX_PX}px` }}
-            className="block w-full resize-none overflow-y-auto bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+            className="block w-full resize-none bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
           />
         </ContextMenuTrigger>
         {fmt.menuContent}

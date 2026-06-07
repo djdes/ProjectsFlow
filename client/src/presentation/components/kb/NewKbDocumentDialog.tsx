@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AutoGrowTextarea } from '@/components/ui/auto-grow-textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
 import type { Frontmatter } from '@/domain/kb/KbDocument';
@@ -154,11 +155,11 @@ export function NewKbDocumentDialog({
           {/* Body — optional textarea */}
           <div className="space-y-1.5">
             <Label htmlFor="new-kb-body">Содержимое (необязательно)</Label>
-            <textarea
+            <AutoGrowTextarea
               id="new-kb-body"
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              rows={4}
+              minRows={4}
               className="w-full rounded-md border bg-background p-3 text-sm"
               placeholder="Markdown-описание…"
             />
