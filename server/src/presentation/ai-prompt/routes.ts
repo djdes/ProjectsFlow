@@ -12,11 +12,13 @@ import {
 } from '../../domain/ai-prompt/errors.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
-// Свободный текст пользователя (improve / compose pass-1) — до 5000 символов.
-const MAX_FREE_TEXT = 5000;
-// compose-advanced: в text едет JSON сегментов из pass-1, не свободный текст. Потолок
-// держим под колонку input_text (MySQL TEXT ≤ 65535 байт; в utf8mb4 кириллица 2 байта).
-const MAX_ADVANCED_PAYLOAD = 30000;
+// Свободный текст пользователя (improve / compose pass-1) — до 50000 символов: совпадает с
+// maxLength поля композера и лимитом описания задачи (фактически «без ограничения по объёму»).
+// Колонка input_text — MEDIUMTEXT (db/066), так что байтового потолка TEXT больше нет.
+const MAX_FREE_TEXT = 50000;
+// compose-advanced: в text едет JSON сегментов из pass-1 (не свободный текст). Запас под
+// большой черновик: simpleBody всех сегментов + структура. Тоже в MEDIUMTEXT (db/066).
+const MAX_ADVANCED_PAYLOAD = 200000;
 
 const enqueueBodySchema = z
   .object({
@@ -31,12 +33,12 @@ const enqueueBodySchema = z
     mode: z.enum(['improve', 'compose', 'compose-advanced']).optional(),
   })
   .superRefine((b, ctx) => {
-    // 5000-символьный лимит — только для свободного текста; advanced (JSON сегментов) шире.
+    // Лимит свободного текста — только для improve/compose; advanced (JSON сегментов) шире.
     if (b.mode !== 'compose-advanced' && b.text.length > MAX_FREE_TEXT) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['text'],
-        message: 'text must be 1..5000 chars',
+        message: `text must be 1..${MAX_FREE_TEXT} chars`,
       });
     }
   });

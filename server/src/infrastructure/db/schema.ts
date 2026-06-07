@@ -721,7 +721,9 @@ export const aiPromptJobs = mysqlTable(
     mode: mysqlEnum('mode', ['improve', 'compose', 'compose-advanced'])
       .notNull()
       .default('improve'),
-    inputText: text('input_text').notNull(),
+    // MEDIUMTEXT (db/066): свободный текст до 50000 символов (≈100КБ в utf8mb4) и JSON
+    // сегментов для compose-advanced не влезают в TEXT (64КБ).
+    inputText: mediumtext('input_text').notNull(),
     // MEDIUMTEXT (db/060): для compose в kb_context кладутся дайджесты всех проектов-
     // кандидатов (до ~60K символов); legacy improve кладёт KB одного проекта (≤30K).
     kbContext: mediumtext('kb_context'),

@@ -343,10 +343,11 @@ const completeAiPromptJobBodySchema = z
   );
 
 // AI-prompt-job submit/poll для AGENT-клиентов (PFCompanion) — зеркало web-схем (ai-prompt/routes.ts).
-// compose-advanced: в text едет JSON сегментов pass-1 (шире 5000), потолок под TEXT-колонку.
+// Свободный текст до 50000 (как поле композера / описание задачи); compose-advanced — шире
+// (JSON сегментов). input_text — MEDIUMTEXT (db/066), байтового потолка TEXT больше нет.
 const enqueueAiPromptBodySchema = z
   .object({
-    text: z.string().trim().min(1, 'text required').max(30000, 'text too long'),
+    text: z.string().trim().min(1, 'text required').max(200000, 'text too long'),
     projectId: z
       .string()
       .uuid('projectId must be uuid')
@@ -356,11 +357,11 @@ const enqueueAiPromptBodySchema = z
     mode: z.enum(['improve', 'compose', 'compose-advanced']).optional(),
   })
   .superRefine((b, ctx) => {
-    if (b.mode !== 'compose-advanced' && b.text.length > 5000) {
+    if (b.mode !== 'compose-advanced' && b.text.length > 50000) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['text'],
-        message: 'text must be 1..5000 chars',
+        message: 'text must be 1..50000 chars',
       });
     }
   });
