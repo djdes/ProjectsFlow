@@ -7,7 +7,10 @@ import type {
   TelegramTaskDraft,
   TelegramTaskDraftRepository,
   TelegramDraftOffered,
+  TelegramDraftSegment,
 } from '../TelegramTaskDraftRepository.js';
+import type { EnqueueAiPromptJob } from '../../ai-prompt/EnqueueAiPromptJob.js';
+import type { WaitForAiPromptJob } from '../../ai-prompt/WaitForAiPromptJob.js';
 import type { TelegramTaskMessageRepository } from '../TelegramTaskMessageRepository.js';
 import type { SendAgentTelegramNotification } from '../SendAgentTelegramNotification.js';
 import type { ProjectMemberRepository } from '../../project/ProjectMemberRepository.js';
@@ -20,6 +23,7 @@ import type { DeclineTaskDelegation } from '../../task/DeclineTaskDelegation.js'
 import type { AssignInboxTaskToProject } from '../../task/AssignInboxTaskToProject.js';
 import { parseComposerMessage } from './parseComposerMessage.js';
 import { fuzzyMatch, greedyProjectPrefix } from './fuzzyMatch.js';
+import { parseComposeSegments, type ParsedComposeSegment } from './parseComposeSegments.js';
 
 // Минимальный slice callback_query, который мы обрабатываем (см. TG Bot API #callbackquery).
 export type TelegramCallbackQuery = {
@@ -48,6 +52,10 @@ type Deps = {
   readonly idGen: () => string;
   readonly shortIdGen: () => string;
   readonly appUrl: string;
+  // AI-перефраз сообщения в задачи (простой/быстрый compose pass-1). Best-effort: если
+  // диспетчер офлайн / job упал / таймаут — конструктор откатывается на ручной флоу.
+  readonly enqueueAiPromptJob: EnqueueAiPromptJob;
+  readonly waitForAiPromptJob: WaitForAiPromptJob;
 };
 
 // composing-черновик живёт 30 мин; confirmed (делегирование) — долго, т.к. accept может
@@ -56,6 +64,18 @@ const DRAFT_TTL_SECONDS = 30 * 60;
 const CONFIRMED_TTL_SECONDS = 30 * 24 * 60 * 60;
 const PAGE_SIZE = 6; // кнопок-вариантов на страницу пикера
 const EXCERPT_LIMIT = 120;
+
+// --- AI-перефраз (compose pass-1) ---
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const SPINNER_INTERVAL_MS = 2500;
+const WAIT_TEXT = '⏳ Ожидайте, перефразирую…';
+// compose-job long-poll: каждый WaitForAiPromptJob блокирует до ~50с; до 3 попыток ≈150с
+// (как клиентский ComposeTasks). Цикл привязан к числу попыток, а НЕ к wall-clock — чтобы
+// тест с мгновенным моком (null/таймаут) не уходил в busy-loop на 150 реальных секунд.
+const COMPOSE_WAIT_MS = 50_000;
+const COMPOSE_MAX_ATTEMPTS = 3;
+const SEGMENT_TERMINAL = new Set<string>(['succeeded', 'failed', 'cancelled']);
+const EDIT_BTNS_PER_ROW = 4; // кнопок «✏️ N» в ряд на многосегментной карточке
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
@@ -77,6 +97,19 @@ type DelegateSel =
   | { readonly type: 'idx'; readonly idx: number }
   | { readonly type: 'none' }
   | { readonly type: 'page'; readonly page: number };
+// AI-сегментные селекторы (с '?' = открыть пикер). Отдельны от ручных, чтобы не ломать
+// существующие tp:/td: коллбэки ручного флоу.
+type AiProjSel =
+  | { readonly type: 'idx'; readonly idx: number }
+  | { readonly type: 'inbox' }
+  | { readonly type: 'open' }
+  | { readonly type: 'page'; readonly page: number };
+type AiDelSel =
+  | { readonly type: 'idx'; readonly idx: number }
+  | { readonly type: 'none' }
+  | { readonly type: 'open' }
+  | { readonly type: 'page'; readonly page: number };
+type DeadlinePreset = 'today' | 'tomorrow' | 'none';
 type ParsedCallback =
   | { readonly kind: 'project'; readonly draftId: string; readonly sel: ProjectSel }
   | { readonly kind: 'delegate'; readonly draftId: string; readonly sel: DelegateSel }
@@ -84,6 +117,19 @@ type ParsedCallback =
   | { readonly kind: 'cancel'; readonly draftId: string }
   | { readonly kind: 'accept'; readonly delegationId: string }
   | { readonly kind: 'decline'; readonly delegationId: string }
+  // --- AI-сегменты (compose) ---
+  | { readonly kind: 'seg-create'; readonly draftId: string }
+  | { readonly kind: 'seg-edit'; readonly draftId: string; readonly seg: number }
+  | { readonly kind: 'seg-back'; readonly draftId: string }
+  | { readonly kind: 'seg-toggle'; readonly draftId: string; readonly seg: number }
+  | {
+      readonly kind: 'seg-deadline';
+      readonly draftId: string;
+      readonly seg: number;
+      readonly preset: DeadlinePreset;
+    }
+  | { readonly kind: 'seg-project'; readonly draftId: string; readonly seg: number; readonly sel: AiProjSel }
+  | { readonly kind: 'seg-delegate'; readonly draftId: string; readonly seg: number; readonly sel: AiDelSel }
   | null;
 
 function parseCallback(data: string | undefined): ParsedCallback {
@@ -111,9 +157,60 @@ function parseCallback(data: string | undefined): ParsedCallback {
       return { kind: 'accept', delegationId: rest };
     case 'dd':
       return { kind: 'decline', delegationId: rest };
+    // --- AI-сегменты ---
+    case 'ac':
+      return rest ? { kind: 'seg-create', draftId: rest } : null;
+    case 'ab':
+      return rest ? { kind: 'seg-back', draftId: rest } : null;
+    case 'ae': {
+      const [draftId, segStr] = rest.split(':');
+      if (!draftId || segStr === undefined) return null;
+      return { kind: 'seg-edit', draftId, seg: toIdx(segStr) };
+    }
+    case 'at': {
+      const [draftId, segStr] = rest.split(':');
+      if (!draftId || segStr === undefined) return null;
+      return { kind: 'seg-toggle', draftId, seg: toIdx(segStr) };
+    }
+    case 'al': {
+      const [draftId, segStr, preset] = rest.split(':');
+      if (!draftId || segStr === undefined || preset === undefined) return null;
+      const p: DeadlinePreset | null =
+        preset === 'today' ? 'today' : preset === 'tom' ? 'tomorrow' : preset === 'none' ? 'none' : null;
+      if (!p) return null;
+      return { kind: 'seg-deadline', draftId, seg: toIdx(segStr), preset: p };
+    }
+    case 'ap': {
+      const [draftId, segStr, sel] = rest.split(':');
+      if (!draftId || segStr === undefined || sel === undefined) return null;
+      return { kind: 'seg-project', draftId, seg: toIdx(segStr), sel: parseAiProjSel(sel) };
+    }
+    case 'ad': {
+      const [draftId, segStr, sel] = rest.split(':');
+      if (!draftId || segStr === undefined || sel === undefined) return null;
+      return { kind: 'seg-delegate', draftId, seg: toIdx(segStr), sel: parseAiDelSel(sel) };
+    }
     default:
       return null;
   }
+}
+
+function toIdx(s: string): number {
+  return Math.max(0, Number(s) || 0);
+}
+
+function parseAiProjSel(sel: string): AiProjSel {
+  if (sel === 'i') return { type: 'inbox' };
+  if (sel === '?') return { type: 'open' };
+  if (sel.startsWith('p')) return { type: 'page', page: Math.max(0, Number(sel.slice(1)) || 0) };
+  return { type: 'idx', idx: Math.max(0, Number(sel) || 0) };
+}
+
+function parseAiDelSel(sel: string): AiDelSel {
+  if (sel === 'n') return { type: 'none' };
+  if (sel === '?') return { type: 'open' };
+  if (sel.startsWith('p')) return { type: 'page', page: Math.max(0, Number(sel.slice(1)) || 0) };
+  return { type: 'idx', idx: Math.max(0, Number(sel) || 0) };
 }
 
 function splitOnce(s: string): [string, string | null] {
@@ -152,7 +249,11 @@ type Card = { readonly text: string; readonly replyMarkup?: InlineKeyboardMarkup
 export class TelegramComposerService {
   constructor(private readonly deps: Deps) {}
 
-  // Точка входа из HandleTelegramWebhook: не-командное, не-reply сообщение → черновик задачи.
+  // Точка входа из HandleTelegramWebhook: не-командное, не-reply сообщение → задача.
+  // Любое сообщение прогоняется через простой/быстрый AI-compose (перефраз + авто проект/
+  // исполнитель/дедлайн); пока AI думает — «Ожидайте, перефразирую…» со спиннером. Если AI
+  // недоступен (диспетчер офлайн / job упал / таймаут / битый JSON) — тихий откат на ручной
+  // флоу. Все AI-вызовы best-effort: любая ошибка только логируется, бот остаётся рабочим.
   async startFromMessage(tgUserId: number, chatId: number, rawText: string): Promise<void> {
     const userId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
     if (!userId) {
@@ -160,6 +261,66 @@ export class TelegramComposerService {
       return;
     }
 
+    const parsed = parseComposerMessage(rawText);
+    // Нет текста задачи (например, один '+Проект') → ручной флоу покажет подсказку (без AI).
+    if (parsed.taskText.trim().length === 0) {
+      await this.manualFlow(userId, chatId, rawText);
+      return;
+    }
+
+    let waitMsgId: number | null = null;
+    let stopSpinner: (() => void) | null = null;
+    // Как только AI-черновик создан — больше НЕ откатываемся на ручной флоу (иначе создадим
+    // второй черновик). Падение на показе карточки после этого — только лог.
+    let aiDraftDone = false;
+    try {
+      waitMsgId = await this.sendReturningId(chatId, WAIT_TEXT);
+      const hint = await this.resolveProjectHint(userId, parsed);
+      const aiText = this.buildAiText(hint.taskText, parsed.delegateQuery);
+      const job = await this.deps.enqueueAiPromptJob.execute({
+        userId,
+        text: aiText,
+        projectId: hint.projectId,
+        mode: 'compose',
+      });
+      if (waitMsgId !== null) stopSpinner = this.startSpinner(chatId, waitMsgId);
+      const parsedSegs = await this.pollCompose(userId, job.id);
+      if (stopSpinner) {
+        stopSpinner();
+        stopSpinner = null;
+      }
+      const segments = this.toDraftSegments(parsedSegs, hint.projectId);
+      const draft = await this.deps.drafts.create({
+        id: this.deps.shortIdGen(),
+        creatorUserId: userId,
+        tgChatId: chatId,
+        taskText: aiText,
+        segments,
+        ttlSeconds: DRAFT_TTL_SECONDS,
+      });
+      aiDraftDone = true;
+      const card = await this.renderSegmentsCard(draft);
+      await this.respond(chatId, waitMsgId, card.text, card.replyMarkup);
+    } catch (err) {
+      if (stopSpinner) stopSpinner();
+      if (aiDraftDone) {
+        console.warn('[tg-composer] AI карточка не показалась (черновик создан):', err);
+        return;
+      }
+      console.warn('[tg-composer] AI compose failed → ручной флоу:', err);
+      await this.manualFlow(userId, chatId, rawText, waitMsgId ?? undefined);
+    }
+  }
+
+  // Ручной флоу (без AI): парсит `+проект текст @делегат`, ведёт многошаговый выбор кнопками.
+  // waitMsgId — если задан (осталось сообщение «Ожидайте…» от AI-попытки), первую карточку
+  // рендерим редактированием этого сообщения, иначе шлём новое.
+  private async manualFlow(
+    userId: string,
+    chatId: number,
+    rawText: string,
+    waitMsgId?: number,
+  ): Promise<void> {
     const parsed = parseComposerMessage(rawText);
 
     // Резолв проекта. taskText может быть переопределён жадным матчем многословного имени.
@@ -186,8 +347,9 @@ export class TelegramComposerService {
     }
 
     if (taskText.length === 0) {
-      await this.send(
+      await this.respond(
         chatId,
+        waitMsgId ?? null,
         '📝 Напиши текст задачи. Например: <code>+Проект Обнови билд @Коллега</code> или просто текст — добавлю во «Входящие».',
       );
       return;
@@ -224,7 +386,7 @@ export class TelegramComposerService {
     });
 
     const card = await this.nextCard(draft);
-    await this.send(chatId, card.text, card.replyMarkup);
+    await this.respond(chatId, waitMsgId ?? null, card.text, card.replyMarkup);
   }
 
   // Phase D — inline-режим: `@ProjectsFlow_Bot текст задачи [@делегат]` показывает живой
@@ -341,6 +503,21 @@ export class TelegramComposerService {
         return this.onDelegateSel(cq, draft, cb.sel, chatId, messageId);
       case 'confirm':
         return this.finalize(draft, userId, chatId, messageId, cq.id);
+      // --- AI-сегменты (compose) ---
+      case 'seg-create':
+        return this.finalizeSegments(draft, userId, chatId, messageId, cq.id);
+      case 'seg-edit':
+        return this.onSegEdit(cq, draft, cb.seg, chatId, messageId);
+      case 'seg-back':
+        return this.onSegBack(cq, draft, chatId, messageId);
+      case 'seg-toggle':
+        return this.onSegToggle(cq, draft, cb.seg, chatId, messageId);
+      case 'seg-deadline':
+        return this.onSegDeadline(cq, draft, cb.seg, cb.preset, chatId, messageId);
+      case 'seg-project':
+        return this.onSegProject(cq, draft, userId, cb.seg, cb.sel, chatId, messageId);
+      case 'seg-delegate':
+        return this.onSegDelegate(cq, draft, userId, cb.seg, cb.sel, chatId, messageId);
     }
   }
 
@@ -747,6 +924,570 @@ export class TelegramComposerService {
     row.push({ text: `${page + 1}/${pages}`, callback_data: makePage(page) });
     if (page < pages - 1) row.push({ text: '▶', callback_data: makePage(page + 1) });
     return [row];
+  }
+
+  // ========================= AI-перефраз (compose) =========================
+
+  // Однозначный проект-хинт из `+Проект` (для AI задаёт контекст и пинит сегменты).
+  // Возвращает projectId (null если не указан/неоднозначен) и очищенный текст задачи.
+  private async resolveProjectHint(
+    userId: string,
+    parsed: { projectQuery: string | null; taskText: string },
+  ): Promise<{ projectId: string | null; taskText: string }> {
+    const taskText = parsed.taskText.trim();
+    if (parsed.projectQuery === null) return { projectId: null, taskText };
+    const all = (await this.deps.members.listProjectsForUser(userId)).filter((p) => !p.isInbox);
+    const segment = [parsed.projectQuery, parsed.taskText].filter((s) => s.length > 0).join(' ');
+    const greedy = greedyProjectPrefix(segment, all, (p) => p.name);
+    if (greedy) return { projectId: greedy.item.id, taskText: greedy.remainder.trim() };
+    const r = fuzzyMatch(parsed.projectQuery, all, (p) => p.name);
+    if (r.unique) return { projectId: r.unique.id, taskText };
+    return { projectId: null, taskText };
+  }
+
+  // Текст для AI: задача + (если в `@делегат` назван исполнитель) явная подсказка модели.
+  private buildAiText(taskText: string, delegateQuery: string | null): string {
+    const t = taskText.trim();
+    if (delegateQuery && delegateQuery.trim().length > 0) {
+      return `${t}\n\nИсполнитель: ${delegateQuery.trim()}`;
+    }
+    return t;
+  }
+
+  // Опрос compose-job: до COMPOSE_MAX_ATTEMPTS long-poll'ов (≈150с в проде; в тестах мок
+  // мгновенный). Бросает на не-succeeded / пустом / битом JSON → caller откатится на ручной.
+  private async pollCompose(userId: string, jobId: string): Promise<ParsedComposeSegment[]> {
+    let job: Awaited<ReturnType<WaitForAiPromptJob['execute']>> = null;
+    for (let i = 0; i < COMPOSE_MAX_ATTEMPTS; i++) {
+      job = await this.deps.waitForAiPromptJob.execute({ userId, jobId, maxWaitMs: COMPOSE_WAIT_MS });
+      if (job && SEGMENT_TERMINAL.has(job.status)) break;
+    }
+    if (!job || job.status !== 'succeeded' || !job.improvedText) {
+      throw new Error(`compose job not ready: ${job?.status ?? 'timeout'}`);
+    }
+    return parseComposeSegments(job.improvedText);
+  }
+
+  // Парсинг-результат → доменные сегменты черновика. hintProjectId (если задан +Проектом)
+  // пинит все сегменты в этот проект (исполнителя оставляем — провалидируется при создании).
+  private toDraftSegments(
+    parsed: ParsedComposeSegment[],
+    hintProjectId: string | null,
+  ): TelegramDraftSegment[] {
+    return parsed.map((s) => ({
+      title: s.title,
+      body: s.body,
+      projectId: hintProjectId ?? s.projectId,
+      projectName: hintProjectId ? null : s.projectName,
+      assigneeUserId: s.assigneeUserId,
+      assigneeName: s.assigneeName,
+      deadline: s.deadline,
+      included: true,
+    }));
+  }
+
+  private async projNameOf(projectId: string | null): Promise<string> {
+    if (!projectId) return 'Входящие';
+    return (await this.deps.projects.getById(projectId))?.name ?? 'проект';
+  }
+
+  // Имя исполнителя для показа: по userId (если сматчился) или сырое имя-подсказка из текста.
+  private async assigneeLabelOf(seg: TelegramDraftSegment): Promise<string | null> {
+    if (seg.assigneeUserId) {
+      return (
+        (await this.deps.users.getById(seg.assigneeUserId))?.displayName ??
+        seg.assigneeName ??
+        'исполнитель'
+      );
+    }
+    return seg.assigneeName;
+  }
+
+  // Главная карточка после перефраза: 1 сегмент → одиночная, N → сводная.
+  private async renderSegmentsCard(draft: TelegramTaskDraft): Promise<Card> {
+    const segs = draft.segments ?? [];
+    if (segs.length <= 1) return this.renderSingleSegment(draft);
+    return this.renderMultiSegment(draft);
+  }
+
+  private async renderSingleSegment(draft: TelegramTaskDraft): Promise<Card> {
+    const seg = draft.segments?.[0];
+    if (!seg) return this.renderConfirm(draft); // защитный фолбэк
+    const projName = await this.projNameOf(seg.projectId);
+    const assignee = await this.assigneeLabelOf(seg);
+    const lines = ['🆕 <b>Новая задача</b>', `📁 Проект: <b>${escapeHtml(projName)}</b>`];
+    if (assignee) lines.push(`👤 Исполнитель: <b>${escapeHtml(assignee)}</b>`);
+    if (seg.deadline) lines.push(`📅 Срок: <b>${escapeHtml(seg.deadline)}</b>`);
+    if (seg.title.trim()) lines.push(`📝 <b>${escapeHtml(seg.title.trim())}</b>`);
+    lines.push(escapeHtml(excerpt(seg.body)));
+    return {
+      text: lines.join('\n'),
+      replyMarkup: {
+        inline_keyboard: [
+          [
+            { text: '✅ Создать задачу', callback_data: `ac:${draft.id}` },
+            { text: '✖️ Отменить', callback_data: `tx:${draft.id}` },
+          ],
+          [{ text: '✏️ Изменить', callback_data: `ae:${draft.id}:0` }],
+        ],
+      },
+    };
+  }
+
+  private async renderMultiSegment(draft: TelegramTaskDraft): Promise<Card> {
+    const segs = draft.segments ?? [];
+    const includedCount = segs.filter((s) => s.included).length;
+    const lines = [`🆕 <b>Распознал задач: ${segs.length}</b>`, ''];
+    for (let i = 0; i < segs.length; i++) {
+      const seg = segs[i];
+      if (!seg) continue;
+      const projName = await this.projNameOf(seg.projectId);
+      const assignee = await this.assigneeLabelOf(seg);
+      const meta = [`📁 ${escapeHtml(projName)}`];
+      if (assignee) meta.push(`👤 ${escapeHtml(assignee)}`);
+      meta.push(`📅 ${seg.deadline ? escapeHtml(seg.deadline) : '—'}`);
+      const titleText = seg.title.trim() || excerpt(seg.body, 60);
+      const strike = seg.included ? '' : ' <i>(исключена)</i>';
+      lines.push(`${i + 1}. ${seg.included ? '' : '🚫 '}<b>${escapeHtml(titleText)}</b>${strike}`);
+      lines.push(`   ${meta.join(' · ')}`);
+    }
+    const rows: { text: string; callback_data: string }[][] = [
+      [
+        { text: `✅ Создать все (${includedCount})`, callback_data: `ac:${draft.id}` },
+        { text: '✖️ Отменить', callback_data: `tx:${draft.id}` },
+      ],
+    ];
+    let row: { text: string; callback_data: string }[] = [];
+    for (let i = 0; i < segs.length; i++) {
+      row.push({ text: `✏️ ${i + 1}`, callback_data: `ae:${draft.id}:${i}` });
+      if (row.length === EDIT_BTNS_PER_ROW) {
+        rows.push(row);
+        row = [];
+      }
+    }
+    if (row.length > 0) rows.push(row);
+    return { text: lines.join('\n'), replyMarkup: { inline_keyboard: rows } };
+  }
+
+  // Под-карточка правки одного сегмента (проект / исполнитель / срок / включение).
+  private async renderSegmentEdit(draft: TelegramTaskDraft, idx: number): Promise<Card> {
+    const segs = draft.segments ?? [];
+    const seg = segs[idx];
+    if (!seg) return this.renderSegmentsCard(draft);
+    const multi = segs.length > 1;
+    const projName = await this.projNameOf(seg.projectId);
+    const assignee = await this.assigneeLabelOf(seg);
+    const lines = [
+      `✏️ <b>Задача ${idx + 1}</b>`,
+      `📁 Проект: <b>${escapeHtml(projName)}</b>`,
+      `👤 Исполнитель: <b>${assignee ? escapeHtml(assignee) : '—'}</b>`,
+      `📅 Срок: <b>${seg.deadline ? escapeHtml(seg.deadline) : '—'}</b>`,
+      '',
+      `📝 ${escapeHtml(excerpt(seg.body))}`,
+    ];
+    if (!seg.included) lines.push('\n🚫 <i>Исключена из создания</i>');
+    const rows: { text: string; callback_data: string }[][] = [
+      [
+        { text: '📁 Проект', callback_data: `ap:${draft.id}:${idx}:?` },
+        { text: '👤 Исполнитель', callback_data: `ad:${draft.id}:${idx}:?` },
+      ],
+      [
+        { text: '📅 Сегодня', callback_data: `al:${draft.id}:${idx}:today` },
+        { text: 'Завтра', callback_data: `al:${draft.id}:${idx}:tom` },
+        { text: 'Без срока', callback_data: `al:${draft.id}:${idx}:none` },
+      ],
+    ];
+    if (multi) {
+      rows.push([
+        {
+          text: seg.included ? '🗑 Исключить' : '↩️ Вернуть',
+          callback_data: `at:${draft.id}:${idx}`,
+        },
+      ]);
+    }
+    rows.push([{ text: '⬅️ Назад', callback_data: `ab:${draft.id}` }]);
+    return { text: lines.join('\n'), replyMarkup: { inline_keyboard: rows } };
+  }
+
+  private renderAiProjectPicker(draft: TelegramTaskDraft, idx: number, page: number): Card {
+    const all = draft.offered?.projects ?? [];
+    const rows = this.pageButtons(all.length, page, (absIdx) => ({
+      text: all[absIdx]?.name.slice(0, 40) ?? '?',
+      callback_data: `ap:${draft.id}:${idx}:${absIdx}`,
+    }));
+    rows.push(...this.navRow(all.length, page, (p) => `ap:${draft.id}:${idx}:p${p}`));
+    rows.push([
+      { text: '📥 Во «Входящие»', callback_data: `ap:${draft.id}:${idx}:i` },
+      { text: '⬅️ Назад', callback_data: `ae:${draft.id}:${idx}` },
+    ]);
+    return { text: `📁 Проект для задачи ${idx + 1}?`, replyMarkup: { inline_keyboard: rows } };
+  }
+
+  private renderAiMemberPicker(draft: TelegramTaskDraft, idx: number, page: number): Card {
+    const all = draft.offered?.members ?? [];
+    const rows = this.pageButtons(all.length, page, (absIdx) => ({
+      text: all[absIdx]?.displayName.slice(0, 40) ?? '?',
+      callback_data: `ad:${draft.id}:${idx}:${absIdx}`,
+    }));
+    rows.push(...this.navRow(all.length, page, (p) => `ad:${draft.id}:${idx}:p${p}`));
+    rows.push([
+      { text: '🚫 Без исполнителя', callback_data: `ad:${draft.id}:${idx}:n` },
+      { text: '⬅️ Назад', callback_data: `ae:${draft.id}:${idx}` },
+    ]);
+    return { text: `👤 Исполнитель для задачи ${idx + 1}?`, replyMarkup: { inline_keyboard: rows } };
+  }
+
+  private async onSegEdit(
+    cq: TelegramCallbackQuery,
+    draft: TelegramTaskDraft,
+    idx: number,
+    chatId: number,
+    messageId: number | undefined,
+  ): Promise<void> {
+    const card = await this.renderSegmentEdit(draft, idx);
+    if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
+    await this.deps.client.answerCallbackQuery(cq.id);
+  }
+
+  private async onSegBack(
+    cq: TelegramCallbackQuery,
+    draft: TelegramTaskDraft,
+    chatId: number,
+    messageId: number | undefined,
+  ): Promise<void> {
+    const card = await this.renderSegmentsCard(draft);
+    if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
+    await this.deps.client.answerCallbackQuery(cq.id);
+  }
+
+  private async onSegToggle(
+    cq: TelegramCallbackQuery,
+    draft: TelegramTaskDraft,
+    idx: number,
+    chatId: number,
+    messageId: number | undefined,
+  ): Promise<void> {
+    const segs = (draft.segments ?? []).slice();
+    const seg = segs[idx];
+    if (seg) {
+      segs[idx] = { ...seg, included: !seg.included };
+      const updated = await this.deps.drafts.patch(draft.id, { segments: segs });
+      const card = await this.renderSegmentEdit(updated ?? draft, idx);
+      if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
+    }
+    await this.deps.client.answerCallbackQuery(cq.id);
+  }
+
+  private async onSegDeadline(
+    cq: TelegramCallbackQuery,
+    draft: TelegramTaskDraft,
+    idx: number,
+    preset: DeadlinePreset,
+    chatId: number,
+    messageId: number | undefined,
+  ): Promise<void> {
+    const segs = (draft.segments ?? []).slice();
+    const seg = segs[idx];
+    if (seg) {
+      const deadline = preset === 'none' ? null : this.presetDate(preset);
+      segs[idx] = { ...seg, deadline };
+      const updated = await this.deps.drafts.patch(draft.id, { segments: segs });
+      const card = await this.renderSegmentEdit(updated ?? draft, idx);
+      if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
+    }
+    await this.deps.client.answerCallbackQuery(cq.id);
+  }
+
+  private presetDate(preset: 'today' | 'tomorrow'): string {
+    const d = new Date();
+    if (preset === 'tomorrow') d.setDate(d.getDate() + 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  private async onSegProject(
+    cq: TelegramCallbackQuery,
+    draft: TelegramTaskDraft,
+    userId: string,
+    idx: number,
+    sel: AiProjSel,
+    chatId: number,
+    messageId: number | undefined,
+  ): Promise<void> {
+    if (sel.type === 'open') {
+      const all = (await this.deps.members.listProjectsForUser(userId)).filter((p) => !p.isInbox);
+      const offered: TelegramDraftOffered = {
+        ...(draft.offered?.members ? { members: draft.offered.members } : {}),
+        projects: all.map((p) => ({ id: p.id, name: p.name })),
+      };
+      const updated = await this.deps.drafts.patch(draft.id, { offered });
+      if (messageId) {
+        const card = this.renderAiProjectPicker(updated ?? draft, idx, 0);
+        await this.edit(chatId, messageId, card.text, card.replyMarkup);
+      }
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
+    if (sel.type === 'page') {
+      if (messageId) {
+        const card = this.renderAiProjectPicker(draft, idx, sel.page);
+        await this.edit(chatId, messageId, card.text, card.replyMarkup);
+      }
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
+    const segs = (draft.segments ?? []).slice();
+    const seg = segs[idx];
+    if (seg) {
+      let projectId: string | null;
+      let projectName: string | null;
+      if (sel.type === 'inbox') {
+        projectId = null;
+        projectName = null;
+      } else {
+        const picked = draft.offered?.projects?.[sel.idx];
+        projectId = picked?.id ?? seg.projectId;
+        projectName = picked?.name ?? seg.projectName;
+      }
+      segs[idx] = { ...seg, projectId, projectName };
+      const updated = await this.deps.drafts.patch(draft.id, {
+        segments: segs,
+        offered: clearProjects(draft.offered),
+      });
+      const card = await this.renderSegmentEdit(updated ?? draft, idx);
+      if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
+    }
+    await this.deps.client.answerCallbackQuery(cq.id);
+  }
+
+  private async onSegDelegate(
+    cq: TelegramCallbackQuery,
+    draft: TelegramTaskDraft,
+    userId: string,
+    idx: number,
+    sel: AiDelSel,
+    chatId: number,
+    messageId: number | undefined,
+  ): Promise<void> {
+    if (sel.type === 'open') {
+      const shared = await this.deps.members.listSharedUsers(userId);
+      const offered: TelegramDraftOffered = {
+        ...(draft.offered?.projects ? { projects: draft.offered.projects } : {}),
+        members: shared.map((u) => ({ id: u.id, displayName: u.displayName })),
+      };
+      const updated = await this.deps.drafts.patch(draft.id, { offered });
+      if (messageId) {
+        const card = this.renderAiMemberPicker(updated ?? draft, idx, 0);
+        await this.edit(chatId, messageId, card.text, card.replyMarkup);
+      }
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
+    if (sel.type === 'page') {
+      if (messageId) {
+        const card = this.renderAiMemberPicker(draft, idx, sel.page);
+        await this.edit(chatId, messageId, card.text, card.replyMarkup);
+      }
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
+    const segs = (draft.segments ?? []).slice();
+    const seg = segs[idx];
+    if (seg) {
+      let assigneeUserId: string | null;
+      let assigneeName: string | null;
+      if (sel.type === 'none') {
+        assigneeUserId = null;
+        assigneeName = null;
+      } else {
+        const picked = draft.offered?.members?.[sel.idx];
+        assigneeUserId = picked?.id ?? seg.assigneeUserId;
+        assigneeName = picked?.displayName ?? seg.assigneeName;
+      }
+      segs[idx] = { ...seg, assigneeUserId, assigneeName };
+      const updated = await this.deps.drafts.patch(draft.id, {
+        segments: segs,
+        offered: clearMembers(draft.offered),
+      });
+      const card = await this.renderSegmentEdit(updated ?? draft, idx);
+      if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
+    }
+    await this.deps.client.answerCallbackQuery(cq.id);
+  }
+
+  // Создать все включённые сегменты. Ошибка одного не валит остальные.
+  private async finalizeSegments(
+    draft: TelegramTaskDraft,
+    userId: string,
+    chatId: number,
+    messageId: number | undefined,
+    cqId: string,
+  ): Promise<void> {
+    const segs = (draft.segments ?? []).filter((s) => s.included);
+    if (segs.length === 0) {
+      await this.deps.client.answerCallbackQuery(cqId, {
+        text: 'Нет задач для создания.',
+        showAlert: true,
+      });
+      return;
+    }
+    let created = 0;
+    let failed = 0;
+    let lastTaskId: string | null = null;
+    let lastProjectId: string | null = null;
+    const summary: string[] = [];
+    for (const seg of segs) {
+      try {
+        const title = seg.title.trim();
+        const body = seg.body.trim();
+        const description = title ? `**${title}**\n\n${body}` : body;
+        if (description.trim().length === 0) {
+          failed += 1;
+          continue;
+        }
+        const targetId = seg.projectId ?? (await this.deps.getOrCreateInbox.execute(userId)).id;
+        const delegateUserId =
+          seg.assigneeUserId && seg.assigneeUserId !== userId ? seg.assigneeUserId : null;
+        const task = await this.deps.createTask.execute({
+          projectId: targetId,
+          ownerUserId: userId,
+          description,
+          status: 'todo',
+          deadline: seg.deadline,
+          delegateUserId,
+        });
+        created += 1;
+        lastTaskId = task.id;
+        lastProjectId = targetId;
+        const projName = await this.projNameOf(seg.projectId);
+        const delegationId = task.delegation?.id ?? null;
+        if (delegateUserId && delegationId) {
+          await this.notifySegmentDelegate(seg, task.id, targetId, delegationId, userId, description);
+        }
+        summary.push(`✅ ${escapeHtml(title || excerpt(body, 40))} → <b>${escapeHtml(projName)}</b>`);
+      } catch (err) {
+        console.warn('[tg-composer] finalizeSegments: segment failed:', err);
+        failed += 1;
+        summary.push(`⚠️ ${escapeHtml(seg.title.trim() || excerpt(seg.body, 40))} — не удалось`);
+      }
+    }
+    await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
+    // reply→комментарий: маппим сообщение только когда создана РОВНО одна задача (для N задач
+    // одно сообщение к нескольким задачам однозначно не привязать).
+    if (created === 1 && lastTaskId && lastProjectId && messageId) {
+      await this.deps.taskMessages.upsert({
+        tgChatId: chatId,
+        tgMessageId: messageId,
+        recipientUserId: userId,
+        taskId: lastTaskId,
+        projectId: lastProjectId,
+      });
+    }
+    const header = failed === 0 ? `✅ Создано задач: ${created}` : `Создано: ${created}, ошибок: ${failed}`;
+    if (messageId) await this.edit(chatId, messageId, [header, '', ...summary].join('\n'));
+    await this.deps.client.answerCallbackQuery(cqId, { text: created > 0 ? 'Создано' : 'Не удалось' });
+  }
+
+  // TG-уведомление делегату сегмента с кнопками Принять/Отказать (in-app/email шлёт CreateTask).
+  private async notifySegmentDelegate(
+    seg: TelegramDraftSegment,
+    taskId: string,
+    projectId: string,
+    delegationId: string,
+    creatorUserId: string,
+    description: string,
+  ): Promise<void> {
+    if (!seg.assigneeUserId) return;
+    const creator = await this.deps.users.getById(creatorUserId);
+    const creatorName = creator?.displayName ?? 'Коллега';
+    const projName = await this.projNameOf(seg.projectId);
+    const msg = `👤 <b>${escapeHtml(creatorName)}</b> делегирует тебе задачу:\n📝 <i>${escapeHtml(excerpt(description))}</i>. Проект: <b>${escapeHtml(projName)}</b>.`;
+    const replyMarkup: InlineKeyboardMarkup = {
+      inline_keyboard: [
+        [
+          { text: '✅ Принять', callback_data: `da:${delegationId}` },
+          { text: '❌ Отказать', callback_data: `dd:${delegationId}` },
+        ],
+      ],
+    };
+    const res = await this.deps.sendNotification.execute({
+      userId: seg.assigneeUserId,
+      text: msg,
+      parseMode: 'HTML',
+      kind: 'task_delegation',
+      taskId,
+      replyMarkup,
+      skipPrefsCheck: true,
+      skipDedupCheck: true,
+    });
+    if (res.status === 'ok') {
+      await this.deps.taskMessages.upsert({
+        tgChatId: res.chatId,
+        tgMessageId: res.messageId,
+        recipientUserId: seg.assigneeUserId,
+        taskId,
+        projectId,
+      });
+    }
+  }
+
+  // Шлёт сообщение и возвращает messageId (для спиннера / последующего edit). null при ошибке.
+  private async sendReturningId(chatId: number, text: string): Promise<number | null> {
+    try {
+      const res = await this.deps.client.sendMessage({
+        chatId,
+        text,
+        parseMode: 'HTML',
+        disableWebPagePreview: true,
+      });
+      return res.kind === 'ok' ? res.messageId : null;
+    } catch (err) {
+      console.warn('[tg-composer] sendReturningId failed:', err);
+      return null;
+    }
+  }
+
+  // Редактируем waitMsgId если он есть, иначе шлём новое сообщение.
+  private async respond(
+    chatId: number,
+    waitMsgId: number | null,
+    text: string,
+    replyMarkup?: InlineKeyboardMarkup,
+  ): Promise<void> {
+    if (waitMsgId !== null) await this.edit(chatId, waitMsgId, text, replyMarkup);
+    else await this.send(chatId, text, replyMarkup);
+  }
+
+  // Анимация ожидания: периодически редактирует сообщение кадрами брайля. Возвращает stop().
+  // Рекурсивный setTimeout (не setInterval) — чтобы тики не накладывались, если edit подвис;
+  // stop() гарантированно гасит таймер. Все edit'ы best-effort.
+  private startSpinner(chatId: number, messageId: number): () => void {
+    let i = 0;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tick = (): void => {
+      if (stopped) return;
+      i = (i + 1) % SPINNER_FRAMES.length;
+      void this.deps.client
+        .editMessageText({
+          chatId,
+          messageId,
+          text: `${SPINNER_FRAMES[i]} Перефразирую…`,
+          parseMode: 'HTML',
+          disableWebPagePreview: true,
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!stopped) timer = setTimeout(tick, SPINNER_INTERVAL_MS);
+        });
+    };
+    timer = setTimeout(tick, SPINNER_INTERVAL_MS);
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
   }
 
   private notLinkedText(): string {

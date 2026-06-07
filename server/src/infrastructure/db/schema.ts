@@ -26,7 +26,10 @@ import type {
   KanbanDefaultColors,
 } from '../../domain/kanban/KanbanSettings.js';
 import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
-import type { TelegramDraftOffered } from '../../application/telegram/TelegramTaskDraftRepository.js';
+import type {
+  TelegramDraftOffered,
+  TelegramDraftSegment,
+} from '../../application/telegram/TelegramTaskDraftRepository.js';
 import type {
   SnapshotMetrics,
   LogTails,
@@ -140,6 +143,8 @@ export const telegramTaskDrafts = mysqlTable(
     delegationId: char('delegation_id', { length: 36 }),
     // Предложенные projects/members для резолва index→UUID из callback_data.
     offered: json('offered').$type<TelegramDraftOffered | null>(),
+    // AI-распознанные сегменты-задачи (mode='compose'); null = ручной флоу. См. db/067.
+    segments: json('segments').$type<TelegramDraftSegment[] | null>(),
     status: mysqlEnum('status', ['composing', 'confirmed', 'cancelled', 'expired'])
       .notNull()
       .default('composing'),

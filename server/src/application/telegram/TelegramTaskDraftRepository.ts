@@ -13,6 +13,25 @@ export type TelegramDraftOffered = {
   readonly members?: readonly { readonly id: string; readonly displayName: string }[];
 };
 
+// Один AI-распознанный сегмент-задача (mode='compose', простой/быстрый вариант: pass-1 sonnet).
+// Сообщение боту прогоняется через AI, который режет его на сегменты и проставляет проект/
+// исполнителя/дедлайн. Массив хранится в JSON-колонке segments черновика между показом
+// карточки и нажатием «Создать». index в массиве = `seg` в callback_data (ap/ad/al/at/ae).
+// null segments = старый ручной флоу (без AI). См. db/067.
+export type TelegramDraftSegment = {
+  readonly title: string;
+  // simpleBody: причёсанный markdown (списки/жирный), без заголовков верхнего уровня.
+  readonly body: string;
+  readonly projectId: string | null;
+  readonly projectName: string | null;
+  readonly assigneeUserId: string | null;
+  // Сырое имя из текста («Олег») — подсказка, когда userId не сматчился.
+  readonly assigneeName: string | null;
+  readonly deadline: string | null; // YYYY-MM-DD
+  // Тогл «включить в создание» (правка в многосегментной карточке). default true.
+  readonly included: boolean;
+};
+
 export type TelegramTaskDraft = {
   readonly id: string;
   readonly creatorUserId: string;
@@ -22,6 +41,7 @@ export type TelegramTaskDraft = {
   readonly delegateUserId: string | null;
   readonly delegationId: string | null;
   readonly offered: TelegramDraftOffered | null;
+  readonly segments: TelegramDraftSegment[] | null;
   readonly status: TelegramTaskDraftStatus;
   readonly createdAt: Date;
   readonly expiresAt: Date;
@@ -35,6 +55,7 @@ export type CreateTelegramTaskDraftInput = {
   readonly projectId?: string | null;
   readonly delegateUserId?: string | null;
   readonly offered?: TelegramDraftOffered | null;
+  readonly segments?: TelegramDraftSegment[] | null;
   // Срок жизни в секундах от now. Репо считает expires_at = now + ttl.
   readonly ttlSeconds: number;
 };
@@ -46,6 +67,7 @@ export type TelegramTaskDraftPatch = {
   readonly delegateUserId?: string | null;
   readonly delegationId?: string | null;
   readonly offered?: TelegramDraftOffered | null;
+  readonly segments?: TelegramDraftSegment[] | null;
   readonly status?: TelegramTaskDraftStatus;
   // Если задано — продлевает expires_at = now + extendTtlSeconds. Нужно для confirmed-
   // черновиков делегирования: accept может прийти спустя часы (намного позже 30-мин TTL

@@ -5,14 +5,38 @@ import type { TelegramTaskDraft } from '../TelegramTaskDraftRepository.js';
 
 // --- Минимальные in-memory фейки (tsx + node:test, без новых deps). ---
 
-type CreateTaskCall = { projectId: string; description: string; delegateUserId?: string | null };
+type CreateTaskCall = {
+  projectId: string;
+  description: string;
+  delegateUserId?: string | null;
+  deadline?: string | null;
+};
+
+// AI-мок: aiSegments → успех (compose вернул эти сегменты); aiOutcome → деградация
+// (enqueue бросает / таймаут / job упал / битый JSON). По умолчанию (без обоих) — enqueue
+// бросает, и конструктор откатывается на ручной флоу (этим режимом идут «старые» тесты).
+type AiSeg = {
+  id: string;
+  title: string;
+  simpleBody: string;
+  projectId: string | null;
+  projectName: string | null;
+  confidence: number;
+  assigneeUserId: string | null;
+  assigneeName: string | null;
+  deadline: string | null;
+};
 
 function makeHarness(opts?: {
   projects?: { id: string; name: string }[];
   shared?: { id: string; displayName: string; email: string }[];
+  aiSegments?: AiSeg[];
+  aiOutcome?: 'enqueue-throw' | 'timeout' | 'fail' | 'bad';
 }) {
   const projects = opts?.projects ?? [{ id: 'p1', name: 'Альфа' }];
   const shared = opts?.shared ?? [{ id: 'u2', displayName: 'Вася', email: 'v@e.com' }];
+  const aiSegments = opts?.aiSegments;
+  const aiOutcome = opts?.aiOutcome ?? (aiSegments ? undefined : 'enqueue-throw');
 
   const drafts = new Map<string, TelegramTaskDraft>();
   let seq = 0;
@@ -37,6 +61,7 @@ function makeHarness(opts?: {
         delegateUserId: input.delegateUserId ?? null,
         delegationId: null,
         offered: input.offered ?? null,
+        segments: input.segments ?? null,
         status: 'composing',
         createdAt: new Date(0),
         expiresAt: new Date(8640000000000000),
@@ -118,6 +143,7 @@ function makeHarness(opts?: {
           projectId: input.projectId,
           description: input.description,
           delegateUserId: input.delegateUserId ?? null,
+          deadline: input.deadline ?? null,
         });
         return {
           id: 't1',
@@ -173,6 +199,23 @@ function makeHarness(opts?: {
       async execute(cmd: any) {
         delegateMessages.push({ userId: cmd.userId, hasButtons: !!cmd.replyMarkup });
         return { status: 'ok' as const, messageId: 5000, chatId: 999 };
+      },
+    },
+    enqueueAiPromptJob: {
+      async execute(_input: any) {
+        if (aiOutcome === 'enqueue-throw') throw new Error('ai disabled (тест → ручной флоу)');
+        return { id: 'job1' } as any;
+      },
+    },
+    waitForAiPromptJob: {
+      async execute(_input: any) {
+        if (aiOutcome === 'timeout') return null;
+        if (aiOutcome === 'fail') return { status: 'failed', improvedText: null } as any;
+        if (aiOutcome === 'bad') return { status: 'succeeded', improvedText: 'это не JSON' } as any;
+        return {
+          status: 'succeeded',
+          improvedText: JSON.stringify({ version: 1, segments: aiSegments ?? [] }),
+        } as any;
       },
     },
     client,
@@ -292,4 +335,161 @@ test('истёкший/неизвестный черновик → алерт, �
   const h = makeHarness();
   await h.service.handleCallback(cq('tc:nope'));
   assert.equal(h.createTaskCalls.length, 0);
+});
+
+// ===================== AI-перефраз (compose) =====================
+
+test('AI: 1 сегмент → одиночная карточка; Создать → задача с дедлайном', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [
+      {
+        id: 's1',
+        title: 'Обновить билд',
+        simpleBody: 'Собрать и выложить новый билд.',
+        projectId: 'p1',
+        projectName: 'Альфа',
+        confidence: 0.9,
+        assigneeUserId: null,
+        assigneeName: null,
+        deadline: '2026-06-09',
+      },
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'надо собрать билд');
+  // Первое сообщение — «Ожидайте…», карточка приходит редактированием.
+  assert.equal(h.sent.length, 1);
+  assert.ok(h.sent[0]!.text.includes('Ожидайте'));
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.projectId, 'p1');
+  assert.match(h.createTaskCalls[0]!.description, /Обновить билд/);
+  assert.equal(h.createTaskCalls[0]!.deadline, '2026-06-09');
+});
+
+test('AI: N сегментов → сводная карточка; исключить сегмент → Создать все создаёт только включённые', async () => {
+  const h = makeHarness({
+    projects: [
+      { id: 'p1', name: 'Альфа' },
+      { id: 'p2', name: 'Бета' },
+    ],
+    aiSegments: [
+      {
+        id: 's1',
+        title: 'Задача один',
+        simpleBody: 'Тело один',
+        projectId: 'p1',
+        projectName: 'Альфа',
+        confidence: 0.8,
+        assigneeUserId: null,
+        assigneeName: null,
+        deadline: null,
+      },
+      {
+        id: 's2',
+        title: 'Задача два',
+        simpleBody: 'Тело два',
+        projectId: 'p2',
+        projectName: 'Бета',
+        confidence: 0.8,
+        assigneeUserId: null,
+        assigneeName: null,
+        deadline: null,
+      },
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'сделать раз и сделать два');
+  const draftId = [...h.drafts.keys()][0]!;
+  // Исключаем сегмент 2 (idx=1).
+  await h.service.handleCallback(cq(`at:${draftId}:1`));
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.projectId, 'p1');
+});
+
+test('AI: правка проекта сегмента кнопкой → создаётся в выбранном проекте', async () => {
+  const h = makeHarness({
+    projects: [
+      { id: 'p1', name: 'Альфа' },
+      { id: 'p2', name: 'Бета' },
+    ],
+    aiSegments: [
+      {
+        id: 's1',
+        title: 'Задача',
+        simpleBody: 'Тело',
+        projectId: 'p1',
+        projectName: 'Альфа',
+        confidence: 0.5,
+        assigneeUserId: null,
+        assigneeName: null,
+        deadline: null,
+      },
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'что-то сделать');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ae:${draftId}:0`)); // открыть правку сегмента
+  await h.service.handleCallback(cq(`ap:${draftId}:0:?`)); // открыть пикер проектов
+  await h.service.handleCallback(cq(`ap:${draftId}:0:1`)); // выбрать Бета (idx=1)
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.projectId, 'p2');
+});
+
+test('AI: сегмент с исполнителем → задача в проекте + делегирование с кнопками', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    shared: [{ id: 'u2', displayName: 'Вася', email: 'v@e.com' }],
+    aiSegments: [
+      {
+        id: 's1',
+        title: 'Задача',
+        simpleBody: 'Тело',
+        projectId: 'p1',
+        projectName: 'Альфа',
+        confidence: 0.9,
+        assigneeUserId: 'u2',
+        assigneeName: 'Вася',
+        deadline: null,
+      },
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'вася сделай это');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.projectId, 'p1'); // в проекте, не в inbox
+  assert.equal(h.createTaskCalls[0]!.delegateUserId, 'u2');
+  assert.equal(h.delegateMessages.length, 1);
+  assert.ok(h.delegateMessages[0]!.hasButtons);
+});
+
+test('AI: таймаут → откат на ручной флоу (создаёт как есть)', async () => {
+  const h = makeHarness({ projects: [{ id: 'p1', name: 'Альфа' }], aiOutcome: 'timeout' });
+  await h.service.startFromMessage(111, 500, '+Альфа Обнови билд');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`tc:${draftId}`)); // ручная карточка → tc
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.projectId, 'p1');
+  assert.equal(h.createTaskCalls[0]!.description, 'Обнови билд'); // без перефраза
+});
+
+test('AI: битый JSON → откат на ручной флоу (во «Входящие»)', async () => {
+  const h = makeHarness({ aiOutcome: 'bad' });
+  await h.service.startFromMessage(111, 500, 'купить кофе');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`tc:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1');
+});
+
+test('AI: job failed → откат на ручной флоу', async () => {
+  const h = makeHarness({ aiOutcome: 'fail' });
+  await h.service.startFromMessage(111, 500, 'починить кран');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`tc:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1');
 });

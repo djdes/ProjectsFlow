@@ -55,11 +55,12 @@ export class TelegramPoller {
         for (const u of updates) {
           // ack: бамп offset ДО обработки, чтобы плохой апдейт не зациклил нас.
           this.offset = Math.max(this.offset, u.update_id + 1);
-          try {
-            await this.deps.handler.execute(u as unknown as HandlerUpdate);
-          } catch (err) {
+          // Fire-and-forget: обработка апдейта может быть долгой (AI-перефраз ждёт диспетчера
+          // до ~150с). Не блокируем цикл, иначе кнопки/сообщения других юзеров висят всё это
+          // время. offset уже забампан выше — повторной обработки не будет (как в webhook).
+          void this.deps.handler.execute(u as unknown as HandlerUpdate).catch((err) => {
             console.warn('[tg-poller] handler failed for update', u.update_id, err);
-          }
+          });
         }
       } catch (err) {
         consecutiveErrors += 1;

@@ -4,6 +4,7 @@ import { telegramTaskDrafts, type TelegramTaskDraftRow } from '../db/schema.js';
 import type {
   CreateTelegramTaskDraftInput,
   TelegramDraftOffered,
+  TelegramDraftSegment,
   TelegramTaskDraft,
   TelegramTaskDraftPatch,
   TelegramTaskDraftRepository,
@@ -20,6 +21,8 @@ function toDomain(r: TelegramTaskDraftRow): TelegramTaskDraft {
     delegateUserId: r.delegateUserId,
     delegationId: r.delegationId,
     offered: parseJsonCol<TelegramDraftOffered | null>(r.offered, null),
+    // MariaDB отдаёт JSON-колонку строкой — обязательно через parseJsonCol (см. jsonCol.ts).
+    segments: parseJsonCol<TelegramDraftSegment[] | null>(r.segments, null),
     status: r.status,
     createdAt: r.createdAt,
     expiresAt: r.expiresAt,
@@ -40,6 +43,7 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
       projectId: input.projectId ?? null,
       delegateUserId: input.delegateUserId ?? null,
       offered: input.offered ?? null,
+      segments: input.segments ?? null,
       status: 'composing',
       expiresAt: sql`DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${input.ttlSeconds} SECOND)`,
     });
@@ -75,6 +79,7 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
     if (patch.delegateUserId !== undefined) set.delegateUserId = patch.delegateUserId;
     if (patch.delegationId !== undefined) set.delegationId = patch.delegationId;
     if (patch.offered !== undefined) set.offered = patch.offered;
+    if (patch.segments !== undefined) set.segments = patch.segments;
     if (patch.status !== undefined) set.status = patch.status;
     const touched = Object.keys(set).length > 0 || patch.extendTtlSeconds !== undefined;
     if (touched) {

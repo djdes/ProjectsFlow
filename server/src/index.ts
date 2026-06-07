@@ -490,6 +490,23 @@ const telegramTaskMessageRepo = new DrizzleTelegramTaskMessageRepository(db);
 // Конструктору нужны те же use-case'ы что и HTTP/agent-роутерам; они собираются инлайн
 // внутри createApp(), а здесь нам нужны собственные экземпляры (use-case'ы stateless —
 // дубль безопасен). Делим только репозитории.
+// AI-перефраз сообщений бота в задачи (простой/быстрый compose pass-1). Те же use-case'ы
+// переиспользуются HTTP-роутами ниже (см. createApp). Best-effort — если AI недоступен,
+// конструктор откатывается на ручной флоу.
+const enqueueAiPromptJob = new EnqueueAiPromptJob({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  aiPromptJobs: aiPromptJobRepo,
+  listProjects: new ListProjects(projectMemberRepo),
+  listKbDocuments: new ListKbDocuments({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
+  getKbDocument: new GetKbDocument({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
+  rateLimiter: agentRateLimiter,
+  resolveDefaultDispatcherUserId: resolveDefaultAiDispatcherUserId,
+});
+const waitForAiPromptJob = new WaitForAiPromptJob({
+  aiPromptJobs: aiPromptJobRepo,
+  isAdmin: async (userId) => (await userRepo.getById(userId))?.isAdmin ?? false,
+});
 const telegramComposer = new TelegramComposerService({
   drafts: telegramTaskDraftRepo,
   taskMessages: telegramTaskMessageRepo,
@@ -543,6 +560,8 @@ const telegramComposer = new TelegramComposerService({
   idGen: idGenerator,
   shortIdGen: shortIdGenerator,
   appUrl: appBaseUrl,
+  enqueueAiPromptJob,
+  waitForAiPromptJob,
 });
 // v2: fan-out по taskId — грузит задачу/members и переиспользует sendAgentTelegramNotification
 // per recipient (там уже все gates — link/started/prefs/dedup/audit).
@@ -1575,28 +1594,8 @@ const { app, devProxyUpgrade } = createApp({
     pollDeviceToken: new PollAgentDeviceToken({ store: agentDeviceCodeStore, now }),
     getDeviceCodeInfo: new GetAgentDeviceCodeInfo({ store: agentDeviceCodeStore, now }),
     // AI prompt-improvement (см. spec 2026-05-28-ai-prompt-improvement-design.md)
-    enqueueAiPromptJob: new EnqueueAiPromptJob({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      aiPromptJobs: aiPromptJobRepo,
-      listProjects: new ListProjects(projectMemberRepo),
-      listKbDocuments: new ListKbDocuments({
-        projects: projectRepo,
-        members: projectMemberRepo,
-        kb: kbStore,
-      }),
-      getKbDocument: new GetKbDocument({
-        projects: projectRepo,
-        members: projectMemberRepo,
-        kb: kbStore,
-      }),
-      rateLimiter: agentRateLimiter,
-      resolveDefaultDispatcherUserId: resolveDefaultAiDispatcherUserId,
-    }),
-    waitForAiPromptJob: new WaitForAiPromptJob({
-      aiPromptJobs: aiPromptJobRepo,
-      isAdmin: async (userId) => (await userRepo.getById(userId))?.isAdmin ?? false,
-    }),
+    enqueueAiPromptJob,
+    waitForAiPromptJob,
     listPendingAiPromptJobs: new ListPendingAiPromptJobs({ aiPromptJobs: aiPromptJobRepo }),
     claimAiPromptJob: new ClaimAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
     completeAiPromptJob: new CompleteAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
