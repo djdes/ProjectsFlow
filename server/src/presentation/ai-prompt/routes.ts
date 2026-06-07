@@ -12,17 +12,34 @@ import {
 } from '../../domain/ai-prompt/errors.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
-const enqueueBodySchema = z.object({
-  text: z.string().trim().min(1, 'text must be 1..5000 chars').max(5000, 'text must be 1..5000 chars'),
-  projectId: z
-    .string()
-    .uuid('projectId must be uuid')
-    .nullable()
-    .optional()
-    .transform((v) => v ?? null),
-  // 'improve' (legacy, default) | 'compose' (2 варианта + разбивка по проектам).
-  mode: z.enum(['improve', 'compose']).optional(),
-});
+// Свободный текст пользователя (improve / compose pass-1) — до 5000 символов.
+const MAX_FREE_TEXT = 5000;
+// compose-advanced: в text едет JSON сегментов из pass-1, не свободный текст. Потолок
+// держим под колонку input_text (MySQL TEXT ≤ 65535 байт; в utf8mb4 кириллица 2 байта).
+const MAX_ADVANCED_PAYLOAD = 30000;
+
+const enqueueBodySchema = z
+  .object({
+    text: z.string().trim().min(1, 'text required').max(MAX_ADVANCED_PAYLOAD, 'text too long'),
+    projectId: z
+      .string()
+      .uuid('projectId must be uuid')
+      .nullable()
+      .optional()
+      .transform((v) => v ?? null),
+    // 'improve' (legacy, default) | 'compose' (pass-1) | 'compose-advanced' (ленивый pass-2).
+    mode: z.enum(['improve', 'compose', 'compose-advanced']).optional(),
+  })
+  .superRefine((b, ctx) => {
+    // 5000-символьный лимит — только для свободного текста; advanced (JSON сегментов) шире.
+    if (b.mode !== 'compose-advanced' && b.text.length > MAX_FREE_TEXT) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['text'],
+        message: 'text must be 1..5000 chars',
+      });
+    }
+  });
 
 const waitQuerySchema = z.object({
   wait: z

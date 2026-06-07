@@ -715,9 +715,12 @@ export const aiPromptJobs = mysqlTable(
       .notNull()
       .default('queued'),
     // Режим job'а: 'improve' (legacy — одиночное улучшение текста, plain в improved_text)
-    // | 'compose' (новое — 2 варианта + разбивка по проектам, JSON-строка в improved_text).
-    // См. db/060_ai_prompt_compose.sql.
-    mode: mysqlEnum('mode', ['improve', 'compose']).notNull().default('improve'),
+    // | 'compose' (pass-1: разбивка + «Простой» + классификация, JSON-строка в improved_text)
+    // | 'compose-advanced' (pass-2: ленивый «Продвинутый» по сегментам pass-1).
+    // См. db/060_ai_prompt_compose.sql + db/065_ai_prompt_compose_advanced.sql.
+    mode: mysqlEnum('mode', ['improve', 'compose', 'compose-advanced'])
+      .notNull()
+      .default('improve'),
     inputText: text('input_text').notNull(),
     // MEDIUMTEXT (db/060): для compose в kb_context кладутся дайджесты всех проектов-
     // кандидатов (до ~60K символов); legacy improve кладёт KB одного проекта (≤30K).

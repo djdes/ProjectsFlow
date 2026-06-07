@@ -343,16 +343,27 @@ const completeAiPromptJobBodySchema = z
   );
 
 // AI-prompt-job submit/poll для AGENT-клиентов (PFCompanion) — зеркало web-схем (ai-prompt/routes.ts).
-const enqueueAiPromptBodySchema = z.object({
-  text: z.string().trim().min(1, 'text must be 1..5000 chars').max(5000, 'text must be 1..5000 chars'),
-  projectId: z
-    .string()
-    .uuid('projectId must be uuid')
-    .nullable()
-    .optional()
-    .transform((v) => v ?? null),
-  mode: z.enum(['improve', 'compose']).optional(),
-});
+// compose-advanced: в text едет JSON сегментов pass-1 (шире 5000), потолок под TEXT-колонку.
+const enqueueAiPromptBodySchema = z
+  .object({
+    text: z.string().trim().min(1, 'text required').max(30000, 'text too long'),
+    projectId: z
+      .string()
+      .uuid('projectId must be uuid')
+      .nullable()
+      .optional()
+      .transform((v) => v ?? null),
+    mode: z.enum(['improve', 'compose', 'compose-advanced']).optional(),
+  })
+  .superRefine((b, ctx) => {
+    if (b.mode !== 'compose-advanced' && b.text.length > 5000) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['text'],
+        message: 'text must be 1..5000 chars',
+      });
+    }
+  });
 
 // Тело kb-bundle: список projectId'ов, по которым диспетчер просит ПОЛНУЮ KB (compose pass-2).
 const aiPromptKbBundleBodySchema = z.object({

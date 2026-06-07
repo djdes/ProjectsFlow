@@ -7,9 +7,10 @@
 // 3. Если status='succeeded' — возвращаем improvedText.
 // 4. Иначе — выбрасываем понятную ошибку (use-case переводит в UX-message).
 
-// 'improve' — legacy одиночное улучшение (plain-текст). 'compose' — разбивка на задачи
-// + 2 варианта переработки + классификация по проектам (JSON-строка в improvedText).
-export type AiPromptJobMode = 'improve' | 'compose';
+// 'improve' — legacy одиночное улучшение (plain-текст).
+// 'compose' — pass-1: разбивка на задачи + «Простой» + классификация (JSON в improvedText).
+// 'compose-advanced' — pass-2: ленивый «Продвинутый» по сегментам pass-1 (JSON в improvedText).
+export type AiPromptJobMode = 'improve' | 'compose' | 'compose-advanced';
 
 export type EnqueueAiPromptInput = {
   readonly text: string;

@@ -8,12 +8,21 @@ export const AI_PROMPT_JOB_STATUSES: readonly AiPromptJobStatus[] = [
   'cancelled',
 ];
 
-// Режим job'а. 'improve' — legacy одиночное улучшение (plain-текст в improvedText).
-// 'compose' — разбивка текста на задачи + 2 варианта переработки («Простой»/«Продвинутый»)
-// + классификация по проектам; результат едет JSON-строкой в improvedText.
-export type AiPromptJobMode = 'improve' | 'compose';
+// Режим job'а.
+// 'improve' — legacy одиночное улучшение (plain-текст в improvedText).
+// 'compose' — ПРОХОД 1: разбивка текста на задачи + «Простой» вариант + классификация
+//   по проектам/исполнителям/срокам; результат едет JSON-строкой в improvedText.
+//   «Продвинутый» вариант здесь НЕ считается (ленивый — отдельным job'ом ниже).
+// 'compose-advanced' — ПРОХОД 2: по сегментам из pass-1 (приходят JSON-строкой в inputText)
+//   и полной KB задетектированных проектов считает только advancedBody («Продвинутый»).
+//   Запускается лениво, когда пользователь открыл вкладку «Продвинутый» в UI.
+export type AiPromptJobMode = 'improve' | 'compose' | 'compose-advanced';
 
-export const AI_PROMPT_JOB_MODES: readonly AiPromptJobMode[] = ['improve', 'compose'];
+export const AI_PROMPT_JOB_MODES: readonly AiPromptJobMode[] = [
+  'improve',
+  'compose',
+  'compose-advanced',
+];
 
 export type AiPromptJob = {
   readonly id: string;

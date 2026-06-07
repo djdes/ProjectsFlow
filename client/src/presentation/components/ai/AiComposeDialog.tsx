@@ -28,6 +28,7 @@ import { useProjects } from '@/presentation/hooks/useProjects';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import {
   ComposeTasksError,
+  type ComposeAdvanceSegment,
   type ComposeResult,
   type ComposeSegment,
   type ComposeTasksErrorCode,
@@ -180,6 +181,11 @@ export function AiComposeDialog({
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   // Монотонный счётчик: «Отмена»/закрытие инкрементит → поздний результат отбрасывается.
   const reqIdRef = useRef(0);
+  // Ленивый pass-2 («Продвинутый»): грузится при первом открытии вкладки. idle→loading→ready|error.
+  const [advancedPhase, setAdvancedPhase] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [advancedById, setAdvancedById] = useState<Record<string, string>>({});
+  const [advancedErr, setAdvancedErr] = useState('');
+  const advReqRef = useRef(0);
   const { user: me } = useCurrentUser();
   const meId = me?.id;
   // Кэш eligible-участников по ключу проекта (projectId | INBOX_VALUE). undefined = не загружено.
@@ -229,11 +235,15 @@ export function AiComposeDialog({
   const start = async (): Promise<void> => {
     if (disabled || trimmed.length === 0) return;
     const reqId = ++reqIdRef.current;
+    advReqRef.current += 1; // отменяем возможный in-flight pass-2 от прошлого запуска
     setResult(null);
     setErrorMsg('');
     setActiveTab('simple');
     setExpanded({});
     setProgress(null);
+    setAdvancedPhase('idle');
+    setAdvancedById({});
+    setAdvancedErr('');
     setPhase('loading');
     try {
       const res = await composeTasks.execute({ text: trimmed, projectId });
@@ -269,11 +279,54 @@ export function AiComposeDialog({
 
   const dismiss = (): void => {
     reqIdRef.current += 1;
+    advReqRef.current += 1; // закрытие диалога инвалидирует in-flight pass-2
     setPhase('idle');
   };
 
+  // Запускает ленивый pass-2 по ТЕКУЩИМ строкам (учитывает правки проекта/заголовка).
+  const loadAdvanced = async (): Promise<void> => {
+    if (!result) return;
+    const reqId = ++advReqRef.current;
+    setAdvancedErr('');
+    setAdvancedPhase('loading');
+    const segments: ComposeAdvanceSegment[] = result.segments.map((s) => {
+      const row = rows.find((r) => r.id === s.id);
+      const segProjectId = row ? row.projectId : s.projectId;
+      const segProjectName = segProjectId
+        ? (realProjects.find((p) => p.id === segProjectId)?.name ?? s.projectName)
+        : null;
+      return {
+        id: s.id,
+        title: (row?.title ?? s.title).trim(),
+        simpleBody: s.simpleBody,
+        projectId: segProjectId,
+        projectName: segProjectName,
+      };
+    });
+    try {
+      const map = await composeTasks.advance({ segments, projectId });
+      if (reqId !== advReqRef.current) return;
+      setAdvancedById(map);
+      setAdvancedPhase('ready');
+    } catch (err) {
+      if (reqId !== advReqRef.current) return;
+      const code = err instanceof ComposeTasksError ? err.code : 'unknown';
+      const detail = err instanceof Error && err.message && err.message !== code ? err.message : '';
+      setAdvancedErr(detail || messageFor(code));
+      setAdvancedPhase('error');
+    }
+  };
+
+  // Переключение вкладки: открытие «Продвинутый» впервые лениво запускает pass-2.
+  const onTabChange = (v: string): void => {
+    const tab = v as TabKey;
+    setActiveTab(tab);
+    if (tab === 'advanced' && advancedPhase === 'idle') void loadAdvanced();
+  };
+
+  // «Простой» — всегда из pass-1; «Продвинутый» — из загруженного pass-2, иначе фолбэк на simple.
   const bodyFor = (seg: ComposeSegment, tab: TabKey): string =>
-    tab === 'simple' ? seg.simpleBody : seg.advancedBody;
+    tab === 'simple' ? seg.simpleBody : (advancedById[seg.id] ?? seg.simpleBody);
 
   // Склейка выбранного варианта в один документ (для «Применить» без распределения).
   const joinedDoc = (tab: TabKey): string => {
@@ -488,19 +541,45 @@ export function AiComposeDialog({
               <>
                 {/* Вкладки варианта + подсказка режима */}
                 <div className="space-y-1.5">
-                  <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
+                  <Tabs value={activeTab} onValueChange={onTabChange}>
                     <TabsList className="grid w-full grid-cols-2">
                       <TabsTrigger value="simple" className="gap-1.5">
                         <Wand2 className="size-3.5" />
                         Простой
                       </TabsTrigger>
                       <TabsTrigger value="advanced" className="gap-1.5">
-                        <BrainCircuit className="size-3.5" />
+                        {advancedPhase === 'loading' ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <BrainCircuit className="size-3.5" />
+                        )}
                         Продвинутый
                       </TabsTrigger>
                     </TabsList>
                   </Tabs>
                   <p className="px-0.5 text-xs text-muted-foreground">{TAB_HINT[activeTab]}</p>
+                  {activeTab === 'advanced' && advancedPhase === 'loading' && (
+                    <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground">
+                      <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" />
+                      Готовим «Продвинутый» вариант по базе знаний… (~1 минута, пока показан
+                      «Простой»)
+                    </div>
+                  )}
+                  {activeTab === 'advanced' && advancedPhase === 'error' && (
+                    <div className="flex items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-xs">
+                      <span className="min-w-0 text-destructive">
+                        Не удалось сделать «Продвинутый»
+                        {advancedErr ? `: ${advancedErr}` : ''}. Показан «Простой».
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void loadAdvanced()}
+                        className="shrink-0 font-medium text-primary hover:underline"
+                      >
+                        Повторить
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Переключатель режима — сегмент-контрол ВЫШЕ управляемой области */}

@@ -24,6 +24,19 @@ export type ComposeResult = {
   readonly segments: ComposeSegment[];
 };
 
+// Вход ленивого pass-2 («Продвинутый»): минимум, нужный модели + KB-привязка по projectId.
+// Берётся из текущих строк ревью (учитывает правки проекта/заголовка пользователем).
+export type ComposeAdvanceSegment = {
+  readonly id: string;
+  readonly title: string;
+  readonly simpleBody: string;
+  readonly projectId: string | null;
+  readonly projectName: string | null;
+};
+
+// Результат pass-2: id сегмента → advancedBody. Отсутствующий id = модель не вернула вариант.
+export type ComposeAdvancedResult = Record<string, string>;
+
 export type ComposeTasksErrorCode =
   | 'timeout'
   | 'ai_not_configured'
@@ -87,6 +100,50 @@ export class ComposeTasks {
       throw toComposeError(e);
     }
   }
+
+  // Ленивый pass-2: по сегментам из pass-1 считает только «Продвинутый» вариант (opus + полная
+  // KB задетектированных проектов). Вызывается, когда пользователь открыл вкладку «Продвинутый».
+  // Возвращает map id→advancedBody; недостающие сегменты UI оставит на simpleBody.
+  async advance(input: {
+    segments: ComposeAdvanceSegment[];
+    projectId: string | null;
+  }): Promise<ComposeAdvancedResult> {
+    if (input.segments.length === 0) return {};
+    // Сегменты едут JSON-строкой в поле text (сервер для compose-advanced допускает широкий payload).
+    const payload = JSON.stringify({ segments: input.segments });
+
+    let jobId: string;
+    try {
+      ({ jobId } = await this.repo.enqueue({
+        text: payload,
+        projectId: input.projectId,
+        mode: 'compose-advanced',
+      }));
+    } catch (e) {
+      throw toComposeError(e);
+    }
+
+    try {
+      const deadline = Date.now() + MAX_TOTAL_MS;
+      let job = await this.repo.waitFor(jobId, POLL_WAIT_SECONDS);
+      while (!TERMINAL.has(job.status) && Date.now() < deadline) {
+        job = await this.repo.waitFor(jobId, POLL_WAIT_SECONDS);
+      }
+
+      if (job.status === 'failed') {
+        throw new ComposeTasksError('job_failed', job.error ?? 'AI не смог обработать запрос');
+      }
+      if (job.status === 'cancelled') {
+        throw new ComposeTasksError('job_cancelled', job.error ?? 'Запрос отменён');
+      }
+      if (job.status !== 'succeeded' || !job.improvedText) {
+        throw new ComposeTasksError('timeout', 'AI диспетчер не ответил');
+      }
+      return parseAdvancedResult(job.improvedText);
+    } catch (e) {
+      throw toComposeError(e);
+    }
+  }
 }
 
 function toComposeError(e: unknown): ComposeTasksError {
@@ -107,8 +164,8 @@ function validDeadline(v: unknown): string | null {
   return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d ? v : null;
 }
 
-// Разбор JSON-результата compose: устойчив к ```-обёрткам и тексту вокруг JSON.
-export function parseComposeResult(raw: string): ComposeResult {
+// Достаёт JSON-объект из ответа модели: устойчив к ```-обёрткам и тексту до/после JSON.
+function extractJsonObject(raw: string): Record<string, unknown> {
   let s = raw.trim();
   const fence = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
   if (fence && fence[1]) s = fence[1].trim();
@@ -117,13 +174,32 @@ export function parseComposeResult(raw: string): ComposeResult {
   if (start === -1 || end === -1 || end < start) {
     throw new ComposeTasksError('bad_result', 'AI вернул нераспознаваемый ответ');
   }
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(s.slice(start, end + 1));
+    return JSON.parse(s.slice(start, end + 1)) as Record<string, unknown>;
   } catch {
     throw new ComposeTasksError('bad_result', 'AI вернул нераспознаваемый ответ');
   }
-  const obj = parsed as { version?: unknown; segments?: unknown };
+}
+
+// Разбор JSON-результата pass-2: { segments: [{ id, advancedBody }] } → map id→advancedBody.
+export function parseAdvancedResult(raw: string): ComposeAdvancedResult {
+  const obj = extractJsonObject(raw) as { segments?: unknown };
+  if (!Array.isArray(obj.segments)) {
+    throw new ComposeTasksError('bad_result', 'AI вернул ответ без сегментов');
+  }
+  const out: ComposeAdvancedResult = {};
+  for (const rawSeg of obj.segments as unknown[]) {
+    const o = (rawSeg ?? {}) as Record<string, unknown>;
+    const id = typeof o['id'] === 'string' ? (o['id'] as string) : '';
+    const advancedBody = typeof o['advancedBody'] === 'string' ? (o['advancedBody'] as string) : '';
+    if (id && advancedBody) out[id] = advancedBody;
+  }
+  return out;
+}
+
+// Разбор JSON-результата compose: устойчив к ```-обёрткам и тексту вокруг JSON.
+export function parseComposeResult(raw: string): ComposeResult {
+  const obj = extractJsonObject(raw) as { version?: unknown; segments?: unknown };
   if (!obj || !Array.isArray(obj.segments)) {
     throw new ComposeTasksError('bad_result', 'AI вернул ответ без сегментов');
   }

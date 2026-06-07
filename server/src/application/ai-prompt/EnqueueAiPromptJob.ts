@@ -44,9 +44,10 @@ type Deps = {
 
 export type EnqueueAiPromptJobInput = {
   readonly userId: string;
+  // Для 'compose-advanced' — это JSON-строка сегментов из pass-1, а не свободный текст.
   readonly text: string;
   readonly projectId: string | null;
-  // 'improve' (legacy, default) | 'compose' (2 варианта + разбивка по проектам).
+  // 'improve' (legacy, default) | 'compose' (pass-1) | 'compose-advanced' (ленивый pass-2).
   readonly mode?: AiPromptJobMode;
 };
 
@@ -55,11 +56,15 @@ export class EnqueueAiPromptJob {
 
   async execute(input: EnqueueAiPromptJobInput): Promise<AiPromptJob> {
     const mode: AiPromptJobMode = input.mode ?? 'improve';
+    // pass-1 и ленивый pass-2 — оба opus-тяжёлые и кросс-проектные: общий лимит и общая
+    // логика резолва диспетчера. advanced отличается лишь тем, что НЕ собирает контекст
+    // кандидатов (полную KB воркер берёт сам по projectId'ам из сегментов через /kb-bundle).
+    const isComposeLike = mode === 'compose' || mode === 'compose-advanced';
 
     // Rate-limit (per userId). Ставим bucket до permission-checks, чтобы подбор валидных
     // projectId'ов не обходил лимит. compose — отдельный, более строгий bucket.
-    const bucket = mode === 'compose' ? `ai-compose:${input.userId}` : `ai-prompt:${input.userId}`;
-    const perHour = mode === 'compose' ? RATE_LIMIT_COMPOSE_PER_HOUR : RATE_LIMIT_PER_HOUR;
+    const bucket = isComposeLike ? `ai-compose:${input.userId}` : `ai-prompt:${input.userId}`;
+    const perHour = isComposeLike ? RATE_LIMIT_COMPOSE_PER_HOUR : RATE_LIMIT_PER_HOUR;
     if (!this.deps.rateLimiter.hit(bucket, perHour, RATE_LIMIT_WINDOW_MS)) {
       throw new AiPromptRateLimitedError();
     }
@@ -77,7 +82,7 @@ export class EnqueueAiPromptJob {
       );
       if (project.dispatcherUserId) {
         dispatcherUserId = project.dispatcherUserId;
-      } else if (mode === 'compose') {
+      } else if (isComposeLike) {
         // compose кросс-проектный: если у текущего проекта нет диспетчера — отдаём
         // дефолтному (он лишь гоняет Claude, не обязан быть диспетчером всех кандидатов).
         const fallback = await this.deps.resolveDefaultDispatcherUserId();
