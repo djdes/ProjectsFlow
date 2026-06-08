@@ -55,3 +55,28 @@ export function resolveColumnColor(
   if (userDefault && userDefault !== 'default') return userDefault;
   return BUILTIN_KANBAN_COLORS[status];
 }
+
+// Built-in column display labels (зеркало client/src/presentation/components/tasks/statusLabels.ts —
+// держим в синхроне). Только 4 видимые колонки; in_progress/awaiting_clarification — не колонки.
+// backlog = «ЧЕРНОВИКИ» (черновики/драфты), todo = «ВОРКЕР» (очередь Ralph-агента),
+// manual = «В РУЧНУЮ» (человек), done = «Готово».
+export const BUILTIN_KANBAN_LABELS: Record<VisibleKanbanStatus, string> = {
+  backlog: 'ЧЕРНОВИКИ',
+  manual: 'В РУЧНУЮ',
+  todo: 'ВОРКЕР',
+  done: 'Готово',
+};
+
+// Подпись колонки: per-project override (если задан непустой label) → built-in.
+export function resolveColumnLabel(
+  perProject: KanbanColumnSettings | undefined,
+  status: VisibleKanbanStatus,
+): string {
+  const custom = perProject?.label?.trim();
+  return custom && custom.length > 0 ? custom : BUILTIN_KANBAN_LABELS[status];
+}
+
+// Скрыта ли колонка на доске проекта (per-project hidden=true).
+export function isColumnHidden(perProject: KanbanColumnSettings | undefined): boolean {
+  return perProject?.hidden === true;
+}

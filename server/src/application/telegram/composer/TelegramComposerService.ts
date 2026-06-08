@@ -24,6 +24,13 @@ import type { AssignInboxTaskToProject } from '../../task/AssignInboxTaskToProje
 import { parseComposerMessage } from './parseComposerMessage.js';
 import { fuzzyMatch, greedyProjectPrefix } from './fuzzyMatch.js';
 import { parseComposeSegments, type ParsedComposeSegment } from './parseComposeSegments.js';
+import {
+  VISIBLE_KANBAN_STATUSES,
+  type VisibleKanbanStatus,
+  type KanbanBoardSettings,
+  resolveColumnLabel,
+  isColumnHidden,
+} from '../../../domain/kanban/KanbanSettings.js';
 
 // Минимальный slice callback_query, который мы обрабатываем (см. TG Bot API #callbackquery).
 export type TelegramCallbackQuery = {
@@ -77,6 +84,24 @@ const COMPOSE_MAX_ATTEMPTS = 3;
 const SEGMENT_TERMINAL = new Set<string>(['succeeded', 'failed', 'cancelled']);
 const EDIT_BTNS_PER_ROW = 4; // кнопок «✏️ N» в ряд на многосегментной карточке
 
+// --- Колонки канбана (выбор колонки/статуса при создании) ---
+// Короткие коды для callback_data (64-байт лимит): статус ↔ 1-символьный код.
+const STATUS_TO_CODE: Record<VisibleKanbanStatus, string> = {
+  backlog: 'b',
+  manual: 'm',
+  todo: 't',
+  done: 'd',
+};
+const CODE_TO_STATUS: Record<string, VisibleKanbanStatus> = {
+  b: 'backlog',
+  m: 'manual',
+  t: 'todo',
+  d: 'done',
+};
+// Дефолтная колонка при создании задачи из бота (ЧЕРНОВИКИ) — задача не уходит сразу в
+// очередь воркера, пока пользователь не выберет «ВОРКЕР»/todo.
+const DEFAULT_COLUMN: VisibleKanbanStatus = 'backlog';
+
 function escapeHtml(s: string): string {
   return s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
 }
@@ -110,6 +135,12 @@ type AiDelSel =
   | { readonly type: 'open' }
   | { readonly type: 'page'; readonly page: number };
 type DeadlinePreset = 'today' | 'tomorrow' | 'none';
+// Селектор колонки: '?' = открыть пикер, pick = выбран статус. Manual ещё имеет back (→ confirm).
+type AiStatusSel = { readonly type: 'open' } | { readonly type: 'pick'; readonly status: VisibleKanbanStatus };
+type ManStatusSel =
+  | { readonly type: 'open' }
+  | { readonly type: 'pick'; readonly status: VisibleKanbanStatus }
+  | { readonly type: 'back' };
 type ParsedCallback =
   | { readonly kind: 'project'; readonly draftId: string; readonly sel: ProjectSel }
   | { readonly kind: 'delegate'; readonly draftId: string; readonly sel: DelegateSel }
@@ -130,6 +161,8 @@ type ParsedCallback =
     }
   | { readonly kind: 'seg-project'; readonly draftId: string; readonly seg: number; readonly sel: AiProjSel }
   | { readonly kind: 'seg-delegate'; readonly draftId: string; readonly seg: number; readonly sel: AiDelSel }
+  | { readonly kind: 'seg-status'; readonly draftId: string; readonly seg: number; readonly sel: AiStatusSel }
+  | { readonly kind: 'man-status'; readonly draftId: string; readonly sel: ManStatusSel }
   | null;
 
 function parseCallback(data: string | undefined): ParsedCallback {
@@ -190,9 +223,32 @@ function parseCallback(data: string | undefined): ParsedCallback {
       if (!draftId || segStr === undefined || sel === undefined) return null;
       return { kind: 'seg-delegate', draftId, seg: toIdx(segStr), sel: parseAiDelSel(sel) };
     }
+    case 'as': {
+      const [draftId, segStr, sel] = rest.split(':');
+      if (!draftId || segStr === undefined || sel === undefined) return null;
+      return { kind: 'seg-status', draftId, seg: toIdx(segStr), sel: parseAiStatusSel(sel) };
+    }
+    case 'ts': {
+      const [draftId, sel] = rest.split(':');
+      if (!draftId || sel === undefined) return null;
+      return { kind: 'man-status', draftId, sel: parseManStatusSel(sel) };
+    }
     default:
       return null;
   }
+}
+
+function parseAiStatusSel(sel: string): AiStatusSel {
+  if (sel === '?') return { type: 'open' };
+  const st = CODE_TO_STATUS[sel];
+  return st ? { type: 'pick', status: st } : { type: 'open' };
+}
+
+function parseManStatusSel(sel: string): ManStatusSel {
+  if (sel === '?') return { type: 'open' };
+  if (sel === 'x') return { type: 'back' };
+  const st = CODE_TO_STATUS[sel];
+  return st ? { type: 'pick', status: st } : { type: 'back' };
 }
 
 function toIdx(s: string): number {
@@ -518,6 +574,10 @@ export class TelegramComposerService {
         return this.onSegProject(cq, draft, userId, cb.seg, cb.sel, chatId, messageId);
       case 'seg-delegate':
         return this.onSegDelegate(cq, draft, userId, cb.seg, cb.sel, chatId, messageId);
+      case 'seg-status':
+        return this.onSegStatus(cq, draft, cb.seg, cb.sel, chatId, messageId);
+      case 'man-status':
+        return this.onManStatus(cq, draft, cb.sel, chatId, messageId);
     }
   }
 
@@ -623,7 +683,7 @@ export class TelegramComposerService {
           projectId: inbox.id,
           ownerUserId: userId,
           description: text,
-          status: 'todo',
+          status: draft.targetStatus ?? DEFAULT_COLUMN,
           delegateUserId: draft.delegateUserId,
         });
         const delegationId = task.delegation?.id ?? null;
@@ -663,7 +723,7 @@ export class TelegramComposerService {
           projectId: targetId,
           ownerUserId: userId,
           description: text,
-          status: 'todo',
+          status: draft.targetStatus ?? DEFAULT_COLUMN,
         });
         await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
         if (messageId) {
@@ -873,9 +933,11 @@ export class TelegramComposerService {
     const delegateName = draft.delegateUserId
       ? ((await this.deps.users.getById(draft.delegateUserId))?.displayName ?? null)
       : null;
+    const columnName = await this.columnLabelFor(draft.projectId, draft.targetStatus);
     const lines = [
       '🆕 <b>Новая задача</b>',
       `📁 Проект: <b>${escapeHtml(projName)}</b>`,
+      `📊 Колонка: <b>${escapeHtml(columnName)}</b>`,
     ];
     if (delegateName) lines.push(`👤 Делегат: <b>${escapeHtml(delegateName)}</b>`);
     lines.push(`📝 ${escapeHtml(excerpt(draft.taskText ?? ''))}`);
@@ -888,7 +950,10 @@ export class TelegramComposerService {
             { text: createLabel, callback_data: `tc:${draft.id}` },
             { text: '✖️ Отмена', callback_data: `tx:${draft.id}` },
           ],
-          [{ text: '📁 Сменить проект', callback_data: `tp:${draft.id}:?` }],
+          [
+            { text: '📁 Сменить проект', callback_data: `tp:${draft.id}:?` },
+            { text: '📊 Колонка', callback_data: `ts:${draft.id}:?` },
+          ],
         ],
       },
     };
@@ -983,12 +1048,48 @@ export class TelegramComposerService {
       assigneeName: s.assigneeName,
       deadline: s.deadline,
       included: true,
+      targetStatus: null, // дефолт 'backlog' (ЧЕРНОВИКИ) пока пользователь не выбрал колонку
     }));
   }
 
   private async projNameOf(projectId: string | null): Promise<string> {
     if (!projectId) return 'Входящие';
     return (await this.deps.projects.getById(projectId))?.name ?? 'проект';
+  }
+
+  // --- Колонки канбана конкретного проекта ---
+  private async kanbanSettingsOf(projectId: string | null): Promise<KanbanBoardSettings | null> {
+    if (!projectId) return null; // «Входящие»/без проекта → встроенные дефолты
+    try {
+      return await this.deps.projects.getKanbanSettings(projectId);
+    } catch (err) {
+      console.warn('[tg-composer] getKanbanSettings failed:', err);
+      return null;
+    }
+  }
+
+  // Видимые колонки проекта (статус+код+подпись) в фикс-порядке backlog→manual→todo→done.
+  // Скрытые (hidden) пропускаем, как на доске; backlog оставляем всегда (это дефолт-фолбэк).
+  private columnOptions(
+    settings: KanbanBoardSettings | null,
+  ): { status: VisibleKanbanStatus; code: string; label: string }[] {
+    const out: { status: VisibleKanbanStatus; code: string; label: string }[] = [];
+    for (const status of VISIBLE_KANBAN_STATUSES) {
+      const per = settings?.[status];
+      if (status !== 'backlog' && isColumnHidden(per)) continue;
+      out.push({ status, code: STATUS_TO_CODE[status], label: resolveColumnLabel(per, status) });
+    }
+    return out;
+  }
+
+  // Подпись выбранной (или дефолтной backlog) колонки под нужный проект.
+  private async columnLabelFor(
+    projectId: string | null,
+    status: VisibleKanbanStatus | null,
+  ): Promise<string> {
+    const s = status ?? DEFAULT_COLUMN;
+    const settings = await this.kanbanSettingsOf(projectId);
+    return resolveColumnLabel(settings?.[s], s);
   }
 
   // Имя исполнителя для показа: по userId (если сматчился) или сырое имя-подсказка из текста.
@@ -1015,8 +1116,10 @@ export class TelegramComposerService {
     if (!seg) return this.renderConfirm(draft); // защитный фолбэк
     const projName = await this.projNameOf(seg.projectId);
     const assignee = await this.assigneeLabelOf(seg);
+    const columnName = await this.columnLabelFor(seg.projectId, seg.targetStatus);
     const lines = ['🆕 <b>Новая задача</b>', `📁 Проект: <b>${escapeHtml(projName)}</b>`];
     if (assignee) lines.push(`👤 Исполнитель: <b>${escapeHtml(assignee)}</b>`);
+    lines.push(`📊 Колонка: <b>${escapeHtml(columnName)}</b>`);
     if (seg.deadline) lines.push(`📅 Срок: <b>${escapeHtml(seg.deadline)}</b>`);
     if (seg.title.trim()) lines.push(`📝 <b>${escapeHtml(seg.title.trim())}</b>`);
     lines.push(escapeHtml(excerpt(seg.body)));
@@ -1038,12 +1141,22 @@ export class TelegramComposerService {
     const segs = draft.segments ?? [];
     const includedCount = segs.filter((s) => s.included).length;
     const lines = [`🆕 <b>Распознал задач: ${segs.length}</b>`, ''];
+    // Кэш kanban-настроек в пределах ОДНОГО рендера (function-local, без гонок при
+    // конкурентной обработке) — дедупит getKanbanSettings для сегментов одного проекта.
+    const settingsCache = new Map<string, KanbanBoardSettings | null>();
+    const settingsFor = async (pid: string | null): Promise<KanbanBoardSettings | null> => {
+      if (!pid) return null;
+      if (!settingsCache.has(pid)) settingsCache.set(pid, await this.kanbanSettingsOf(pid));
+      return settingsCache.get(pid) ?? null;
+    };
     for (let i = 0; i < segs.length; i++) {
       const seg = segs[i];
       if (!seg) continue;
       const projName = await this.projNameOf(seg.projectId);
       const assignee = await this.assigneeLabelOf(seg);
-      const meta = [`📁 ${escapeHtml(projName)}`];
+      const colStatus = seg.targetStatus ?? DEFAULT_COLUMN;
+      const columnName = resolveColumnLabel((await settingsFor(seg.projectId))?.[colStatus], colStatus);
+      const meta = [`📁 ${escapeHtml(projName)}`, `📊 ${escapeHtml(columnName)}`];
       if (assignee) meta.push(`👤 ${escapeHtml(assignee)}`);
       meta.push(`📅 ${seg.deadline ? escapeHtml(seg.deadline) : '—'}`);
       const titleText = seg.title.trim() || excerpt(seg.body, 60);
@@ -1077,9 +1190,11 @@ export class TelegramComposerService {
     const multi = segs.length > 1;
     const projName = await this.projNameOf(seg.projectId);
     const assignee = await this.assigneeLabelOf(seg);
+    const columnName = await this.columnLabelFor(seg.projectId, seg.targetStatus);
     const lines = [
       `✏️ <b>Задача ${idx + 1}</b>`,
       `📁 Проект: <b>${escapeHtml(projName)}</b>`,
+      `📊 Колонка: <b>${escapeHtml(columnName)}</b>`,
       `👤 Исполнитель: <b>${assignee ? escapeHtml(assignee) : '—'}</b>`,
       `📅 Срок: <b>${seg.deadline ? escapeHtml(seg.deadline) : '—'}</b>`,
       '',
@@ -1091,6 +1206,7 @@ export class TelegramComposerService {
         { text: '📁 Проект', callback_data: `ap:${draft.id}:${idx}:?` },
         { text: '👤 Исполнитель', callback_data: `ad:${draft.id}:${idx}:?` },
       ],
+      [{ text: '📊 Колонка', callback_data: `as:${draft.id}:${idx}:?` }],
       [
         { text: '📅 Сегодня', callback_data: `al:${draft.id}:${idx}:today` },
         { text: 'Завтра', callback_data: `al:${draft.id}:${idx}:tom` },
@@ -1317,6 +1433,75 @@ export class TelegramComposerService {
     await this.deps.client.answerCallbackQuery(cq.id);
   }
 
+  // Пикер колонки для AI-сегмента: список колонок по НАЗВАНИЯМ проекта этого сегмента.
+  private async renderAiStatusPicker(draft: TelegramTaskDraft, idx: number): Promise<Card> {
+    const seg = draft.segments?.[idx];
+    const settings = await this.kanbanSettingsOf(seg?.projectId ?? null);
+    const rows = this.columnOptions(settings).map((o) => [
+      { text: o.label.slice(0, 40), callback_data: `as:${draft.id}:${idx}:${o.code}` },
+    ]);
+    rows.push([{ text: '⬅️ Назад', callback_data: `ae:${draft.id}:${idx}` }]);
+    return { text: `📊 В какую колонку задачу ${idx + 1}?`, replyMarkup: { inline_keyboard: rows } };
+  }
+
+  // Пикер колонки для ручного флоу: список колонок по названиям проекта черновика.
+  private async renderManStatusPicker(draft: TelegramTaskDraft): Promise<Card> {
+    const settings = await this.kanbanSettingsOf(draft.projectId);
+    const rows = this.columnOptions(settings).map((o) => [
+      { text: o.label.slice(0, 40), callback_data: `ts:${draft.id}:${o.code}` },
+    ]);
+    rows.push([{ text: '⬅️ Назад', callback_data: `ts:${draft.id}:x` }]);
+    return { text: '📊 В какую колонку?', replyMarkup: { inline_keyboard: rows } };
+  }
+
+  private async onSegStatus(
+    cq: TelegramCallbackQuery,
+    draft: TelegramTaskDraft,
+    idx: number,
+    sel: AiStatusSel,
+    chatId: number,
+    messageId: number | undefined,
+  ): Promise<void> {
+    if (sel.type === 'open') {
+      const card = await this.renderAiStatusPicker(draft, idx);
+      if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
+    const segs = (draft.segments ?? []).slice();
+    const seg = segs[idx];
+    if (seg) {
+      segs[idx] = { ...seg, targetStatus: sel.status };
+      const updated = await this.deps.drafts.patch(draft.id, { segments: segs });
+      const card = await this.renderSegmentEdit(updated ?? draft, idx);
+      if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
+    }
+    await this.deps.client.answerCallbackQuery(cq.id);
+  }
+
+  private async onManStatus(
+    cq: TelegramCallbackQuery,
+    draft: TelegramTaskDraft,
+    sel: ManStatusSel,
+    chatId: number,
+    messageId: number | undefined,
+  ): Promise<void> {
+    if (sel.type === 'open') {
+      const card = await this.renderManStatusPicker(draft);
+      if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
+    // pick → сохранить колонку; back → просто вернуть карточку подтверждения.
+    const updated =
+      sel.type === 'pick'
+        ? ((await this.deps.drafts.patch(draft.id, { targetStatus: sel.status })) ?? draft)
+        : draft;
+    const card = await this.renderConfirm(updated);
+    if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
+    await this.deps.client.answerCallbackQuery(cq.id);
+  }
+
   // Создать все включённые сегменты. Ошибка одного не валит остальные.
   private async finalizeSegments(
     draft: TelegramTaskDraft,
@@ -1354,7 +1539,7 @@ export class TelegramComposerService {
           projectId: targetId,
           ownerUserId: userId,
           description,
-          status: 'todo',
+          status: seg.targetStatus ?? DEFAULT_COLUMN,
           deadline: seg.deadline,
           delegateUserId,
         });

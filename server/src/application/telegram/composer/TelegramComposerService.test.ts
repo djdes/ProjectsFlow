@@ -10,7 +10,14 @@ type CreateTaskCall = {
   description: string;
   delegateUserId?: string | null;
   deadline?: string | null;
+  status?: string;
 };
+
+// Тексты кнопок из replyMarkup (для проверки пикера колонок).
+function buttonTexts(replyMarkup: any): string[] {
+  const rows = replyMarkup?.inline_keyboard ?? [];
+  return rows.flat().map((b: any) => b.text as string);
+}
 
 // AI-мок: aiSegments → успех (compose вернул эти сегменты); aiOutcome → деградация
 // (enqueue бросает / таймаут / job упал / битый JSON). По умолчанию (без обоих) — enqueue
@@ -32,17 +39,20 @@ function makeHarness(opts?: {
   shared?: { id: string; displayName: string; email: string }[];
   aiSegments?: AiSeg[];
   aiOutcome?: 'enqueue-throw' | 'timeout' | 'fail' | 'bad';
+  // Per-project kanban settings (кастомные подписи/скрытость колонок) для пикера.
+  kanbanByProject?: Record<string, any>;
 }) {
   const projects = opts?.projects ?? [{ id: 'p1', name: 'Альфа' }];
   const shared = opts?.shared ?? [{ id: 'u2', displayName: 'Вася', email: 'v@e.com' }];
   const aiSegments = opts?.aiSegments;
   const aiOutcome = opts?.aiOutcome ?? (aiSegments ? undefined : 'enqueue-throw');
+  const kanbanByProject = opts?.kanbanByProject ?? {};
 
   const drafts = new Map<string, TelegramTaskDraft>();
   let seq = 0;
   const createTaskCalls: CreateTaskCall[] = [];
   const sent: { chatId: number; text: string }[] = [];
-  const edits: { messageId: number; text: string }[] = [];
+  const edits: { messageId: number; text: string; replyMarkup?: any }[] = [];
   const answers: { text?: string }[] = [];
   const delegateMessages: { userId: string; hasButtons: boolean }[] = [];
   const accepted: string[] = [];
@@ -62,6 +72,7 @@ function makeHarness(opts?: {
         delegationId: null,
         offered: input.offered ?? null,
         segments: input.segments ?? null,
+        targetStatus: input.targetStatus ?? null,
         status: 'composing',
         createdAt: new Date(0),
         expiresAt: new Date(8640000000000000),
@@ -94,7 +105,7 @@ function makeHarness(opts?: {
       return { kind: 'ok' as const, messageId: 1000 + sent.length };
     },
     async editMessageText(input: any) {
-      edits.push({ messageId: input.messageId, text: input.text });
+      edits.push({ messageId: input.messageId, text: input.text, replyMarkup: input.replyMarkup });
     },
     async answerCallbackQuery(_id: string, opts?: { text?: string }) {
       answers.push({ text: opts?.text });
@@ -127,6 +138,9 @@ function makeHarness(opts?: {
         const p = projects.find((x) => x.id === id);
         return p ? ({ ...p, isInbox: false } as any) : ({ id, name: 'Входящие', isInbox: true } as any);
       },
+      async getKanbanSettings(projectId: string) {
+        return kanbanByProject[projectId] ?? null;
+      },
     },
     users: {
       async findUserIdByTelegramUserId(tgId: number) {
@@ -144,6 +158,7 @@ function makeHarness(opts?: {
           description: input.description,
           delegateUserId: input.delegateUserId ?? null,
           deadline: input.deadline ?? null,
+          status: input.status,
         });
         return {
           id: 't1',
@@ -492,4 +507,99 @@ test('AI: job failed → откат на ручной флоу', async () => {
   await h.service.handleCallback(cq(`tc:${draftId}`));
   assert.equal(h.createTaskCalls.length, 1);
   assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1');
+});
+
+// ===================== Выбор колонки (статуса) =====================
+
+const seg1 = (over: Partial<AiSeg> = {}): AiSeg => ({
+  id: 's1',
+  title: 'Задача',
+  simpleBody: 'Тело',
+  projectId: 'p1',
+  projectName: 'Альфа',
+  confidence: 0.9,
+  assigneeUserId: null,
+  assigneeName: null,
+  deadline: null,
+  ...over,
+});
+
+test('Колонка: дефолт по умолчанию — backlog (AI)', async () => {
+  const h = makeHarness({ projects: [{ id: 'p1', name: 'Альфа' }], aiSegments: [seg1()] });
+  await h.service.startFromMessage(111, 500, 'сделать дело');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls[0]!.status, 'backlog');
+});
+
+test('Колонка: AI — выбор «ВОРКЕР» (todo) кнопкой → создаётся в todo', async () => {
+  const h = makeHarness({ projects: [{ id: 'p1', name: 'Альфа' }], aiSegments: [seg1()] });
+  await h.service.startFromMessage(111, 500, 'сделать дело');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`as:${draftId}:0:t`)); // pick todo
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls[0]!.status, 'todo');
+});
+
+test('Колонка: пикер показывает кастомные имена проекта и прячет скрытые', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [seg1()],
+    kanbanByProject: { p1: { todo: { label: 'РАБОТА' }, manual: { hidden: true } } },
+  });
+  await h.service.startFromMessage(111, 500, 'сделать дело');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`as:${draftId}:0:?`)); // открыть пикер
+  const picker = h.edits[h.edits.length - 1]!;
+  const labels = buttonTexts(picker.replyMarkup);
+  assert.ok(labels.includes('РАБОТА'), `кастомная подпись todo: ${labels.join(',')}`);
+  assert.ok(labels.includes('ЧЕРНОВИКИ'), 'backlog дефолт');
+  assert.ok(labels.includes('Готово'), 'done дефолт');
+  assert.ok(!labels.includes('В РУЧНУЮ'), 'manual скрыт → нет в пикере');
+});
+
+test('Колонка: выбранное кастомное имя отражается в карточке сегмента', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    aiSegments: [seg1()],
+    kanbanByProject: { p1: { todo: { label: 'РАБОТА' } } },
+  });
+  await h.service.startFromMessage(111, 500, 'сделать дело');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`as:${draftId}:0:t`)); // pick todo → карточка правки
+  const card = h.edits[h.edits.length - 1]!;
+  assert.match(card.text, /Колонка:.*РАБОТА/s);
+});
+
+test('Колонка: ручной флоу — дефолт backlog, затем выбор todo', async () => {
+  const h = makeHarness({ projects: [{ id: 'p1', name: 'Альфа' }], aiOutcome: 'timeout' });
+  await h.service.startFromMessage(111, 500, '+Альфа Обнови билд');
+  const draftId = [...h.drafts.keys()][0]!;
+  // Дефолт — backlog (без выбора): проверим через отдельный прогон ниже; здесь выбираем todo.
+  await h.service.handleCallback(cq(`ts:${draftId}:?`)); // открыть пикер
+  await h.service.handleCallback(cq(`ts:${draftId}:t`)); // выбрать ВОРКЕР
+  await h.service.handleCallback(cq(`tc:${draftId}`));
+  assert.equal(h.createTaskCalls[0]!.status, 'todo');
+});
+
+test('Колонка: ручной флоу без выбора → backlog', async () => {
+  const h = makeHarness({ projects: [{ id: 'p1', name: 'Альфа' }], aiOutcome: 'timeout' });
+  await h.service.startFromMessage(111, 500, '+Альфа Обнови билд');
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`tc:${draftId}`));
+  assert.equal(h.createTaskCalls[0]!.status, 'backlog');
+});
+
+test('Колонка: многосегментная карточка показывает колонку каждой задачи', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }, { id: 'p2', name: 'Бета' }],
+    aiSegments: [
+      seg1({ id: 's1', projectId: 'p1', projectName: 'Альфа' }),
+      seg1({ id: 's2', projectId: 'p2', projectName: 'Бета' }),
+    ],
+  });
+  await h.service.startFromMessage(111, 500, 'раз и два');
+  // Сводная карточка — это edit поверх «Ожидайте». Колонка дефолт ЧЕРНОВИКИ у обоих.
+  const card = h.edits[h.edits.length - 1]!;
+  assert.match(card.text, /ЧЕРНОВИКИ/);
 });

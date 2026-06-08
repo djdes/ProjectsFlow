@@ -30,6 +30,7 @@ import type {
   TelegramDraftOffered,
   TelegramDraftSegment,
 } from '../../application/telegram/TelegramTaskDraftRepository.js';
+import type { VisibleKanbanStatus } from '../../domain/kanban/KanbanSettings.js';
 import type {
   SnapshotMetrics,
   LogTails,
@@ -145,6 +146,8 @@ export const telegramTaskDrafts = mysqlTable(
     offered: json('offered').$type<TelegramDraftOffered | null>(),
     // AI-распознанные сегменты-задачи (mode='compose'); null = ручной флоу. См. db/067.
     segments: json('segments').$type<TelegramDraftSegment[] | null>(),
+    // Колонка канбана для ручного (одиночного) флоу; null = дефолт 'backlog'. См. db/068.
+    targetStatus: varchar('target_status', { length: 20 }).$type<VisibleKanbanStatus | null>(),
     status: mysqlEnum('status', ['composing', 'confirmed', 'cancelled', 'expired'])
       .notNull()
       .default('composing'),

@@ -23,6 +23,7 @@ function toDomain(r: TelegramTaskDraftRow): TelegramTaskDraft {
     offered: parseJsonCol<TelegramDraftOffered | null>(r.offered, null),
     // MariaDB отдаёт JSON-колонку строкой — обязательно через parseJsonCol (см. jsonCol.ts).
     segments: parseJsonCol<TelegramDraftSegment[] | null>(r.segments, null),
+    targetStatus: r.targetStatus,
     status: r.status,
     createdAt: r.createdAt,
     expiresAt: r.expiresAt,
@@ -44,6 +45,7 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
       delegateUserId: input.delegateUserId ?? null,
       offered: input.offered ?? null,
       segments: input.segments ?? null,
+      targetStatus: input.targetStatus ?? null,
       status: 'composing',
       expiresAt: sql`DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${input.ttlSeconds} SECOND)`,
     });
@@ -80,6 +82,7 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
     if (patch.delegationId !== undefined) set.delegationId = patch.delegationId;
     if (patch.offered !== undefined) set.offered = patch.offered;
     if (patch.segments !== undefined) set.segments = patch.segments;
+    if (patch.targetStatus !== undefined) set.targetStatus = patch.targetStatus;
     if (patch.status !== undefined) set.status = patch.status;
     const touched = Object.keys(set).length > 0 || patch.extendTtlSeconds !== undefined;
     if (touched) {

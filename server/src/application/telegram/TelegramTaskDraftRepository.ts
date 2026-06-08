@@ -3,6 +3,9 @@
 // а полный контекст (текст, выбранный проект/делегат, предложенные варианты) — здесь.
 // См. db/048. Заполняется TelegramComposerService, читается им же при callback'ах.
 
+import type { VisibleKanbanStatus } from '../../domain/kanban/KanbanSettings.js';
+
+// Лайфцикл-статус черновика конструктора (НЕ путать с targetStatus = колонка канбана задачи).
 export type TelegramTaskDraftStatus = 'composing' | 'confirmed' | 'cancelled' | 'expired';
 
 // Предложенные варианты в карточке конструктора: index в callback_data → id здесь.
@@ -30,6 +33,10 @@ export type TelegramDraftSegment = {
   readonly deadline: string | null; // YYYY-MM-DD
   // Тогл «включить в создание» (правка в многосегментной карточке). default true.
   readonly included: boolean;
+  // Колонка канбана (статус) задачи. null = дефолт 'backlog' (ЧЕРНОВИКИ) при создании.
+  // Хранится канонический ключ статуса (backlog/manual/todo/done); имя колонки резолвится
+  // под проект сегмента при рендере. См. db/067 (поле внутри JSON segments).
+  readonly targetStatus: VisibleKanbanStatus | null;
 };
 
 export type TelegramTaskDraft = {
@@ -42,6 +49,9 @@ export type TelegramTaskDraft = {
   readonly delegationId: string | null;
   readonly offered: TelegramDraftOffered | null;
   readonly segments: TelegramDraftSegment[] | null;
+  // Колонка канбана для РУЧНОГО флоу (одиночная задача). null = дефолт 'backlog'.
+  // Для AI-флоу колонка хранится per-segment в segments[].targetStatus. См. db/068.
+  readonly targetStatus: VisibleKanbanStatus | null;
   readonly status: TelegramTaskDraftStatus;
   readonly createdAt: Date;
   readonly expiresAt: Date;
@@ -56,6 +66,7 @@ export type CreateTelegramTaskDraftInput = {
   readonly delegateUserId?: string | null;
   readonly offered?: TelegramDraftOffered | null;
   readonly segments?: TelegramDraftSegment[] | null;
+  readonly targetStatus?: VisibleKanbanStatus | null;
   // Срок жизни в секундах от now. Репо считает expires_at = now + ttl.
   readonly ttlSeconds: number;
 };
@@ -68,6 +79,7 @@ export type TelegramTaskDraftPatch = {
   readonly delegationId?: string | null;
   readonly offered?: TelegramDraftOffered | null;
   readonly segments?: TelegramDraftSegment[] | null;
+  readonly targetStatus?: VisibleKanbanStatus | null;
   readonly status?: TelegramTaskDraftStatus;
   // Если задано — продлевает expires_at = now + extendTtlSeconds. Нужно для confirmed-
   // черновиков делегирования: accept может прийти спустя часы (намного позже 30-мин TTL
