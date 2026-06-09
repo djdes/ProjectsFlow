@@ -1,5 +1,6 @@
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { TaskDelegationRepository } from '../task/TaskDelegationRepository.js';
+import type { TaskCommentRepository } from '../task/TaskCommentRepository.js';
 import type { TaskWithCounts } from '../task/ListTasks.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
@@ -15,10 +16,12 @@ import {
   renderDigestTelegram,
 } from '../task/digest/buildTaskDigest.js';
 import { toVisibleStatus } from '../../domain/task/digestFormat.js';
+import type { TaskStatus } from '../../domain/task/Task.js';
 
 type Deps = {
   readonly tasks: TaskRepository;
   readonly delegations: TaskDelegationRepository;
+  readonly comments: TaskCommentRepository;
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly email: EmailSender;
@@ -47,16 +50,23 @@ export class SendDailyDigest {
     if (!project) return { taskCount: 0 };
 
     const all = await this.deps.tasks.listByProject(projectId);
-    const wanted = new Set(cfg.statuses);
-    const selected = all.filter((t) => wanted.has(toVisibleStatus(t.status)));
+    // Выполненные (done) задачи в сводку НЕ включаем (во всех каналах) — сводка про «что делать».
+    // Аннотация TaskStatus[] обязательна: TS сужает .filter через inferred predicate, иначе
+    // Set<...без done> и .has(toVisibleStatus) ругается на 'done'.
+    const statuses: TaskStatus[] = cfg.statuses.filter((s) => s !== 'done');
+    const wanted = new Set(statuses);
+    const selected = all.filter((t) => t.status !== 'done' && wanted.has(toVisibleStatus(t.status)));
     if (selected.length === 0) return { taskCount: 0 };
 
-    const delegations = await this.deps.delegations.listActiveForTasks(selected.map((t) => t.id));
+    const [delegations, commentCounts] = await Promise.all([
+      this.deps.delegations.listActiveForTasks(selected.map((t) => t.id)),
+      this.deps.comments.countsByTasks(selected.map((t) => t.id)),
+    ]);
     const enriched: TaskWithCounts[] = selected.map((t) => ({
       ...t,
       commitCount: 0,
       attachmentCount: 0,
-      commentCount: 0,
+      commentCount: commentCounts.get(t.id) ?? 0,
       delegation: delegations.get(t.id) ?? null,
     }));
 
@@ -65,14 +75,14 @@ export class SendDailyDigest {
       appUrl: this.deps.appUrl,
       isInbox: project.isInbox,
       attachmentsByTask: new Map(),
-      grouping: { by: 'status', statuses: cfg.statuses },
+      grouping: { by: 'status', statuses },
     });
 
     const subject = `Ежедневная сводка · ${project.name}`;
     const html = renderDigestHtml(model);
     const text = renderDigestMarkdown(model);
-    const tgPersonal = renderDigestTelegram(model);
-    const tgGroup = renderDigestTelegram(model, { assigneeFirst: true });
+    // Telegram: массив сообщений (длинная сводка разбивается, все задачи целиком).
+    const tgChunks = renderDigestTelegram(model);
 
     const members = await this.deps.members.listByProject(projectId);
     const memberById = new Map(members.map((m) => [m.userId, m] as const));
@@ -100,26 +110,31 @@ export class SendDailyDigest {
           .catch((e) => console.warn('[daily-digest] notification failed', userId, e));
       }
       if (cfg.channels.includes('telegram') && cfg.tgTargets.includes('personal')) {
-        await this.deps.telegram
-          .execute({ userId, text: tgPersonal, parseMode: 'HTML', kind: 'task_digest', skipDedupCheck: true })
-          .catch((e) => console.warn('[daily-digest] tg personal failed', userId, e));
+        // Несколько сообщений по очереди (длинная сводка не обрезается).
+        for (const chunk of tgChunks) {
+          await this.deps.telegram
+            .execute({ userId, text: chunk, parseMode: 'HTML', kind: 'task_digest', skipDedupCheck: true })
+            .catch((e) => console.warn('[daily-digest] tg personal failed', userId, e));
+        }
       }
     }
 
-    // Группа — одно сообщение на всю команду.
+    // Группа — те же сообщения на всю команду.
     if (
       cfg.channels.includes('telegram') &&
       cfg.tgTargets.includes('group') &&
       settings.telegramGroupChatId !== null
     ) {
-      await this.deps.telegramClient
-        .sendMessage({
-          chatId: settings.telegramGroupChatId,
-          text: tgGroup,
-          parseMode: 'HTML',
-          disableWebPagePreview: true,
-        })
-        .catch((e) => console.warn('[daily-digest] tg group failed', e));
+      for (const chunk of tgChunks) {
+        await this.deps.telegramClient
+          .sendMessage({
+            chatId: settings.telegramGroupChatId,
+            text: chunk,
+            parseMode: 'HTML',
+            disableWebPagePreview: true,
+          })
+          .catch((e) => console.warn('[daily-digest] tg group failed', e));
+      }
     }
 
     return { taskCount: selected.length };

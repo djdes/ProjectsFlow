@@ -17,8 +17,9 @@ export type DigestItem = {
   readonly body: string; // остальное описание (markdown, сохраняем вёрстку)
   readonly deadline: string | null;
   readonly assignee: string | null;
-  readonly openLink: string; // ?task=… — открыть задачу
+  readonly openLink: string; // ?task=… — открыть задачу (карточка с комментариями)
   readonly doneLink: string; // ?task=…&done=1 — перенести в «Готово»
+  readonly commentCount: number; // кол-во комментариев у задачи (для «Комментировать (N)»)
   readonly attachments: DigestAttachment[];
 };
 
@@ -70,6 +71,7 @@ export function buildDigestModel(
       assignee: t.delegation?.delegateDisplayName ?? null,
       openLink: linkBase,
       doneLink: `${linkBase}&done=1`,
+      commentCount: t.commentCount ?? 0,
       attachments: [...(opts.attachmentsByTask.get(t.id) ?? [])],
     };
   };
@@ -160,61 +162,69 @@ export function renderDigestHtml(m: DigestModel): string {
   return p.join('');
 }
 
-// Telegram (parse_mode HTML). Урезаем на границе задач, чтобы не превысить 4096.
-// assigneeFirst — для отправки в группу: каждая задача начинается с исполнителя
-// «👤 Анна — …» (или «👤 — …», если не делегирована).
-export function renderDigestTelegram(
-  m: DigestModel,
-  opts: { maxLen?: number; assigneeFirst?: boolean } = {},
-): string {
+// Блок одной задачи для Telegram: жирный заголовок (НЕ ссылка) → мета (👤/⏰) → тело →
+// вложения → футер «Комментировать (N) | Завершить» (гиперссылки на сайт). Если блок не
+// влезает в maxBlock — усекаем ТОЛЬКО тело (по сырому markdown, затем re-render, чтобы HTML
+// остался сбалансированным и Telegram не отбил parse_mode).
+function digestItemBlockTg(it: DigestItem, maxBlock: number): string {
+  const title = `<b>${escapeHtml(it.name)}</b>`;
+  const meta: string[] = [];
+  if (it.assignee) meta.push(`👤 ${escapeHtml(it.assignee)}`);
+  if (it.deadline) meta.push(`⏰ ${escapeHtml(it.deadline)}`);
+  const commentLabel =
+    it.commentCount > 0 ? `Комментировать (${it.commentCount})` : 'Комментировать';
+  const footer =
+    `<a href="${escapeHtml(it.openLink)}">${commentLabel}</a>` +
+    ` | <a href="${escapeHtml(it.doneLink)}">Завершить</a>`;
+  const attach = it.attachments.length
+    ? it.attachments.map((a) => `📎 <a href="${escapeHtml(a.url)}">${escapeHtml(a.name)}</a>`).join(' · ')
+    : '';
+  const compose = (body: string): string =>
+    [title, meta.join(' · '), body, attach, footer].filter((s) => s.length > 0).join('\n');
+
+  let block = compose(it.body ? markdownToRich(it.body, 'telegram') : '');
+  if (block.length > maxBlock) {
+    const room = maxBlock - compose('').length - 1;
+    block =
+      room > 40 && it.body
+        ? compose(markdownToRich(it.body.slice(0, room).trimEnd() + '…', 'telegram'))
+        : compose('');
+    if (block.length > maxBlock) block = compose(''); // тело всё равно не влезает — без него
+  }
+  return block;
+}
+
+// Telegram (parse_mode HTML). Возвращает МАССИВ сообщений: длинная сводка разбивается на
+// несколько сообщений, ВСЕ задачи показываются полностью (без «…на сайте»). Заголовок проекта
+// на первом сообщении, «…(продолжение)» — на следующих. Группа-заголовок повторяется в начале
+// каждого сообщения, где есть её задачи.
+export function renderDigestTelegram(m: DigestModel, opts: { maxLen?: number } = {}): string[] {
   const maxLen = opts.maxLen ?? 3800;
-  const segs: string[] = [
-    `<b>Задачи — ${m.count} · ${escapeHtml(`Проект «${m.projectName}»`)}</b>`,
-  ];
-  let used = segs[0]!.length;
-  let cut = false;
+  const header = `<b>Задачи — ${m.count} · ${escapeHtml(`Проект «${m.projectName}»`)}</b>`;
+  const cont = '<b>…(продолжение)</b>';
+  const chunks: string[] = [];
+  let cur = header;
+  let groupInChunk: string | null = null; // заголовок группы, уже добавленный в текущий чанк
+
   for (const g of m.groups) {
-    if (cut) break;
-    const headingSeg = `\n\n<b>${escapeHtml(g.heading)}</b>`;
-    let headingAdded = false;
-    for (let i = 0; i < g.items.length; i++) {
-      const it = g.items[i]!;
-      const meta: string[] = [];
-      if (it.deadline) meta.push(`⏰ ${escapeHtml(it.deadline)}`);
-      // assigneeFirst: исполнитель в начале строки, иначе — в мете.
-      if (!opts.assigneeFirst && it.assignee) meta.push(`👤 ${escapeHtml(it.assignee)}`);
-      const prefix = opts.assigneeFirst
-        ? it.assignee
-          ? `👤 ${escapeHtml(it.assignee)} — `
-          : '👤 — '
-        : '';
-      const itemLines: string[] = [
-        `${i + 1}. ${prefix}<a href="${escapeHtml(it.openLink)}">${escapeHtml(
-          it.name,
-        )}</a> · <a href="${escapeHtml(it.doneLink)}">✓ Готово</a>`,
-      ];
-      if (meta.length) itemLines.push(meta.join(' · '));
-      if (it.body) itemLines.push(markdownToRich(it.body, 'telegram'));
-      if (it.attachments.length) {
-        itemLines.push(
-          it.attachments.map((a) => `📎 <a href="${escapeHtml(a.url)}">${escapeHtml(a.name)}</a>`).join(' · '),
-        );
+    const heading = `<b>${escapeHtml(g.heading)}</b>`;
+    for (const it of g.items) {
+      const block = digestItemBlockTg(it, maxLen - 120); // запас под cont+heading
+      const needHeading = groupInChunk !== g.heading;
+      const addLen = (needHeading ? heading.length + 2 : 0) + block.length + 2;
+      // Перенос на новое сообщение только если в текущем уже есть задачи (groupInChunk != null).
+      if (groupInChunk !== null && cur.length + addLen > maxLen) {
+        chunks.push(cur);
+        cur = cont;
+        groupInChunk = null;
       }
-      const itemSeg = '\n\n' + itemLines.join('\n');
-      const add = (headingAdded ? 0 : headingSeg.length) + itemSeg.length;
-      if (used + add > maxLen) {
-        cut = true;
-        break;
+      if (groupInChunk !== g.heading) {
+        cur += '\n\n' + heading;
+        groupInChunk = g.heading;
       }
-      if (!headingAdded) {
-        segs.push(headingSeg);
-        used += headingSeg.length;
-        headingAdded = true;
-      }
-      segs.push(itemSeg);
-      used += itemSeg.length;
+      cur += '\n\n' + block;
     }
   }
-  if (cut) segs.push('\n\n…(сообщение длинное — полностью на сайте)');
-  return segs.join('');
+  chunks.push(cur);
+  return chunks;
 }

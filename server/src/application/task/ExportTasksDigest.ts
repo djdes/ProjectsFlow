@@ -105,7 +105,8 @@ export class ExportTasksDigest {
 
     const subject = `Задачи (${model.count}) · ${projectName}`;
     const html = renderDigestHtml(model);
-    const telegramHtml = renderDigestTelegram(model);
+    // Telegram-формат: массив сообщений (длинная сводка разбивается, без обрезки).
+    const telegramChunks = renderDigestTelegram(model);
 
     const delivered: { userId: string; channel: DigestChannel }[] = [];
     const skipped: { userId: string; reason: string }[] = [];
@@ -125,15 +126,23 @@ export class ExportTasksDigest {
           skipped.push({ userId: 'group', reason: 'no_group' });
           continue;
         }
-        const groupHtml = renderDigestTelegram(model, { assigneeFirst: true });
-        const res = await this.deps.telegramClient.sendMessage({
-          chatId: settings.telegramGroupChatId,
-          text: groupHtml,
-          parseMode: 'HTML',
-          disableWebPagePreview: true,
-        });
-        if (res.kind === 'ok') delivered.push({ userId: 'group', channel: 'telegram' });
-        else skipped.push({ userId: 'group', reason: res.kind });
+        let groupOk = true;
+        let groupFail = '';
+        for (const chunk of telegramChunks) {
+          const res = await this.deps.telegramClient.sendMessage({
+            chatId: settings.telegramGroupChatId,
+            text: chunk,
+            parseMode: 'HTML',
+            disableWebPagePreview: true,
+          });
+          if (res.kind !== 'ok') {
+            groupOk = false;
+            groupFail = res.kind;
+            break;
+          }
+        }
+        if (groupOk) delivered.push({ userId: 'group', channel: 'telegram' });
+        else skipped.push({ userId: 'group', reason: groupFail });
         continue;
       }
       const userId = r.kind === 'self' ? cmd.ownerUserId : r.userId;
@@ -162,16 +171,25 @@ export class ExportTasksDigest {
           skipped.push({ userId, reason: 'email_failed' });
         }
       } else {
-        const res = await this.deps.telegram.execute({
-          userId,
-          text: telegramHtml,
-          parseMode: 'HTML',
-          kind: 'task_digest',
-          // Пользователь явно нажал «отправить» — не глушим 60с-дедупом.
-          skipDedupCheck: true,
-        });
-        if (res.status === 'ok') delivered.push({ userId, channel: 'telegram' });
-        else skipped.push({ userId, reason: res.status });
+        let tgOk = true;
+        let tgFail = '';
+        for (const chunk of telegramChunks) {
+          const res = await this.deps.telegram.execute({
+            userId,
+            text: chunk,
+            parseMode: 'HTML',
+            kind: 'task_digest',
+            // Пользователь явно нажал «отправить» — не глушим 60с-дедупом.
+            skipDedupCheck: true,
+          });
+          if (res.status !== 'ok') {
+            tgOk = false;
+            tgFail = res.status;
+            break;
+          }
+        }
+        if (tgOk) delivered.push({ userId, channel: 'telegram' });
+        else skipped.push({ userId, reason: tgFail });
       }
     }
 

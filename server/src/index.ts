@@ -944,6 +944,7 @@ const authDeps = {
 const sendDailyDigest = new SendDailyDigest({
   tasks: taskRepo,
   delegations: taskDelegationRepo,
+  comments: taskCommentRepo,
   projects: projectRepo,
   members: projectMemberRepo,
   email: emailSender,
