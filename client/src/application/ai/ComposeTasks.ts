@@ -57,10 +57,12 @@ export class ComposeTasksError extends Error {
   }
 }
 
-// compose тяжелее improve: 2 прохода opus + сбор KB. Один long-poll сервера ограничен
-// 60с (HARD_MAX_WAIT_MS), поэтому опрашиваем циклом до ~3 минут суммарно.
+// compose тяжелее improve: разбивка + KB многих проектов. Большой/длинный черновик может
+// обрабатываться диспетчером минуты (watchdog в ralph до 15 мин). Один long-poll сервера
+// ограничен 60с (HARD_MAX_WAIT_MS), поэтому опрашиваем циклом до ~16 минут — чтобы НЕ бросить
+// раньше, чем отработает watchdog (иначе ложный compose_pass1:timeout на больших промптах).
 const POLL_WAIT_SECONDS = 55;
-const MAX_TOTAL_MS = 180_000;
+const MAX_TOTAL_MS = 960_000;
 
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled']);
 

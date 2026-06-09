@@ -172,6 +172,8 @@ export function AiComposeDialog({
   const { composeTasks, taskRepository, projectRepository } = useContainer();
   const { data: projects } = useProjects();
   const [phase, setPhase] = useState<Phase>('idle');
+  // Секунды ожидания в фазе loading — для прогресса при долгой обработке (>60с).
+  const [elapsedSec, setElapsedSec] = useState(0);
   const [result, setResult] = useState<ComposeResult | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('simple');
   const [distribute, setDistribute] = useState(false);
@@ -220,6 +222,17 @@ export function AiComposeDialog({
   }, [phase, distribute, rows, membersByKey, projectRepository, meId]);
 
   const trimmed = text.trim();
+  // Тикаем счётчик ожидания только в фазе loading; сбрасываем при выходе из неё.
+  useEffect(() => {
+    if (phase !== 'loading') {
+      setElapsedSec(0);
+      return;
+    }
+    setElapsedSec(0);
+    const t = setInterval(() => setElapsedSec((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [phase]);
+
   const isBusy = phase === 'loading' || phase === 'creating';
   const isDisabled = disabled || isBusy || trimmed.length === 0;
 
@@ -527,7 +540,14 @@ export function AiComposeDialog({
                   </span>
                 </div>
                 <p className="text-sm font-medium text-foreground">Генерация двух вариантов…</p>
-                <p className="text-xs">Обычно 1–2 минуты. Можно отменить.</p>
+                {phase === 'loading' && elapsedSec >= 60 ? (
+                  <p className="text-xs">
+                    Большой промпт — обрабатываю, это может занять несколько минут. Не закрывайте
+                    окно. ({elapsedSec} с)
+                  </p>
+                ) : (
+                  <p className="text-xs">Обычно 1–2 минуты. Можно отменить.</p>
+                )}
               </div>
             ) : phase === 'error' ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center">

@@ -76,11 +76,12 @@ const EXCERPT_LIMIT = 120;
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const SPINNER_INTERVAL_MS = 2500;
 const WAIT_TEXT = '⏳ Ожидайте, перефразирую…';
-// compose-job long-poll: каждый WaitForAiPromptJob блокирует до ~50с; до 3 попыток ≈150с
-// (как клиентский ComposeTasks). Цикл привязан к числу попыток, а НЕ к wall-clock — чтобы
-// тест с мгновенным моком (null/таймаут) не уходил в busy-loop на 150 реальных секунд.
+// compose-job long-poll: каждый WaitForAiPromptJob блокирует до ~50с; до 20 попыток ≈1000с
+// (≈16 мин) — большой/длинный черновик у диспетчера может идти минуты (watchdog в ralph до
+// 15 мин); НЕ бросаем раньше, иначе ложный таймаут. Цикл привязан к числу попыток, а НЕ к
+// wall-clock — чтобы тест с мгновенным моком (null/таймаут) не уходил в busy-loop.
 const COMPOSE_WAIT_MS = 50_000;
-const COMPOSE_MAX_ATTEMPTS = 3;
+const COMPOSE_MAX_ATTEMPTS = 20;
 const SEGMENT_TERMINAL = new Set<string>(['succeeded', 'failed', 'cancelled']);
 const EDIT_BTNS_PER_ROW = 4; // кнопок «✏️ N» в ряд на многосегментной карточке
 
@@ -1652,14 +1653,21 @@ export class TelegramComposerService {
     let i = 0;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    const startedAt = Date.now();
     const tick = (): void => {
       if (stopped) return;
       i = (i + 1) % SPINNER_FRAMES.length;
+      const sec = Math.round((Date.now() - startedAt) / 1000);
+      // После >60с — явно говорим, что процесс идёт и ничего не зависло (большой промпт).
+      const text =
+        sec < 60
+          ? `${SPINNER_FRAMES[i]} Перефразирую…`
+          : `${SPINNER_FRAMES[i]} Большой промпт, обрабатываю… ничего не зависло (${sec}с)`;
       void this.deps.client
         .editMessageText({
           chatId,
           messageId,
-          text: `${SPINNER_FRAMES[i]} Перефразирую…`,
+          text,
           parseMode: 'HTML',
           disableWebPagePreview: true,
         })
