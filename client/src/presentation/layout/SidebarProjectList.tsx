@@ -464,9 +464,12 @@ export function SidebarProjectList(): React.ReactElement {
   const noMatches = searching && favorites.length === 0 && regular.length === 0;
 
   return (
-    <div className="space-y-1.5">
+    // Колонка на всю высоту: поиск закреплён сверху (его focus-ring не обрезается
+    // overflow-контейнером), список проектов скроллится в своём min-h-0 боксе — профиль
+    // снизу остаётся видимым при любом числе проектов.
+    <div className="flex h-full flex-col gap-1.5">
       {visible.length > 1 && (
-        <div className="relative">
+        <div className="relative shrink-0">
           <FolderSearch className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
@@ -478,6 +481,7 @@ export function SidebarProjectList(): React.ReactElement {
         </div>
       )}
 
+      <div className="-mx-1 min-h-0 flex-1 space-y-1.5 overflow-y-auto px-1">
       {/* «Избранное» — самостоятельная секция НАД «Мои проекты». Скрывается в режиме поиска
           (тогда выдача плоская, без дублей). Заголовок кликается — сворачивает секцию. */}
       {showFavoritesSection && favorites.length > 0 && (
@@ -523,6 +527,7 @@ export function SidebarProjectList(): React.ReactElement {
             />
           ) : null
         )}
+      </div>
       </div>
     </div>
   );

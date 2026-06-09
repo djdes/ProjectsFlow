@@ -113,7 +113,7 @@ export function Sidebar({ onToggleCollapse }: SidebarProps): React.ReactElement 
         )}
       </NavLink>
 
-      <nav className="-mx-1 overflow-y-auto px-1">
+      <nav className="min-h-0">
         <SidebarProjectList />
       </nav>
 
