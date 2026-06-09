@@ -24,7 +24,7 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
-import { getInitials } from '@/presentation/layout/projectIcons';
+import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import { relativeTime } from '@/lib/relativeTime';
 import type { Task, RalphMode, TaskPriority } from '@/domain/task/Task';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
@@ -293,7 +293,7 @@ function AcceptedRow({
   const isDone = item.status === 'done';
   return (
     <li
-      className="group flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40"
+      className="group flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/40"
       onClick={onOpen}
     >
       <InboxCheckbox
@@ -361,9 +361,11 @@ function PendingRow({
   onDecline: () => void;
 }): React.ReactElement {
   return (
-    <li className="flex items-start gap-3 px-3 py-2.5">
-      <Avatar className="size-8 shrink-0">
-        <AvatarFallback className="text-[11px]">
+    <li className="flex items-start gap-2.5 border-l-2 border-primary px-3 py-2">
+      <Avatar className="size-7 shrink-0">
+        <AvatarFallback
+          className={cn('text-[10px]', avatarColor(item.delegation.creatorDisplayName))}
+        >
           {getInitials(item.delegation.creatorDisplayName)}
         </AvatarFallback>
       </Avatar>

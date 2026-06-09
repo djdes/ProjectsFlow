@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Menu, PanelLeft } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
@@ -54,21 +54,11 @@ export function AppShell(): React.ReactElement {
           <div
             className={cn(
               'grid h-dvh bg-background text-foreground',
-              collapsed ? 'grid-cols-[1fr]' : 'grid-cols-[260px_1fr]',
+              collapsed ? 'grid-cols-[3.5rem_1fr]' : 'grid-cols-[260px_1fr]',
             )}
           >
-            {!collapsed && <Sidebar onToggleCollapse={toggleCollapse} />}
+            <Sidebar collapsed={collapsed} onToggleCollapse={toggleCollapse} />
             <main className="relative overflow-y-auto">
-              {collapsed && (
-                <button
-                  type="button"
-                  onClick={toggleCollapse}
-                  aria-label="Показать панель"
-                  className="absolute left-2 top-2 z-20 grid size-8 place-items-center rounded-md border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  <PanelLeft className="size-4" />
-                </button>
-              )}
               <Outlet />
             </main>
           </div>

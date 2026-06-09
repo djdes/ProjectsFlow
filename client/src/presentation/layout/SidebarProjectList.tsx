@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -100,13 +100,27 @@ function SidebarProjectRow({
     transition,
   };
 
+  // Авто-скролл активного проекта в зону видимости — в длинном списке легко потерять
+  // место. Композируем ref dnd-kit со своим, чтобы дотянуться до DOM-узла строки.
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const setRefs = (node: HTMLDivElement | null): void => {
+    setNodeRef(node);
+    rowRef.current = node;
+  };
+  const isActiveRoute =
+    location.pathname === `/projects/${project.id}` ||
+    location.pathname.startsWith(`/projects/${project.id}/`);
+  useEffect(() => {
+    if (isActiveRoute) rowRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [isActiveRoute]);
+
   // Бейджи (число задач + индикатор команды) прячем при hover/focus/открытом меню —
   // на их месте появляется кнопка «три точки».
   const actionsActive = menuOpen;
 
   return (
     <div
-      ref={setNodeRef}
+      ref={setRefs}
       style={style}
       className={cn(
         'group relative flex items-center rounded-md',
@@ -335,6 +349,10 @@ function ProjectGroup({
 // тарифы, значение придёт из профиля/подписки и рендер ниже подхватит число.
 const PROJECT_LIMIT = Infinity;
 
+// Нижний fade скролл-контейнера — подсказка «есть ещё ниже». Маска прозрачит последние
+// ~1.25rem контента, поэтому не зависит от цвета фона панели.
+const BOTTOM_FADE = 'linear-gradient(to bottom, black calc(100% - 1.25rem), transparent)';
+
 export function SidebarProjectList(): React.ReactElement {
   const { data, loading, error } = useProjects();
   const { reorder } = useReorderProjects();
@@ -345,6 +363,19 @@ export function SidebarProjectList(): React.ReactElement {
   const { collapsed: mainCollapsed, toggle: toggleMainCollapsed } =
     useSidebarSectionCollapse('main');
   const [query, setQuery] = useState('');
+  // Нижний fade скролл-контейнера: подсказка «есть ещё проекты ниже».
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [moreBelow, setMoreBelow] = useState(false);
+  const updateScrollFade = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setMoreBelow(el.scrollTop + el.clientHeight < el.scrollHeight - 4);
+  }, []);
+  useEffect(() => {
+    updateScrollFade();
+    window.addEventListener('resize', updateScrollFade);
+    return () => window.removeEventListener('resize', updateScrollFade);
+  }, [data, updateScrollFade]);
 
   if (loading) return <SidebarProjectListSkeleton />;
 
@@ -362,7 +393,7 @@ export function SidebarProjectList(): React.ReactElement {
   // Шапка «Мои проекты» (заголовок + счётчик + «+») рендерится всегда, чтобы юзер мог
   // создать первый проект. Сам заголовок кликается — сворачивает секцию (как в Todoist).
   const myProjectsHeader = (
-    <div className="flex items-center justify-between gap-1 px-2 pt-1">
+    <div className="sticky top-0 z-10 flex items-center justify-between gap-1 rounded bg-card/80 px-2 py-1 backdrop-blur-sm">
       <button
         type="button"
         onClick={toggleMainCollapsed}
@@ -481,7 +512,12 @@ export function SidebarProjectList(): React.ReactElement {
         </div>
       )}
 
-      <div className="-mx-1 min-h-0 flex-1 space-y-1.5 overflow-y-auto px-1">
+      <div
+        ref={scrollRef}
+        onScroll={updateScrollFade}
+        style={moreBelow ? { maskImage: BOTTOM_FADE, WebkitMaskImage: BOTTOM_FADE } : undefined}
+        className="-mx-1 min-h-0 flex-1 space-y-1.5 overflow-y-auto px-1"
+      >
       {/* «Избранное» — самостоятельная секция НАД «Мои проекты». Скрывается в режиме поиска
           (тогда выдача плоская, без дублей). Заголовок кликается — сворачивает секцию. */}
       {showFavoritesSection && favorites.length > 0 && (
@@ -490,7 +526,7 @@ export function SidebarProjectList(): React.ReactElement {
             type="button"
             onClick={toggleFavCollapsed}
             aria-expanded={!favCollapsed}
-            className="flex w-full items-center gap-1.5 px-2 pt-1 text-left text-[11px] font-medium uppercase tracking-widest text-muted-foreground hover:text-foreground"
+            className="sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-card/80 px-2 py-1 text-left text-[11px] font-medium uppercase tracking-widest text-muted-foreground backdrop-blur-sm hover:text-foreground"
           >
             <ChevronDown
               className={cn(

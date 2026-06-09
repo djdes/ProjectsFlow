@@ -18,13 +18,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
+import { cn } from '@/lib/utils';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { useTheme, type Theme } from '@/presentation/components/theme/ThemeProvider';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
-import { getInitials } from './projectIcons';
+import { avatarColor, getInitials } from './projectIcons';
 
-export function SidebarUserMenu(): React.ReactElement {
+// compact — режим для свёрнутой панели (icon-rail): триггером служит только аватар.
+export function SidebarUserMenu({ compact = false }: { compact?: boolean } = {}): React.ReactElement {
   const navigate = useNavigate();
   const { user, loading } = useCurrentUser();
   const { logout } = useAuth();
@@ -33,7 +35,9 @@ export function SidebarUserMenu(): React.ReactElement {
   const [copied, setCopied] = useState(false);
 
   if (loading || !user) {
-    return (
+    return compact ? (
+      <div className="size-8 shrink-0 animate-pulse rounded-full bg-muted" />
+    ) : (
       <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
         <div className="size-8 shrink-0 animate-pulse rounded-full bg-muted" />
         <div className="h-3 w-24 animate-pulse rounded bg-muted" />
@@ -56,16 +60,28 @@ export function SidebarUserMenu(): React.ReactElement {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <DropdownMenuTrigger
+        title={compact ? user.displayName : undefined}
+        className={cn(
+          'flex items-center rounded-md text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          compact ? 'justify-center p-0.5' : 'w-full gap-2 px-2 py-1.5',
+        )}
+      >
         <Avatar>
-          <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
+          <AvatarFallback className={avatarColor(user.displayName)}>
+            {getInitials(user.displayName)}
+          </AvatarFallback>
         </Avatar>
-        <span className="flex-1 truncate font-medium">{user.displayName}</span>
-        <span className="text-muted-foreground" aria-hidden="true">
-          ⋯
-        </span>
+        {!compact && (
+          <>
+            <span className="flex-1 truncate font-medium">{user.displayName}</span>
+            <span className="text-muted-foreground" aria-hidden="true">
+              ⋯
+            </span>
+          </>
+        )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-56">
+      <DropdownMenuContent side="top" align={compact ? 'center' : 'start'} className="w-56">
         <DropdownMenuLabel className="flex items-center gap-2 font-normal text-muted-foreground">
           <span className="flex-1 truncate">{user.email}</span>
           <button

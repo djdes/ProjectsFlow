@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Columns3, Eye, EyeOff, Inbox as InboxIcon, List as ListIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
@@ -141,22 +147,29 @@ function HideDoneToggle({
   value: boolean;
   onChange: (v: boolean) => void;
 }): React.ReactElement {
+  const label = value ? 'Показать выполненные' : 'Скрыть выполненные';
   return (
-    <button
-      type="button"
-      onClick={() => onChange(!value)}
-      aria-pressed={value}
-      title={value ? 'Показать выполненные' : 'Скрыть выполненные'}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-md border bg-card px-2.5 py-1 text-xs transition-colors',
-        value
-          ? 'border-foreground/30 text-foreground'
-          : 'text-muted-foreground hover:text-foreground',
-      )}
-    >
-      {value ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-      Выполненные
-    </button>
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={() => onChange(!value)}
+            aria-pressed={value}
+            aria-label={label}
+            className={cn(
+              'inline-flex size-8 items-center justify-center rounded-md border bg-card transition-colors',
+              value
+                ? 'border-foreground/30 text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {value ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
