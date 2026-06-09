@@ -1,6 +1,7 @@
 import type { User } from '@/domain/user/User';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 import type { KanbanDefaultColors } from '@/domain/kanban/KanbanSettings';
+import type { UiPrefs } from '@/domain/user/UiPrefs';
 import type {
   UpdateProfileInput,
   UserRepository,
@@ -71,6 +72,25 @@ export class HttpUserRepository implements UserRepository {
       '/me/kanban-colors',
       { colors },
     );
+    return saved ?? {};
+  }
+
+  async getUiPrefs(): Promise<UiPrefs> {
+    const { prefs } = await httpClient.get<{ prefs?: unknown }>('/me/ui-prefs');
+    // Защита от строкового JSON-значения колонки (старый сервер) — нормализуем в объект.
+    let val: unknown = prefs;
+    if (typeof val === 'string') {
+      try {
+        val = JSON.parse(val);
+      } catch {
+        return {};
+      }
+    }
+    return val && typeof val === 'object' && !Array.isArray(val) ? (val as UiPrefs) : {};
+  }
+
+  async setUiPrefs(prefs: UiPrefs): Promise<UiPrefs> {
+    const { prefs: saved } = await httpClient.put<{ prefs?: UiPrefs }>('/me/ui-prefs', { prefs });
     return saved ?? {};
   }
 }

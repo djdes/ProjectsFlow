@@ -11,6 +11,7 @@ import type {
 import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
 import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
+import type { UiPrefs } from '../../domain/user/UiPrefs.js';
 import { parseJsonCol } from './jsonCol.js';
 
 function toUser(row: UserRow): User {
@@ -235,5 +236,22 @@ export class DrizzleUserRepository implements UserRepository {
       .update(users)
       .set({ defaultKanbanColors: colors })
       .where(eq(users.id, userId));
+  }
+
+  async getUiPrefs(userId: string): Promise<UiPrefs | null> {
+    const rows = await this.db
+      .select({ prefs: users.uiPrefs })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return parseJsonCol<UiPrefs | null>(rows[0]?.prefs, null);
+  }
+
+  // Read-merge-write: bag расширяемый, частичный set не должен затирать чужие ключи.
+  // Конкуренция не критична — это per-user preferences, пишутся из одной вкладки.
+  async setUiPrefs(userId: string, prefs: UiPrefs): Promise<void> {
+    const current = await this.getUiPrefs(userId);
+    const merged = { ...(current ?? {}), ...prefs };
+    await this.db.update(users).set({ uiPrefs: merged }).where(eq(users.id, userId));
   }
 }

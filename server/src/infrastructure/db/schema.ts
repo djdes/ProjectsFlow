@@ -26,6 +26,7 @@ import type {
   KanbanDefaultColors,
 } from '../../domain/kanban/KanbanSettings.js';
 import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
+import type { UiPrefs } from '../../domain/user/UiPrefs.js';
 import type {
   TelegramDraftOffered,
   TelegramDraftSegment,
@@ -73,6 +74,8 @@ export const users = mysqlTable(
     defaultNotificationPrefs: json('default_notification_prefs').$type<NotificationPrefs | null>(),
     // Персональная карта дефолтных цветов канбан-колонок — fallback для всех проектов юзера. См. db/057.
     defaultKanbanColors: json('default_kanban_colors').$type<KanbanDefaultColors | null>(),
+    // Обобщённый bag клиентских UI-настроек (группировка «Поручено мне» и т.д.). См. db/069.
+    uiPrefs: json('ui_prefs').$type<UiPrefs | null>(),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },

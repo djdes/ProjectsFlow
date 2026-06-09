@@ -1,5 +1,5 @@
 import type { TaskDelegation } from '@/domain/task/TaskDelegation';
-import type { AssignedGroup } from '@/domain/task/AssignedTask';
+import type { AssignedTask } from '@/domain/task/AssignedTask';
 
 // Pending делегация + excerpt описания задачи — то, что приходит из
 // /api/delegations/pending для верхнего блока inbox.
@@ -10,9 +10,9 @@ export type PendingDelegation = TaskDelegation & {
 export interface TaskDelegationRepository {
   // pending для меня как делегата (UI блок «Делегировано мне»).
   listMyPending(): Promise<PendingDelegation[]>;
-  // Все поручённые мне задачи (pending+accepted) по всем проектам, сгруппированные
-  // по проекту — для блока «Поручено мне» на главной.
-  listAssignedToMe(): Promise<AssignedGroup[]>;
+  // Все поручённые мне задачи (pending+accepted) по всем проектам — плоским списком.
+  // Группировку (проект/дата/дедлайн/приоритет) делает презентация (assignedGrouping.ts).
+  listAssignedToMe(): Promise<AssignedTask[]>;
   accept(id: string): Promise<TaskDelegation>;
   decline(id: string): Promise<TaskDelegation>;
   // creator отзывает pending до accept'а.

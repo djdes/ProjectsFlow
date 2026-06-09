@@ -104,7 +104,14 @@ export function InboxPage(): React.ReactElement {
   }
 
   return (
-    <div className="flex h-full flex-col gap-4 p-4 sm:gap-6 sm:p-6">
+    <div
+      className={cn(
+        'flex h-full flex-col gap-4 p-4 sm:gap-6 sm:p-6',
+        // Список — узкая центрированная читаемая колонка (как Todoist). Канбан-доске нужна
+        // вся ширина, поэтому ограничение применяем только в list-режиме.
+        view === 'list' && 'mx-auto w-full max-w-3xl',
+      )}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <InboxIcon className="size-7 text-primary" />

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { KANBAN_COLORS, VISIBLE_KANBAN_STATUSES } from '../../domain/kanban/KanbanSettings.js';
 import { NOTIF_EVENT_TYPES, type NotifEventType } from '../../domain/notifications/NotificationPrefs.js';
+import { ASSIGNED_GROUPINGS } from '../../domain/user/UiPrefs.js';
 
 const NOTIF_EVENT_TYPES_TUPLE = NOTIF_EVENT_TYPES as unknown as [NotifEventType, ...NotifEventType[]];
 
@@ -83,6 +84,11 @@ export const kanbanDefaultColorsSchema = z.record(
   z.enum(VISIBLE_KANBAN_STATUSES),
   z.enum(KANBAN_COLORS),
 );
+
+// Персональные UI-настройки клиента (профиль). Все поля optional — частичный мерж.
+export const uiPrefsSchema = z.object({
+  inboxAssignedGrouping: z.enum(ASSIGNED_GROUPINGS).optional(),
+});
 
 export type CreateProjectBody = z.infer<typeof createProjectSchema>;
 export type UpdateProjectBody = z.infer<typeof updateProjectSchema>;

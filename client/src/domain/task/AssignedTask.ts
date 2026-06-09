@@ -12,11 +12,3 @@ export type AssignedTask = Task & {
   readonly canModify: boolean;
 };
 
-// Группа блока «Поручено мне» — задачи одного проекта. Для inbox-проекта label = имя
-// делегатора («Личные · {делегатор}»), для именованного — название проекта.
-export type AssignedGroup = {
-  readonly projectId: string;
-  readonly label: string;
-  readonly isInbox: boolean;
-  readonly items: AssignedTask[];
-};

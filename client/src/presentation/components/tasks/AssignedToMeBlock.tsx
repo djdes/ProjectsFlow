@@ -1,16 +1,41 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Check, FolderKanban, GitCommit, ImageIcon, Inbox as InboxIcon, MessageSquare, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  CalendarClock,
+  Check,
+  Flag,
+  FolderKanban,
+  GitCommit,
+  ImageIcon,
+  Inbox as InboxIcon,
+  ListFilter,
+  MessageSquare,
+  X,
+} from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
-import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { relativeTime } from '@/lib/relativeTime';
 import type { Task, RalphMode, TaskPriority } from '@/domain/task/Task';
-import type { AssignedGroup, AssignedTask } from '@/domain/task/AssignedTask';
+import type { AssignedTask } from '@/domain/task/AssignedTask';
+import {
+  ASSIGNED_GROUPING_LABELS,
+  ASSIGNED_GROUPINGS,
+  DEFAULT_ASSIGNED_GROUPING,
+  type AssignedGrouping,
+} from '@/domain/user/UiPrefs';
+import { groupAssignedTasks } from './assignedGrouping';
+import { ExpandableMarkdown } from './ExpandableMarkdown';
 import { InboxCheckbox } from './InboxCheckbox';
 import { DelegationBadge } from './DelegationBadge';
 import { PriorityBadge } from './PriorityBadge';
@@ -25,14 +50,15 @@ type Props = {
 };
 
 // Блок «Поручено мне» на главной: задачи, делегированные текущему пользователю, по всем
-// проектам, сгруппированные по проекту. Принятые — с чекбоксом «выполнено» (снятие
-// галочки возвращает прежний статус); ожидающие — с кнопками «Принять/Отклонить».
-// Заменяет прежний жёлтый блок PendingDelegationsBlock. Клик по принятой задаче открывает
-// её в TaskDrawer (read-access для inbox-делегата гейтится на сервере).
+// проектам. Группировка переключаемая (проект/дата создания/дедлайн/приоритет) и сохраняется
+// за аккаунтом (users.ui_prefs). Принятые — с чекбоксом «выполнено» (снятие галочки возвращает
+// прежний статус); ожидающие — с кнопками «Принять/Отклонить». Клик по принятой задаче
+// открывает её в TaskDrawer (read-access для inbox-делегата гейтится на сервере).
 export function AssignedToMeBlock({ onChanged }: Props): React.ReactElement | null {
-  const { taskDelegationRepository, taskRepository } = useContainer();
+  const { taskDelegationRepository, taskRepository, userRepository } = useContainer();
   const { user } = useCurrentUser();
-  const [groups, setGroups] = useState<AssignedGroup[]>([]);
+  const [tasks, setTasks] = useState<AssignedTask[]>([]);
+  const [grouping, setGrouping] = useState<AssignedGrouping>(DEFAULT_ASSIGNED_GROUPING);
   const [loading, setLoading] = useState(true);
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
   const [drawerTask, setDrawerTask] = useState<AssignedTask | null>(null);
@@ -40,22 +66,45 @@ export function AssignedToMeBlock({ onChanged }: Props): React.ReactElement | nu
   const refresh = useCallback(async (): Promise<void> => {
     try {
       const list = await taskDelegationRepository.listAssignedToMe();
-      setGroups(list);
+      setTasks(list);
     } catch (e) {
       toast.error(`Не удалось загрузить поручения: ${(e as Error).message}`);
-    } finally {
-      setLoading(false);
     }
   }, [taskDelegationRepository]);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-    void refresh();
+    // Список задач + сохранённую группировку грузим вместе и гейтим первый рендер на оба —
+    // блок не «мигает» дефолтной группировкой перед применением сохранённой.
+    Promise.all([taskDelegationRepository.listAssignedToMe(), userRepository.getUiPrefs()])
+      .then(([list, prefs]) => {
+        if (cancelled) return;
+        setTasks(list);
+        if (prefs.inboxAssignedGrouping) setGrouping(prefs.inboxAssignedGrouping);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) toast.error(`Не удалось загрузить поручения: ${(e as Error).message}`);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     // Перефетч при возврате на вкладку — ловим новые поручения без ручного refresh.
     const onFocus = (): void => void refresh();
     window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [refresh]);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [taskDelegationRepository, userRepository, refresh]);
+
+  const handleGroupingChange = (next: AssignedGrouping): void => {
+    // Оптимистично: группировка применяется мгновенно, сохранение летит в фоне.
+    setGrouping(next);
+    void userRepository.setUiPrefs({ inboxAssignedGrouping: next }).catch((e: unknown) => {
+      toast.error(`Не удалось сохранить группировку: ${(e as Error).message}`);
+    });
+  };
 
   const resolve = async (delegationId: string, action: 'accept' | 'decline'): Promise<void> => {
     setResolvingIds((s) => new Set(s).add(delegationId));
@@ -98,8 +147,11 @@ export function AssignedToMeBlock({ onChanged }: Props): React.ReactElement | nu
     });
   };
 
+  // Группировку (проект/дата/дедлайн/приоритет) делает чистый презентационный хелпер.
+  const groups = useMemo(() => groupAssignedTasks(tasks, grouping, new Date()), [tasks, grouping]);
+
   if (loading) return null;
-  const total = groups.reduce((n, g) => n + g.items.length, 0);
+  const total = tasks.length;
   if (total === 0) return null;
 
   return (
@@ -107,48 +159,45 @@ export function AssignedToMeBlock({ onChanged }: Props): React.ReactElement | nu
       id="assigned-to-me"
       className="space-y-3 rounded-lg border border-primary/30 bg-primary/[0.04] p-3 dark:border-primary/25 dark:bg-primary/[0.06]"
     >
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-        Поручено мне
-        <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-          {total}
-        </span>
-      </h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          Поручено мне
+          <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+            {total}
+          </span>
+        </h2>
+        <GroupingMenu value={grouping} onChange={handleGroupingChange} />
+      </div>
 
       <div className="space-y-3">
         {groups.map((group) => (
-          <div key={group.projectId} className="space-y-1.5">
+          <div key={group.key} className="space-y-1.5">
             <div className="flex items-center gap-1.5 px-0.5 text-xs font-medium text-muted-foreground">
-              {group.isInbox ? (
-                <InboxIcon className="size-3.5 shrink-0" />
-              ) : (
-                <FolderKanban className="size-3.5 shrink-0" />
-              )}
+              <GroupIcon mode={grouping} isInbox={group.isInbox} />
               <span className="truncate">{group.label}</span>
               <span className="text-muted-foreground/60">· {group.items.length}</span>
             </div>
             <ul className="divide-y overflow-hidden rounded-md border bg-card">
-              {[...group.items]
-                // Ожидающие — наверх (требуют действия), принятые — ниже.
-                .sort((a, b) => Number(b.delegation.status === 'pending') - Number(a.delegation.status === 'pending'))
-                .map((item) =>
-                  item.delegation.status === 'pending' ? (
-                    <PendingRow
-                      key={item.delegation.id}
-                      item={item}
-                      busy={resolvingIds.has(item.delegation.id)}
-                      onAccept={() => void resolve(item.delegation.id, 'accept')}
-                      onDecline={() => void resolve(item.delegation.id, 'decline')}
-                    />
-                  ) : (
-                    <AcceptedRow
-                      key={item.delegation.id}
-                      item={item}
-                      currentUserId={user?.id ?? null}
-                      onOpen={() => setDrawerTask(item)}
-                      onChanged={handleToggled}
-                    />
-                  ),
-                )}
+              {/* Хелпер уже отсортировал: ожидающие (pending) наверх, затем по релевантному ключу. */}
+              {group.items.map((item) =>
+                item.delegation.status === 'pending' ? (
+                  <PendingRow
+                    key={item.delegation.id}
+                    item={item}
+                    busy={resolvingIds.has(item.delegation.id)}
+                    onAccept={() => void resolve(item.delegation.id, 'accept')}
+                    onDecline={() => void resolve(item.delegation.id, 'decline')}
+                  />
+                ) : (
+                  <AcceptedRow
+                    key={item.delegation.id}
+                    item={item}
+                    currentUserId={user?.id ?? null}
+                    onOpen={() => setDrawerTask(item)}
+                    onChanged={handleToggled}
+                  />
+                ),
+              )}
             </ul>
           </div>
         ))}
@@ -169,6 +218,63 @@ export function AssignedToMeBlock({ onChanged }: Props): React.ReactElement | nu
       />
     </section>
   );
+}
+
+// Переключатель группировки. Radio-меню; текущий режим отмечен. Сохранение — в handleGroupingChange.
+function GroupingMenu({
+  value,
+  onChange,
+}: {
+  value: AssignedGrouping;
+  onChange: (g: AssignedGrouping) => void;
+}): React.ReactElement {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          title="Группировка"
+        >
+          <ListFilter className="size-3.5" />
+          <span className="hidden sm:inline">Группировка:</span>
+          <span className="font-medium text-foreground">{ASSIGNED_GROUPING_LABELS[value]}</span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[11rem]">
+        <DropdownMenuRadioGroup
+          value={value}
+          onValueChange={(v) => onChange(v as AssignedGrouping)}
+        >
+          {ASSIGNED_GROUPINGS.map((g) => (
+            <DropdownMenuRadioItem key={g} value={g}>
+              {ASSIGNED_GROUPING_LABELS[g]}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// Иконка заголовка группы: для project — инбокс/проект; для priority — флажок; для
+// created/deadline — календарь с часами.
+function GroupIcon({
+  mode,
+  isInbox,
+}: {
+  mode: AssignedGrouping;
+  isInbox: boolean;
+}): React.ReactElement {
+  if (mode === 'project') {
+    return isInbox ? (
+      <InboxIcon className="size-3.5 shrink-0" />
+    ) : (
+      <FolderKanban className="size-3.5 shrink-0" />
+    );
+  }
+  if (mode === 'priority') return <Flag className="size-3.5 shrink-0" />;
+  return <CalendarClock className="size-3.5 shrink-0" />;
 }
 
 // Принятая задача — ведёт себя как обычная строка: чекбокс «выполнено» (снятие
@@ -200,15 +306,9 @@ function AcceptedRow({
       />
       <div className="min-w-0 flex-1">
         {item.description?.trim() ? (
-          <Markdown
-            className={cn(
-              MARKDOWN_COMPACT,
-              'line-clamp-2',
-              isDone && 'line-through opacity-60',
-            )}
-          >
+          <ExpandableMarkdown className={cn(isDone && 'line-through opacity-60')}>
             {item.description}
-          </Markdown>
+          </ExpandableMarkdown>
         ) : (
           <p className="text-sm leading-snug text-muted-foreground">—</p>
         )}

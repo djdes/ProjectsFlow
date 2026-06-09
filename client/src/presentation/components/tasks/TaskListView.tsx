@@ -4,13 +4,13 @@ import { ImageIcon, Loader2, MessageSquare, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
-import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
 import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
 import type { Task, TaskStatus } from '@/domain/task/Task';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
+import { ExpandableMarkdown } from './ExpandableMarkdown';
 import { RalphModeBadge } from './RalphMode';
 import { InboxCheckbox } from './InboxCheckbox';
 import { DelegationBadge } from './DelegationBadge';
@@ -291,15 +291,9 @@ function TaskListRow({
       )}
       <div className="min-w-0 flex-1">
         {task.description?.trim() ? (
-          <Markdown
-            className={cn(
-              MARKDOWN_COMPACT,
-              'line-clamp-2',
-              isDone && 'line-through opacity-60',
-            )}
-          >
+          <ExpandableMarkdown className={cn(isDone && 'line-through opacity-60')}>
             {task.description}
-          </Markdown>
+          </ExpandableMarkdown>
         ) : (
           <p className="text-sm leading-snug text-muted-foreground">—</p>
         )}

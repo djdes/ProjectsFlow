@@ -3,6 +3,7 @@ import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
 import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
 import type { KanbanDefaultColors } from '../../domain/kanban/KanbanSettings.js';
+import type { UiPrefs } from '../../domain/user/UiPrefs.js';
 
 // Поля, приходящие из Login Widget — сохраняются как есть. tg_chat_id/tg_started_at
 // заполняются позже из webhook'а /start.
@@ -66,4 +67,8 @@ export interface UserRepository {
   // Применяется как fallback ко всем проектам юзера, резолвится на лету в UI.
   getDefaultKanbanColors(userId: string): Promise<KanbanDefaultColors | null>;
   setDefaultKanbanColors(userId: string, colors: KanbanDefaultColors): Promise<void>;
+
+  // Обобщённый bag клиентских UI-настроек (NULL = дефолты). setUiPrefs мержит частично.
+  getUiPrefs(userId: string): Promise<UiPrefs | null>;
+  setUiPrefs(userId: string, prefs: UiPrefs): Promise<void>;
 }
