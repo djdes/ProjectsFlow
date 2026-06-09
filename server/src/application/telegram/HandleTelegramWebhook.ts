@@ -105,9 +105,22 @@ export class HandleTelegramWebhook {
     const msg = update.message;
     if (!msg || !msg.from || !msg.text) return;
 
-    const text = msg.text.trim();
+    let text = msg.text.trim();
     const tgUserId = msg.from.id;
     const chatId = msg.chat.id;
+
+    // В групповых чатах бот реагирует ТОЛЬКО когда к нему обращаются: упоминание
+    // @<botUsername> в тексте ИЛИ reply на сообщение самого бота. Иначе молчим — иначе он
+    // отвечал бы на каждое сообщение группы. Личка (private) — без ограничений.
+    if (msg.chat.type === 'group' || msg.chat.type === 'supergroup') {
+      const bu = this.deps.botUsername;
+      const repliedToBot = msg.reply_to_message?.from?.is_bot === true;
+      const mentioned = bu ? new RegExp('@' + bu + '\\b', 'i').test(text) : false;
+      if (!repliedToBot && !mentioned) return;
+      // Вырезаем @упоминание из текста: чтобы оно не попало в текст задачи и чтобы команды
+      // вида «/help@BotName» (так TG шлёт команды в группах) распознавались как «/help».
+      if (bu) text = text.replace(new RegExp('@' + bu, 'ig'), '').replace(/\s+/g, ' ').trim();
+    }
 
     // Reply→ralph-answer / комментарий ловим ДО командного роутинга — юзер может reply'нуть
     // просто текстом, без слэш-префикса (типичный TG UX).
