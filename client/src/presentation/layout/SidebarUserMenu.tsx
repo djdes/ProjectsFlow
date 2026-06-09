@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Monitor, Moon, Settings, Sun, User as UserIcon } from 'lucide-react';
+import { Activity, Check, Copy, LogOut, Monitor, Moon, Sun, User as UserIcon } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -16,6 +17,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { toast } from '@/components/ui/sonner';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { useTheme, type Theme } from '@/presentation/components/theme/ThemeProvider';
@@ -28,6 +30,7 @@ export function SidebarUserMenu(): React.ReactElement {
   const { logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const { animations, setAnimations } = useMotion();
+  const [copied, setCopied] = useState(false);
 
   if (loading || !user) {
     return (
@@ -43,6 +46,14 @@ export function SidebarUserMenu(): React.ReactElement {
     navigate('/login', { replace: true });
   };
 
+  const copyEmail = (): void => {
+    void navigator.clipboard?.writeText(user.email).then(() => {
+      setCopied(true);
+      toast.success('Email скопирован');
+      window.setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -55,17 +66,31 @@ export function SidebarUserMenu(): React.ReactElement {
         </span>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
-        <DropdownMenuLabel className="truncate font-normal text-muted-foreground">
-          {user.email}
+        <DropdownMenuLabel className="flex items-center gap-2 font-normal text-muted-foreground">
+          <span className="flex-1 truncate">{user.email}</span>
+          <button
+            type="button"
+            // не закрываем меню по клику — показываем «скопировано» прямо в нём
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              copyEmail();
+            }}
+            aria-label="Скопировать email"
+            title="Скопировать email"
+            className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          </button>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => navigate('/profile')}>
           <UserIcon />
           Профиль
         </DropdownMenuItem>
-        <DropdownMenuItem disabled>
-          <Settings />
-          Настройки
+        <DropdownMenuItem onClick={() => navigate('/monitoring')}>
+          <Activity />
+          Мониторинг
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuSub>

@@ -122,10 +122,6 @@ export function InboxPage(): React.ReactElement {
           <ViewToggle value={view} onChange={handleViewChange} />
         </div>
       </div>
-      <p className="max-w-2xl text-sm text-muted-foreground">
-        Задачи, которые ещё не&nbsp;привязаны к&nbsp;проекту. Сюда удобно кидать всё,
-        что пришло на&nbsp;ум — потом можно разобрать по&nbsp;проектам.
-      </p>
 
       <AssignedToMeBlock onChanged={() => setRefetchKey((k) => k + 1)} />
 
@@ -159,7 +155,7 @@ function HideDoneToggle({
       )}
     >
       {value ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-      {value ? 'Скрыты выполненные' : 'Скрыть выполненные'}
+      Выполненные
     </button>
   );
 }

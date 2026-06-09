@@ -20,12 +20,12 @@ import {
   ArrowUp,
   BookOpen,
   ChevronDown,
+  FolderSearch,
   Heart,
   HeartOff,
   MoreHorizontal,
   Pencil,
   Plus,
-  Search,
   Trash2,
   Users,
 } from 'lucide-react';
@@ -467,11 +467,11 @@ export function SidebarProjectList(): React.ReactElement {
     <div className="space-y-1.5">
       {visible.length > 1 && (
         <div className="relative">
-          <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <FolderSearch className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск проекта…"
+            placeholder="Поиск проекта"
             aria-label="Поиск проекта"
             className="h-8 w-full pl-7 text-sm"
           />
