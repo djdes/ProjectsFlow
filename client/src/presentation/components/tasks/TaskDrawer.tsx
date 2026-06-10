@@ -834,31 +834,44 @@ export function TaskDrawer({
                 </ContextMenu>
               </div>
 
-              {/* Пилюли-кнопки под полем: Priority, Deadline, Delegate, Вложение */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <PrioritySelect value={createPriority} onChange={setCreatePriority} disabled={saving} compact />
-                <DeadlinePicker value={createDeadline} onChange={setCreateDeadline} disabled={saving} />
+              {/* Иконки-свойства под полем (единый стиль с композерами доски):
+                  скрепка, приоритет, дедлайн, делегат. */}
+              <div className="flex flex-wrap items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-9 text-muted-foreground hover:text-foreground"
+                  onClick={() => createFileInputRef.current?.click()}
+                  disabled={saving}
+                  aria-label="Вложение"
+                  title="Вложение (или перетащи файл / Ctrl+V)"
+                >
+                  <Paperclip className="size-4" />
+                </Button>
+                <PrioritySelect
+                  value={createPriority}
+                  onChange={setCreatePriority}
+                  disabled={saving}
+                  iconOnly
+                  className="size-9"
+                />
+                <DeadlinePicker
+                  value={createDeadline}
+                  onChange={setCreateDeadline}
+                  disabled={saving}
+                  iconOnly
+                  className={cn('h-9', createDeadline === null ? 'w-9 px-0' : 'px-2')}
+                />
                 {(isInbox || isShared) && (
                   <DelegateSelect
                     value={createDelegateUserId}
                     onChange={setCreateDelegateUserId}
                     disabled={saving}
                     projectId={isShared && aiProjectId ? aiProjectId : undefined}
-                    className="h-7 w-7"
+                    className="size-9"
                   />
                 )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => createFileInputRef.current?.click()}
-                  disabled={saving}
-                  title="Вложение (или перетащи файл / Ctrl+V)"
-                >
-                  <Paperclip className="size-3.5" />
-                  Вложение
-                </Button>
                 <input
                   ref={createFileInputRef}
                   type="file"
@@ -881,7 +894,9 @@ export function TaskDrawer({
                   value={createRalphMode}
                   onChange={setCreateRalphMode}
                   disabled={saving}
-                  className="!h-7 min-w-[100px] !px-2 text-xs sm:!h-8 sm:min-w-[140px]"
+                  variant="ghost"
+                  iconOnly
+                  className="!size-9 shrink-0 !p-0"
                 />
                 <AiImproveButton
                   text={description}
@@ -1357,6 +1372,7 @@ function TaskCommentsSection({
               projectId={projectId}
               taskId={taskId}
               comment={c}
+              members={members}
               answeredQids={answeredQids}
               onAnswerCreated={handleCreated}
               onUpdated={handleUpdated}
@@ -1783,6 +1799,7 @@ function CommentItem({
   projectId,
   taskId,
   comment,
+  members,
   answeredQids,
   onAnswerCreated,
   onUpdated,
@@ -1791,6 +1808,8 @@ function CommentItem({
   projectId: string;
   taskId: string;
   comment: TaskComment;
+  // Участники проекта — для резолва автора комментария по ownerUserId (имя + аватар).
+  members: readonly ProjectMember[];
   answeredQids: Set<string>;
   onAnswerCreated: (created: TaskComment) => void;
   onUpdated: (updated: TaskComment) => void;
@@ -1871,12 +1890,18 @@ function CommentItem({
   };
 
   const isEdited = comment.updatedAt.getTime() - comment.createdAt.getTime() > 1500;
-  // Single-tenant: автор комментария — всегда текущий юзер (см. MEMORY: 1 user = 1 tenant).
-  // Если когда-нибудь появится multi-tenancy, нужно резолвить юзера по comment.ownerUserId.
+  // Автор резолвится по ownerUserId через участников проекта (в совместных проектах
+  // комментарии пишут разные люди). Фолбэк — текущий юзер (свой коммент в inbox,
+  // где members может не успеть загрузиться) или «—» для вышедших из проекта.
   const { user } = useCurrentUser();
   const isAgent = comment.actorKind === 'agent';
   const isSystem = comment.actorKind === 'system';
-  const displayName = user?.displayName ?? '—';
+  const author = members.find((m) => m.userId === comment.ownerUserId)?.user ?? null;
+  const displayName =
+    author?.displayName ??
+    (user && comment.ownerUserId === user.id ? user.displayName : '—');
+  const avatarUrl =
+    author?.avatarUrl ?? (user && comment.ownerUserId === user.id ? user.avatarUrl : null);
   const initials = getInitials(displayName);
 
   return (
@@ -1892,7 +1917,7 @@ function CommentItem({
         </div>
       ) : (
         <Avatar className="size-7 shrink-0">
-          {user?.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={displayName} /> : null}
+          {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
           <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
         </Avatar>
       )}

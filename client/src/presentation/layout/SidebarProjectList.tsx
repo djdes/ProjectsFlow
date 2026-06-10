@@ -147,14 +147,20 @@ function SidebarProjectRow({
       >
         {() => (
           <>
-            {/* Цвет иконки = индикатор git: зелёная при подключённом репо, серая без него. */}
-            <ProjectIcon
-              className={cn(
-                'size-4 shrink-0',
-                project.gitRepoUrl ? 'text-emerald-500' : 'text-muted-foreground',
+            {/* Папка нейтральная; git-подключение — маленькая зелёная точка-индикатор
+                (зелёная папка целиком читалась как «статус ок», а не как факт интеграции). */}
+            <span className="relative shrink-0">
+              <ProjectIcon
+                className="size-4 text-muted-foreground"
+                aria-label={project.gitRepoUrl ? 'Git подключён' : 'Git не подключён'}
+              />
+              {project.gitRepoUrl && (
+                <span
+                  aria-hidden
+                  className="absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full bg-emerald-500 ring-2 ring-sidebar"
+                />
               )}
-              aria-label={project.gitRepoUrl ? 'Git подключён' : 'Git не подключён'}
-            />
+            </span>
             <span className="flex-1 truncate">{project.name}</span>
             <span
               className={cn(
@@ -404,8 +410,9 @@ export function SidebarProjectList(): React.ReactElement {
           )}
         />
         <span>Мои проекты</span>
+        {/* Лимит показываем только когда он реально есть (тарифы); «/∞» — дев-шум. */}
         <span className="tabular-nums opacity-70">
-          {visible.length}/{PROJECT_LIMIT === Infinity ? '∞' : PROJECT_LIMIT}
+          {PROJECT_LIMIT === Infinity ? visible.length : `${visible.length}/${PROJECT_LIMIT}`}
         </span>
       </button>
       <button

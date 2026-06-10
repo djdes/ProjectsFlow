@@ -2,11 +2,17 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Activity, BookOpen, Bot, ChevronRight, Settings, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useContainer } from '@/infrastructure/di/container';
 import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
 import { AutomationDialog } from '@/presentation/components/project/AutomationDialog';
-import { MultiTaskWorkerToggle } from '@/presentation/components/project/MultiTaskWorkerToggle';
+import { EditableProjectTitle } from '@/presentation/components/project/EditableProjectTitle';
 
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -73,52 +79,55 @@ export function TasksPage(): React.ReactElement {
       </nav>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Задачи</h1>
-        <div className="flex flex-wrap items-center gap-1">
-          <MultiTaskWorkerToggle projectId={data.id} initialEnabled={data.multiTaskWorker} />
-          {financeVisible && (
-            <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-              <Link to={`/projects/${data.id}/finance`}>
+        {/* Notion-style: страница называется именем проекта (клик — переименовать).
+            Генерик-«Задачи» убран — контекст и так в хлебных крошках. */}
+        <EditableProjectTitle projectId={data.id} name={data.name} />
+        {/* Действия — тихие иконки с тултипами (Notion top-right style). Тоггл
+            мультизадачного воркера переехал в диалог «Автоматизация». */}
+        <TooltipProvider delayDuration={300}>
+          <div className="flex items-center gap-0.5">
+            {financeVisible && (
+              <PageActionButton label="Финансы" to={`/projects/${data.id}/finance`}>
                 <Wallet className="size-4" />
-                Финансы
-              </Link>
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={() => setAutomationOpen(true)}
-          >
-            <Bot className="size-4" />
-            Автоматизация
-          </Button>
-          <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-            <Link to={`/projects/${data.id}/kb`}>
+              </PageActionButton>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 text-muted-foreground hover:text-foreground"
+                  onClick={() => setAutomationOpen(true)}
+                  aria-label="Автоматизация"
+                >
+                  <Bot className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Автоматизация</TooltipContent>
+            </Tooltip>
+            <PageActionButton label="База знаний" to={`/projects/${data.id}/kb`}>
               <BookOpen className="size-4" />
-              База знаний
-            </Link>
-          </Button>
-          {monitoringVisible && (
-            <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-              <Link to={`/projects/${data.id}/monitoring`}>
-                <Activity className="size-4" />
-                Мониторинг
-                {monitoringAlerts > 0 && (
-                  <span className="ml-1 inline-flex min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
-                    {monitoringAlerts}
-                  </span>
-                )}
-              </Link>
-            </Button>
-          )}
-          <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-            <Link to={`/projects/${data.id}/overview`}>
+            </PageActionButton>
+            {monitoringVisible && (
+              <PageActionButton label="Мониторинг" to={`/projects/${data.id}/monitoring`}>
+                <span className="relative">
+                  <Activity className="size-4" />
+                  {monitoringAlerts > 0 && (
+                    <span
+                      className="absolute -right-1.5 -top-1.5 inline-flex min-w-3.5 items-center justify-center rounded-full bg-red-500 px-0.5 text-[9px] font-semibold leading-[14px] text-white"
+                      aria-label={`Алертов: ${monitoringAlerts}`}
+                    >
+                      {monitoringAlerts}
+                    </span>
+                  )}
+                </span>
+              </PageActionButton>
+            )}
+            <PageActionButton label="Настройки" to={`/projects/${data.id}/overview`}>
               <Settings className="size-4" />
-              Настройки
-            </Link>
-          </Button>
-        </div>
+            </PageActionButton>
+          </div>
+        </TooltipProvider>
       </div>
 
       <KanbanBoard projectId={data.id} projectName={data.name} memberCount={data.memberCount} />
@@ -128,7 +137,37 @@ export function TasksPage(): React.ReactElement {
         onOpenChange={setAutomationOpen}
         projectId={data.id}
         hasDispatcher={data.dispatcherUserId !== null}
+        multiTaskWorker={data.multiTaskWorker}
       />
     </div>
+  );
+}
+
+// Иконка-действие в шапке страницы: ghost-кнопка + тултип (Notion top-right style).
+function PageActionButton({
+  label,
+  to,
+  children,
+}: {
+  label: string;
+  to: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          asChild
+          variant="ghost"
+          size="icon"
+          className="size-8 text-muted-foreground hover:text-foreground"
+        >
+          <Link to={to} aria-label={label}>
+            {children}
+          </Link>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
   );
 }

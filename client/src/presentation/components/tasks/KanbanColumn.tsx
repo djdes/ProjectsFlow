@@ -83,6 +83,9 @@ type Props = {
   onEnterSelection?: () => void;
 };
 
+// Сколько done-карточек видно без раскрытия (свежие сверху — это и есть «последние»).
+const DONE_PREVIEW_COUNT = 10;
+
 export function KanbanColumn({
   status,
   label,
@@ -123,6 +126,12 @@ export function KanbanColumn({
     data: { type: 'column', status },
   });
   const [composing, setComposing] = useState(false);
+  // «Готово» распухает (десятки карточек) — по умолчанию показываем хвост из
+  // DONE_PREVIEW_COUNT, остальное за кнопкой «Показать все». Прочие колонки — целиком.
+  const [showAllDone, setShowAllDone] = useState(false);
+  const collapsible = status === 'done' && !selectionMode && tasks.length > DONE_PREVIEW_COUNT;
+  const visibleTasks = collapsible && !showAllDone ? tasks.slice(0, DONE_PREVIEW_COUNT) : tasks;
+  const hiddenCount = tasks.length - visibleTasks.length;
 
   return (
     <div
@@ -238,10 +247,10 @@ export function KanbanColumn({
         }`}
       >
         <SortableContext
-          items={tasks.map((t) => t.id)}
+          items={visibleTasks.map((t) => t.id)}
           strategy={verticalListSortingStrategy}
         >
-          {tasks.map((t) => (
+          {visibleTasks.map((t) => (
             <Fragment key={t.id}>
               <AnimatePresence>
                 {dropTarget && dropTarget.overId === t.id && t.id !== activeId && (
@@ -273,8 +282,17 @@ export function KanbanColumn({
             <DropIndicatorLine key={`drop-end-${status}`} />
           )}
         </AnimatePresence>
-        {tasks.length === 0 && !dropTarget && (
-          <p className="py-4 text-center text-xs text-muted-foreground/60">пусто</p>
+        {collapsible && (
+          <button
+            type="button"
+            onClick={() => setShowAllDone((v) => !v)}
+            className="shrink-0 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            {showAllDone ? 'Свернуть' : `Показать все (${tasks.length})`}
+          </button>
+        )}
+        {hiddenCount > 0 && !showAllDone && (
+          <span className="sr-only">{`Скрыто карточек: ${hiddenCount}`}</span>
         )}
       </div>
 

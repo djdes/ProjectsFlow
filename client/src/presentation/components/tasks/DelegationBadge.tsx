@@ -9,7 +9,9 @@ type Props = {
   currentUserId: string;
 };
 
-// Ярлык-badge на карточке inbox-задачи. Цвет: amber для pending, blue для accepted.
+// Ярлык-badge на карточке inbox-задачи. Компакт: иконка + имя; развёрнутая
+// формулировка («Делегировано…», «ждёт ответа») — в title-тултипе. Цвет остаётся
+// только у семантики: amber = ждёт ответа делегата; входящие/принятые — нейтральные.
 // Только активные статусы (pending/accepted) — terminal'ы из этого badge'а не рисуются
 // (карточка уже без delegation в этом случае, бэк присылает null).
 export function DelegationBadge({ delegation, currentUserId }: Props): React.ReactElement | null {
@@ -19,28 +21,28 @@ export function DelegationBadge({ delegation, currentUserId }: Props): React.Rea
   const isCreator = delegation.creatorUserId === currentUserId;
   const isPending = delegation.status === 'pending';
 
-  const label = isCreator
+  const name = isCreator ? delegation.delegateDisplayName : delegation.creatorDisplayName;
+  const title = isCreator
     ? isPending
-      ? `Делегировано: ${delegation.delegateDisplayName} (ждёт ответа)`
-      : `Делегировано: ${delegation.delegateDisplayName}`
-    : isPending
-      ? `От: ${delegation.creatorDisplayName}`
-      : `От: ${delegation.creatorDisplayName}`;
+      ? `Делегировано: ${name} (ждёт ответа)`
+      : `Делегировано: ${name} (принято)`
+    : `Делегировал(а): ${name}`;
 
-  const Icon = isCreator ? Send : UserCheck;
+  const Icon = isCreator ? (isPending ? Hourglass : UserCheck) : Send;
 
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal',
-        isPending
+        'inline-flex max-w-[160px] items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium',
+        isPending && isCreator
           ? 'bg-amber-500/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-400'
-          : 'bg-blue-500/15 text-blue-600 dark:bg-blue-400/15 dark:text-blue-400',
+          : 'bg-muted text-muted-foreground',
       )}
-      title={`${label} · status: ${delegation.status}`}
+      title={`${title} · status: ${delegation.status}`}
     >
-      {isPending ? <Hourglass className="size-2.5" /> : <Icon className="size-2.5" />}
-      {label}
+      <Icon className="size-2.5 shrink-0" />
+      {!isCreator && <span className="opacity-60">от</span>}
+      <span className="truncate">{name}</span>
     </span>
   );
 }

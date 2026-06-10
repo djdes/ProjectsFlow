@@ -96,6 +96,32 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Тонкие скроллбары в тон темы: системные (особенно в dark) выглядят ярким
+     инородным блоком внутри колонок канбана и дравера. Firefox — scrollbar-width,
+     Chromium/WebKit — ::-webkit-scrollbar. Прозрачный трек, ненавязчивый thumb. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.25);
+    border-radius: 8px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.45);
+  }
+
   html,
   body,
   #root {

@@ -15,6 +15,7 @@ import { AutoGrowTextarea } from '@/components/ui/auto-grow-textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
+import { MultiTaskWorkerToggle } from './MultiTaskWorkerToggle';
 import type {
   AutomationConfig,
   AutomationLimitKind,
@@ -34,6 +35,8 @@ type Props = {
   projectId: string;
   // У проекта назначен диспетчер? Без него автоматизация не «оживёт» (некому выполнять).
   hasDispatcher: boolean;
+  // Текущее значение «мультизадачного воркера» (PATCH делает сам тоггл внутри).
+  multiTaskWorker: boolean;
 };
 
 type DraftCriterion = {
@@ -177,6 +180,7 @@ export function AutomationDialog({
   onOpenChange,
   projectId,
   hasDispatcher,
+  multiTaskWorker,
 }: Props): React.ReactElement {
   const { automationRepository, digestSettingsRepository, projectRepository } = useContainer();
   const [loading, setLoading] = useState(true);
@@ -383,6 +387,9 @@ export function AutomationDialog({
               checked={draft.enabled}
               onCheckedChange={(v) => update({ enabled: v })}
             />
+
+            {/* Самостоятельный тоггл (PATCH сразу) — переехал сюда из шапки доски. */}
+            <MultiTaskWorkerToggle projectId={projectId} initialEnabled={multiTaskWorker} />
 
             {!hasDispatcher && (
               <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">

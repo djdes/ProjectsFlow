@@ -9,10 +9,11 @@ type Props = {
   initialEnabled: boolean;
 };
 
-// Переключатель «Мультизадачный воркер» в шапке доски. Когда включён — Ralph-диспетчер
-// может выполнять до 3 задач этого проекта одновременно (а не строго одну за раз).
-// Менять может любой участник проекта (сервер гейтит viewer+). Оптимистично переключаем
-// состояние, при ошибке откатываем. Двухстрочный лейбл: заголовок + подпись «до 3 задач».
+// Переключатель «Мультизадачный воркер» в диалоге «Автоматизация». Когда включён —
+// Ralph-диспетчер может выполнять до 3 задач этого проекта одновременно (а не строго
+// одну за раз). Менять может любой участник проекта (сервер гейтит viewer+).
+// Оптимистично переключаем состояние, при ошибке откатываем. PATCH идёт сразу,
+// отдельной кнопки «Сохранить» не требует.
 export function MultiTaskWorkerToggle({ projectId, initialEnabled }: Props): React.ReactElement {
   const { projectRepository } = useContainer();
   const [enabled, setEnabled] = useState(initialEnabled);
@@ -43,19 +44,24 @@ export function MultiTaskWorkerToggle({ projectId, initialEnabled }: Props): Rea
     }
   };
 
+  // Та же разметка, что у SwitchRow автоматизации — выглядит родной строкой диалога.
   return (
-    <div className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-accent">
+    <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+      <div className="pr-3">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-medium">Мультизадачный воркер</span>
+          {saving && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Диспетчер ведёт до 3 задач проекта параллельно.
+        </p>
+      </div>
       <Switch
         checked={enabled}
         onCheckedChange={toggle}
         disabled={saving}
         aria-label="Мультизадачный воркер"
       />
-      <div className="leading-tight">
-        <div className="text-xs font-medium">Мультизадачный воркер</div>
-        <div className="text-[10px] text-muted-foreground">до&nbsp;3&nbsp;задач</div>
-      </div>
-      {saving && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
     </div>
   );
 }
