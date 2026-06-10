@@ -5,6 +5,7 @@ export const seedProjects: Project[] = [
   {
     id: '01HXXXXXXXXXXXXXXXXXXXXX01',
     name: 'Acme site',
+    icon: null,
     status: 'active',
     gitRepoUrl: null,
     kbRepoFullName: null,
@@ -21,6 +22,7 @@ export const seedProjects: Project[] = [
   {
     id: '01HXXXXXXXXXXXXXXXXXXXXX02',
     name: 'Mobile app',
+    icon: null,
     status: 'active',
     gitRepoUrl: null,
     kbRepoFullName: null,
@@ -37,6 +39,7 @@ export const seedProjects: Project[] = [
   {
     id: '01HXXXXXXXXXXXXXXXXXXXXX03',
     name: 'Internal CRM',
+    icon: null,
     status: 'paused',
     gitRepoUrl: null,
     kbRepoFullName: null,
@@ -53,6 +56,7 @@ export const seedProjects: Project[] = [
   {
     id: '01HXXXXXXXXXXXXXXXXXXXXX04',
     name: 'Marketing pages',
+    icon: null,
     status: 'archived',
     gitRepoUrl: null,
     kbRepoFullName: null,

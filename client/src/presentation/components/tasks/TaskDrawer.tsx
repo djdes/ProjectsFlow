@@ -8,7 +8,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { ChevronDown, ChevronUp, Download, FileText, Loader2, Map, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
+import { ArrowRight, ChevronDown, ChevronUp, Download, FileText, Loader2, Map, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,6 +43,7 @@ import {
   RalphAnswerControls,
 } from './RalphQuestionControls';
 import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
+import { toggleChecklistItem } from '@/lib/checklist';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import {
   useTextFieldFormatting,
@@ -167,6 +168,57 @@ function TaskRalphModeChip({
       variant="ghost"
       className="!h-7 w-auto gap-1.5 !px-2 !py-0 text-xs text-muted-foreground hover:text-foreground"
     />
+  );
+}
+
+// Цепочка «передать дальше»: следующая колонка для кнопки быстрого продвижения
+// задачи в шапке дравера (черновики → вручную → воркер → готово).
+const ADVANCE_NEXT: Partial<Record<TaskStatus, TaskStatus>> = {
+  backlog: 'manual',
+  manual: 'todo',
+  todo: 'done',
+};
+
+// Кнопка «передать в следующую колонку» в шапке edit-mode. Лейбл = имя следующего
+// статуса; для статусов вне цепочки (in_progress/awaiting/done) не рендерится.
+function TaskAdvanceButton({
+  task,
+  onMove,
+  onChanged,
+}: {
+  task: Task;
+  onMove: (taskId: string, targetStatus: TaskStatus) => Promise<void>;
+  onChanged: () => void;
+}): React.ReactElement | null {
+  const [saving, setSaving] = useState(false);
+  const next = ADVANCE_NEXT[task.status];
+  if (!next) return null;
+
+  const advance = async (): Promise<void> => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onMove(task.id, next);
+      onChanged();
+      toast.success(`Передано: ${STATUS_LABEL[next]}`);
+    } catch (err) {
+      toast.error(`Не удалось передать: ${(err as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      disabled={saving}
+      onClick={() => void advance()}
+      title={`Передать задачу в «${STATUS_LABEL[next]}»`}
+      className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+    >
+      {saving ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowRight className="size-3.5" />}
+      {STATUS_LABEL[next]}
+    </button>
   );
 }
 
@@ -542,6 +594,13 @@ export function TaskDrawer({
                     {taskShortId(task.id)}
                   </span>
                 </div>
+                {onMove && (
+                  <TaskAdvanceButton
+                    task={task}
+                    onMove={onMove}
+                    onChanged={() => onCommitsChange?.()}
+                  />
+                )}
                 {onMove ? (
                   <TaskStatusChip
                     task={task}
@@ -1049,6 +1108,24 @@ function TaskDescriptionEditor({
     setEditing(false);
   };
 
+  // Интерактивный чеклист в режиме просмотра: клик по чекбоксу переключает пункт
+  // и сразу PATCH'ит описание (оптимистично, откат при ошибке).
+  const toggleCheckbox = (index: number, checked: boolean): void => {
+    const prev = description;
+    const next = toggleChecklistItem(prev, index, checked);
+    if (next === prev) return;
+    setDescription(next);
+    setDraft(next);
+    void taskRepository
+      .update(projectId, taskId, { description: next })
+      .then(() => onSaved())
+      .catch((e: unknown) => {
+        setDescription(prev);
+        setDraft(prev);
+        toast.error(`Не удалось обновить чеклист: ${(e as Error).message}`);
+      });
+  };
+
   // Автосохранение при закрытии окна задачи. blur-save ловит клик мимо поля; этот unmount-хук —
   // страховка, когда дровер закрывают/переключают задачу (key={task.id} → remount), не сняв
   // фокус с textarea. Esc по-прежнему отменяет (cancel сбрасывает draft → editing=false → guard).
@@ -1095,16 +1172,16 @@ function TaskDescriptionEditor({
     }
   };
 
-  // Клик по тексту → режим редактирования, КРОМЕ клика по ссылке внутри markdown
-  // (ссылку открываем, а не уходим в edit). Контейнер — div, а не <button>: rendered
+  // Клик по тексту → режим редактирования, КРОМЕ клика по ссылке или чекбоксу внутри
+  // markdown (их обрабатываем по назначению). Контейнер — div, а не <button>: rendered
   // markdown содержит блочные элементы (<p>/<ul>/<pre>), невалидные внутри <button>.
   const handleDisplayClick = (e: React.MouseEvent<HTMLDivElement>): void => {
-    if ((e.target as HTMLElement).closest('a')) return;
+    if ((e.target as HTMLElement).closest('a,input')) return;
     enterEdit();
   };
   const handleDisplayKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
-    // Enter/Space на ссылке внутри markdown — открываем ссылку, а не уходим в edit.
-    if ((e.target as HTMLElement).closest('a')) return;
+    // Enter/Space на ссылке/чекбоксе внутри markdown — их собственное действие, не edit.
+    if ((e.target as HTMLElement).closest('a,input')) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       enterEdit();
@@ -1232,7 +1309,9 @@ function TaskDescriptionEditor({
           aria-label="Редактировать описание"
         >
           {description.trim().length > 0 ? (
-            <Markdown className="min-w-0 flex-1">{description}</Markdown>
+            <Markdown className="min-w-0 flex-1" onCheckboxToggle={toggleCheckbox}>
+              {description}
+            </Markdown>
           ) : (
             <span className="min-w-0 flex-1 text-sm italic leading-snug text-muted-foreground">
               Нажми, чтобы добавить описание…

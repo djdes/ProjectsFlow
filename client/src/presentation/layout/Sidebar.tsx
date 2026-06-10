@@ -279,13 +279,13 @@ function RailProjectLink({ project }: { project: Project }): React.ReactElement 
           aria-label={project.name}
           className={({ isActive }) =>
             cn(
-              'grid size-8 shrink-0 place-items-center rounded-md text-[10px] font-semibold transition-transform hover:scale-105',
-              avatarColor(project.name),
+              'grid size-8 shrink-0 place-items-center rounded-md transition-transform hover:scale-105',
+              project.icon ? 'bg-foreground/[0.04] text-base dark:bg-white/[0.06]' : cn('text-[10px] font-semibold', avatarColor(project.name)),
               isActive && 'ring-2 ring-primary',
             )
           }
         >
-          {getInitials(project.name)}
+          {project.icon ?? getInitials(project.name)}
         </NavLink>
       </TooltipTrigger>
       <TooltipContent side="right">{project.name}</TooltipContent>

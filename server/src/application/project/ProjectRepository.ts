@@ -12,6 +12,7 @@ export type CreateProjectInput = {
 // На уровне domain поле string | null, а здесь добавляем undefined для отсутствия update'а.
 export type UpdateProjectInput = {
   readonly name?: string;
+  readonly icon?: string | null;
   readonly gitRepoUrl?: string | null;
   readonly kbRepoFullName?: string | null;
   readonly kbKind?: 'none' | 'github' | 'local';

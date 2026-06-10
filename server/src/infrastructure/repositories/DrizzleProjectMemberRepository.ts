@@ -49,6 +49,7 @@ function toProject(row: ProjectRow): Project {
     id: row.id,
     ownerId: row.ownerId,
     name: row.name,
+    icon: row.icon ?? null,
     status: row.status as ProjectStatus,
     gitRepoUrl: row.gitRepoUrl ?? null,
     kbRepoFullName: row.kbRepoFullName ?? null,

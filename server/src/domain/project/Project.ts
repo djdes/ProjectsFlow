@@ -9,6 +9,8 @@ export type Project = {
   readonly id: string;
   readonly ownerId: string;
   readonly name: string;
+  // Эмодзи-иконка (Notion-style). NULL = дефолтная папка в UI. См. db/071.
+  readonly icon: string | null;
   readonly status: ProjectStatus;
   readonly gitRepoUrl: string | null;
   readonly kbRepoFullName: string | null;

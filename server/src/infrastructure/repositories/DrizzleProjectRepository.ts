@@ -33,6 +33,7 @@ function toProject(row: ProjectRow): Project {
     id: row.id,
     ownerId: row.ownerId,
     name: row.name,
+    icon: row.icon ?? null,
     status: row.status as ProjectStatus,
     gitRepoUrl: row.gitRepoUrl ?? null,
     kbRepoFullName: row.kbRepoFullName ?? null,
@@ -125,8 +126,9 @@ export class DrizzleProjectRepository implements ProjectRepository {
   async update(id: string, patch: UpdateProjectInput): Promise<Project | null> {
     // Собираем set-объект только из реально переданных полей.
     // undefined = поле не указано клиентом (не трогаем), null = очистить.
-    const set: Partial<Pick<ProjectRow, 'name' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker'>> = {};
+    const set: Partial<Pick<ProjectRow, 'name' | 'icon' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker'>> = {};
     if (patch.name !== undefined) set.name = patch.name;
+    if (patch.icon !== undefined) set.icon = patch.icon;
     if (patch.gitRepoUrl !== undefined) set.gitRepoUrl = patch.gitRepoUrl;
     if (patch.kbRepoFullName !== undefined) set.kbRepoFullName = patch.kbRepoFullName;
     if (patch.kbKind !== undefined) set.kbKind = patch.kbKind;

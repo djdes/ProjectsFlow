@@ -204,6 +204,8 @@ export const projects = mysqlTable(
     // доступ-чек идёт через project_members (см. spec фазу P4 — финальный дроп колонки).
     ownerId: fkUserId('owner_id'),
     name: varchar('name', { length: 80 }).notNull(),
+    // Эмодзи-иконка проекта (Notion-style); NULL = дефолтная папка. См. db/071.
+    icon: varchar('icon', { length: 16 }),
     status: mysqlEnum('status', ['active', 'paused', 'archived']).notNull().default('active'),
     gitRepoUrl: varchar('git_repo_url', { length: 500 }),
     kbRepoFullName: varchar('kb_repo_full_name', { length: 255 }),

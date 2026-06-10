@@ -14,11 +14,32 @@ import {
   type DropAnimation,
 } from '@dnd-kit/core';
 import { motion } from 'motion/react';
-import { ArrowDownNarrowWide, ArrowUpNarrowWide } from 'lucide-react';
+import {
+  ArrowDownNarrowWide,
+  ArrowUpNarrowWide,
+  Bot,
+  CalendarClock,
+  ChevronDown,
+  Flag,
+  Plus,
+  Search,
+  Users,
+  X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
-import type { Task, TaskStatus } from '@/domain/task/Task';
-import { TASK_STATUSES } from '@/domain/task/Task';
+import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import { TASK_STATUSES, TASK_PRIORITIES } from '@/domain/task/Task';
+import { PRIORITY_META } from '@/domain/task/priorityMeta';
+import type { ProjectMember } from '@/domain/project/ProjectMembership';
+import { useContainer } from '@/infrastructure/di/container';
+import { ConfettiBurst } from './ConfettiBurst';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { useBulkTaskActions } from '@/presentation/hooks/useBulkTaskActions';
 import { useDoneSortOrder, type DoneSortOrder } from '@/presentation/hooks/useDoneSortOrder';
@@ -60,7 +81,64 @@ type Props = {
   hideDone?: boolean;
   // Количество участников проекта. > 1 ⇒ совместный — показываем блок делегирования.
   memberCount?: number;
+  // Открыть диалог «Автоматизация» (кнопка в пустом состоянии доски). Передаёт TasksPage.
+  onOpenAutomation?: () => void;
 };
+
+// Локальная ISO-дата 'YYYY-MM-DD' (без UTC-сдвига) — для сравнения с deadline.
+function localIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// Тихий dropdown-фильтр доски: иконка + текущий лейбл; активное состояние подсвечено.
+function FilterDropdown({
+  icon,
+  label,
+  active,
+  options,
+  onSelect,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  options: ReadonlyArray<{ key: string; label: string; dotClass?: string }>;
+  onSelect: (key: string) => void;
+}): React.ReactElement {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cnFilterTrigger(active)}
+        >
+          {icon}
+          {label}
+          <ChevronDown className="size-3 opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-[180px]">
+        {options.map((o) => (
+          <DropdownMenuItem key={o.key} onClick={() => onSelect(o.key)} className="gap-2">
+            {o.dotClass && <span className={`size-2.5 rounded-full ${o.dotClass}`} aria-hidden />}
+            {o.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function cnFilterTrigger(active: boolean): string {
+  return [
+    'inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs transition-colors',
+    active
+      ? 'bg-primary/10 font-medium text-primary'
+      : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+  ].join(' ');
+}
 
 // Какие колонки реально рисуем. in_progress и awaiting_clarification не имеют
 // собственных колонок — задачи в этих статусах визуально живут в TODO с badge'ом
@@ -125,9 +203,10 @@ function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStat
   return out;
 }
 
-export function KanbanBoard({ projectId, showCommits = true, projectName, hideDone = false, memberCount }: Props): React.ReactElement {
+export function KanbanBoard({ projectId, showCommits = true, projectName, hideDone = false, memberCount, onOpenAutomation }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const { user } = useCurrentUser();
+  const { projectRepository } = useContainer();
   // isInbox = это inbox-board (задаётся через showCommits=false — у inbox нет git-репо).
   // Чекбокс «выполнено» показываем на ВСЕХ досках (inbox и проекты): клик → done,
   // снятие → restore прежней колонки (status_before_done). Сервер сам гейтит право
@@ -221,6 +300,64 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   const { order: doneOrder, toggle: toggleDoneOrder } = useDoneSortOrder();
   const grouped = useMemo(() => groupByStatus(tasks, doneOrder), [tasks, doneOrder]);
   const activeTask = activeId ? tasks.find((t) => t.id === activeId) ?? null : null;
+
+  // === Фильтры доски (клиентские, поверх grouped — drag-математика остаётся на полном списке) ===
+  const [filterQuery, setFilterQuery] = useState('');
+  const [filterPriority, setFilterPriority] = useState<TaskPriority | null>(null);
+  const [filterDeadline, setFilterDeadline] = useState<'overdue' | 'week' | null>(null);
+  const [filterDelegate, setFilterDelegate] = useState<string | null>(null);
+  // Участники — для фильтра по делегату (только совместные проекты).
+  const [members, setMembers] = useState<ProjectMember[]>([]);
+  useEffect(() => {
+    if (!isShared) return;
+    let cancelled = false;
+    void projectRepository
+      .listMembers(projectId)
+      .then((list) => {
+        if (!cancelled) setMembers(list);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [isShared, projectId, projectRepository]);
+
+  const filterActive =
+    filterQuery.trim().length > 0 ||
+    filterPriority !== null ||
+    filterDeadline !== null ||
+    filterDelegate !== null;
+
+  const filterTasks = useCallback(
+    (list: Task[]): Task[] => {
+      if (!filterActive) return list;
+      const q = filterQuery.trim().toLocaleLowerCase('ru');
+      const todayIso = localIsoDate(new Date());
+      const weekIso = localIsoDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+      return list.filter((t) => {
+        if (q && !(t.description ?? '').toLocaleLowerCase('ru').includes(q)) return false;
+        if (filterPriority !== null && t.priority !== filterPriority) return false;
+        if (filterDeadline === 'overdue') {
+          if (!t.deadline || t.deadline >= todayIso || t.status === 'done') return false;
+        } else if (filterDeadline === 'week') {
+          if (!t.deadline || t.deadline > weekIso) return false;
+        }
+        if (filterDelegate !== null && t.delegation?.delegateUserId !== filterDelegate) return false;
+        return true;
+      });
+    },
+    [filterActive, filterQuery, filterPriority, filterDeadline, filterDelegate],
+  );
+
+  const resetFilters = (): void => {
+    setFilterQuery('');
+    setFilterPriority(null);
+    setFilterDeadline(null);
+    setFilterDelegate(null);
+  };
+
+  // Конфетти при переносе карточки в «Готово» (key перезапускает анимацию).
+  const [confettiKey, setConfettiKey] = useState(0);
 
   // === Мультивыделение (scoped к одной колонке) ===
   // selectionStatus — колонка в режиме выделения (null = режим выключен).
@@ -403,6 +540,10 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         beforeTaskId: beforeTask?.id ?? null,
         afterTaskId: afterTask?.id ?? null,
       });
+      // Микро-праздник: дотащили в «Готово» (не реордер внутри done).
+      if (targetStatus === 'done' && activeTask.status !== 'done') {
+        setConfettiKey((k) => k + 1);
+      }
     } catch (err) {
       toast.error(`Не удалось переместить: ${(err as Error).message}`);
     }
@@ -484,6 +625,100 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     // Доска занимает оставшуюся высоту экрана (родитель страницы — flex h-full flex-col),
     // колонки скроллятся внутри себя (Todoist-стиль). pb на ряду — резерв под floating-композер.
     <div className="flex min-h-0 flex-1 flex-col">
+      {confettiKey > 0 && <ConfettiBurst key={confettiKey} onDone={() => setConfettiKey(0)} />}
+
+      {/* Тихий ряд фильтров: поиск по проекту + приоритет + срок (+ делегат в совместных). */}
+      <div className="flex flex-wrap items-center gap-1 pb-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
+          <input
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+            placeholder="Фильтр по тексту…"
+            aria-label="Фильтр задач по тексту"
+            className="h-7 w-44 rounded-md bg-transparent pl-7 pr-2 text-xs outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-accent/60 focus:bg-accent/60"
+          />
+        </div>
+        <FilterDropdown
+          icon={<Flag className="size-3.5" />}
+          label={filterPriority !== null ? PRIORITY_META[filterPriority].label : 'Приоритет'}
+          active={filterPriority !== null}
+          options={[
+            { key: 'all', label: 'Любой приоритет' },
+            ...TASK_PRIORITIES.map((p) => ({
+              key: String(p),
+              label: PRIORITY_META[p].label,
+              dotClass: PRIORITY_META[p].dotColor,
+            })),
+          ]}
+          onSelect={(key) => setFilterPriority(key === 'all' ? null : (Number(key) as TaskPriority))}
+        />
+        <FilterDropdown
+          icon={<CalendarClock className="size-3.5" />}
+          label={
+            filterDeadline === 'overdue'
+              ? 'Просрочено'
+              : filterDeadline === 'week'
+                ? 'Эта неделя'
+                : 'Срок'
+          }
+          active={filterDeadline !== null}
+          options={[
+            { key: 'all', label: 'Любой срок' },
+            { key: 'overdue', label: 'Просрочено' },
+            { key: 'week', label: 'Ближайшая неделя' },
+          ]}
+          onSelect={(key) => setFilterDeadline(key === 'all' ? null : (key as 'overdue' | 'week'))}
+        />
+        {isShared && members.length > 0 && (
+          <FilterDropdown
+            icon={<Users className="size-3.5" />}
+            label={
+              filterDelegate !== null
+                ? members.find((m) => m.userId === filterDelegate)?.user.displayName ?? 'Делегат'
+                : 'Делегат'
+            }
+            active={filterDelegate !== null}
+            options={[
+              { key: 'all', label: 'Все участники' },
+              ...members.map((m) => ({ key: m.userId, label: m.user.displayName })),
+            ]}
+            onSelect={(key) => setFilterDelegate(key === 'all' ? null : key)}
+          />
+        )}
+        {filterActive && (
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <X className="size-3" />
+            Сбросить
+          </button>
+        )}
+      </div>
+
+      {/* Пустой проект: дружелюбный старт вместо четырёх голых колонок. */}
+      {!loading && tasks.length === 0 && !filterActive && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-dashed px-4 py-3">
+          <p className="text-sm text-muted-foreground">
+            Проект пуст — создайте первую задачу{onOpenAutomation ? ' или включите автоматизацию' : ''}.
+          </p>
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" className="h-7 gap-1.5 px-2.5 text-xs" onClick={() => setDialog({ mode: 'create', status: 'backlog' })}>
+              <Plus className="size-3.5" />
+              Создать задачу
+            </Button>
+            {onOpenAutomation && (
+              <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground" onClick={onOpenAutomation}>
+                <Bot className="size-3.5" />
+                Автоматизация
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       <DndContext
         sensors={sensors}
         measuring={MEASURING_CONFIG}
@@ -499,7 +734,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         {/* На мобиле колонки занимают почти всю ширину и «прилипают» при свайпе
             (snap), на десктопе — обычный горизонтальный ряд. Drag между колонками
             работает в обоих режимах: все колонки в DOM, просто проскроллены. */}
-        <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto pb-24 sm:snap-none sm:pb-28">
+        <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto pb-40 sm:snap-none md:pb-28">
           {shownStatuses.map((status) => {
             const perColumn = settings?.[status];
             const color = resolveColumnColor(perColumn, defaults?.[status], status);
@@ -509,7 +744,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
                 key={status}
                 status={status}
                 label={label}
-                tasks={hideDone && status === 'done' ? [] : grouped[status]}
+                tasks={filterTasks(hideDone && status === 'done' ? [] : grouped[status])}
                 onCreate={(s) => setDialog({ mode: 'create', status: s })}
                 onEdit={(t) => setDialog({ mode: 'edit', task: t })}
                 onDelete={handleDelete}

@@ -43,6 +43,7 @@ export class MockProjectRepository implements ProjectRepository {
     inbox = {
       id: crypto.randomUUID(),
       name: 'Входящие',
+      icon: null,
       status: 'active',
       gitRepoUrl: null,
       kbRepoFullName: null,
@@ -123,6 +124,7 @@ export class MockProjectRepository implements ProjectRepository {
     const project: Project = {
       id: crypto.randomUUID(),
       name: input.name,
+      icon: null,
       status: 'active',
       gitRepoUrl: null,
       kbRepoFullName: null,
@@ -157,6 +159,7 @@ export class MockProjectRepository implements ProjectRepository {
     const next: Project = {
       ...current,
       ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.icon !== undefined ? { icon: patch.icon } : {}),
       ...(patch.gitRepoUrl !== undefined ? { gitRepoUrl: patch.gitRepoUrl } : {}),
       ...(patch.kbRepoFullName !== undefined ? { kbRepoFullName: patch.kbRepoFullName } : {}),
     };

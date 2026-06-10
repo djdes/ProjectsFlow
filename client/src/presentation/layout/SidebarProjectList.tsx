@@ -147,13 +147,19 @@ function SidebarProjectRow({
       >
         {() => (
           <>
-            {/* Папка нейтральная; git-подключение — маленькая зелёная точка-индикатор
-                (зелёная папка целиком читалась как «статус ок», а не как факт интеграции). */}
+            {/* Иконка: эмодзи проекта (если задана) или нейтральная папка;
+                git-подключение — маленькая зелёная точка-индикатор. */}
             <span className="relative shrink-0">
-              <ProjectIcon
-                className="size-4 text-muted-foreground"
-                aria-label={project.gitRepoUrl ? 'Git подключён' : 'Git не подключён'}
-              />
+              {project.icon ? (
+                <span className="grid size-4 place-items-center text-sm leading-none" aria-hidden>
+                  {project.icon}
+                </span>
+              ) : (
+                <ProjectIcon
+                  className="size-4 text-muted-foreground"
+                  aria-label={project.gitRepoUrl ? 'Git подключён' : 'Git не подключён'}
+                />
+              )}
               {project.gitRepoUrl && (
                 <span
                   aria-hidden

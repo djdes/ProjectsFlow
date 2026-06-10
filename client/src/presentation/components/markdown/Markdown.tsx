@@ -48,15 +48,57 @@ const BASE_PROSE = cn(
 export function Markdown({
   children,
   className,
+  onCheckboxToggle,
 }: {
   children: string;
   className?: string;
+  // Интерактивные GFM-чеклисты: если задан — чекбоксы кликабельны, колбэк получает
+  // порядковый индекс чекбокса в исходнике (см. lib/checklist.ts) и новое состояние.
+  onCheckboxToggle?: (index: number, checked: boolean) => void;
 }): React.ReactElement {
+  // Счётчик чекбоксов текущего render-pass: порядок вызова компонентов = порядок
+  // документа, поэтому простая нумерация однозначно мапится на строки источника.
+  // Обычная локальная переменная (не ref): components-замыкания пересоздаются на
+  // каждый рендер и видят свой свежий счётчик.
+  const checkboxCounter = { value: 0 };
+
   return (
     <div className={cn(BASE_PROSE, className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, SANITIZE_SCHEMA]]}
+        components={{
+          input: (inputProps) => {
+            // node не должен утекать в DOM-атрибуты при spread'е props.
+            const { node, ...props } = inputProps;
+            void node;
+            if (props.type !== 'checkbox') return <input {...props} />;
+            if (!onCheckboxToggle) {
+              return (
+                <input
+                  type="checkbox"
+                  checked={!!props.checked}
+                  readOnly
+                  disabled
+                  className="size-3.5 translate-y-px accent-primary"
+                />
+              );
+            }
+            const index = checkboxCounter.value;
+            checkboxCounter.value += 1;
+            return (
+              <input
+                type="checkbox"
+                checked={!!props.checked}
+                onChange={(e) => onCheckboxToggle(index, e.target.checked)}
+                // Не даём клику всплыть в контейнеры с onClick (открытие редактора и т.п.).
+                onClick={(e) => e.stopPropagation()}
+                className="size-3.5 translate-y-px cursor-pointer accent-primary"
+                aria-label="Пункт чеклиста"
+              />
+            );
+          },
+        }}
       >
         {applyHighlightSyntax(children)}
       </ReactMarkdown>

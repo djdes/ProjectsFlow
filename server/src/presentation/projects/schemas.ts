@@ -38,6 +38,8 @@ const kbRepoFullNameOrNullSchema = z
 export const updateProjectSchema = z
   .object({
     name: z.string().trim().min(1).max(80).optional(),
+    // Эмодзи-иконка проекта; null = сбросить на дефолтную папку.
+    icon: z.string().trim().min(1).max(16).nullable().optional(),
     gitRepoUrl: urlOrNullSchema.optional(),
     kbRepoFullName: kbRepoFullNameOrNullSchema.optional(),
   })

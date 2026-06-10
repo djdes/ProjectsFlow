@@ -74,6 +74,8 @@ export type CreateProjectInput = {
 // Patch-семантика: undefined = поле не меняется, null = очистить, string = новое значение.
 export type UpdateProjectInput = {
   readonly name?: string;
+  // Эмодзи-иконка; null = сбросить на дефолтную папку.
+  readonly icon?: string | null;
   readonly gitRepoUrl?: string | null;
   readonly kbRepoFullName?: string | null;
 };

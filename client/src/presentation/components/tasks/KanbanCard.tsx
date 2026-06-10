@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
-import { ArrowRight, Check, ImageIcon, MessageSquare, Trash2 } from 'lucide-react';
+import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SelectModifiers } from './selection/selectionReducer';
@@ -14,6 +14,7 @@ import { RalphModeBadge } from './RalphMode';
 import { DeadlineBadge } from './DeadlineBadge';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { relativeTime } from '@/lib/relativeTime';
+import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL } from './statusLabels';
 
 type Props = {
@@ -100,6 +101,9 @@ export function KanbanCard({
   // но если юзер чуть-чуть двинул мышь — драг бы запустился; со stopPropagation это
   // окончательно исключено.)
   const stopDrag = (e: React.PointerEvent): void => e.stopPropagation();
+
+  // Прогресс GFM-чеклиста из описания — бейдж «3/7» в мета-строке.
+  const checklist = task.description ? checklistProgress(task.description) : null;
 
   return (
     <Wrapper layoutId={task.id}>
@@ -204,7 +208,7 @@ export function KanbanCard({
           ) : (
             <p className="text-sm leading-snug text-muted-foreground">—</p>
           )}
-          {/* Мета-строка: делегирование → счётчики (💬/🖼) → ralph → дедлайн → статус.
+          {/* Мета-строка: делегирование → чеклист → счётчики (💬/🖼) → ralph → дедлайн → статус.
               Рендерим только если есть что показать (иначе остаётся лишь футер). */}
           {((task.attachmentCount ?? 0) > 0 ||
             (task.commentCount ?? 0) > 0 ||
@@ -212,10 +216,25 @@ export function KanbanCard({
             task.status === 'in_progress' ||
             task.status === 'awaiting_clarification' ||
             !!task.delegation ||
-            task.deadline !== null) && (
+            task.deadline !== null ||
+            checklist !== null) && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
               {task.delegation && currentUserId && (
                 <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
+              )}
+              {/* Прогресс чеклиста из описания; зелёный когда всё выполнено. */}
+              {checklist && (
+                <span
+                  className={cn(
+                    'flex items-center gap-1 tabular-nums',
+                    checklist.done === checklist.total &&
+                      'text-emerald-600 dark:text-emerald-400',
+                  )}
+                  title="Чеклист в описании"
+                >
+                  <ListChecks className="size-3" />
+                  {checklist.done}/{checklist.total}
+                </span>
               )}
               {/* Счётчики — монохром без цветных подложек (Notion-style): цвет на карточке
                   остаётся только у семантики (дедлайн/статус/приоритет). */}

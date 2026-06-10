@@ -8,16 +8,21 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
+import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useContainer } from '@/infrastructure/di/container';
+import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
 import { AutomationDialog } from '@/presentation/components/project/AutomationDialog';
 import { EditableProjectTitle } from '@/presentation/components/project/EditableProjectTitle';
+import { ProjectIconPicker } from '@/presentation/components/project/ProjectIconPicker';
 
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
   const { data, loading, notFound } = useProject(projectId ?? '');
-  const { projectFinanceRepository, monitoringRepository } = useContainer();
+  const { projectFinanceRepository, monitoringRepository, projectRepository } = useContainer();
   // Гейт видимости кнопки «Финансы»: дёргаем summary только чтобы проверить доступ.
   // Сумму больше не показываем (раньше был чип в шапке), сам блок Доход/Расход/Прибыль
   // живёт на странице /finance.
@@ -27,6 +32,33 @@ export function TasksPage(): React.ReactElement {
   // Число активных алертов — для бейджа на кнопке.
   const [monitoringAlerts, setMonitoringAlerts] = useState(0);
   const [automationOpen, setAutomationOpen] = useState(false);
+  // Участники для аватар-стека в шапке (только совместные проекты).
+  const [members, setMembers] = useState<ProjectMember[]>([]);
+
+  // Заголовок вкладки браузера = имя проекта (помогает ориентироваться в табах).
+  useEffect(() => {
+    if (data?.name) document.title = `${data.name} · ProjectsFlow`;
+    return () => {
+      document.title = 'ProjectsFlow';
+    };
+  }, [data?.name]);
+
+  useEffect(() => {
+    if (!projectId || !data || (data.memberCount ?? 0) <= 1) {
+      setMembers([]);
+      return;
+    }
+    let cancelled = false;
+    void projectRepository
+      .listMembers(projectId)
+      .then((list) => {
+        if (!cancelled) setMembers(list);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, data, projectRepository]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -79,13 +111,41 @@ export function TasksPage(): React.ReactElement {
       </nav>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Notion-style: страница называется именем проекта (клик — переименовать).
+        {/* Notion-style: иконка проекта + имя как заголовок страницы (клик — переименовать).
             Генерик-«Задачи» убран — контекст и так в хлебных крошках. */}
-        <EditableProjectTitle projectId={data.id} name={data.name} />
+        <div className="flex min-w-0 items-center gap-1.5">
+          <ProjectIconPicker projectId={data.id} icon={data.icon} />
+          <EditableProjectTitle projectId={data.id} name={data.name} />
+        </div>
         {/* Действия — тихие иконки с тултипами (Notion top-right style). Тоггл
             мультизадачного воркера переехал в диалог «Автоматизация». */}
         <TooltipProvider delayDuration={300}>
           <div className="flex items-center gap-0.5">
+            {/* Аватар-стек участников совместного проекта; клик — общий доступ. */}
+            {members.length > 1 && (
+              <Link
+                to={`/projects/${data.id}/overview`}
+                className="mr-1.5 flex items-center -space-x-1.5"
+                title={members.map((m) => m.user.displayName).join(', ')}
+                aria-label="Участники проекта"
+              >
+                {members.slice(0, 4).map((m) => (
+                  <Avatar key={m.userId} className="size-6 ring-2 ring-background">
+                    {m.user.avatarUrl ? (
+                      <AvatarImage src={m.user.avatarUrl} alt={m.user.displayName} />
+                    ) : null}
+                    <AvatarFallback className={cn('text-[9px]', avatarColor(m.user.displayName))}>
+                      {getInitials(m.user.displayName)}
+                    </AvatarFallback>
+                  </Avatar>
+                ))}
+                {members.length > 4 && (
+                  <span className="grid size-6 place-items-center rounded-full bg-muted text-[9px] font-medium text-muted-foreground ring-2 ring-background">
+                    +{members.length - 4}
+                  </span>
+                )}
+              </Link>
+            )}
             {financeVisible && (
               <PageActionButton label="Финансы" to={`/projects/${data.id}/finance`}>
                 <Wallet className="size-4" />
@@ -130,7 +190,12 @@ export function TasksPage(): React.ReactElement {
         </TooltipProvider>
       </div>
 
-      <KanbanBoard projectId={data.id} projectName={data.name} memberCount={data.memberCount} />
+      <KanbanBoard
+        projectId={data.id}
+        projectName={data.name}
+        memberCount={data.memberCount}
+        onOpenAutomation={() => setAutomationOpen(true)}
+      />
 
       <AutomationDialog
         open={automationOpen}

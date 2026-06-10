@@ -86,6 +86,18 @@ type Props = {
 // Сколько done-карточек видно без раскрытия (свежие сверху — это и есть «последние»).
 const DONE_PREVIEW_COUNT = 10;
 
+// Дата-корзина для группировки «Готово»: Сегодня / Вчера / Ранее.
+// updatedAt ≈ момент переноса в done (последнее изменение задачи).
+function doneBucket(d: Date): string {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfThat = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOfToday - startOfThat) / 86_400_000);
+  if (diffDays <= 0) return 'Сегодня';
+  if (diffDays === 1) return 'Вчера';
+  return 'Ранее';
+}
+
 export function KanbanColumn({
   status,
   label,
@@ -250,8 +262,16 @@ export function KanbanColumn({
           items={visibleTasks.map((t) => t.id)}
           strategy={verticalListSortingStrategy}
         >
-          {visibleTasks.map((t) => (
+          {visibleTasks.map((t, idx) => (
             <Fragment key={t.id}>
+              {/* «Готово» группируем по датам завершения: Сегодня / Вчера / Ранее. */}
+              {status === 'done' &&
+                (idx === 0 ||
+                  doneBucket((visibleTasks[idx - 1] ?? t).updatedAt) !== doneBucket(t.updatedAt)) && (
+                  <p className="px-1 pb-0.5 pt-1.5 text-[11px] font-medium text-muted-foreground/70 first:pt-0">
+                    {doneBucket(t.updatedAt)}
+                  </p>
+                )}
               <AnimatePresence>
                 {dropTarget && dropTarget.overId === t.id && t.id !== activeId && (
                   <DropIndicatorLine key={`drop-before-${t.id}`} />

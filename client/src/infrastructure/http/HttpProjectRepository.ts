@@ -35,6 +35,7 @@ type ProjectDto = {
   id: string;
   ownerId: string;
   name: string;
+  icon?: string | null;
   status: ProjectStatus;
   gitRepoUrl: string | null;
   kbRepoFullName: string | null;
@@ -57,6 +58,7 @@ function fromDto(dto: ProjectDto): Project {
   return {
     id: dto.id,
     name: dto.name,
+    icon: dto.icon ?? null,
     status: dto.status,
     gitRepoUrl: dto.gitRepoUrl,
     kbRepoFullName: dto.kbRepoFullName ?? null,

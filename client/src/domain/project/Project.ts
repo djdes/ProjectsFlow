@@ -9,6 +9,8 @@ export type KbKind = 'none' | 'github' | 'local';
 export type Project = {
   readonly id: string;
   readonly name: string;
+  // Эмодзи-иконка проекта (Notion-style). null = дефолтная папка в UI.
+  readonly icon: string | null;
   readonly status: ProjectStatus;
   readonly gitRepoUrl: string | null;
   readonly kbRepoFullName: string | null;

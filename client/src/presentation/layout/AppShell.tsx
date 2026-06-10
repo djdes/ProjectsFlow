@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Outlet } from 'react-router-dom';
-import { Menu } from 'lucide-react';
+import { NavLink, Outlet } from 'react-router-dom';
+import { Bell, FolderKanban, Inbox, Menu, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,7 @@ import { ProjectsProvider } from '@/presentation/hooks/ProjectsProvider';
 import { GithubConnectionProvider } from '@/presentation/hooks/GithubConnectionProvider';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useNotificationStream } from '@/presentation/hooks/useNotificationStream';
+import { useUnreadNotificationsCount } from '@/presentation/hooks/useUnreadNotificationsCount';
 import { Sidebar } from './Sidebar';
 
 const COLLAPSE_KEY = 'pf_sidebar_collapsed';
@@ -78,6 +79,7 @@ export function AppShell(): React.ReactElement {
             <main className="flex-1 overflow-y-auto">
               <Outlet />
             </main>
+            <MobileBottomNav onOpenProjects={() => setDrawerOpen(true)} />
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
               <SheetContent side="left" className="w-72 p-0">
                 <div onClick={() => setDrawerOpen(false)} className="h-full">
@@ -92,5 +94,46 @@ export function AppShell(): React.ReactElement {
         </NewProjectDialogProvider>
       </GithubConnectionProvider>
     </ProjectsProvider>
+  );
+}
+
+// Нижний таб-бар (только mobile, <768px): Входящие / Проекты (drawer) / Уведомления / Профиль.
+// Современный мобильный стандарт вместо «всё за гамбургером». Плавающие элементы
+// (композер, булк-бар) подняты на его высоту через max-md-оффсеты.
+function MobileBottomNav({ onOpenProjects }: { onOpenProjects: () => void }): React.ReactElement {
+  const { count: unreadCount } = useUnreadNotificationsCount();
+
+  const itemClass = (isActive: boolean): string =>
+    cn(
+      'flex flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] transition-colors',
+      isActive ? 'text-foreground' : 'text-muted-foreground',
+    );
+
+  return (
+    <nav className="flex h-14 shrink-0 items-stretch border-t bg-background pb-[env(safe-area-inset-bottom)]">
+      <NavLink to="/" end className={({ isActive }) => itemClass(isActive)}>
+        <Inbox className="size-5" />
+        Входящие
+      </NavLink>
+      <button type="button" onClick={onOpenProjects} className={itemClass(false)}>
+        <FolderKanban className="size-5" />
+        Проекты
+      </button>
+      <NavLink to="/notifications" className={({ isActive }) => itemClass(isActive)}>
+        <span className="relative">
+          <Bell className="size-5" />
+          {unreadCount > 0 && (
+            <span className="absolute -right-1.5 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </span>
+        Уведомления
+      </NavLink>
+      <NavLink to="/profile" className={({ isActive }) => itemClass(isActive)}>
+        <User className="size-5" />
+        Профиль
+      </NavLink>
+    </nav>
   );
 }
