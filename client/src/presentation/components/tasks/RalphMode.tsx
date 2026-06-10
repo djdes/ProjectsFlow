@@ -19,12 +19,15 @@ export function RalphModeSelect({
   disabled,
   className,
   variant = 'outline',
+  iconOnly = false,
 }: {
   value: RalphMode;
   onChange: (next: RalphMode) => void;
   disabled?: boolean;
   className?: string;
   variant?: 'outline' | 'ghost';
+  // Компактный вид для композеров: только эмодзи-иконка режима, label в title.
+  iconOnly?: boolean;
 }): React.ReactElement {
   const meta = RALPH_MODE_META[value];
   return (
@@ -34,13 +37,20 @@ export function RalphModeSelect({
           type="button"
           variant={variant}
           disabled={disabled}
-          className={`w-full justify-between font-normal ${className ?? ''}`}
+          title={`Режим воркера: ${meta.label}`}
+          className={`${iconOnly ? 'justify-center' : 'w-full justify-between'} font-normal ${className ?? ''}`}
         >
-          <span className="flex items-center gap-2 truncate">
-            <span aria-hidden="true">{meta.icon}</span>
-            <span className="truncate">{meta.label}</span>
-          </span>
-          <ChevronDown className="size-4 shrink-0 opacity-60" />
+          {iconOnly ? (
+            <span aria-hidden="true" className="text-base leading-none">{meta.icon}</span>
+          ) : (
+            <>
+              <span className="flex items-center gap-2 truncate">
+                <span aria-hidden="true">{meta.icon}</span>
+                <span className="truncate">{meta.label}</span>
+              </span>
+              <ChevronDown className="size-4 shrink-0 opacity-60" />
+            </>
+          )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px]">

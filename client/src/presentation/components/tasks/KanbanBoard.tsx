@@ -610,7 +610,6 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         onClose={() => setDialog(null)}
         onSubmit={handleDialogSubmit}
         onCommitsChange={() => void refetch()}
-        showCommits={showCommits}
         projectName={projectName}
         backlogTail={backlogTail}
         todoTail={todoTail}

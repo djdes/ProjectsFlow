@@ -169,7 +169,6 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
         onClose={() => setDialog(null)}
         onSubmit={handleDialogSubmit}
         onCommitsChange={() => void refetch()}
-        showCommits={showCommits}
         backlogTail={backlogTail}
         todoTail={todoTail}
         isInbox={!showCommits}
@@ -291,7 +290,7 @@ function TaskListRow({
       )}
       <div className="min-w-0 flex-1">
         {task.description?.trim() ? (
-          <ExpandableMarkdown className={cn(isDone && 'line-through opacity-60')}>
+          <ExpandableMarkdown className={cn(isDone && 'opacity-60')}>
             {task.description}
           </ExpandableMarkdown>
         ) : (

@@ -137,15 +137,6 @@
    Tailwind-arbitrary values — keyframe-анимация и :where-host для контейнера хотят
    нормальный CSS. Используется в TaskDialog CommentItem; см. spec comment-actor-kind.md. */
 @layer components {
-  /* Лёгкий тинт вместо сплошной peach-плиты: rgba от claude-orange читается
-     и в светлой, и в тёмной теме (solid peach в dark выглядел инородно). */
-  .pf-claude-agent {
-    border-left: 2px solid var(--claude-orange);
-    background: rgba(217, 119, 87, 0.07);
-    border-radius: 0 10px 10px 0;
-    padding: 10px 14px;
-  }
-
   .pf-claude-agent-icon {
     color: var(--claude-orange);
     /* Мягкое мерцание — узнаваемо как Claude, не отвлекает. */
@@ -154,12 +145,29 @@
     transform-origin: center;
   }
 
+  /* Notion-style выделение текста фоном: ==текст== в markdown → <mark>.
+     Тёплый янтарный тинт, наследует цвет текста (дефолтный mark красит в чёрный). */
+  mark {
+    background: rgba(250, 204, 21, 0.35);
+    color: inherit;
+    padding: 0 0.15em;
+    border-radius: 0.2em;
+  }
+
+  .dark mark {
+    background: rgba(250, 204, 21, 0.22);
+  }
+
+  /* Имя агента в комментарии — Notion-style плоская строка: обычный шрифт,
+     фирменный цвет Claude (в dark — светлее, иначе тонет на графите). */
   .pf-claude-agent-title {
     color: var(--claude-orange-dark);
-    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
     font-weight: 600;
-    font-size: 12.5px;
-    letter-spacing: 0.2px;
+    font-size: 13px;
+  }
+
+  .dark .pf-claude-agent-title {
+    color: var(--claude-orange);
   }
 
   @keyframes pf-claude-pulse {

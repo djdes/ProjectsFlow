@@ -194,7 +194,9 @@ export function KanbanCard({
               className={cn(
                 MARKDOWN_COMPACT,
                 'line-clamp-3',
-                task.status === 'done' && 'line-through opacity-60',
+                // Done: приглушаем, но НЕ зачёркиваем — line-through на 3 строках
+                // markdown-текста нечитаем; зелёный чек и так маркирует готовность.
+                task.status === 'done' && 'opacity-60',
               )}
             >
               {task.description}

@@ -8,6 +8,7 @@ import {
   Code,
   Copy,
   Heading1,
+  Highlighter,
   Italic,
   Link as LinkIcon,
   List,
@@ -243,6 +244,7 @@ export function useTextFieldFormatting(textareaRef: TextareaRef): UseTextFieldFo
       if (code === 'KeyX') wrap(el, '~~', '~~');
       else if (code === 'Period') transformLines(el, (lines) => lines.map((l) => (l.trim() ? `> ${l}` : l)));
       else if (code === 'KeyM') wrap(el, '`', '`');
+      else if (code === 'KeyH') wrap(el, '==', '==');
       else if (code === 'KeyD') insertDate(el);
       else handled = false;
     }
@@ -257,6 +259,7 @@ export function useTextFieldFormatting(textareaRef: TextareaRef): UseTextFieldFo
   const fmtItalic = useCallback(() => defer((el) => wrap(el, '*', '*')), [defer]);
   const fmtUnderline = useCallback(() => defer((el) => wrap(el, '<u>', '</u>')), [defer]);
   const fmtStrike = useCallback(() => defer((el) => wrap(el, '~~', '~~')), [defer]);
+  const fmtHighlight = useCallback(() => defer((el) => wrap(el, '==', '==')), [defer]);
   const fmtCode = useCallback(() => defer((el) => wrap(el, '`', '`')), [defer]);
   const fmtH1 = useCallback(
     () => defer((el) => transformLines(el, (lines) => lines.map((l, i) => (i === 0 ? `# ${l}` : l)))),
@@ -336,6 +339,11 @@ export function useTextFieldFormatting(textareaRef: TextareaRef): UseTextFieldFo
               <Strikethrough />
               Зачёркнутый
               <ContextMenuShortcut>Ctrl+Shift+X</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={fmtHighlight}>
+              <Highlighter />
+              Выделить цветом
+              <ContextMenuShortcut>Ctrl+Shift+H</ContextMenuShortcut>
             </ContextMenuItem>
             <ContextMenuItem onSelect={fmtQuote}>
               <Quote />

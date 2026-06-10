@@ -12,8 +12,18 @@ import { cn } from '@/lib/utils';
 // остаётся нетронутой.
 const SANITIZE_SCHEMA = {
   ...defaultSchema,
-  tagNames: [...(defaultSchema.tagNames ?? []), 'u'],
+  tagNames: [...(defaultSchema.tagNames ?? []), 'u', 'mark'],
 };
+
+// Notion-style выделение фоном: ==текст== → <mark> (remark-gfm такого синтаксиса
+// не знает, поэтому лёгкий препроцессинг до парсера). Не лезем в код: сегменты
+// внутри backtick-ов (инлайн `код` и ```блоки```) пропускаются как есть.
+function applyHighlightSyntax(src: string): string {
+  return src
+    .split(/(```[\s\S]*?```|`[^`\n]*`)/)
+    .map((seg, i) => (i % 2 === 1 ? seg : seg.replace(/==([^=\n]+)==/g, '<mark>$1</mark>')))
+    .join('');
+}
 
 // Общий рендер markdown (GFM + перенос строк + безопасный html). Используется для
 // пользовательского ввода в мульти-юзер-проектах (описания задач, комментарии,
@@ -48,7 +58,7 @@ export function Markdown({
         remarkPlugins={[remarkGfm, remarkBreaks]}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, SANITIZE_SCHEMA]]}
       >
-        {children}
+        {applyHighlightSyntax(children)}
       </ReactMarkdown>
     </div>
   );
@@ -61,7 +71,9 @@ export function Markdown({
 // Сам line-clamp-N задаёт вызывающая сторона (на карточке 3 строки, в списке — 2).
 export const MARKDOWN_COMPACT = cn(
   'text-sm leading-snug',
-  '[&_p]:my-0 [&_ul]:my-0 [&_ol]:my-0 [&_li]:my-0 [&_blockquote]:my-0 [&_pre]:my-1 [&_hr]:my-1',
+  // hr скрыт: на 3-строчном превью разделитель (например, `---` frontmatter-стиля
+  // в начале описания) выглядит как случайная полоска поверх карточки.
+  '[&_p]:my-0 [&_ul]:my-0 [&_ol]:my-0 [&_li]:my-0 [&_blockquote]:my-0 [&_pre]:my-1 [&_hr]:hidden',
   '[&_h1]:my-0 [&_h2]:my-0 [&_h3]:my-0 [&_h4]:my-0',
   '[&_h1]:text-sm [&_h2]:text-sm [&_h3]:text-sm [&_h4]:text-sm',
   '[&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_h4]:font-semibold',

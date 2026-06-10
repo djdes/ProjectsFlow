@@ -8,6 +8,8 @@ type Props = {
   onChange: (next: string | null) => void;
   disabled?: boolean;
   className?: string;
+  // Icon-only режим для композеров: иконка календаря, дата появляется рядом только когда задана.
+  iconOnly?: boolean;
 };
 
 // Краткий формат для кнопки: «27 май» / «27 май 2026» (если другой год).
@@ -35,6 +37,7 @@ export function DeadlinePicker({
   onChange,
   disabled,
   className,
+  iconOnly = false,
 }: Props): React.ReactElement {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -62,19 +65,20 @@ export function DeadlinePicker({
       <Button
         type="button"
         variant="ghost"
-        size="sm"
+        size={iconOnly && !value ? 'icon' : 'sm'}
         disabled={disabled}
         onClick={openPicker}
         className={cn(
-          'h-7 gap-1.5 px-2 text-xs',
+          iconOnly ? 'shrink-0 gap-1.5 text-xs' : 'h-7 gap-1.5 px-2 text-xs',
           value ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
           className,
         )}
         title={value ? `Срок: ${value}` : 'Выбрать срок выполнения'}
+        aria-label={value ? `Срок: ${value}` : 'Срок выполнения'}
       >
-        <CalendarClock className="size-3.5" />
-        {label}
-        <ChevronDown className="size-3" />
+        <CalendarClock className={iconOnly ? 'size-4' : 'size-3.5'} />
+        {(!iconOnly || value !== null) && label}
+        {!iconOnly && <ChevronDown className="size-3" />}
       </Button>
       {value && (
         <button

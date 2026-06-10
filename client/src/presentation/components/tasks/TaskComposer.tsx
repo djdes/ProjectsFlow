@@ -18,6 +18,8 @@ import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatt
 import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
 import { RalphModeSelect } from './RalphMode';
 import { DelegateSelect } from './DelegateSelect';
+import { PrioritySelect } from './PrioritySelect';
+import { DeadlinePicker } from './DeadlinePicker';
 import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
 import {
   extractClipboardFiles,
@@ -86,6 +88,8 @@ export function TaskComposer({
   const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
   const [quickStatus, setQuickStatus] = useState<'todo' | 'backlog'>('todo');
   const [delegateUserId, setDelegateUserId] = useState<string | null>(null);
+  const [priority, setPriority] = useState<TaskPriority | null>(null);
+  const [deadline, setDeadline] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [previewFile, setPreviewFile] = useState<PendingFile | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -155,6 +159,8 @@ export function TaskComposer({
         status: forcedStatus ?? quickStatus,
         ralphMode,
         delegateUserId,
+        priority,
+        deadline,
       });
       if (pending.length > 0) {
         let ok = 0;
@@ -181,6 +187,8 @@ export function TaskComposer({
       setRalphMode('normal');
       setQuickStatus('todo');
       setDelegateUserId(null);
+      setPriority(null);
+      setDeadline(null);
     } catch (err) {
       toast.error(`Не удалось создать: ${(err as Error).message}`);
     } finally {
@@ -322,7 +330,23 @@ export function TaskComposer({
           value={ralphMode}
           onChange={setRalphMode}
           disabled={submitting}
-          className="!h-9 min-w-[100px] !px-2.5 !py-0 text-xs sm:min-w-[140px]"
+          variant="ghost"
+          iconOnly
+          className="!size-9 shrink-0 !p-0"
+        />
+        <PrioritySelect
+          value={priority}
+          onChange={setPriority}
+          disabled={submitting}
+          iconOnly
+          className="size-9"
+        />
+        <DeadlinePicker
+          value={deadline}
+          onChange={setDeadline}
+          disabled={submitting}
+          iconOnly
+          className={cn('h-9', deadline === null ? 'w-9 px-0' : 'px-2')}
         />
         <div className="ml-auto flex items-center gap-1.5">
           {!forcedStatus && (

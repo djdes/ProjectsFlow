@@ -217,7 +217,6 @@ export function AssignedToMeBlock({ onChanged }: Props): React.ReactElement | nu
         }}
         onSubmit={handleDrawerSubmit}
         onCommitsChange={() => void refresh()}
-        showCommits={drawerTask ? !drawerTask.isInbox : false}
         projectName={drawerTask && !drawerTask.isInbox ? drawerTask.projectName : undefined}
         isInbox={drawerTask?.isInbox ?? false}
         aiProjectId={drawerTask && !drawerTask.isInbox ? drawerTask.projectId : null}
@@ -312,7 +311,7 @@ function AcceptedRow({
       />
       <div className="min-w-0 flex-1">
         {item.description?.trim() ? (
-          <ExpandableMarkdown className={cn(isDone && 'line-through opacity-60')}>
+          <ExpandableMarkdown className={cn(isDone && 'opacity-60')}>
             {item.description}
           </ExpandableMarkdown>
         ) : (

@@ -18,6 +18,8 @@ type Props = {
   className?: string;
   // Compact-режим: trigger показывает только дот + label без рамки fill-card.
   compact?: boolean;
+  // Icon-only режим для композеров: флажок (цветной, когда приоритет задан), label в title.
+  iconOnly?: boolean;
 };
 
 // Dropdown выбора приоритета. 5 опций: «Без приоритета» (null) + P1..P4.
@@ -28,8 +30,34 @@ export function PrioritySelect({
   disabled,
   className,
   compact = false,
+  iconOnly = false,
 }: Props): React.ReactElement {
   const meta = value !== null ? PRIORITY_META[value] : null;
+
+  if (iconOnly) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            disabled={disabled}
+            className={cn(
+              'shrink-0',
+              meta ? meta.textColor : 'text-muted-foreground hover:text-foreground',
+              className,
+            )}
+            title={meta ? `Приоритет: ${meta.label}` : 'Приоритет'}
+            aria-label={meta ? `Приоритет: ${meta.label}` : 'Приоритет'}
+          >
+            <Flag className="size-4" fill={meta ? 'currentColor' : 'none'} />
+          </Button>
+        </DropdownMenuTrigger>
+        <PriorityMenuContent value={value} onChange={onChange} />
+      </DropdownMenu>
+    );
+  }
 
   return (
     <DropdownMenu>
@@ -56,26 +84,39 @@ export function PrioritySelect({
           <ChevronDown className="size-3" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[180px]">
-        <DropdownMenuItem onClick={() => onChange(null)}>
-          <Flag className="size-3.5 text-muted-foreground" />
-          Без приоритета
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {TASK_PRIORITIES.map((p) => {
-          const m = PRIORITY_META[p];
-          return (
-            <DropdownMenuItem
-              key={p}
-              onClick={() => onChange(p)}
-              className={cn('gap-2', value === p && 'font-medium')}
-            >
-              <span className={cn('size-2.5 rounded-full', m.dotColor)} aria-hidden />
-              <span>{m.label}</span>
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
+      <PriorityMenuContent value={value} onChange={onChange} />
     </DropdownMenu>
+  );
+}
+
+// Общее содержимое dropdown'а — для обычного и icon-only триггеров.
+function PriorityMenuContent({
+  value,
+  onChange,
+}: {
+  value: TaskPriority | null;
+  onChange: (next: TaskPriority | null) => void;
+}): React.ReactElement {
+  return (
+    <DropdownMenuContent align="start" className="min-w-[180px]">
+      <DropdownMenuItem onClick={() => onChange(null)}>
+        <Flag className="size-3.5 text-muted-foreground" />
+        Без приоритета
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      {TASK_PRIORITIES.map((p) => {
+        const m = PRIORITY_META[p];
+        return (
+          <DropdownMenuItem
+            key={p}
+            onClick={() => onChange(p)}
+            className={cn('gap-2', value === p && 'font-medium')}
+          >
+            <span className={cn('size-2.5 rounded-full', m.dotColor)} aria-hidden />
+            <span>{m.label}</span>
+          </DropdownMenuItem>
+        );
+      })}
+    </DropdownMenuContent>
   );
 }

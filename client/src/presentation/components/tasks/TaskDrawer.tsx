@@ -8,7 +8,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { ChevronDown, ChevronRight, Download, FileText, Loader2, Map, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Download, FileText, Loader2, Map, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,14 +36,13 @@ import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import { CommentActionsMenu } from '@/presentation/components/tasks/CommentActionsMenu';
 import { getInitials } from '@/presentation/layout/projectIcons';
-import { TaskCommitsSection } from './TaskCommitsSection';
 import { CommentBody } from './CommentBody';
 import {
   parseRalphQuestion,
   answeredQidSet,
   RalphAnswerControls,
 } from './RalphQuestionControls';
-import { Markdown } from '@/presentation/components/markdown/Markdown';
+import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import {
   useTextFieldFormatting,
@@ -106,9 +105,6 @@ type Props = {
   }) => Promise<Task>;
   // Колбэк когда коммиты или аттачи у задачи поменялись — board перефетчит badge'и.
   onCommitsChange?: () => void;
-  // Показывать секцию коммитов в edit-режиме. Для inbox-проекта выключаем — у него
-  // нет git-репо, привязывать нечего.
-  showCommits?: boolean;
   // Имя проекта — рисуем в шапке диалога как контекстный заголовок. В inbox не передаём.
   projectName?: string;
   // Последние задачи в backlog/todo — нужны для расчёта beforeTaskId при move'е
@@ -259,7 +255,6 @@ export function TaskDrawer({
   onClose,
   onSubmit,
   onCommitsChange,
-  showCommits = true,
   projectName,
   backlogTail = null,
   todoTail = null,
@@ -309,9 +304,8 @@ export function TaskDrawer({
       el.scrollTo({ top: el.scrollHeight, behavior: 'auto' });
     });
   }, []);
-  // Коммиты по умолчанию свёрнуты — это вторичный контент, чтобы не отвлекал.
-  // Раскрытие — клик по заголовку.
-  const [commitsOpen, setCommitsOpen] = useState(false);
+  // Закреплённое описание в шапке: по умолчанию свёрнуто до 2 строк, клик раскрывает.
+  const [descExpanded, setDescExpanded] = useState(false);
   // Активная вкладка тела edit-режима: «Обсуждение» (комментарии) | LIVE (лента воркера).
   const [activeTab, setActiveTab] = useState<'discussion' | 'live'>('discussion');
   // Есть ли running LIVE-сессия (бейдж 🔴 на триггере вкладки). LiveTab сообщает через колбэк.
@@ -364,7 +358,7 @@ export function TaskDrawer({
     setCreatePriority(null);
     setError(null);
     setExpanded(false);
-    setCommitsOpen(false);
+    setDescExpanded(false);
     setActiveTab('discussion');
     setLiveRunning(false);
     setCreateDragActive(false);
@@ -600,6 +594,70 @@ export function TaskDrawer({
                   }}
                 />
               </div>
+
+              {/* Закреплённое описание: всегда под рукой (тело скроллится к свежим
+                  комментариям). Клик по свёрнутому превью раскрывает полный текст;
+                  для не-done внутри — прежний inline-редактор (клик по тексту = правка). */}
+              <div className="border-t border-border/60 px-4 py-2 sm:px-6">
+                {descExpanded ? (
+                  <div className="max-h-[50vh] overflow-y-auto overscroll-contain">
+                    {canEdit ? (
+                      <TaskDescriptionEditor
+                        key={task.id}
+                        projectId={task.projectId}
+                        taskId={task.id}
+                        initialDescription={task.description ?? ''}
+                        onSaved={() => onCommitsChange?.()}
+                        onCollapse={() => setDescExpanded(false)}
+                      />
+                    ) : (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-medium text-muted-foreground/70">
+                            Описание
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 text-muted-foreground"
+                            onClick={() => setDescExpanded(false)}
+                            aria-label="Свернуть описание"
+                          >
+                            <ChevronUp className="size-4" />
+                          </Button>
+                        </div>
+                        {task.description?.trim() ? (
+                          <Markdown className="p-1">{task.description}</Markdown>
+                        ) : (
+                          <span className="text-sm italic text-muted-foreground">
+                            Без описания
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setDescExpanded(true)}
+                    aria-expanded={false}
+                    aria-label="Показать описание задачи"
+                    className="group/desc -m-1 flex w-full items-start gap-2 rounded-md p-1 text-left transition-colors hover:bg-accent/60"
+                  >
+                    <div className="min-w-0 flex-1">
+                      {task.description?.trim() ? (
+                        <Markdown className={cn(MARKDOWN_COMPACT, 'line-clamp-2')}>
+                          {task.description}
+                        </Markdown>
+                      ) : (
+                        <span className="text-sm italic text-muted-foreground">Без описания</span>
+                      )}
+                    </div>
+                    <ChevronDown className="mt-0.5 size-4 shrink-0 text-muted-foreground/50 transition-colors group-hover/desc:text-muted-foreground" />
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* === SCROLLABLE BODY — вкладки Обсуждение | LIVE === */}
@@ -634,61 +692,16 @@ export function TaskDrawer({
                 forceMount
                 className="min-h-0 overflow-hidden data-[state=inactive]:hidden"
               >
-                <div ref={bodyRef} className="h-full space-y-5 overflow-y-auto px-4 py-5 sm:px-6">
-                  {canEdit ? (
-                    <TaskDescriptionEditor
-                      key={task.id}
-                      projectId={task.projectId}
-                      taskId={task.id}
-                      initialDescription={task.description ?? ''}
-                      onSaved={() => onCommitsChange?.()}
-                    />
-                  ) : (
-                    <div className="rounded-md border border-dashed border-transparent p-2 text-sm leading-snug">
-                      {task.description?.trim() ? (
-                        <Markdown>{task.description}</Markdown>
-                      ) : (
-                        <span className="italic text-muted-foreground">Без описания</span>
-                      )}
-                    </div>
-                  )}
-
-                  {showCommits && (
-                    <div className="border-t pt-4">
-                      <button
-                        type="button"
-                        onClick={() => setCommitsOpen((v) => !v)}
-                        className="flex w-full items-center gap-1.5 text-xs font-medium text-muted-foreground/70 hover:text-foreground"
-                        aria-expanded={commitsOpen}
-                      >
-                        <ChevronRight
-                          className={cn(
-                            'size-3.5 shrink-0 transition-transform',
-                            commitsOpen && 'rotate-90',
-                          )}
-                        />
-                        <span>Коммиты</span>
-                        {task.commitCount !== undefined && task.commitCount > 0 && (
-                          <span className="text-[10px] opacity-70">· {task.commitCount}</span>
-                        )}
-                      </button>
-                      {commitsOpen && (
-                        <div className="mt-3">
-                          <TaskCommitsSection task={task} onChange={() => onCommitsChange?.()} />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="border-t pt-4">
-                    <TaskCommentsSection
-                      projectId={task.projectId}
-                      taskId={task.id}
-                      onCommentCreatedRef={onCommentCreatedRef}
-                      onFirstLoad={scrollBodyToBottom}
-                      scrollToCommentId={scrollToCommentId}
-                    />
-                  </div>
+                {/* Описание закреплено в шапке, коммиты скрыты — тело целиком отдано
+                    обсуждению (Notion-style: комментарии и есть страница). */}
+                <div ref={bodyRef} className="h-full overflow-y-auto px-4 py-5 sm:px-6">
+                  <TaskCommentsSection
+                    projectId={task.projectId}
+                    taskId={task.id}
+                    onCommentCreatedRef={onCommentCreatedRef}
+                    onFirstLoad={scrollBodyToBottom}
+                    scrollToCommentId={scrollToCommentId}
+                  />
                 </div>
               </TabsContent>
 
@@ -905,11 +918,14 @@ function TaskDescriptionEditor({
   taskId,
   initialDescription,
   onSaved,
+  onCollapse,
 }: {
   projectId: string;
   taskId: string;
   initialDescription: string;
   onSaved: () => void;
+  // Если задан — в шапке появляется кнопка «свернуть» (описание закреплено в header'е drawer'а).
+  onCollapse?: () => void;
 }): React.ReactElement {
   const { taskRepository } = useContainer();
   const [description, setDescription] = useState(initialDescription);
@@ -1145,6 +1161,19 @@ function TaskDescriptionEditor({
           >
             <Map className="size-4" />
           </Button>
+          {onCollapse && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8 text-muted-foreground"
+              onClick={onCollapse}
+              aria-label="Свернуть описание"
+              title="Свернуть описание"
+            >
+              <ChevronUp className="size-4" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1730,22 +1759,23 @@ function formatCommentTime(date: Date): string {
   return COMMENT_TIME_FORMATTER.format(date);
 }
 
-// Маппинг agent_name → читаемый title. Default — диспетчер (исторически 99% автокомментов).
+// Маппинг agent_name → читаемые имя + модель (рендерятся раздельно: имя — акцентом,
+// модель — приглушённо, как в Notion). Default — диспетчер (исторически 99% автокомментов).
 // Расширяется без deploy backend'а — новые worker'ы добавлять сюда.
-function agentTitle(agentName: string | null): string {
+function agentMeta(agentName: string | null): { name: string; sub: string } {
   switch (agentName) {
     case 'ralph-worker':
-      return 'Воркер · Claude Opus 4.7';
+      return { name: 'Воркер', sub: 'Claude Opus 4.7' };
     case 'ralph-grillme':
-      return 'Grillme-агент · Claude Opus 4.7';
+      return { name: 'Grillme-агент', sub: 'Claude Opus 4.7' };
     case 'ralph-verify':
-      return 'Верификатор · Claude Sonnet 4.6';
+      return { name: 'Верификатор', sub: 'Claude Sonnet 4.6' };
     case 'ralph-dispatcher':
     case null:
-      return 'Диспетчер · Claude Code/Opus';
+      return { name: 'Диспетчер', sub: 'Claude Code/Opus' };
     default:
       // Forward-compat: незнакомое имя — generic с показом raw-имени.
-      return `Агент · ${agentName}`;
+      return { name: 'Агент', sub: agentName };
   }
 }
 
@@ -1866,11 +1896,18 @@ function CommentItem({
           <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
         </Avatar>
       )}
-      <div className={`min-w-0 flex-1 ${isAgent ? 'pf-claude-agent' : ''}`}>
+      <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           {isAgent ? (
-            <span className="pf-claude-agent-title truncate">
-              {agentTitle(comment.agentName)}
+            // Notion-style: плоский комментарий без тонированной плиты; идентичность
+            // агента — peach-аватар ✻ + имя цветом Claude + модель приглушённо.
+            <span className="flex min-w-0 items-baseline gap-1.5">
+              <span className="pf-claude-agent-title truncate">
+                {agentMeta(comment.agentName).name}
+              </span>
+              <span className="truncate text-[11px] text-muted-foreground/70">
+                {agentMeta(comment.agentName).sub}
+              </span>
             </span>
           ) : isSystem ? (
             <span className="truncate rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
