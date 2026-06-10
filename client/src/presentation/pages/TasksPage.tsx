@@ -63,7 +63,7 @@ export function TasksPage(): React.ReactElement {
   }
 
   return (
-    <div className="flex h-full flex-col gap-4 p-4 sm:gap-6 sm:p-6">
+    <div className="flex h-full flex-col gap-3 p-4 sm:gap-4 sm:p-6">
       <nav className="flex items-center gap-1 text-sm text-muted-foreground" aria-label="Хлебные крошки">
         <Link to="/" className="hover:text-foreground">
           Проекты
@@ -73,29 +73,34 @@ export function TasksPage(): React.ReactElement {
       </nav>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-semibold tracking-tight">Задачи</h1>
-        <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Задачи</h1>
+        <div className="flex flex-wrap items-center gap-1">
           <MultiTaskWorkerToggle projectId={data.id} initialEnabled={data.multiTaskWorker} />
           {financeVisible && (
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
               <Link to={`/projects/${data.id}/finance`}>
                 <Wallet className="size-4" />
                 Финансы
               </Link>
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={() => setAutomationOpen(true)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-foreground"
+            onClick={() => setAutomationOpen(true)}
+          >
             <Bot className="size-4" />
             Автоматизация
           </Button>
-          <Button asChild variant="outline" size="sm">
+          <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
             <Link to={`/projects/${data.id}/kb`}>
               <BookOpen className="size-4" />
               База знаний
             </Link>
           </Button>
           {monitoringVisible && (
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
               <Link to={`/projects/${data.id}/monitoring`}>
                 <Activity className="size-4" />
                 Мониторинг
@@ -107,7 +112,7 @@ export function TasksPage(): React.ReactElement {
               </Link>
             </Button>
           )}
-          <Button asChild variant="outline" size="sm">
+          <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
             <Link to={`/projects/${data.id}/overview`}>
               <Settings className="size-4" />
               Настройки

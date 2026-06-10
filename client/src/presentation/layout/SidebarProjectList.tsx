@@ -136,20 +136,17 @@ function SidebarProjectRow({
         className={({ isActive }) =>
           cn(
             'relative flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-            'hover:bg-muted',
+            'hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]',
             'cursor-pointer',
-            isActive && 'bg-accent text-accent-foreground',
+            isActive && 'bg-foreground/[0.06] font-medium text-foreground dark:bg-white/10',
             isArchived && 'opacity-50',
             // На active drag — grab-cursor, иначе обычная pointer-рука (это всё-таки ссылка).
             reorderable && isDragging && 'cursor-grabbing',
           )
         }
       >
-        {({ isActive }) => (
+        {() => (
           <>
-            {isActive && (
-              <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-primary" />
-            )}
             {/* Цвет иконки = индикатор git: зелёная при подключённом репо, серая без него. */}
             <ProjectIcon
               className={cn(
@@ -174,7 +171,7 @@ function SidebarProjectRow({
               )}
               {(project.taskCount ?? 0) > 0 && (
                 <span
-                  className="rounded-full bg-muted px-1.5 text-[11px] leading-5 tabular-nums text-muted-foreground"
+                  className="px-1 text-[11px] leading-5 tabular-nums text-muted-foreground"
                   aria-label={`Задач: ${project.taskCount}`}
                 >
                   {project.taskCount}
@@ -194,7 +191,7 @@ function SidebarProjectRow({
             // Не даём pointerdown инициировать drag строки.
             onPointerDown={(e) => e.stopPropagation()}
             className={cn(
-              'absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded text-muted-foreground transition-colors hover:bg-background hover:text-foreground',
+              'absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground dark:hover:bg-white/10',
               'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100',
               menuOpen && 'opacity-100',
             )}
@@ -393,12 +390,12 @@ export function SidebarProjectList(): React.ReactElement {
   // Шапка «Мои проекты» (заголовок + счётчик + «+») рендерится всегда, чтобы юзер мог
   // создать первый проект. Сам заголовок кликается — сворачивает секцию (как в Todoist).
   const myProjectsHeader = (
-    <div className="sticky top-0 z-10 flex items-center justify-between gap-1 rounded bg-card/80 px-2 py-1 backdrop-blur-sm">
+    <div className="sticky top-0 z-10 flex items-center justify-between gap-1 rounded bg-sidebar/90 px-2 py-1 backdrop-blur-sm">
       <button
         type="button"
         onClick={toggleMainCollapsed}
         aria-expanded={!mainCollapsed}
-        className="group flex flex-1 items-baseline gap-1.5 rounded text-left text-[11px] font-medium uppercase tracking-widest text-muted-foreground hover:text-foreground"
+        className="group flex flex-1 items-baseline gap-1.5 rounded text-left text-xs font-medium text-muted-foreground/80 hover:text-foreground"
       >
         <ChevronDown
           className={cn(
@@ -407,7 +404,7 @@ export function SidebarProjectList(): React.ReactElement {
           )}
         />
         <span>Мои проекты</span>
-        <span className="tracking-normal tabular-nums normal-case opacity-70">
+        <span className="tabular-nums opacity-70">
           {visible.length}/{PROJECT_LIMIT === Infinity ? '∞' : PROJECT_LIMIT}
         </span>
       </button>
@@ -415,7 +412,7 @@ export function SidebarProjectList(): React.ReactElement {
         type="button"
         onClick={openNewProject}
         aria-label="Новый проект"
-        className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground dark:hover:bg-white/10"
       >
         <Plus className="size-4" />
       </button>
@@ -526,7 +523,7 @@ export function SidebarProjectList(): React.ReactElement {
             type="button"
             onClick={toggleFavCollapsed}
             aria-expanded={!favCollapsed}
-            className="sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-card/80 px-2 py-1 text-left text-[11px] font-medium uppercase tracking-widest text-muted-foreground backdrop-blur-sm hover:text-foreground"
+            className="sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-sidebar/90 px-2 py-1 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
           >
             <ChevronDown
               className={cn(

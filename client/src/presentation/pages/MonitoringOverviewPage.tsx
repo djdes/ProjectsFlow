@@ -68,7 +68,7 @@ export function MonitoringOverviewPage(): React.ReactElement {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Activity className="size-6" />
-          <h1 className="text-3xl font-semibold tracking-tight">Мониторинг — все проекты</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Мониторинг — все проекты</h1>
         </div>
         <Button asChild variant="outline" size="sm">
           <Link to="/monitoring/alerts">

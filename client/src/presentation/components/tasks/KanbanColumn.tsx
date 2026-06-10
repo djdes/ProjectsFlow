@@ -127,15 +127,17 @@ export function KanbanColumn({
   return (
     <div
       className={cn(
-        'flex h-full min-h-0 w-[82vw] max-w-[20rem] shrink-0 snap-start flex-col rounded-lg border sm:w-72 sm:max-w-none',
+        // group/column — именованный, чтобы не конфликтовать с голым `group` карточек:
+        // на hover колонки проявляем «тихие» иконки шапки (Notion-style).
+        'group/column flex h-full min-h-0 w-[82vw] max-w-[20rem] shrink-0 snap-start flex-col rounded-xl sm:w-72 sm:max-w-none',
         colorClasses?.body ?? 'bg-muted/60 sm:bg-muted/30',
       )}
     >
       <div
         className={cn(
-          'flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2',
+          'flex shrink-0 items-center justify-between gap-2 px-3 pb-1 pt-2.5',
           // Режим выделения: подсвечиваем шапку акцентом, чтобы было видно активную колонку.
-          selectionMode && 'bg-primary/10',
+          selectionMode && 'rounded-t-xl bg-primary/10',
         )}
       >
         {selectionMode ? (
@@ -179,7 +181,7 @@ export function KanbanColumn({
                 <div className="min-w-0">
                   <span
                     className={cn(
-                      'inline-block max-w-full truncate rounded px-1.5 py-0.5 text-xs font-medium uppercase tracking-widest',
+                      'inline-block max-w-full truncate rounded-md px-1.5 py-0.5 text-[13px] font-medium leading-snug',
                       colorClasses?.pill ?? 'text-muted-foreground',
                     )}
                   >
@@ -192,25 +194,29 @@ export function KanbanColumn({
                   )}
                 </div>
               )}
-              <span className="shrink-0 rounded-full bg-background px-1.5 py-0.5 text-xs text-muted-foreground">
+              <span className="shrink-0 px-0.5 text-xs tabular-nums text-muted-foreground">
                 {tasks.length}
               </span>
             </div>
             <div className="flex items-center gap-0.5">
-              {headerExtra}
-              {onEnterSelection && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6"
-                  onClick={onEnterSelection}
-                  aria-label="Выделить задачи"
-                  title="Выделить задачи"
-                >
-                  <ListChecks className="size-4" />
-                </Button>
-              )}
-              {columnMenu}
+              {/* «Тихие» действия: видны на hover/focus колонки и при открытом меню;
+                  на тач-устройствах (<sm) — всегда, hover'а там нет. */}
+              <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-focus-within/column:opacity-100 group-hover/column:opacity-100 has-[[data-state=open]]:opacity-100 max-sm:opacity-100">
+                {headerExtra}
+                {onEnterSelection && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6"
+                    onClick={onEnterSelection}
+                    aria-label="Выделить задачи"
+                    title="Выделить задачи"
+                  >
+                    <ListChecks className="size-4" />
+                  </Button>
+                )}
+                {columnMenu}
+              </div>
               <Button
                 variant="ghost"
                 size="icon"
@@ -273,7 +279,7 @@ export function KanbanColumn({
       </div>
 
       {onInlineCreate && (
-        <div className="shrink-0 border-t p-2">
+        <div className="shrink-0 p-2 pt-0">
           {composing ? (
             <TaskComposer
               variant="inline"

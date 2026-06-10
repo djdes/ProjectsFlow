@@ -3,9 +3,9 @@ import type { TaskStatus } from '@/domain/task/Task';
 // Visual-only label for kanban column header, status badge, in-card chip.
 // The domain enum keeps `backlog/todo/...`; this is the user-facing rename.
 export const STATUS_LABEL: Record<TaskStatus, string> = {
-  backlog: 'ЧЕРНОВИКИ',
-  manual: 'В РУЧНУЮ',
-  todo: 'ВОРКЕР',
+  backlog: 'Черновики',
+  manual: 'Вручную',
+  todo: 'Воркер',
   in_progress: 'В работе',
   awaiting_clarification: '🤔 На уточнении',
   done: 'Готово',

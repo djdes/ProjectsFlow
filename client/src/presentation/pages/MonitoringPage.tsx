@@ -63,7 +63,7 @@ export function MonitoringPage(): React.ReactElement {
 
       <div className="flex items-center gap-2">
         <Activity className="size-6" />
-        <h1 className="text-3xl font-semibold tracking-tight">Мониторинг</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Мониторинг</h1>
       </div>
 
       {forbidden ? (

@@ -224,7 +224,7 @@ function TaskStatusChip({
           type="button"
           disabled={saving}
           className={cn(
-            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-colors hover:ring-1 hover:ring-foreground/20 disabled:opacity-50',
+            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors hover:ring-1 hover:ring-foreground/20 disabled:opacity-50',
             statusBadgeColor[status],
           )}
         >
@@ -662,7 +662,7 @@ export function TaskDrawer({
                       <button
                         type="button"
                         onClick={() => setCommitsOpen((v) => !v)}
-                        className="flex w-full items-center gap-1.5 text-xs uppercase tracking-widest text-muted-foreground/70 hover:text-foreground"
+                        className="flex w-full items-center gap-1.5 text-xs font-medium text-muted-foreground/70 hover:text-foreground"
                         aria-expanded={commitsOpen}
                       >
                         <ChevronRight
@@ -1089,7 +1089,7 @@ function TaskDescriptionEditor({
       {/* Шапка описания: AI-кнопка ВСЕГДА видна (и в показе, и в правке), не двигается
           при переключении режимов и работает над тем, что сейчас на экране. */}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground/70">
+        <span className="text-xs font-medium text-muted-foreground/70">
           Описание
         </span>
         <div className="flex items-center gap-0.5">

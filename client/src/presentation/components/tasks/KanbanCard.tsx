@@ -126,27 +126,20 @@ export function KanbanCard({
         role="button"
         aria-pressed={selecting ? selected : undefined}
         className={cn(
-          'group relative flex touch-none select-none items-start gap-2 rounded-md border bg-card p-3 shadow-md outline-none sm:shadow-sm',
-          // Подсветка выбранной карточки в режиме выделения.
-          selecting && selected && 'border-primary ring-2 ring-primary/60',
+          'group relative flex touch-none select-none items-start gap-2 rounded-lg border border-black/[0.06] bg-card p-3 shadow-sm outline-none dark:border-white/[0.08]',
           // Базовый transition только для тех свойств, которые меняем CSS-ом —
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
           'transition-[box-shadow,border-color,opacity] duration-150 ease-out',
           'hover:shadow-md',
-          // Priority-accent: тонкая (1px) цветная рамка вокруг ВСЕЙ карточки
-          // (rose/orange/blue/slate). Сам приоритет-пилюля убрана — цвет рамки и есть
-          // индикатор важности (меняется в дравере). База `border` выше даёт 1px
-          // нейтральной рамки для задач без приоритета.
-          task.priority && PRIORITY_META[task.priority].borderColor,
+          // Priority-accent: цветной левый кант (2px, rose/orange/blue/slate) —
+          // спокойный индикатор важности в стиле Todoist (меняется в дравере).
+          task.priority && cn('border-l-2', PRIORITY_META[task.priority].border),
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
-          // Status-аcent: TODO — пульсирующее янтарное неоновое «дыхание». Сообщает
-          // «эта задача ждёт, чтобы её взяли в работу». Анимируется box-shadow
-          // (composited на GPU, без layout-reflow) — НЕ трогает border-color, поэтому
-          // цветная рамка приоритета остаётся видна и на todo-карточках.
-          !preview && task.status === 'todo' && 'animate-todo-glow',
-          // Hover-подсветка границы только для задач без приоритета — иначе перебивает
-          // цвет рамки приоритета.
-          !preview && task.status !== 'todo' && !task.priority && 'hover:border-foreground/20',
+          // Status-акцент: TODO — статичный тонкий янтарный ring «задача ждёт воркера».
+          // Стоит ДО selection-ring ниже, чтобы при выделении twMerge оставил ring выбора.
+          !preview && task.status === 'todo' && 'ring-1 ring-amber-400/60 dark:ring-amber-300/25',
+          // Подсветка выбранной карточки в режиме выделения.
+          selecting && selected && 'border-primary ring-2 ring-primary/60',
           preview
             ? // Карточка в DragOverlay: «приподнятый» вид — мощная тень, ring, выраженная
               // граница. Tilt/scale делаем НЕ здесь, а на motion-обёртке в KanbanBoard —
@@ -218,19 +211,21 @@ export function KanbanCard({
             task.status === 'awaiting_clarification' ||
             !!task.delegation ||
             task.deadline !== null) && (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
               {task.delegation && currentUserId && (
                 <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
               )}
+              {/* Счётчики — монохром без цветных подложек (Notion-style): цвет на карточке
+                  остаётся только у семантики (дедлайн/статус/приоритет). */}
               {(task.commentCount ?? 0) > 0 && (
-                <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-violet-600 dark:bg-violet-400/15 dark:text-violet-400">
-                  <MessageSquare className="size-2.5" />
+                <span className="flex items-center gap-1">
+                  <MessageSquare className="size-3" />
                   {task.commentCount}
                 </span>
               )}
               {(task.attachmentCount ?? 0) > 0 && (
-                <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-emerald-600 dark:bg-emerald-400/15 dark:text-emerald-400">
-                  <ImageIcon className="size-2.5" />
+                <span className="flex items-center gap-1">
+                  <ImageIcon className="size-3" />
                   {task.attachmentCount}
                 </span>
               )}
@@ -244,10 +239,7 @@ export function KanbanCard({
                   in_progress и awaiting_clarification визуально лежат в TODO. */}
               {task.status === 'in_progress' && (
                 <span className="ml-auto flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400">
-                  <span
-                    aria-hidden
-                    className="size-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]"
-                  />
+                  <span aria-hidden className="size-2 rounded-full bg-emerald-500" />
                   {STATUS_LABEL.in_progress}
                 </span>
               )}
@@ -259,18 +251,18 @@ export function KanbanCard({
               )}
             </div>
           )}
-          {/* Футер: дата слева, кнопки действий справа. Кнопки всегда видны на своих
-              местах (предсказуемая раскладка), кроме режима выделения (булк-действия
-              сверху) и drag-preview (чистый оверлей). */}
-          <div className="mt-2 flex items-center justify-between gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
-            <span
-              className="normal-case tracking-normal opacity-60"
-              title={task.createdAt.toLocaleString('ru-RU')}
-            >
+          {/* Футер: дата слева, кнопки действий справа. Кнопки «тихие» — проявляются
+              на hover/focus карточки (на таче — всегда); прячутся целиком в режиме
+              выделения (булк-действия сверху) и в drag-preview (чистый оверлей). */}
+          <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <span className="opacity-60" title={task.createdAt.toLocaleString('ru-RU')}>
               {relativeTime(task.createdAt)}
             </span>
             <div
-              className={cn('flex shrink-0 gap-0.5', (selecting || preview) && 'hidden')}
+              className={cn(
+                'flex shrink-0 gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100',
+                (selecting || preview) && 'hidden',
+              )}
               onPointerDown={stopDrag}
             >
               {onQuickPromote && !preview && (
@@ -291,7 +283,7 @@ export function KanbanCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-6 cursor-pointer text-destructive hover:text-destructive"
+                className="size-6 cursor-pointer text-muted-foreground hover:text-destructive"
                 onClick={(e) => {
                   // Чтобы клик по корзине не открыл диалог через onClick на родителе.
                   e.stopPropagation();

@@ -63,7 +63,7 @@ export function SidebarUserMenu({ compact = false }: { compact?: boolean } = {})
       <DropdownMenuTrigger
         title={compact ? user.displayName : undefined}
         className={cn(
-          'flex items-center rounded-md text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'flex items-center rounded-md text-left text-sm transition-colors hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-white/[0.06]',
           compact ? 'justify-center p-0.5' : 'w-full gap-2 px-2 py-1.5',
         )}
       >

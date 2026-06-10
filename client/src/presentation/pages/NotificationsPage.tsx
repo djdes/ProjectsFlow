@@ -170,7 +170,7 @@ export function NotificationsPage(): React.ReactElement {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Bell className="size-7 text-primary" />
-          <h1 className="text-3xl font-semibold tracking-tight">Уведомления</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Уведомления</h1>
         </div>
         <div className="flex items-center gap-2">
           <FilterToggle value={filter} onChange={setFilter} unreadCount={unreadCount} />

@@ -49,6 +49,7 @@ const config: Config = {
           DEFAULT: 'hsl(var(--popover))',
           foreground: 'hsl(var(--popover-foreground))',
         },
+        sidebar: 'hsl(var(--sidebar))',
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -64,25 +65,10 @@ const config: Config = {
           from: { height: 'var(--radix-accordion-content-height)' },
           to: { height: '0' },
         },
-        // Сочный янтарный halo. Glow всегда «жирный» и виден — анимируем только маленькую
-        // дельту, без скачков альфы. Цель: ощущение живой подсветки, но без эффекта моргания.
-        'todo-glow': {
-          '0%, 100%': {
-            boxShadow:
-              '0 0 0 1px rgba(245, 158, 11, 0.70), 0 0 14px 1px rgba(245, 158, 11, 0.45), 0 0 24px 3px rgba(245, 158, 11, 0.22)',
-          },
-          '50%': {
-            boxShadow:
-              '0 0 0 1px rgba(245, 158, 11, 0.78), 0 0 18px 2px rgba(245, 158, 11, 0.52), 0 0 30px 4px rgba(245, 158, 11, 0.28)',
-          },
-        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
-        // 6s + linear — равномерное движение без ускорения в середине (это оно
-        // воспринималось как «мигание»). Глоу всегда жирный, дельта совсем небольшая.
-        'todo-glow': 'todo-glow 6s linear infinite',
       },
     },
   },

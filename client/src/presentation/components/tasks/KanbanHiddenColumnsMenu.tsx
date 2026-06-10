@@ -36,11 +36,11 @@ export function KanbanHiddenColumnsMenu({ hidden, onShow }: Props): React.ReactE
           >
             <EyeOff className="size-4" />
             Скрытые колонки
-            <span className="rounded-full bg-muted px-1.5 text-[11px]">{hidden.length}</span>
+            <span className="px-0.5 text-[11px] tabular-nums">{hidden.length}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-56">
-          <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
             Показать колонку
           </DropdownMenuLabel>
           <DropdownMenuSeparator />

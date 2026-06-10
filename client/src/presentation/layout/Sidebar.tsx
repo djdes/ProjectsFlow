@@ -36,7 +36,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
   if (collapsed) {
     const favorites = (projects ?? []).filter((p) => !p.isInbox && p.isFavorite);
     return (
-      <aside className="flex h-full flex-col items-center gap-1 border-r bg-card/40 p-2">
+      <aside className="flex h-full flex-col items-center gap-1 bg-sidebar p-2">
         <TooltipProvider delayDuration={300}>
           {onToggleCollapse && (
             <RailButton onClick={onToggleCollapse} label="Развернуть панель">
@@ -90,12 +90,12 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
   }
 
   return (
-    <aside className="grid h-full grid-rows-[auto_auto_auto_auto_1fr_auto] gap-3 border-r bg-card/40 p-3">
+    <aside className="grid h-full grid-rows-[auto_auto_auto_auto_1fr_auto] gap-3 bg-sidebar p-3">
       {/* Шапка: лого + колокольчик уведомлений + тоггл панели */}
       <div className="flex items-center gap-1">
         <Link
           to="/"
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-base font-semibold tracking-tight transition-colors hover:bg-muted"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-base font-semibold tracking-tight transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
         >
           <span
             className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-xs font-bold text-primary-foreground"
@@ -110,7 +110,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
           aria-label="Уведомления"
           className={({ isActive }) =>
             cn(
-              'relative grid size-8 shrink-0 place-items-center rounded-md transition-colors hover:bg-muted',
+              'relative grid size-8 shrink-0 place-items-center rounded-md transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]',
               isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
             )
           }
@@ -131,31 +131,31 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
             type="button"
             onClick={onToggleCollapse}
             aria-label="Свернуть панель"
-            className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06] hover:text-foreground"
           >
             <PanelLeft className="size-4" />
           </button>
         )}
       </div>
 
-      {/* Главное действие: быстрое добавление задачи. Без фона, зелёный акцент. */}
+      {/* Главное действие: быстрое добавление задачи. Зелёный акцент только на иконке. */}
       <button
         type="button"
         onClick={openAddTask}
-        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-semibold text-success transition-colors hover:bg-muted"
+        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
       >
-        <Plus className="size-4 shrink-0" />
+        <Plus className="size-4 shrink-0 text-success" />
         <span className="flex-1 text-left">Добавить задачу</span>
       </button>
 
       <button
         type="button"
         onClick={openSearch}
-        className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
+        className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
       >
         <Search className="size-4 shrink-0" />
         <span className="flex-1 text-left">Глобальный поиск</span>
-        <kbd className="rounded border bg-muted px-1.5 text-[10px] font-medium tracking-wider text-muted-foreground">
+        <kbd className="rounded bg-foreground/[0.06] px-1.5 text-[10px] font-medium tracking-wider text-muted-foreground dark:bg-white/10">
           ⌘K
         </kbd>
       </button>
@@ -165,21 +165,14 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
         end
         className={({ isActive }) =>
           cn(
-            'group relative flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-            'hover:bg-muted',
-            isActive && 'bg-accent text-accent-foreground',
+            'group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+            'hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]',
+            isActive && 'bg-foreground/[0.06] font-medium text-foreground dark:bg-white/10',
           )
         }
       >
-        {({ isActive }) => (
-          <>
-            {isActive && (
-              <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-primary" />
-            )}
-            <Inbox className="size-4 shrink-0 text-muted-foreground" />
-            <span className="flex-1 truncate">Входящие</span>
-          </>
-        )}
+        <Inbox className="size-4 shrink-0 text-muted-foreground" />
+        <span className="flex-1 truncate">Входящие</span>
       </NavLink>
 
       <nav className="min-h-0">
@@ -192,8 +185,8 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
             to="/admin"
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted',
-                isActive && 'bg-accent text-accent-foreground',
+                'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]',
+                isActive && 'bg-foreground/[0.06] font-medium text-foreground dark:bg-white/10',
               )
             }
           >
@@ -225,7 +218,7 @@ function RailButton({
           type="button"
           onClick={onClick}
           aria-label={label}
-          className="grid size-9 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="grid size-9 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06] hover:text-foreground"
         >
           {children}
         </button>
@@ -257,9 +250,9 @@ function RailNavLink({
           aria-label={label}
           className={({ isActive }) =>
             cn(
-              'relative grid size-9 shrink-0 place-items-center rounded-md transition-colors hover:bg-muted',
+              'relative grid size-9 shrink-0 place-items-center rounded-md transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]',
               isActive
-                ? 'bg-accent text-accent-foreground'
+                ? 'bg-foreground/[0.06] text-foreground dark:bg-white/10'
                 : 'text-muted-foreground hover:text-foreground',
             )
           }

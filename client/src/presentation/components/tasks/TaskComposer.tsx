@@ -219,7 +219,7 @@ export function TaskComposer({
         'w-full overflow-hidden border bg-card transition-colors focus-within:border-foreground/30',
         isInline
           ? 'rounded-lg shadow-sm'
-          : 'pointer-events-auto max-w-2xl rounded-2xl bg-card/95 shadow-xl backdrop-blur-md',
+          : 'pointer-events-auto max-w-2xl rounded-2xl bg-card/95 shadow-lg backdrop-blur-md',
         dragActive ? 'border-primary bg-primary/5' : '',
       )}
     >
@@ -301,7 +301,7 @@ export function TaskComposer({
           type="button"
           variant="ghost"
           size="icon"
-          className="size-10 shrink-0 text-muted-foreground hover:text-foreground"
+          className="size-9 shrink-0 text-muted-foreground hover:text-foreground"
           onClick={() => fileInputRef.current?.click()}
           disabled={submitting}
           aria-label="Прикрепить файл"
@@ -315,14 +315,14 @@ export function TaskComposer({
             onChange={setDelegateUserId}
             disabled={submitting}
             projectId={isShared && aiProjectId ? aiProjectId : undefined}
-            className="size-10"
+            className="size-9"
           />
         )}
         <RalphModeSelect
           value={ralphMode}
           onChange={setRalphMode}
           disabled={submitting}
-          className="!h-10 min-w-[100px] !px-2.5 !py-0 text-xs sm:min-w-[140px]"
+          className="!h-9 min-w-[100px] !px-2.5 !py-0 text-xs sm:min-w-[140px]"
         />
         <div className="ml-auto flex items-center gap-1.5">
           {!forcedStatus && (
@@ -331,7 +331,7 @@ export function TaskComposer({
               onClick={() => setQuickStatus((s) => (s === 'todo' ? 'backlog' : 'todo'))}
               disabled={submitting}
               title={quickStatus === 'todo' ? 'В очередь (нажми для черновика)' : 'Черновик (нажми для очереди)'}
-              className="inline-flex h-10 items-center gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
             >
               {quickStatus === 'todo' ? (
                 <>
@@ -364,7 +364,7 @@ export function TaskComposer({
               type="button"
               variant="ghost"
               size="icon"
-              className="size-10 shrink-0 text-muted-foreground hover:text-foreground"
+              className="size-9 shrink-0 text-muted-foreground hover:text-foreground"
               onClick={onClose}
               disabled={submitting}
               aria-label="Закрыть"
@@ -376,7 +376,7 @@ export function TaskComposer({
           <Button
             type="button"
             size="sm"
-            className="h-10 gap-1.5 px-3"
+            className="h-9 gap-1.5 px-3"
             onClick={() => void submit()}
             disabled={!canSubmit}
             title="Ctrl+Enter"

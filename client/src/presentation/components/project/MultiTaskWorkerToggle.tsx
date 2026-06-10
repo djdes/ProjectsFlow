@@ -44,7 +44,7 @@ export function MultiTaskWorkerToggle({ projectId, initialEnabled }: Props): Rea
   };
 
   return (
-    <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2.5 py-1">
+    <div className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-accent">
       <Switch
         checked={enabled}
         onCheckedChange={toggle}

@@ -257,7 +257,7 @@ export function ProfilePage(): React.ReactElement {
         </Link>
       </Button>
 
-      <h1 className="text-3xl font-semibold tracking-tight">Профиль</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Профиль</h1>
 
       <PersonalDataCard />
       <ProjectsShareCard />

@@ -100,7 +100,7 @@ export function KanbanColumnMenu({
           />
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
           Цвет
         </DropdownMenuLabel>
         <div className="px-2 pb-1.5 pt-1">

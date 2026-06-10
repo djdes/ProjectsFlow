@@ -456,12 +456,12 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="h-24 animate-pulse rounded-lg bg-muted" />
-        <div className="flex gap-4 overflow-x-auto">
+        <div className="h-24 animate-pulse rounded-xl bg-muted" />
+        <div className="flex gap-3 overflow-x-auto">
           {VISIBLE_STATUSES.map((s) => (
             <div
               key={s}
-              className="h-64 w-[82vw] max-w-[20rem] shrink-0 animate-pulse rounded-lg bg-muted/60 sm:w-72 sm:max-w-none sm:bg-muted"
+              className="h-64 w-[82vw] max-w-[20rem] shrink-0 animate-pulse rounded-xl bg-muted/60 sm:w-72 sm:max-w-none sm:bg-muted"
             />
           ))}
         </div>
@@ -499,7 +499,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         {/* На мобиле колонки занимают почти всю ширину и «прилипают» при свайпе
             (snap), на десктопе — обычный горизонтальный ряд. Drag между колонками
             работает в обоих режимах: все колонки в DOM, просто проскроллены. */}
-        <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-4 overflow-x-auto pb-24 sm:snap-none sm:pb-28">
+        <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto pb-24 sm:snap-none sm:pb-28">
           {shownStatuses.map((status) => {
             const perColumn = settings?.[status];
             const color = resolveColumnColor(perColumn, defaults?.[status], status);

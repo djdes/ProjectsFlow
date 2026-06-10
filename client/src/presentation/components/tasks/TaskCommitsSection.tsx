@@ -239,7 +239,7 @@ export function TaskCommitsSection({ task, onChange }: Props): React.ReactElemen
 // Минимум для визуальной сетки section header.
 function Label({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
-    <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+    <span className="text-xs font-medium text-muted-foreground">
       {children}
     </span>
   );

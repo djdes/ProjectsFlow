@@ -39,16 +39,17 @@ function formatDeadline(deadline: string): string {
 }
 
 // Бейдж со сроком: иконка часов + дата (relative для близких / Intl для дальних).
-// Если deadline прошёл и task не done — красный fg + AlertTriangle.
+// Обычный срок — монохром (шум не нужен); просроченный и task не done — красная
+// пилюля + AlertTriangle (единственный «громкий» случай).
 export function DeadlineBadge({ deadline, status, className }: Props): React.ReactElement {
   const overdue = status !== 'done' && deadline < todayIso();
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal',
+        'inline-flex items-center gap-1 text-[11px] font-medium',
         overdue
-          ? 'bg-rose-500/15 text-rose-600 dark:bg-rose-400/15 dark:text-rose-400'
-          : 'bg-amber-500/10 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300',
+          ? 'rounded-full bg-rose-500/15 px-1.5 py-0.5 text-rose-600 dark:bg-rose-400/15 dark:text-rose-400'
+          : 'text-muted-foreground',
         className,
       )}
       title={`Срок: ${deadline}${overdue ? ' (просрочено)' : ''}`}
