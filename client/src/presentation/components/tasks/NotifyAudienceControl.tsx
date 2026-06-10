@@ -83,13 +83,13 @@ export function NotifyAudienceControl({
         disabled && 'pointer-events-none opacity-50',
       )}
     >
-      <div className="inline-flex items-center rounded-md border bg-muted/40 p-0.5">
+      <div className="inline-flex items-center rounded-lg bg-muted p-0.5">
         <button
           type="button"
           aria-pressed={notifyOn}
           onClick={() => onChange({ mode: 'all' })}
           className={cn(
-            'inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs transition-colors',
+            'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs transition-colors',
             notifyOn
               ? 'bg-background font-medium text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground',
@@ -103,7 +103,7 @@ export function NotifyAudienceControl({
           aria-pressed={!notifyOn}
           onClick={() => onChange({ mode: 'none' })}
           className={cn(
-            'rounded px-2 py-0.5 text-xs transition-colors',
+            'rounded-md px-2.5 py-1 text-xs transition-colors',
             !notifyOn
               ? 'bg-background font-medium text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground',
@@ -118,7 +118,7 @@ export function NotifyAudienceControl({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               title="Кого уведомить"
             >
               <Users className="size-3" />

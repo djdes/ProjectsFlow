@@ -137,11 +137,13 @@
    Tailwind-arbitrary values — keyframe-анимация и :where-host для контейнера хотят
    нормальный CSS. Используется в TaskDialog CommentItem; см. spec comment-actor-kind.md. */
 @layer components {
+  /* Лёгкий тинт вместо сплошной peach-плиты: rgba от claude-orange читается
+     и в светлой, и в тёмной теме (solid peach в dark выглядел инородно). */
   .pf-claude-agent {
-    border-left: 3px solid var(--claude-orange);
-    background: var(--claude-peach);
-    border-radius: 0 8px 8px 0;
-    padding: 8px 12px;
+    border-left: 2px solid var(--claude-orange);
+    background: rgba(217, 119, 87, 0.07);
+    border-radius: 0 10px 10px 0;
+    padding: 10px 14px;
   }
 
   .pf-claude-agent-icon {

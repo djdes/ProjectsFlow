@@ -230,20 +230,20 @@ export function TaskDrawerComposer({
             }}
             rows={1}
             disabled={submitting}
-            placeholder="Написать комментарий… Markdown, файлы (Ctrl+V)"
-            className="block w-full resize-none bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+            placeholder="Написать комментарий…"
+            className="block w-full resize-none bg-transparent px-4 py-2.5 text-sm leading-snug placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50"
           />
         </ContextMenuTrigger>
         {fmt.menuContent}
       </ContextMenu>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1.5 pb-1.5">
-        <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2">
+        <div className="flex items-center gap-1">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="size-7 text-muted-foreground hover:text-foreground"
+            className="size-8 text-muted-foreground hover:text-foreground"
             onClick={() => fileInputRef.current?.click()}
             disabled={submitting}
             aria-label="Прикрепить файл"
@@ -264,7 +264,7 @@ export function TaskDrawerComposer({
           <div
             role="radiogroup"
             aria-label="Куда отправить задачу при отправке"
-            className="inline-flex items-center rounded-md border bg-muted/40 p-0.5"
+            className="inline-flex items-center rounded-lg bg-muted p-0.5"
           >
             <button
               type="button"
@@ -272,7 +272,7 @@ export function TaskDrawerComposer({
               aria-checked={target === 'draft'}
               onClick={() => setTarget('draft')}
               className={cn(
-                'rounded px-2 py-0.5 text-xs transition-colors',
+                'rounded-md px-2.5 py-1 text-xs transition-colors',
                 target === 'draft'
                   ? 'bg-background font-medium text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
@@ -286,7 +286,7 @@ export function TaskDrawerComposer({
               aria-checked={target === 'worker'}
               onClick={() => setTarget('worker')}
               className={cn(
-                'rounded px-2 py-0.5 text-xs transition-colors',
+                'rounded-md px-2.5 py-1 text-xs transition-colors',
                 target === 'worker'
                   ? 'bg-background font-medium text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
@@ -299,7 +299,7 @@ export function TaskDrawerComposer({
           <Button
             type="button"
             size="sm"
-            className="h-7 gap-1.5 px-2.5"
+            className="h-8 gap-1.5 px-3"
             onClick={() => void submit()}
             disabled={!canSubmit}
             title="Ctrl+Enter — отправить"

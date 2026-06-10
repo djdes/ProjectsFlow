@@ -11,17 +11,20 @@ import { RALPH_MODE_META, RALPH_MODES, type RalphMode } from '@/domain/task/Task
 
 // Селектор режима Ralph — нейтрально стилизованный dropdown с двустрочными элементами
 // (label + описание). Используется и в форме создания, и в форме редактирования задачи.
-// Размер кнопки контролирует caller через className. См. spec task-ralph-mode.md.
+// Размер кнопки контролирует caller через className; variant='ghost' — тихий чип-вид
+// для ряда свойств в шапке TaskDrawer'а. См. spec task-ralph-mode.md.
 export function RalphModeSelect({
   value,
   onChange,
   disabled,
   className,
+  variant = 'outline',
 }: {
   value: RalphMode;
   onChange: (next: RalphMode) => void;
   disabled?: boolean;
   className?: string;
+  variant?: 'outline' | 'ghost';
 }): React.ReactElement {
   const meta = RALPH_MODE_META[value];
   return (
@@ -29,7 +32,7 @@ export function RalphModeSelect({
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant={variant}
           disabled={disabled}
           className={`w-full justify-between font-normal ${className ?? ''}`}
         >

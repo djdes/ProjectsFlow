@@ -24,7 +24,6 @@ import {
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -163,16 +162,28 @@ function TaskRalphModeChip({
     }
   };
 
-  // shadcn DropdownMenu — даёт нам же что и RalphModeSelect, но trigger компактный chip-вид.
+  // Тихий чип в ряду свойств шапки — ghost, без рамки и фиксированной ширины.
   return (
     <RalphModeSelect
       value={mode}
       onChange={(v) => void change(v)}
       disabled={saving}
-      className="!h-7 min-w-0 sm:min-w-[180px] !px-2 !py-0 text-xs"
+      variant="ghost"
+      className="!h-7 w-auto gap-1.5 !px-2 !py-0 text-xs text-muted-foreground hover:text-foreground"
     />
   );
 }
+
+// Цвета статус-пилюли — в тон колонкам доски (kanbanColors): черновики stone,
+// вручную yellow, воркер blue, готово green; активные in_progress/awaiting — свои.
+const STATUS_BADGE_COLOR: Record<TaskStatus, string> = {
+  backlog: 'bg-stone-500/15 text-stone-600 dark:bg-stone-500/20 dark:text-stone-300',
+  manual: 'bg-yellow-500/15 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300',
+  todo: 'bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
+  in_progress: 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400',
+  awaiting_clarification: 'bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
+  done: 'bg-green-500/15 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+};
 
 // Chip-селектор статуса задачи в edit-mode шапки. Показывает текущий статус
 // цветным бейджем; клик раскрывает dropdown для смены — move идёт сразу (optimistic).
@@ -191,15 +202,6 @@ function TaskStatusChip({
   useEffect(() => {
     setStatus(task.status);
   }, [task.status]);
-
-  const statusBadgeColor: Record<TaskStatus, string> = {
-    backlog: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
-    manual: 'bg-purple-500/15 text-purple-600 dark:text-purple-400',
-    todo: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-    in_progress: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
-    awaiting_clarification: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-    done: 'bg-slate-500/15 text-slate-600 dark:text-slate-400',
-  };
 
   const change = async (next: TaskStatus): Promise<void> => {
     if (next === status || saving) return;
@@ -225,7 +227,7 @@ function TaskStatusChip({
           disabled={saving}
           className={cn(
             'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors hover:ring-1 hover:ring-foreground/20 disabled:opacity-50',
-            statusBadgeColor[status],
+            STATUS_BADGE_COLOR[status],
           )}
         >
           {STATUS_LABEL[status]}
@@ -239,7 +241,7 @@ function TaskStatusChip({
               <span
                 className={cn(
                   'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                  statusBadgeColor[s],
+                  STATUS_BADGE_COLOR[s],
                 )}
               >
                 {STATUS_LABEL[s]}
@@ -476,16 +478,6 @@ export function TaskDrawer({
     }
   };
 
-  // Mapping статусов в цвет бейджа в header'е drawer'а.
-  const statusBadgeColor: Record<Task['status'], string> = {
-    backlog: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
-    manual: 'bg-purple-500/15 text-purple-600 dark:text-purple-400',
-    todo: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-    in_progress: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
-    awaiting_clarification: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-    done: 'bg-slate-500/15 text-slate-600 dark:text-slate-400',
-  };
-
   const renderExpandButton = (): React.ReactElement | null => {
     if (isCoarsePointer) return null;
     return (
@@ -540,17 +532,21 @@ export function TaskDrawer({
 
         {state?.mode === 'edit' && task ? (
           <>
-            {/* === STICKY HEADER === */}
+            {/* === STICKY HEADER === Notion-style: тонкий топ-бар (контекст · статус ·
+                закрыть), под ним один спокойный ряд чипов-свойств одинаковой высоты.
+                Аттачи (когда есть) переносятся на свою строку через basis-full. */}
             <div className="border-b bg-background/95 backdrop-blur-md">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 pt-3">
+              <div className="flex items-center gap-2 px-4 pt-3 sm:px-6">
                 {renderExpandButton()}
-                <div className="flex min-w-0 flex-1 items-center gap-2">
+                <div className="flex min-w-0 flex-1 items-baseline gap-2">
                   {projectName && (
-                    <span className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <span className="truncate text-xs font-medium text-muted-foreground">
                       {projectName}
                     </span>
                   )}
-                  <span className="font-mono text-[10px] opacity-50">[{taskShortId(task.id)}]</span>
+                  <span className="font-mono text-[10px] text-muted-foreground/50">
+                    {taskShortId(task.id)}
+                  </span>
                 </div>
                 {onMove ? (
                   <TaskStatusChip
@@ -561,13 +557,17 @@ export function TaskDrawer({
                 ) : (
                   <span
                     className={cn(
-                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider',
-                      statusBadgeColor[task.status],
+                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                      STATUS_BADGE_COLOR[task.status],
                     )}
                   >
                     {STATUS_LABEL[task.status]}
                   </span>
                 )}
+                {renderCloseButton()}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 px-4 pb-2.5 pt-1.5 sm:px-6">
                 {(task.status === 'backlog' ||
                   task.status === 'todo' ||
                   task.status === 'awaiting_clarification') && (
@@ -592,10 +592,6 @@ export function TaskDrawer({
                     }}
                   />
                 )}
-                {renderCloseButton()}
-              </div>
-
-              <div className="px-4 py-2">
                 <TaskDrawerAttachmentRow
                   items={headerAttachments}
                   canEdit={canEdit}
@@ -638,7 +634,7 @@ export function TaskDrawer({
                 forceMount
                 className="min-h-0 overflow-hidden data-[state=inactive]:hidden"
               >
-                <div ref={bodyRef} className="h-full space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
+                <div ref={bodyRef} className="h-full space-y-5 overflow-y-auto px-4 py-5 sm:px-6">
                   {canEdit ? (
                     <TaskDescriptionEditor
                       key={task.id}
@@ -1311,11 +1307,11 @@ function TaskCommentsSection({
   const answeredQids = answeredQidSet(comments);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <Label>Комментарии</Label>
+    <div className="space-y-4">
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-xs font-medium text-muted-foreground">Комментарии</span>
         {!loading && comments.length > 0 && (
-          <span className="text-xs text-muted-foreground">{comments.length}</span>
+          <span className="text-xs tabular-nums text-muted-foreground/60">{comments.length}</span>
         )}
       </div>
 
@@ -1325,7 +1321,7 @@ function TaskCommentsSection({
           <div className="h-12 animate-pulse rounded-md bg-muted" />
         </div>
       ) : comments.length > 0 ? (
-        <ul className="space-y-2">
+        <ul className="space-y-4">
           {comments.map((c) => (
             <CommentItem
               key={c.id}
@@ -1854,7 +1850,7 @@ function CommentItem({
   const initials = getInitials(displayName);
 
   return (
-    <li id={`comment-${comment.id}`} className="group flex scroll-mt-4 items-start gap-2.5 py-1">
+    <li id={`comment-${comment.id}`} className="group flex scroll-mt-4 items-start gap-3">
       {isAgent ? (
         // Avatar заменён на «✻»-плашку — иконка Claude в peach-кружке, не путается с
         // юзер-аватаром Denis (он был источником путаницы в исходном issue).
@@ -1881,9 +1877,9 @@ function CommentItem({
               ⚙ Система
             </span>
           ) : (
-            <span className="truncate text-xs font-medium">{displayName}</span>
+            <span className="truncate text-[13px] font-medium">{displayName}</span>
           )}
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[11px] text-muted-foreground/70">
             {formatCommentTime(comment.createdAt)}
             {isEdited && <span className="ml-1 opacity-70">· изменён</span>}
           </span>
@@ -1902,7 +1898,7 @@ function CommentItem({
               type="button"
               variant="ghost"
               size="icon"
-              className="size-6 text-destructive hover:text-destructive"
+              className="size-6 text-muted-foreground hover:text-destructive"
               onClick={() => void remove()}
               aria-label="Удалить"
             >

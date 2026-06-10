@@ -31,5 +31,5 @@ export function TaskPriorityChip({ task, onChanged }: Props): React.ReactElement
     }
   };
 
-  return <PrioritySelect value={value} onChange={(v) => void change(v)} disabled={saving} />;
+  return <PrioritySelect value={value} onChange={(v) => void change(v)} disabled={saving} compact />;
 }
