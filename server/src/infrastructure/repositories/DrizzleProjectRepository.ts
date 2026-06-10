@@ -40,6 +40,7 @@ function toProject(row: ProjectRow): Project {
     kbKind: row.kbKind,
     financeVisibility: row.financeVisibility,
     dispatcherUserId: row.dispatcherUserId ?? null,
+    multiTaskWorker: row.multiTaskWorker,
     createdAt: row.createdAt,
   };
 }
@@ -124,13 +125,14 @@ export class DrizzleProjectRepository implements ProjectRepository {
   async update(id: string, patch: UpdateProjectInput): Promise<Project | null> {
     // Собираем set-объект только из реально переданных полей.
     // undefined = поле не указано клиентом (не трогаем), null = очистить.
-    const set: Partial<Pick<ProjectRow, 'name' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId'>> = {};
+    const set: Partial<Pick<ProjectRow, 'name' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker'>> = {};
     if (patch.name !== undefined) set.name = patch.name;
     if (patch.gitRepoUrl !== undefined) set.gitRepoUrl = patch.gitRepoUrl;
     if (patch.kbRepoFullName !== undefined) set.kbRepoFullName = patch.kbRepoFullName;
     if (patch.kbKind !== undefined) set.kbKind = patch.kbKind;
     if (patch.financeVisibility !== undefined) set.financeVisibility = patch.financeVisibility;
     if (patch.dispatcherUserId !== undefined) set.dispatcherUserId = patch.dispatcherUserId;
+    if (patch.multiTaskWorker !== undefined) set.multiTaskWorker = patch.multiTaskWorker;
 
     if (Object.keys(set).length > 0) {
       try {

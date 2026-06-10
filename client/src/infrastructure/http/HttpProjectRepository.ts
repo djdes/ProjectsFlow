@@ -45,6 +45,8 @@ type ProjectDto = {
   kbKind?: 'none' | 'github' | 'local';
   financeVisibility?: 'owner' | 'members';
   dispatcherUserId?: string | null;
+  // Мультизадачный воркер. На старых list-ответах может отсутствовать — дефолтим false.
+  multiTaskWorker?: boolean;
   // Только на list-эндпоинте; на get/create/update сервер не отдаёт. Дефолтим false/0.
   isFavorite?: boolean;
   favoriteSortOrder?: number;
@@ -67,6 +69,7 @@ function fromDto(dto: ProjectDto): Project {
     taskCount: dto.taskCount,
     financeVisibility: dto.financeVisibility ?? 'owner',
     dispatcherUserId: dto.dispatcherUserId ?? null,
+    multiTaskWorker: dto.multiTaskWorker ?? false,
     isFavorite: dto.isFavorite ?? false,
     favoriteSortOrder: dto.favoriteSortOrder ?? 0,
     createdAt: new Date(dto.createdAt),
@@ -191,6 +194,14 @@ export class HttpProjectRepository implements ProjectRepository {
     const { project } = await httpClient.put<{ project: ProjectDto }>(
       `/projects/${projectId}/dispatcher`,
       { userId },
+    );
+    return fromDto(project);
+  }
+
+  async setMultiTaskWorker(projectId: string, enabled: boolean): Promise<Project> {
+    const { project } = await httpClient.put<{ project: ProjectDto }>(
+      `/projects/${projectId}/multi-task-worker`,
+      { enabled },
     );
     return fromDto(project);
   }

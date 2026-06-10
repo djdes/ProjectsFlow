@@ -29,6 +29,9 @@ export type Project = {
   readonly financeVisibility: FinanceVisibility;
   // Ralph-диспетчер: какой member автономно выполняет задачи (MCP /loop). null = ручной.
   readonly dispatcherUserId: string | null;
+  // Мультизадачный воркер: true ⇒ диспетчер выполняет до 3 задач проекта параллельно.
+  // На list-эндпоинте может отсутствовать в старых ответах — дефолт false на маппинге.
+  readonly multiTaskWorker: boolean;
   // Персональный favorite-флаг + порядок в секции «Избранное» (см. db/040 + spec). На
   // get/create/update эндпоинтах сервер их не отдаёт — клиент использует поля только из
   // списка `GET /api/projects`. Дефолты применяются на маппинге, чтобы тип оставался строгим.

@@ -122,6 +122,11 @@ export const setDispatcherSchema = z.object({
   userId: z.string().min(1).nullable(),
 });
 
+// Включить/выключить «Мультизадачный воркер» проекта (параллельное выполнение задач).
+export const setMultiTaskWorkerSchema = z.object({
+  enabled: z.boolean(),
+});
+
 // Включить/выключить per-member делегацию GitHub-токена. Default granter =
 // callerUserId (caller включает СВОЮ делегацию). Optional `granterUserId` —
 // для admin-on-behalf: admin указывает за кого toggle'ить.
@@ -134,4 +139,5 @@ export type CreateInviteBody = z.infer<typeof createInviteSchema>;
 export type UpdateMemberRoleBody = z.infer<typeof updateMemberRoleSchema>;
 export type TransferOwnershipBody = z.infer<typeof transferOwnershipSchema>;
 export type SetDispatcherBody = z.infer<typeof setDispatcherSchema>;
+export type SetMultiTaskWorkerBody = z.infer<typeof setMultiTaskWorkerSchema>;
 export type SetGitTokenDelegationBody = z.infer<typeof setGitTokenDelegationSchema>;

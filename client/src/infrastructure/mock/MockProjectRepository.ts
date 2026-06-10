@@ -51,6 +51,7 @@ export class MockProjectRepository implements ProjectRepository {
       kbKind: 'none',
       financeVisibility: 'owner',
       dispatcherUserId: null,
+      multiTaskWorker: false,
       isFavorite: false,
       favoriteSortOrder: 0,
       createdAt: new Date(),
@@ -130,6 +131,7 @@ export class MockProjectRepository implements ProjectRepository {
       kbKind: 'none',
       financeVisibility: 'owner',
       dispatcherUserId: null,
+      multiTaskWorker: false,
       isFavorite: false,
       favoriteSortOrder: 0,
       createdAt: new Date(),
@@ -174,6 +176,9 @@ export class MockProjectRepository implements ProjectRepository {
   }
   setDispatcher(): Promise<never> {
     return Promise.reject(new Error('Mock.setDispatcher: not implemented'));
+  }
+  setMultiTaskWorker(): Promise<never> {
+    return Promise.reject(new Error('Mock.setMultiTaskWorker: not implemented'));
   }
   getGitTokenDelegation(): Promise<never> {
     return Promise.reject(new Error('Mock.getGitTokenDelegation: not implemented'));

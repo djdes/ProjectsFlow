@@ -6,6 +6,7 @@ import { useProject } from '@/presentation/hooks/useProject';
 import { useContainer } from '@/infrastructure/di/container';
 import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
 import { AutomationDialog } from '@/presentation/components/project/AutomationDialog';
+import { MultiTaskWorkerToggle } from '@/presentation/components/project/MultiTaskWorkerToggle';
 
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -74,6 +75,7 @@ export function TasksPage(): React.ReactElement {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-semibold tracking-tight">Задачи</h1>
         <div className="flex flex-wrap items-center gap-2">
+          <MultiTaskWorkerToggle projectId={data.id} initialEnabled={data.multiTaskWorker} />
           {financeVisible && (
             <Button asChild variant="outline" size="sm">
               <Link to={`/projects/${data.id}/finance`}>

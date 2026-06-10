@@ -56,6 +56,7 @@ function toProject(row: ProjectRow): Project {
     kbKind: row.kbKind,
     financeVisibility: row.financeVisibility,
     dispatcherUserId: row.dispatcherUserId ?? null,
+    multiTaskWorker: row.multiTaskWorker,
     createdAt: row.createdAt,
   };
 }

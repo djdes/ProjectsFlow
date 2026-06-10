@@ -106,6 +106,9 @@ export interface ProjectRepository {
   // agent-токеном); setDispatcher — назначить/снять (owner-only).
   listDispatcherCandidates(projectId: string): Promise<DispatcherCandidate[]>;
   setDispatcher(projectId: string, userId: string | null): Promise<Project>;
+  // Мультизадачный воркер проекта: вкл/выкл параллельное выполнение задач диспетчером.
+  // Любой участник проекта (viewer+). Сервер вернёт обновлённый проект.
+  setMultiTaskWorker(projectId: string, enabled: boolean): Promise<Project>;
   // v0.15: per-member opt-in. GET возвращает `mine` (статус caller'а) + `all`
   // (полный список членов, только для owner-а). PUT включает/выключает ОДНУ
   // делегацию: без granterUserId — caller's own, с granterUserId — admin-on-behalf.

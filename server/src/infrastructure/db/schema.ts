@@ -219,6 +219,11 @@ export const projects = mysqlTable(
     // активный agent-токен. На revoke последнего токена — auto-NULL во всех
     // dispatched-проектах (см. RevokeAgentToken). См. db/028.
     dispatcherUserId: char('dispatcher_user_id', { length: 36 }),
+    // Мультизадачный воркер: per-project opt-in. TRUE ⇒ Ralph-диспетчер может выполнять
+    // до N задач этого проекта ОДНОВРЕМЕННО (для проектов, чьи задачи не конфликтуют в
+    // .git). FALSE (default) = «1 проект = 1 задача» (backward-compat). Кап задаёт
+    // диспетчер (env PF_PER_PROJECT_MULTITASK_CAP, default 3). См. db/070.
+    multiTaskWorker: boolean('multi_task_worker').notNull().default(false),
     // Общая (на весь проект) кастомизация канбан-колонок: цвет / переименованный заголовок /
     // флаг скрытия. Карта status→{color,label,hidden}. NULL = встроенные дефолты. См. db/057.
     kanbanSettings: json('kanban_settings').$type<KanbanBoardSettings | null>(),

@@ -17,6 +17,7 @@ export type UpdateProjectInput = {
   readonly kbKind?: 'none' | 'github' | 'local';
   readonly financeVisibility?: 'owner' | 'members';
   readonly dispatcherUserId?: string | null;
+  readonly multiTaskWorker?: boolean;
 };
 
 // Multi-tenancy: проверка доступа НЕ внутри ProjectRepository — она в use-case'ах через

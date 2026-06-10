@@ -498,6 +498,9 @@ type ProjectDto = {
   gitRepoUrl: string | null;
   // Ralph-диспетчер: какой юзер автономно выполняет задачи. NULL = ручной режим.
   dispatcherUserId: string | null;
+  // Мультизадачный воркер: true ⇒ диспетчер может выполнять до N задач этого проекта
+  // параллельно (а не строго одну за раз). Диспетчер читает это поле в Sync-ProjectsFromApi.
+  multiTaskWorker: boolean;
   // Удобный флаг для агента: «этот проект сейчас на мне». Заполняется при наличии
   // currentUserId — иначе undefined (для /agent/projects без знания обладателя токена
   // мы знаем актора, но в DTO-функции его не прокидываем — заполняется на месте).
@@ -512,6 +515,7 @@ function projectToAgentDto(p: Project, currentUserId?: string): ProjectDto {
     hasKb: p.kbKind !== 'none',
     gitRepoUrl: p.gitRepoUrl,
     dispatcherUserId: p.dispatcherUserId,
+    multiTaskWorker: p.multiTaskWorker,
   };
   if (currentUserId !== undefined) {
     dto.isMyDispatch = p.dispatcherUserId === currentUserId;
@@ -689,6 +693,7 @@ export function agentApiRouter(deps: Deps): Router {
           hasKb: p.kbKind !== 'none',
           gitRepoUrl: p.gitRepoUrl,
           dispatcherUserId: p.dispatcherUserId,
+          multiTaskWorker: p.multiTaskWorker,
           isMyDispatch: p.dispatcherUserId === me,
         })),
       });

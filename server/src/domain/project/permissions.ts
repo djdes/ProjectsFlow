@@ -30,6 +30,7 @@ export type ProjectAction =
   | 'cancel_agent_job'
   | 'manage_finance'
   | 'set_project_dispatcher'
+  | 'set_multi_task_worker'
   | 'set_git_token_delegation'
   // Настройки публикации/деплоя автоматизации (git-автор, игнор CLAUDE.md, UltraCode-гейт,
   // метод/команда деплоя). Owner-only: deployCommand = произвольный shell на хосте диспетчера,
@@ -76,6 +77,9 @@ const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   // не доступ к данным. Admin-bypass позволяет админу менять диспетчера в любом
   // проекте (даже где он не member) — используется в admin-панели.
   set_project_dispatcher: 'viewer',
+  // Включить/выключить «Мультизадачный воркер» (параллельное выполнение задач проекта).
+  // Любой участник — это routing automation, не доступ к данным. Admin-bypass — в любом проекте.
+  set_multi_task_worker: 'viewer',
   // Включить/выключить делегацию GitHub-токена. Owner-only (доступ к личному OAuth).
   // Admin может через admin-bypass — НО granter остаётся = project.ownerId
   // (admin делегирует НЕ свой токен; см. SetGitTokenDelegation use-case).

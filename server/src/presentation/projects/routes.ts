@@ -5,6 +5,7 @@ import type { CreateProject } from '../../application/project/CreateProject.js';
 import type { UpdateProject } from '../../application/project/UpdateProject.js';
 import type { DeleteProject } from '../../application/project/DeleteProject.js';
 import type { SetProjectDispatcher } from '../../application/project/SetProjectDispatcher.js';
+import type { SetProjectMultiTaskWorker } from '../../application/project/SetProjectMultiTaskWorker.js';
 import type { ListDispatcherCandidates } from '../../application/project/ListDispatcherCandidates.js';
 import type { SetGitTokenDelegation } from '../../application/project/SetGitTokenDelegation.js';
 import type { ListGitTokenAccessLog } from '../../application/project/ListGitTokenAccessLog.js';
@@ -44,6 +45,7 @@ import {
   reorderFavoritesSchema,
   reorderProjectsSchema,
   setDispatcherSchema,
+  setMultiTaskWorkerSchema,
   setGitTokenDelegationSchema,
   toggleFavoriteSchema,
   transferOwnershipSchema,
@@ -58,6 +60,7 @@ type Deps = {
   readonly updateProject: UpdateProject;
   readonly deleteProject: DeleteProject;
   readonly setProjectDispatcher: SetProjectDispatcher;
+  readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
   readonly listDispatcherCandidates: ListDispatcherCandidates;
   readonly setGitTokenDelegation: SetGitTokenDelegation;
   readonly listGitTokenAccessLog: ListGitTokenAccessLog;
@@ -533,6 +536,21 @@ export function projectsRouter(deps: Deps): Router {
       );
       deps.notifyProjectChanged(id);
       res.json({ project: toDto(project, 'owner') });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Включить / выключить «Мультизадачный воркер» (параллельное выполнение задач проекта
+  // диспетчером). Любой участник (viewer+ — проверка роли внутри SetProjectMultiTaskWorker).
+  router.put('/:id/multi-task-worker', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const body = setMultiTaskWorkerSchema.parse(req.body);
+      const project = await deps.setMultiTaskWorker.execute(id, req.user!.id, body.enabled);
+      deps.notifyProjectChanged(id);
+      res.json({ project: toDto(project) });
     } catch (e) {
       next(e);
     }
