@@ -3,6 +3,8 @@ import type { ListAllProjects } from '../../application/admin/ListAllProjects.js
 import type { ListAllUsers } from '../../application/admin/ListAllUsers.js';
 import type { UpdateUserAsAdmin } from '../../application/admin/UpdateUserAsAdmin.js';
 import type { ListUserProjectsWithDispatcher } from '../../application/admin/ListUserProjectsWithDispatcher.js';
+import type { ListUserProjectsWithFavorites } from '../../application/admin/ListUserProjectsWithFavorites.js';
+import type { SetUserProjectFavorite } from '../../application/admin/SetUserProjectFavorite.js';
 import type { AdminProjectView, AdminUserView } from '../../application/admin/AdminRepository.js';
 import type { EmailSender } from '../../application/notifications/EmailSender.js';
 import {
@@ -18,6 +20,8 @@ type Deps = {
   readonly listAllUsers: ListAllUsers;
   readonly updateUser: UpdateUserAsAdmin;
   readonly listUserProjectsWithDispatcher: ListUserProjectsWithDispatcher;
+  readonly listUserProjectsWithFavorites: ListUserProjectsWithFavorites;
+  readonly setUserProjectFavorite: SetUserProjectFavorite;
   readonly emailSender: EmailSender;
 };
 
@@ -65,6 +69,49 @@ export function adminRouter(deps: Deps): Router {
         }
         const projects = await deps.listUserProjectsWithDispatcher.execute(id);
         res.json({ projects });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Проекты юзера (любые роли, кроме inbox) + его персональный favorite-флаг. Admin
+  // в диалоге «Избранное» видит и переключает favorite за этого юзера.
+  router.get(
+    '/users/:id/projects-with-favorites',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params['id'];
+        if (typeof id !== 'string') {
+          res.status(404).json({ error: 'not_found' });
+          return;
+        }
+        const projects = await deps.listUserProjectsWithFavorites.execute(id);
+        res.json({ projects });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Включить/снять favorite проекта за юзера. body: { favorite: boolean }.
+  router.put(
+    '/users/:id/projects/:projectId/favorite',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params['id'];
+        const projectId = req.params['projectId'];
+        if (typeof id !== 'string' || typeof projectId !== 'string') {
+          res.status(404).json({ error: 'not_found' });
+          return;
+        }
+        const favorite = (req.body ?? {}).favorite;
+        if (typeof favorite !== 'boolean') {
+          res.status(400).json({ error: 'favorite must be a boolean' });
+          return;
+        }
+        await deps.setUserProjectFavorite.execute(id, projectId, favorite);
+        res.status(204).end();
       } catch (e) {
         next(e);
       }

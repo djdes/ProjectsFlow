@@ -18,6 +18,7 @@ import type { CreateProject } from '../application/project/CreateProject.js';
 import type { UpdateProject } from '../application/project/UpdateProject.js';
 import type { DeleteProject } from '../application/project/DeleteProject.js';
 import type { SetProjectDispatcher } from '../application/project/SetProjectDispatcher.js';
+import type { SetProjectMultiTaskWorker } from '../application/project/SetProjectMultiTaskWorker.js';
 import type { ListDispatcherCandidates } from '../application/project/ListDispatcherCandidates.js';
 import type { ListMyDispatchedProjects } from '../application/agent/ListMyDispatchedProjects.js';
 import type { SetGitTokenDelegation } from '../application/project/SetGitTokenDelegation.js';
@@ -119,6 +120,8 @@ import type { GetCommentNotifications } from '../application/task/GetCommentNoti
 import type { ListAllProjects } from '../application/admin/ListAllProjects.js';
 import type { ListAllUsers } from '../application/admin/ListAllUsers.js';
 import type { ListUserProjectsWithDispatcher } from '../application/admin/ListUserProjectsWithDispatcher.js';
+import type { ListUserProjectsWithFavorites } from '../application/admin/ListUserProjectsWithFavorites.js';
+import type { SetUserProjectFavorite } from '../application/admin/SetUserProjectFavorite.js';
 import type { UpdateUserAsAdmin } from '../application/admin/UpdateUserAsAdmin.js';
 import type { ManageEmployees } from '../application/finance/ManageEmployees.js';
 import type { ManageProjectFinance } from '../application/finance/ManageProjectFinance.js';
@@ -224,6 +227,7 @@ type AppDeps = {
     readonly updateProject: UpdateProject;
     readonly deleteProject: DeleteProject;
     readonly setProjectDispatcher: SetProjectDispatcher;
+    readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
     readonly listDispatcherCandidates: ListDispatcherCandidates;
     readonly setGitTokenDelegation: SetGitTokenDelegation;
     readonly listGitTokenAccessLog: ListGitTokenAccessLog;
@@ -276,6 +280,8 @@ type AppDeps = {
     readonly listAllUsers: ListAllUsers;
     readonly updateUser: UpdateUserAsAdmin;
     readonly listUserProjectsWithDispatcher: ListUserProjectsWithDispatcher;
+    readonly listUserProjectsWithFavorites: ListUserProjectsWithFavorites;
+    readonly setUserProjectFavorite: SetUserProjectFavorite;
     readonly emailSender: EmailSender;
   };
   readonly finance: {

@@ -4,6 +4,7 @@ import type {
   AdminUser,
   AdminUserPatch,
   AdminUserProjectDispatcher,
+  AdminUserProjectFavorite,
   EmailTemplateMeta,
   EmailPreview,
 } from '@/application/admin/AdminRepository';
@@ -29,6 +30,23 @@ export class HttpAdminRepository implements AdminRepository {
       `/admin/users/${userId}/projects-with-dispatcher`,
     );
     return projects;
+  }
+
+  async listUserProjectsWithFavorites(userId: string): Promise<AdminUserProjectFavorite[]> {
+    const { projects } = await httpClient.get<{ projects: AdminUserProjectFavorite[] }>(
+      `/admin/users/${userId}/projects-with-favorites`,
+    );
+    return projects;
+  }
+
+  async setUserProjectFavorite(
+    userId: string,
+    projectId: string,
+    favorite: boolean,
+  ): Promise<void> {
+    await httpClient.put<unknown>(`/admin/users/${userId}/projects/${projectId}/favorite`, {
+      favorite,
+    });
   }
 
   async listEmailTemplates(): Promise<EmailTemplateMeta[]> {

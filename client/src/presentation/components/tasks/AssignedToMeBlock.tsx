@@ -24,6 +24,7 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import { relativeTime } from '@/lib/relativeTime';
 import type { Task, RalphMode, TaskPriority } from '@/domain/task/Task';
@@ -57,6 +58,9 @@ type Props = {
 export function AssignedToMeBlock({ onChanged }: Props): React.ReactElement | null {
   const { taskDelegationRepository, taskRepository, userRepository } = useContainer();
   const { user } = useCurrentUser();
+  // refresh списка проектов: при accept сервер помечает проект задачи favorite'ом — чтобы
+  // секция «Избранное» в сайдбаре сразу его подхватила, перезагружаем список после принятия.
+  const { refresh: refreshProjects } = useProjectsContext();
   const [tasks, setTasks] = useState<AssignedTask[]>([]);
   const [grouping, setGrouping] = useState<AssignedGrouping>(DEFAULT_ASSIGNED_GROUPING);
   const [loading, setLoading] = useState(true);
@@ -111,6 +115,8 @@ export function AssignedToMeBlock({ onChanged }: Props): React.ReactElement | nu
     try {
       if (action === 'accept') {
         await taskDelegationRepository.accept(delegationId);
+        // Сервер мог добавить проект задачи в избранное принявшего — обновляем сайдбар.
+        refreshProjects();
         toast.success('Задача принята');
       } else {
         await taskDelegationRepository.decline(delegationId);

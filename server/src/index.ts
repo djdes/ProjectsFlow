@@ -74,6 +74,7 @@ import { RequestRepoAccess } from './application/agent/RequestRepoAccess.js';
 import { GetMyAccount } from './application/agent/GetMyAccount.js';
 import { DeleteProject } from './application/project/DeleteProject.js';
 import { SetProjectDispatcher } from './application/project/SetProjectDispatcher.js';
+import { SetProjectMultiTaskWorker } from './application/project/SetProjectMultiTaskWorker.js';
 import { ListDispatcherCandidates } from './application/project/ListDispatcherCandidates.js';
 import { ListMyDispatchedProjects } from './application/agent/ListMyDispatchedProjects.js';
 import { pickDefaultDispatcherUserId } from './application/project/pickDefaultDispatcher.js';
@@ -196,6 +197,8 @@ import { DrizzleAdminRepository } from './infrastructure/repositories/DrizzleAdm
 import { ListAllProjects } from './application/admin/ListAllProjects.js';
 import { ListAllUsers } from './application/admin/ListAllUsers.js';
 import { ListUserProjectsWithDispatcher } from './application/admin/ListUserProjectsWithDispatcher.js';
+import { ListUserProjectsWithFavorites } from './application/admin/ListUserProjectsWithFavorites.js';
+import { SetUserProjectFavorite } from './application/admin/SetUserProjectFavorite.js';
 import { UpdateUserAsAdmin } from './application/admin/UpdateUserAsAdmin.js';
 import { DrizzleEmployeeRepository } from './infrastructure/repositories/DrizzleEmployeeRepository.js';
 import { DrizzleProjectFinanceRepository } from './infrastructure/repositories/DrizzleProjectFinanceRepository.js';
@@ -531,6 +534,9 @@ const telegramComposer = new TelegramComposerService({
   }),
   accept: new AcceptTaskDelegation({
     delegations: taskDelegationRepo,
+    tasks: taskRepo,
+    projects: projectRepo,
+    members: projectMemberRepo,
     users: userRepo,
     notifications: notificationRepo,
     idGen: idGenerator,
@@ -996,6 +1002,10 @@ const { app, devProxyUpgrade } = createApp({
       agentTokens: agentTokenRepo,
       users: userRepo,
     }),
+    setMultiTaskWorker: new SetProjectMultiTaskWorker({
+      projects: projectRepo,
+      members: projectMemberRepo,
+    }),
     listDispatcherCandidates: new ListDispatcherCandidates({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -1135,6 +1145,13 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       delegations: gitTokenDelegationRepo,
       users: userRepo,
+    }),
+    listUserProjectsWithFavorites: new ListUserProjectsWithFavorites({
+      members: projectMemberRepo,
+    }),
+    setUserProjectFavorite: new SetUserProjectFavorite({
+      projects: projectRepo,
+      members: projectMemberRepo,
     }),
     emailSender,
   },
@@ -1419,6 +1436,9 @@ const { app, devProxyUpgrade } = createApp({
   delegations: {
     accept: new AcceptTaskDelegation({
       delegations: taskDelegationRepo,
+      tasks: taskRepo,
+      projects: projectRepo,
+      members: projectMemberRepo,
       users: userRepo,
       notifications: notificationRepo,
       idGen: idGenerator,

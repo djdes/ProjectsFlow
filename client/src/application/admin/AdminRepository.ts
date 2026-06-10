@@ -48,6 +48,17 @@ export type AdminUserProjectDispatcher = {
   readonly gitTokenDelegationEnabled: boolean;
 };
 
+// Проект юзера + его персональный favorite-флаг. Используется admin-диалогом «Избранное»
+// — admin видит и переключает избранное за этого юзера. Inbox в список не попадает.
+export type AdminUserProjectFavorite = {
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly status: ProjectStatus;
+  readonly isInbox: boolean;
+  readonly isFavorite: boolean;
+  readonly favoriteSortOrder: number;
+};
+
 export type EmailTemplateMeta = {
   readonly key: string;
   readonly label: string;
@@ -67,6 +78,10 @@ export interface AdminRepository {
   // Проекты юзера (где он owner) + текущие диспетчеры. Сменить диспетчера
   // admin может через обычный `projectRepository.setDispatcher` (admin-bypass).
   listUserProjectsWithDispatcher(userId: string): Promise<AdminUserProjectDispatcher[]>;
+  // Проекты юзера + его персональный favorite-флаг (без inbox). Admin переключает
+  // избранное за юзера через setUserProjectFavorite.
+  listUserProjectsWithFavorites(userId: string): Promise<AdminUserProjectFavorite[]>;
+  setUserProjectFavorite(userId: string, projectId: string, favorite: boolean): Promise<void>;
   listEmailTemplates(): Promise<EmailTemplateMeta[]>;
   previewEmail(templateKey: string): Promise<EmailPreview>;
   sendTestEmail(templateKey: string, recipientEmail: string): Promise<void>;

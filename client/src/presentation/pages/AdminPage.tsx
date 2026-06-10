@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Check, ChevronRight, ExternalLink, Eye, Github, Loader2, Mail, Pencil, Send, Shield, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
+import { Bot, Check, ChevronRight, ExternalLink, Eye, Github, Loader2, Mail, Pencil, Send, Shield, Star, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,6 +18,7 @@ import type { AdminProject, AdminUser, EmailTemplateMeta, EmailPreview } from '@
 import { useContainer } from '@/infrastructure/di/container';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { AdminUserDispatchersDialog } from '@/presentation/components/admin/AdminUserDispatchersDialog';
+import { AdminUserFavoritesDialog } from '@/presentation/components/admin/AdminUserFavoritesDialog';
 
 type Tab = 'projects' | 'users' | 'email';
 
@@ -273,6 +274,7 @@ function UsersTab(): React.ReactElement {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [dispatchersUser, setDispatchersUser] = useState<AdminUser | null>(null);
+  const [favoritesUser, setFavoritesUser] = useState<AdminUser | null>(null);
 
   const reload = (): void => {
     adminRepository
@@ -358,6 +360,15 @@ function UsersTab(): React.ReactElement {
                 <Bot className="size-4" />
                 Диспетчеры
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setFavoritesUser(u)}
+                title="Управление избранными проектами этого юзера"
+              >
+                <Star className="size-4" />
+                Избранное
+              </Button>
               <Button size="sm" variant="outline" onClick={() => setEditing(u)}>
                 Изменить
               </Button>
@@ -384,6 +395,13 @@ function UsersTab(): React.ReactElement {
         <AdminUserDispatchersDialog
           user={dispatchersUser}
           onClose={() => setDispatchersUser(null)}
+        />
+      )}
+
+      {favoritesUser && (
+        <AdminUserFavoritesDialog
+          user={favoritesUser}
+          onClose={() => setFavoritesUser(null)}
         />
       )}
     </>
