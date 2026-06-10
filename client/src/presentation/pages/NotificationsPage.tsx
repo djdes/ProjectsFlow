@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { HttpError } from '@/lib/HttpError';
 import type { Notification } from '@/domain/notifications/Notification';
 import { useContainer } from '@/infrastructure/di/container';
 import { useUnreadNotificationsCount } from '@/presentation/hooks/useUnreadNotificationsCount';
@@ -25,10 +26,16 @@ export function NotificationsPage(): React.ReactElement {
     useContainer();
   const navigate = useNavigate();
   const { refresh: refreshBadge } = useUnreadNotificationsCount();
-  const { applyAppend } = useProjectsContext();
+  const { applyAppend, refresh: refreshProjects } = useProjectsContext();
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterMode>('all');
+  // UI-состояние действий над делегированием прямо в строке уведомления: 'busy' пока
+  // летит запрос (кнопки заблокированы), затем 'accepted'/'declined'/'resolved' —
+  // кнопки заменяются меткой, повторный клик (и 500 на уже-обработанном) невозможен.
+  const [delegationUi, setDelegationUi] = useState<
+    Record<string, 'busy' | 'accepted' | 'declined' | 'resolved'>
+  >({});
 
   useEffect(() => {
     let cancelled = false;
@@ -112,28 +119,49 @@ export function NotificationsPage(): React.ReactElement {
 
   const handleAcceptDelegation = async (n: Notification): Promise<void> => {
     if (n.payload.type !== 'task_delegation') return;
-    const taskId = n.payload.taskId;
+    if (delegationUi[n.id]) return; // уже в процессе или обработано — игнорируем повторный клик
+    setDelegationUi((s) => ({ ...s, [n.id]: 'busy' }));
     try {
       await taskDelegationRepository.accept(n.payload.delegationId);
+      setDelegationUi((s) => ({ ...s, [n.id]: 'accepted' }));
       await markRead(n);
+      // Сервер добавил проект задачи в избранное принявшего — обновляем сайдбар.
+      refreshProjects();
       toast.success('Задача принята');
-      // Открываем задачу сразу — deep-link `?task=<id>` подхватывается
-      // KanbanBoard/TaskListView и открывает drawer.
-      navigate(`/inbox?task=${taskId}`);
     } catch (e) {
-      toast.error(`Не удалось: ${(e as Error).message}`);
+      resolveDelegationError(n, e, 'accept');
     }
   };
 
   const handleDeclineDelegation = async (n: Notification): Promise<void> => {
     if (n.payload.type !== 'task_delegation') return;
+    if (delegationUi[n.id]) return;
+    setDelegationUi((s) => ({ ...s, [n.id]: 'busy' }));
     try {
       await taskDelegationRepository.decline(n.payload.delegationId);
+      setDelegationUi((s) => ({ ...s, [n.id]: 'declined' }));
       await markRead(n);
       toast.success('Задача отклонена');
     } catch (e) {
-      toast.error(`Не удалось: ${(e as Error).message}`);
+      resolveDelegationError(n, e, 'decline');
     }
+  };
+
+  // 409 = делегирование уже не pending (принято/отклонено/отозвано где-то ещё): не пугаем
+  // красной ошибкой, просто прячем кнопки как обработанное. Иначе — откатываем busy и тост.
+  const resolveDelegationError = (n: Notification, e: unknown, action: 'accept' | 'decline'): void => {
+    if (e instanceof HttpError && e.status === 409) {
+      setDelegationUi((s) => ({ ...s, [n.id]: action === 'accept' ? 'accepted' : 'resolved' }));
+      void markRead(n);
+      toast.success('Это делегирование уже обработано');
+      return;
+    }
+    setDelegationUi((s) => {
+      const next = { ...s };
+      delete next[n.id];
+      return next;
+    });
+    toast.error(`Не удалось: ${(e as Error).message}`);
   };
 
   const handleResolveJoin = async (n: Notification, accept: boolean): Promise<void> => {
@@ -207,6 +235,7 @@ export function NotificationsPage(): React.ReactElement {
               onResolveJoin={(accept) => void handleResolveJoin(n, accept)}
               onAcceptDelegation={() => void handleAcceptDelegation(n)}
               onDeclineDelegation={() => void handleDeclineDelegation(n)}
+              delegationUi={delegationUi[n.id]}
             />
           ))}
         </ul>
@@ -285,6 +314,7 @@ function NotificationRow({
   onResolveJoin,
   onAcceptDelegation,
   onDeclineDelegation,
+  delegationUi,
 }: {
   n: Notification;
   onClick: () => void;
@@ -292,6 +322,7 @@ function NotificationRow({
   onResolveJoin: (accept: boolean) => void;
   onAcceptDelegation: () => void;
   onDeclineDelegation: () => void;
+  delegationUi?: 'busy' | 'accepted' | 'declined' | 'resolved';
 }): React.ReactElement {
   const isUnread = n.readAt === null;
   const payload = n.payload;
@@ -384,28 +415,40 @@ function NotificationRow({
             <p className="line-clamp-2 text-xs italic text-muted-foreground">
               «{payload.taskExcerpt || '(без описания)'}»
             </p>
-            <div className="flex gap-2 pt-1">
-              <Button
-                size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAcceptDelegation();
-                }}
-              >
-                Принять
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeclineDelegation();
-                }}
-              >
-                Отклонить
-              </Button>
-            </div>
+            {delegationUi === 'accepted' ? (
+              <p className="pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                ✓ Принято
+              </p>
+            ) : delegationUi === 'declined' ? (
+              <p className="pt-1 text-xs text-muted-foreground">Отклонено</p>
+            ) : delegationUi === 'resolved' ? (
+              <p className="pt-1 text-xs text-muted-foreground">Уже обработано</p>
+            ) : (
+              <div className="flex gap-2 pt-1">
+                <Button
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  disabled={delegationUi === 'busy'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAcceptDelegation();
+                  }}
+                >
+                  Принять
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={delegationUi === 'busy'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeclineDelegation();
+                  }}
+                >
+                  Отклонить
+                </Button>
+              </div>
+            )}
           </>
         )}
 

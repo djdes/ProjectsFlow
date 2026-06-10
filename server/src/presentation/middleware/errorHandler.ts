@@ -66,6 +66,9 @@ import {
   TaskCommitNotFoundError,
   TaskDescriptionEmptyError,
   TaskNotFoundError,
+  DelegationNotFoundError,
+  DelegationWrongStateError,
+  NotDelegateError,
 } from '../../domain/task/errors.js';
 import { TaskNotActiveError } from '../../application/task/RequestRalphCancel.js';
 import { RalphCancelNotRequestedByYouError } from '../../application/task/RevokeRalphCancel.js';
@@ -385,6 +388,24 @@ export function errorHandler(
   }
   if (err instanceof TaskNotActiveError) {
     res.status(409).json({ error: 'task_not_active', message: err.message });
+    return;
+  }
+
+  // --- Делегирование задач (accept/decline/withdraw) ---
+  if (err instanceof DelegationNotFoundError) {
+    res.status(404).json({ error: 'delegation_not_found', message: 'Делегирование не найдено' });
+    return;
+  }
+  if (err instanceof NotDelegateError) {
+    res.status(403).json({ error: 'not_delegate', message: err.message });
+    return;
+  }
+  if (err instanceof DelegationWrongStateError) {
+    // Уже принято/отклонено/отозвано — не 500, а 409: клиент трактует как «уже обработано».
+    res.status(409).json({
+      error: 'delegation_wrong_state',
+      message: 'Это делегирование уже обработано (принято, отклонено или отозвано).',
+    });
     return;
   }
   if (err instanceof RalphCancelNotRequestedByYouError) {
