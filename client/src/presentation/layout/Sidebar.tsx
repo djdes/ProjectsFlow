@@ -95,14 +95,16 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
       <div className="flex items-center gap-1">
         <Link
           to="/"
+          aria-label="ProjectsFlow"
           className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-base font-semibold tracking-tight transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
         >
           <span
             className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-xs font-bold text-primary-foreground"
-            aria-label="ProjectsFlow"
+            aria-hidden="true"
           >
             PF
           </span>
+          <span className="truncate">ProjectsFlow</span>
         </Link>
 
         <NavLink

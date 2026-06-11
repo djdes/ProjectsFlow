@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Check, Copy, LogOut, Monitor, Moon, Sun, User as UserIcon } from 'lucide-react';
+import { Activity, Check, Copy, LogOut, User as UserIcon } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -8,13 +8,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
@@ -109,24 +105,17 @@ export function SidebarUserMenu({ compact = false }: { compact?: boolean } = {})
           Мониторинг
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            {theme === 'dark' ? <Moon /> : theme === 'light' ? <Sun /> : <Monitor />}
-            Тема
-          </DropdownMenuSubTrigger>
-          <DropdownMenuPortal>
-            <DropdownMenuSubContent>
-              <DropdownMenuRadioGroup
-                value={theme}
-                onValueChange={(v) => setTheme(v as Theme)}
-              >
-                <DropdownMenuRadioItem value="light">Светлая</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="dark">Тёмная</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="system">Система</DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuPortal>
-        </DropdownMenuSub>
+        {/* Тема — плоским списком, а не вложенным сабменю: на тач сабменю почти не
+            открывается, поэтому каждый вариант — отдельный полноширинный тап-таргет. */}
+        <DropdownMenuLabel className="py-1 text-xs font-normal text-muted-foreground">
+          Тема
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={theme} onValueChange={(v) => setTheme(v as Theme)}>
+          <DropdownMenuRadioItem value="light">Светлая</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">Тёмная</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system">Система</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
         <DropdownMenuCheckboxItem
           checked={animations}
           onCheckedChange={setAnimations}

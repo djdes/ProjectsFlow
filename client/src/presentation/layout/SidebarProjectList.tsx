@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   DndContext,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
@@ -129,8 +130,8 @@ function SidebarProjectRow({
     >
       <NavLink
         to={`/projects/${project.id}`}
-        // listeners/attributes на ссылке: тащим за всю строку. Порог сенсора (5px)
-        // отделяет drag от обычного клика-навигации.
+        // listeners/attributes на ссылке: тащим за всю строку. Мышь — порог 8px; тач —
+        // long-press, чтобы тап-навигация и скролл списка не превращались в drag.
         {...(reorderable ? listeners : {})}
         {...(reorderable ? attributes : {})}
         className={({ isActive }) =>
@@ -200,8 +201,9 @@ function SidebarProjectRow({
           <button
             type="button"
             aria-label={`Действия проекта «${project.name}»`}
-            // Не даём pointerdown инициировать drag строки.
-            onPointerDown={(e) => e.stopPropagation()}
+            // Не даём нажатию инициировать drag строки (mousedown/touchstart — активаторы dnd-kit).
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
             className={cn(
               'absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground dark:hover:bg-white/10',
               'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100',
@@ -323,8 +325,12 @@ function ProjectGroup({
   onReorderEnd: (event: DragEndEvent) => void;
   onMove: (projectId: string, dir: MoveDir) => void;
 }): React.ReactElement {
-  // Порог 5px: клик/тап по проекту не превращается в drag.
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  // Мышь — порог 8px (быстрый reorder). Тач — long-press ~220мс, чтобы скролл списка
+  // проектов пальцем не «хватал» строку (строки — это ещё и навигация по тапу).
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+  );
   const sortableIds = projects.map((p) => `${bucket}-${p.id}`);
 
   const rows = (

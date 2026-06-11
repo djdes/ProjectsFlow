@@ -562,6 +562,7 @@ export function TaskDrawer({
     <Sheet open={state !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
         side="right"
+        showClose={false}
         className={cn(
           'grid h-dvh w-full grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0',
           expanded ? 'sm:max-w-none' : 'sm:max-w-[640px]',
@@ -671,10 +672,7 @@ export function TaskDrawer({
                       />
                     ) : (
                       <div className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-medium text-muted-foreground/70">
-                            Описание
-                          </span>
+                        <div className="flex items-center justify-end gap-2">
                           <Button
                             type="button"
                             variant="ghost"
@@ -1190,17 +1188,17 @@ function TaskDescriptionEditor({
 
   return (
     <div className="space-y-1.5">
-      {/* Шапка описания: AI-кнопка ВСЕГДА видна (и в показе, и в правке), не двигается
-          при переключении режимов и работает над тем, что сейчас на экране. */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-muted-foreground/70">
-          Описание
-        </span>
+      {/* Шапка описания без лейбла «Описание»: компактный правый кластер действий.
+          AI-кнопка ВСЕГДА видна (и в показе, и в правке), не двигается при переключении. */}
+      <div className="flex items-center justify-end gap-2">
         <div className="flex items-center gap-0.5">
           {/* Копирует текущий текст описания с вёрсткой → вставка в Telegram применит формат.
               onMouseDown.preventDefault внутри кнопки не уводит фокус (без лишнего blur-save). */}
           {(editing ? draft : description).trim().length > 0 && (
-            <TelegramCopyButton onCopy={() => copyMarkdownForTelegram(editing ? draft : description)} />
+            <TelegramCopyButton
+              className="size-8"
+              onCopy={() => copyMarkdownForTelegram(editing ? draft : description)}
+            />
           )}
           {/* preventDefault — клик по AI не уводит фокус мгновенно; aiOpeningRef гасит
               blur-save, который иначе сработает, когда Radix-диалог перехватит фокус. */}
@@ -1292,9 +1290,6 @@ function TaskDescriptionEditor({
             </ContextMenuTrigger>
             {fmt.menuContent}
           </ContextMenu>
-          <p className="text-[11px] text-muted-foreground">
-            Ctrl+Enter — сохранить, Esc — отменить. {saving && '…'}
-          </p>
         </div>
       ) : (
         <div

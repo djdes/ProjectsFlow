@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Monitor, Moon, Sun } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,7 +13,6 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/sonner';
 import {
@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useUpdateProfile } from '@/presentation/hooks/useUpdateProfile';
-import { useTheme, type Theme } from '@/presentation/components/theme/ThemeProvider';
+import { useTheme } from '@/presentation/components/theme/ThemeProvider';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { GithubAccountSection } from '@/presentation/components/github/GithubAccountSection';
 import { AgentAccessCard } from '@/presentation/components/agent/AgentAccessCard';
@@ -32,6 +32,7 @@ import { TelegramSection } from '@/presentation/components/profile/TelegramSecti
 import { ProjectsShareCard } from '@/presentation/components/profile/ProjectsShareCard';
 import { NotificationDefaultsCard } from '@/presentation/components/profile/NotificationDefaultsCard';
 import { KanbanColorsCard } from '@/presentation/components/profile/KanbanColorsCard';
+import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
 import { getInitials } from '@/presentation/layout/projectIcons';
 
 function PersonalDataCard(): React.ReactElement {
@@ -208,24 +209,31 @@ function PreferencesCard(): React.ReactElement {
       <CardContent className="space-y-6">
         <div className="space-y-3">
           <Label>Тема</Label>
-          <RadioGroup
-            value={theme}
-            onValueChange={(v) => setTheme(v as Theme)}
-            className="grid grid-cols-3 gap-2 sm:max-w-md"
-          >
-            {(['light', 'dark', 'system'] as const).map((value) => (
-              <Label
-                key={value}
-                htmlFor={`theme-${value}`}
-                className="flex cursor-pointer items-center gap-2 rounded-md border bg-card p-3 text-sm transition-colors has-[:checked]:border-primary has-[:checked]:bg-accent"
-              >
-                <RadioGroupItem id={`theme-${value}`} value={value} />
-                <span className="font-normal">
+          {/* Сегмент-контрол вместо card-radio: одинаковые по размеру кнопки, единый
+              визуальный язык с остальными переключателями. */}
+          <div className="inline-flex w-full rounded-lg bg-muted p-0.5 sm:max-w-md">
+            {(['light', 'dark', 'system'] as const).map((value) => {
+              const Icon = value === 'light' ? Sun : value === 'dark' ? Moon : Monitor;
+              const active = theme === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTheme(value)}
+                  aria-pressed={active}
+                  className={cn(
+                    'flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                    active
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  <Icon className="size-4" />
                   {value === 'light' ? 'Светлая' : value === 'dark' ? 'Тёмная' : 'Система'}
-                </span>
-              </Label>
-            ))}
-          </RadioGroup>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="flex items-start justify-between gap-4 sm:max-w-md">
@@ -269,6 +277,7 @@ export function ProfilePage(): React.ReactElement {
       <AgentAccessCard />
       <SecurityCard />
       <PreferencesCard />
+      <InstallAppPrompt variant="card" />
     </div>
   );
 }

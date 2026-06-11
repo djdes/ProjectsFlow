@@ -4,7 +4,8 @@ import {
   DndContext,
   DragOverlay,
   MeasuringStrategy,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   defaultDropAnimationSideEffects,
   useSensor,
   useSensors,
@@ -294,8 +295,12 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   const [previewPhase, setPreviewPhase] = useState<'lifted' | 'settled'>('settled');
   const dropTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Чувствительность: 5px минимум до старта drag — иначе одиночный клик ловится как drag.
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  // Мышь — drag почти мгновенный (порог 8px). Тач — drag только после удержания ~220мс
+  // (long-press): обычный скролл колонок/доски пальцем больше не «хватает» карточку.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+  );
 
   const { order: doneOrder, toggle: toggleDoneOrder } = useDoneSortOrder();
   const grouped = useMemo(() => groupByStatus(tasks, doneOrder), [tasks, doneOrder]);

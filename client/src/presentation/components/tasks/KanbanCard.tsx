@@ -96,11 +96,10 @@ export function KanbanCard({
   // layoutId.
   const Wrapper = preview ? PassthroughWrapper : MotionWrapper;
 
-  // Останавливаем pointerdown на actions, чтобы клик по Edit/Delete не стартовал drag
-  // через listeners на родителе. (activationConstraint distance:5 ловит мелкие движения,
-  // но если юзер чуть-чуть двинул мышь — драг бы запустился; со stopPropagation это
-  // окончательно исключено.)
-  const stopDrag = (e: React.PointerEvent): void => e.stopPropagation();
+  // Гасим mousedown/touchstart на actions, чтобы нажатие по Edit/Delete/чекбоксу не
+  // стартовало drag через активаторы dnd-kit (MouseSensor/TouchSensor) на родителе.
+  const stopDrag = (e: React.SyntheticEvent): void => e.stopPropagation();
+  const stopDragProps = { onMouseDown: stopDrag, onTouchStart: stopDrag };
 
   // Прогресс GFM-чеклиста из описания — бейдж «3/7» в мета-строке.
   const checklist = task.description ? checklistProgress(task.description) : null;
@@ -122,15 +121,17 @@ export function KanbanCard({
             });
             return;
           }
-          // Открываем диалог только если это был именно клик, не drag.
-          // PointerSensor activationConstraint distance:5 гарантирует, что drag-старт
-          // съест pointermove'ы и onClick не выстрелит для drag'а; обычный клик долетит.
+          // Открываем диалог только если это был клик, не drag. Активаторы (мышь 8px /
+          // тач long-press ~220мс) съедают drag-жест, так что onClick для drag не выстрелит.
           onEdit(task);
         }}
         role="button"
         aria-pressed={selecting ? selected : undefined}
         className={cn(
-          'group relative flex touch-none select-none items-start gap-2 rounded-lg border border-black/[0.06] bg-card p-3 shadow-sm outline-none dark:border-white/[0.08]',
+          // НЕ ставим touch-action:none — иначе палец не сможет скроллить колонку/доску
+          // (любое касание карточки превращалось бы в drag). Long-press TouchSensor (~220мс)
+          // сам отличает скролл от переноса.
+          'group relative flex select-none items-start gap-2 rounded-lg border border-black/[0.06] bg-card p-3 shadow-sm outline-none dark:border-white/[0.08]',
           // Базовый transition только для тех свойств, которые меняем CSS-ом —
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
           'transition-[box-shadow,border-color,opacity] duration-150 ease-out',
@@ -182,7 +183,7 @@ export function KanbanCard({
         ) : (
           showCheckbox &&
           !preview && (
-            <div className="pt-0.5" onPointerDown={stopDrag}>
+            <div className="pt-0.5" {...stopDragProps}>
               <InboxCheckbox
                 task={task}
                 lastDoneTaskId={lastDoneTaskId}
@@ -284,7 +285,7 @@ export function KanbanCard({
                 'flex shrink-0 gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100',
                 (selecting || preview) && 'hidden',
               )}
-              onPointerDown={stopDrag}
+              {...stopDragProps}
             >
               {onQuickPromote && !preview && (
                 <Button

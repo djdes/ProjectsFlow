@@ -489,7 +489,7 @@ export function AiComposeDialog({
         onClick={() => void start()}
         disabled={isDisabled}
         title="Переработать текст с помощью AI"
-        className={cn('gap-1.5', compact ? 'h-10 px-2.5 text-xs' : 'h-8')}
+        className={cn('gap-1.5', compact ? 'h-8 px-2.5 text-xs' : 'h-8')}
       >
         {phase === 'loading' ? (
           <Loader2 className="size-3.5 animate-spin" />

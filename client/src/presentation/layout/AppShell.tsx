@@ -12,6 +12,7 @@ import { GithubConnectionProvider } from '@/presentation/hooks/GithubConnectionP
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useNotificationStream } from '@/presentation/hooks/useNotificationStream';
 import { useUnreadNotificationsCount } from '@/presentation/hooks/useUnreadNotificationsCount';
+import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
 import { Sidebar } from './Sidebar';
 
 const COLLAPSE_KEY = 'pf_sidebar_collapsed';
@@ -76,6 +77,7 @@ export function AppShell(): React.ReactElement {
               </Button>
               <span className="text-sm font-semibold">ProjectsFlow</span>
             </header>
+            <InstallAppPrompt variant="banner" />
             <main className="flex-1 overflow-y-auto">
               <Outlet />
             </main>

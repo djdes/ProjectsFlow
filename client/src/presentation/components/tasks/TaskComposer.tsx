@@ -6,7 +6,7 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from 'react';
-import { FileText, Inbox, Loader2, NotebookPen, Paperclip, Send, X } from 'lucide-react';
+import { FileText, Inbox, NotebookPen, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
@@ -21,10 +21,17 @@ import { DelegateSelect } from './DelegateSelect';
 import { PrioritySelect } from './PrioritySelect';
 import { DeadlinePicker } from './DeadlinePicker';
 import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
+import { SendTargetButton } from '@/presentation/components/tasks/SendTargetButton';
 import {
   extractClipboardFiles,
   isImageMime,
 } from '@/presentation/components/attachments/files';
+
+// Цели быстрого добавления: воркеру (todo) или в черновик (backlog). Питают каретку SendTargetButton.
+const QUICK_STATUS_OPTIONS = [
+  { value: 'todo', label: 'Воркеру', icon: Inbox },
+  { value: 'backlog', label: 'Черновик', icon: NotebookPen },
+] as const;
 
 type PendingFile = {
   readonly id: string;
@@ -86,7 +93,8 @@ export function TaskComposer({
     try { if (text) sessionStorage.setItem(STORAGE_KEY, text); else sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
   }, [text, STORAGE_KEY]);
   const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
-  const [quickStatus, setQuickStatus] = useState<'todo' | 'backlog'>('todo');
+  // По умолчанию — черновик (backlog): быстрое добавление кидает в бэклог, а не сразу воркеру.
+  const [quickStatus, setQuickStatus] = useState<'todo' | 'backlog'>('backlog');
   const [delegateUserId, setDelegateUserId] = useState<string | null>(null);
   const [priority, setPriority] = useState<TaskPriority | null>(null);
   const [deadline, setDeadline] = useState<string | null>(null);
@@ -97,6 +105,19 @@ export function TaskComposer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fmt = useTextFieldFormatting(textareaRef);
+  // Floating-композер на телефоне: по умолчанию одна строка (поле + отправка), ряд доп-кнопок
+  // выезжает по фокусу. На десктопе (sm+) тулбар виден всегда. Таймер откладывает сворачивание,
+  // чтобы тап по кнопке тулбара успел сработать до скрытия (важно на тач — relatedTarget пуст).
+  const [focused, setFocused] = useState(false);
+  const collapseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const openToolbar = (): void => {
+    if (collapseTimer.current) clearTimeout(collapseTimer.current);
+    setFocused(true);
+  };
+  const scheduleCollapse = (): void => {
+    if (collapseTimer.current) clearTimeout(collapseTimer.current);
+    collapseTimer.current = setTimeout(() => setFocused(false), 200);
+  };
 
   // Авто-рост до 12 строк (site-wide правило), дальше внутренний скролл.
   useAutoGrowTextarea(textareaRef, text, { minRows: 1 });
@@ -185,7 +206,7 @@ export function TaskComposer({
       setText('');
       try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
       setRalphMode('normal');
-      setQuickStatus('todo');
+      setQuickStatus('backlog');
       setDelegateUserId(null);
       setPriority(null);
       setDeadline(null);
@@ -211,18 +232,32 @@ export function TaskComposer({
   useEffect(() => {
     return () => {
       pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
+      if (collapseTimer.current) clearTimeout(collapseTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const canSubmit = text.trim().length > 0 && !submitting;
-  const placeholder = isInline ? 'Новая задача…' : 'Добавление в Claude Opus';
+  const hasText = text.trim().length > 0;
+  const canSubmit = hasText && !submitting;
+  // Развёрнут, если: inline-композер (всегда), есть фокус, набран текст или есть вложения.
+  const expanded = isInline || focused || hasText || pending.length > 0;
+  const placeholder = isInline
+    ? 'Новая задача…'
+    : quickStatus === 'backlog'
+      ? 'Добавить в черновик'
+      : 'Задача воркеру';
 
   const card = (
     <div
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onFocus={openToolbar}
+      onBlur={(e) => {
+        // Сворачиваем только когда фокус ушёл за пределы карточки (на десктопе relatedTarget
+        // укажет на кнопку тулбара — тогда не сворачиваем). На тач подстрахует таймер.
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) scheduleCollapse();
+      }}
       className={cn(
         'w-full overflow-hidden border bg-card transition-colors focus-within:border-foreground/30',
         isInline
@@ -284,27 +319,49 @@ export function TaskComposer({
         </Dialog>
       )}
 
-      <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
-        <ContextMenuTrigger asChild>
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onPaste={handlePaste}
-            onKeyDown={(e) => {
-              fmt.keyDownHandler(e);
-              if (!e.defaultPrevented) handleKeyDown(e);
-            }}
-            rows={1}
-            disabled={submitting}
-            placeholder={placeholder}
-            className="block w-full resize-none bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+      {/* Верхний ряд: поле ввода + отправка. Всегда виден — на телефоне это и есть «одна строка». */}
+      <div className="flex items-end gap-1 pr-1.5">
+        <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
+          <ContextMenuTrigger asChild>
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onPaste={handlePaste}
+              onKeyDown={(e) => {
+                fmt.keyDownHandler(e);
+                if (!e.defaultPrevented) handleKeyDown(e);
+              }}
+              rows={1}
+              disabled={submitting}
+              placeholder={placeholder}
+              className="block min-w-0 flex-1 resize-none bg-transparent px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+            />
+          </ContextMenuTrigger>
+          {fmt.menuContent}
+        </ContextMenu>
+        <div className="flex shrink-0 items-center pb-1.5">
+          <SendTargetButton
+            size="md"
+            options={forcedStatus ? undefined : QUICK_STATUS_OPTIONS}
+            value={quickStatus}
+            onChange={setQuickStatus}
+            onSend={() => void submit()}
+            submitting={submitting}
+            disabled={!canSubmit}
+            showLabel={false}
           />
-        </ContextMenuTrigger>
-        {fmt.menuContent}
-      </ContextMenu>
+        </div>
+      </div>
 
-      <div className={cn('flex items-center gap-1.5 px-1.5 pb-2', isInline && 'flex-wrap')}>
+      {/* Ряд доп-действий. На телефоне в свёрнутом состоянии скрыт, выезжает по фокусу; на sm+ виден всегда. */}
+      <div
+        className={cn(
+          'flex items-center gap-1.5 px-1.5 pb-2',
+          isInline && 'flex-wrap',
+          !expanded && 'hidden sm:flex',
+        )}
+      >
         <Button
           type="button"
           variant="ghost"
@@ -349,27 +406,6 @@ export function TaskComposer({
           className={cn('h-9', deadline === null ? 'w-9 px-0' : 'px-2')}
         />
         <div className="ml-auto flex items-center gap-1.5">
-          {!forcedStatus && (
-            <button
-              type="button"
-              onClick={() => setQuickStatus((s) => (s === 'todo' ? 'backlog' : 'todo'))}
-              disabled={submitting}
-              title={quickStatus === 'todo' ? 'В очередь (нажми для черновика)' : 'Черновик (нажми для очереди)'}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-            >
-              {quickStatus === 'todo' ? (
-                <>
-                  <Inbox className="size-4" />
-                  <span className="hidden sm:inline">В очередь</span>
-                </>
-              ) : (
-                <>
-                  <NotebookPen className="size-4" />
-                  <span className="hidden sm:inline">Черновик</span>
-                </>
-              )}
-            </button>
-          )}
           <AiComposeDialog
             text={text}
             projectId={aiProjectId}
@@ -397,21 +433,6 @@ export function TaskComposer({
               <X className="size-4" />
             </Button>
           )}
-          <Button
-            type="button"
-            size="sm"
-            className="h-9 gap-1.5 px-3"
-            onClick={() => void submit()}
-            disabled={!canSubmit}
-            title="Ctrl+Enter"
-          >
-            {submitting ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Send className="size-4" />
-            )}
-            <span className="hidden sm:inline">Отправить</span>
-          </Button>
         </div>
       </div>
 

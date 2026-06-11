@@ -8,6 +8,17 @@
          font-size: 16px на input/textarea в @media (max-width: 639px) в globals.css. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>ProjectsFlow</title>
+
+    <!-- PWA: установка на экран «Домой». Минимальный набор (manifest + meta), без service worker. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="application-name" content="ProjectsFlow" />
+    <meta name="apple-mobile-web-app-title" content="ProjectsFlow" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1a1a1a" media="(prefers-color-scheme: dark)" />
     <script>
       // FOUC fix: применяем тему ДО React, чтобы не мерцать светлым на загрузке тёмной.
       (function () {

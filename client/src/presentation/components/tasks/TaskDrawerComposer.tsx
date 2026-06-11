@@ -5,10 +5,9 @@ import {
   type ClipboardEvent,
   type KeyboardEvent,
 } from 'react';
-import { FileText, Loader2, Paperclip, Send, X } from 'lucide-react';
+import { FileText, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
-import { cn } from '@/lib/utils';
 import type { Task, TaskStatus } from '@/domain/task/Task';
 import type { NotifyAudience, TaskComment } from '@/domain/task/TaskComment';
 import { useContainer } from '@/infrastructure/di/container';
@@ -17,6 +16,7 @@ import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatt
 import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
+import { SendTargetButton } from '@/presentation/components/tasks/SendTargetButton';
 import {
   extractClipboardFiles,
   isImageMime,
@@ -29,6 +29,11 @@ type PendingFile = {
 };
 
 type ComposerTarget = 'draft' | 'worker';
+
+const DRAWER_TARGETS = [
+  { value: 'draft', label: 'В черновики' },
+  { value: 'worker', label: 'Воркеру' },
+] as const;
 
 type Props = {
   task: Task;
@@ -260,58 +265,15 @@ export function TaskDrawerComposer({
           />
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <div
-            role="radiogroup"
-            aria-label="Куда отправить задачу при отправке"
-            className="inline-flex items-center rounded-lg bg-muted p-0.5"
-          >
-            <button
-              type="button"
-              role="radio"
-              aria-checked={target === 'draft'}
-              onClick={() => setTarget('draft')}
-              className={cn(
-                'rounded-md px-2.5 py-1 text-xs transition-colors',
-                target === 'draft'
-                  ? 'bg-background font-medium text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              В черновики
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={target === 'worker'}
-              onClick={() => setTarget('worker')}
-              className={cn(
-                'rounded-md px-2.5 py-1 text-xs transition-colors',
-                target === 'worker'
-                  ? 'bg-background font-medium text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              Воркеру
-            </button>
-          </div>
-
-          <Button
-            type="button"
-            size="sm"
-            className="h-8 gap-1.5 px-3"
-            onClick={() => void submit()}
-            disabled={!canSubmit}
-            title="Ctrl+Enter — отправить"
-          >
-            {submitting ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Send className="size-3.5" />
-            )}
-            Отправить
-          </Button>
-        </div>
+        <SendTargetButton
+          size="sm"
+          options={DRAWER_TARGETS}
+          value={target}
+          onChange={setTarget}
+          onSend={() => void submit()}
+          submitting={submitting}
+          disabled={!canSubmit}
+        />
 
         <input
           ref={fileInputRef}
