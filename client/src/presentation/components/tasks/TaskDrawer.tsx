@@ -674,6 +674,7 @@ export function TaskDrawer({
                         initialDescription={task.description ?? ''}
                         onSaved={() => onCommitsChange?.()}
                         onCollapse={() => setDescExpanded(false)}
+                        onPasteFiles={(files) => void uploadFilesDirectly(files)}
                       />
                     ) : (
                       <div className="space-y-1.5">
@@ -996,6 +997,7 @@ function TaskDescriptionEditor({
   initialDescription,
   onSaved,
   onCollapse,
+  onPasteFiles,
 }: {
   projectId: string;
   taskId: string;
@@ -1003,6 +1005,8 @@ function TaskDescriptionEditor({
   onSaved: () => void;
   // Если задан — в шапке появляется кнопка «свернуть» (описание закреплено в header'е drawer'а).
   onCollapse?: () => void;
+  // Вставка картинок из буфера (Ctrl+V) → прикрепляем к задаче через drawer.
+  onPasteFiles?: (files: File[]) => void;
 }): React.ReactElement {
   const { taskRepository } = useContainer();
   const [description, setDescription] = useState(initialDescription);
@@ -1175,6 +1179,16 @@ function TaskDescriptionEditor({
     }
   };
 
+  // Ctrl+V с картинкой/файлом в буфере → прикрепляем к задаче (а не вставляем binary в текст).
+  // Обычная текстовая вставка идёт по дефолту: extractClipboardFiles вернёт пусто.
+  const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>): void => {
+    if (!onPasteFiles) return;
+    const files = extractClipboardFiles(e.clipboardData);
+    if (files.length === 0) return;
+    e.preventDefault();
+    onPasteFiles(files);
+  };
+
   // Клик по тексту → режим редактирования, КРОМЕ клика по ссылке или чекбоксу внутри
   // markdown (их обрабатываем по назначению). Контейнер — div, а не <button>: rendered
   // markdown содержит блочные элементы (<p>/<ul>/<pre>), невалидные внутри <button>.
@@ -1281,6 +1295,7 @@ function TaskDescriptionEditor({
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={handleBlur}
+                onPaste={handlePaste}
                 onKeyDown={(e) => {
                   fmt.keyDownHandler(e);
                   if (!e.defaultPrevented) handleKeyDown(e);
