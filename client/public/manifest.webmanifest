@@ -3,7 +3,7 @@
   "short_name": "ProjectsFlow",
   "description": "Платформа управления проектами",
   "id": "/",
-  "start_url": "/",
+  "start_url": "/login",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
