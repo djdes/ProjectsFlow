@@ -20,6 +20,7 @@ export function RalphModeSelect({
   className,
   variant = 'outline',
   iconOnly = false,
+  showCaret = false,
 }: {
   value: RalphMode;
   onChange: (next: RalphMode) => void;
@@ -28,6 +29,8 @@ export function RalphModeSelect({
   variant?: 'outline' | 'ghost';
   // Компактный вид для композеров: только эмодзи-иконка режима, label в title.
   iconOnly?: boolean;
+  // В iconOnly-режиме показать маленькую каретку (для чипа-режима в шапке дравера).
+  showCaret?: boolean;
 }): React.ReactElement {
   const meta = RALPH_MODE_META[value];
   return (
@@ -41,7 +44,10 @@ export function RalphModeSelect({
           className={`${iconOnly ? 'justify-center' : 'w-full justify-between'} font-normal ${className ?? ''}`}
         >
           {iconOnly ? (
-            <span aria-hidden="true" className="text-base leading-none">{meta.icon}</span>
+            <>
+              <span aria-hidden="true" className="text-base leading-none">{meta.icon}</span>
+              {showCaret && <ChevronDown className="size-3 shrink-0 opacity-60" />}
+            </>
           ) : (
             <>
               <span className="flex items-center gap-2 truncate">

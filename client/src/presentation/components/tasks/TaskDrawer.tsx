@@ -159,14 +159,16 @@ function TaskRalphModeChip({
     }
   };
 
-  // Тихий чип в ряду свойств шапки — ghost, без рамки и фиксированной ширины.
+  // Тихий чип в ряду свойств шапки — только иконка режима + каретка (без текста «Обычный»).
   return (
     <RalphModeSelect
       value={mode}
       onChange={(v) => void change(v)}
       disabled={saving}
       variant="ghost"
-      className="!h-7 w-auto gap-1.5 !px-2 !py-0 text-xs text-muted-foreground hover:text-foreground"
+      iconOnly
+      showCaret
+      className="!h-7 w-auto gap-1 !px-1.5 !py-0 text-muted-foreground hover:text-foreground"
     />
   );
 }
@@ -583,7 +585,7 @@ export function TaskDrawer({
                 закрыть), под ним один спокойный ряд чипов-свойств одинаковой высоты.
                 Аттачи (когда есть) переносятся на свою строку через basis-full. */}
             <div className="border-b bg-background/95 backdrop-blur-md">
-              <div className="flex items-center gap-2 px-4 pt-3 sm:px-6">
+              <div className="flex items-center gap-2 px-4 pt-3">
                 {renderExpandButton()}
                 <div className="flex min-w-0 flex-1 items-baseline gap-2">
                   {projectName && (
@@ -621,14 +623,15 @@ export function TaskDrawer({
                 {renderCloseButton()}
               </div>
 
-              <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 px-4 pb-2.5 pt-1.5 sm:px-6">
-                {(task.status === 'backlog' ||
-                  task.status === 'todo' ||
-                  task.status === 'awaiting_clarification') && (
-                  <TaskRalphModeChip task={task} onChanged={() => onCommitsChange?.()} />
-                )}
-                <TaskPriorityChip task={task} onChanged={() => onCommitsChange?.()} />
-                <TaskDeadlineChip task={task} onChanged={() => onCommitsChange?.()} />
+              {/* Порядок: Файл · Делегировать · Дедлайн · Приоритет · Режим (крайний справа). */}
+              <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 px-4 pb-2.5 pt-1.5">
+                <TaskDrawerAttachmentRow
+                  items={headerAttachments}
+                  canEdit={canEdit}
+                  onAddFiles={(files) => {
+                    void uploadFilesDirectly(files);
+                  }}
+                />
                 {(isInbox || isShared) && (
                   <DelegateTaskButton
                     task={task}
@@ -646,19 +649,21 @@ export function TaskDrawer({
                     }}
                   />
                 )}
-                <TaskDrawerAttachmentRow
-                  items={headerAttachments}
-                  canEdit={canEdit}
-                  onAddFiles={(files) => {
-                    void uploadFilesDirectly(files);
-                  }}
-                />
+                <TaskDeadlineChip task={task} onChanged={() => onCommitsChange?.()} />
+                <TaskPriorityChip task={task} onChanged={() => onCommitsChange?.()} />
+                {(task.status === 'backlog' ||
+                  task.status === 'todo' ||
+                  task.status === 'awaiting_clarification') && (
+                  <div className="ml-auto">
+                    <TaskRalphModeChip task={task} onChanged={() => onCommitsChange?.()} />
+                  </div>
+                )}
               </div>
 
               {/* Закреплённое описание: всегда под рукой (тело скроллится к свежим
                   комментариям). Клик по свёрнутому превью раскрывает полный текст;
                   для не-done внутри — прежний inline-редактор (клик по тексту = правка). */}
-              <div className="border-t border-border/60 px-4 py-2 sm:px-6">
+              <div className="border-t border-border/60 px-4 py-2">
                 {descExpanded ? (
                   <div className="max-h-[50vh] overflow-y-auto overscroll-contain">
                     {canEdit ? (
@@ -726,7 +731,7 @@ export function TaskDrawer({
               onValueChange={(v: string) => setActiveTab(v as 'discussion' | 'live')}
               className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
             >
-              <div className="border-b px-4 pt-2 sm:px-6">
+              <div className="border-b px-4 pt-2">
                 <TabsList className="h-8">
                   <TabsTrigger value="discussion" className="text-xs">
                     Обсуждение
@@ -751,7 +756,7 @@ export function TaskDrawer({
               >
                 {/* Описание закреплено в шапке, коммиты скрыты — тело целиком отдано
                     обсуждению (Notion-style: комментарии и есть страница). */}
-                <div ref={bodyRef} className="h-full overflow-y-auto px-4 py-5 sm:px-6">
+                <div ref={bodyRef} className="h-full overflow-y-auto px-4 py-5">
                   <TaskCommentsSection
                     projectId={task.projectId}
                     taskId={task.id}
@@ -816,7 +821,7 @@ export function TaskDrawer({
           // === CREATE MODE === — Todoist-style: textarea + chips сверху, pills под
           // полем, footer = RalphMode + AI + Cancel + Submit. Файлы — chips НАД textarea.
           <>
-            <div className="border-b bg-background/95 px-4 pb-2 pt-4 sm:px-6 backdrop-blur-md">
+            <div className="border-b bg-background/95 px-4 pb-2 pt-4 backdrop-blur-md">
               <div className="flex items-center gap-2">
                 {renderExpandButton()}
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -832,7 +837,7 @@ export function TaskDrawer({
               onDragOver={handleCreateDragOver}
               onDragLeave={handleCreateDragLeave}
               onDrop={handleCreateDrop}
-              className="space-y-3 overflow-y-auto px-4 pb-4 pt-4 sm:px-6"
+              className="space-y-3 overflow-y-auto px-4 pb-4 pt-4"
             >
               {/* Textarea с chips вложений сверху (как в AddTaskDialog / QuickAddTodo) */}
               <div
@@ -945,7 +950,7 @@ export function TaskDrawer({
             </form>
 
             {/* Footer: RalphMode + AI слева, Cancel + Submit справа */}
-            <div className="flex flex-col gap-2 border-t bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex flex-col gap-2 border-t bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-1.5">
                 <RalphModeSelect
                   value={createRalphMode}
@@ -1187,11 +1192,10 @@ function TaskDescriptionEditor({
   };
 
   return (
-    <div className="space-y-1.5">
-      {/* Шапка описания без лейбла «Описание»: компактный правый кластер действий.
-          AI-кнопка ВСЕГДА видна (и в показе, и в правке), не двигается при переключении. */}
-      <div className="flex items-center justify-end gap-2">
-        <div className="flex items-center gap-0.5">
+    <div className="relative">
+      {/* Действия описания — поверх текста в правом верхнем углу, не занимают отдельную строку.
+          AI-кнопка ВСЕГДА видна. bg/blur — чтобы текст под кластером оставался читаемым. */}
+      <div className="absolute right-0 top-0 z-10 flex items-center gap-0.5 rounded-md bg-background/85 px-0.5 backdrop-blur-sm">
           {/* Копирует текущий текст описания с вёрсткой → вставка в Telegram применит формат.
               onMouseDown.preventDefault внутри кнопки не уводит фокус (без лишнего blur-save). */}
           {(editing ? draft : description).trim().length > 0 && (
@@ -1264,7 +1268,6 @@ function TaskDescriptionEditor({
               <ChevronUp className="size-4" />
             </Button>
           )}
-        </div>
       </div>
 
       {editing ? (
@@ -1285,7 +1288,7 @@ function TaskDescriptionEditor({
                 maxLength={50000}
                 rows={1}
                 disabled={saving}
-                className="block max-h-[60vh] w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent p-2 text-sm leading-snug focus:outline-none disabled:opacity-50"
+                className="block max-h-[60vh] w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-0 py-1.5 text-sm leading-snug focus:outline-none disabled:opacity-50"
               />
             </ContextMenuTrigger>
             {fmt.menuContent}
@@ -1297,25 +1300,16 @@ function TaskDescriptionEditor({
           tabIndex={0}
           onClick={handleDisplayClick}
           onKeyDown={handleDisplayKeyDown}
-          className={cn(
-            // p-2 + border 1px — те же, что у textarea, чтобы текст не «прыгал» при переключении.
-            'group flex w-full cursor-text items-start gap-2 rounded-md border border-dashed border-transparent p-2 text-left transition-colors hover:border-border hover:bg-muted/30',
-          )}
+          className="group w-full cursor-text rounded-md border border-dashed border-transparent px-0 py-1.5 text-left transition-colors hover:border-border hover:bg-muted/30"
           aria-label="Редактировать описание"
         >
           {description.trim().length > 0 ? (
-            <Markdown className="min-w-0 flex-1" onCheckboxToggle={toggleCheckbox}>
-              {description}
-            </Markdown>
+            <Markdown onCheckboxToggle={toggleCheckbox}>{description}</Markdown>
           ) : (
-            <span className="min-w-0 flex-1 text-sm italic leading-snug text-muted-foreground">
+            <span className="text-sm italic leading-snug text-muted-foreground">
               Нажми, чтобы добавить описание…
             </span>
           )}
-          <Pencil
-            aria-hidden
-            className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100"
-          />
         </div>
       )}
     </div>

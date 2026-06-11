@@ -1,6 +1,13 @@
 import { useRef } from 'react';
-import { CalendarClock, ChevronDown, X } from 'lucide-react';
+import { CalendarClock, CalendarDays, ChevronDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -25,13 +32,38 @@ function formatShort(iso: string): string {
   });
 }
 
-// Дедлайн в виде ghost-кнопки (как PrioritySelect/RalphModeSelect): иконка + label
-// + chevron. По клику открывается нативный календарь через input.showPicker().
-// Когда дата выбрана — справа от кнопки появляется крестик-очистка.
-//
-// Скрытый <input type="date"> остаётся в DOM (sr-only) — это нужно для:
-//   1) onChange ловит выбранную дату;
-//   2) showPicker() требует чтобы элемент был "connected to DOM" и НЕ display:none.
+function toISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// Быстрые шаблоны срока, считаются от локального «сегодня». Конец недели = воскресенье
+// (неделя пн–вс), конец месяца = последний день текущего месяца.
+function buildPresets(): { readonly label: string; readonly iso: string }[] {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const add = (n: number): Date => {
+    const r = new Date(today);
+    r.setDate(r.getDate() + n);
+    return r;
+  };
+  const dow = today.getDay(); // 0=вс … 6=сб
+  const endOfWeek = add(dow === 0 ? 0 : 7 - dow);
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  return [
+    { label: 'Сегодня', iso: toISO(today) },
+    { label: 'Завтра', iso: toISO(add(1)) },
+    { label: 'Послезавтра', iso: toISO(add(2)) },
+    { label: 'До конца недели', iso: toISO(endOfWeek) },
+    { label: 'До конца месяца', iso: toISO(endOfMonth) },
+  ];
+}
+
+// Дедлайн в виде ghost-кнопки. По клику — dropdown с быстрыми шаблонами (Сегодня/Завтра/…)
+// и пунктом «Выбрать дату…», который открывает нативный календарь через input.showPicker().
+// Скрытый <input type="date"> остаётся в DOM (sr-only) — showPicker() требует connected & не display:none.
 export function DeadlinePicker({
   value,
   onChange,
@@ -41,12 +73,9 @@ export function DeadlinePicker({
 }: Props): React.ReactElement {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const openPicker = (): void => {
+  const openNativePicker = (): void => {
     const inp = inputRef.current;
     if (!inp || disabled) return;
-    // Современные браузеры — Chrome/Edge 99+, FF 101+, Safari 16.4+.
-    // Старые — fallback на focus(), который НЕ откроет picker, но даст возможность
-    // ввести руками (input всё равно видим экранному читалке через sr-only).
     if (typeof inp.showPicker === 'function') {
       try {
         inp.showPicker();
@@ -62,44 +91,55 @@ export function DeadlinePicker({
 
   return (
     <span className="inline-flex items-center">
-      <Button
-        type="button"
-        variant="ghost"
-        size={iconOnly && !value ? 'icon' : 'sm'}
-        disabled={disabled}
-        onClick={openPicker}
-        className={cn(
-          iconOnly ? 'shrink-0 gap-1.5 text-xs' : 'h-7 gap-1.5 px-2 text-xs',
-          value ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-          className,
-        )}
-        title={value ? `Срок: ${value}` : 'Выбрать срок выполнения'}
-        aria-label={value ? `Срок: ${value}` : 'Срок выполнения'}
-      >
-        <CalendarClock className={iconOnly ? 'size-4' : 'size-3.5'} />
-        {(!iconOnly || value !== null) && label}
-        {!iconOnly && <ChevronDown className="size-3" />}
-      </Button>
-      {value && (
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => onChange(null)}
-          className="ml-0.5 grid size-5 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-destructive disabled:opacity-50"
-          aria-label="Очистить срок"
-          title="Очистить срок"
-        >
-          <X className="size-3" />
-        </button>
-      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size={iconOnly && !value ? 'icon' : 'sm'}
+            disabled={disabled}
+            className={cn(
+              iconOnly ? 'shrink-0 gap-1.5 text-xs' : 'h-7 gap-1.5 px-2 text-xs',
+              value ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+              className,
+            )}
+            title={value ? `Срок: ${value}` : 'Выбрать срок выполнения'}
+            aria-label={value ? `Срок: ${value}` : 'Срок выполнения'}
+          >
+            <CalendarClock className={iconOnly ? 'size-4' : 'size-3.5'} />
+            {(!iconOnly || value !== null) && label}
+            {!iconOnly && <ChevronDown className="size-3" />}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-44">
+          {buildPresets().map((p) => (
+            <DropdownMenuItem key={p.label} onSelect={() => onChange(p.iso)}>
+              {p.label}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => openNativePicker()}>
+            <CalendarDays className="size-4" />
+            Выбрать дату…
+          </DropdownMenuItem>
+          {value && (
+            <DropdownMenuItem
+              onSelect={() => onChange(null)}
+              className="text-destructive focus:text-destructive"
+            >
+              <X className="size-4" />
+              Очистить срок
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
       <input
         ref={inputRef}
         type="date"
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value || null)}
         disabled={disabled}
-        // sr-only: position:absolute + clip-path — input остаётся в DOM, не
-        // display:none (иначе showPicker() кинет ошибку), но визуально скрыт.
+        // sr-only: остаётся в DOM (не display:none, иначе showPicker() кинет ошибку), но скрыт.
         className="sr-only"
         tabIndex={-1}
         aria-label="Срок выполнения"
