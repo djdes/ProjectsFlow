@@ -31,6 +31,10 @@ export type SaveAutomationCommand = {
   readonly ultracodeReviewEnabled: boolean;
   readonly deployMethod: DeployMethod;
   readonly deployCommand: string | null;
+  readonly commitSyncEnabled: boolean;
+  readonly commitSyncHour: number;
+  readonly commitSyncMinute: number;
+  readonly commitSyncThresholdHours: number;
   readonly criteria: ReadonlyArray<{
     readonly key: string;
     readonly enabled: boolean;
@@ -90,6 +94,10 @@ export class SaveAutomationConfig {
       ultracodeReviewEnabled: input.ultracodeReviewEnabled,
       deployMethod: input.deployMethod,
       deployCommand: input.deployCommand,
+      commitSyncEnabled: input.commitSyncEnabled,
+      commitSyncHour: input.commitSyncHour,
+      commitSyncMinute: input.commitSyncMinute,
+      commitSyncThresholdHours: input.commitSyncThresholdHours,
       criteria: input.criteria,
     });
 

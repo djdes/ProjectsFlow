@@ -669,6 +669,74 @@ const TOOLS = [
     },
   },
   {
+    name: 'pf_list_pending_commit_sync_jobs',
+    description:
+      'List queued daily commit-sync jobs where current user is the dispatcher, oldest first. ' +
+      'The site scheduled a daily run that matches recent git commits to the project\'s open tasks ' +
+      '(todo/in_progress) BY MEANING. Each item has projectId/projectName and createdAt. If empty, ' +
+      'no work to do.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', description: 'Max jobs to return (default 10, max 50)' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_claim_commit_sync_job',
+    description:
+      'Atomically claim a queued commit-sync job. Returns the full job including `context` — a ' +
+      'pre-assembled markdown bundle: the project\'s open tasks (todo/in_progress) and recent commits ' +
+      'with sha, message, committedAt and ageHours. Read THAT context directly; you do NOT fetch ' +
+      'tasks/commits yourself. Your job: decide which commits SEMANTICALLY reference which task (the ' +
+      'commit message/content closes or advances the task — this is NOT id-matching, reason about ' +
+      'meaning). Return only matches as {taskId, commitSha, reason}. Do NOT decide in_progress vs done ' +
+      '— the SERVER applies the age threshold. On 409 another session won — skip. ~5 min before cleanup.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string', description: 'Job id (from pf_list_pending_commit_sync_jobs)' },
+      },
+      required: ['jobId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pf_complete_commit_sync_job',
+    description:
+      'Finalize a commit-sync job. ok=true requires matches (array of {taskId, commitSha, reason?}); ' +
+      'pass an EMPTY array if no commit semantically matches any task. The server applies the age ' +
+      'threshold deterministically (commit younger than threshold → task to in_progress; older → done). ' +
+      'ok=false requires error (≤500 chars). Optionally report costUsd/tokensIn/tokensOut.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string', description: 'Job id' },
+        ok: { type: 'boolean', description: 'true if matching ran successfully (matches may be empty)' },
+        matches: {
+          type: ['array', 'null'],
+          description: 'Matches [{taskId, commitSha, reason?}]. Required (may be empty) when ok=true.',
+          items: {
+            type: 'object',
+            properties: {
+              taskId: { type: 'string' },
+              commitSha: { type: 'string' },
+              reason: { type: ['string', 'null'] },
+            },
+            required: ['taskId', 'commitSha'],
+          },
+        },
+        error: { type: ['string', 'null'], description: 'Short error reason (≤500 chars). Required when ok=false.' },
+        costUsd: { type: ['number', 'null'], description: 'Optional run cost in USD.' },
+        tokensIn: { type: ['integer', 'null'], description: 'Optional input tokens.' },
+        tokensOut: { type: ['integer', 'null'], description: 'Optional output tokens.' },
+      },
+      required: ['jobId', 'ok'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pf_get_project',
     description:
       'Fetch metadata for a single project: id, name, status, hasKb, gitRepoUrl. Returns ' +
@@ -1416,6 +1484,34 @@ const CompleteMonitoringAnalysisJobInput = z.object({
   tokensOut: z.number().int().nullable().optional(),
 });
 
+const ListPendingCommitSyncJobsInput = z.object({
+  limit: z.number().int().min(1).max(50).optional(),
+});
+
+const ClaimCommitSyncJobInput = z.object({
+  jobId: z.string().min(1),
+});
+
+const CompleteCommitSyncJobInput = z.object({
+  jobId: z.string().min(1),
+  ok: z.boolean(),
+  matches: z
+    .array(
+      z.object({
+        taskId: z.string().min(1),
+        commitSha: z.string().min(1),
+        reason: z.string().max(2000).nullable().optional(),
+      }),
+    )
+    .max(500)
+    .nullable()
+    .optional(),
+  error: z.string().max(500).nullable().optional(),
+  costUsd: z.number().nullable().optional(),
+  tokensIn: z.number().int().nullable().optional(),
+  tokensOut: z.number().int().nullable().optional(),
+});
+
 const GetProjectInput = z.object({ projectId: z.string().min(1) });
 const ListMembersInput = z.object({ projectId: z.string().min(1) });
 const SearchTasksInput = z.object({ query: z.string().trim().min(2).max(200) });
@@ -1691,6 +1787,34 @@ async function main(): Promise<void> {
           await api.completeMonitoringAnalysisJob(input.jobId, {
             ok: input.ok,
             resultMarkdown: input.resultMarkdown ?? null,
+            error: input.error ?? null,
+            costUsd: input.costUsd ?? null,
+            tokensIn: input.tokensIn ?? null,
+            tokensOut: input.tokensOut ?? null,
+          });
+          return jsonResult({ ok: true });
+        }
+        case 'pf_list_pending_commit_sync_jobs': {
+          const input = ListPendingCommitSyncJobsInput.parse(req.params.arguments ?? {});
+          const jobs = await api.listPendingCommitSyncJobs(input.limit ?? 10);
+          return jsonResult(jobs);
+        }
+        case 'pf_claim_commit_sync_job': {
+          const input = ClaimCommitSyncJobInput.parse(req.params.arguments ?? {});
+          const job = await api.claimCommitSyncJob(input.jobId);
+          return jsonResult(job);
+        }
+        case 'pf_complete_commit_sync_job': {
+          const input = CompleteCommitSyncJobInput.parse(req.params.arguments ?? {});
+          await api.completeCommitSyncJob(input.jobId, {
+            ok: input.ok,
+            matches: input.matches
+              ? input.matches.map((m) => ({
+                  taskId: m.taskId,
+                  commitSha: m.commitSha,
+                  reason: m.reason ?? null,
+                }))
+              : null,
             error: input.error ?? null,
             costUsd: input.costUsd ?? null,
             tokensIn: input.tokensIn ?? null,

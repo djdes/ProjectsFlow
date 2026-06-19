@@ -200,6 +200,9 @@ import type { ListServerAnalysisHistory } from '../application/monitoring-analys
 import type { ListPendingMonitoringAnalysisJobs } from '../application/monitoring-analysis/ListPendingMonitoringAnalysisJobs.js';
 import type { ClaimMonitoringAnalysisJob } from '../application/monitoring-analysis/ClaimMonitoringAnalysisJob.js';
 import type { CompleteMonitoringAnalysisJob } from '../application/monitoring-analysis/CompleteMonitoringAnalysisJob.js';
+import type { ListPendingCommitSyncJobs } from '../application/commit-sync/ListPendingCommitSyncJobs.js';
+import type { ClaimCommitSyncJob } from '../application/commit-sync/ClaimCommitSyncJob.js';
+import type { CompleteCommitSyncJob } from '../application/commit-sync/CompleteCommitSyncJob.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
@@ -432,6 +435,9 @@ type AppDeps = {
     readonly listPendingMonitoringAnalysisJobs: ListPendingMonitoringAnalysisJobs;
     readonly claimMonitoringAnalysisJob: ClaimMonitoringAnalysisJob;
     readonly completeMonitoringAnalysisJob: CompleteMonitoringAnalysisJob;
+    readonly listPendingCommitSyncJobs: ListPendingCommitSyncJobs;
+    readonly claimCommitSyncJob: ClaimCommitSyncJob;
+    readonly completeCommitSyncJob: CompleteCommitSyncJob;
     readonly ackRalphCancel: AckRalphCancel;
     readonly checkRepoUsage: CheckRepoUsage;
     readonly requestRepoAccess: RequestRepoAccess;
@@ -662,6 +668,9 @@ export function createApp(deps: AppDeps): CreatedApp {
       listPendingMonitoringAnalysisJobs: deps.agent.listPendingMonitoringAnalysisJobs,
       claimMonitoringAnalysisJob: deps.agent.claimMonitoringAnalysisJob,
       completeMonitoringAnalysisJob: deps.agent.completeMonitoringAnalysisJob,
+      listPendingCommitSyncJobs: deps.agent.listPendingCommitSyncJobs,
+      claimCommitSyncJob: deps.agent.claimCommitSyncJob,
+      completeCommitSyncJob: deps.agent.completeCommitSyncJob,
       uploadTaskAttachment: deps.tasks.uploadAttachment,
       maxAttachmentBytes: deps.tasks.maxAttachmentBytes,
       ackRalphCancel: deps.agent.ackRalphCancel,

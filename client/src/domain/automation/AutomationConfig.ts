@@ -42,5 +42,12 @@ export type AutomationConfig = {
   readonly runStartedAt: string | null;
   readonly tasksCreated: number;
   readonly lastTaskAt: string | null;
+  // Ежедневная авто-обработка статусов задач по коммитам (db/072).
+  readonly commitSyncEnabled: boolean;
+  readonly commitSyncHour: number;
+  readonly commitSyncMinute: number;
+  readonly commitSyncThresholdHours: number;
+  // Read-only: МSK-дата последнего прогона ('YYYY-MM-DD') или null.
+  readonly commitSyncLastRunOn: string | null;
   readonly criteria: ReadonlyArray<AutomationCriterion>;
 };

@@ -62,6 +62,11 @@ type Draft = {
   ultracodeReviewEnabled: boolean;
   deployMethod: DeployMethod;
   deployCommand: string;
+  // Ежедневная авто-обработка статусов задач по коммитам (db/072).
+  commitSyncEnabled: boolean;
+  commitSyncHour: number;
+  commitSyncMinute: number;
+  commitSyncThresholdHours: number;
   criteria: DraftCriterion[];
 };
 
@@ -163,6 +168,10 @@ function toDraft(config: AutomationConfig): Draft {
     ultracodeReviewEnabled: config.ultracodeReviewEnabled,
     deployMethod: config.deployMethod,
     deployCommand: config.deployCommand ?? DEFAULT_DEPLOY_COMMAND,
+    commitSyncEnabled: config.commitSyncEnabled,
+    commitSyncHour: config.commitSyncHour,
+    commitSyncMinute: config.commitSyncMinute,
+    commitSyncThresholdHours: config.commitSyncThresholdHours,
     criteria: config.criteria.map((c) => ({
       key: c.key,
       label: c.label,
@@ -308,6 +317,10 @@ export function AutomationDialog({
         deployMethod: draft.deployMethod,
         deployCommand:
           draft.deployMethod === 'ssh_manual' ? draft.deployCommand.trim() : null,
+        commitSyncEnabled: draft.commitSyncEnabled,
+        commitSyncHour: draft.commitSyncHour,
+        commitSyncMinute: draft.commitSyncMinute,
+        commitSyncThresholdHours: draft.commitSyncThresholdHours,
         criteria: draft.criteria.map((c) => ({
           key: c.key,
           enabled: c.enabled,
@@ -822,6 +835,63 @@ export function AutomationDialog({
                     сохранит настройки и отправит сводку сразу
                   </span>
                 </div>
+              </div>
+            )}
+
+            {/* Ежедневная авто-обработка статусов задач по коммитам (db/072) */}
+            <SwitchRow
+              title="Авто-обработка статусов по коммитам"
+              description="Раз в день в заданное время ИИ сопоставляет коммиты GitHub с задачами в черновиках и в работе и двигает их статус по возрасту коммита."
+              checked={draft.commitSyncEnabled}
+              onCheckedChange={(v) => update({ commitSyncEnabled: v })}
+            />
+            {draft.commitSyncEnabled && (
+              <div className="space-y-3 rounded-md border px-3 py-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Время (МSK)</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={draft.commitSyncHour}
+                    onChange={(e) =>
+                      update({ commitSyncHour: Math.min(23, Math.max(0, Number(e.target.value) || 0)) })
+                    }
+                    className="h-8 w-16"
+                  />
+                  <span>:</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={draft.commitSyncMinute}
+                    onChange={(e) =>
+                      update({ commitSyncMinute: Math.min(59, Math.max(0, Number(e.target.value) || 0)) })
+                    }
+                    className="h-8 w-16"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Порог (часов)</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={8760}
+                    value={draft.commitSyncThresholdHours}
+                    onChange={(e) =>
+                      update({
+                        commitSyncThresholdHours: Math.min(8760, Math.max(1, Number(e.target.value) || 1)),
+                      })
+                    }
+                    className="h-8 w-20"
+                  />
+                </div>
+
+                <p className="text-[11px] text-muted-foreground">
+                  Коммит свежее порога → задача в «В работе»; старше → «Готово». Сопоставление коммитов
+                  и задач делает ИИ.
+                </p>
               </div>
             )}
 

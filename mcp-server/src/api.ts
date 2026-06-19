@@ -292,6 +292,41 @@ export type CompleteMonitoringAnalysisJobInput = {
   tokensOut?: number | null;
 };
 
+// Ежедневная commit-sync (db/072): сопоставление коммитов с задачами по смыслу.
+export type PendingCommitSyncJob = {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  createdAt: string;
+};
+
+export type CommitSyncJobClaimed = {
+  id: string;
+  projectId: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  // Порог часов — справочно (применяет сервер; тебе решать статус НЕ нужно).
+  thresholdHours: number;
+  // Пред-собранный markdown-контекст: задачи + коммиты с ageHours + порог + схема ответа.
+  context: string | null;
+  claimedAt: string | null;
+  createdAt: string;
+};
+
+export type CommitSyncMatchInput = {
+  taskId: string;
+  commitSha: string;
+  reason?: string | null;
+};
+
+export type CompleteCommitSyncJobInput = {
+  ok: boolean;
+  matches?: CommitSyncMatchInput[] | null;
+  error?: string | null;
+  costUsd?: number | null;
+  tokensIn?: number | null;
+  tokensOut?: number | null;
+};
+
 export type RepoUsageResult = {
   ownership: 'none' | 'self' | 'other';
   requestTarget: string | null;
@@ -700,6 +735,28 @@ export class ApiClient {
   ): Promise<void> {
     await this.request<void>(
       `/agent/monitoring-analysis-jobs/${encodeURIComponent(jobId)}/complete`,
+      { method: 'POST', body: input },
+    );
+  }
+
+  async listPendingCommitSyncJobs(limit: number): Promise<PendingCommitSyncJob[]> {
+    const { jobs } = await this.request<{ jobs: PendingCommitSyncJob[] }>(
+      `/agent/pending-commit-sync-jobs?limit=${limit}`,
+    );
+    return jobs;
+  }
+
+  async claimCommitSyncJob(jobId: string): Promise<CommitSyncJobClaimed> {
+    const { job } = await this.request<{ job: CommitSyncJobClaimed }>(
+      `/agent/commit-sync-jobs/${encodeURIComponent(jobId)}/claim`,
+      { method: 'POST', body: {} },
+    );
+    return job;
+  }
+
+  async completeCommitSyncJob(jobId: string, input: CompleteCommitSyncJobInput): Promise<void> {
+    await this.request<void>(
+      `/agent/commit-sync-jobs/${encodeURIComponent(jobId)}/complete`,
       { method: 'POST', body: input },
     );
   }

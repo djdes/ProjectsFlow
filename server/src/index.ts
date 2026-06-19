@@ -122,6 +122,13 @@ import { ListPendingMonitoringAnalysisJobs } from './application/monitoring-anal
 import { ClaimMonitoringAnalysisJob } from './application/monitoring-analysis/ClaimMonitoringAnalysisJob.js';
 import { CompleteMonitoringAnalysisJob } from './application/monitoring-analysis/CompleteMonitoringAnalysisJob.js';
 import { MonitoringAnalysisJobCleanup } from './application/monitoring-analysis/MonitoringAnalysisJobCleanup.js';
+import { DrizzleCommitSyncJobRepository } from './infrastructure/repositories/DrizzleCommitSyncJobRepository.js';
+import { EnqueueCommitSyncJob } from './application/commit-sync/EnqueueCommitSyncJob.js';
+import { ListPendingCommitSyncJobs } from './application/commit-sync/ListPendingCommitSyncJobs.js';
+import { ClaimCommitSyncJob } from './application/commit-sync/ClaimCommitSyncJob.js';
+import { CompleteCommitSyncJob } from './application/commit-sync/CompleteCommitSyncJob.js';
+import { CommitSyncJobCleanup } from './application/commit-sync/CommitSyncJobCleanup.js';
+import { CommitSyncScheduler } from './infrastructure/scheduler/CommitSyncScheduler.js';
 import { DrizzleAutomationRepository } from './infrastructure/repositories/DrizzleAutomationRepository.js';
 import { GetAutomationConfig } from './application/automation/GetAutomationConfig.js';
 import { SaveAutomationConfig } from './application/automation/SaveAutomationConfig.js';
@@ -851,6 +858,52 @@ setInterval(() => {
       }
     })
     .catch((err) => console.warn('[monitoring-analysis-cleanup] failed:', err));
+}, 60 * 1000).unref();
+
+// Ежедневная commit-sync (db/072): планировщик ставит job, диспетчер матчит коммиты с
+// задачами, сервер двигает статусы по порогу. Зеркало monitoring_analysis_jobs.
+const commitSyncJobRepo = new DrizzleCommitSyncJobRepository(db);
+const enqueueCommitSyncJob = new EnqueueCommitSyncJob({
+  projects: projectRepo,
+  automation: automationRepo,
+  tasks: taskRepo,
+  listProjectCommits: new ListProjectCommits({
+    projects: projectRepo,
+    members: projectMemberRepo,
+    tokens: githubTokenRepo,
+    api: githubApi,
+  }),
+  commitSyncJobs: commitSyncJobRepo,
+});
+const listPendingCommitSyncJobs = new ListPendingCommitSyncJobs({
+  commitSyncJobs: commitSyncJobRepo,
+});
+const claimCommitSyncJob = new ClaimCommitSyncJob({ commitSyncJobs: commitSyncJobRepo });
+const completeCommitSyncJob = new CompleteCommitSyncJob({
+  commitSyncJobs: commitSyncJobRepo,
+  tasks: taskRepo,
+  // Привязка совпавшего коммита к карточке (best-effort, сбой не валит move).
+  linkCommit: new LinkCommit({
+    projects: projectRepo,
+    members: projectMemberRepo,
+    tasks: taskRepo,
+    taskCommits: taskCommitRepo,
+    tokens: githubTokenRepo,
+    api: githubApi,
+    delegations: gitTokenDelegationRepo,
+    users: userRepo,
+  }),
+});
+const commitSyncJobCleanup = new CommitSyncJobCleanup({ commitSyncJobs: commitSyncJobRepo });
+setInterval(() => {
+  void commitSyncJobCleanup
+    .runOnce(new Date())
+    .then((r) => {
+      if (r.cancelled > 0 || r.deleted > 0) {
+        console.log(`[commit-sync-cleanup] cancelled=${r.cancelled} deleted=${r.deleted}`);
+      }
+    })
+    .catch((err) => console.warn('[commit-sync-cleanup] failed:', err));
 }, 60 * 1000).unref();
 
 const monitoringKbSnapshotWriter = new MonitoringKbSnapshotWriter({
@@ -1623,6 +1676,9 @@ const { app, devProxyUpgrade } = createApp({
     listPendingMonitoringAnalysisJobs,
     claimMonitoringAnalysisJob,
     completeMonitoringAnalysisJob,
+    listPendingCommitSyncJobs,
+    claimCommitSyncJob,
+    completeCommitSyncJob,
     getAiPromptKbBundle: new GetAiPromptKbBundle({
       aiPromptJobs: aiPromptJobRepo,
       projects: projectRepo,
@@ -1802,6 +1858,14 @@ const dailyDigestScheduler = new DailyDigestScheduler({
   send: sendDailyDigest,
 });
 dailyDigestScheduler.start();
+
+// Ежедневная commit-sync (db/072): тик раз в минуту ставит job на проекты с включённой
+// авто-обработкой статусов по коммитам в заданное МSK-время. Зеркало DailyDigestScheduler.
+const commitSyncScheduler = new CommitSyncScheduler({
+  automation: automationRepo,
+  enqueue: enqueueCommitSyncJob,
+});
+commitSyncScheduler.start();
 
 const server = app.listen(config.port, () => {
   console.log(

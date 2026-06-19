@@ -130,6 +130,11 @@ export function defaultAutomationConfig(projectId: string): AutomationConfig {
     tasksCreated: 0,
     lastTaskAt: null,
     nextCriterionIdx: 0,
+    commitSyncEnabled: false,
+    commitSyncHour: 3,
+    commitSyncMinute: 0,
+    commitSyncThresholdHours: 70,
+    commitSyncLastRunOn: null,
     criteria: mergeCriteriaWithDefaults([]),
   };
 }

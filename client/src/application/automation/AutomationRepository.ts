@@ -20,6 +20,10 @@ export type SaveAutomationInput = {
   readonly ultracodeReviewEnabled: boolean;
   readonly deployMethod: DeployMethod;
   readonly deployCommand: string | null;
+  readonly commitSyncEnabled: boolean;
+  readonly commitSyncHour: number;
+  readonly commitSyncMinute: number;
+  readonly commitSyncThresholdHours: number;
   readonly criteria: ReadonlyArray<{
     readonly key: string;
     readonly enabled: boolean;

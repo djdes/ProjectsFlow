@@ -810,6 +810,44 @@ export type MonitoringAnalysisJobRow = typeof monitoringAnalysisJobs.$inferSelec
 export type NewMonitoringAnalysisJobRow = typeof monitoringAnalysisJobs.$inferInsert;
 
 // ============================================================================
+// commit_sync_jobs — миграция db/072. Ежедневная авто-обработка статусов задач по
+// коммитам: сервер ставит job (задачи + коммиты + порог), ralph матчит коммиты с задачами,
+// сервер двигает статусы по порогу при complete. Зеркало monitoring_analysis_jobs.
+// ============================================================================
+export const commitSyncJobs = mysqlTable(
+  'commit_sync_jobs',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    dispatcherUserId: char('dispatcher_user_id', { length: 36 }).notNull(),
+    status: mysqlEnum('status', ['queued', 'running', 'succeeded', 'failed', 'cancelled'])
+      .notNull()
+      .default('queued'),
+    thresholdHours: int('threshold_hours').notNull(),
+    context: mediumtext('context'),
+    commitsJson: mediumtext('commits_json'),
+    matchesJson: mediumtext('matches_json'),
+    resultSummary: mediumtext('result_summary'),
+    error: varchar('error', { length: 500 }),
+    costUsd: decimal('cost_usd', { precision: 10, scale: 4 }),
+    tokensIn: bigint('tokens_in', { mode: 'number' }),
+    tokensOut: bigint('tokens_out', { mode: 'number' }),
+    claimedAt: timestamp('claimed_at'),
+    finishedAt: timestamp('finished_at'),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    index('idx_csj_dispatcher_status').on(t.dispatcherUserId, t.status, t.createdAt),
+    index('idx_csj_project_created').on(t.projectId, t.createdAt),
+    index('idx_csj_status_created').on(t.status, t.createdAt),
+  ],
+);
+
+export type CommitSyncJobRow = typeof commitSyncJobs.$inferSelect;
+export type NewCommitSyncJobRow = typeof commitSyncJobs.$inferInsert;
+
+// ============================================================================
 // project_automation — миграция db/045. Автоматизация: если у проекта нет открытых
 // задач, диспетчер (ralph) сам генерирует и выполняет задачи по выбранным критериям.
 // Сайт хранит конфиг + редактируемые промпты, считает лимит и round-robin критериев.
@@ -844,6 +882,12 @@ export const projectAutomation = mysqlTable('project_automation', {
   tasksCreated: int('tasks_created').notNull().default(0),
   lastTaskAt: timestamp('last_task_at'),
   nextCriterionIdx: int('next_criterion_idx').notNull().default(0),
+  // Ежедневная авто-обработка статусов задач по коммитам (db/072).
+  commitSyncEnabled: boolean('commit_sync_enabled').notNull().default(false),
+  commitSyncHour: tinyint('commit_sync_hour').notNull().default(3),
+  commitSyncMinute: tinyint('commit_sync_minute').notNull().default(0),
+  commitSyncThresholdHours: int('commit_sync_threshold_hours').notNull().default(70),
+  commitSyncLastRunOn: date('commit_sync_last_run_on', { mode: 'string' }),
   createdAt: createdAtCol(),
   updatedAt: updatedAtCol(),
 });

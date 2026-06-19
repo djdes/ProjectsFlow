@@ -36,6 +36,15 @@ import type { ClaimMonitoringAnalysisJob } from '../../application/monitoring-an
 import type { CompleteMonitoringAnalysisJob } from '../../application/monitoring-analysis/CompleteMonitoringAnalysisJob.js';
 import type { MonitoringAnalysisJob } from '../../domain/monitoring-analysis/MonitoringAnalysisJob.js';
 import type { PendingMonitoringAnalysisJob } from '../../application/monitoring-analysis/MonitoringAnalysisJobRepository.js';
+import type { ListPendingCommitSyncJobs } from '../../application/commit-sync/ListPendingCommitSyncJobs.js';
+import type { ClaimCommitSyncJob } from '../../application/commit-sync/ClaimCommitSyncJob.js';
+import type { CompleteCommitSyncJob } from '../../application/commit-sync/CompleteCommitSyncJob.js';
+import type { CommitSyncJob } from '../../domain/commit-sync/CommitSyncJob.js';
+import type { PendingCommitSyncJob } from '../../application/commit-sync/CommitSyncJobRepository.js';
+import {
+  CommitSyncJobAlreadyClaimedError,
+  CommitSyncJobNotFoundError,
+} from '../../domain/commit-sync/errors.js';
 import {
   AiPromptDispatcherNotConfiguredError,
   AiPromptJobAccessDeniedError,
@@ -143,6 +152,9 @@ type Deps = {
   readonly listPendingMonitoringAnalysisJobs: ListPendingMonitoringAnalysisJobs;
   readonly claimMonitoringAnalysisJob: ClaimMonitoringAnalysisJob;
   readonly completeMonitoringAnalysisJob: CompleteMonitoringAnalysisJob;
+  readonly listPendingCommitSyncJobs: ListPendingCommitSyncJobs;
+  readonly claimCommitSyncJob: ClaimCommitSyncJob;
+  readonly completeCommitSyncJob: CompleteCommitSyncJob;
   readonly uploadTaskAttachment: UploadTaskAttachment;
   readonly maxAttachmentBytes: number;
   readonly ackRalphCancel: AckRalphCancel;
@@ -1288,6 +1300,111 @@ export function agentApiRouter(deps: Deps): Router {
       });
       res.status(204).end();
     } catch (e) {
+      next(e);
+    }
+  });
+
+  // === Ежедневная commit-sync — dispatcher poll/claim/complete (db/072) ===
+  // Зеркало monitoring-analysis: Ralph поллит, забирает job с пред-собранным контекстом
+  // (задачи + коммиты с ageHours + порог), спрашивает Claude совпадения коммит↔задача и
+  // возвращает matches. Порог и перемещения применяет СЕРВЕР в CompleteCommitSyncJob.
+  const commitSyncMatchSchema = z.object({
+    taskId: z.string().min(1),
+    commitSha: z.string().min(1),
+    reason: z.string().max(2000).nullable().optional(),
+  });
+
+  const completeCommitSyncBodySchema = z
+    .object({
+      ok: z.boolean(),
+      // Пустой массив = «совпадений нет» — валидно для ok=true.
+      matches: z.array(commitSyncMatchSchema).max(500).nullable().optional(),
+      error: z.string().max(500).nullable().optional(),
+      costUsd: z.number().nullable().optional(),
+      tokensIn: z.number().int().nullable().optional(),
+      tokensOut: z.number().int().nullable().optional(),
+    })
+    .refine((b) => (b.ok ? Array.isArray(b.matches) : true), {
+      message: 'matches array required when ok=true (may be empty)',
+      path: ['matches'],
+    })
+    .refine((b) => (b.ok ? true : Boolean(b.error && b.error.trim().length > 0)), {
+      message: 'error required when ok=false',
+      path: ['error'],
+    });
+
+  const pendingCommitSyncToDto = (p: PendingCommitSyncJob): Record<string, unknown> => ({
+    id: p.id,
+    projectId: p.projectId,
+    projectName: p.projectName,
+    createdAt: p.createdAt.toISOString(),
+  });
+
+  const commitSyncToAgentDto = (j: CommitSyncJob): Record<string, unknown> => ({
+    id: j.id,
+    projectId: j.projectId,
+    status: j.status,
+    thresholdHours: j.thresholdHours,
+    context: j.context,
+    claimedAt: j.claimedAt ? j.claimedAt.toISOString() : null,
+    createdAt: j.createdAt.toISOString(),
+  });
+
+  router.get('/pending-commit-sync-jobs', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const limitParam = req.query['limit'];
+      const limit = typeof limitParam === 'string' ? parseInt(limitParam, 10) : undefined;
+      const jobs = await deps.listPendingCommitSyncJobs.execute({
+        userId: req.user!.id,
+        limit: Number.isFinite(limit) ? limit : undefined,
+      });
+      res.json({ jobs: jobs.map(pendingCommitSyncToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/commit-sync-jobs/:jobId/claim', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const jobId = req.params['jobId'] as string;
+      const job = await deps.claimCommitSyncJob.execute({ userId: req.user!.id, jobId });
+      res.json({ job: commitSyncToAgentDto(job) });
+    } catch (e) {
+      // 409 на гонке claim'а — диспетчер по нему понимает «job уже забран», это норма.
+      if (e instanceof CommitSyncJobAlreadyClaimedError) {
+        res.status(409).json({ error: 'commit_sync_job_already_claimed' });
+        return;
+      }
+      if (e instanceof CommitSyncJobNotFoundError) {
+        res.status(404).json({ error: 'commit_sync_job_not_found' });
+        return;
+      }
+      next(e);
+    }
+  });
+
+  router.post('/commit-sync-jobs/:jobId/complete', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const jobId = req.params['jobId'] as string;
+      const body = completeCommitSyncBodySchema.parse(req.body);
+      await deps.completeCommitSyncJob.execute({
+        userId: req.user!.id,
+        jobId,
+        ok: body.ok,
+        matches: body.matches
+          ? body.matches.map((m) => ({ taskId: m.taskId, commitSha: m.commitSha, reason: m.reason ?? null }))
+          : null,
+        error: body.error ?? null,
+        costUsd: body.costUsd ?? null,
+        tokensIn: body.tokensIn ?? null,
+        tokensOut: body.tokensOut ?? null,
+      });
+      res.status(204).end();
+    } catch (e) {
+      if (e instanceof CommitSyncJobNotFoundError) {
+        res.status(404).json({ error: 'commit_sync_job_not_found' });
+        return;
+      }
       next(e);
     }
   });

@@ -24,6 +24,12 @@ export type SaveAutomationInput = {
   readonly ultracodeReviewEnabled: boolean;
   readonly deployMethod: DeployMethod;
   readonly deployCommand: string | null;
+  // Ежедневная авто-обработка статусов задач по коммитам (db/072). 4 редактируемых поля;
+  // commit_sync_last_run_on здесь НЕ трогаем — им владеет планировщик (markCommitSyncRun).
+  readonly commitSyncEnabled: boolean;
+  readonly commitSyncHour: number;
+  readonly commitSyncMinute: number;
+  readonly commitSyncThresholdHours: number;
   // run_status выставляется отдельно (resetRun/markStopped) — здесь не трогаем.
   readonly criteria: ReadonlyArray<{
     readonly key: string;
@@ -64,4 +70,18 @@ export type AutomationRepository = {
   // project_id'ы где автоматизация включена (enabled=true) — лёгкий флаг для discovery
   // в ListMyDispatchedProjects (диспетчер решает, какие проекты опрашивать полным GET'ом).
   listEnabledProjectIds(): Promise<ReadonlyArray<string>>;
+
+  // --- Ежедневная авто-обработка статусов задач по коммитам (db/072) ---
+  // Проекты с включённым commit-sync — для планировщика CommitSyncScheduler.
+  // lastRunOn — МSK-дата ('YYYY-MM-DD') последнего прогона (анти-дубль), null если не было.
+  listCommitSyncEnabled(): Promise<
+    ReadonlyArray<{
+      readonly projectId: string;
+      readonly hour: number;
+      readonly minute: number;
+      readonly lastRunOn: string | null;
+    }>
+  >;
+  // Пометить commit-sync прогон выполненным сегодня (МSK-дата 'YYYY-MM-DD').
+  markCommitSyncRun(projectId: string, dateMsk: string): Promise<void>;
 };

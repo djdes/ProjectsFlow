@@ -72,6 +72,12 @@ const saveBodySchema = z
       .nullable()
       .optional()
       .transform((v) => (v && v.trim().length > 0 ? v : null)),
+    // Ежедневная авто-обработка статусов задач по коммитам (db/072). Опциональны с
+    // дефолтами — старый клиент не падает. Редактируемы editor+ (не publish-settings).
+    commitSyncEnabled: z.boolean().optional().default(false),
+    commitSyncHour: z.number().int().min(0).max(23).optional().default(3),
+    commitSyncMinute: z.number().int().min(0).max(59).optional().default(0),
+    commitSyncThresholdHours: z.number().int().min(1).max(8760).optional().default(70),
     criteria: z.array(criterionSchema).max(20),
   })
   .refine((b) => b.pauseMaxSeconds >= b.pauseMinSeconds, {
@@ -140,6 +146,10 @@ export function buildAutomationRouter(deps: Deps): Router {
           ultracodeReviewEnabled: body.ultracodeReviewEnabled,
           deployMethod: body.deployMethod,
           deployCommand: body.deployCommand,
+          commitSyncEnabled: body.commitSyncEnabled,
+          commitSyncHour: body.commitSyncHour,
+          commitSyncMinute: body.commitSyncMinute,
+          commitSyncThresholdHours: body.commitSyncThresholdHours,
           criteria: body.criteria,
         });
         res.json(automationConfigToDto(config));
@@ -171,6 +181,11 @@ function automationConfigToDto(config: AutomationConfig): {
   runStartedAt: string | null;
   tasksCreated: number;
   lastTaskAt: string | null;
+  commitSyncEnabled: boolean;
+  commitSyncHour: number;
+  commitSyncMinute: number;
+  commitSyncThresholdHours: number;
+  commitSyncLastRunOn: string | null;
   criteria: ReadonlyArray<{
     key: string;
     label: string;
@@ -198,6 +213,11 @@ function automationConfigToDto(config: AutomationConfig): {
     runStartedAt: config.runStartedAt ? config.runStartedAt.toISOString() : null,
     tasksCreated: config.tasksCreated,
     lastTaskAt: config.lastTaskAt ? config.lastTaskAt.toISOString() : null,
+    commitSyncEnabled: config.commitSyncEnabled,
+    commitSyncHour: config.commitSyncHour,
+    commitSyncMinute: config.commitSyncMinute,
+    commitSyncThresholdHours: config.commitSyncThresholdHours,
+    commitSyncLastRunOn: config.commitSyncLastRunOn,
     criteria: config.criteria.map((c) => ({
       key: c.key,
       label: AUTOMATION_CRITERIA_BY_KEY.get(c.key)?.label ?? c.key,

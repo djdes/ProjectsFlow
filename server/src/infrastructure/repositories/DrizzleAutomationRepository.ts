@@ -63,6 +63,11 @@ export class DrizzleAutomationRepository implements AutomationRepository {
         ultracodeReviewEnabled: input.ultracodeReviewEnabled,
         deployMethod: input.deployMethod,
         deployCommand: input.deployCommand,
+        // commit-sync: 4 редактируемых поля. last_run_on НЕ трогаем — им владеет планировщик.
+        commitSyncEnabled: input.commitSyncEnabled,
+        commitSyncHour: input.commitSyncHour,
+        commitSyncMinute: input.commitSyncMinute,
+        commitSyncThresholdHours: input.commitSyncThresholdHours,
       })
       .onDuplicateKeyUpdate({
         set: {
@@ -80,6 +85,10 @@ export class DrizzleAutomationRepository implements AutomationRepository {
           ultracodeReviewEnabled: input.ultracodeReviewEnabled,
           deployMethod: input.deployMethod,
           deployCommand: input.deployCommand,
+          commitSyncEnabled: input.commitSyncEnabled,
+          commitSyncHour: input.commitSyncHour,
+          commitSyncMinute: input.commitSyncMinute,
+          commitSyncThresholdHours: input.commitSyncThresholdHours,
         },
       });
 
@@ -130,6 +139,38 @@ export class DrizzleAutomationRepository implements AutomationRepository {
       .from(projectAutomation)
       .where(eq(projectAutomation.enabled, true));
     return rows.map((r) => r.projectId);
+  }
+
+  async listCommitSyncEnabled(): Promise<
+    ReadonlyArray<{
+      projectId: string;
+      hour: number;
+      minute: number;
+      lastRunOn: string | null;
+    }>
+  > {
+    const rows = await this.db
+      .select({
+        projectId: projectAutomation.projectId,
+        hour: projectAutomation.commitSyncHour,
+        minute: projectAutomation.commitSyncMinute,
+        lastRunOn: projectAutomation.commitSyncLastRunOn,
+      })
+      .from(projectAutomation)
+      .where(eq(projectAutomation.commitSyncEnabled, true));
+    return rows.map((r) => ({
+      projectId: r.projectId,
+      hour: r.hour,
+      minute: r.minute,
+      lastRunOn: r.lastRunOn ?? null,
+    }));
+  }
+
+  async markCommitSyncRun(projectId: string, dateMsk: string): Promise<void> {
+    await this.db
+      .update(projectAutomation)
+      .set({ commitSyncLastRunOn: dateMsk })
+      .where(eq(projectAutomation.projectId, projectId));
   }
 
   async recordTaskCreated(projectId: string, nextIdx: number): Promise<AutomationRunState> {
@@ -184,5 +225,10 @@ function rowToConfigBase(row: ProjectAutomationRow): Omit<AutomationConfig, 'cri
     tasksCreated: row.tasksCreated,
     lastTaskAt: row.lastTaskAt ?? null,
     nextCriterionIdx: row.nextCriterionIdx,
+    commitSyncEnabled: row.commitSyncEnabled,
+    commitSyncHour: row.commitSyncHour,
+    commitSyncMinute: row.commitSyncMinute,
+    commitSyncThresholdHours: row.commitSyncThresholdHours,
+    commitSyncLastRunOn: row.commitSyncLastRunOn ?? null,
   };
 }

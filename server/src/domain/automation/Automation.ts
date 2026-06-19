@@ -47,5 +47,13 @@ export type AutomationConfig = {
   readonly tasksCreated: number;
   readonly lastTaskAt: Date | null;
   readonly nextCriterionIdx: number;
+  // Ежедневная авто-обработка статусов задач по коммитам (db/072). Планировщик раз в день
+  // в commitSyncHour:commitSyncMinute (МSK) ставит job; диспетчер матчит коммиты с задачами,
+  // сервер двигает по порогу commitSyncThresholdHours. lastRunOn — анти-дубль (МSK-дата).
+  readonly commitSyncEnabled: boolean;
+  readonly commitSyncHour: number;
+  readonly commitSyncMinute: number;
+  readonly commitSyncThresholdHours: number;
+  readonly commitSyncLastRunOn: string | null;
   readonly criteria: ReadonlyArray<AutomationCriterion>;
 };
