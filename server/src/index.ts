@@ -22,6 +22,9 @@ import { DrizzleWorkspaceRepository } from './infrastructure/repositories/Drizzl
 import { WorkspaceService } from './application/workspace/WorkspaceService.js';
 import { DrizzleProjectInviteRepository } from './infrastructure/repositories/DrizzleProjectInviteRepository.js';
 import { DrizzleNotificationRepository } from './infrastructure/repositories/DrizzleNotificationRepository.js';
+import { DrizzleRecentTaskViewRepository } from './infrastructure/repositories/DrizzleRecentTaskViewRepository.js';
+import { RecordTaskView } from './application/task/RecordTaskView.js';
+import { ListRecentTaskViews } from './application/task/ListRecentTaskViews.js';
 import { NotificationHub } from './infrastructure/notifications/NotificationHub.js';
 import { RealtimeHub } from './infrastructure/realtime/RealtimeHub.js';
 import { ProjectEventBroadcaster } from './application/realtime/ProjectEventBroadcaster.js';
@@ -249,6 +252,7 @@ const sessionRepo = new DrizzleSessionRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const projectMemberRepo = new DrizzleProjectMemberRepository(db);
 const projectInviteRepo = new DrizzleProjectInviteRepository(db);
+const recentTaskViewRepo = new DrizzleRecentTaskViewRepository(db);
 
 // === Пространства (workspaces) ===
 const workspaceRepo = new DrizzleWorkspaceRepository(db);
@@ -1240,6 +1244,10 @@ const { app, devProxyUpgrade } = createApp({
     subscribe: (userId, fn) => notificationHub.subscribe(userId, fn),
     subscribeRealtime: (userId, fn) => realtimeHub.subscribe(userId, fn),
     projectNotifier,
+  },
+  recentTaskViews: {
+    list: new ListRecentTaskViews({ repo: recentTaskViewRepo }),
+    record: new RecordTaskView({ repo: recentTaskViewRepo }),
   },
   invites: {
     getByToken: new GetInviteByToken({

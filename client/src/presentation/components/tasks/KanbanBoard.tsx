@@ -219,13 +219,21 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   const { settings, defaults, setColor, setLabel, setHidden } = useKanbanSettings(projectId);
   const [dialog, setDialog] = useState<TaskDrawerState | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  // Deep-link из email-кнопки: ?task=<id> открывает диалог задачи (один раз после загрузки).
-  const deepLinkedRef = useRef(false);
+  // Deep-link: ?task=<id> открывает диалог задачи. Используется email-кнопками И блоком
+  // «Недавнее» в сайдбаре. Трекаем последний обработанный taskId (а не one-shot-флаг):
+  // клик по другой записи «Недавнего» на уже смонтированной доске меняет только query
+  // (доска не перемонтируется) — реагируем на смену значения. Сброс ref при пустом query
+  // позволяет переоткрыть ту же задачу повторным кликом.
+  const deepLinkedTaskRef = useRef<string | null>(null);
   useEffect(() => {
-    if (deepLinkedRef.current || loading) return;
+    if (loading) return;
     const taskId = searchParams.get('task');
-    if (!taskId) return;
-    deepLinkedRef.current = true;
+    if (!taskId) {
+      deepLinkedTaskRef.current = null;
+      return;
+    }
+    if (deepLinkedTaskRef.current === taskId) return;
+    deepLinkedTaskRef.current = taskId;
     const task = tasks.find((t) => t.id === taskId);
     // Ловим #comment-<id> из hash ДО очистки query (setSearchParams сбрасывает hash).
     const hashMatch = /^#comment-(.+)$/.exec(window.location.hash);

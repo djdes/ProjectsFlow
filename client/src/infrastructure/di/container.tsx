@@ -23,6 +23,9 @@ import { HttpMonitoringRepository } from '@/infrastructure/http/HttpMonitoringRe
 import { HttpLiveRepository } from '@/infrastructure/http/HttpLiveRepository';
 import { HttpChatRepository } from '@/infrastructure/http/HttpChatRepository';
 import { HttpWorkspaceRepository } from '@/infrastructure/http/HttpWorkspaceRepository';
+import { HttpRecentTaskViewRepository } from '@/infrastructure/http/HttpRecentTaskViewRepository';
+import { RecordTaskView } from '@/application/recent/RecordTaskView';
+import { ListRecentTaskViews } from '@/application/recent/ListRecentTaskViews';
 import { ImproveTaskDescription } from '@/application/ai/ImproveTaskDescription';
 import { ComposeTasks } from '@/application/ai/ComposeTasks';
 import type { AiPromptRepository } from '@/application/ai/AiPromptRepository';
@@ -101,6 +104,8 @@ type Container = {
   listWorkspaces: ListWorkspaces;
   createWorkspace: CreateWorkspace;
   workspaceRepository: WorkspaceRepository;
+  recordTaskView: RecordTaskView;
+  listRecentTaskViews: ListRecentTaskViews;
 };
 
 function buildContainer(): Container {
@@ -128,6 +133,7 @@ function buildContainer(): Container {
   const liveRepo = new HttpLiveRepository();
   const chatRepo = new HttpChatRepository();
   const workspaceRepo = new HttpWorkspaceRepository();
+  const recentTaskViewRepo = new HttpRecentTaskViewRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -166,6 +172,8 @@ function buildContainer(): Container {
     listWorkspaces: new ListWorkspaces(workspaceRepo),
     createWorkspace: new CreateWorkspace(workspaceRepo),
     workspaceRepository: workspaceRepo,
+    recordTaskView: new RecordTaskView(recentTaskViewRepo),
+    listRecentTaskViews: new ListRecentTaskViews(recentTaskViewRepo),
   };
 }
 
