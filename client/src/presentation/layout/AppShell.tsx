@@ -105,45 +105,59 @@ export function AppShell(): React.ReactElement {
 function MobileBottomNav({ onOpenProjects }: { onOpenProjects: () => void }): React.ReactElement {
   const { count: unreadCount } = useUnreadNotificationsCount();
 
+  // Активная вкладка получает «жидко-стеклянный» чип: слой светлее самой панели,
+  // с верхним бликом и кольцом — приподнятое frosted-glass-выделение (iOS-26 / Telegram).
   const itemClass = (isActive: boolean): string =>
     cn(
-      'flex flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] leading-none transition-colors',
-      isActive ? 'text-foreground' : 'text-muted-foreground',
+      'group relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-[1.15rem] py-1.5 text-[10px] leading-none transition-all duration-300 ease-out',
+      isActive
+        ? 'text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_1px_3px_rgba(0,0,0,0.12)] ring-1 ring-black/[0.04] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.3)] dark:ring-white/10'
+        : 'text-muted-foreground active:scale-[0.94]',
+      isActive && 'bg-background/90 dark:bg-white/[0.07]',
     );
 
-  // min-h-14 (а не h-14): safe-area-паддинг прибавляется СНИЗУ, не съедая высоту иконок
-  // на iPhone в standalone (см. CLAUDE.md → «Правка мобильной вёрстки / PWA под iPhone»).
+  // Парящая стеклянная панель: внешний <nav> держит отступы (эффект парения + safe-area
+  // снизу), внутренний слой — frosted glass (blur + saturate + полупрозрачность + тень).
+  // В потоке flex (shrink-0): контент страницы останавливается над панелью, оверлапа нет.
+  // См. CLAUDE.md → «Правка мобильной вёрстки / PWA под iPhone».
   return (
-    <nav className="flex min-h-14 shrink-0 items-stretch border-t bg-background pb-[env(safe-area-inset-bottom)]">
-      <NavLink to="/" end className={({ isActive }) => itemClass(isActive)}>
-        <span className="relative inline-flex">
-          <Inbox className="size-5" />
-        </span>
-        Входящие
-      </NavLink>
-      <button type="button" onClick={onOpenProjects} className={itemClass(false)}>
-        <span className="relative inline-flex">
-          <FolderKanban className="size-5" />
-        </span>
-        Проекты
-      </button>
-      <NavLink to="/notifications" className={({ isActive }) => itemClass(isActive)}>
-        <span className="relative inline-flex">
-          <Bell className="size-5" />
-          {unreadCount > 0 && (
-            <span className="absolute -right-1.5 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </span>
-          )}
-        </span>
-        Уведомления
-      </NavLink>
-      <NavLink to="/profile" className={({ isActive }) => itemClass(isActive)}>
-        <span className="relative inline-flex">
-          <User className="size-5" />
-        </span>
-        Профиль
-      </NavLink>
+    <nav className="shrink-0 px-3 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+0.55rem)]">
+      <div className="relative mx-auto flex max-w-md items-stretch gap-1 rounded-[1.55rem] border border-white/20 bg-background/65 p-1 shadow-[0_8px_28px_-6px_rgba(0,0,0,0.35)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:bg-background/55 dark:shadow-[0_8px_28px_-4px_rgba(0,0,0,0.6)]">
+        {/* верхний блик стекла */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent dark:via-white/20"
+        />
+        <NavLink to="/" end className={({ isActive }) => itemClass(isActive)}>
+          <span className="relative inline-flex">
+            <Inbox className="size-5" />
+          </span>
+          Входящие
+        </NavLink>
+        <button type="button" onClick={onOpenProjects} className={itemClass(false)}>
+          <span className="relative inline-flex">
+            <FolderKanban className="size-5" />
+          </span>
+          Проекты
+        </button>
+        <NavLink to="/notifications" className={({ isActive }) => itemClass(isActive)}>
+          <span className="relative inline-flex">
+            <Bell className="size-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -right-1.5 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </span>
+          Уведомления
+        </NavLink>
+        <NavLink to="/profile" className={({ isActive }) => itemClass(isActive)}>
+          <span className="relative inline-flex">
+            <User className="size-5" />
+          </span>
+          Профиль
+        </NavLink>
+      </div>
     </nav>
   );
 }
