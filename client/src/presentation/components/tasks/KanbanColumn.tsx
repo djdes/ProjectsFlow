@@ -150,7 +150,7 @@ export function KanbanColumn({
       className={cn(
         // group/column — именованный, чтобы не конфликтовать с голым `group` карточек:
         // на hover колонки проявляем «тихие» иконки шапки (Notion-style).
-        'group/column flex h-full min-h-0 w-[82vw] max-w-[20rem] shrink-0 snap-start flex-col rounded-xl sm:w-72 sm:max-w-none',
+        'group/column flex h-full min-h-0 w-[92vw] max-w-[24rem] shrink-0 snap-start flex-col rounded-xl sm:w-72 sm:max-w-none',
         colorClasses?.body ?? 'bg-muted/60 sm:bg-muted/30',
       )}
     >

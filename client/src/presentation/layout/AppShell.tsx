@@ -107,22 +107,28 @@ function MobileBottomNav({ onOpenProjects }: { onOpenProjects: () => void }): Re
 
   const itemClass = (isActive: boolean): string =>
     cn(
-      'flex flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] transition-colors',
+      'flex flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] leading-none transition-colors',
       isActive ? 'text-foreground' : 'text-muted-foreground',
     );
 
+  // min-h-14 (а не h-14): safe-area-паддинг прибавляется СНИЗУ, не съедая высоту иконок
+  // на iPhone в standalone (см. CLAUDE.md → «Правка мобильной вёрстки / PWA под iPhone»).
   return (
-    <nav className="flex h-14 shrink-0 items-stretch border-t bg-background pb-[env(safe-area-inset-bottom)]">
+    <nav className="flex min-h-14 shrink-0 items-stretch border-t bg-background pb-[env(safe-area-inset-bottom)]">
       <NavLink to="/" end className={({ isActive }) => itemClass(isActive)}>
-        <Inbox className="size-5" />
+        <span className="relative inline-flex">
+          <Inbox className="size-5" />
+        </span>
         Входящие
       </NavLink>
       <button type="button" onClick={onOpenProjects} className={itemClass(false)}>
-        <FolderKanban className="size-5" />
+        <span className="relative inline-flex">
+          <FolderKanban className="size-5" />
+        </span>
         Проекты
       </button>
       <NavLink to="/notifications" className={({ isActive }) => itemClass(isActive)}>
-        <span className="relative">
+        <span className="relative inline-flex">
           <Bell className="size-5" />
           {unreadCount > 0 && (
             <span className="absolute -right-1.5 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
@@ -133,7 +139,9 @@ function MobileBottomNav({ onOpenProjects }: { onOpenProjects: () => void }): Re
         Уведомления
       </NavLink>
       <NavLink to="/profile" className={({ isActive }) => itemClass(isActive)}>
-        <User className="size-5" />
+        <span className="relative inline-flex">
+          <User className="size-5" />
+        </span>
         Профиль
       </NavLink>
     </nav>

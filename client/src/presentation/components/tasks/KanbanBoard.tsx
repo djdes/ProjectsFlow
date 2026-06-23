@@ -641,7 +641,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
             onChange={(e) => setFilterQuery(e.target.value)}
             placeholder="Фильтр по тексту…"
             aria-label="Фильтр задач по тексту"
-            className="h-7 w-44 rounded-md bg-transparent pl-7 pr-2 text-xs outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-accent/60 focus:bg-accent/60"
+            className="h-7 w-32 rounded-md bg-transparent pl-7 pr-2 text-xs outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-accent/60 focus:bg-accent/60 sm:w-44"
           />
         </div>
         <FilterDropdown
@@ -739,7 +739,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         {/* На мобиле колонки занимают почти всю ширину и «прилипают» при свайпе
             (snap), на десктопе — обычный горизонтальный ряд. Drag между колонками
             работает в обоих режимах: все колонки в DOM, просто проскроллены. */}
-        <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto pb-28 sm:snap-none">
+        <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto pb-20 sm:snap-none sm:pb-28">
           {shownStatuses.map((status) => {
             const perColumn = settings?.[status];
             const color = resolveColumnColor(perColumn, defaults?.[status], status);
