@@ -112,7 +112,7 @@ export function InboxPage(): React.ReactElement {
   return (
     <div
       className={cn(
-        'flex h-full flex-col gap-4 p-4 sm:gap-6 sm:p-6',
+        'flex h-full flex-col gap-3 p-4 sm:gap-4 sm:p-5',
         // Список — узкая центрированная читаемая колонка (как Todoist). Канбан-доске нужна
         // вся ширина, поэтому ограничение применяем только в list-режиме.
         view === 'list' && 'mx-auto w-full max-w-3xl',
@@ -120,8 +120,8 @@ export function InboxPage(): React.ReactElement {
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <InboxIcon className="size-7 text-primary" />
-          <h1 className="text-2xl font-semibold tracking-tight">Входящие</h1>
+          <InboxIcon className="size-5 text-primary" />
+          <h1 className="text-xl font-semibold tracking-tight">Входящие</h1>
         </div>
         <div className="flex items-center gap-2">
           <HideDoneToggle value={hideDone} onChange={handleHideDoneChange} />
