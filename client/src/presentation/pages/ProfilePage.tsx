@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Monitor, Moon, Sun } from 'lucide-react';
+import { Activity, ArrowLeft, Monitor, Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -255,6 +255,25 @@ function PreferencesCard(): React.ReactElement {
   );
 }
 
+function MonitoringCard(): React.ReactElement {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Мониторинг</CardTitle>
+        <CardDescription>Состояние серверов и здоровье инфраструктуры.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button asChild variant="outline" className="gap-2">
+          <Link to="/monitoring">
+            <Activity className="size-4" />
+            Открыть мониторинг
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ProfilePage(): React.ReactElement {
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-6">
@@ -265,7 +284,7 @@ export function ProfilePage(): React.ReactElement {
         </Link>
       </Button>
 
-      <h1 className="text-2xl font-semibold tracking-tight">Профиль</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Настройки</h1>
 
       <PersonalDataCard />
       <ProjectsShareCard />
@@ -277,6 +296,7 @@ export function ProfilePage(): React.ReactElement {
       <AgentAccessCard />
       <SecurityCard />
       <PreferencesCard />
+      <MonitoringCard />
       <InstallAppPrompt variant="card" />
     </div>
   );

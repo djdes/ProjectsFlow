@@ -9,6 +9,7 @@ import { TasksPage } from '@/presentation/pages/TasksPage';
 import { InboxPage } from '@/presentation/pages/InboxPage';
 import { NotificationsPage } from '@/presentation/pages/NotificationsPage';
 import { ProfilePage } from '@/presentation/pages/ProfilePage';
+import { WorkspaceSettingsPage } from '@/presentation/pages/WorkspaceSettingsPage';
 import { FinancePage } from '@/presentation/pages/FinancePage';
 import { AdminPage } from '@/presentation/pages/AdminPage';
 import { NotFoundPage } from '@/presentation/pages/NotFoundPage';
@@ -74,6 +75,7 @@ export const router = createBrowserRouter([
       // Обратная совместимость со старыми ссылками на доску (напр. из уведомлений).
       { path: 'projects/:projectId/tasks', element: <LegacyTasksRedirect /> },
       { path: 'profile', element: <ProfilePage /> },
+      { path: 'workspaces/:workspaceId/settings', element: <WorkspaceSettingsPage /> },
       {
         path: 'admin',
         element: (

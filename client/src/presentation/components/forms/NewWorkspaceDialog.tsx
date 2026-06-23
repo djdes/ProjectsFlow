@@ -11,8 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
-import { EMOJI } from '@/presentation/components/project/ProjectIconPicker';
+import { EmojiGrid } from './EmojiGrid';
 import { useCreateWorkspace } from '@/presentation/hooks/useCreateWorkspace';
 import { WorkspaceIcon } from '@/presentation/layout/WorkspaceIcon';
 
@@ -84,22 +83,7 @@ export function NewWorkspaceDialog({ open, onOpenChange }: Props): React.ReactEl
 
           <div className="space-y-2">
             <Label>Иконка</Label>
-            <div className="grid grid-cols-8 gap-0.5 rounded-md border p-2">
-              {EMOJI.map((e) => (
-                <button
-                  key={e}
-                  type="button"
-                  onClick={() => setIcon((cur) => (cur === e ? null : e))}
-                  className={cn(
-                    'grid size-7 place-items-center rounded-md text-base transition-colors hover:bg-accent',
-                    e === icon && 'bg-accent ring-1 ring-primary/40',
-                  )}
-                  aria-label={`Иконка ${e}`}
-                >
-                  {e}
-                </button>
-              ))}
-            </div>
+            <EmojiGrid value={icon} onChange={setIcon} />
           </div>
 
           {submitError && <p className="text-xs text-destructive">{submitError}</p>}

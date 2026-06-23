@@ -15,8 +15,8 @@ Branch: feat/workspaces
 - Task 9: done
 - Task 10: done (http-only, mocks dead in repo)
 - Task 11: done (typecheck clean)
-- Task 12: Sidebar switcher + popup — pending
-- Task 13: Create-workspace dialog — pending
+- Task 12: done
+- Task 13: done
 - Task 14: Profile page changes — pending
 - Task 15: Workspace settings page — pending
 - Task 16: Animations — pending
