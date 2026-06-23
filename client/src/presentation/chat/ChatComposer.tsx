@@ -162,7 +162,7 @@ export function ChatComposer({
           onKeyDown={onKeyDown}
           rows={1}
           placeholder={editing ? 'Изменить сообщение…' : 'Сообщение…'}
-          className="min-h-8 flex-1 resize-none rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="min-h-8 w-0 min-w-0 flex-1 resize-none rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
 
         <button
