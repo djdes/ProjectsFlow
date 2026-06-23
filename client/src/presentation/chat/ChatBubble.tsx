@@ -211,7 +211,7 @@ export function ChatBubble({
             за блок» и не обрезается скроллом. Раскрывается только пикер эмодзи (портал). */}
         <div
           className={cn(
-            'absolute -top-3 z-20 flex items-center gap-0.5 rounded-full border bg-background/95 px-0.5 py-0.5 opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 focus-within:opacity-100',
+            'absolute -top-7 z-20 flex items-center gap-0.5 rounded-full border bg-background/95 px-0.5 py-0.5 opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 focus-within:opacity-100',
             // НАД пузырём (не поверх текста), выровнен по внутреннему краю (не лезет к
             // скроллбару). Сверху у ленты есть pt-запас, поэтому даже у верхнего сообщения
             // тулбар не режется. Пикер эмодзи — портал (не обрезается).
@@ -228,7 +228,7 @@ export function ChatBubble({
                 <SmilePlus className="size-3.5" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="center" className="flex w-auto gap-0.5 p-1">
+            <DropdownMenuContent side="top" align="start" sideOffset={6} collisionPadding={8} className="flex w-auto gap-0.5 p-1">
               {QUICK_EMOJIS.map((e) => {
                 const mine =
                   message.reactions.find((r) => r.emoji === e)?.userIds.includes(currentUserId) ?? false;
