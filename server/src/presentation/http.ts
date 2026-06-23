@@ -169,6 +169,9 @@ import { telegramWebhookRouter } from './telegram/webhookRoutes.js';
 import { invitesRouter } from './invites/routes.js';
 import { delegationsRouter } from './delegations/routes.js';
 import { notificationsRouter } from './notifications/routes.js';
+import { recentTaskViewsRouter } from './recent-task-views/routes.js';
+import type { ListRecentTaskViews } from '../application/task/ListRecentTaskViews.js';
+import type { RecordTaskView } from '../application/task/RecordTaskView.js';
 import { agentTokensRouter } from './agent/tokensRoutes.js';
 import { agentApiRouter } from './agent/apiRoutes.js';
 import { fileSyncRouter } from './file-sync/routes.js';
@@ -303,6 +306,10 @@ type AppDeps = {
       fn: (e: RealtimeEvent) => void,
     ) => () => void;
     readonly projectNotifier: ProjectNotificationService;
+  };
+  readonly recentTaskViews: {
+    readonly list: ListRecentTaskViews;
+    readonly record: RecordTaskView;
   };
   readonly github: {
     readonly startDeviceFlow: StartDeviceFlow;
@@ -609,6 +616,7 @@ export function createApp(deps: AppDeps): CreatedApp {
     accept: deps.invites.accept,
   }));
   app.use('/api/notifications', notificationsRouter(deps.notifications));
+  app.use('/api/recent-task-views', recentTaskViewsRouter(deps.recentTaskViews));
 
   // Agent tokens management (session-auth)
   app.use(

@@ -21,6 +21,9 @@ import { HttpProjectFinanceRepository } from '@/infrastructure/http/HttpProjectF
 import { HttpTelegramRepository } from '@/infrastructure/http/HttpTelegramRepository';
 import { HttpMonitoringRepository } from '@/infrastructure/http/HttpMonitoringRepository';
 import { HttpLiveRepository } from '@/infrastructure/http/HttpLiveRepository';
+import { HttpRecentTaskViewRepository } from '@/infrastructure/http/HttpRecentTaskViewRepository';
+import { RecordTaskView } from '@/application/recent/RecordTaskView';
+import { ListRecentTaskViews } from '@/application/recent/ListRecentTaskViews';
 import { ImproveTaskDescription } from '@/application/ai/ImproveTaskDescription';
 import { ComposeTasks } from '@/application/ai/ComposeTasks';
 import type { AiPromptRepository } from '@/application/ai/AiPromptRepository';
@@ -91,6 +94,8 @@ type Container = {
   composeTasks: ComposeTasks;
   automationRepository: AutomationRepository;
   userRepository: UserRepository;
+  recordTaskView: RecordTaskView;
+  listRecentTaskViews: ListRecentTaskViews;
 };
 
 function buildContainer(): Container {
@@ -116,6 +121,7 @@ function buildContainer(): Container {
   const telegramRepo = new HttpTelegramRepository();
   const monitoringRepo = new HttpMonitoringRepository();
   const liveRepo = new HttpLiveRepository();
+  const recentTaskViewRepo = new HttpRecentTaskViewRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -150,6 +156,8 @@ function buildContainer(): Container {
     composeTasks: new ComposeTasks(aiPromptRepo),
     automationRepository: automationRepo,
     userRepository: userRepo,
+    recordTaskView: new RecordTaskView(recentTaskViewRepo),
+    listRecentTaskViews: new ListRecentTaskViews(recentTaskViewRepo),
   };
 }
 

@@ -1252,3 +1252,26 @@ export const liveSessions = mysqlTable(
 );
 export type LiveSessionRow = typeof liveSessions.$inferSelect;
 export type NewLiveSessionRow = typeof liveSessions.$inferInsert;
+
+// ============================================================================
+// recent_task_views — миграция db/074. Недавно открытые задачи на юзера: источник
+// для блока «Недавнее» в сайдбаре (кросс-девайс). Открытие задачи апсертит viewed_at.
+// PK (user_id, task_id) — одна строка на задачу. Доступ-фильтр на чтении — через
+// project_members (без привязки к workspace). См. план foamy-bubbling-sun.
+// ============================================================================
+export const recentTaskViews = mysqlTable(
+  'recent_task_views',
+  {
+    userId: char('user_id', { length: 36 }).notNull(),
+    taskId: char('task_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    viewedAt: timestamp('viewed_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.taskId] }),
+    index('idx_recent_views_user_viewed').on(t.userId, t.viewedAt),
+  ],
+);
+
+export type RecentTaskViewRow = typeof recentTaskViews.$inferSelect;
+export type NewRecentTaskViewRow = typeof recentTaskViews.$inferInsert;

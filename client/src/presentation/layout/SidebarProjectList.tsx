@@ -42,6 +42,7 @@ import { useUpdateProject } from '@/presentation/hooks/useUpdateProject';
 import { useDuplicateProject } from '@/presentation/hooks/useDuplicateProject';
 import { useNewProjectDialog } from '@/presentation/components/forms/NewProjectDialogProvider';
 import { useSidebarSectionCollapse } from '@/presentation/hooks/useSidebarSectionCollapse';
+import { RecentTasksBlock } from './RecentTasksBlock';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -559,6 +560,9 @@ export function SidebarProjectList(): React.ReactElement {
     // overflow-контейнером), список проектов скроллится в своём min-h-0 боксе — профиль
     // снизу остаётся видимым при любом числе проектов.
     <div className="flex h-full flex-col gap-1.5">
+      {/* «Недавнее» — над поиском, всегда видимо (не скроллится со списком проектов).
+          Сам блок прячется, пока юзер не открыл ни одной задачи. */}
+      <RecentTasksBlock />
       {visible.length > 1 && (
         <div className="relative shrink-0">
           <FolderSearch className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
-// Свёрнутость секций сайдбара («Избранное», «Мои проекты», «Архивные»). Хранится локально,
-// как тема и done-order — это персональный UI-стейт, не имеет смысла на других устройствах.
-type SectionKey = 'favorites' | 'main' | 'archived';
+// Свёрнутость секций сайдбара («Недавнее», «Избранное», «Мои проекты», «Архивные»). Хранится
+// локально, как тема и done-order — это персональный UI-стейт, не имеет смысла на других устройствах.
+type SectionKey = 'favorites' | 'main' | 'archived' | 'recent';
 
 const STORAGE_PREFIX = 'pf-sidebar-section-';
 

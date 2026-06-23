@@ -15,6 +15,9 @@ import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleP
 import { DrizzleProjectMemberRepository } from './infrastructure/repositories/DrizzleProjectMemberRepository.js';
 import { DrizzleProjectInviteRepository } from './infrastructure/repositories/DrizzleProjectInviteRepository.js';
 import { DrizzleNotificationRepository } from './infrastructure/repositories/DrizzleNotificationRepository.js';
+import { DrizzleRecentTaskViewRepository } from './infrastructure/repositories/DrizzleRecentTaskViewRepository.js';
+import { RecordTaskView } from './application/task/RecordTaskView.js';
+import { ListRecentTaskViews } from './application/task/ListRecentTaskViews.js';
 import { NotificationHub } from './infrastructure/notifications/NotificationHub.js';
 import { RealtimeHub } from './infrastructure/realtime/RealtimeHub.js';
 import { ProjectEventBroadcaster } from './application/realtime/ProjectEventBroadcaster.js';
@@ -242,6 +245,7 @@ const sessionRepo = new DrizzleSessionRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const projectMemberRepo = new DrizzleProjectMemberRepository(db);
 const projectInviteRepo = new DrizzleProjectInviteRepository(db);
+const recentTaskViewRepo = new DrizzleRecentTaskViewRepository(db);
 // Real-time-доставка: хаб + декоратор поверх Drizzle-репозитория. Любое создание
 // уведомления автоматически push'ится подписчикам SSE.
 const notificationHub = new NotificationHub();
@@ -1165,6 +1169,10 @@ const { app, devProxyUpgrade } = createApp({
     subscribe: (userId, fn) => notificationHub.subscribe(userId, fn),
     subscribeRealtime: (userId, fn) => realtimeHub.subscribe(userId, fn),
     projectNotifier,
+  },
+  recentTaskViews: {
+    list: new ListRecentTaskViews({ repo: recentTaskViewRepo }),
+    record: new RecordTaskView({ repo: recentTaskViewRepo }),
   },
   invites: {
     getByToken: new GetInviteByToken({

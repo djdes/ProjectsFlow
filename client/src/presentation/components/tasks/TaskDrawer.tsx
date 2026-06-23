@@ -318,7 +318,21 @@ export function TaskDrawer({
   onMove,
 }: Props): React.ReactElement {
   const { user: currentUser } = useCurrentUser();
-  const { taskRepository } = useContainer();
+  const { taskRepository, recordTaskView } = useContainer();
+  // Фиксируем «юзер открыл задачу» — единая точка для всех мест, где открывается drawer
+  // (доска, «Поручено мне», блок «Недавнее»). Только edit-mode с реальной задачей; раз на
+  // taskId. Fire-and-forget (ошибки глотаем), затем шлём 'pf:recent-changed' — блок
+  // «Недавнее» в сайдбаре перефетчит без перезагрузки.
+  const recordedTaskIdRef = useRef<string | null>(null);
+  const openTaskId = state?.mode === 'edit' ? state.task.id : null;
+  useEffect(() => {
+    if (!openTaskId || recordedTaskIdRef.current === openTaskId) return;
+    recordedTaskIdRef.current = openTaskId;
+    void recordTaskView
+      .execute(openTaskId)
+      .then(() => window.dispatchEvent(new CustomEvent('pf:recent-changed')))
+      .catch(() => {});
+  }, [openTaskId, recordTaskView]);
   // В create-mode description редактируется обычной textarea на форме; в edit-mode
   // компонент TaskDescriptionEditor самостоятельно фетчит/сохраняет через taskRepository,
   // а это локальное состояние используется только в create-режиме (submit формы).
