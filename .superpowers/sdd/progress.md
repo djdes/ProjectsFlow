@@ -17,8 +17,8 @@ Branch: feat/workspaces
 - Task 11: done (typecheck clean)
 - Task 12: done
 - Task 13: done
-- Task 14: Profile page changes — pending
-- Task 15: Workspace settings page — pending
+- Task 14: done
+- Task 15: done
 - Task 16: Animations — pending
 - Task 17: Verification — pending
 

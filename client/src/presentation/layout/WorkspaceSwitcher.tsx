@@ -80,7 +80,12 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
           <WorkspaceIcon name={current.name} icon={current.icon} className={compact ? 'size-7 text-sm' : 'size-6'} />
           {!compact && (
             <>
-              <span className="min-w-0 flex-1 truncate font-semibold tracking-tight">{current.name}</span>
+              <span
+                key={current.id}
+                className="min-w-0 flex-1 truncate font-semibold tracking-tight motion-safe:animate-in motion-safe:fade-in"
+              >
+                {current.name}
+              </span>
               <ChevronsUpDown
                 className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-data-[state=open]:opacity-100"
                 aria-hidden="true"
