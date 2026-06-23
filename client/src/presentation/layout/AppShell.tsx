@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Bell, FolderKanban, Inbox, Menu, User } from 'lucide-react';
+import { Bell, FolderKanban, Inbox, Menu, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -92,10 +92,20 @@ export function AppShell(): React.ReactElement {
             </main>
             <MobileBottomNav onOpenProjects={() => setDrawerOpen(true)} />
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-              <SheetContent side="left" className="w-72 p-0">
+              <SheetContent side="left" showClose={false} className="w-72 p-0">
                 <div className="h-full">
                   <Sidebar />
                 </div>
+                {/* Свой крестик — выровнен по строке шапки Sidebar (p-3, иконки size-8),
+                    чтобы быть на одной линии с колокольчиком, а не ниже (как дефолтный top-4). */}
+                <button
+                  type="button"
+                  onClick={() => setDrawerOpen(false)}
+                  aria-label="Закрыть"
+                  className="absolute right-2 top-3 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground dark:hover:bg-white/10"
+                >
+                  <X className="size-4" />
+                </button>
               </SheetContent>
             </Sheet>
           </div>
@@ -183,7 +193,7 @@ function MobileBottomNav({ onOpenProjects }: { onOpenProjects: () => void }): Re
   // В потоке flex (shrink-0): контент страницы останавливается над панелью, оверлапа нет.
   // См. CLAUDE.md → «Правка мобильной вёрстки / PWA под iPhone».
   return (
-    <nav className="shrink-0 px-3 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+0.55rem)]">
+    <nav className="shrink-0 px-3 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+0.15rem)]">
       <div
         ref={containerRef}
         onPointerDown={onPointerDown}

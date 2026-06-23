@@ -93,7 +93,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
     <aside className="grid h-full grid-rows-[auto_auto_auto_1fr_auto] gap-3 bg-sidebar p-3">
       {/* Шапка: компактное лого + поиск + колокольчик + тоггл панели. На мобиле (drawer)
           правый отступ, чтобы контролы не лезли под крестик SheetContent (top-4 right-4). */}
-      <div className="flex items-center gap-1 max-md:pr-7">
+      <div className="flex items-center gap-1 max-md:pr-8">
         <Link
           to="/"
           aria-label="ProjectsFlow"

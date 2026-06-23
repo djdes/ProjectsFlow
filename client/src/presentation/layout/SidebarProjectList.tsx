@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -419,16 +419,6 @@ function ProjectGroup({
 // тарифы, значение придёт из профиля/подписки и рендер ниже подхватит число.
 const PROJECT_LIMIT = Infinity;
 
-// Fade скролл-контейнера — подсказка «есть ещё выше/ниже». Маска прозрачит крайние ~1.25rem
-// контента, поэтому не зависит от цвета фона панели. Подбираем нужную сторону(ы).
-const FADE_TOP = 'transparent, black 1.25rem';
-const FADE_BOTTOM = 'black calc(100% - 1.25rem), transparent';
-function scrollFadeMask(above: boolean, below: boolean): string | undefined {
-  if (above && below) return `linear-gradient(to bottom, ${FADE_TOP}, ${FADE_BOTTOM})`;
-  if (above) return `linear-gradient(to bottom, ${FADE_TOP}, black)`;
-  if (below) return `linear-gradient(to bottom, black, ${FADE_BOTTOM})`;
-  return undefined;
-}
 
 export function SidebarProjectList(): React.ReactElement {
   const { data, loading, error } = useProjects();
@@ -442,21 +432,6 @@ export function SidebarProjectList(): React.ReactElement {
   const { collapsed: archivedCollapsed, toggle: toggleArchivedCollapsed } =
     useSidebarSectionCollapse('archived', true);
   const [query, setQuery] = useState('');
-  // Fade скролл-контейнера сверху/снизу: подсказка «есть ещё проекты выше/ниже».
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [moreAbove, setMoreAbove] = useState(false);
-  const [moreBelow, setMoreBelow] = useState(false);
-  const updateScrollFade = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setMoreAbove(el.scrollTop > 4);
-    setMoreBelow(el.scrollTop + el.clientHeight < el.scrollHeight - 4);
-  }, []);
-  useEffect(() => {
-    updateScrollFade();
-    window.addEventListener('resize', updateScrollFade);
-    return () => window.removeEventListener('resize', updateScrollFade);
-  }, [data, updateScrollFade]);
 
   if (loading) return <SidebarProjectListSkeleton />;
 
@@ -597,15 +572,8 @@ export function SidebarProjectList(): React.ReactElement {
         </div>
       )}
 
-      <div
-        ref={scrollRef}
-        onScroll={updateScrollFade}
-        style={(() => {
-          const mask = scrollFadeMask(moreAbove, moreBelow);
-          return mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined;
-        })()}
-        className="-mx-1 min-h-0 flex-1 space-y-1.5 overflow-y-auto px-1"
-      >
+      <div className="pf-scroll-visible -mx-1 min-h-0 flex-1 space-y-1.5 px-1">
+
       {/* «Избранное» — самостоятельная секция НАД «Мои проекты». Скрывается в режиме поиска
           (тогда выдача плоская, без дублей). Заголовок кликается — сворачивает секцию. */}
       {showFavoritesSection && favorites.length > 0 && (
@@ -653,9 +621,9 @@ export function SidebarProjectList(): React.ReactElement {
         )}
       </div>
 
-      {/* «Архивные» — спрятанные проекты. По умолчанию свёрнута, при поиске не показываем
-          (выдача плоская по активным). Внутри строки доступно «Вернуть из архива». */}
-      {!searching && archived.length > 0 && (
+      {/* «Архивные» — спрятанные проекты. Показываем ВСЕГДА (вне поиска), чтобы пункт был
+          обнаружим даже без архивных. По умолчанию свёрнута; «Вернуть из архива» — в меню строки. */}
+      {!searching && (
         <div className="space-y-1 pt-1">
           <button
             type="button"
@@ -667,17 +635,20 @@ export function SidebarProjectList(): React.ReactElement {
               className={cn('size-3 shrink-0 transition-transform', archivedCollapsed && '-rotate-90')}
             />
             <span>Архивные</span>
-            <span className="tabular-nums opacity-70">{archived.length}</span>
+            {archived.length > 0 && <span className="tabular-nums opacity-70">{archived.length}</span>}
           </button>
-          {!archivedCollapsed && (
-            <ProjectGroup
-              projects={archived}
-              bucket="main"
-              reorderable={false}
-              onReorderEnd={() => {}}
-              onMove={() => {}}
-            />
-          )}
+          {!archivedCollapsed &&
+            (archived.length > 0 ? (
+              <ProjectGroup
+                projects={archived}
+                bucket="main"
+                reorderable={false}
+                onReorderEnd={() => {}}
+                onMove={() => {}}
+              />
+            ) : (
+              <p className="px-2 py-1.5 text-xs text-muted-foreground/70">Нет архивных проектов.</p>
+            ))}
         </div>
       )}
       </div>
