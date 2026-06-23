@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Bell, House, Inbox, MessageCircle, PanelLeft, Plus, Search, Shield } from 'lucide-react';
+import { Bell, Inbox, MessageCircle, PanelLeft, Plus, Search, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -18,6 +18,12 @@ import { useChatUnread } from '@/presentation/hooks/useChatUnread';
 import { useProjects } from '@/presentation/hooks/useProjects';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { GlassTabBar, type GlassTabItem } from '@/presentation/components/nav/GlassTabBar';
+import {
+  AnimatedHome,
+  AnimatedChat,
+  AnimatedInbox,
+  AnimatedSearch,
+} from '@/presentation/components/nav/AnimatedNavIcons';
 import { WorkspaceChatPanel } from '@/presentation/chat/WorkspaceChatPanel';
 import type { Project } from '@/domain/project/Project';
 import { SidebarProjectList } from './SidebarProjectList';
@@ -68,10 +74,10 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
 
   // 4-кнопочный glass-rail: Главная/Чат — held-toggle вида; Входящие/Поиск — моментальные.
   const railItems: GlassTabItem[] = [
-    { key: 'home', label: 'Главная', icon: <House className="size-5" /> },
-    { key: 'chat', label: 'Чат', icon: <MessageCircle className="size-5" />, badge: chatUnread },
-    { key: 'inbox', label: 'Входящие', icon: <Inbox className="size-5" /> },
-    { key: 'search', label: 'Поиск', icon: <Search className="size-5" /> },
+    { key: 'home', label: 'Главная', icon: <AnimatedHome className="size-5" /> },
+    { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: chatUnread },
+    { key: 'inbox', label: 'Входящие', icon: <AnimatedInbox className="size-5" /> },
+    { key: 'search', label: 'Поиск', icon: <AnimatedSearch className="size-5" /> },
   ];
   const onRailSelect = (i: number): void => {
     if (i === 0) setViewPersist('home');

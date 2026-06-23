@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { cloneElement, isValidElement, useState } from 'react';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -46,6 +46,10 @@ export function GlassTabBar({ items, activeIndex, onSelect, layoutId, className 
     >
       {items.map((item, idx) => {
         const isHighlighted = idx === activeIndex;
+        // «Живые» иконки получают active → у них оживают внутренние части (дверь, точки, лупа).
+        const icon = isValidElement(item.icon)
+          ? cloneElement(item.icon as React.ReactElement<{ active?: boolean }>, { active: isHighlighted })
+          : item.icon;
         return (
           <button
             key={item.key}
@@ -83,10 +87,10 @@ export function GlassTabBar({ items, activeIndex, onSelect, layoutId, className 
                   animate={{ scale: isHighlighted ? 1.06 : 0.9, y: isHighlighted ? -1 : 0, rotate: 0 }}
                   transition={{ type: 'spring', stiffness: 480, damping: 18, mass: 0.7 }}
                 >
-                  {item.icon}
+                  {icon}
                 </motion.span>
               ) : (
-                item.icon
+                icon
               )}
               {item.badge !== undefined && item.badge > 0 && (
                 <span className="absolute -right-1.5 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
