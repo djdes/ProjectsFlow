@@ -179,6 +179,7 @@ import { liveAgentRouter } from './live/agentRoutes.js';
 import { liveUserRouter } from './live/routes.js';
 import type { LiveService } from '../application/live/LiveService.js';
 import type { LiveEventHub } from '../infrastructure/realtime/LiveEventHub.js';
+import { chatRouter, type ChatRouterDeps } from './chat/routes.js';
 import { agentDeviceRouter } from './agent/deviceRoutes.js';
 import { buildAiPromptRouter } from './ai-prompt/routes.js';
 import { buildAutomationRouter } from './automation/routes.js';
@@ -225,6 +226,7 @@ type AppDeps = {
     readonly service: LiveService;
     readonly liveEventHub: LiveEventHub;
   };
+  readonly chat: ChatRouterDeps;
   readonly projects: {
     readonly listProjects: ListProjects;
     readonly getProject: GetProject;
@@ -524,6 +526,8 @@ export function createApp(deps: AppDeps): CreatedApp {
     }),
   );
   app.use('/api/workspaces', workspacesRouter({ service: deps.workspaces.service }));
+  // Чат пространства — тот же префикс, подпути /:workspaceId/chat/... (не пересекаются с workspaces).
+  app.use('/api/workspaces', chatRouter(deps.chat));
   app.use('/api/integrations/github', githubRouter(deps.github));
   app.use('/api/projects/:projectId/secrets', secretsRouter(deps.secrets));
   app.use('/api/projects/:projectId/monitoring', monitoringRouter(deps.monitoring));

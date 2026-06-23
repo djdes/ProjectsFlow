@@ -9,6 +9,11 @@ import { FileSyncService } from './application/file-sync/FileSyncService.js';
 import { DrizzleLiveRepository } from './infrastructure/repositories/DrizzleLiveRepository.js';
 import { LiveService } from './application/live/LiveService.js';
 import { LiveEventHub } from './infrastructure/realtime/LiveEventHub.js';
+import { ChatService } from './application/chat/ChatService.js';
+import { ChatEventHub } from './infrastructure/realtime/ChatEventHub.js';
+import { DrizzleChatRepository } from './infrastructure/repositories/DrizzleChatRepository.js';
+import { WorkspaceEventBroadcaster } from './application/realtime/WorkspaceEventBroadcaster.js';
+import { DispatchChatMentionNotifications } from './application/chat/DispatchChatMentionNotifications.js';
 import { DrizzleUserRepository } from './infrastructure/repositories/DrizzleUserRepository.js';
 import { DrizzleSessionRepository } from './infrastructure/repositories/DrizzleSessionRepository.js';
 import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleProjectRepository.js';
@@ -744,6 +749,22 @@ const liveService = new LiveService({
 // Best-effort: ошибка не должна мешать старту сервера.
 void liveService.sweepStaleRunning().catch(() => {});
 
+// ===== Чат пространства (db/075): общий канал участников пространства =====
+// Workspace-scoped firehose событий чата (только для открытых SSE-вкладок; НЕ per-user bus).
+const chatEventHub = new ChatEventHub();
+const workspaceEventBroadcaster = new WorkspaceEventBroadcaster({
+  members: workspaceRepo,
+  publisher: realtimeHub,
+});
+const chatService = new ChatService({
+  repo: new DrizzleChatRepository(db),
+  workspaces: workspaceRepo,
+  chatEventHub,
+  broadcaster: workspaceEventBroadcaster,
+  mentions: new DispatchChatMentionNotifications({ notifications: notificationRepo, idGen: idGenerator }),
+  idGen: idGenerator,
+});
+
 const agentTokenHasher = new Sha256AgentTokenHasher();
 const agentDeviceCodeStore = new InMemoryAgentDeviceCodeStore();
 
@@ -1073,6 +1094,13 @@ const { app, devProxyUpgrade } = createApp({
   live: {
     service: liveService,
     liveEventHub,
+  },
+  chat: {
+    service: chatService,
+    chatEventHub,
+    storage: attachmentStorage,
+    idGen: idGenerator,
+    maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
   },
   projects: {
     listProjects: new ListProjects({ members: projectMemberRepo, resolveWorkspaceId: resolveWorkspaceIdOrNull }),

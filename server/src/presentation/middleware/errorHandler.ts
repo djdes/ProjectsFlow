@@ -116,6 +116,15 @@ import {
   UserNotFoundByEmailError,
   NotProjectOwnerError,
 } from '../../domain/workspace/errors.js';
+import {
+  ChatMessageNotFoundError,
+  NotMessageAuthorError,
+  CannotDeleteMessageError,
+  MessageDeletedError,
+  EmptyMessageError,
+  ChatAttachmentNotFoundError,
+  ChatAttachmentTooLargeError,
+} from '../../domain/chat/errors.js';
 
 type ErrorPayload = {
   error: string;
@@ -624,6 +633,39 @@ export function errorHandler(
   }
   if (err instanceof UserNotFoundByEmailError) {
     res.status(404).json({ error: 'user_not_found_by_email', message: 'Пользователь с таким email не найден' });
+    return;
+  }
+
+  // --- Чат пространства ---
+  if (err instanceof ChatMessageNotFoundError) {
+    res.status(404).json({ error: 'chat_message_not_found' });
+    return;
+  }
+  if (err instanceof NotMessageAuthorError) {
+    res.status(403).json({ error: 'not_message_author', message: 'Редактировать может только автор' });
+    return;
+  }
+  if (err instanceof CannotDeleteMessageError) {
+    res.status(403).json({ error: 'cannot_delete_message', message: 'Удалить может автор или владелец пространства' });
+    return;
+  }
+  if (err instanceof MessageDeletedError) {
+    res.status(409).json({ error: 'message_deleted', message: 'Сообщение удалено' });
+    return;
+  }
+  if (err instanceof EmptyMessageError) {
+    res.status(400).json({ error: 'empty_message', message: 'Введите текст или прикрепите файл' });
+    return;
+  }
+  if (err instanceof ChatAttachmentNotFoundError) {
+    res.status(404).json({ error: 'chat_attachment_not_found' });
+    return;
+  }
+  if (err instanceof ChatAttachmentTooLargeError) {
+    res.status(413).json({
+      error: 'chat_attachment_too_large',
+      message: `Файл больше лимита (${Math.round(err.maxBytes / 1024 / 1024)} MB)`,
+    });
     return;
   }
 

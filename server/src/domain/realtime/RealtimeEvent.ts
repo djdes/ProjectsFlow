@@ -45,4 +45,11 @@ export type RealtimeEvent =
       readonly projectId: string;
       readonly serverId: string;
       readonly status: string;
+    }
+  // Новое сообщение в общем чате пространства. Лёгкое событие для бейджа непрочитанного
+  // 🔴 на кнопке «Чат» — полная лента идёт НЕ сюда (per-user bus), а в workspace-scoped
+  // ChatEventHub (SSE /stream чата). Клиент по нему рефетчит/инкрементит счётчик.
+  | {
+      readonly kind: 'workspace_chat_changed';
+      readonly workspaceId: string;
     };

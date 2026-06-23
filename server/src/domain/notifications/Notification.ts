@@ -112,6 +112,19 @@ export type DailyDigestPayload = {
   readonly taskCount: number;
 };
 
+// @mention в общем чате пространства. Прилетает упомянутому участнику; клиент ведёт в чат
+// пространства (открывает вид «Чат» и скроллит к сообщению по seq).
+export type ChatMentionPayload = {
+  readonly type: 'chat_mention';
+  readonly workspaceId: string;
+  readonly workspaceName: string;
+  readonly messageId: string;
+  readonly messageSeq: number;
+  readonly messageExcerpt: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
 export type NotificationPayload =
   | CommentMentionPayload
   | ProjectInvitePayload
@@ -120,7 +133,8 @@ export type NotificationPayload =
   | TaskDelegationResolvedPayload
   | TaskAssignedToProjectPayload
   | ServerAlertPayload
-  | DailyDigestPayload;
+  | DailyDigestPayload
+  | ChatMentionPayload;
 
 export type Notification = {
   readonly id: string;

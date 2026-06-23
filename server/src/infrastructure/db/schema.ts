@@ -282,6 +282,83 @@ export const workspaceMembers = mysqlTable(
 export type WorkspaceMemberRow = typeof workspaceMembers.$inferSelect;
 export type NewWorkspaceMemberRow = typeof workspaceMembers.$inferInsert;
 
+// Общий чат пространства (db/075). Один канал на пространство; seq — глобально-монотонный
+// AUTO_INCREMENT курсор (сортировка/пагинация/SSE-replay). Удаление мягкое (deleted_at).
+export const workspaceChatMessages = mysqlTable(
+  'workspace_chat_messages',
+  {
+    id: id(),
+    seq: bigint('seq', { mode: 'number', unsigned: true }).autoincrement().notNull(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    authorUserId: char('author_user_id', { length: 36 }).notNull(),
+    body: text('body').notNull(),
+    replyToId: char('reply_to_id', { length: 36 }),
+    createdAt: createdAtCol(),
+    editedAt: timestamp('edited_at'),
+    deletedAt: timestamp('deleted_at'),
+  },
+  (t) => [
+    uniqueIndex('uq_wcm_seq').on(t.seq),
+    index('idx_wcm_ws_seq').on(t.workspaceId, t.seq),
+  ],
+);
+
+export type WorkspaceChatMessageRow = typeof workspaceChatMessages.$inferSelect;
+export type NewWorkspaceChatMessageRow = typeof workspaceChatMessages.$inferInsert;
+
+// Реакции: один юзер — одна эмодзи на сообщение максимум один раз.
+export const workspaceChatReactions = mysqlTable(
+  'workspace_chat_reactions',
+  {
+    messageId: char('message_id', { length: 36 }).notNull(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    emoji: varchar('emoji', { length: 16 }).notNull(),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.messageId, t.userId, t.emoji] }),
+    index('idx_wcr_message').on(t.messageId),
+  ],
+);
+
+export type WorkspaceChatReactionRow = typeof workspaceChatReactions.$inferSelect;
+export type NewWorkspaceChatReactionRow = typeof workspaceChatReactions.$inferInsert;
+
+// Прочитанное: последний прочитанный seq на (пространство, юзер) → счётчик непрочитанного.
+export const workspaceChatReads = mysqlTable(
+  'workspace_chat_reads',
+  {
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    lastReadSeq: bigint('last_read_seq', { mode: 'number', unsigned: true }).notNull().default(0),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [primaryKey({ columns: [t.workspaceId, t.userId] })],
+);
+
+export type WorkspaceChatReadRow = typeof workspaceChatReads.$inferSelect;
+export type NewWorkspaceChatReadRow = typeof workspaceChatReads.$inferInsert;
+
+// Вложения сообщений чата. Бинарь — в AttachmentStorage (FS/S3) по storage_key.
+export const workspaceChatAttachments = mysqlTable(
+  'workspace_chat_attachments',
+  {
+    id: id(),
+    messageId: char('message_id', { length: 36 }).notNull(),
+    storageKey: varchar('storage_key', { length: 500 }).notNull(),
+    filename: varchar('filename', { length: 255 }).notNull(),
+    mimeType: varchar('mime_type', { length: 100 }).notNull(),
+    sizeBytes: int('size_bytes').notNull(),
+    width: int('width'),
+    height: int('height'),
+    createdAt: createdAtCol(),
+  },
+  (t) => [index('idx_wca_message').on(t.messageId)],
+);
+
+export type WorkspaceChatAttachmentRow = typeof workspaceChatAttachments.$inferSelect;
+export type NewWorkspaceChatAttachmentRow = typeof workspaceChatAttachments.$inferInsert;
+
 // Multi-tenancy: участники проекта + их роли. См. spec
 // docs/superpowers/specs/2026-05-19-multi-tenant-projects-design.md.
 export const projectMembers = mysqlTable(
