@@ -202,7 +202,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.18 }}
-          className="min-h-0 min-w-0"
+          className="min-h-0 min-w-0 overflow-hidden"
         >
           {view === 'chat' ? (
             <WorkspaceChatPanel />
@@ -213,7 +213,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
           )}
         </motion.div>
       ) : (
-        <div className="min-h-0 min-w-0">
+        <div className="min-h-0 min-w-0 overflow-hidden">
           {view === 'chat' ? (
             <WorkspaceChatPanel />
           ) : (

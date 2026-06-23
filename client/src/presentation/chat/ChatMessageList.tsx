@@ -125,7 +125,7 @@ export function ChatMessageList(props: Props): React.ReactElement {
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        className="pf-scroll-visible h-full overflow-y-auto py-2"
+        className="pf-scroll-visible h-full space-y-0.5 overflow-y-auto overflow-x-hidden py-1"
       >
         {props.loadingOlder && (
           <div className="py-2 text-center text-xs text-muted-foreground">Загрузка…</div>

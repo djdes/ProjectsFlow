@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronsUpDown, Copy, LogOut, Plus, Settings } from 'lucide-react';
+import { Check, ChevronsUpDown, CircleArrowUp, Copy, LogOut, Plus, Settings, UserPlus } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -98,11 +97,40 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
           side={compact ? 'right' : 'bottom'}
           align="start"
           sideOffset={compact ? 8 : 4}
-          className="w-64"
+          className="w-72 p-0"
         >
-          {/* Аккаунт */}
-          <DropdownMenuLabel className="flex items-center gap-2 font-normal text-muted-foreground">
-            <span className="flex-1 truncate">{user.email}</span>
+          {/* Шапка: крупная иконка + название + тариф */}
+          <div className="flex items-center gap-3 px-3 py-3">
+            <WorkspaceIcon name={current.name} icon={current.icon} className="size-10 rounded-lg text-lg" />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold leading-tight">{current.name}</div>
+              <div className="text-xs text-muted-foreground">Free plan</div>
+            </div>
+          </div>
+
+          <DropdownMenuSeparator className="my-0" />
+
+          {/* Действия */}
+          <div className="p-1">
+            <DropdownMenuItem onClick={() => navigate('/profile')} className="text-primary focus:text-primary">
+              <CircleArrowUp />
+              Улучшить план
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/profile')}>
+              <Settings />
+              Настройки
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openSettings(current.id)}>
+              <UserPlus />
+              Пригласить участников
+            </DropdownMenuItem>
+          </div>
+
+          <DropdownMenuSeparator className="my-0" />
+
+          {/* Аккаунт: email + список пространств */}
+          <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground">
+            <span className="min-w-0 flex-1 truncate">{user.email}</span>
             <button
               type="button"
               onClick={(e) => {
@@ -116,27 +144,14 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
             >
               {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             </button>
-          </DropdownMenuLabel>
-          <DropdownMenuItem onClick={() => navigate('/profile')}>
-            <Settings />
-            Настройки
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleLogout}>
-            <LogOut />
-            Выйти
-          </DropdownMenuItem>
+          </div>
 
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel className="py-1 text-xs font-normal text-muted-foreground">
-            Пространства
-          </DropdownMenuLabel>
-
-          <div className="max-h-64 overflow-y-auto">
+          <div className="max-h-56 overflow-y-auto p-1">
             {(workspaces ?? []).map((ws) => (
               <div
                 key={ws.id}
                 className={cn(
-                  'group/row flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent',
+                  'group/row flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent',
                   ws.isCurrent && 'font-medium',
                 )}
               >
@@ -163,19 +178,28 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
                 </button>
               </div>
             ))}
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                setOpen(false);
+                setCreateOpen(true);
+              }}
+              className="text-primary focus:text-primary"
+            >
+              <Plus />
+              Новое пространство
+            </DropdownMenuItem>
           </div>
 
-          <DropdownMenuItem
-            onSelect={(e) => {
-              e.preventDefault();
-              setOpen(false);
-              setCreateOpen(true);
-            }}
-            className="text-primary focus:text-primary"
-          >
-            <Plus />
-            Новое пространство
-          </DropdownMenuItem>
+          <DropdownMenuSeparator className="my-0" />
+
+          {/* Выход — в самом низу */}
+          <div className="p-1">
+            <DropdownMenuItem onClick={handleLogout}>
+              <LogOut />
+              Выйти
+            </DropdownMenuItem>
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
 

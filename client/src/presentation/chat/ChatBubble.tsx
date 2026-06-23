@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { CornerUpLeft, Pencil, SmilePlus, Trash2 } from 'lucide-react';
+import { CornerUpLeft, Download, Pencil, SmilePlus, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
@@ -53,6 +54,7 @@ export function ChatBubble({
 }: Props): React.ReactElement {
   const { animations } = useMotion();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [preview, setPreview] = useState<{ url: string; filename: string } | null>(null);
 
   if (message.deleted) {
     return (
@@ -111,10 +113,11 @@ export function ChatBubble({
 
         <div
           className={cn(
-            'relative rounded-2xl px-3 py-1.5 text-sm',
+            'relative rounded-2xl px-3 py-1.5 text-sm text-foreground',
+            // Мягкий полупрозрачный акцент вместо «бьющего» синего — нежно, как в TG.
             isOwn
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-foreground/[0.05] text-foreground dark:bg-white/[0.07]',
+              ? 'bg-primary/10 dark:bg-primary/20'
+              : 'bg-foreground/[0.05] dark:bg-white/[0.06]',
           )}
         >
           {/* reply-цитата */}
@@ -122,15 +125,10 @@ export function ChatBubble({
             <button
               type="button"
               onClick={() => onJumpTo(message.replyTo!.id)}
-              className={cn(
-                'mb-1 flex w-full flex-col items-start rounded-md border-l-2 px-2 py-0.5 text-left text-xs',
-                isOwn
-                  ? 'border-primary-foreground/50 bg-primary-foreground/10'
-                  : 'border-primary/50 bg-primary/5',
-              )}
+              className="mb-1 flex w-full flex-col items-start rounded-md border-l-2 border-primary/40 bg-primary/5 px-2 py-0.5 text-left text-xs"
             >
-              <span className="font-medium opacity-90">{message.replyTo.authorDisplayName}</span>
-              <span className="line-clamp-1 opacity-70">{message.replyTo.excerpt}</span>
+              <span className="font-medium text-primary/90">{message.replyTo.authorDisplayName}</span>
+              <span className="line-clamp-1 text-muted-foreground">{message.replyTo.excerpt}</span>
             </button>
           )}
 
@@ -143,14 +141,19 @@ export function ChatBubble({
             <div className="mt-1 flex flex-col gap-1">
               {message.attachments.map((a) =>
                 a.mimeType.startsWith('image/') ? (
-                  <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="block">
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => setPreview({ url: a.url, filename: a.filename })}
+                    className="block overflow-hidden rounded-lg transition-transform hover:scale-[1.01]"
+                  >
                     <img
                       src={a.url}
                       alt={a.filename}
                       className="max-h-48 w-auto rounded-lg object-cover"
                       loading="lazy"
                     />
-                  </a>
+                  </button>
                 ) : (
                   <a
                     key={a.id}
@@ -158,10 +161,7 @@ export function ChatBubble({
                     target="_blank"
                     rel="noreferrer"
                     download={a.filename}
-                    className={cn(
-                      'truncate rounded-md px-2 py-1 text-xs underline-offset-2 hover:underline',
-                      isOwn ? 'bg-primary-foreground/10' : 'bg-foreground/[0.04] dark:bg-white/[0.05]',
-                    )}
+                    className="truncate rounded-md bg-foreground/[0.04] px-2 py-1 text-xs underline-offset-2 hover:underline dark:bg-white/[0.05]"
                   >
                     📎 {a.filename}
                   </a>
@@ -170,12 +170,7 @@ export function ChatBubble({
             </div>
           )}
 
-          <div
-            className={cn(
-              'mt-0.5 flex items-center gap-1 text-[10px]',
-              isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground',
-            )}
-          >
+          <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
             <span>{formatTime(message.createdAt)}</span>
             {message.editedAt && <span>· изм.</span>}
           </div>
@@ -276,6 +271,42 @@ export function ChatBubble({
           )}
         </div>
       </div>
+
+      {/* Лайтбокс картинки — открываем прямо на сайте (модалка), а не отдельной вкладкой. */}
+      <Dialog open={preview !== null} onOpenChange={(o) => !o && setPreview(null)}>
+        <DialogContent className="grid max-h-[90dvh] max-w-3xl gap-0 overflow-hidden p-0">
+          <div className="flex items-center justify-between border-b px-4 py-2.5">
+            <p className="truncate text-sm font-medium">{preview?.filename ?? ''}</p>
+            <div className="flex items-center gap-1">
+              <a
+                href={preview?.url}
+                download={preview?.filename}
+                className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Скачать"
+              >
+                <Download className="size-4" />
+              </a>
+              <button
+                type="button"
+                onClick={() => setPreview(null)}
+                aria-label="Закрыть"
+                className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          </div>
+          <div className="grid place-items-center overflow-auto bg-muted/30 p-2 sm:p-4">
+            {preview && (
+              <img
+                src={preview.url}
+                alt={preview.filename}
+                className="max-h-[75dvh] max-w-full object-contain"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Wrapper>
   );
 }

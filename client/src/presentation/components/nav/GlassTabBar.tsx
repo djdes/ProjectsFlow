@@ -77,9 +77,11 @@ export function GlassTabBar({ items, activeIndex, onSelect, layoutId, className 
                 <motion.span
                   key={pop.index === idx ? pop.id : 'idle'}
                   className="inline-flex"
-                  initial={pop.index === idx ? { scale: 0.55 } : false}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 620, damping: 15, mass: 0.7 }}
+                  initial={pop.index === idx ? { scale: 0.55, rotate: -8 } : false}
+                  // Активная иконка «садится» крупнее и чуть приподнята; неактивные мягко
+                  // уменьшены и приглушены — движение плавное, а не просто подпрыгивание.
+                  animate={{ scale: isHighlighted ? 1.06 : 0.9, y: isHighlighted ? -1 : 0, rotate: 0 }}
+                  transition={{ type: 'spring', stiffness: 480, damping: 18, mass: 0.7 }}
                 >
                   {item.icon}
                 </motion.span>
