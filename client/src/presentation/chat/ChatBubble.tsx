@@ -211,11 +211,10 @@ export function ChatBubble({
             за блок» и не обрезается скроллом. Раскрывается только пикер эмодзи (портал). */}
         <div
           className={cn(
-            'absolute -top-7 z-20 flex items-center gap-0.5 rounded-full border bg-background/95 px-0.5 py-0.5 opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 focus-within:opacity-100',
-            // НАД пузырём (не поверх текста), выровнен по внутреннему краю (не лезет к
-            // скроллбару). Сверху у ленты есть pt-запас, поэтому даже у верхнего сообщения
-            // тулбар не режется. Пикер эмодзи — портал (не обрезается).
-            isOwn ? 'left-1' : 'right-1',
+            'absolute top-1/2 z-20 flex -translate-y-1/2 items-center gap-0.5 rounded-full border bg-background/95 px-0.5 py-0.5 opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 focus-within:opacity-100',
+            // В боковом жёлобе рядом с пузырём, по центру по вертикали: не поверх текста,
+            // не поверх соседнего сообщения и не режется скроллом. Свои — слева, чужие — справа.
+            isOwn ? 'right-full mr-1' : 'left-full ml-1',
           )}
         >
           <DropdownMenu>
