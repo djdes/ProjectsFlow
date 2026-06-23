@@ -42,6 +42,8 @@ export const updateProjectSchema = z
     icon: z.string().trim().min(1).max(16).nullable().optional(),
     gitRepoUrl: urlOrNullSchema.optional(),
     kbRepoFullName: kbRepoFullNameOrNullSchema.optional(),
+    // Статус проекта: 'archived' прячет его в секцию «Архивные», 'active' возвращает.
+    status: z.enum(['active', 'paused', 'archived']).optional(),
   })
   .refine((obj) => Object.keys(obj).length > 0, { message: 'Нечего обновлять' });
 

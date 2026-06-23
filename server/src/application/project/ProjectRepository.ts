@@ -19,6 +19,7 @@ export type UpdateProjectInput = {
   readonly financeVisibility?: 'owner' | 'members';
   readonly dispatcherUserId?: string | null;
   readonly multiTaskWorker?: boolean;
+  readonly status?: 'active' | 'paused' | 'archived';
 };
 
 // Multi-tenancy: проверка доступа НЕ внутри ProjectRepository — она в use-case'ах через

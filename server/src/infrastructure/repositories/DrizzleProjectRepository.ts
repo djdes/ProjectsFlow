@@ -126,7 +126,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
   async update(id: string, patch: UpdateProjectInput): Promise<Project | null> {
     // Собираем set-объект только из реально переданных полей.
     // undefined = поле не указано клиентом (не трогаем), null = очистить.
-    const set: Partial<Pick<ProjectRow, 'name' | 'icon' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker'>> = {};
+    const set: Partial<Pick<ProjectRow, 'name' | 'icon' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker' | 'status'>> = {};
     if (patch.name !== undefined) set.name = patch.name;
     if (patch.icon !== undefined) set.icon = patch.icon;
     if (patch.gitRepoUrl !== undefined) set.gitRepoUrl = patch.gitRepoUrl;
@@ -135,6 +135,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
     if (patch.financeVisibility !== undefined) set.financeVisibility = patch.financeVisibility;
     if (patch.dispatcherUserId !== undefined) set.dispatcherUserId = patch.dispatcherUserId;
     if (patch.multiTaskWorker !== undefined) set.multiTaskWorker = patch.multiTaskWorker;
+    if (patch.status !== undefined) set.status = patch.status;
 
     if (Object.keys(set).length > 0) {
       try {

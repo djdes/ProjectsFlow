@@ -162,6 +162,7 @@ export class MockProjectRepository implements ProjectRepository {
       ...(patch.icon !== undefined ? { icon: patch.icon } : {}),
       ...(patch.gitRepoUrl !== undefined ? { gitRepoUrl: patch.gitRepoUrl } : {}),
       ...(patch.kbRepoFullName !== undefined ? { kbRepoFullName: patch.kbRepoFullName } : {}),
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
     };
     this.projects = this.projects.map((p) => (p.id === id ? next : p));
     return delay(next);

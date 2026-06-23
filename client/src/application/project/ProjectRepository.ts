@@ -1,4 +1,4 @@
-import type { Project } from '@/domain/project/Project';
+import type { Project, ProjectStatus } from '@/domain/project/Project';
 import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
 import type { ProjectInvite, ProjectInviteRole } from '@/domain/project/ProjectInvite';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
@@ -78,6 +78,8 @@ export type UpdateProjectInput = {
   readonly icon?: string | null;
   readonly gitRepoUrl?: string | null;
   readonly kbRepoFullName?: string | null;
+  // Статус: 'archived' прячет проект в секцию «Архивные», 'active' возвращает.
+  readonly status?: ProjectStatus;
 };
 
 export type CreateInviteInput = {

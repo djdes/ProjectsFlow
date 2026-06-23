@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Bell, FolderKanban, Inbox, Menu, User } from 'lucide-react';
@@ -22,6 +22,13 @@ const COLLAPSE_KEY = 'pf_sidebar_collapsed';
 export function AppShell(): React.ReactElement {
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { pathname } = useLocation();
+  // Закрываем мобильный drawer ТОЛЬКО при смене маршрута (клик по проекту/разделу). Раньше
+  // тут была обёртка onClick={close} вокруг всего Sidebar — она закрывала панель на ЛЮБОЙ
+  // клик, ломая разворот секции «Мои проекты». Теперь тоггл секции (без навигации) не закрывает.
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
   // Свёрнутость левой панели (desktop), переживает перезагрузку.
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
@@ -86,7 +93,7 @@ export function AppShell(): React.ReactElement {
             <MobileBottomNav onOpenProjects={() => setDrawerOpen(true)} />
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
               <SheetContent side="left" className="w-72 p-0">
-                <div onClick={() => setDrawerOpen(false)} className="h-full">
+                <div className="h-full">
                   <Sidebar />
                 </div>
               </SheetContent>

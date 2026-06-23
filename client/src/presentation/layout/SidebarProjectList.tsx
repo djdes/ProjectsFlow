@@ -17,10 +17,13 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  Archive,
+  ArchiveRestore,
   ArrowDown,
   ArrowUp,
   BookOpen,
   ChevronDown,
+  Copy,
   FolderSearch,
   Heart,
   HeartOff,
@@ -35,6 +38,8 @@ import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useReorderProjects } from '@/presentation/hooks/useReorderProjects';
 import { useReorderFavoriteProjects } from '@/presentation/hooks/useReorderFavoriteProjects';
 import { useToggleProjectFavorite } from '@/presentation/hooks/useToggleProjectFavorite';
+import { useUpdateProject } from '@/presentation/hooks/useUpdateProject';
+import { useDuplicateProject } from '@/presentation/hooks/useDuplicateProject';
 import { useNewProjectDialog } from '@/presentation/components/forms/NewProjectDialogProvider';
 import { useSidebarSectionCollapse } from '@/presentation/hooks/useSidebarSectionCollapse';
 import {
@@ -45,8 +50,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
-import { defaultProjectIcon as ProjectIcon } from './projectIcons';
+import { avatarColor } from './projectIcons';
 import { RenameProjectDialog } from '@/presentation/components/project/RenameProjectDialog';
 import { DeleteProjectDialog } from '@/presentation/components/project/DeleteProjectDialog';
 import type { Project } from '@/domain/project/Project';
@@ -79,6 +85,8 @@ function SidebarProjectRow({
   const location = useLocation();
   const { refresh: refreshProjects } = useProjectsContext();
   const { toggle: toggleFavorite } = useToggleProjectFavorite();
+  const { submit: updateProject } = useUpdateProject();
+  const { submit: duplicateProject } = useDuplicateProject();
   const [menuOpen, setMenuOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -86,6 +94,27 @@ function SidebarProjectRow({
   // Удалить может только owner; inbox-проект (служебный, один на юзера) удалять
   // нельзя в принципе — пункт прячем, чтобы не было ложной кнопки.
   const canDelete = project.role === 'owner' && !project.isInbox;
+  // Архивировать/дублировать — editor+ (viewer не может менять проект). Inbox исключаем.
+  const canManage = project.role !== 'viewer' && !project.isInbox;
+
+  const handleSetArchived = async (archived: boolean): Promise<void> => {
+    try {
+      await updateProject(project.id, { status: archived ? 'archived' : 'active' });
+      refreshProjects();
+    } catch (e) {
+      toast.error(`Не удалось ${archived ? 'архивировать' : 'вернуть'} проект: ${(e as Error).message}`);
+    }
+  };
+
+  const handleDuplicate = async (): Promise<void> => {
+    try {
+      const created = await duplicateProject({ name: project.name, icon: project.icon });
+      refreshProjects();
+      navigate(`/projects/${created.id}`);
+    } catch (e) {
+      toast.error(`Не удалось дублировать проект: ${(e as Error).message}`);
+    }
+  };
 
   // Один project.id может рендериться дважды (в favorites и в main); чтобы dnd-kit и
   // React не ругались на дубли ключей — префиксуем sortable-id'шник bucket'ом.
@@ -148,18 +177,24 @@ function SidebarProjectRow({
       >
         {() => (
           <>
-            {/* Иконка: эмодзи проекта (если задана) или нейтральная папка;
-                git-подключение — маленькая зелёная точка-индикатор. */}
+            {/* Иконка: эмодзи проекта (если задана) или фирменный чип — детерминированный
+                цвет проекта + первая буква имени (Notion-style). git-подключение —
+                маленькая зелёная точка-индикатор поверх. */}
             <span className="relative shrink-0">
               {project.icon ? (
-                <span className="grid size-4 place-items-center text-sm leading-none" aria-hidden>
+                <span className="grid size-5 place-items-center text-base leading-none" aria-hidden>
                   {project.icon}
                 </span>
               ) : (
-                <ProjectIcon
-                  className="size-4 text-muted-foreground"
-                  aria-label={project.gitRepoUrl ? 'Git подключён' : 'Git не подключён'}
-                />
+                <span
+                  className={cn(
+                    'grid size-5 place-items-center rounded-md text-[11px] font-semibold leading-none',
+                    avatarColor(project.name),
+                  )}
+                  aria-hidden
+                >
+                  {(project.name.trim()[0] ?? '?').toUpperCase()}
+                </span>
               )}
               {project.gitRepoUrl && (
                 <span
@@ -249,6 +284,26 @@ function SidebarProjectRow({
             <ArrowDown />
             Переместить ниже
           </DropdownMenuItem>
+          {canManage && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => void handleDuplicate()}>
+                <Copy />
+                Дублировать
+              </DropdownMenuItem>
+              {isArchived ? (
+                <DropdownMenuItem onSelect={() => void handleSetArchived(false)}>
+                  <ArchiveRestore />
+                  Вернуть из архива
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onSelect={() => void handleSetArchived(true)}>
+                  <Archive />
+                  В архив
+                </DropdownMenuItem>
+              )}
+            </>
+          )}
           {canDelete && (
             <>
               <DropdownMenuSeparator />
@@ -364,9 +419,16 @@ function ProjectGroup({
 // тарифы, значение придёт из профиля/подписки и рендер ниже подхватит число.
 const PROJECT_LIMIT = Infinity;
 
-// Нижний fade скролл-контейнера — подсказка «есть ещё ниже». Маска прозрачит последние
-// ~1.25rem контента, поэтому не зависит от цвета фона панели.
-const BOTTOM_FADE = 'linear-gradient(to bottom, black calc(100% - 1.25rem), transparent)';
+// Fade скролл-контейнера — подсказка «есть ещё выше/ниже». Маска прозрачит крайние ~1.25rem
+// контента, поэтому не зависит от цвета фона панели. Подбираем нужную сторону(ы).
+const FADE_TOP = 'transparent, black 1.25rem';
+const FADE_BOTTOM = 'black calc(100% - 1.25rem), transparent';
+function scrollFadeMask(above: boolean, below: boolean): string | undefined {
+  if (above && below) return `linear-gradient(to bottom, ${FADE_TOP}, ${FADE_BOTTOM})`;
+  if (above) return `linear-gradient(to bottom, ${FADE_TOP}, black)`;
+  if (below) return `linear-gradient(to bottom, black, ${FADE_BOTTOM})`;
+  return undefined;
+}
 
 export function SidebarProjectList(): React.ReactElement {
   const { data, loading, error } = useProjects();
@@ -377,13 +439,17 @@ export function SidebarProjectList(): React.ReactElement {
     useSidebarSectionCollapse('favorites');
   const { collapsed: mainCollapsed, toggle: toggleMainCollapsed } =
     useSidebarSectionCollapse('main');
+  const { collapsed: archivedCollapsed, toggle: toggleArchivedCollapsed } =
+    useSidebarSectionCollapse('archived', true);
   const [query, setQuery] = useState('');
-  // Нижний fade скролл-контейнера: подсказка «есть ещё проекты ниже».
+  // Fade скролл-контейнера сверху/снизу: подсказка «есть ещё проекты выше/ниже».
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [moreAbove, setMoreAbove] = useState(false);
   const [moreBelow, setMoreBelow] = useState(false);
   const updateScrollFade = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
+    setMoreAbove(el.scrollTop > 4);
     setMoreBelow(el.scrollTop + el.clientHeight < el.scrollHeight - 4);
   }, []);
   useEffect(() => {
@@ -403,7 +469,10 @@ export function SidebarProjectList(): React.ReactElement {
   }
 
   // Inbox-проект скрываем — он рендерится отдельным пунктом в Sidebar.
-  const visible = (data ?? []).filter((p) => !p.isInbox);
+  const all = (data ?? []).filter((p) => !p.isInbox);
+  // Активные проекты идут в «Избранное»/«Мои проекты», архивные — в отдельную секцию ниже.
+  const visible = all.filter((p) => p.status !== 'archived');
+  const archived = all.filter((p) => p.status === 'archived');
 
   // Шапка «Мои проекты» (заголовок + счётчик + «+») рендерится всегда, чтобы юзер мог
   // создать первый проект. Сам заголовок кликается — сворачивает секцию (как в Todoist).
@@ -413,11 +482,11 @@ export function SidebarProjectList(): React.ReactElement {
         type="button"
         onClick={toggleMainCollapsed}
         aria-expanded={!mainCollapsed}
-        className="group flex flex-1 items-baseline gap-1.5 rounded text-left text-xs font-medium text-muted-foreground/80 hover:text-foreground"
+        className="group flex flex-1 items-center gap-1.5 rounded text-left text-xs font-medium text-muted-foreground/80 hover:text-foreground"
       >
         <ChevronDown
           className={cn(
-            'size-3 shrink-0 self-center transition-transform',
+            'size-3 shrink-0 transition-transform',
             mainCollapsed && '-rotate-90',
           )}
         />
@@ -438,7 +507,7 @@ export function SidebarProjectList(): React.ReactElement {
     </div>
   );
 
-  if (visible.length === 0) {
+  if (all.length === 0) {
     return (
       <div className="space-y-1.5">
         {myProjectsHeader}
@@ -521,8 +590,8 @@ export function SidebarProjectList(): React.ReactElement {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск проекта"
-            aria-label="Поиск проекта"
+            placeholder="Проект"
+            aria-label="Проект"
             className="h-8 w-full pl-7 text-sm"
           />
         </div>
@@ -531,7 +600,10 @@ export function SidebarProjectList(): React.ReactElement {
       <div
         ref={scrollRef}
         onScroll={updateScrollFade}
-        style={moreBelow ? { maskImage: BOTTOM_FADE, WebkitMaskImage: BOTTOM_FADE } : undefined}
+        style={(() => {
+          const mask = scrollFadeMask(moreAbove, moreBelow);
+          return mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined;
+        })()}
         className="-mx-1 min-h-0 flex-1 space-y-1.5 overflow-y-auto px-1"
       >
       {/* «Избранное» — самостоятельная секция НАД «Мои проекты». Скрывается в режиме поиска
@@ -580,6 +652,34 @@ export function SidebarProjectList(): React.ReactElement {
           ) : null
         )}
       </div>
+
+      {/* «Архивные» — спрятанные проекты. По умолчанию свёрнута, при поиске не показываем
+          (выдача плоская по активным). Внутри строки доступно «Вернуть из архива». */}
+      {!searching && archived.length > 0 && (
+        <div className="space-y-1 pt-1">
+          <button
+            type="button"
+            onClick={toggleArchivedCollapsed}
+            aria-expanded={!archivedCollapsed}
+            className="sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-sidebar/90 px-2 py-1 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
+          >
+            <ChevronDown
+              className={cn('size-3 shrink-0 transition-transform', archivedCollapsed && '-rotate-90')}
+            />
+            <span>Архивные</span>
+            <span className="tabular-nums opacity-70">{archived.length}</span>
+          </button>
+          {!archivedCollapsed && (
+            <ProjectGroup
+              projects={archived}
+              bucket="main"
+              reorderable={false}
+              onReorderEnd={() => {}}
+              onMove={() => {}}
+            />
+          )}
+        </div>
+      )}
       </div>
     </div>
   );

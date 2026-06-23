@@ -90,22 +90,33 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
   }
 
   return (
-    <aside className="grid h-full grid-rows-[auto_auto_auto_auto_1fr_auto] gap-3 bg-sidebar p-3">
-      {/* Шапка: лого + колокольчик уведомлений + тоггл панели */}
-      <div className="flex items-center gap-1">
+    <aside className="grid h-full grid-rows-[auto_auto_auto_1fr_auto] gap-3 bg-sidebar p-3">
+      {/* Шапка: компактное лого + поиск + колокольчик + тоггл панели. На мобиле (drawer)
+          правый отступ, чтобы контролы не лезли под крестик SheetContent (top-4 right-4). */}
+      <div className="flex items-center gap-1 max-md:pr-7">
         <Link
           to="/"
           aria-label="ProjectsFlow"
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-base font-semibold tracking-tight transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-semibold tracking-tight transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
         >
           <span
-            className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-xs font-bold text-primary-foreground"
+            className="grid size-6 shrink-0 place-items-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground"
             aria-hidden="true"
           >
             PF
           </span>
           <span className="truncate">ProjectsFlow</span>
         </Link>
+
+        <button
+          type="button"
+          onClick={openSearch}
+          aria-label="Глобальный поиск"
+          title="Глобальный поиск"
+          className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06] hover:text-foreground"
+        >
+          <Search className="size-4" />
+        </button>
 
         <NavLink
           to="/notifications"
@@ -148,18 +159,6 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
       >
         <Plus className="size-4 shrink-0 text-success" />
         <span className="flex-1 text-left">Добавить задачу</span>
-      </button>
-
-      <button
-        type="button"
-        onClick={openSearch}
-        className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
-      >
-        <Search className="size-4 shrink-0" />
-        <span className="flex-1 text-left">Глобальный поиск</span>
-        <kbd className="rounded bg-foreground/[0.06] px-1.5 text-[10px] font-medium tracking-wider text-muted-foreground dark:bg-white/10">
-          ⌘K
-        </kbd>
       </button>
 
       <NavLink
