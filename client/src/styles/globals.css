@@ -122,6 +122,25 @@
     background: hsl(var(--muted-foreground) / 0.45);
   }
 
+  /* Список проектов в сайдбаре (ПК): постоянно видимый и заметный грабабельный скроллбар.
+     overflow-y:scroll держит полосу всегда. БЕЗ scrollbar-gutter — он давал второй
+     «фантомный» трек рядом с настоящим. Скроллится только этот блок (шапка/профиль —
+     отдельные строки грида, не двигаются). */
+  .pf-scroll-visible {
+    overflow-y: scroll;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.5) transparent;
+  }
+  .pf-scroll-visible::-webkit-scrollbar {
+    width: 10px;
+  }
+  .pf-scroll-visible::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.45);
+    border-radius: 8px;
+  }
+  .pf-scroll-visible::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.65);
+  }
+
   html,
   body,
   #root {

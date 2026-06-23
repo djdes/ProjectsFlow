@@ -572,7 +572,7 @@ export function SidebarProjectList(): React.ReactElement {
         </div>
       )}
 
-      <div className="-mx-1 min-h-0 flex-1 space-y-1.5 overflow-y-auto px-1">
+      <div className="pf-scroll-visible -mx-1 min-h-0 flex-1 space-y-1.5 px-1">
 
       {/* «Избранное» — самостоятельная секция НАД «Мои проекты». Скрывается в режиме поиска
           (тогда выдача плоская, без дублей). Заголовок кликается — сворачивает секцию. */}
