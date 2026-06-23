@@ -142,7 +142,7 @@ export function KanbanCard({
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
           // Status-акцент: TODO — статичный тонкий янтарный ring «задача ждёт воркера».
           // Стоит ДО selection-ring ниже, чтобы при выделении twMerge оставил ring выбора.
-          !preview && task.status === 'todo' && 'ring-1 ring-amber-400/60 dark:ring-amber-300/25',
+          !preview && task.status === 'todo' && 'ring-1 ring-amber-400/40 dark:ring-amber-300/20',
           // Подсветка выбранной карточки в режиме выделения.
           selecting && selected && 'border-primary ring-2 ring-primary/60',
           preview
