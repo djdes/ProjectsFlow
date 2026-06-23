@@ -3,6 +3,13 @@ import { motion } from 'motion/react';
 import { CornerUpLeft, Download, Pencil, SmilePlus, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
@@ -53,7 +60,6 @@ export function ChatBubble({
   canModerate,
 }: Props): React.ReactElement {
   const { animations } = useMotion();
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [preview, setPreview] = useState<{ url: string; filename: string } | null>(null);
 
   if (message.deleted) {
@@ -201,74 +207,66 @@ export function ChatBubble({
           </div>
         )}
 
-        {/* hover-тулбар действий */}
+        {/* Действия: портал-меню (DropdownMenu) — НЕ обрезается скроллом, в отличие от
+            прежнего абсолютного тулбара над пузырём. Триггер сидит во внутреннем углу. */}
         <div
           className={cn(
-            'absolute -top-3 z-10 flex items-center gap-0.5 rounded-full border bg-background px-1 py-0.5 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 focus-within:opacity-100',
-            isOwn ? 'left-0' : 'right-0',
+            'absolute top-0.5 z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 data-[state=open]:opacity-100',
+            isOwn ? 'left-0.5' : 'right-0.5',
           )}
         >
-          <div className="relative">
-            <button
-              type="button"
-              aria-label="Реакция"
-              onClick={() => setPickerOpen((v) => !v)}
-              className="grid size-6 place-items-center rounded-full text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
-            >
-              <SmilePlus className="size-3.5" />
-            </button>
-            {pickerOpen && (
-              <div
-                className="absolute bottom-full z-20 mb-1 flex gap-0.5 rounded-full border bg-background p-1 shadow-md"
-                style={isOwn ? { left: 0 } : { right: 0 }}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Действия с сообщением"
+                className="grid size-6 place-items-center rounded-full border bg-background/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:text-foreground"
               >
+                <SmilePlus className="size-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align={isOwn ? 'start' : 'end'} className="w-auto min-w-44 p-1">
+              <div className="flex gap-0.5 pb-1">
                 {QUICK_EMOJIS.map((e) => {
-                  const mine = message.reactions.find((r) => r.emoji === e)?.userIds.includes(currentUserId) ?? false;
+                  const mine =
+                    message.reactions.find((r) => r.emoji === e)?.userIds.includes(currentUserId) ?? false;
                   return (
                     <button
                       key={e}
                       type="button"
-                      onClick={() => {
-                        onToggleReaction(message.id, e, mine);
-                        setPickerOpen(false);
-                      }}
-                      className="grid size-7 place-items-center rounded-full text-base hover:bg-foreground/[0.06]"
+                      onClick={() => onToggleReaction(message.id, e, mine)}
+                      className={cn(
+                        'grid size-7 place-items-center rounded-md text-base transition-transform hover:scale-110 hover:bg-foreground/[0.06]',
+                        mine && 'bg-primary/10',
+                      )}
                     >
                       {e}
                     </button>
                   );
                 })}
               </div>
-            )}
-          </div>
-          <button
-            type="button"
-            aria-label="Ответить"
-            onClick={() => onReply(message)}
-            className="grid size-6 place-items-center rounded-full text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
-          >
-            <CornerUpLeft className="size-3.5" />
-          </button>
-          {isOwn && (
-            <button
-              type="button"
-              aria-label="Редактировать"
-              onClick={() => onEdit(message)}
-              className="grid size-6 place-items-center rounded-full text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
-            >
-              <Pencil className="size-3.5" />
-            </button>
-          )}
-          {(isOwn || canModerate) && (
-            <button
-              type="button"
-              aria-label="Удалить"
-              onClick={() => onDelete(message)}
-              className="grid size-6 place-items-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-            >
-              <Trash2 className="size-3.5" />
-            </button>
-          )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => onReply(message)}>
+                <CornerUpLeft />
+                Ответить
+              </DropdownMenuItem>
+              {isOwn && (
+                <DropdownMenuItem onSelect={() => onEdit(message)}>
+                  <Pencil />
+                  Редактировать
+                </DropdownMenuItem>
+              )}
+              {(isOwn || canModerate) && (
+                <DropdownMenuItem
+                  onSelect={() => onDelete(message)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 />
+                  Удалить
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
