@@ -64,12 +64,12 @@ export function AppShell(): React.ReactElement {
         {isDesktop ? (
           <div
             className={cn(
-              'grid h-dvh bg-background text-foreground',
+              'grid h-dvh overflow-hidden bg-background text-foreground',
               collapsed ? 'grid-cols-[3.5rem_1fr]' : 'grid-cols-[260px_1fr]',
             )}
           >
             <Sidebar collapsed={collapsed} onToggleCollapse={toggleCollapse} />
-            <main className="relative overflow-y-auto">
+            <main className="relative min-h-0 overflow-y-auto">
               <Outlet />
             </main>
           </div>

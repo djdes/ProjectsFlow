@@ -36,7 +36,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
   if (collapsed) {
     const favorites = (projects ?? []).filter((p) => !p.isInbox && p.isFavorite);
     return (
-      <aside className="flex h-full flex-col items-center gap-1 bg-sidebar p-2">
+      <aside className="flex h-full min-h-0 flex-col items-center gap-1 overflow-hidden bg-sidebar p-2">
         <TooltipProvider delayDuration={300}>
           {onToggleCollapse && (
             <RailButton onClick={onToggleCollapse} label="Развернуть панель">
@@ -90,7 +90,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
   }
 
   return (
-    <aside className="grid h-full grid-rows-[auto_auto_auto_1fr_auto] gap-3 bg-sidebar p-3">
+    <aside className="grid h-full min-h-0 grid-rows-[auto_auto_auto_1fr_auto] gap-3 overflow-hidden bg-sidebar p-3">
       {/* Шапка: компактное лого + поиск + колокольчик + тоггл панели. На мобиле (drawer)
           правый отступ, чтобы контролы не лезли под крестик SheetContent (top-4 right-4). */}
       <div className="flex items-center gap-1 max-md:pr-8">
