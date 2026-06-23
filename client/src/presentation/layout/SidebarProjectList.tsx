@@ -165,7 +165,7 @@ function SidebarProjectRow({
         {...(reorderable ? attributes : {})}
         className={({ isActive }) =>
           cn(
-            'relative flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+            'relative flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
             'hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]',
             'cursor-pointer',
             isActive && 'bg-foreground/[0.06] font-medium text-foreground dark:bg-white/10',
@@ -203,7 +203,7 @@ function SidebarProjectRow({
                 />
               )}
             </span>
-            <span className="flex-1 truncate">{project.name}</span>
+            <span className="min-w-0 flex-1 truncate">{project.name}</span>
             <span
               className={cn(
                 'flex shrink-0 items-center gap-1',

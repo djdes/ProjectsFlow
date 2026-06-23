@@ -128,6 +128,9 @@
      отдельные строки грида, не двигаются). */
   .pf-scroll-visible {
     overflow-y: scroll;
+    /* Длинные имена проектов не должны включать горизонтальный скролл (он ломает/прячет
+       вертикальную полосу). Клипаем по X — имена и так усекаются через truncate. */
+    overflow-x: hidden;
     scrollbar-color: hsl(var(--muted-foreground) / 0.5) transparent;
   }
   .pf-scroll-visible::-webkit-scrollbar {
