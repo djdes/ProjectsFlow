@@ -76,6 +76,8 @@ export const users = mysqlTable(
     defaultKanbanColors: json('default_kanban_colors').$type<KanbanDefaultColors | null>(),
     // Обобщённый bag клиентских UI-настроек (группировка «Поручено мне» и т.д.). См. db/069.
     uiPrefs: json('ui_prefs').$type<UiPrefs | null>(),
+    // Активное пространство юзера — единый источник правды для скоупинга проектов. См. db/073.
+    currentWorkspaceId: char('current_workspace_id', { length: 36 }),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -200,6 +202,9 @@ export const projects = mysqlTable(
   'projects',
   {
     id: id(),
+    // Пространство, которому принадлежит проект. Проект живёт ровно в одном пространстве;
+    // GET /api/projects скоупится по активному пространству юзера. См. db/073.
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
     // owner_id остаётся как кеш «кто создал» для backward-compat и отката. Реальный
     // доступ-чек идёт через project_members (см. spec фазу P4 — финальный дроп колонки).
     ownerId: fkUserId('owner_id'),
@@ -237,8 +242,44 @@ export const projects = mysqlTable(
     uniqueIndex('uq_projects_owner_name').on(t.ownerId, t.name),
     index('idx_projects_owner').on(t.ownerId),
     index('idx_projects_dispatcher_user').on(t.dispatcherUserId),
+    index('idx_projects_workspace').on(t.workspaceId),
   ],
 );
+
+// Пространства (workspaces): верхнеуровневый изолированный контейнер над проектами. См. db/073.
+export const workspaces = mysqlTable(
+  'workspaces',
+  {
+    id: id(),
+    name: varchar('name', { length: 120 }).notNull(),
+    // Эмодзи-иконка пространства (Notion-style); NULL = дефолт (первая буква названия).
+    icon: varchar('icon', { length: 16 }),
+    ownerUserId: fkUserId('owner_user_id'),
+    createdAt: createdAtCol(),
+  },
+  (t) => [index('idx_workspaces_owner').on(t.ownerUserId)],
+);
+
+export type WorkspaceRow = typeof workspaces.$inferSelect;
+export type NewWorkspaceRow = typeof workspaces.$inferInsert;
+
+// Участники пространства + роль. Доступ к проекту = участник его пространства + проектная роль.
+export const workspaceMembers = mysqlTable(
+  'workspace_members',
+  {
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    role: mysqlEnum('role', ['owner', 'member']).notNull().default('member'),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.userId] }),
+    index('idx_wm_user').on(t.userId),
+  ],
+);
+
+export type WorkspaceMemberRow = typeof workspaceMembers.$inferSelect;
+export type NewWorkspaceMemberRow = typeof workspaceMembers.$inferInsert;
 
 // Multi-tenancy: участники проекта + их роли. См. spec
 // docs/superpowers/specs/2026-05-19-multi-tenant-projects-design.md.

@@ -105,6 +105,17 @@ import {
   LiveSessionNotFoundError,
   LiveSessionGoneError,
 } from '../../domain/live/errors.js';
+import {
+  WorkspaceNotFoundError,
+  NotWorkspaceMemberError,
+  NotWorkspaceOwnerError,
+  LastOwnerError,
+  WorkspaceNotEmptyError,
+  CannotDeleteLastWorkspaceError,
+  WorkspaceNameEmptyError,
+  UserNotFoundByEmailError,
+  NotProjectOwnerError,
+} from '../../domain/workspace/errors.js';
 
 type ErrorPayload = {
   error: string;
@@ -578,6 +589,41 @@ export function errorHandler(
   }
   if (err instanceof LiveSessionGoneError) {
     res.status(410).json({ error: 'live_session_gone', message: err.message });
+    return;
+  }
+
+  // --- Пространства (workspaces) ---
+  if (err instanceof WorkspaceNotFoundError || err instanceof NotWorkspaceMemberError) {
+    // Не разглашаем существование чужого пространства — 404 и для not-found, и для not-member.
+    res.status(404).json({ error: 'workspace_not_found' });
+    return;
+  }
+  if (err instanceof NotWorkspaceOwnerError) {
+    res.status(403).json({ error: 'not_workspace_owner', message: 'Нужны права владельца пространства' });
+    return;
+  }
+  if (err instanceof NotProjectOwnerError) {
+    res.status(403).json({ error: 'not_project_owner', message: 'Переносить проект может только его владелец' });
+    return;
+  }
+  if (err instanceof LastOwnerError) {
+    res.status(409).json({ error: 'workspace_last_owner', message: 'Нельзя удалить или понизить единственного владельца' });
+    return;
+  }
+  if (err instanceof WorkspaceNotEmptyError) {
+    res.status(409).json({ error: 'workspace_not_empty', message: 'Сначала перенесите или удалите проекты пространства' });
+    return;
+  }
+  if (err instanceof CannotDeleteLastWorkspaceError) {
+    res.status(409).json({ error: 'workspace_last', message: 'Нельзя удалить единственное пространство' });
+    return;
+  }
+  if (err instanceof WorkspaceNameEmptyError) {
+    res.status(400).json({ error: 'workspace_name_empty', message: 'Введите название пространства' });
+    return;
+  }
+  if (err instanceof UserNotFoundByEmailError) {
+    res.status(404).json({ error: 'user_not_found_by_email', message: 'Пользователь с таким email не найден' });
     return;
   }
 
