@@ -202,7 +202,9 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.18 }}
-          className="min-h-0 min-w-0 overflow-hidden"
+          // НЕ overflow-hidden: список проектов намеренно «вытекает» на -mx-1 (фокус-ринги),
+          // а чат скроллит свой внутренний контейнер. overflow-hidden тут срезал ринги/4px.
+          className="min-h-0 min-w-0"
         >
           {view === 'chat' ? (
             <WorkspaceChatPanel />
@@ -213,7 +215,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
           )}
         </motion.div>
       ) : (
-        <div className="min-h-0 min-w-0 overflow-hidden">
+        <div className="min-h-0 min-w-0">
           {view === 'chat' ? (
             <WorkspaceChatPanel />
           ) : (

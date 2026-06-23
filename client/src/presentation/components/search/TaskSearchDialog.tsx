@@ -278,10 +278,12 @@ export function TaskSearchDialog({
                   )}
                 >
                   <span className="grid size-5 shrink-0 place-items-center">{item.icon}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="line-clamp-1 text-sm">{item.label}</span>
+                  <span className="block min-w-0 flex-1">
+                    {/* truncate (а не line-clamp): обрезает и одно длинное слово без пробелов
+                        с многоточием — иначе имя «выезжает за блок» поиска. */}
+                    <span className="block truncate text-sm">{item.label}</span>
                     {item.sub && (
-                      <span className="line-clamp-1 text-xs text-muted-foreground">{item.sub}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{item.sub}</span>
                     )}
                   </span>
                 </button>
