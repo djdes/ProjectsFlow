@@ -90,7 +90,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
   }
 
   return (
-    <aside className="grid h-full min-h-0 grid-rows-[auto_auto_auto_1fr_auto] gap-3 overflow-hidden bg-sidebar p-3">
+    <aside className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_auto_1fr_auto] gap-3 overflow-hidden bg-sidebar p-3">
       {/* Шапка: компактное лого + поиск + колокольчик + тоггл панели. На мобиле (drawer)
           правый отступ, чтобы контролы не лезли под крестик SheetContent (top-4 right-4). */}
       <div className="flex items-center gap-1 max-md:pr-8">
@@ -176,7 +176,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
         <span className="flex-1 truncate">Входящие</span>
       </NavLink>
 
-      <nav className="min-h-0">
+      <nav className="min-h-0 min-w-0">
         <SidebarProjectList />
       </nav>
 
