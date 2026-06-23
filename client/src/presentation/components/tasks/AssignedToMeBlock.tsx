@@ -366,23 +366,28 @@ function PendingRow({
   onDecline: () => void;
 }): React.ReactElement {
   return (
-    <li className="flex items-start gap-2.5 border-l-2 border-primary px-3 py-2">
-      <Avatar className="size-7 shrink-0">
-        <AvatarFallback
-          className={cn('text-[10px]', avatarColor(item.delegation.creatorDisplayName))}
-        >
-          {getInitials(item.delegation.creatorDisplayName)}
-        </AvatarFallback>
-      </Avatar>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm leading-snug">
-          <span className="font-medium">{item.delegation.creatorDisplayName}</span> поручил вам:
-        </p>
-        <p className="line-clamp-2 text-xs text-muted-foreground">
-          «{item.description || '(без описания)'}»
-        </p>
+    // Вертикально: сверху «<аватар> Имя поручил вам: «описание»», снизу — кнопки.
+    // Так на узких экранах ничего не сжимается и кнопки ложатся ровно под текстом.
+    <li className="flex flex-col gap-2 border-l-2 border-primary px-3 py-2">
+      <div className="flex items-start gap-2.5">
+        <Avatar className="size-7 shrink-0">
+          <AvatarFallback
+            className={cn('text-[10px]', avatarColor(item.delegation.creatorDisplayName))}
+          >
+            {getInitials(item.delegation.creatorDisplayName)}
+          </AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm leading-snug">
+            <span className="font-medium">{item.delegation.creatorDisplayName}</span> поручил вам:
+          </p>
+          <p className="line-clamp-2 text-xs text-muted-foreground">
+            «{item.description || '(без описания)'}»
+          </p>
+        </div>
       </div>
-      <div className="flex shrink-0 gap-1.5">
+      {/* Кнопки под текстом, с отступом слева под аватар (size-7 + gap-2.5 = 2.375rem). */}
+      <div className="flex gap-1.5 pl-[2.375rem]">
         <Button
           size="sm"
           className="h-7 gap-1 bg-emerald-600 hover:bg-emerald-700"
