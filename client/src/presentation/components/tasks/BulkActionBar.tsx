@@ -180,7 +180,7 @@ export function BulkActionBar({
 
   return (
     <>
-      <div className="pointer-events-none fixed inset-x-0 bottom-[4.5rem] z-50 flex justify-center px-3 md:bottom-4">
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.5rem_+_env(safe-area-inset-bottom))] z-50 flex justify-center px-3 md:bottom-4">
         <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-xl border bg-card/95 p-1.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <span className="px-2 text-xs font-medium tabular-nums">
           {disabled ? <Loader2 className="inline size-3.5 animate-spin" /> : `Выбрано ${count}`}

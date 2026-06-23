@@ -455,7 +455,7 @@ export function TaskComposer({
   // чтобы поля по бокам не блокировали клики по канбану. На mobile (<md) приподнят
   // над нижним таб-баром (h-14, см. AppShell MobileBottomNav).
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-[4.5rem] z-40 flex justify-center px-3 md:bottom-4 md:px-4">
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.5rem_+_env(safe-area-inset-bottom))] z-40 flex justify-center px-3 md:bottom-4 md:px-4">
       {card}
     </div>
   );
