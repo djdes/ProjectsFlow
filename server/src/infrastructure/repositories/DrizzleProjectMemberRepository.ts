@@ -116,6 +116,34 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     }));
   }
 
+  async listProjectsForUserInWorkspace(
+    userId: string,
+    workspaceId: string,
+  ): Promise<ProjectWithRole[]> {
+    // То же, что listProjectsForUser, но с фильтром по пространству — изоляция сайдбара.
+    const rows = await this.db
+      .select({
+        project: projects,
+        role: projectMembers.role,
+        memberCount: sql<number>`(SELECT COUNT(*) FROM project_members pm WHERE pm.project_id = ${projects.id})`,
+        taskCount: sql<number>`(SELECT COUNT(*) FROM tasks t WHERE t.project_id = ${projects.id})`,
+        isFavorite: projectMembers.isFavorite,
+        favoriteSortOrder: projectMembers.favoriteSortOrder,
+      })
+      .from(projectMembers)
+      .innerJoin(projects, eq(projects.id, projectMembers.projectId))
+      .where(and(eq(projectMembers.userId, userId), eq(projects.workspaceId, workspaceId)))
+      .orderBy(asc(projectMembers.sortOrder), asc(projects.createdAt));
+    return rows.map((r) => ({
+      ...toProject(r.project),
+      role: r.role,
+      memberCount: Number(r.memberCount),
+      taskCount: Number(r.taskCount),
+      isFavorite: r.isFavorite,
+      favoriteSortOrder: Number(r.favoriteSortOrder),
+    }));
+  }
+
   async countOwners(projectId: string): Promise<number> {
     const rows = await this.db
       .select({ count: sql<number>`COUNT(*)` })

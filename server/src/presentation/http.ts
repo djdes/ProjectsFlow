@@ -149,6 +149,8 @@ import { sessionFromCookie } from './middleware/sessionFromCookie.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './auth/routes.js';
 import { projectsRouter } from './projects/routes.js';
+import { workspacesRouter } from './workspaces/routes.js';
+import type { WorkspaceService } from '../application/workspace/WorkspaceService.js';
 import { githubRouter } from './integrations/github/routes.js';
 import { secretsRouter } from './secrets/routes.js';
 import { kbRouter } from './kb/routes.js';
@@ -262,7 +264,12 @@ type AppDeps = {
     readonly resolveJoinRequest: ResolveProjectJoinRequest;
     readonly appUrl: string;
     readonly notifyProjectChanged: (projectId: string) => void;
+    // Deep-link авто-switch: при открытии проекта делает его пространство активным.
+    readonly setActiveWorkspaceForProject: (userId: string, projectId: string) => Promise<void>;
     readonly members: ProjectMemberRepository;
+  };
+  readonly workspaces: {
+    readonly service: WorkspaceService;
   };
   readonly invites: {
     readonly getByToken: GetInviteByToken;
@@ -516,6 +523,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       notifier: deps.notifications.projectNotifier,
     }),
   );
+  app.use('/api/workspaces', workspacesRouter({ service: deps.workspaces.service }));
   app.use('/api/integrations/github', githubRouter(deps.github));
   app.use('/api/projects/:projectId/secrets', secretsRouter(deps.secrets));
   app.use('/api/projects/:projectId/monitoring', monitoringRouter(deps.monitoring));

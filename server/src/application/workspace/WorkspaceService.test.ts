@@ -114,6 +114,9 @@ function makeFakes(seed: Seed) {
       const p = projects.find((x) => x.id === projectId);
       if (p) p.workspaceId = workspaceId;
     },
+    async listByWorkspace(workspaceId: string) {
+      return projects.filter((p) => p.workspaceId === workspaceId).map((p) => ({ id: p.id, name: p.id, icon: null }));
+    },
   };
   const projectMembersPort = {
     async listByProject(projectId: string) {

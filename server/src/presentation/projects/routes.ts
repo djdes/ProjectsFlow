@@ -91,6 +91,8 @@ type Deps = {
   readonly appUrl: string;
   // Live-обновление: сигнал «проект изменился» всем участникам (SSE). Best-effort.
   readonly notifyProjectChanged: (projectId: string) => void;
+  // Deep-link авто-switch активного пространства при открытии проекта. Best-effort.
+  readonly setActiveWorkspaceForProject: (userId: string, projectId: string) => Promise<void>;
   // Email-оповещения команде (изменения состава) + чтение/запись пер-участниковых настроек.
   readonly notifier: ProjectNotificationService;
   readonly members: ProjectMemberRepository;
@@ -258,6 +260,12 @@ export function projectsRouter(deps: Deps): Router {
       if (typeof id !== 'string') throw new ProjectNotFoundError();
       const project = await deps.getProject.execute(id, req.user!.id);
       if (!project) throw new ProjectNotFoundError();
+      // Deep-link из другого пространства → делаем его активным (best-effort, не роняем ответ).
+      try {
+        await deps.setActiveWorkspaceForProject(req.user!.id, id);
+      } catch {
+        // авто-switch не критичен для отдачи проекта
+      }
       res.json({ project: toDto(project) });
     } catch (e) {
       next(e);

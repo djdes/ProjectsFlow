@@ -13,6 +13,8 @@ import { DrizzleUserRepository } from './infrastructure/repositories/DrizzleUser
 import { DrizzleSessionRepository } from './infrastructure/repositories/DrizzleSessionRepository.js';
 import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleProjectRepository.js';
 import { DrizzleProjectMemberRepository } from './infrastructure/repositories/DrizzleProjectMemberRepository.js';
+import { DrizzleWorkspaceRepository } from './infrastructure/repositories/DrizzleWorkspaceRepository.js';
+import { WorkspaceService } from './application/workspace/WorkspaceService.js';
 import { DrizzleProjectInviteRepository } from './infrastructure/repositories/DrizzleProjectInviteRepository.js';
 import { DrizzleNotificationRepository } from './infrastructure/repositories/DrizzleNotificationRepository.js';
 import { NotificationHub } from './infrastructure/notifications/NotificationHub.js';
@@ -242,6 +244,43 @@ const sessionRepo = new DrizzleSessionRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const projectMemberRepo = new DrizzleProjectMemberRepository(db);
 const projectInviteRepo = new DrizzleProjectInviteRepository(db);
+
+// === Пространства (workspaces) ===
+const workspaceRepo = new DrizzleWorkspaceRepository(db);
+const workspaceService = new WorkspaceService({
+  repo: workspaceRepo,
+  projects: projectRepo,
+  projectMembers: projectMemberRepo,
+  users: userRepo,
+  idGen: idGenerator,
+});
+// Активное пространство юзера (current ?? первое доступное). Кидает если пространств нет —
+// для create-проекта/inbox это инвариант (после миграции у каждого есть личное пространство).
+const resolveWorkspaceId = async (userId: string): Promise<string> => {
+  const current = await workspaceRepo.getCurrentWorkspaceId(userId);
+  if (current) return current;
+  const another = await workspaceRepo.findAnotherForUser(userId, '');
+  if (another) return another;
+  throw new Error(`User ${userId} has no workspace`);
+};
+// Версия для листинга: null вместо ошибки (пустой список вместо 500).
+const resolveWorkspaceIdOrNull = (userId: string): Promise<string | null> =>
+  workspaceRepo
+    .getCurrentWorkspaceId(userId)
+    .then((cur) => cur ?? workspaceRepo.findAnotherForUser(userId, ''));
+// Создаёт личное пространство новому юзеру + делает активным (для Register).
+const createDefaultWorkspace = async (userId: string): Promise<void> => {
+  await workspaceService.create(userId, { name: 'Личное', icon: null });
+};
+// Deep-link авто-switch: открыли проект из другого пространства → делаем его активным.
+const setActiveWorkspaceForProject = async (userId: string, projectId: string): Promise<void> => {
+  const wsId = await projectRepo.getWorkspaceId(projectId);
+  if (!wsId) return;
+  const current = await workspaceRepo.getCurrentWorkspaceId(userId);
+  if (current === wsId) return;
+  const membership = await workspaceRepo.getMembership(wsId, userId);
+  if (membership) await workspaceRepo.setCurrentWorkspace(userId, wsId);
+};
 // Real-time-доставка: хаб + декоратор поверх Drizzle-репозитория. Любое создание
 // уведомления автоматически push'ится подписчикам SSE.
 const notificationHub = new NotificationHub();
@@ -507,7 +546,7 @@ const enqueueAiPromptJob = new EnqueueAiPromptJob({
   projects: projectRepo,
   members: projectMemberRepo,
   aiPromptJobs: aiPromptJobRepo,
-  listProjects: new ListProjects(projectMemberRepo),
+  listProjects: new ListProjects({ members: projectMemberRepo, resolveWorkspaceId: resolveWorkspaceIdOrNull }),
   listKbDocuments: new ListKbDocuments({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
   getKbDocument: new GetKbDocument({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
   rateLimiter: agentRateLimiter,
@@ -538,6 +577,7 @@ const telegramComposer = new TelegramComposerService({
     repo: projectRepo,
     members: projectMemberRepo,
     idGen: idGenerator,
+    resolveWorkspaceId,
   }),
   accept: new AcceptTaskDelegation({
     delegations: taskDelegationRepo,
@@ -805,13 +845,13 @@ const manageAlertRules = new ManageAlertRules({
 });
 const listMonitoredServers = new ListMonitoredServers({ servers: serverRepo });
 const monitoringOverview = new GetMonitoringOverview({
-  listProjects: new ListProjects(projectMemberRepo),
+  listProjects: new ListProjects({ members: projectMemberRepo, resolveWorkspaceId: resolveWorkspaceIdOrNull }),
   servers: serverRepo,
   snapshots: snapshotRepo,
   alerts: monitoringAlertRepo,
 });
 const monitoringAlertCenter = new GetAlertCenter({
-  listProjects: new ListProjects(projectMemberRepo),
+  listProjects: new ListProjects({ members: projectMemberRepo, resolveWorkspaceId: resolveWorkspaceIdOrNull }),
   servers: serverRepo,
   alerts: monitoringAlertRepo,
 });
@@ -996,6 +1036,7 @@ const authDeps = {
   idGen: idGenerator,
   sessionTtlMs: sessionTtlMs(),
   now,
+  createDefaultWorkspace,
 };
 
 // Ежедневная сводка (db/064): один общий SendDailyDigest для планировщика и кнопки
@@ -1034,12 +1075,13 @@ const { app, devProxyUpgrade } = createApp({
     liveEventHub,
   },
   projects: {
-    listProjects: new ListProjects(projectMemberRepo),
+    listProjects: new ListProjects({ members: projectMemberRepo, resolveWorkspaceId: resolveWorkspaceIdOrNull }),
     getProject: new GetProject({ projects: projectRepo, members: projectMemberRepo }),
     createProject: new CreateProject({
       repo: projectRepo,
       members: projectMemberRepo,
       idGen: idGenerator,
+      resolveWorkspaceId,
       resolveDefaultDispatcher,
     }),
     updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo }),
@@ -1096,6 +1138,7 @@ const { app, devProxyUpgrade } = createApp({
       repo: projectRepo,
       members: projectMemberRepo,
       idGen: idGenerator,
+      resolveWorkspaceId,
     }),
     listMembers: new ListProjectMembers({ projects: projectRepo, members: projectMemberRepo }),
     removeMember: new RemoveProjectMember({ projects: projectRepo, members: projectMemberRepo }),
@@ -1155,7 +1198,11 @@ const { app, devProxyUpgrade } = createApp({
     }),
     appUrl: process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? 'http://localhost:5173',
     notifyProjectChanged,
+    setActiveWorkspaceForProject,
     members: projectMemberRepo,
+  },
+  workspaces: {
+    service: workspaceService,
   },
   notifications: {
     list: new ListNotifications({ repo: notificationRepo }),
@@ -1573,12 +1620,13 @@ const { app, devProxyUpgrade } = createApp({
       secrets: secretsRepo,
     }),
     // Переиспользуем существующие use-cases для agent-эндпоинтов
-    listProjects: new ListProjects(projectMemberRepo),
+    listProjects: new ListProjects({ members: projectMemberRepo, resolveWorkspaceId: resolveWorkspaceIdOrNull }),
     createProjectWithGit: new CreateProjectWithGit({
       createProject: new CreateProject({
         repo: projectRepo,
         members: projectMemberRepo,
         idGen: idGenerator,
+        resolveWorkspaceId,
         resolveDefaultDispatcher,
       }),
       updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo }),

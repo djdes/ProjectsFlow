@@ -77,6 +77,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
     try {
       await this.db.insert(projects).values({
         id: input.id,
+        workspaceId: input.workspaceId,
         ownerId: input.ownerId,
         name: input.name,
         status: 'active',
@@ -101,6 +102,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
       await this.db.transaction(async (tx) => {
         await tx.insert(projects).values({
           id: input.id,
+          workspaceId: input.workspaceId,
           ownerId: input.ownerId,
           name: input.name,
           status: 'active',
@@ -147,6 +149,34 @@ export class DrizzleProjectRepository implements ProjectRepository {
     }
 
     return this.getById(id);
+  }
+
+  async setWorkspace(projectId: string, workspaceId: string): Promise<void> {
+    try {
+      await this.db.update(projects).set({ workspaceId }).where(eq(projects.id, projectId));
+    } catch (err) {
+      // Конфликт имени в целевом пространстве (uq_projects_workspace_name).
+      if (isDuplicateKey(err)) throw new ProjectNameAlreadyExistsError('');
+      throw err;
+    }
+  }
+
+  async getWorkspaceId(projectId: string): Promise<string | null> {
+    const rows = await this.db
+      .select({ workspaceId: projects.workspaceId })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+    return rows[0]?.workspaceId ?? null;
+  }
+
+  async listByWorkspace(workspaceId: string): Promise<Array<{ id: string; name: string; icon: string | null }>> {
+    const rows = await this.db
+      .select({ id: projects.id, name: projects.name, icon: projects.icon })
+      .from(projects)
+      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.isInbox, false)))
+      .orderBy(projects.createdAt);
+    return rows.map((r) => ({ id: r.id, name: r.name, icon: r.icon ?? null }));
   }
 
   async listWithGitRepo(): Promise<Project[]> {

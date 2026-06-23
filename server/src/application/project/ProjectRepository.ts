@@ -5,6 +5,8 @@ export type CreateProjectInput = {
   readonly id: string;
   readonly ownerId: string;
   readonly name: string;
+  // Пространство, которому принадлежит проект (обязательно — projects.workspace_id NOT NULL).
+  readonly workspaceId: string;
   readonly isInbox?: boolean;
 };
 
@@ -39,6 +41,12 @@ export interface ProjectRepository {
   createWithOwnerMembership(input: CreateProjectInput): Promise<Project>;
   // Без owner-фильтра: caller уже проверил доступ. Возвращает null если проект не найден.
   update(id: string, patch: UpdateProjectInput): Promise<Project | null>;
+  // Перенос проекта в другое пространство (см. WorkspaceService.moveProject).
+  setWorkspace(projectId: string, workspaceId: string): Promise<void>;
+  // workspace_id проекта — для deep-link авто-switch активного пространства.
+  getWorkspaceId(projectId: string): Promise<string | null>;
+  // Проекты пространства (для страницы настроек пространства). Лёгкий read-model.
+  listByWorkspace(workspaceId: string): Promise<Array<{ id: string; name: string; icon: string | null }>>;
   // Все проекты с непустым git_repo_url. Нормализацию/фильтрацию делает use-case
   // (CheckGitCollision) — он же контролирует cross-tenant-раскрытие.
   listWithGitRepo(): Promise<Project[]>;

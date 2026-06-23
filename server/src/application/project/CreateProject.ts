@@ -12,6 +12,8 @@ type Deps = {
   readonly repo: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly idGen: () => string;
+  // Активное пространство владельца — новый проект создаётся в нём. Бросает если нет пространства.
+  readonly resolveWorkspaceId: (ownerId: string) => Promise<string>;
   // Опциональная политика «авто-дефолт Ralph-диспетчера на новый проект».
   // Возвращает userId дежурного admin'а (с активным токеном) либо null —
   // тогда проект остаётся без диспетчера (ручной режим). Best-effort: если
@@ -28,10 +30,12 @@ export class CreateProject {
     // АТОМАРНО: project + owner-membership в одной TX (см. createWithOwnerMembership).
     // Раньше create() и members.add() шли последовательно — если member.add падал,
     // проект оставался orphan'ом без доступа никому, включая создателя.
+    const workspaceId = await this.deps.resolveWorkspaceId(cmd.ownerId);
     const project = await this.deps.repo.createWithOwnerMembership({
       id: this.deps.idGen(),
       ownerId: cmd.ownerId,
       name,
+      workspaceId,
     });
 
     // Auto-default Ralph-диспетчера на дежурного admin'а (с активным agent-токеном).

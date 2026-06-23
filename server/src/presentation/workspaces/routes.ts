@@ -1,0 +1,190 @@
+import { Router, type Request, type Response, type NextFunction } from 'express';
+import type { WorkspaceService } from '../../application/workspace/WorkspaceService.js';
+import type { Workspace } from '../../domain/workspace/Workspace.js';
+import type { WorkspaceListItem } from '../../application/workspace/WorkspaceRepository.js';
+import type { WorkspaceMember } from '../../domain/workspace/WorkspaceMember.js';
+import { requireAuth } from '../middleware/requireAuth.js';
+import {
+  addMemberSchema,
+  changeRoleSchema,
+  createWorkspaceSchema,
+  moveProjectSchema,
+  setCurrentSchema,
+  updateWorkspaceSchema,
+} from './schemas.js';
+
+type WorkspaceDto = {
+  id: string;
+  name: string;
+  icon: string | null;
+  ownerUserId: string;
+  role?: 'owner' | 'member';
+  projectCount?: number;
+  isCurrent?: boolean;
+  createdAt: string;
+};
+
+function toDto(ws: Workspace): WorkspaceDto;
+function toDto(ws: WorkspaceListItem, isCurrent: boolean): WorkspaceDto;
+function toDto(ws: Workspace | WorkspaceListItem, isCurrent?: boolean): WorkspaceDto {
+  const listItem = ws as Partial<WorkspaceListItem>;
+  return {
+    id: ws.id,
+    name: ws.name,
+    icon: ws.icon,
+    ownerUserId: ws.ownerUserId,
+    role: listItem.role,
+    projectCount: listItem.projectCount,
+    isCurrent,
+    createdAt: ws.createdAt.toISOString(),
+  };
+}
+
+function memberToDto(m: WorkspaceMember): {
+  userId: string;
+  role: 'owner' | 'member';
+  displayName: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+} {
+  return {
+    userId: m.userId,
+    role: m.role,
+    displayName: m.displayName ?? null,
+    email: m.email ?? null,
+    avatarUrl: m.avatarUrl ?? null,
+  };
+}
+
+type Deps = {
+  readonly service: WorkspaceService;
+};
+
+export function workspacesRouter(deps: Deps): Router {
+  const router = Router();
+  router.use(requireAuth);
+
+  // GET /api/workspaces — мои пространства, активное помечено isCurrent.
+  router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user!.id;
+      const [list, current] = await Promise.all([
+        deps.service.listForUser(userId),
+        deps.service.getCurrentWorkspaceId(userId),
+      ]);
+      // Если current обнулился (после удаления) — считаем активным первое в списке.
+      const currentId = current ?? list[0]?.id ?? null;
+      res.json({ workspaces: list.map((w) => toDto(w, w.id === currentId)) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // POST /api/workspaces — создать + сделать активным.
+  router.post('/', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = createWorkspaceSchema.parse(req.body);
+      const ws = await deps.service.create(req.user!.id, { name: body.name, icon: body.icon ?? null });
+      res.status(201).json({ workspace: toDto(ws) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // PUT /api/workspaces/current — сменить активное.
+  router.put('/current', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = setCurrentSchema.parse(req.body);
+      await deps.service.switchCurrent(req.user!.id, body.workspaceId);
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // PATCH /api/workspaces/:id — переименовать / сменить иконку.
+  router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = updateWorkspaceSchema.parse(req.body);
+      const ws = await deps.service.rename(req.params.id as string, req.user!.id, body);
+      res.json({ workspace: toDto(ws) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // DELETE /api/workspaces/:id — удалить пространство.
+  router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await deps.service.deleteWorkspace(req.params.id as string, req.user!.id);
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // GET /api/workspaces/:id/members
+  router.get('/:id/members', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const members = await deps.service.listMembers(req.params.id as string, req.user!.id);
+      res.json({ members: members.map(memberToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // POST /api/workspaces/:id/members — добавить участника по email.
+  router.post('/:id/members', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = addMemberSchema.parse(req.body);
+      const m = await deps.service.addMember(req.params.id as string, req.user!.id, body.email, body.role ?? 'member');
+      res.status(201).json({ member: memberToDto(m) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // PATCH /api/workspaces/:id/members/:userId — сменить роль.
+  router.patch('/:id/members/:userId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = changeRoleSchema.parse(req.body);
+      await deps.service.changeMemberRole(req.params.id as string, req.user!.id, req.params.userId as string, body.role);
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // DELETE /api/workspaces/:id/members/:userId — удалить участника.
+  router.delete('/:id/members/:userId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await deps.service.removeMember(req.params.id as string, req.user!.id, req.params.userId as string);
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // GET /api/workspaces/:id/projects — проекты пространства.
+  router.get('/:id/projects', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projects = await deps.service.listProjects(req.params.id as string, req.user!.id);
+      res.json({ projects });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // POST /api/workspaces/:id/projects/:projectId/move — перенести проект в другое пространство.
+  router.post('/:id/projects/:projectId/move', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = moveProjectSchema.parse(req.body);
+      await deps.service.moveProject(req.params.id as string, req.user!.id, req.params.projectId as string, body.targetWorkspaceId);
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  return router;
+}

@@ -53,6 +53,12 @@ SET u.current_workspace_id = w.id;
 ALTER TABLE projects MODIFY COLUMN workspace_id CHAR(36) NOT NULL;
 ALTER TABLE projects ADD CONSTRAINT fk_projects_workspace
   FOREIGN KEY (workspace_id) REFERENCES workspaces(id);
+
+-- Уникальность имени проекта теперь в рамках ПРОСТРАНСТВА, а не владельца: один и тот же
+-- юзер может иметь одноимённые проекты в разных пространствах (см. spec — пространства
+-- изолированы). Внутри пространства имя по-прежнему уникально.
+ALTER TABLE projects DROP INDEX uq_projects_owner_name;
+ALTER TABLE projects ADD UNIQUE KEY uq_projects_workspace_name (workspace_id, name);
 -- ON DELETE SET NULL: удаление пространства не блокируется чужим current_workspace_id;
 -- приложение лениво переразрешает NULL current в любое доступное пространство.
 ALTER TABLE users ADD CONSTRAINT fk_users_current_workspace

@@ -27,6 +27,7 @@ import type {
 type ProjectsPort = {
   getById(id: string): Promise<{ id: string; ownerId: string } | null>;
   setWorkspace(projectId: string, workspaceId: string): Promise<void>;
+  listByWorkspace(workspaceId: string): Promise<ReadonlyArray<{ id: string; name: string; icon: string | null }>>;
 };
 type ProjectMembersPort = {
   listByProject(projectId: string): Promise<ReadonlyArray<{ userId: string }>>;
@@ -48,6 +49,19 @@ export class WorkspaceService {
 
   listForUser(userId: string): Promise<WorkspaceListItem[]> {
     return this.deps.repo.listForUser(userId);
+  }
+
+  getCurrentWorkspaceId(userId: string): Promise<string | null> {
+    return this.deps.repo.getCurrentWorkspaceId(userId);
+  }
+
+  /** Проекты пространства (для страницы настроек). Только участник пространства. */
+  async listProjects(
+    workspaceId: string,
+    userId: string,
+  ): Promise<ReadonlyArray<{ id: string; name: string; icon: string | null }>> {
+    await requireWorkspaceMember(this.deps.repo, workspaceId, userId);
+    return this.deps.projects.listByWorkspace(workspaceId);
   }
 
   async create(userId: string, input: { name: string; icon: string | null }): Promise<Workspace> {

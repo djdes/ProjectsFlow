@@ -239,7 +239,8 @@ export const projects = mysqlTable(
   },
   (t) => [
     index('idx_projects_owner_inbox').on(t.ownerId, t.isInbox),
-    uniqueIndex('uq_projects_owner_name').on(t.ownerId, t.name),
+    // Имя проекта уникально в рамках пространства (не владельца). См. db/073.
+    uniqueIndex('uq_projects_workspace_name').on(t.workspaceId, t.name),
     index('idx_projects_owner').on(t.ownerId),
     index('idx_projects_dispatcher_user').on(t.dispatcherUserId),
     index('idx_projects_workspace').on(t.workspaceId),

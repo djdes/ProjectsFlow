@@ -34,8 +34,13 @@ export interface ProjectMemberRepository {
   // Список members проекта c user-данными (имя, аватар, email). Нужен для UI «Команда».
   listByProject(projectId: string): Promise<ProjectMemberWithUser[]>;
 
-  // Проекты в которых юзер состоит, с его ролью. Используется в ListProjects.
+  // Проекты в которых юзер состоит, с его ролью. БЕЗ скоупинга по пространству —
+  // используется telegram/admin/notifications где нужны все проекты юзера.
   listProjectsForUser(userId: string): Promise<ProjectWithRole[]>;
+
+  // Как listProjectsForUser, но только проекты заданного пространства. Используется
+  // в ListProjects (сайдбар / GET /api/projects) для изоляции по активному пространству.
+  listProjectsForUserInWorkspace(userId: string, workspaceId: string): Promise<ProjectWithRole[]>;
 
   // Сколько owner'ов у проекта — для валидации «не понизь последнего owner'а».
   countOwners(projectId: string): Promise<number>;
