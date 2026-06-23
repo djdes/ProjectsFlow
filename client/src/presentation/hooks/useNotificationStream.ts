@@ -13,6 +13,9 @@ export const PROJECT_CHANGED_EVENT = 'pf:project-changed';
 export const LIVE_CHANGED_EVENT = 'pf:live-changed';
 // Сохранён снимок мониторинга — страница «Мониторинг» рефетчит/перекрашивает. detail={projectId,serverId,status}.
 export const MONITORING_CHANGED_EVENT = 'pf:monitoring-changed';
+// Новое сообщение в чате пространства — бейдж непрочитанного на кнопке «Чат» рефетчит счётчик.
+// detail={workspaceId}. Полную ленту обновляет открытая SSE-вкладка чата (отдельный EventSource).
+export const CHAT_CHANGED_EVENT = 'pf:chat-changed';
 
 type LiveSessionStatus = 'running' | 'completed' | 'failed' | 'timeout' | 'canceled';
 
@@ -25,7 +28,8 @@ type RealtimeEvent =
       sessionId: string;
       status: LiveSessionStatus;
     }
-  | { kind: 'snapshot_stored'; projectId: string; serverId: string; status: string };
+  | { kind: 'snapshot_stored'; projectId: string; serverId: string; status: string }
+  | { kind: 'workspace_chat_changed'; workspaceId: string };
 
 type StreamPayload =
   | { type: 'comment_mention'; projectName: string; actorDisplayName: string }
@@ -87,6 +91,12 @@ export function useNotificationStream(): void {
             new CustomEvent(MONITORING_CHANGED_EVENT, {
               detail: { projectId: data.projectId, serverId: data.serverId, status: data.status },
             }),
+          );
+          return;
+        }
+        if (data.kind === 'workspace_chat_changed') {
+          window.dispatchEvent(
+            new CustomEvent(CHAT_CHANGED_EVENT, { detail: { workspaceId: data.workspaceId } }),
           );
           return;
         }

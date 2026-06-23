@@ -21,6 +21,7 @@ import { HttpProjectFinanceRepository } from '@/infrastructure/http/HttpProjectF
 import { HttpTelegramRepository } from '@/infrastructure/http/HttpTelegramRepository';
 import { HttpMonitoringRepository } from '@/infrastructure/http/HttpMonitoringRepository';
 import { HttpLiveRepository } from '@/infrastructure/http/HttpLiveRepository';
+import { HttpChatRepository } from '@/infrastructure/http/HttpChatRepository';
 import { HttpWorkspaceRepository } from '@/infrastructure/http/HttpWorkspaceRepository';
 import { ImproveTaskDescription } from '@/application/ai/ImproveTaskDescription';
 import { ComposeTasks } from '@/application/ai/ComposeTasks';
@@ -58,6 +59,7 @@ import type {
 import type { TelegramRepository } from '@/application/telegram/TelegramRepository';
 import type { MonitoringRepository } from '@/application/monitoring/MonitoringRepository';
 import type { LiveRepository } from '@/application/live/LiveRepository';
+import type { ChatRepository } from '@/application/chat/ChatRepository';
 import type { UserRepository } from '@/application/user/UserRepository';
 import type { WorkspaceRepository } from '@/application/workspace/WorkspaceRepository';
 
@@ -90,6 +92,7 @@ type Container = {
   telegramRepository: TelegramRepository;
   monitoringRepository: MonitoringRepository;
   liveRepository: LiveRepository;
+  chatRepository: ChatRepository;
   aiPromptRepository: AiPromptRepository;
   improveTaskDescription: ImproveTaskDescription;
   composeTasks: ComposeTasks;
@@ -123,6 +126,7 @@ function buildContainer(): Container {
   const telegramRepo = new HttpTelegramRepository();
   const monitoringRepo = new HttpMonitoringRepository();
   const liveRepo = new HttpLiveRepository();
+  const chatRepo = new HttpChatRepository();
   const workspaceRepo = new HttpWorkspaceRepository();
   return {
     listProjects: new ListProjects(projectRepo),
@@ -153,6 +157,7 @@ function buildContainer(): Container {
     telegramRepository: telegramRepo,
     monitoringRepository: monitoringRepo,
     liveRepository: liveRepo,
+    chatRepository: chatRepo,
     aiPromptRepository: aiPromptRepo,
     improveTaskDescription: new ImproveTaskDescription(aiPromptRepo),
     composeTasks: new ComposeTasks(aiPromptRepo),
