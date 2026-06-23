@@ -21,12 +21,15 @@ import { HttpProjectFinanceRepository } from '@/infrastructure/http/HttpProjectF
 import { HttpTelegramRepository } from '@/infrastructure/http/HttpTelegramRepository';
 import { HttpMonitoringRepository } from '@/infrastructure/http/HttpMonitoringRepository';
 import { HttpLiveRepository } from '@/infrastructure/http/HttpLiveRepository';
+import { HttpWorkspaceRepository } from '@/infrastructure/http/HttpWorkspaceRepository';
 import { ImproveTaskDescription } from '@/application/ai/ImproveTaskDescription';
 import { ComposeTasks } from '@/application/ai/ComposeTasks';
 import type { AiPromptRepository } from '@/application/ai/AiPromptRepository';
 import type { AutomationRepository } from '@/application/automation/AutomationRepository';
 import { SearchTasks } from '@/application/task/SearchTasks';
 import { ListProjects } from '@/application/project/ListProjects';
+import { ListWorkspaces } from '@/application/workspace/ListWorkspaces';
+import { CreateWorkspace } from '@/application/workspace/CreateWorkspace';
 import { GetProject } from '@/application/project/GetProject';
 import { CreateProject } from '@/application/project/CreateProject';
 import { UpdateProject } from '@/application/project/UpdateProject';
@@ -56,6 +59,7 @@ import type { TelegramRepository } from '@/application/telegram/TelegramReposito
 import type { MonitoringRepository } from '@/application/monitoring/MonitoringRepository';
 import type { LiveRepository } from '@/application/live/LiveRepository';
 import type { UserRepository } from '@/application/user/UserRepository';
+import type { WorkspaceRepository } from '@/application/workspace/WorkspaceRepository';
 
 type Container = {
   listProjects: ListProjects;
@@ -91,6 +95,9 @@ type Container = {
   composeTasks: ComposeTasks;
   automationRepository: AutomationRepository;
   userRepository: UserRepository;
+  listWorkspaces: ListWorkspaces;
+  createWorkspace: CreateWorkspace;
+  workspaceRepository: WorkspaceRepository;
 };
 
 function buildContainer(): Container {
@@ -116,6 +123,7 @@ function buildContainer(): Container {
   const telegramRepo = new HttpTelegramRepository();
   const monitoringRepo = new HttpMonitoringRepository();
   const liveRepo = new HttpLiveRepository();
+  const workspaceRepo = new HttpWorkspaceRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -150,6 +158,9 @@ function buildContainer(): Container {
     composeTasks: new ComposeTasks(aiPromptRepo),
     automationRepository: automationRepo,
     userRepository: userRepo,
+    listWorkspaces: new ListWorkspaces(workspaceRepo),
+    createWorkspace: new CreateWorkspace(workspaceRepo),
+    workspaceRepository: workspaceRepo,
   };
 }
 

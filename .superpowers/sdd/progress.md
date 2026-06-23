@@ -9,9 +9,9 @@ Branch: feat/workspaces
 - Task 3: done
 - Task 4: done
 - Task 5: done (13 tests pass)
-- Task 6: DrizzleWorkspaceRepository — pending
-- Task 7: Workspace routes — pending
-- Task 8: Wire + scope projects — pending
+- Task 6: done
+- Task 7: done
+- Task 8: done (server build+105 tests green)
 - Task 9: Client domain + application — pending
 - Task 10: Client http+mock+DI — pending
 - Task 11: Provider + hooks — pending

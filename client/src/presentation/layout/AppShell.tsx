@@ -10,6 +10,7 @@ import { NewProjectDialogProvider } from '@/presentation/components/forms/NewPro
 import { AddTaskDialogProvider } from '@/presentation/components/forms/AddTaskDialogProvider';
 import { GlobalSearchProvider } from '@/presentation/components/search/GlobalSearchProvider';
 import { ProjectsProvider } from '@/presentation/hooks/ProjectsProvider';
+import { WorkspacesProvider } from '@/presentation/hooks/WorkspacesProvider';
 import { GithubConnectionProvider } from '@/presentation/hooks/GithubConnectionProvider';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useNotificationStream } from '@/presentation/hooks/useNotificationStream';
@@ -56,6 +57,7 @@ export function AppShell(): React.ReactElement {
   // ProjectsProvider — внутри ProtectedRoute (этот компонент рендерится только для authenticated),
   // поэтому не делает 401-запросов когда пользователь не залогинен.
   return (
+    <WorkspacesProvider>
     <ProjectsProvider>
       <GithubConnectionProvider>
         <NewProjectDialogProvider>
@@ -115,6 +117,7 @@ export function AppShell(): React.ReactElement {
         </NewProjectDialogProvider>
       </GithubConnectionProvider>
     </ProjectsProvider>
+    </WorkspacesProvider>
   );
 }
 
