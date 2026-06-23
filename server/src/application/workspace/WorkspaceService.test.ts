@@ -110,6 +110,9 @@ function makeFakes(seed: Seed) {
       const p = projects.find((x) => x.id === id);
       return p ? { id: p.id, ownerId: p.ownerId } : null;
     },
+    async getWorkspaceId(id: string) {
+      return projects.find((x) => x.id === id)?.workspaceId ?? null;
+    },
     async setWorkspace(projectId: string, workspaceId: string) {
       const p = projects.find((x) => x.id === projectId);
       if (p) p.workspaceId = workspaceId;
@@ -238,6 +241,20 @@ test('moveProject: moves and auto-adds project members to target workspace', asy
   await service.moveProject('w1', 'u1', 'p1', 'w2');
   assert.equal(projects.find((p) => p.id === 'p1')?.workspaceId, 'w2');
   assert.ok(await repo.getMembership('w2', 'u2'), 'u2 added to target workspace');
+});
+
+test('moveProject: rejected when project is not in the source workspace', async () => {
+  const { service } = makeFakes({
+    workspaces: [{ id: 'w1', ownerUserId: 'u1' }, { id: 'w2', ownerUserId: 'u1' }, { id: 'w3', ownerUserId: 'u1' }],
+    members: [
+      { workspaceId: 'w1', userId: 'u1', role: 'owner' },
+      { workspaceId: 'w2', userId: 'u1', role: 'owner' },
+      { workspaceId: 'w3', userId: 'u1', role: 'owner' },
+    ],
+    // Проект лежит в w3, но переносим якобы из w1 — должно отлететь.
+    projects: [{ id: 'p1', ownerId: 'u1', workspaceId: 'w3' }],
+  });
+  await assert.rejects(() => service.moveProject('w1', 'u1', 'p1', 'w2'));
 });
 
 test('switchCurrent: non-member rejected (404 not-found, no leak)', async () => {

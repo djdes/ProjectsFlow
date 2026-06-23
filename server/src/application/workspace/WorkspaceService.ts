@@ -26,6 +26,7 @@ import type {
 // Узкие структурные порты — нужны только методы ниже; реальные репозитории их содержат.
 type ProjectsPort = {
   getById(id: string): Promise<{ id: string; ownerId: string } | null>;
+  getWorkspaceId(projectId: string): Promise<string | null>;
   setWorkspace(projectId: string, workspaceId: string): Promise<void>;
   listByWorkspace(workspaceId: string): Promise<ReadonlyArray<{ id: string; name: string; icon: string | null }>>;
 };
@@ -166,6 +167,9 @@ export class WorkspaceService {
     await requireWorkspaceMember(this.deps.repo, targetWorkspaceId, userId);
     const project = await this.deps.projects.getById(projectId);
     if (!project) throw new ProjectNotFoundError();
+    // Проект должен реально лежать в исходном пространстве из URL (не доверяем path-сегменту).
+    const sourceWorkspaceId = await this.deps.projects.getWorkspaceId(projectId);
+    if (sourceWorkspaceId !== workspaceId) throw new ProjectNotFoundError();
     if (project.ownerId !== userId) throw new NotProjectOwnerError();
     await this.deps.projects.setWorkspace(projectId, targetWorkspaceId);
     // Все участники проекта должны стать участниками целевого пространства (идемпотентно).

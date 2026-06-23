@@ -69,11 +69,15 @@ export function WorkspacesProvider({ children }: { children: ReactNode }): React
         await workspaceRepository.switchCurrent(id);
         // Сайдбар/страницы проектов перечитываются (ProjectsProvider слушает это событие).
         window.dispatchEvent(new Event(PROJECT_CHANGED_EVENT));
+      } catch (e) {
+        // Ошибка — откатываем оптимистичный флаг к серверному состоянию.
+        refresh();
+        throw e;
       } finally {
         setSwitching(false);
       }
     },
-    [workspaceRepository],
+    [workspaceRepository, refresh],
   );
 
   const current = data?.find((w) => w.isCurrent) ?? data?.[0] ?? null;

@@ -28,10 +28,13 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS workspace_id CHAR(36) NULL AFTER i
 ALTER TABLE users    ADD COLUMN IF NOT EXISTS current_workspace_id CHAR(36) NULL;
 
 -- Backfill: одно личное пространство на юзера, коррелируется по owner_user_id.
+-- WHERE NOT EXISTS / INSERT IGNORE — чтобы повторный прогон после частичного сбоя
+-- (раннер пишет в _migrations только при полном успехе) не плодил дубликаты.
 INSERT INTO workspaces (id, name, owner_user_id)
-SELECT UUID(), 'Личное', id FROM users;
+SELECT UUID(), 'Личное', u.id FROM users u
+WHERE NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_user_id = u.id);
 
-INSERT INTO workspace_members (workspace_id, user_id, role)
+INSERT IGNORE INTO workspace_members (workspace_id, user_id, role)
 SELECT id, owner_user_id, 'owner' FROM workspaces;
 
 UPDATE projects p
@@ -57,8 +60,8 @@ ALTER TABLE projects ADD CONSTRAINT fk_projects_workspace
 -- Уникальность имени проекта теперь в рамках ПРОСТРАНСТВА, а не владельца: один и тот же
 -- юзер может иметь одноимённые проекты в разных пространствах (см. spec — пространства
 -- изолированы). Внутри пространства имя по-прежнему уникально.
-ALTER TABLE projects DROP INDEX uq_projects_owner_name;
-ALTER TABLE projects ADD UNIQUE KEY uq_projects_workspace_name (workspace_id, name);
+ALTER TABLE projects DROP INDEX IF EXISTS uq_projects_owner_name;
+ALTER TABLE projects ADD UNIQUE INDEX IF NOT EXISTS uq_projects_workspace_name (workspace_id, name);
 -- ON DELETE SET NULL: удаление пространства не блокируется чужим current_workspace_id;
 -- приложение лениво переразрешает NULL current в любое доступное пространство.
 ALTER TABLE users ADD CONSTRAINT fk_users_current_workspace

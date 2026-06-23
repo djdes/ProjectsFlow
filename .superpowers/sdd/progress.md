@@ -19,7 +19,7 @@ Branch: feat/workspaces
 - Task 13: done
 - Task 14: done
 - Task 15: done
-- Task 16: Animations — pending
-- Task 17: Verification — pending
+- Task 16: done
+- Task 17: done (typecheck+lint+build+105 tests green; DB apply - Task 17: Verification — pending live E2E pending user env)
 
 ## Notes
