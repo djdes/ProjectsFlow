@@ -11,6 +11,8 @@ import { AddTaskDialogProvider } from '@/presentation/components/forms/AddTaskDi
 import { GlobalSearchProvider } from '@/presentation/components/search/GlobalSearchProvider';
 import { ProjectsProvider } from '@/presentation/hooks/ProjectsProvider';
 import { WorkspacesProvider } from '@/presentation/hooks/WorkspacesProvider';
+import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
+import { WorkspaceIcon } from './WorkspaceIcon';
 import { GithubConnectionProvider } from '@/presentation/hooks/GithubConnectionProvider';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useNotificationStream } from '@/presentation/hooks/useNotificationStream';
@@ -86,7 +88,7 @@ export function AppShell(): React.ReactElement {
               >
                 <Menu />
               </Button>
-              <span className="text-sm font-semibold">ProjectsFlow</span>
+              <MobileWorkspaceTitle />
             </header>
             <InstallAppPrompt variant="banner" />
             <main className="flex-1 overflow-y-auto">
@@ -118,6 +120,18 @@ export function AppShell(): React.ReactElement {
       </GithubConnectionProvider>
     </ProjectsProvider>
     </WorkspacesProvider>
+  );
+}
+
+// Заголовок мобильной шапки — название активного пространства вместо статичного лого.
+function MobileWorkspaceTitle(): React.ReactElement {
+  const { workspace } = useCurrentWorkspace();
+  if (!workspace) return <span className="text-sm font-semibold">ProjectsFlow</span>;
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <WorkspaceIcon name={workspace.name} icon={workspace.icon} className="size-5 text-[10px]" />
+      <span className="truncate text-sm font-semibold">{workspace.name}</span>
+    </span>
   );
 }
 

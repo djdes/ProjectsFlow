@@ -1,4 +1,4 @@
-import { Link, NavLink } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { Bell, Inbox, PanelLeft, Plus, Search, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -14,7 +14,7 @@ import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useProjects } from '@/presentation/hooks/useProjects';
 import type { Project } from '@/domain/project/Project';
 import { SidebarProjectList } from './SidebarProjectList';
-import { SidebarUserMenu } from './SidebarUserMenu';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { avatarColor, getInitials } from './projectIcons';
 
 type SidebarProps = {
@@ -43,15 +43,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
               <PanelLeft className="size-4" />
             </RailButton>
           )}
-          <Link
-            to="/"
-            aria-label="ProjectsFlow"
-            className="grid size-9 shrink-0 place-items-center"
-          >
-            <span className="grid size-7 place-items-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
-              PF
-            </span>
-          </Link>
+          <WorkspaceSwitcher compact />
 
           <div className="my-0.5 h-px w-6 bg-border" />
 
@@ -83,7 +75,6 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
               <Shield className="size-4" />
             </RailNavLink>
           )}
-          <SidebarUserMenu compact />
         </TooltipProvider>
       </aside>
     );
@@ -94,19 +85,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
       {/* Шапка: компактное лого + поиск + колокольчик + тоггл панели. На мобиле (drawer)
           правый отступ, чтобы контролы не лезли под крестик SheetContent (top-4 right-4). */}
       <div className="flex items-center gap-1 max-md:pr-8">
-        <Link
-          to="/"
-          aria-label="ProjectsFlow"
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-semibold tracking-tight transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
-        >
-          <span
-            className="grid size-6 shrink-0 place-items-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground"
-            aria-hidden="true"
-          >
-            PF
-          </span>
-          <span className="truncate">ProjectsFlow</span>
-        </Link>
+        <WorkspaceSwitcher />
 
         <button
           type="button"
@@ -180,8 +159,8 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
         <SidebarProjectList />
       </nav>
 
-      <div className="space-y-1 border-t pt-2">
-        {user?.isAdmin && (
+      {user?.isAdmin && (
+        <div className="border-t pt-2">
           <NavLink
             to="/admin"
             className={({ isActive }) =>
@@ -194,9 +173,8 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
             <Shield className="size-4 shrink-0 text-muted-foreground" />
             <span className="flex-1 truncate">Администрирование</span>
           </NavLink>
-        )}
-        <SidebarUserMenu />
-      </div>
+        </div>
+      )}
     </aside>
   );
 }

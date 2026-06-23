@@ -12,9 +12,9 @@ Branch: feat/workspaces
 - Task 6: done
 - Task 7: done
 - Task 8: done (server build+105 tests green)
-- Task 9: Client domain + application — pending
-- Task 10: Client http+mock+DI — pending
-- Task 11: Provider + hooks — pending
+- Task 9: done
+- Task 10: done (http-only, mocks dead in repo)
+- Task 11: done (typecheck clean)
 - Task 12: Sidebar switcher + popup — pending
 - Task 13: Create-workspace dialog — pending
 - Task 14: Profile page changes — pending
