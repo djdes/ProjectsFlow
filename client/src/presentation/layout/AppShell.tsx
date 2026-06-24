@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { cloneElement, isValidElement, useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Bell, FolderKanban, Inbox, Menu, User, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
+import {
+  AnimatedBell,
+  AnimatedFolder,
+  AnimatedInbox,
+  AnimatedUser,
+} from '@/presentation/components/nav/AnimatedNavIcons';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -162,10 +168,10 @@ function MobileBottomNav({ onOpenProjects }: { onOpenProjects: () => void }): Re
   const [pop, setPop] = useState<{ index: number; id: number }>({ index: -1, id: 0 });
 
   const items: NavItem[] = [
-    { key: 'inbox', label: 'Входящие', icon: <Inbox className="size-5" />, active: pathname === '/', run: () => navigate('/') },
-    { key: 'projects', label: 'Проекты', icon: <FolderKanban className="size-5" />, active: false, run: onOpenProjects },
-    { key: 'notifications', label: 'Уведомления', icon: <Bell className="size-5" />, badge: unreadCount, active: pathname.startsWith('/notifications'), run: () => navigate('/notifications') },
-    { key: 'profile', label: 'Профиль', icon: <User className="size-5" />, active: pathname.startsWith('/profile'), run: () => navigate('/profile') },
+    { key: 'inbox', label: 'Входящие', icon: <AnimatedInbox className="size-5" />, active: pathname === '/', run: () => navigate('/') },
+    { key: 'projects', label: 'Проекты', icon: <AnimatedFolder className="size-5" />, active: false, run: onOpenProjects },
+    { key: 'notifications', label: 'Уведомления', icon: <AnimatedBell className="size-5" />, badge: unreadCount, active: pathname.startsWith('/notifications'), run: () => navigate('/notifications') },
+    { key: 'profile', label: 'Профиль', icon: <AnimatedUser className="size-5" />, active: pathname.startsWith('/profile'), run: () => navigate('/profile') },
   ];
   const activeIndex = items.findIndex((i) => i.active);
   // Подсвечено: палец во время жеста, иначе — активный маршрут (−1 = ничего, напр. внутри проекта).
@@ -227,6 +233,10 @@ function MobileBottomNav({ onOpenProjects }: { onOpenProjects: () => void }): Re
         {items.map((item, idx) => {
           const isHighlighted = idx === highlight;
           const isUnderFinger = dragIndex !== null && idx === dragIndex;
+          // «Живые» иконки получают active → оживают внутренние части (как в рейле сайдбара).
+          const icon = isValidElement(item.icon)
+            ? cloneElement(item.icon as React.ReactElement<{ active?: boolean }>, { active: isHighlighted })
+            : item.icon;
           return (
             <button
               key={item.key}
@@ -263,10 +273,10 @@ function MobileBottomNav({ onOpenProjects }: { onOpenProjects: () => void }): Re
                     animate={{ scale: isUnderFinger ? 1.14 : 1, y: isUnderFinger ? -2 : 0 }}
                     transition={{ type: 'spring', stiffness: 620, damping: 15, mass: 0.7 }}
                   >
-                    {item.icon}
+                    {icon}
                   </motion.span>
                 ) : (
-                  item.icon
+                  icon
                 )}
                 {item.key === 'notifications' && (item.badge ?? 0) > 0 && (
                   <span className="absolute -right-1.5 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">

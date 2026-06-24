@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Bell, Inbox, MessageCircle, PanelLeft, Plus, Search, Shield } from 'lucide-react';
+import { Inbox, MessageCircle, PanelLeft, Plus, Search, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -23,6 +23,7 @@ import {
   AnimatedChat,
   AnimatedInbox,
   AnimatedSearch,
+  AnimatedBell,
 } from '@/presentation/components/nav/AnimatedNavIcons';
 import { WorkspaceChatPanel } from '@/presentation/chat/WorkspaceChatPanel';
 import type { Project } from '@/domain/project/Project';
@@ -131,7 +132,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
           <div className="my-0.5 h-px w-6 bg-border" />
 
           <RailNavLink to="/notifications" label="Уведомления" badge={unreadCount}>
-            <Bell className="size-4" />
+            <AnimatedBell className="size-4" active={unreadCount > 0} />
           </RailNavLink>
           {user?.isAdmin && (
             <RailNavLink to="/admin" label="Администрирование">
@@ -160,7 +161,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
             )
           }
         >
-          <Bell className="size-4" />
+          <AnimatedBell className="size-4" active={unreadCount > 0} />
           {unreadCount > 0 && (
             <span
               className="absolute -right-0.5 -top-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-medium leading-4 text-primary-foreground"
