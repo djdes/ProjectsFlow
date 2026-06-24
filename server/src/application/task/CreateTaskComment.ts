@@ -71,13 +71,17 @@ export class CreateTaskComment {
       notifyMode: input.notifyMode,
     });
 
-    // Лента действий (best-effort): комментарий = активность проекта.
-    void this.deps.activityRecorder?.record({
-      projectId: input.projectId,
-      actorUserId: input.ownerUserId,
-      kind: 'task_commented',
-      payload: { taskId: task.id, taskExcerpt: excerpt(task.description), commentExcerpt: excerpt(body) },
-    });
+    // Лента действий (best-effort): комментарий = активность проекта. Агентские
+    // (Ralph) комменты НЕ пишем — их прогресс уже стримит LIVE-вкладка, иначе лента
+    // забивается именем владельца токена во время авто-прогона.
+    if (input.actorKind !== 'agent') {
+      void this.deps.activityRecorder?.record({
+        projectId: input.projectId,
+        actorUserId: input.ownerUserId,
+        kind: 'task_commented',
+        payload: { taskId: task.id, taskExcerpt: excerpt(task.description), commentExcerpt: excerpt(body) },
+      });
+    }
 
     // Mention-парсинг. Уведомления — best-effort: если что-то упадёт здесь, комментарий
     // уже сохранён и пользователь увидит успех. Логируем ошибку, но не reject'им.

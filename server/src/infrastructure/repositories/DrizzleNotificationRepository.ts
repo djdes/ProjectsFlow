@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { notifications, type NotificationRow } from '../db/schema.js';
 import type {
@@ -48,15 +48,15 @@ export class DrizzleNotificationRepository implements NotificationRepository {
 
   async listByUser(
     userId: string,
-    opts: { limit: number; unreadOnly: boolean },
+    opts: { limit: number; unreadOnly: boolean; before?: Date },
   ): Promise<Notification[]> {
-    const whereExpr = opts.unreadOnly
-      ? and(eq(notifications.userId, userId), isNull(notifications.readAt))
-      : eq(notifications.userId, userId);
+    const conds = [eq(notifications.userId, userId)];
+    if (opts.unreadOnly) conds.push(isNull(notifications.readAt));
+    if (opts.before) conds.push(lt(notifications.createdAt, opts.before));
     const rows = await this.db
       .select()
       .from(notifications)
-      .where(whereExpr)
+      .where(and(...conds))
       .orderBy(desc(notifications.createdAt))
       .limit(opts.limit);
     return rows.map(toNotification);

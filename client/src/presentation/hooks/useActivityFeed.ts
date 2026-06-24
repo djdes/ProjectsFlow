@@ -83,7 +83,13 @@ export function useActivityFeed(
       .execute(workspaceId, { tab, before: nextBefore, limit: PAGE })
       .then((page) => {
         if (s !== seq.current) return;
-        setItems((prev) => [...prev, ...page.items]);
+        // Курсор before — по createdAt (секундная гранулярность). Дедуп по id страхует
+        // от повтора граничного элемента с тем же временем.
+        setItems((prev) => {
+          const seen = new Set(prev.map((it) => (it.type === 'activity' ? it.id : it.notification.id)));
+          const fresh = page.items.filter((it) => !seen.has(it.type === 'activity' ? it.id : it.notification.id));
+          return [...prev, ...fresh];
+        });
         setNextBefore(page.nextBefore);
       })
       .catch(() => {

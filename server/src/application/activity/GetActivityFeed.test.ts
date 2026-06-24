@@ -39,10 +39,14 @@ function makeFeed(opts: {
     },
   };
   const notifications = {
-    async listByUser(_u: string, q: { limit: number; unreadOnly: boolean }): Promise<Notification[]> {
+    async listByUser(
+      _u: string,
+      q: { limit: number; unreadOnly: boolean; before?: Date },
+    ): Promise<Notification[]> {
       const all = opts.notifs ?? [];
-      const filtered = q.unreadOnly ? all.filter((n) => n.readAt === null) : all;
-      return filtered.slice(0, q.limit);
+      let filtered = q.unreadOnly ? all.filter((n) => n.readAt === null) : all;
+      if (q.before) filtered = filtered.filter((n) => n.createdAt < q.before!);
+      return [...filtered].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, q.limit);
     },
   };
   const workspaceProjectIds = async (): Promise<Set<string>> => new Set(opts.wsProjects ?? ['p1']);
@@ -95,6 +99,26 @@ test('action: only actionable unread notifications, scoped', async () => {
   const items = await feed.execute('u1', 'w1', { tab: 'action', limit: 10 });
   // mention не actionable; read — прочитано → только invite.
   assert.deepEqual(items.map((i) => (i.type === 'notification' ? i.notification.id : '')), ['inv']);
+});
+
+test('all: notifications past the first page are reachable via before-cursor', async () => {
+  // Регрессия: раньше уведомления брались только N свежих и фильтровались по before
+  // в памяти → старее первой страницы были недостижимы. Теперь before уходит в источник.
+  const feed = makeFeed({
+    events: [],
+    notifs: [
+      notif('new', 'comment_mention', '2026-06-24T12:00:00Z', 'p1'),
+      notif('old', 'comment_mention', '2026-06-24T08:00:00Z', 'p1'),
+    ],
+  });
+  const page1 = await feed.execute('u1', 'w1', { tab: 'all', limit: 1 });
+  assert.deepEqual(page1.map((i) => (i.type === 'notification' ? i.notification.id : '')), ['new']);
+  const page2 = await feed.execute('u1', 'w1', {
+    tab: 'all',
+    limit: 1,
+    before: page1[0]!.createdAt,
+  });
+  assert.deepEqual(page2.map((i) => (i.type === 'notification' ? i.notification.id : '')), ['old']);
 });
 
 test('all: limit respected after merge', async () => {
