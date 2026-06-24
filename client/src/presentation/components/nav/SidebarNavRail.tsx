@@ -24,8 +24,10 @@ export function SidebarNavRail({
   readonly onSelect: (index: number) => void;
 }): React.ReactElement {
   const { animations } = useMotion();
-  const spring = animations
-    ? { type: 'spring' as const, stiffness: 460, damping: 34, mass: 0.7 }
+  // Твин (не пружина) + layout="position" — морф без переколбаса и без scale-дисторшна
+  // содержимого, чтобы переключение не «подлагивало».
+  const t = animations
+    ? { duration: 0.2, ease: [0.22, 1, 0.36, 1] as const }
     : { duration: 0 };
 
   return (
@@ -37,13 +39,13 @@ export function SidebarNavRail({
           : item.icon;
         return (
           <motion.button
-            layout
+            layout="position"
             key={item.key}
             type="button"
             onClick={() => onSelect(idx)}
             aria-label={item.label}
             aria-current={active ? 'page' : undefined}
-            transition={spring}
+            transition={t}
             className={cn(
               'relative flex min-w-0 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-medium transition-colors',
               active
@@ -55,7 +57,7 @@ export function SidebarNavRail({
               <motion.span
                 aria-hidden
                 layoutId="pf-rail-active"
-                transition={spring}
+                transition={t}
                 className="absolute inset-0 rounded-xl bg-foreground/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] ring-1 ring-black/[0.04] dark:bg-white/10 dark:ring-white/10"
               />
             )}
@@ -67,7 +69,7 @@ export function SidebarNavRail({
                   initial={animations ? { opacity: 0, width: 0 } : false}
                   animate={{ opacity: 1, width: 'auto' }}
                   exit={animations ? { opacity: 0, width: 0 } : undefined}
-                  transition={spring}
+                  transition={t}
                   className="relative z-10 overflow-hidden whitespace-nowrap"
                 >
                   {item.label}

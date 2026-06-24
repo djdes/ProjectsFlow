@@ -25,7 +25,7 @@ export function RecentTasksBlock(): React.ReactElement | null {
   if (items.length === 0) return null;
 
   const visible = expanded ? items.slice(0, MAX_LIMIT) : items.slice(0, PREVIEW_LIMIT);
-  const canExpand = !expanded && items.length > PREVIEW_LIMIT;
+  const showToggle = items.length > PREVIEW_LIMIT;
 
   return (
     <div className="shrink-0">
@@ -77,14 +77,21 @@ export function RecentTasksBlock(): React.ReactElement | null {
               ))}
             </motion.ul>
 
-            {/* «ещё» — выровнено по тексту строк (pl под иконку), раскрывает остальные в блоке. */}
-            {canExpand && (
+            {/* «ещё»/«скрыть» — выровнено по строкам действий (иконка-шеврон в size-5 слоте +
+                текст), раскрывает/сворачивает остальные прямо в блоке. */}
+            {showToggle && (
               <button
                 type="button"
-                onClick={() => setExpanded(true)}
-                className="mt-0.5 rounded-md py-1 pl-9 pr-2 text-left text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => setExpanded((v) => !v)}
+                aria-expanded={expanded}
+                className="mt-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]"
               >
-                ещё
+                <span className="grid size-5 shrink-0 place-items-center">
+                  <ChevronDown
+                    className={cn('size-4 transition-transform', expanded && 'rotate-180')}
+                  />
+                </span>
+                {expanded ? 'скрыть' : 'ещё'}
               </button>
             )}
           </motion.div>
