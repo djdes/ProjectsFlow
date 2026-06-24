@@ -18,6 +18,7 @@ import { GlobalSearchProvider } from '@/presentation/components/search/GlobalSea
 import { ProjectsProvider } from '@/presentation/hooks/ProjectsProvider';
 import { WorkspacesProvider } from '@/presentation/hooks/WorkspacesProvider';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
+import { PageTransition } from '@/presentation/components/motion/PageTransition';
 import { WorkspaceIcon } from './WorkspaceIcon';
 import { GithubConnectionProvider } from '@/presentation/hooks/GithubConnectionProvider';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
@@ -80,7 +81,9 @@ export function AppShell(): React.ReactElement {
           >
             <Sidebar collapsed={collapsed} onToggleCollapse={toggleCollapse} />
             <main className="relative min-h-0 overflow-y-auto">
-              <Outlet />
+              <PageTransition>
+                <Outlet />
+              </PageTransition>
             </main>
           </div>
         ) : (
@@ -98,7 +101,9 @@ export function AppShell(): React.ReactElement {
             </header>
             <InstallAppPrompt variant="banner" />
             <main className="flex-1 overflow-y-auto">
-              <Outlet />
+              <PageTransition>
+                <Outlet />
+              </PageTransition>
             </main>
             <MobileBottomNav onOpenProjects={() => setDrawerOpen(true)} />
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>

@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { useProjects } from '@/presentation/hooks/useProjects';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
+import { Collapse } from '@/presentation/components/motion/Collapse';
 import { useReorderProjects } from '@/presentation/hooks/useReorderProjects';
 import { useReorderFavoriteProjects } from '@/presentation/hooks/useReorderFavoriteProjects';
 import { useToggleProjectFavorite } from '@/presentation/hooks/useToggleProjectFavorite';
@@ -476,9 +477,9 @@ export function SidebarProjectList(): React.ReactElement {
         type="button"
         onClick={openNewProject}
         aria-label="Новый проект"
-        className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground dark:hover:bg-white/10"
+        className="group grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition hover:bg-foreground/[0.06] hover:text-foreground active:scale-90 dark:hover:bg-white/10"
       >
-        <Plus className="size-4" />
+        <Plus className="size-4 transition-transform duration-300 group-hover:rotate-90" />
       </button>
     </div>
   );
@@ -597,7 +598,7 @@ export function SidebarProjectList(): React.ReactElement {
             />
             <span>Избранное</span>
           </button>
-          {!favCollapsed && (
+          <Collapse open={!favCollapsed}>
             <ProjectGroup
               projects={favorites}
               bucket="favorites"
@@ -605,14 +606,14 @@ export function SidebarProjectList(): React.ReactElement {
               onReorderEnd={handleFavoritesDragEnd}
               onMove={moveInFavorites}
             />
-          )}
+          </Collapse>
         </div>
       )}
 
       <div className="space-y-1">
         {myProjectsHeader}
-        {!mainCollapsed && (
-          noMatches ? (
+        <Collapse open={!mainCollapsed}>
+          {noMatches ? (
             <p className="px-2 py-1.5 text-sm text-muted-foreground">Ничего не найдено.</p>
           ) : regular.length > 0 ? (
             <ProjectGroup
@@ -622,8 +623,8 @@ export function SidebarProjectList(): React.ReactElement {
               onReorderEnd={handleRegularDragEnd}
               onMove={moveInRegular}
             />
-          ) : null
-        )}
+          ) : null}
+        </Collapse>
       </div>
 
       {/* «Архивные» — спрятанные проекты. Показываем ВСЕГДА (вне поиска), чтобы пункт был
@@ -642,8 +643,8 @@ export function SidebarProjectList(): React.ReactElement {
             <span>Архивные</span>
             {archived.length > 0 && <span className="tabular-nums opacity-70">{archived.length}</span>}
           </button>
-          {!archivedCollapsed &&
-            (archived.length > 0 ? (
+          <Collapse open={!archivedCollapsed}>
+            {archived.length > 0 ? (
               <ProjectGroup
                 projects={archived}
                 bucket="main"
@@ -653,7 +654,8 @@ export function SidebarProjectList(): React.ReactElement {
               />
             ) : (
               <p className="px-2 py-1.5 text-xs text-muted-foreground/70">Нет архивных проектов.</p>
-            ))}
+            )}
+          </Collapse>
         </div>
       )}
       </div>

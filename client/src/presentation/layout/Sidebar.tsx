@@ -180,9 +180,9 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
       <button
         type="button"
         onClick={openAddTask}
-        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
+        className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition hover:bg-foreground/[0.04] active:scale-[0.985] dark:hover:bg-white/[0.06]"
       >
-        <Plus className="size-4 shrink-0 text-success" />
+        <Plus className="size-4 shrink-0 text-success transition-transform duration-300 group-hover:rotate-90" />
         <span className="flex-1 text-left">Добавить задачу</span>
       </button>
 

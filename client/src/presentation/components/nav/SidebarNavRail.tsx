@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement } from 'react';
+import { cloneElement, isValidElement, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 
@@ -25,18 +25,24 @@ export function SidebarNavRail({
   readonly onSelect: (index: number) => void;
 }): React.ReactElement {
   const { animations } = useMotion();
+  // Иконка «оживает» не только когда вкладка активна, но и при наведении — так весь рейл
+  // ощущается живым. Подсветка/морф кнопки при этом завязаны только на active (не на hover).
+  const [hovered, setHovered] = useState<number | null>(null);
   return (
     <div className="flex items-center gap-1">
       {items.map((item, idx) => {
         const active = idx === activeIndex;
+        const live = active || idx === hovered;
         const icon = isValidElement(item.icon)
-          ? cloneElement(item.icon as React.ReactElement<{ active?: boolean }>, { active })
+          ? cloneElement(item.icon as React.ReactElement<{ active?: boolean }>, { active: live })
           : item.icon;
         return (
           <button
             key={item.key}
             type="button"
             onClick={() => onSelect(idx)}
+            onMouseEnter={() => setHovered(idx)}
+            onMouseLeave={() => setHovered((h) => (h === idx ? null : h))}
             aria-label={item.label}
             aria-current={active ? 'page' : undefined}
             className={cn(
