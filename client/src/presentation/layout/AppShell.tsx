@@ -1,7 +1,13 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Menu, X } from 'lucide-react';
+import { ChevronsRight, Menu, X } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   AnimatedChat,
   AnimatedFolder,
@@ -59,6 +65,18 @@ export function AppShell(): React.ReactElement {
     });
   }, []);
 
+  // Хоткей Ctrl+\ (Cmd+\ на mac) — тоггл левой панели, как в Notion.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
+        e.preventDefault();
+        toggleCollapse();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [toggleCollapse]);
+
   // SSE real-time-уведомления (toast + мгновенный бейдж). Только для authenticated-сессии,
   // которой и является AppShell (рендерится внутри ProtectedRoute).
   useNotificationStream();
@@ -76,11 +94,35 @@ export function AppShell(): React.ReactElement {
           <div
             className={cn(
               'grid h-dvh overflow-hidden bg-background text-foreground',
-              collapsed ? 'grid-cols-[3.5rem_1fr]' : 'grid-cols-[260px_1fr]',
+              // Свёрнутая панель скрывается ЦЕЛИКОМ (Notion-style), а не превращается в rail.
+              collapsed ? 'grid-cols-[1fr]' : 'grid-cols-[260px_1fr]',
             )}
           >
-            <Sidebar collapsed={collapsed} onToggleCollapse={toggleCollapse} />
-            <main className="relative min-h-0 overflow-y-auto">
+            {!collapsed && <Sidebar collapsed={collapsed} onToggleCollapse={toggleCollapse} />}
+            {/* При скрытой панели резервируем слева место под плавающую кнопку «развернуть»,
+                чтобы она не наезжала на крошки/заголовок страницы. */}
+            <main className={cn('relative min-h-0 overflow-y-auto', collapsed && 'pl-10')}>
+              {/* Плавающая кнопка «развернуть» в углу контента, когда панель скрыта. */}
+              {collapsed && (
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={toggleCollapse}
+                        aria-label="Развернуть панель"
+                        className="absolute left-2 top-2.5 z-30 grid size-8 place-items-center rounded-md bg-background/80 text-muted-foreground backdrop-blur-sm transition-colors hover:bg-foreground/[0.06] hover:text-foreground dark:hover:bg-white/10"
+                      >
+                        <ChevronsRight className="size-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="flex items-center gap-1.5">
+                      <span>Развернуть панель</span>
+                      <kbd className="rounded bg-foreground/10 px-1 text-[10px] leading-4">Ctrl+\</kbd>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               <PageTransition>
                 <Outlet />
               </PageTransition>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronRight, LayoutGrid, Trash2 } from 'lucide-react';
+import { LayoutGrid, Trash2 } from 'lucide-react';
+import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useProject } from '@/presentation/hooks/useProject';
@@ -62,18 +63,13 @@ export function ProjectPage(): React.ReactElement {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 px-6 pb-12 pt-8">
-      <nav className="flex items-center gap-1 text-sm text-muted-foreground" aria-label="Хлебные крошки">
-        <Link to="/" className="hover:text-foreground">
-          Проекты
-        </Link>
-        <ChevronRight className="size-4" />
-        <Link to={`/projects/${data.id}`} className="hover:text-foreground">
-          {data.name}
-        </Link>
-        <ChevronRight className="size-4" />
-        <span className="text-foreground">Обзор</span>
-      </nav>
+    <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-12 pt-3.5 sm:px-6">
+      <ProjectBreadcrumbs
+        projectId={data.id}
+        projectName={data.name}
+        projectIcon={data.icon}
+        view="overview"
+      />
 
       <div className="space-y-3">
         <EditableProjectTitle projectId={data.id} name={data.name} />

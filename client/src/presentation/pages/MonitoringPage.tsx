@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { Activity, ChevronRight, Plus } from 'lucide-react';
+import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useProject } from '@/presentation/hooks/useProject';
@@ -44,22 +45,13 @@ export function MonitoringPage(): React.ReactElement {
   const alertsFor = (serverId: string): typeof alerts => alerts.filter((a) => a.serverId === serverId);
 
   return (
-    <div className="flex h-full flex-col gap-5 p-4 pt-6 sm:p-6 sm:pt-8">
-      <nav className="flex items-center gap-1 text-sm text-muted-foreground" aria-label="Хлебные крошки">
-        <Link to="/" className="hover:text-foreground">
-          Проекты
-        </Link>
-        <ChevronRight className="size-4" />
-        {data ? (
-          <Link to={`/projects/${pid}`} className="hover:text-foreground">
-            {data.name}
-          </Link>
-        ) : (
-          <span>Проект</span>
-        )}
-        <ChevronRight className="size-4" />
-        <span className="text-foreground">Мониторинг</span>
-      </nav>
+    <div className="flex h-full flex-col gap-5 p-4 pt-3.5 sm:p-6 sm:pt-4">
+      <ProjectBreadcrumbs
+        projectId={pid ?? ''}
+        projectName={data?.name ?? 'Проект'}
+        projectIcon={data?.icon}
+        view="monitoring"
+      />
 
       <div className="flex items-center gap-2">
         <Activity className="size-5 text-primary" />

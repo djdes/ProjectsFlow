@@ -154,6 +154,11 @@ function SidebarProjectRow({
     <div
       ref={setRefs}
       style={style}
+      // Правый клик по строке = открытие меню «три точки» (контекст-меню проекта).
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setMenuOpen(true);
+      }}
       className={cn(
         'group relative flex items-center rounded-md',
         isDragging && 'z-10 opacity-60',
@@ -206,31 +211,35 @@ function SidebarProjectRow({
               )}
             </span>
             <span className="min-w-0 flex-1 truncate">{project.name}</span>
-            <span
-              className={cn(
-                'flex shrink-0 items-center gap-1',
-                'group-hover:invisible group-focus-within:invisible max-md:invisible',
-                actionsActive && 'invisible',
-              )}
-            >
-              {(project.memberCount ?? 0) > 1 && (
-                <Users
-                  className="size-3.5 text-muted-foreground"
-                  aria-label="Совместный проект"
-                />
-              )}
-              {(project.taskCount ?? 0) > 0 && (
-                <span
-                  className="px-1 text-xs leading-5 tabular-nums text-muted-foreground"
-                  aria-label={`Задач: ${project.taskCount}`}
-                >
-                  {project.taskCount}
-                </span>
-              )}
-            </span>
+            {/* В покое справа — только иконка совместного проекта (ровный правый край).
+                По наведению она гаснет: на её место выезжают число задач + «три точки». */}
+            {(project.memberCount ?? 0) > 1 && (
+              <Users
+                className={cn(
+                  'size-3.5 shrink-0 text-muted-foreground transition-opacity',
+                  'group-hover:opacity-0 group-focus-within:opacity-0 max-md:opacity-0',
+                  actionsActive && 'opacity-0',
+                )}
+                aria-label="Совместный проект"
+              />
+            )}
           </>
         )}
       </NavLink>
+
+      {/* Число задач — появляется по наведению, слева от кнопки «три точки» (right-1, size-7). */}
+      {(project.taskCount ?? 0) > 0 && (
+        <span
+          aria-label={`Задач: ${project.taskCount}`}
+          className={cn(
+            'pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 text-xs leading-5 tabular-nums text-muted-foreground',
+            'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100',
+            actionsActive && 'opacity-100',
+          )}
+        >
+          {project.taskCount}
+        </span>
+      )}
 
       {/* «Три точки»: видны при наведении/фокусе строки, при открытом меню и на мобиле. */}
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -463,7 +472,7 @@ export function SidebarProjectList(): React.ReactElement {
       >
         <ChevronDown
           className={cn(
-            'size-3 shrink-0 transition-transform',
+            'size-3 shrink-0 opacity-0 transition-all group-hover:opacity-100',
             mainCollapsed && '-rotate-90',
           )}
         />
@@ -576,7 +585,7 @@ export function SidebarProjectList(): React.ReactElement {
         </div>
       )}
 
-      <div className="pf-scroll-visible -mx-1 min-h-0 flex-1 space-y-2 px-1">
+      <div className="pf-scroll-visible -mx-1 min-h-0 flex-1 space-y-4 px-1">
         {/* «Недавнее» — скроллится вместе с проектами. Прячется, пока юзер не открыл задачу. */}
         <RecentTasksBlock />
 
@@ -588,11 +597,11 @@ export function SidebarProjectList(): React.ReactElement {
             type="button"
             onClick={toggleFavCollapsed}
             aria-expanded={!favCollapsed}
-            className="sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-sidebar/90 px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
+            className="group sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-sidebar/90 px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
           >
             <ChevronDown
               className={cn(
-                'size-3 shrink-0 transition-transform',
+                'size-3 shrink-0 opacity-0 transition-all group-hover:opacity-100',
                 favCollapsed && '-rotate-90',
               )}
             />
@@ -635,10 +644,10 @@ export function SidebarProjectList(): React.ReactElement {
             type="button"
             onClick={toggleArchivedCollapsed}
             aria-expanded={!archivedCollapsed}
-            className="sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-sidebar/90 px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
+            className="group sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-sidebar/90 px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
           >
             <ChevronDown
-              className={cn('size-3 shrink-0 transition-transform', archivedCollapsed && '-rotate-90')}
+              className={cn('size-3 shrink-0 opacity-0 transition-all group-hover:opacity-100', archivedCollapsed && '-rotate-90')}
             />
             <span>Архивные</span>
             {archived.length > 0 && <span className="tabular-nums opacity-70">{archived.length}</span>}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronRight, Plus, Trash2, Wallet } from 'lucide-react';
+import { Plus, Trash2, Wallet } from 'lucide-react';
+import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -83,14 +84,13 @@ export function FinancePage(): React.ReactElement {
   const activeEmployees = employees.filter((e) => e.active);
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 px-6 pb-12 pt-8">
-      <nav className="flex items-center gap-1 text-sm text-muted-foreground" aria-label="Хлебные крошки">
-        <Link to="/" className="hover:text-foreground">Проекты</Link>
-        <ChevronRight className="size-4" />
-        <Link to={`/projects/${pid}`} className="hover:text-foreground">{project.name}</Link>
-        <ChevronRight className="size-4" />
-        <span className="text-foreground">Финансы</span>
-      </nav>
+    <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-12 pt-3.5 sm:px-6">
+      <ProjectBreadcrumbs
+        projectId={pid ?? ''}
+        projectName={project.name}
+        projectIcon={project.icon}
+        view="finance"
+      />
 
       <div className="flex items-center gap-3">
         <Wallet className="size-5 text-primary" />

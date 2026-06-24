@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Activity, BookOpen, Bot, ChevronRight, Settings, Wallet } from 'lucide-react';
+import { Activity, BookOpen, Bot, Settings, Wallet } from 'lucide-react';
+import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -101,16 +102,17 @@ export function TasksPage(): React.ReactElement {
   }
 
   return (
-    <div className="flex h-full flex-col gap-1.5 p-3 pt-5 sm:gap-4 sm:p-6 sm:pt-8">
+    <div className="flex h-full flex-col gap-1.5 p-3 pt-3.5 sm:gap-4 sm:p-6 sm:pt-4">
       {/* Хлебные крошки прячем на мобиле: имя проекта дублируется в заголовке ниже,
           навигация — в нижнем таб-баре/drawer. Это возвращает вертикальное место канбану. */}
-      <nav className="hidden items-center gap-1 text-sm text-muted-foreground sm:flex" aria-label="Хлебные крошки">
-        <Link to="/" className="hover:text-foreground">
-          Проекты
-        </Link>
-        <ChevronRight className="size-4" />
-        <span className="text-foreground">{data.name}</span>
-      </nav>
+      <div className="hidden sm:block">
+        <ProjectBreadcrumbs
+          projectId={data.id}
+          projectName={data.name}
+          projectIcon={data.icon}
+          view="board"
+        />
+      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Notion-style: иконка проекта + имя как заголовок страницы (клик — переименовать).

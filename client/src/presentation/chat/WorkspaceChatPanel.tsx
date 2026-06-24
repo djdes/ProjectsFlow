@@ -87,7 +87,7 @@ export function WorkspaceChatPanel(): React.ReactElement {
       ) : (
         <div className="flex shrink-0 items-center gap-2 px-2 pb-2 text-sm font-medium">
           <MessagesSquare className="size-4 text-muted-foreground" />
-          <span className="truncate">Чат · {selectedRoom?.name ?? workspace?.name ?? 'Пространство'}</span>
+          <span className="truncate">Чат</span>
         </div>
       )}
 

@@ -1,7 +1,7 @@
 import { cloneElement, isValidElement, useCallback, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { PanelLeft, Plus, Shield } from 'lucide-react';
+import { ChevronsLeft, PanelLeft, Plus, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -158,14 +158,24 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
         <WorkspaceSwitcher />
 
         {onToggleCollapse && (
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            aria-label="Свернуть панель"
-            className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06] hover:text-foreground"
-          >
-            <PanelLeft className="size-4" />
-          </button>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={onToggleCollapse}
+                  aria-label="Свернуть панель"
+                  className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06] hover:text-foreground"
+                >
+                  <ChevronsLeft className="size-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="flex items-center gap-1.5">
+                <span>Свернуть панель</span>
+                <kbd className="rounded bg-foreground/10 px-1 text-[10px] leading-4">Ctrl+\</kbd>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
       </div>
 

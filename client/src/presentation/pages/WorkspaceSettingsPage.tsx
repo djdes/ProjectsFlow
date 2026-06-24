@@ -69,7 +69,7 @@ export function WorkspaceSettingsPage(): React.ReactElement {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6 px-6 pb-12 pt-8">
+    <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pb-12 pt-3.5 sm:px-6">
       <Button asChild variant="ghost" size="sm" className="-ml-3 gap-1">
         <Link to="/">
           <ArrowLeft />

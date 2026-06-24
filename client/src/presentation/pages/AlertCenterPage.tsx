@@ -60,7 +60,7 @@ export function AlertCenterPage(): React.ReactElement {
   const critical = data?.active.filter((a) => a.severity === 'critical') ?? [];
 
   return (
-    <div className="flex h-full flex-col gap-5 p-5 pt-8 sm:p-6 sm:pt-8">
+    <div className="flex h-full flex-col gap-5 p-4 pt-3.5 sm:p-6 sm:pt-4">
       <div className="flex items-center gap-2.5">
         <BellRing className="size-5 text-primary" />
         <h1 className="text-xl font-semibold tracking-tight">Алерты — все проекты</h1>
