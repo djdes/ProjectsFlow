@@ -39,7 +39,7 @@ export class DeleteTask {
       projectId,
       actorUserId: ownerUserId,
       kind: 'task_deleted',
-      payload: { taskId, taskExcerpt: task.description.slice(0, 120) },
+      payload: { taskId, taskExcerpt: (task.description ?? '').slice(0, 120) },
     });
   }
 }

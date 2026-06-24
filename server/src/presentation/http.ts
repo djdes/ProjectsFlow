@@ -151,6 +151,9 @@ import { authRouter } from './auth/routes.js';
 import { projectsRouter } from './projects/routes.js';
 import { workspacesRouter } from './workspaces/routes.js';
 import type { WorkspaceService } from '../application/workspace/WorkspaceService.js';
+import type { WorkspaceRepository } from '../application/workspace/WorkspaceRepository.js';
+import { activityFeedRouter } from './activity/routes.js';
+import type { GetActivityFeed } from '../application/activity/GetActivityFeed.js';
 import { githubRouter } from './integrations/github/routes.js';
 import { secretsRouter } from './secrets/routes.js';
 import { kbRouter } from './kb/routes.js';
@@ -275,6 +278,11 @@ type AppDeps = {
   };
   readonly workspaces: {
     readonly service: WorkspaceService;
+  };
+  readonly activity: {
+    readonly getFeed: GetActivityFeed;
+    readonly workspaces: WorkspaceRepository;
+    readonly users: UserRepository;
   };
   readonly invites: {
     readonly getByToken: GetInviteByToken;
@@ -533,6 +541,14 @@ export function createApp(deps: AppDeps): CreatedApp {
     }),
   );
   app.use('/api/workspaces', workspacesRouter({ service: deps.workspaces.service }));
+  app.use(
+    '/api/workspaces/:workspaceId/feed',
+    activityFeedRouter({
+      getFeed: deps.activity.getFeed,
+      workspaces: deps.activity.workspaces,
+      users: deps.activity.users,
+    }),
+  );
   // Чат пространства — тот же префикс, подпути /:workspaceId/chat/... (не пересекаются с workspaces).
   app.use('/api/workspaces', chatRouter(deps.chat));
   app.use('/api/integrations/github', githubRouter(deps.github));

@@ -102,7 +102,7 @@ export class MoveTask {
         kind: 'task_status_changed',
         payload: {
           taskId: task.id,
-          taskExcerpt: task.description.slice(0, 120),
+          taskExcerpt: (task.description ?? '').slice(0, 120),
           oldStatus: task.status,
           newStatus: updated.status,
         },

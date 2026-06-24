@@ -1267,6 +1267,11 @@ const { app, devProxyUpgrade } = createApp({
   workspaces: {
     service: workspaceService,
   },
+  activity: {
+    getFeed: getActivityFeed,
+    workspaces: workspaceRepo,
+    users: userRepo,
+  },
   notifications: {
     list: new ListNotifications({ repo: notificationRepo }),
     countUnread: new CountUnreadNotifications({ repo: notificationRepo }),
