@@ -24,6 +24,7 @@ function toWorkspace(row: WorkspaceRow): Workspace {
     id: row.id,
     name: row.name,
     icon: row.icon ?? null,
+    kind: row.kind,
     ownerUserId: row.ownerUserId,
     createdAt: row.createdAt,
   };
@@ -41,6 +42,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
   constructor(private readonly db: Database) {}
 
   async listForUser(userId: string): Promise<WorkspaceListItem[]> {
+    // Показываем: свой дефолт-хаб + командные (свои и куда позвали). СКРЫВАЕМ чужие дефолт-хабы
+    // (kind='default' && owner<>me) — иначе у фрилансера светилось бы «пространство заказчика».
+    // Свой дефолт идёт первым (kind='default' < 'team' в сортировке), затем командные по дате.
     const rows = await this.db
       .select({
         workspace: workspaces,
@@ -49,13 +53,27 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
-      .where(eq(workspaceMembers.userId, userId))
-      .orderBy(asc(workspaces.createdAt));
+      .where(
+        and(
+          eq(workspaceMembers.userId, userId),
+          sql`NOT (${workspaces.kind} = 'default' AND ${workspaces.ownerUserId} <> ${userId})`,
+        ),
+      )
+      .orderBy(asc(workspaces.kind), asc(workspaces.createdAt));
     return rows.map((r) => ({
       ...toWorkspace(r.workspace),
       role: r.role,
       projectCount: Number(r.projectCount),
     }));
+  }
+
+  async findDefaultForOwner(ownerUserId: string): Promise<string | null> {
+    const rows = await this.db
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(and(eq(workspaces.ownerUserId, ownerUserId), eq(workspaces.kind, 'default')))
+      .limit(1);
+    return rows[0]?.id ?? null;
   }
 
   async getById(id: string): Promise<Workspace | null> {
@@ -70,6 +88,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
         id: input.id,
         name: input.name,
         icon: input.icon,
+        kind: input.kind ?? 'team',
         ownerUserId: input.ownerUserId,
       });
       await tx.insert(workspaceMembers).values({

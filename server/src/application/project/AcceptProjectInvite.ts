@@ -7,6 +7,7 @@ import type { ProjectInviteRepository } from './ProjectInviteRepository.js';
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
+import type { HubMembershipSync } from '../workspace/HubMembershipSync.js';
 
 type Deps = {
   readonly invites: ProjectInviteRepository;
@@ -15,6 +16,8 @@ type Deps = {
   readonly now: () => Date;
   // Лента действий (best-effort). Опционально.
   readonly activityRecorder?: ActivityRecorder;
+  // Синк участников дефолт-хаба владельца (best-effort). Опционально.
+  readonly hubSync?: HubMembershipSync;
 };
 
 export type AcceptInviteResult = {
@@ -57,6 +60,12 @@ export class AcceptProjectInvite {
         kind: 'member_added',
         payload: { targetUserId: userId, role: invite.role },
       });
+      // Добавляем в хаб-чат владельца проекта (best-effort: не блокирует вступление).
+      try {
+        await this.deps.hubSync?.onMemberAdded(invite.projectId, userId);
+      } catch {
+        // Синк хаба не должен ломать вступление в проект — drift поправит следующая операция/миграция.
+      }
     }
 
     await this.deps.invites.markAccepted({

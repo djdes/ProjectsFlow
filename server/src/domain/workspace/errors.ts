@@ -40,6 +40,13 @@ export class CannotDeleteLastWorkspaceError extends Error {
   }
 }
 
+export class CannotDeleteDefaultWorkspaceError extends Error {
+  constructor() {
+    super('Cannot delete your default workspace');
+    this.name = 'CannotDeleteDefaultWorkspaceError';
+  }
+}
+
 export class WorkspaceNameEmptyError extends Error {
   constructor() {
     super('Workspace name cannot be empty');

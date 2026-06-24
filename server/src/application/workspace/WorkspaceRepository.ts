@@ -1,4 +1,4 @@
-import type { Workspace } from '../../domain/workspace/Workspace.js';
+import type { Workspace, WorkspaceKind } from '../../domain/workspace/Workspace.js';
 import type { WorkspaceMember, WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 
 export type CreateWorkspaceInput = {
@@ -6,6 +6,8 @@ export type CreateWorkspaceInput = {
   readonly name: string;
   readonly icon: string | null;
   readonly ownerUserId: string;
+  // По умолчанию 'team' (ручное создание). Дефолт-хаб юзера создаётся с kind='default'.
+  readonly kind?: WorkspaceKind;
 };
 
 export type UpdateWorkspaceInput = {
@@ -23,6 +25,8 @@ export interface WorkspaceRepository {
   /** Пространства, где юзер — участник, с его ролью и числом проектов. */
   listForUser(userId: string): Promise<WorkspaceListItem[]>;
   getById(id: string): Promise<Workspace | null>;
+  /** Дефолт-хаб владельца (kind='default'), либо null. Для синка участников хаб-чата. */
+  findDefaultForOwner(ownerUserId: string): Promise<string | null>;
   /** Транзакция: создать пространство + owner-membership создателя. */
   createWithOwnerMembership(input: CreateWorkspaceInput): Promise<Workspace>;
   update(id: string, patch: UpdateWorkspaceInput): Promise<Workspace | null>;

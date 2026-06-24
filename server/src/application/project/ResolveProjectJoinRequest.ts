@@ -5,6 +5,7 @@ import type { ProjectRepository } from './ProjectRepository.js';
 import type { ProjectJoinRequestRepository } from './ProjectJoinRequestRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import { requireProjectAccess } from './projectAccess.js';
+import type { HubMembershipSync } from '../workspace/HubMembershipSync.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -12,6 +13,8 @@ type Deps = {
   readonly joinRequests: ProjectJoinRequestRepository;
   readonly users: UserRepository;
   readonly now: () => Date;
+  // Синк участников дефолт-хаба владельца (best-effort). Опционально.
+  readonly hubSync?: HubMembershipSync;
 };
 
 // Владелец (или admin) принимает/отклоняет заявку. Accept → заявитель становится editor.
@@ -47,6 +50,12 @@ export class ResolveProjectJoinRequest {
           }
         } catch {
           // Best-effort.
+        }
+        // Добавляем нового участника в хаб-чат владельца проекта (best-effort).
+        try {
+          await this.deps.hubSync?.onMemberAdded(jr.projectId, jr.requesterUserId);
+        } catch {
+          // Синк хаба не должен ломать одобрение заявки.
         }
       }
     }

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { WorkspaceService } from './WorkspaceService.js';
 import type { WorkspaceRepository, CreateWorkspaceInput, UpdateWorkspaceInput, WorkspaceListItem } from './WorkspaceRepository.js';
-import type { Workspace } from '../../domain/workspace/Workspace.js';
+import type { Workspace, WorkspaceKind } from '../../domain/workspace/Workspace.js';
 import type { WorkspaceMember, WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 import {
   WorkspaceNameEmptyError,
@@ -10,12 +10,13 @@ import {
   LastOwnerError,
   WorkspaceNotEmptyError,
   CannotDeleteLastWorkspaceError,
+  CannotDeleteDefaultWorkspaceError,
   UserNotFoundByEmailError,
   NotProjectOwnerError,
 } from '../../domain/workspace/errors.js';
 
 type Seed = {
-  workspaces?: Array<{ id: string; name?: string; ownerUserId: string }>;
+  workspaces?: Array<{ id: string; name?: string; ownerUserId: string; kind?: WorkspaceKind }>;
   members?: Array<{ workspaceId: string; userId: string; role: WorkspaceRole }>;
   current?: Record<string, string>; // userId -> workspaceId
   projects?: Array<{ id: string; ownerId: string; workspaceId: string; members?: string[] }>;
@@ -25,7 +26,7 @@ type Seed = {
 function makeFakes(seed: Seed) {
   const workspaces = new Map<string, Workspace>();
   for (const w of seed.workspaces ?? []) {
-    workspaces.set(w.id, { id: w.id, name: w.name ?? 'WS', icon: null, ownerUserId: w.ownerUserId, createdAt: new Date('2026-01-01') });
+    workspaces.set(w.id, { id: w.id, name: w.name ?? 'WS', icon: null, kind: w.kind ?? 'team', ownerUserId: w.ownerUserId, createdAt: new Date('2026-01-01') });
   }
   const members = (seed.members ?? []).map((m) => ({ ...m }));
   const current = new Map<string, string>(Object.entries(seed.current ?? {}));
@@ -47,8 +48,14 @@ function makeFakes(seed: Seed) {
     async getById(id) {
       return workspaces.get(id) ?? null;
     },
+    async findDefaultForOwner(ownerUserId) {
+      for (const w of workspaces.values()) {
+        if (w.ownerUserId === ownerUserId && w.kind === 'default') return w.id;
+      }
+      return null;
+    },
     async createWithOwnerMembership(input: CreateWorkspaceInput) {
-      const w: Workspace = { id: input.id, name: input.name, icon: input.icon, ownerUserId: input.ownerUserId, createdAt: new Date('2026-01-02') };
+      const w: Workspace = { id: input.id, name: input.name, icon: input.icon, kind: input.kind ?? 'team', ownerUserId: input.ownerUserId, createdAt: new Date('2026-01-02') };
       workspaces.set(w.id, w);
       members.push({ workspaceId: w.id, userId: input.ownerUserId, role: 'owner' });
       return w;
@@ -221,6 +228,21 @@ test('delete: empty non-last workspace deletes and auto-switches current', async
   await service.deleteWorkspace('w1', 'u1');
   assert.equal(await repo.getById('w1'), null);
   assert.equal(await repo.getCurrentWorkspaceId('u1'), 'w2');
+});
+
+test('delete: default hub rejected even when empty and non-last', async () => {
+  const { service } = makeFakes({
+    workspaces: [{ id: 'w1', ownerUserId: 'u1', kind: 'default' }, { id: 'w2', ownerUserId: 'u1', kind: 'team' }],
+    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }, { workspaceId: 'w2', userId: 'u1', role: 'owner' }],
+    current: { u1: 'w2' },
+  });
+  await assert.rejects(() => service.deleteWorkspace('w1', 'u1'), CannotDeleteDefaultWorkspaceError);
+});
+
+test('create: manual create makes a team workspace, not a default hub', async () => {
+  const { service } = makeFakes({ users: [{ id: 'u1', email: 'u1@x' }] });
+  const ws = await service.create('u1', { name: 'Клиент', icon: null });
+  assert.equal(ws.kind, 'team');
 });
 
 test('moveProject: non-owner of project rejected', async () => {

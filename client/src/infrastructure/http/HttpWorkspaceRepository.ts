@@ -1,4 +1,9 @@
-import type { Workspace, WorkspaceMember, WorkspaceRole } from '@/domain/workspace/Workspace';
+import type {
+  Workspace,
+  WorkspaceKind,
+  WorkspaceMember,
+  WorkspaceRole,
+} from '@/domain/workspace/Workspace';
 import type {
   CreateWorkspaceInput,
   UpdateWorkspaceInput,
@@ -10,6 +15,7 @@ type WorkspaceDto = {
   id: string;
   name: string;
   icon: string | null;
+  kind?: WorkspaceKind;
   ownerUserId: string;
   role?: WorkspaceRole;
   projectCount?: number;
@@ -32,6 +38,8 @@ function fromDto(dto: WorkspaceDto): Workspace {
     id: dto.id,
     name: dto.name,
     icon: dto.icon ?? null,
+    // Старый бэк без kind → считаем командным (дефолт явно помечается миграцией db/079).
+    kind: dto.kind ?? 'team',
     ownerUserId: dto.ownerUserId,
     role: dto.role ?? 'member',
     projectCount: dto.projectCount ?? 0,

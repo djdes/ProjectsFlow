@@ -42,6 +42,9 @@ export function WorkspaceSettingsPage(): React.ReactElement {
 
   const workspace = workspaces?.find((w) => w.id === workspaceId) ?? null;
   const isOwner = workspace?.role === 'owner';
+  // Дефолт-хаб: состав участников выводится автоматически (вы + все по общим проектам),
+  // и его нельзя удалить. Поэтому ручное управление участниками и «опасная зона» скрыты.
+  const isDefault = workspace?.kind === 'default';
 
   if (loading) {
     return (
@@ -80,9 +83,9 @@ export function WorkspaceSettingsPage(): React.ReactElement {
       </div>
 
       <RenameCard workspaceId={workspace.id} initialName={workspace.name} initialIcon={workspace.icon} disabled={!isOwner} />
-      <MembersCard workspaceId={workspace.id} canManage={isOwner} />
+      <MembersCard workspaceId={workspace.id} canManage={isOwner && !isDefault} autoManaged={isDefault} />
       <ProjectsCard workspaceId={workspace.id} />
-      {isOwner && (
+      {isOwner && !isDefault && (
         <DangerZoneCard
           workspaceId={workspace.id}
           workspaceName={workspace.name}
@@ -165,9 +168,12 @@ function RenameCard({
 function MembersCard({
   workspaceId,
   canManage,
+  autoManaged = false,
 }: {
   workspaceId: string;
   canManage: boolean;
+  // Дефолт-хаб: состав выводится автоматически, ручное управление скрыто.
+  autoManaged?: boolean;
 }): React.ReactElement {
   const { members, loading, add, changeRole, remove } = useWorkspaceMembers(workspaceId);
   const [email, setEmail] = useState('');
@@ -210,7 +216,11 @@ function MembersCard({
     <Card>
       <CardHeader>
         <CardTitle>Участники</CardTitle>
-        <CardDescription>Доступ к&nbsp;пространству и&nbsp;его проектам.</CardDescription>
+        <CardDescription>
+          {autoManaged
+            ? 'Это пространство по умолчанию. Состав формируется автоматически: вы и все, с кем у вас есть общие проекты.'
+            : 'Доступ к пространству и его проектам.'}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {loading ? (

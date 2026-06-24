@@ -112,6 +112,7 @@ import {
   LastOwnerError,
   WorkspaceNotEmptyError,
   CannotDeleteLastWorkspaceError,
+  CannotDeleteDefaultWorkspaceError,
   WorkspaceNameEmptyError,
   UserNotFoundByEmailError,
   NotProjectOwnerError,
@@ -625,6 +626,10 @@ export function errorHandler(
   }
   if (err instanceof CannotDeleteLastWorkspaceError) {
     res.status(409).json({ error: 'workspace_last', message: 'Нельзя удалить единственное пространство' });
+    return;
+  }
+  if (err instanceof CannotDeleteDefaultWorkspaceError) {
+    res.status(409).json({ error: 'workspace_default', message: 'Нельзя удалить пространство по умолчанию' });
     return;
   }
   if (err instanceof WorkspaceNameEmptyError) {

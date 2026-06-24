@@ -152,6 +152,16 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     return Number(rows[0]?.count ?? 0);
   }
 
+  async isMemberOfAnyProjectOwnedBy(userId: string, ownerUserId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ one: sql<number>`1` })
+      .from(projectMembers)
+      .innerJoin(projects, eq(projects.id, projectMembers.projectId))
+      .where(and(eq(projectMembers.userId, userId), eq(projects.ownerId, ownerUserId)))
+      .limit(1);
+    return rows.length > 0;
+  }
+
   async add(input: AddMemberInput): Promise<ProjectMembership> {
     await this.db.insert(projectMembers).values({
       projectId: input.projectId,

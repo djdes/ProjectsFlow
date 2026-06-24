@@ -20,6 +20,8 @@ import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleP
 import { DrizzleProjectMemberRepository } from './infrastructure/repositories/DrizzleProjectMemberRepository.js';
 import { DrizzleWorkspaceRepository } from './infrastructure/repositories/DrizzleWorkspaceRepository.js';
 import { WorkspaceService } from './application/workspace/WorkspaceService.js';
+import { HubMembershipSync } from './application/workspace/HubMembershipSync.js';
+import type { WorkspaceKind } from './domain/workspace/Workspace.js';
 import { DrizzleActivityRepository } from './infrastructure/repositories/DrizzleActivityRepository.js';
 import { ActivityRecorder } from './application/activity/ActivityRecorder.js';
 import { GetActivityFeed } from './application/activity/GetActivityFeed.js';
@@ -275,21 +277,49 @@ const resolveWorkspaceId = async (userId: string): Promise<string> => {
   if (another) return another;
   throw new Error(`User ${userId} has no workspace`);
 };
-// Версия для листинга: null вместо ошибки (пустой список вместо 500).
-const resolveWorkspaceIdOrNull = (userId: string): Promise<string | null> =>
-  workspaceRepo
-    .getCurrentWorkspaceId(userId)
-    .then((cur) => cur ?? workspaceRepo.findAnotherForUser(userId, ''));
-// Создаёт пространство по умолчанию новому юзеру + делает активным (для Register).
-// Имя — «Пространство <имя аккаунта>» (один дефолтный воркспейс на пользователя).
-const createDefaultWorkspace = async (userId: string, displayName: string): Promise<void> => {
-  await workspaceService.create(userId, { name: `Пространство ${displayName}`, icon: null });
+// Активное пространство для листинга проектов: id + kind (null = нет пространств → пустой список).
+// kind решает охват: 'default' → ВСЕ мои проекты (хаб), 'team' → срез по workspace_id (см. ListProjects).
+const resolveActiveWorkspace = async (
+  userId: string,
+): Promise<{ id: string; kind: WorkspaceKind } | null> => {
+  const current = await workspaceRepo.getCurrentWorkspaceId(userId);
+  const id = current ?? (await workspaceRepo.findAnotherForUser(userId, ''));
+  if (!id) return null;
+  const ws = await workspaceRepo.getById(id);
+  return ws ? { id: ws.id, kind: ws.kind } : null;
 };
-// Deep-link авто-switch: открыли проект из другого пространства → делаем его активным.
+// Создаёт пространство по умолчанию новому юзеру + делает активным (для Register).
+// Имя — «Пространство <имя аккаунта>». Это его дефолт-хаб (kind='default'): один на юзера,
+// неудаляем, агрегирует все его проекты.
+const createDefaultWorkspace = async (userId: string, displayName: string): Promise<void> => {
+  await workspaceService.create(userId, {
+    name: `Пространство ${displayName}`,
+    icon: null,
+    kind: 'default',
+  });
+};
+// Синк участников дефолт-хаба владельца с участниками его проектов (для общего чата).
+// Дёргается best-effort из invite/accept/remove use-cases.
+const hubMembershipSync = new HubMembershipSync({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  workspaces: workspaceRepo,
+});
+// Deep-link авто-switch: открыли проект → делаем его пространство активным.
+// В новой модели в ЧУЖОЙ дефолт-хаб не переключаемся (он скрыт из свитчера, см. listForUser) —
+// проект и так виден в собственном дефолт-хабе юзера (агрегация). В этом случае переключаем
+// на СВОЙ дефолт, чтобы проект гарантированно отображался. Команды и свой хаб — как раньше.
 const setActiveWorkspaceForProject = async (userId: string, projectId: string): Promise<void> => {
   const wsId = await projectRepo.getWorkspaceId(projectId);
   if (!wsId) return;
+  const ws = await workspaceRepo.getById(wsId);
+  if (!ws) return;
   const current = await workspaceRepo.getCurrentWorkspaceId(userId);
+  if (ws.kind === 'default' && ws.ownerUserId !== userId) {
+    const ownHub = await workspaceRepo.findDefaultForOwner(userId);
+    if (ownHub && current !== ownHub) await workspaceRepo.setCurrentWorkspace(userId, ownHub);
+    return;
+  }
   if (current === wsId) return;
   const membership = await workspaceRepo.getMembership(wsId, userId);
   if (membership) await workspaceRepo.setCurrentWorkspace(userId, wsId);
@@ -581,7 +611,7 @@ const enqueueAiPromptJob = new EnqueueAiPromptJob({
   projects: projectRepo,
   members: projectMemberRepo,
   aiPromptJobs: aiPromptJobRepo,
-  listProjects: new ListProjects({ members: projectMemberRepo, resolveWorkspaceId: resolveWorkspaceIdOrNull }),
+  listProjects: new ListProjects({ members: projectMemberRepo, resolveActiveWorkspace }),
   listKbDocuments: new ListKbDocuments({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
   getKbDocument: new GetKbDocument({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
   rateLimiter: agentRateLimiter,
@@ -897,13 +927,13 @@ const manageAlertRules = new ManageAlertRules({
 });
 const listMonitoredServers = new ListMonitoredServers({ servers: serverRepo });
 const monitoringOverview = new GetMonitoringOverview({
-  listProjects: new ListProjects({ members: projectMemberRepo, resolveWorkspaceId: resolveWorkspaceIdOrNull }),
+  listProjects: new ListProjects({ members: projectMemberRepo, resolveActiveWorkspace }),
   servers: serverRepo,
   snapshots: snapshotRepo,
   alerts: monitoringAlertRepo,
 });
 const monitoringAlertCenter = new GetAlertCenter({
-  listProjects: new ListProjects({ members: projectMemberRepo, resolveWorkspaceId: resolveWorkspaceIdOrNull }),
+  listProjects: new ListProjects({ members: projectMemberRepo, resolveActiveWorkspace }),
   servers: serverRepo,
   alerts: monitoringAlertRepo,
 });
@@ -1134,7 +1164,7 @@ const { app, devProxyUpgrade } = createApp({
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
   },
   projects: {
-    listProjects: new ListProjects({ members: projectMemberRepo, resolveWorkspaceId: resolveWorkspaceIdOrNull }),
+    listProjects: new ListProjects({ members: projectMemberRepo, resolveActiveWorkspace }),
     getProject: new GetProject({ projects: projectRepo, members: projectMemberRepo }),
     createProject: new CreateProject({
       repo: projectRepo,
@@ -1201,7 +1231,7 @@ const { app, devProxyUpgrade } = createApp({
       resolveWorkspaceId,
     }),
     listMembers: new ListProjectMembers({ projects: projectRepo, members: projectMemberRepo }),
-    removeMember: new RemoveProjectMember({ projects: projectRepo, members: projectMemberRepo, activityRecorder }),
+    removeMember: new RemoveProjectMember({ projects: projectRepo, members: projectMemberRepo, activityRecorder, hubSync: hubMembershipSync }),
     updateMemberRole: new UpdateProjectMemberRole({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -1256,6 +1286,7 @@ const { app, devProxyUpgrade } = createApp({
       joinRequests: projectJoinRequestRepo,
       users: userRepo,
       now,
+      hubSync: hubMembershipSync,
     }),
     appUrl: process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? 'http://localhost:5173',
     notifyProjectChanged,
@@ -1296,6 +1327,7 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
       now,
       activityRecorder,
+      hubSync: hubMembershipSync,
     }),
   },
   search: {
@@ -1694,7 +1726,7 @@ const { app, devProxyUpgrade } = createApp({
       secrets: secretsRepo,
     }),
     // Переиспользуем существующие use-cases для agent-эндпоинтов
-    listProjects: new ListProjects({ members: projectMemberRepo, resolveWorkspaceId: resolveWorkspaceIdOrNull }),
+    listProjects: new ListProjects({ members: projectMemberRepo, resolveActiveWorkspace }),
     createProjectWithGit: new CreateProjectWithGit({
       createProject: new CreateProject({
         repo: projectRepo,

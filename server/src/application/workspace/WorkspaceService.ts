@@ -1,4 +1,4 @@
-import type { Workspace } from '../../domain/workspace/Workspace.js';
+import type { Workspace, WorkspaceKind } from '../../domain/workspace/Workspace.js';
 import type {
   WorkspaceMember,
   WorkspaceRole,
@@ -11,6 +11,7 @@ import {
   LastOwnerError,
   WorkspaceNotEmptyError,
   CannotDeleteLastWorkspaceError,
+  CannotDeleteDefaultWorkspaceError,
   UserNotFoundByEmailError,
 } from '../../domain/workspace/errors.js';
 import { ProjectNotFoundError } from '../../domain/project/errors.js';
@@ -65,13 +66,19 @@ export class WorkspaceService {
     return this.deps.projects.listByWorkspace(workspaceId);
   }
 
-  async create(userId: string, input: { name: string; icon: string | null }): Promise<Workspace> {
+  // kind по умолчанию 'team' (ручное создание из UI — командное пространство).
+  // Дефолт-хаб юзера создаётся при регистрации с kind='default' (см. createDefaultWorkspace).
+  async create(
+    userId: string,
+    input: { name: string; icon: string | null; kind?: WorkspaceKind },
+  ): Promise<Workspace> {
     const name = input.name.trim();
     if (name.length === 0) throw new WorkspaceNameEmptyError();
     const ws = await this.deps.repo.createWithOwnerMembership({
       id: this.deps.idGen(),
       name,
       icon: input.icon ?? null,
+      kind: input.kind ?? 'team',
       ownerUserId: userId,
     });
     await this.deps.repo.setCurrentWorkspace(userId, ws.id);
@@ -181,6 +188,9 @@ export class WorkspaceService {
 
   async deleteWorkspace(workspaceId: string, userId: string): Promise<void> {
     await requireWorkspaceOwner(this.deps.repo, workspaceId, userId);
+    // Дефолт-хаб неудаляем — это «всё моё» представление, всегда должно существовать.
+    const ws = await this.deps.repo.getById(workspaceId);
+    if (ws?.kind === 'default') throw new CannotDeleteDefaultWorkspaceError();
     const projects = await this.deps.repo.projectCount(workspaceId);
     if (projects > 0) throw new WorkspaceNotEmptyError();
     const total = await this.deps.repo.countForUser(userId);

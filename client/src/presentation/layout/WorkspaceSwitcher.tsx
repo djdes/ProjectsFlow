@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronsUpDown, CircleArrowUp, Copy, LogOut, Plus, Settings, UserPlus } from 'lucide-react';
+import { Check, ChevronsUpDown, CircleArrowUp, Copy, Home, LogOut, Plus, Settings, UserPlus } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -162,6 +162,15 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
                 >
                   <WorkspaceIcon name={ws.name} icon={ws.icon} className="size-5 text-[10px]" />
                   <span className="min-w-0 flex-1 truncate">{ws.name}</span>
+                  {ws.kind === 'default' && (
+                    <span
+                      title="Пространство по умолчанию — все ваши проекты"
+                      className="inline-flex shrink-0 items-center gap-1 text-[10px] font-medium text-muted-foreground"
+                    >
+                      <Home className="size-3" aria-hidden="true" />
+                      по умолчанию
+                    </span>
+                  )}
                   {ws.isCurrent && <Check className="size-4 shrink-0 text-primary motion-safe:animate-in motion-safe:zoom-in-50" />}
                 </button>
                 <button

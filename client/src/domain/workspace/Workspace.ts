@@ -1,11 +1,16 @@
 export type WorkspaceRole = 'owner' | 'member';
 
+// 'default' — личный хаб (все мои проекты + общий чат, неудаляем, один на юзера);
+// 'team' — созданное вручную командное пространство.
+export type WorkspaceKind = 'default' | 'team';
+
 // Пространство (workspace): верхнеуровневый изолированный контейнер над проектами.
 export type Workspace = {
   readonly id: string;
   readonly name: string;
   // Эмодзи-иконка; null = дефолт (первая буква названия).
   readonly icon: string | null;
+  readonly kind: WorkspaceKind;
   readonly ownerUserId: string;
   // Роль текущего юзера в пространстве.
   readonly role: WorkspaceRole;

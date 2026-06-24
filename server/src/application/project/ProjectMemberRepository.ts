@@ -45,6 +45,11 @@ export interface ProjectMemberRepository {
   // Сколько owner'ов у проекта — для валидации «не понизь последнего owner'а».
   countOwners(projectId: string): Promise<number>;
 
+  // Состоит ли userId хотя бы в одном проекте, которым владеет ownerUserId. Нужно синку
+  // участников дефолт-хаба: при выходе из проекта убираем юзера из хаб-чата владельца
+  // только если у них больше нет общих проектов (HubMembershipSync).
+  isMemberOfAnyProjectOwnedBy(userId: string, ownerUserId: string): Promise<boolean>;
+
   add(input: AddMemberInput): Promise<ProjectMembership>;
   remove(projectId: string, userId: string): Promise<boolean>;
   updateRole(projectId: string, userId: string, role: ProjectRole): Promise<ProjectMembership | null>;

@@ -1,6 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import type { WorkspaceService } from '../../application/workspace/WorkspaceService.js';
-import type { Workspace } from '../../domain/workspace/Workspace.js';
+import type { Workspace, WorkspaceKind } from '../../domain/workspace/Workspace.js';
 import type { WorkspaceListItem } from '../../application/workspace/WorkspaceRepository.js';
 import type { WorkspaceMember } from '../../domain/workspace/WorkspaceMember.js';
 import { requireAuth } from '../middleware/requireAuth.js';
@@ -17,6 +17,7 @@ type WorkspaceDto = {
   id: string;
   name: string;
   icon: string | null;
+  kind: WorkspaceKind;
   ownerUserId: string;
   role?: 'owner' | 'member';
   projectCount?: number;
@@ -32,6 +33,7 @@ function toDto(ws: Workspace | WorkspaceListItem, isCurrent?: boolean): Workspac
     id: ws.id,
     name: ws.name,
     icon: ws.icon,
+    kind: ws.kind,
     ownerUserId: ws.ownerUserId,
     role: listItem.role,
     projectCount: listItem.projectCount,

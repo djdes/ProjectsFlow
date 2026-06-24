@@ -256,6 +256,9 @@ export const workspaces = mysqlTable(
     name: varchar('name', { length: 120 }).notNull(),
     // Эмодзи-иконка пространства (Notion-style); NULL = дефолт (первая буква названия).
     icon: varchar('icon', { length: 16 }),
+    // 'default' = личный хаб-со-всеми-моими-проектами (один на владельца, неудаляем, скрыт у чужих);
+    // 'team' = созданное вручную командное пространство (свои участники/проекты/чат). См. db/079.
+    kind: mysqlEnum('kind', ['default', 'team']).notNull().default('team'),
     ownerUserId: fkUserId('owner_user_id'),
     createdAt: createdAtCol(),
   },

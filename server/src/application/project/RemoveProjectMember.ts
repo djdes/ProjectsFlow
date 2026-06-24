@@ -6,12 +6,15 @@ import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
 import { requireProjectAccess } from './projectAccess.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
+import type { HubMembershipSync } from '../workspace/HubMembershipSync.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   // Лента действий (best-effort). Опционально.
   readonly activityRecorder?: ActivityRecorder;
+  // Синк участников дефолт-хаба владельца (best-effort). Опционально.
+  readonly hubSync?: HubMembershipSync;
 };
 
 export class RemoveProjectMember {
@@ -31,6 +34,13 @@ export class RemoveProjectMember {
     }
 
     await this.deps.members.remove(projectId, targetUserId);
+
+    // Убираем из хаб-чата владельца, если общих проектов больше нет (best-effort).
+    try {
+      await this.deps.hubSync?.onMemberRemoved(projectId, targetUserId);
+    } catch {
+      // Синк хаба не должен ломать удаление участника.
+    }
 
     // Лента действий (best-effort). Видят оставшиеся участники проекта.
     void this.deps.activityRecorder?.record({

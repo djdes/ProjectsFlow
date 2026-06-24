@@ -59,7 +59,8 @@ export function NewWorkspaceDialog({ open, onOpenChange }: Props): React.ReactEl
         <DialogHeader>
           <DialogTitle>Новое пространство</DialogTitle>
           <DialogDescription>
-            Изолированный контейнер для проектов и участников. Создаётся пустым.
+            Командное пространство со своими участниками, проектами и чатом — отдельно от
+            вашего пространства по&nbsp;умолчанию. Создаётся пустым.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -75,7 +76,7 @@ export function NewWorkspaceDialog({ open, onOpenChange }: Props): React.ReactEl
                 maxLength={120}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Личное, Работа, Клиент…"
+                placeholder="Работа, Клиент, Команда…"
                 aria-invalid={Boolean(submitError)}
               />
             </div>
