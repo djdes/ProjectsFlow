@@ -23,6 +23,7 @@ import { HttpMonitoringRepository } from '@/infrastructure/http/HttpMonitoringRe
 import { HttpLiveRepository } from '@/infrastructure/http/HttpLiveRepository';
 import { HttpChatRepository } from '@/infrastructure/http/HttpChatRepository';
 import { HttpWorkspaceRepository } from '@/infrastructure/http/HttpWorkspaceRepository';
+import { HttpActivityRepository } from '@/infrastructure/http/HttpActivityRepository';
 import { HttpRecentTaskViewRepository } from '@/infrastructure/http/HttpRecentTaskViewRepository';
 import { RecordTaskView } from '@/application/recent/RecordTaskView';
 import { ListRecentTaskViews } from '@/application/recent/ListRecentTaskViews';
@@ -34,6 +35,7 @@ import { SearchTasks } from '@/application/task/SearchTasks';
 import { ListProjects } from '@/application/project/ListProjects';
 import { ListWorkspaces } from '@/application/workspace/ListWorkspaces';
 import { CreateWorkspace } from '@/application/workspace/CreateWorkspace';
+import { GetActivityFeed } from '@/application/activity/GetActivityFeed';
 import { GetProject } from '@/application/project/GetProject';
 import { CreateProject } from '@/application/project/CreateProject';
 import { UpdateProject } from '@/application/project/UpdateProject';
@@ -65,6 +67,7 @@ import type { LiveRepository } from '@/application/live/LiveRepository';
 import type { ChatRepository } from '@/application/chat/ChatRepository';
 import type { UserRepository } from '@/application/user/UserRepository';
 import type { WorkspaceRepository } from '@/application/workspace/WorkspaceRepository';
+import type { ActivityRepository } from '@/application/activity/ActivityRepository';
 
 type Container = {
   listProjects: ListProjects;
@@ -104,6 +107,8 @@ type Container = {
   listWorkspaces: ListWorkspaces;
   createWorkspace: CreateWorkspace;
   workspaceRepository: WorkspaceRepository;
+  getActivityFeed: GetActivityFeed;
+  activityRepository: ActivityRepository;
   recordTaskView: RecordTaskView;
   listRecentTaskViews: ListRecentTaskViews;
 };
@@ -133,6 +138,7 @@ function buildContainer(): Container {
   const liveRepo = new HttpLiveRepository();
   const chatRepo = new HttpChatRepository();
   const workspaceRepo = new HttpWorkspaceRepository();
+  const activityRepo = new HttpActivityRepository();
   const recentTaskViewRepo = new HttpRecentTaskViewRepository();
   return {
     listProjects: new ListProjects(projectRepo),
@@ -172,6 +178,8 @@ function buildContainer(): Container {
     listWorkspaces: new ListWorkspaces(workspaceRepo),
     createWorkspace: new CreateWorkspace(workspaceRepo),
     workspaceRepository: workspaceRepo,
+    getActivityFeed: new GetActivityFeed(activityRepo),
+    activityRepository: activityRepo,
     recordTaskView: new RecordTaskView(recentTaskViewRepo),
     listRecentTaskViews: new ListRecentTaskViews(recentTaskViewRepo),
   };

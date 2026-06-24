@@ -25,7 +25,7 @@ import {
   AnimatedSearch,
   AnimatedBell,
 } from '@/presentation/components/nav/AnimatedNavIcons';
-import { WorkspaceChatPanel } from '@/presentation/chat/WorkspaceChatPanel';
+import { CommunicationPanel } from '@/presentation/chat/CommunicationPanel';
 import type { Project } from '@/domain/project/Project';
 import { SidebarProjectList } from './SidebarProjectList';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
@@ -219,7 +219,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
           className="min-h-0 min-w-0"
         >
           {showChat ? (
-            <WorkspaceChatPanel />
+            <CommunicationPanel />
           ) : (
             <nav className="h-full min-h-0 min-w-0">
               <SidebarProjectList />
@@ -229,7 +229,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
       ) : (
         <div className="min-h-0 min-w-0">
           {showChat ? (
-            <WorkspaceChatPanel />
+            <CommunicationPanel />
           ) : (
             <nav className="h-full min-h-0 min-w-0">
               <SidebarProjectList />
