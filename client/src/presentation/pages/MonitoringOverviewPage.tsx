@@ -64,11 +64,11 @@ export function MonitoringOverviewPage(): React.ReactElement {
   }, [projects, onlyProblems]);
 
   return (
-    <div className="flex h-full flex-col gap-4 p-4 sm:gap-6 sm:p-6">
+    <div className="flex h-full flex-col gap-4 p-4 sm:gap-5 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Activity className="size-6" />
-          <h1 className="text-2xl font-semibold tracking-tight">Мониторинг — все проекты</h1>
+        <div className="flex items-center gap-2.5">
+          <Activity className="size-5 text-primary" />
+          <h1 className="text-xl font-semibold tracking-tight">Мониторинг — все проекты</h1>
         </div>
         <Button asChild variant="outline" size="sm">
           <Link to="/monitoring/alerts">

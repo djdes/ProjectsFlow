@@ -44,7 +44,7 @@ export function MonitoringPage(): React.ReactElement {
   const alertsFor = (serverId: string): typeof alerts => alerts.filter((a) => a.serverId === serverId);
 
   return (
-    <div className="flex h-full flex-col gap-4 p-4 sm:gap-6 sm:p-6">
+    <div className="flex h-full flex-col gap-4 p-4 sm:gap-5 sm:p-5">
       <nav className="flex items-center gap-1 text-sm text-muted-foreground" aria-label="Хлебные крошки">
         <Link to="/" className="hover:text-foreground">
           Проекты
@@ -62,8 +62,8 @@ export function MonitoringPage(): React.ReactElement {
       </nav>
 
       <div className="flex items-center gap-2">
-        <Activity className="size-6" />
-        <h1 className="text-2xl font-semibold tracking-tight">Мониторинг</h1>
+        <Activity className="size-5 text-primary" />
+        <h1 className="text-xl font-semibold tracking-tight">Мониторинг</h1>
       </div>
 
       {forbidden ? (

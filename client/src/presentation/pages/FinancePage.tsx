@@ -83,7 +83,7 @@ export function FinancePage(): React.ReactElement {
   const activeEmployees = employees.filter((e) => e.active);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto max-w-3xl space-y-5 p-5">
       <nav className="flex items-center gap-1 text-sm text-muted-foreground" aria-label="Хлебные крошки">
         <Link to="/" className="hover:text-foreground">Проекты</Link>
         <ChevronRight className="size-4" />
@@ -93,8 +93,8 @@ export function FinancePage(): React.ReactElement {
       </nav>
 
       <div className="flex items-center gap-3">
-        <Wallet className="size-7 text-primary" />
-        <h1 className="text-2xl font-semibold tracking-tight">Финансы</h1>
+        <Wallet className="size-5 text-primary" />
+        <h1 className="text-xl font-semibold tracking-tight">Финансы</h1>
       </div>
 
       {/* P&L */}

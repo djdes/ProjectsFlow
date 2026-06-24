@@ -194,11 +194,11 @@ export function NotificationsPage(): React.ReactElement {
   const unreadCount = items.filter((n) => n.readAt === null).length;
 
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
+    <div className="flex h-full flex-col gap-4 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Bell className="size-7 text-primary" />
-          <h1 className="text-2xl font-semibold tracking-tight">Уведомления</h1>
+        <div className="flex items-center gap-2.5">
+          <Bell className="size-5 text-primary" />
+          <h1 className="text-xl font-semibold tracking-tight">Уведомления</h1>
         </div>
         <div className="flex items-center gap-2">
           <FilterToggle value={filter} onChange={setFilter} unreadCount={unreadCount} />

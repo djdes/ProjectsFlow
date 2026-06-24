@@ -66,7 +66,7 @@ export function WorkspaceSettingsPage(): React.ReactElement {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-6">
+    <div className="mx-auto max-w-2xl space-y-5 p-5">
       <Button asChild variant="ghost" size="sm" className="-ml-3 gap-1">
         <Link to="/">
           <ArrowLeft />
@@ -75,8 +75,8 @@ export function WorkspaceSettingsPage(): React.ReactElement {
       </Button>
 
       <div className="flex items-center gap-3">
-        <WorkspaceIcon name={workspace.name} icon={workspace.icon} className="size-10 text-lg" />
-        <h1 className="text-2xl font-semibold tracking-tight">{workspace.name}</h1>
+        <WorkspaceIcon name={workspace.name} icon={workspace.icon} className="size-9 text-base" />
+        <h1 className="text-xl font-semibold tracking-tight">{workspace.name}</h1>
       </div>
 
       <RenameCard workspaceId={workspace.id} initialName={workspace.name} initialIcon={workspace.icon} disabled={!isOwner} />
