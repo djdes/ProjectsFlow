@@ -64,7 +64,7 @@ export function MonitoringOverviewPage(): React.ReactElement {
   }, [projects, onlyProblems]);
 
   return (
-    <div className="flex h-full flex-col gap-4 p-4 sm:gap-5 sm:p-5">
+    <div className="flex h-full flex-col gap-5 p-5 pt-8 sm:p-6 sm:pt-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <Activity className="size-5 text-primary" />

@@ -276,7 +276,7 @@ function MonitoringCard(): React.ReactElement {
 
 export function ProfilePage(): React.ReactElement {
   return (
-    <div className="mx-auto max-w-2xl space-y-5 p-5">
+    <div className="mx-auto w-full max-w-2xl space-y-6 px-6 pb-12 pt-8">
       <Button asChild variant="ghost" size="sm" className="-ml-3 gap-1">
         <Link to="/">
           <ArrowLeft />

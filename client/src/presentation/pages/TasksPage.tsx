@@ -101,7 +101,7 @@ export function TasksPage(): React.ReactElement {
   }
 
   return (
-    <div className="flex h-full flex-col gap-1.5 p-3 sm:gap-4 sm:p-5">
+    <div className="flex h-full flex-col gap-1.5 p-3 pt-5 sm:gap-4 sm:p-6 sm:pt-8">
       {/* Хлебные крошки прячем на мобиле: имя проекта дублируется в заголовке ниже,
           навигация — в нижнем таб-баре/drawer. Это возвращает вертикальное место канбану. */}
       <nav className="hidden items-center gap-1 text-sm text-muted-foreground sm:flex" aria-label="Хлебные крошки">

@@ -26,7 +26,7 @@ export function AdminPage(): React.ReactElement {
   const [tab, setTab] = useState<Tab>('projects');
 
   return (
-    <div className="flex h-full flex-col gap-4 p-5">
+    <div className="flex h-full flex-col gap-5 p-5 pt-8 sm:p-6 sm:pt-8">
       <div className="flex items-center gap-2.5">
         <Shield className="size-5 text-primary" />
         <h1 className="text-xl font-semibold tracking-tight">Администрирование</h1>

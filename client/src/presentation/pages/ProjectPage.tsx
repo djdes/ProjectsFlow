@@ -62,7 +62,7 @@ export function ProjectPage(): React.ReactElement {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6 px-6 pb-12 pt-8">
       <nav className="flex items-center gap-1 text-sm text-muted-foreground" aria-label="Хлебные крошки">
         <Link to="/" className="hover:text-foreground">
           Проекты

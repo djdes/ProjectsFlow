@@ -112,7 +112,7 @@ export function InboxPage(): React.ReactElement {
   return (
     <div
       className={cn(
-        'flex h-full flex-col gap-3 p-4 sm:gap-4 sm:p-5',
+        'flex h-full flex-col gap-4 p-4 pt-6 sm:gap-5 sm:p-6 sm:pt-8',
         // Список — узкая центрированная читаемая колонка (как Todoist). Канбан-доске нужна
         // вся ширина, поэтому ограничение применяем только в list-режиме.
         view === 'list' && 'mx-auto w-full max-w-3xl',

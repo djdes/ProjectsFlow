@@ -44,7 +44,7 @@ export function MonitoringPage(): React.ReactElement {
   const alertsFor = (serverId: string): typeof alerts => alerts.filter((a) => a.serverId === serverId);
 
   return (
-    <div className="flex h-full flex-col gap-4 p-4 sm:gap-5 sm:p-5">
+    <div className="flex h-full flex-col gap-5 p-4 pt-6 sm:p-6 sm:pt-8">
       <nav className="flex items-center gap-1 text-sm text-muted-foreground" aria-label="Хлебные крошки">
         <Link to="/" className="hover:text-foreground">
           Проекты
