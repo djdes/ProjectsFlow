@@ -8,7 +8,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { ArrowRight, ChevronDown, ChevronUp, Download, FileText, Loader2, Map, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
+import { ArrowRight, ChevronDown, ChevronsRight, ChevronUp, Download, FileText, Loader2, Map, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -561,6 +561,8 @@ export function TaskDrawer({
     );
   };
 
+  // Закрытие шторки — двойная стрелка вправо (как «свернуть» у левой панели): окно
+  // «уезжает» обратно за правый край. Стоит слева в шапке, крестика справа больше нет.
   const renderCloseButton = (): React.ReactElement => (
     <Button
       type="button"
@@ -569,8 +571,9 @@ export function TaskDrawer({
       className="group/x size-8 shrink-0"
       onClick={onClose}
       aria-label="Закрыть"
+      title="Закрыть"
     >
-      <X className="size-4 transition-transform duration-200 group-hover/x:rotate-90" />
+      <ChevronsRight className="size-4 transition-transform duration-200 group-hover/x:translate-x-0.5" />
     </Button>
   );
 
@@ -604,6 +607,7 @@ export function TaskDrawer({
                 Аттачи (когда есть) переносятся на свою строку через basis-full. */}
             <div className="border-b bg-background/95 backdrop-blur-md">
               <div className="flex items-center gap-2 px-4 pt-3">
+                {renderCloseButton()}
                 {renderExpandButton()}
                 <div className="flex min-w-0 flex-1 items-baseline gap-2">
                   {projectName && (
@@ -638,7 +642,6 @@ export function TaskDrawer({
                     {STATUS_LABEL[task.status]}
                   </span>
                 )}
-                {renderCloseButton()}
               </div>
 
               {/* Порядок: Файл · Делегировать · Дедлайн · Приоритет · Режим (крайний справа). */}
@@ -842,11 +845,11 @@ export function TaskDrawer({
           <>
             <div className="border-b bg-background/95 px-4 pb-2 pt-4 backdrop-blur-md">
               <div className="flex items-center gap-2">
+                {renderCloseButton()}
                 {renderExpandButton()}
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {projectName ? `${projectName} · ` : ''}Новая задача
                 </span>
-                <div className="ml-auto">{renderCloseButton()}</div>
               </div>
             </div>
             <form

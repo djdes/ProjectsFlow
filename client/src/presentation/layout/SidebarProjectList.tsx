@@ -472,7 +472,7 @@ export function SidebarProjectList(): React.ReactElement {
       >
         <ChevronDown
           className={cn(
-            'size-3 shrink-0 opacity-0 transition-all group-hover:opacity-100',
+            'hidden size-3 shrink-0 transition-transform group-hover:block',
             mainCollapsed && '-rotate-90',
           )}
         />
@@ -601,7 +601,7 @@ export function SidebarProjectList(): React.ReactElement {
           >
             <ChevronDown
               className={cn(
-                'size-3 shrink-0 opacity-0 transition-all group-hover:opacity-100',
+                'hidden size-3 shrink-0 transition-transform group-hover:block',
                 favCollapsed && '-rotate-90',
               )}
             />
@@ -647,7 +647,7 @@ export function SidebarProjectList(): React.ReactElement {
             className="group sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-sidebar/90 px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
           >
             <ChevronDown
-              className={cn('size-3 shrink-0 opacity-0 transition-all group-hover:opacity-100', archivedCollapsed && '-rotate-90')}
+              className={cn('hidden size-3 shrink-0 transition-transform group-hover:block', archivedCollapsed && '-rotate-90')}
             />
             <span>Архивные</span>
             {archived.length > 0 && <span className="tabular-nums opacity-70">{archived.length}</span>}
