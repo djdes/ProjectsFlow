@@ -2,6 +2,8 @@ import { and, asc, desc, eq, gt, inArray, lt, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   users,
+  workspaces,
+  workspaceMembers,
   workspaceChatMessages,
   workspaceChatReactions,
   workspaceChatReads,
@@ -12,6 +14,7 @@ import type { ChatReaction } from '../../domain/chat/ChatReaction.js';
 import type { ChatAttachment } from '../../domain/chat/ChatAttachment.js';
 import type {
   ChatRepository,
+  ChatRoomRow,
   InsertMessageInput,
   InsertAttachmentInput,
   ListMessagesQuery,
@@ -238,5 +241,35 @@ export class DrizzleChatRepository implements ChatRepository {
       .from(workspaceChatMessages)
       .where(eq(workspaceChatMessages.workspaceId, workspaceId));
     return Number(rows[0]?.max ?? 0);
+  }
+
+  async listChatRoomsForUser(userId: string): Promise<ChatRoomRow[]> {
+    // Все пространства, где юзер — участник, + метаданные комнаты. memberCount/кол-во и
+    // последний seq сообщений — коррелированными подзапросами (по неудалённым). Фильтр
+    // «показывать ли комнату» — в ChatService.listRooms.
+    const rows = await this.db
+      .select({
+        workspaceId: workspaces.id,
+        name: workspaces.name,
+        kind: workspaces.kind,
+        ownerUserId: workspaces.ownerUserId,
+        role: workspaceMembers.role,
+        memberCount: sql<number>`(SELECT COUNT(*) FROM workspace_members wm2 WHERE wm2.workspace_id = ${workspaces.id})`,
+        messageCount: sql<number>`(SELECT COUNT(*) FROM workspace_chat_messages cm WHERE cm.workspace_id = ${workspaces.id} AND cm.deleted_at IS NULL)`,
+        lastMessageSeq: sql<number>`(SELECT COALESCE(MAX(cm.seq), 0) FROM workspace_chat_messages cm WHERE cm.workspace_id = ${workspaces.id} AND cm.deleted_at IS NULL)`,
+      })
+      .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+      .where(eq(workspaceMembers.userId, userId));
+    return rows.map((r) => ({
+      workspaceId: r.workspaceId,
+      name: r.name,
+      kind: r.kind,
+      ownerUserId: r.ownerUserId,
+      role: r.role,
+      memberCount: Number(r.memberCount),
+      messageCount: Number(r.messageCount),
+      lastMessageSeq: Number(r.lastMessageSeq),
+    }));
   }
 }

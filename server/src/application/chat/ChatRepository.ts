@@ -1,6 +1,21 @@
 import type { ChatMessageRecord } from '../../domain/chat/ChatMessage.js';
 import type { ChatReaction } from '../../domain/chat/ChatReaction.js';
 import type { ChatAttachment } from '../../domain/chat/ChatAttachment.js';
+import type { WorkspaceKind } from '../../domain/workspace/Workspace.js';
+
+// Строка-кандидат для списка чат-комнат юзера (пространства, где он участник) — без unread,
+// его добавляет ChatService через countUnread. messageCount/lastMessageSeq — по неудалённым.
+export type ChatRoomRow = {
+  readonly workspaceId: string;
+  readonly name: string;
+  readonly kind: WorkspaceKind;
+  readonly ownerUserId: string;
+  // Роль текущего юзера в этой комнате (owner может модерировать чужие сообщения).
+  readonly role: 'owner' | 'member';
+  readonly memberCount: number;
+  readonly messageCount: number;
+  readonly lastMessageSeq: number;
+};
 
 export type InsertMessageInput = {
   readonly id: string;
@@ -51,4 +66,7 @@ export interface ChatRepository {
   setLastReadSeq(workspaceId: string, userId: string, seq: number): Promise<void>;
   countUnread(workspaceId: string, userId: string): Promise<number>;
   maxSeq(workspaceId: string): Promise<number>;
+
+  // Пространства, где юзер — участник, с метаданными для списка чат-комнат (см. ChatService.listRooms).
+  listChatRoomsForUser(userId: string): Promise<ChatRoomRow[]>;
 }

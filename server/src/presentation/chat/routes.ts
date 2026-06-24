@@ -42,6 +42,16 @@ export function chatRouter(deps: ChatRouterDeps): Router {
     limits: { fileSize: deps.maxAttachmentBytes },
   });
 
+  // Список чат-комнат юзера (не привязан к :workspaceId). Регистрируем до :workspaceId-роутов.
+  router.get('/chat/rooms', async (req, res, next) => {
+    try {
+      const rooms = await svc.listRooms(uid(req));
+      res.json({ rooms });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   router.get('/:workspaceId/chat/messages', async (req, res, next) => {
     try {
       const beforeSeq = req.query['beforeSeq'] !== undefined ? Number(req.query['beforeSeq']) : undefined;

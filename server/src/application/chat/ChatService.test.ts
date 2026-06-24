@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ChatService } from './ChatService.js';
-import type { ChatRepository, InsertMessageInput, InsertAttachmentInput, ListMessagesQuery } from './ChatRepository.js';
+import type { ChatRepository, ChatRoomRow, InsertMessageInput, InsertAttachmentInput, ListMessagesQuery } from './ChatRepository.js';
+import type { ChatServiceDeps } from './ChatService.js';
 import type { ChatMessageRecord } from '../../domain/chat/ChatMessage.js';
 import type { ChatReaction } from '../../domain/chat/ChatReaction.js';
 import type { ChatAttachment } from '../../domain/chat/ChatAttachment.js';
@@ -111,6 +112,9 @@ function makeService(seed: Seed) {
     async maxSeq() {
       return seq;
     },
+    async listChatRoomsForUser() {
+      return [];
+    },
   };
 
   // --- workspace access fake ---
@@ -123,7 +127,7 @@ function makeService(seed: Seed) {
       return seed.members.map((m) => ({ workspaceId, userId: m.userId, role: m.role, displayName: m.displayName }));
     },
     async getById(): Promise<Workspace | null> {
-      return { id: WS, name: 'Team', icon: null, ownerUserId: 'owner', createdAt: new Date('2026-01-01') };
+      return { id: WS, name: 'Team', icon: null, kind: 'team', ownerUserId: 'owner', createdAt: new Date('2026-01-01') };
     },
   };
 
@@ -227,4 +231,80 @@ test('reply: replyTo превью отдаётся с excerpt', async () => {
   const reply = list.find((m) => m.replyTo);
   assert.equal(reply?.replyTo?.id, first.id);
   assert.equal(reply?.replyTo?.excerpt, 'исходное');
+});
+
+// --- listRooms: какие чат-комнаты видит юзер (фикс бага «приглашённый не видит общий чат») ---
+
+function row(over: Partial<ChatRoomRow> & { workspaceId: string }): ChatRoomRow {
+  return {
+    name: over.workspaceId,
+    kind: 'team',
+    ownerUserId: 'someone',
+    role: 'member',
+    memberCount: 1,
+    messageCount: 0,
+    lastMessageSeq: 0,
+    ...over,
+  };
+}
+
+function roomsService(rows: ChatRoomRow[], unread: Record<string, number> = {}) {
+  const repo = {
+    async listChatRoomsForUser() {
+      return rows;
+    },
+    async countUnread(ws: string) {
+      return unread[ws] ?? 0;
+    },
+  } as unknown as ChatRepository;
+  return new ChatService({
+    repo,
+    workspaces: { async getMembership() { return null; }, async listMembers() { return []; }, async getById() { return null; } },
+    chatEventHub: { publish() {}, subscribe: () => () => {} },
+    broadcaster: { async broadcastChatChanged() {} },
+    mentions: { async execute() {} },
+    idGen: () => 'x',
+  } as unknown as ChatServiceDeps);
+}
+
+test('listRooms: показывает хаб владельца с командой, скрывает пустой соло-хаб приглашённого', async () => {
+  // У приглашённого Ярослава: его собственный пустой дефолт-хаб (mc=1, без сообщений) + хаб
+  // Дениса, куда его позвали (mc=4). Должен увидеть только хаб Дениса.
+  const service = roomsService([
+    row({ workspaceId: 'hubYaroslav', kind: 'default', ownerUserId: 'yaroslav', role: 'owner', memberCount: 1 }),
+    row({ workspaceId: 'hubDenis', kind: 'default', ownerUserId: 'denis', role: 'member', memberCount: 4, messageCount: 5, lastMessageSeq: 5 }),
+  ]);
+  const rooms = await service.listRooms('yaroslav');
+  assert.deepEqual(rooms.map((r) => r.workspaceId), ['hubDenis']);
+});
+
+test('listRooms: владелец видит свой хаб (есть команда)', async () => {
+  const service = roomsService([
+    row({ workspaceId: 'hubDenis', kind: 'default', ownerUserId: 'denis', role: 'owner', memberCount: 4, messageCount: 5, lastMessageSeq: 5 }),
+  ]);
+  const rooms = await service.listRooms('denis');
+  assert.deepEqual(rooms.map((r) => r.workspaceId), ['hubDenis']);
+  assert.equal(rooms[0]?.role, 'owner');
+});
+
+test('listRooms: соло-юзер без команды/сообщений → fallback на собственный дефолт-хаб', async () => {
+  const service = roomsService([
+    row({ workspaceId: 'hubSolo', kind: 'default', ownerUserId: 'solo', role: 'owner', memberCount: 1 }),
+  ]);
+  const rooms = await service.listRooms('solo');
+  assert.deepEqual(rooms.map((r) => r.workspaceId), ['hubSolo']);
+});
+
+test('listRooms: несколько комнат — сортировка по свежести + unread прикрепляется', async () => {
+  const service = roomsService(
+    [
+      row({ workspaceId: 'wsA', memberCount: 3, messageCount: 2, lastMessageSeq: 10 }),
+      row({ workspaceId: 'wsB', memberCount: 2, messageCount: 9, lastMessageSeq: 99 }),
+    ],
+    { wsA: 1, wsB: 7 },
+  );
+  const rooms = await service.listRooms('u');
+  assert.deepEqual(rooms.map((r) => r.workspaceId), ['wsB', 'wsA']); // по lastMessageSeq desc
+  assert.equal(rooms.find((r) => r.workspaceId === 'wsB')?.unreadCount, 7);
+  assert.equal(rooms.find((r) => r.workspaceId === 'wsA')?.unreadCount, 1);
 });

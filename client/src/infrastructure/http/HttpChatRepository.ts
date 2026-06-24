@@ -9,6 +9,7 @@ import type {
   ChatReactionAggregate,
   ChatReplyPreview,
 } from '@/domain/chat/ChatMessage';
+import type { ChatRoom } from '@/domain/chat/ChatRoom';
 import { httpClient } from './httpClient';
 import { HttpError, type HttpErrorBody } from '@/lib/HttpError';
 
@@ -40,6 +41,11 @@ export class HttpChatRepository implements ChatRepository {
         url: this.attachmentUrl(workspaceId, a.id),
       })),
     };
+  }
+
+  async listRooms(): Promise<ChatRoom[]> {
+    const { rooms } = await httpClient.get<{ rooms: ChatRoom[] }>('/workspaces/chat/rooms');
+    return rooms;
   }
 
   async listMessages(workspaceId: string, query: ListChatMessagesQuery = {}): Promise<ChatMessage[]> {

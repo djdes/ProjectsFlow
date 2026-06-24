@@ -1,4 +1,4 @@
-import type { Workspace } from '../../domain/workspace/Workspace.js';
+import type { Workspace, WorkspaceKind } from '../../domain/workspace/Workspace.js';
 import type { WorkspaceMember } from '../../domain/workspace/WorkspaceMember.js';
 import { requireWorkspaceMember } from '../workspace/workspaceAccess.js';
 import type { ChatRepository, ListMessagesQuery } from './ChatRepository.js';
@@ -49,6 +49,18 @@ export type SendMessageInput = {
   readonly attachments?: readonly SendAttachmentDescriptor[];
 };
 
+// Чат-комната в списке юзера: пространство, где он состоит + непрочитанное.
+export type ChatRoomSummary = {
+  readonly workspaceId: string;
+  readonly name: string;
+  readonly kind: WorkspaceKind;
+  readonly ownerUserId: string;
+  readonly role: 'owner' | 'member';
+  readonly memberCount: number;
+  readonly unreadCount: number;
+  readonly lastMessageSeq: number;
+};
+
 const DEFAULT_PAGE = 40;
 const MAX_PAGE = 100;
 
@@ -95,6 +107,33 @@ export class ChatService {
   async getUnreadCount(workspaceId: string, userId: string): Promise<number> {
     await requireWorkspaceMember(this.deps.workspaces, workspaceId, userId);
     return this.deps.repo.countUnread(workspaceId, userId);
+  }
+
+  // Чат-комнаты юзера: все пространства, где он участник И там есть команда (memberCount>1)
+  // ИЛИ есть сообщения. Это и решает баг «приглашённый не видит общий чат»: хаб владельца
+  // (где лежит общий чат) попадает в список, т.к. приглашённый — его участник. Если ничего
+  // не подошло — отдаём собственный дефолт-хаб (соло-юзеру есть куда писать). Сорт по свежести.
+  async listRooms(userId: string): Promise<ChatRoomSummary[]> {
+    const candidates = await this.deps.repo.listChatRoomsForUser(userId);
+    let rooms = candidates.filter((r) => r.memberCount > 1 || r.messageCount > 0);
+    if (rooms.length === 0) {
+      const ownHub = candidates.find((r) => r.kind === 'default' && r.ownerUserId === userId);
+      rooms = ownHub ? [ownHub] : [];
+    }
+    const withUnread = await Promise.all(
+      rooms.map(async (r) => ({
+        workspaceId: r.workspaceId,
+        name: r.name,
+        kind: r.kind,
+        ownerUserId: r.ownerUserId,
+        role: r.role,
+        memberCount: r.memberCount,
+        lastMessageSeq: r.lastMessageSeq,
+        unreadCount: await this.deps.repo.countUnread(r.workspaceId, userId),
+      })),
+    );
+    withUnread.sort((a, b) => b.lastMessageSeq - a.lastMessageSeq);
+    return withUnread;
   }
 
   async markRead(workspaceId: string, userId: string, lastReadSeq: number): Promise<void> {

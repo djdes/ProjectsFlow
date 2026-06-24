@@ -13,8 +13,7 @@ import { useAddTaskDialog } from '@/presentation/components/forms/AddTaskDialogP
 import { useGlobalSearch } from '@/presentation/components/search/GlobalSearchProvider';
 import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
-import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
-import { useChatUnread } from '@/presentation/hooks/useChatUnread';
+import { useChatRooms } from '@/presentation/hooks/useChatRooms';
 import { useProjects } from '@/presentation/hooks/useProjects';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { SidebarNavRail, type RailItem } from '@/presentation/components/nav/SidebarNavRail';
@@ -62,8 +61,9 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
   const { open: openAddTask } = useAddTaskDialog();
   const { user } = useCurrentUser();
   const { data: projects } = useProjects();
-  const { workspace } = useCurrentWorkspace();
-  const { count: chatUnread } = useChatUnread(workspace?.id ?? null);
+  // Суммарный непрочитанный по ВСЕМ чат-комнатам юзера (а не только активного пространства) —
+  // иначе приглашённый не видел бы бейдж по чату хаба владельца, в котором состоит.
+  const { totalUnread: chatUnread } = useChatRooms();
   const { animations } = useMotion();
   const navigate = useNavigate();
 

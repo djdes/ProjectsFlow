@@ -1,4 +1,5 @@
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
+import type { ChatRoom } from '@/domain/chat/ChatRoom';
 
 export type ListChatMessagesQuery = {
   readonly beforeSeq?: number;
@@ -15,6 +16,8 @@ export type SendChatMessageInput = {
 // Порт чата пространства. SSE-стрим (live-лента) НЕ здесь — его открывает хук напрямую
 // через EventSource (как useLiveSession/useNotificationStream); порт покрывает REST.
 export interface ChatRepository {
+  // Чат-комнаты текущего юзера (для вкладки «Чат»: какой workspace-чат показывать/выбирать).
+  listRooms(): Promise<ChatRoom[]>;
   listMessages(workspaceId: string, query?: ListChatMessagesQuery): Promise<ChatMessage[]>;
   sendMessage(workspaceId: string, input: SendChatMessageInput): Promise<ChatMessage>;
   editMessage(workspaceId: string, messageId: string, body: string): Promise<ChatMessage>;
