@@ -25,7 +25,7 @@ type Deps = {
   readonly now: () => Date;
   // Создаёт личное пространство новому юзеру и делает его активным. Без пространства
   // юзер не сможет создавать проекты (projects.workspace_id NOT NULL).
-  readonly createDefaultWorkspace: (userId: string) => Promise<void>;
+  readonly createDefaultWorkspace: (userId: string, displayName: string) => Promise<void>;
 };
 
 export class Register {
@@ -46,7 +46,7 @@ export class Register {
 
     // Личное пространство по умолчанию + ставим активным. До этого юзер не сможет
     // создать ни одного проекта (workspace_id NOT NULL).
-    await this.deps.createDefaultWorkspace(user.id);
+    await this.deps.createDefaultWorkspace(user.id, input.displayName.trim());
 
     const session = await this.deps.sessions.create({
       id: this.deps.idGen(),

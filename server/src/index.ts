@@ -277,9 +277,10 @@ const resolveWorkspaceIdOrNull = (userId: string): Promise<string | null> =>
   workspaceRepo
     .getCurrentWorkspaceId(userId)
     .then((cur) => cur ?? workspaceRepo.findAnotherForUser(userId, ''));
-// Создаёт личное пространство новому юзеру + делает активным (для Register).
-const createDefaultWorkspace = async (userId: string): Promise<void> => {
-  await workspaceService.create(userId, { name: 'Личное', icon: null });
+// Создаёт пространство по умолчанию новому юзеру + делает активным (для Register).
+// Имя — «Пространство <имя аккаунта>» (один дефолтный воркспейс на пользователя).
+const createDefaultWorkspace = async (userId: string, displayName: string): Promise<void> => {
+  await workspaceService.create(userId, { name: `Пространство ${displayName}`, icon: null });
 };
 // Deep-link авто-switch: открыли проект из другого пространства → делаем его активным.
 const setActiveWorkspaceForProject = async (userId: string, projectId: string): Promise<void> => {
