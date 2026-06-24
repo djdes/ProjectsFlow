@@ -117,6 +117,7 @@ export function ChatBubble({
         )}
 
         <div
+          data-chat-bubble
           className={cn(
             'relative rounded-2xl px-3 py-1.5 text-sm text-foreground',
             // Мягкий полупрозрачный акцент вместо «бьющего» синего — нежно, как в TG.

@@ -17,7 +17,7 @@ import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { useChatUnread } from '@/presentation/hooks/useChatUnread';
 import { useProjects } from '@/presentation/hooks/useProjects';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
-import { GlassTabBar, type GlassTabItem } from '@/presentation/components/nav/GlassTabBar';
+import { SidebarNavRail, type RailItem } from '@/presentation/components/nav/SidebarNavRail';
 import {
   AnimatedHome,
   AnimatedChat,
@@ -31,13 +31,16 @@ import { SidebarProjectList } from './SidebarProjectList';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { avatarColor, getInitials } from './projectIcons';
 
-// Вид нижней области сайдбара: список проектов («Главная») или общий чат пространства.
-type SidebarView = 'home' | 'chat';
-const VIEW_KEY = 'pf_sidebar_view';
+// Активная кнопка рейла. Главная/Входящие/Поиск показывают список проектов в нижней
+// области; Чат — общий чат пространства. Любая из 4 может быть активной (как в Notion).
+type RailKey = 'home' | 'chat' | 'inbox' | 'search';
+const RAIL_ORDER: readonly RailKey[] = ['home', 'chat', 'inbox', 'search'];
+const RAIL_KEY = 'pf_sidebar_rail';
 
-function readView(): SidebarView {
+function readRail(): RailKey {
   try {
-    return localStorage.getItem(VIEW_KEY) === 'chat' ? 'chat' : 'home';
+    const v = localStorage.getItem(RAIL_KEY);
+    return v === 'chat' || v === 'inbox' || v === 'search' ? v : 'home';
   } catch {
     return 'home';
   }
@@ -63,28 +66,30 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
   const { animations } = useMotion();
   const navigate = useNavigate();
 
-  const [view, setView] = useState<SidebarView>(readView);
-  const setViewPersist = useCallback((v: SidebarView) => {
-    setView(v);
+  const [activeRail, setActiveRail] = useState<RailKey>(readRail);
+  const setRailPersist = useCallback((k: RailKey) => {
+    setActiveRail(k);
     try {
-      localStorage.setItem(VIEW_KEY, v);
+      localStorage.setItem(RAIL_KEY, k);
     } catch {
-      /* localStorage недоступен — вид просто не персистится */
+      /* localStorage недоступен — активная кнопка просто не персистится */
     }
   }, []);
+  // Нижняя область = чат только когда активен Чат; для Главная/Входящие/Поиск — проекты.
+  const showChat = activeRail === 'chat';
 
-  // 4-кнопочный glass-rail: Главная/Чат — held-toggle вида; Входящие/Поиск — моментальные.
-  const railItems: GlassTabItem[] = [
+  // 4-кнопочный rail: активная — широкая (иконка+текст), остальные — узкие иконки.
+  const railItems: RailItem[] = [
     { key: 'home', label: 'Главная', icon: <AnimatedHome className="size-5" /> },
     { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: chatUnread },
     { key: 'inbox', label: 'Входящие', icon: <AnimatedInbox className="size-5" /> },
     { key: 'search', label: 'Поиск', icon: <AnimatedSearch className="size-5" /> },
   ];
   const onRailSelect = (i: number): void => {
-    if (i === 0) setViewPersist('home');
-    else if (i === 1) setViewPersist('chat');
-    else if (i === 2) navigate('/');
-    else openSearch();
+    const key = RAIL_ORDER[i] ?? 'home';
+    setRailPersist(key);
+    if (key === 'inbox') navigate('/');
+    else if (key === 'search') openSearch();
   };
 
   if (collapsed) {
@@ -112,7 +117,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
           </RailNavLink>
           <RailButton
             onClick={() => {
-              setViewPersist('chat');
+              setRailPersist('chat');
               onToggleCollapse?.();
             }}
             label="Чат"
@@ -185,12 +190,11 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
         )}
       </div>
 
-      {/* Навигационный glass-rail: Главная/Чат/Входящие/Поиск. */}
-      <GlassTabBar
+      {/* Навигационный rail: Главная/Чат/Входящие/Поиск — активная широкая, прочие узкие. */}
+      <SidebarNavRail
         items={railItems}
-        activeIndex={view === 'home' ? 0 : 1}
+        activeIndex={RAIL_ORDER.indexOf(activeRail)}
         onSelect={onRailSelect}
-        layoutId="pf-sidebar-rail-glass"
       />
 
       {/* Главное действие: быстрое добавление задачи. Зелёный акцент только на иконке. */}
@@ -206,7 +210,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
       {/* Нижняя область: список проектов («Главная») ИЛИ общий чат пространства. Crossfade. */}
       {animations ? (
         <motion.div
-          key={view}
+          key={showChat ? 'chat' : 'home'}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.18 }}
@@ -214,7 +218,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
           // а чат скроллит свой внутренний контейнер. overflow-hidden тут срезал ринги/4px.
           className="min-h-0 min-w-0"
         >
-          {view === 'chat' ? (
+          {showChat ? (
             <WorkspaceChatPanel />
           ) : (
             <nav className="h-full min-h-0 min-w-0">
@@ -224,7 +228,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
         </motion.div>
       ) : (
         <div className="min-h-0 min-w-0">
-          {view === 'chat' ? (
+          {showChat ? (
             <WorkspaceChatPanel />
           ) : (
             <nav className="h-full min-h-0 min-w-0">

@@ -1,27 +1,31 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronDown, Clock, History } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { useSidebarSectionCollapse } from '@/presentation/hooks/useSidebarSectionCollapse';
 import { useRecentTasks } from '@/presentation/hooks/useRecentTasks';
 import { RecentTaskRow } from '@/presentation/components/recent/RecentTaskRow';
-import { RecentTasksDialog } from '@/presentation/components/recent/RecentTasksDialog';
 
-// Блок «Недавнее» над поиском проектов: последние 3 открытые задачи. Клик → доска
-// проекта + открытая карточка (?task=). «Вся история» — диалог с бо́льшим списком.
-// Свёрнутость персистится в localStorage; анимации уважают MotionProvider.
+// Блок «Недавнее» над поиском проектов: последние открытые задачи. Клик → доска проекта
+// + открытая карточка (?task=). Минималистично: одна иконка-раскрытие (без часов), строки
+// без названия проекта/времени. «ещё» раскрывает остальные (макс 10) прямо в блоке — без
+// отдельного окна. Свёрнутость персистится; анимации уважают MotionProvider.
 const PREVIEW_LIMIT = 3;
+const MAX_LIMIT = 10;
 
 export function RecentTasksBlock(): React.ReactElement | null {
   const { animations } = useMotion();
   const { collapsed, toggle } = useSidebarSectionCollapse('recent', false);
-  const { items } = useRecentTasks(PREVIEW_LIMIT);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const { items } = useRecentTasks(MAX_LIMIT);
+  const [expanded, setExpanded] = useState(false);
 
   // Пока нет ни одной открытой задачи — блок не показываем (в т.ч. на первой загрузке).
   if (items.length === 0) return null;
+
+  const visible = expanded ? items.slice(0, MAX_LIMIT) : items.slice(0, PREVIEW_LIMIT);
+  const canExpand = !expanded && items.length > PREVIEW_LIMIT;
 
   return (
     <div className="shrink-0">
@@ -34,7 +38,6 @@ export function RecentTasksBlock(): React.ReactElement | null {
         <ChevronDown
           className={cn('size-3 shrink-0 transition-transform', collapsed && '-rotate-90')}
         />
-        <Clock className="size-3 shrink-0" />
         <span>Недавнее</span>
       </button>
 
@@ -56,7 +59,7 @@ export function RecentTasksBlock(): React.ReactElement | null {
               animate="show"
               variants={{ show: { transition: { staggerChildren: 0.04 } } }}
             >
-              {items.map((item) => (
+              {visible.map((item) => (
                 <motion.li
                   key={item.taskId}
                   variants={{
@@ -74,19 +77,19 @@ export function RecentTasksBlock(): React.ReactElement | null {
               ))}
             </motion.ul>
 
-            <button
-              type="button"
-              onClick={() => setHistoryOpen(true)}
-              className="mt-0.5 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]"
-            >
-              <History className="size-3 shrink-0" />
-              Показать больше
-            </button>
+            {/* «ещё» — выровнено по тексту строк (pl под иконку), раскрывает остальные в блоке. */}
+            {canExpand && (
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                className="mt-0.5 rounded-md py-1 pl-9 pr-2 text-left text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                ещё
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
-
-      <RecentTasksDialog open={historyOpen} onOpenChange={setHistoryOpen} />
     </div>
   );
 }

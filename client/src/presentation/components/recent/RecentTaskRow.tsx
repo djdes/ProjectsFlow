@@ -1,7 +1,6 @@
 import { Inbox } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { avatarColor } from '@/presentation/layout/projectIcons';
-import { relativeTime } from '@/lib/relativeTime';
 import type { RecentTaskView } from '@/domain/recent/RecentTaskView';
 
 // Иконка проекта в строке «Недавнего»: эмодзи проекта / inbox-иконка / цветной чип с буквой.
@@ -29,19 +28,14 @@ function RecentProjectIcon({ item }: { item: RecentTaskView }): React.ReactEleme
   );
 }
 
-// Презентационное содержимое строки недавней задачи (иконка + описание + проект·время).
-// Навигацию задаёт родитель (NavLink в блоке / button c onClick в диалоге).
+// Презентационное содержимое строки недавней задачи: иконка + описание (минималистично,
+// без названия проекта и времени). Навигацию задаёт родитель.
 export function RecentTaskRow({ item }: { item: RecentTaskView }): React.ReactElement {
   return (
     <>
       <RecentProjectIcon item={item} />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm leading-snug">
-          {item.taskExcerpt || '(без описания)'}
-        </span>
-        <span className="truncate text-[11px] text-muted-foreground">
-          {item.projectIsInbox ? 'Входящие' : item.projectName} · {relativeTime(item.viewedAt)}
-        </span>
+      <span className="min-w-0 flex-1 truncate text-sm leading-snug">
+        {item.taskExcerpt || '(без описания)'}
       </span>
     </>
   );
