@@ -366,13 +366,13 @@ export function TaskComposer({
           type="button"
           variant="ghost"
           size="icon"
-          className="size-9 shrink-0 text-muted-foreground hover:text-foreground"
+          className="group/at size-9 shrink-0 text-muted-foreground hover:text-foreground"
           onClick={() => fileInputRef.current?.click()}
           disabled={submitting}
           aria-label="Прикрепить файл"
           title="Прикрепить файл (или Ctrl+V / перетащи)"
         >
-          <Paperclip className="size-4" />
+          <Paperclip className="size-4 transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110" />
         </Button>
         {(isInbox || isShared) && (
           <DelegateSelect

@@ -23,9 +23,11 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { taskShortId, type Task } from '@/domain/task/Task';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
@@ -319,6 +321,7 @@ export function TaskDrawer({
 }: Props): React.ReactElement {
   const { user: currentUser } = useCurrentUser();
   const { taskRepository, recordTaskView } = useContainer();
+  const { animations } = useMotion();
   // Фиксируем «юзер открыл задачу» — единая точка для всех мест, где открывается drawer
   // (доска, «Поручено мне», блок «Недавнее»). Только edit-mode с реальной задачей; раз на
   // taskId. Fire-and-forget (ошибки глотаем), затем шлём 'pf:recent-changed' — блок
@@ -916,8 +919,14 @@ export function TaskDrawer({
               </div>
 
               {/* Иконки-свойства под полем (единый стиль с композерами доски):
-                  скрепка, приоритет, дедлайн, делегат. */}
-              <div className="flex flex-wrap items-center gap-1">
+                  скрепка, приоритет, дедлайн, делегат. Мягко всплывают при открытии
+                  create-дравера — gated useMotion (reduced-motion → мгновенно). */}
+              <motion.div
+                initial={animations ? { opacity: 0, y: 8 } : false}
+                animate={{ opacity: 1, y: 0 }}
+                transition={animations ? { duration: 0.28, ease: 'easeOut', delay: 0.08 } : { duration: 0 }}
+                className="flex flex-wrap items-center gap-1"
+              >
                 <Button
                   type="button"
                   variant="ghost"
@@ -963,7 +972,7 @@ export function TaskDrawer({
                     e.target.value = '';
                   }}
                 />
-              </div>
+              </motion.div>
 
               {error && <p className="text-xs text-destructive">{error}</p>}
             </form>

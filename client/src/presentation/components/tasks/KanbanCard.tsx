@@ -291,7 +291,7 @@ export function KanbanCard({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-6 cursor-pointer text-muted-foreground hover:text-foreground"
+                  className="group/promote size-6 cursor-pointer text-muted-foreground hover:text-foreground"
                   onClick={(e) => {
                     e.stopPropagation();
                     onQuickPromote(task);
@@ -299,13 +299,13 @@ export function KanbanCard({
                   aria-label="Передать воркеру"
                   title="Передать воркеру"
                 >
-                  <ArrowRight className="size-3.5" />
+                  <ArrowRight className="size-3.5 transition-transform duration-150 group-hover/promote:translate-x-0.5" />
                 </Button>
               )}
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-6 cursor-pointer text-muted-foreground hover:text-destructive"
+                className="group/del size-6 cursor-pointer text-muted-foreground hover:text-destructive"
                 onClick={(e) => {
                   // Чтобы клик по корзине не открыл диалог через onClick на родителе.
                   e.stopPropagation();
@@ -313,7 +313,7 @@ export function KanbanCard({
                 }}
                 aria-label="Удалить"
               >
-                <Trash2 className="size-3.5" />
+                <Trash2 className="size-3.5 transition-transform duration-150 group-hover/del:scale-110" />
               </Button>
             </div>
           </div>

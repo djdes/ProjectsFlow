@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { motion } from 'motion/react';
 import { ImageIcon, Loader2, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { useMotion } from '@/presentation/components/motion/MotionProvider';
+import { AnimatedInbox } from '@/presentation/components/nav/AnimatedNavIcons';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
 import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
@@ -143,14 +146,18 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
       <QuickAddInput onSubmit={handleQuickAdd} />
 
       {sorted.length === 0 ? (
-        <div className="rounded-lg border border-dashed bg-muted/20 py-12 text-center text-sm text-muted-foreground">
-          Пусто. Напиши что-нибудь сверху и&nbsp;нажми&nbsp;Enter.
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed bg-muted/20 py-12 text-center text-sm text-muted-foreground">
+          <AnimatedInbox active className="size-8 text-muted-foreground/50" />
+          <span>
+            Пусто. Напиши что-нибудь сверху и&nbsp;нажми&nbsp;Enter.
+          </span>
         </div>
       ) : (
         <ul className="divide-y overflow-hidden rounded-lg border bg-card">
-          {sorted.map((t) => (
+          {sorted.map((t, i) => (
             <TaskListRow
               key={t.id}
+              index={i}
               task={t}
               showCheckbox
               currentUserId={user?.id ?? null}
@@ -228,7 +235,7 @@ function QuickAddInput({
             rows={1}
             autoFocus
             disabled={submitting}
-            placeholder="Что нужно сделать? Enter — добавить, Shift+Enter — новая строка"
+            placeholder="Что нужно сделать?"
             className="block w-full resize-none rounded-lg bg-transparent px-4 py-3 text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
           />
         </ContextMenuTrigger>
@@ -243,6 +250,7 @@ function QuickAddInput({
 
 function TaskListRow({
   task,
+  index,
   showCheckbox,
   currentUserId,
   lastDoneTaskId,
@@ -252,6 +260,7 @@ function TaskListRow({
   onChanged,
 }: {
   task: Task;
+  index: number;
   showCheckbox: boolean;
   currentUserId: string | null;
   lastDoneTaskId: string | null;
@@ -260,6 +269,7 @@ function TaskListRow({
   onDelete: () => void;
   onChanged: () => void;
 }): React.ReactElement {
+  const { animations } = useMotion();
   const isDone = task.status === 'done';
   const hasDelegation = task.delegation !== null && task.delegation !== undefined;
   const hasBadges =
@@ -270,7 +280,17 @@ function TaskListRow({
     task.deadline !== null;
 
   return (
-    <li
+    <motion.li
+      // Stagger-вплывание строк при появлении списка: лёгкий fade+lift, задержка
+      // капается на 0.3с (длинные списки не «телепаются» секундами). Гейтится useMotion
+      // (pf-no-motion / reduced-motion → мгновенно). Новые строки тоже мягко появляются.
+      initial={animations ? { opacity: 0, y: 6 } : false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={
+        animations
+          ? { duration: 0.22, ease: 'easeOut', delay: Math.min(index * 0.03, 0.3) }
+          : { duration: 0 }
+      }
       className={cn(
         'group flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40',
         // Priority-accent — левый цветной border 4px. На List-row даёт визуально
@@ -350,6 +370,6 @@ function TaskListRow({
           <Trash2 className="size-3.5 transition-transform duration-150 group-hover/del:scale-110" />
         </Button>
       </div>
-    </li>
+    </motion.li>
   );
 }
