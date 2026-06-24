@@ -33,7 +33,7 @@ export function RecentTasksBlock(): React.ReactElement | null {
         type="button"
         onClick={toggle}
         aria-expanded={!collapsed}
-        className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs font-medium text-muted-foreground/80 transition-colors hover:text-foreground"
+        className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 transition-colors hover:text-foreground"
       >
         <ChevronDown
           className={cn('size-3 shrink-0 transition-transform', collapsed && '-rotate-90')}
@@ -54,7 +54,7 @@ export function RecentTasksBlock(): React.ReactElement | null {
             className="overflow-hidden"
           >
             <motion.ul
-              className="mt-0.5 space-y-0.5"
+              className="mt-0.5 space-y-1"
               initial={animations ? 'hidden' : false}
               animate="show"
               variants={{ show: { transition: { staggerChildren: 0.04 } } }}
@@ -69,7 +69,7 @@ export function RecentTasksBlock(): React.ReactElement | null {
                 >
                   <NavLink
                     to={`/projects/${item.projectId}?task=${item.taskId}`}
-                    className="flex items-center gap-2 rounded-md px-2 py-1.5 transition-all hover:translate-x-0.5 hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
+                    className="flex items-center gap-2 rounded-md px-2 py-2 transition-all hover:translate-x-0.5 hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]"
                   >
                     <RecentTaskRow item={item} />
                   </NavLink>
@@ -84,7 +84,7 @@ export function RecentTasksBlock(): React.ReactElement | null {
                 type="button"
                 onClick={() => setExpanded((v) => !v)}
                 aria-expanded={expanded}
-                className="mt-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]"
+                className="mt-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]"
               >
                 <span className="grid size-5 shrink-0 place-items-center">
                   <ChevronDown

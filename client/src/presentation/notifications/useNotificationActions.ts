@@ -52,7 +52,10 @@ export function useNotificationActions(opts?: {
     void (async () => {
       await markRead(n);
       const p = n.payload;
-      if (p.type === 'comment_mention' || p.type === 'join_request') navigate(`/projects/${p.projectId}`);
+      // Дип-линк к задаче + конкретному комментарию (KanbanBoard ловит ?task=, TaskDrawer — #comment-).
+      if (p.type === 'comment_mention')
+        navigate(`/projects/${p.projectId}?task=${p.taskId}#comment-${p.commentId}`);
+      else if (p.type === 'join_request') navigate(`/projects/${p.projectId}`);
       else if (p.type === 'task_delegation' || p.type === 'task_delegation_resolved') navigate('/inbox');
       else if (p.type === 'task_assigned_to_project') navigate(`/projects/${p.projectId}`);
       else if (p.type === 'server_alert') navigate(`/projects/${p.projectId}/monitoring`);

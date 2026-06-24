@@ -87,7 +87,9 @@ export function notificationsRouter(deps: Deps): Router {
 
   router.get('/unread-count', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const count = await deps.countUnread.execute(req.user!.id);
+      // ?actionable=1 — только непрочитанные с действием (бейдж «Действие» в чат-ленте).
+      const actionableOnly = req.query['actionable'] === '1' || req.query['actionable'] === 'true';
+      const count = await deps.countUnread.execute(req.user!.id, actionableOnly);
       res.json({ count });
     } catch (e) {
       next(e);

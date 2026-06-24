@@ -20,6 +20,8 @@ export interface NotificationRepository {
     opts: { limit: number; unreadOnly: boolean; before?: Date },
   ): Promise<Notification[]>;
   countUnread(userId: string): Promise<number>;
+  // Непрочитанные actionable-уведомления (инвайты/join/делегирования) — для бейджа «Действие».
+  countActionableUnread(userId: string): Promise<number>;
   markRead(id: string, userId: string, readAt: Date): Promise<boolean>;
   markAllRead(userId: string, readAt: Date): Promise<number>;
 }

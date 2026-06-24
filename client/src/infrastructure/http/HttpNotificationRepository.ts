@@ -46,6 +46,11 @@ export class HttpNotificationRepository implements NotificationRepository {
     return count;
   }
 
+  async countActionableUnread(): Promise<number> {
+    const { count } = await httpClient.get<{ count: number }>('/notifications/unread-count?actionable=1');
+    return count;
+  }
+
   async markRead(id: string): Promise<void> {
     await httpClient.post<void>(`/notifications/${id}/read`);
   }

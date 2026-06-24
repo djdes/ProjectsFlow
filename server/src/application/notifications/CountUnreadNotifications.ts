@@ -7,7 +7,11 @@ type Deps = {
 export class CountUnreadNotifications {
   constructor(private readonly deps: Deps) {}
 
-  execute(userId: string): Promise<number> {
-    return this.deps.repo.countUnread(userId);
+  // actionableOnly — только уведомления с действием (для бейджа «Действие»),
+  // иначе все непрочитанные.
+  execute(userId: string, actionableOnly = false): Promise<number> {
+    return actionableOnly
+      ? this.deps.repo.countActionableUnread(userId)
+      : this.deps.repo.countUnread(userId);
   }
 }

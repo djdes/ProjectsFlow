@@ -28,7 +28,7 @@ export function NotificationItem({
     <li
       onClick={() => actions.handleClick(n)}
       className={cn(
-        'group flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors',
+        'group flex cursor-pointer items-start gap-2.5 px-3 py-2 transition-colors',
         isUnread ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/40',
       )}
     >
@@ -36,8 +36,8 @@ export function NotificationItem({
         className={cn('mt-1.5 size-2 shrink-0 rounded-full', isUnread ? 'bg-primary' : 'bg-transparent')}
         aria-hidden
       />
-      <Avatar className="size-8 shrink-0">
-        <AvatarFallback className="text-[11px]">
+      <Avatar className="size-7 shrink-0">
+        <AvatarFallback className="text-xs">
           {getInitials(
             payload.type === 'server_alert'
               ? payload.serverName
@@ -57,7 +57,7 @@ export function NotificationItem({
                 <>
                   {' '}
                   <span
-                    className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
+                    className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
                     title="Задача ждёт твоего ответа"
                   >
                     🤔 ждёт уточнения
@@ -215,7 +215,7 @@ export function NotificationItem({
           </>
         )}
 
-        <p className="text-[11px] text-muted-foreground">{relativeTime(n.createdAt)}</p>
+        <p className="text-xs text-muted-foreground">{relativeTime(n.createdAt)}</p>
       </div>
     </li>
   );

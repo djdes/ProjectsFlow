@@ -166,7 +166,7 @@ function SidebarProjectRow({
         {...(reorderable ? attributes : {})}
         className={({ isActive }) =>
           cn(
-            'relative flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+            'relative flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors',
             'hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]',
             'cursor-pointer',
             isActive && 'bg-foreground/[0.06] font-medium text-foreground dark:bg-white/10',
@@ -189,7 +189,7 @@ function SidebarProjectRow({
               ) : (
                 <span
                   className={cn(
-                    'grid size-5 place-items-center rounded-md text-[11px] font-semibold leading-none',
+                    'grid size-5 place-items-center rounded-md text-xs font-semibold leading-none',
                     avatarColor(project.name),
                   )}
                   aria-hidden
@@ -220,7 +220,7 @@ function SidebarProjectRow({
               )}
               {(project.taskCount ?? 0) > 0 && (
                 <span
-                  className="px-1 text-[11px] leading-5 tabular-nums text-muted-foreground"
+                  className="px-1 text-xs leading-5 tabular-nums text-muted-foreground"
                   aria-label={`Задач: ${project.taskCount}`}
                 >
                   {project.taskCount}
@@ -390,7 +390,7 @@ function ProjectGroup({
   const sortableIds = projects.map((p) => `${bucket}-${p.id}`);
 
   const rows = (
-    <div className="space-y-0.5">
+    <div className="space-y-1">
       {projects.map((p, idx) => (
         <SidebarProjectRow
           key={`${bucket}-${p.id}`}
@@ -453,7 +453,7 @@ export function SidebarProjectList(): React.ReactElement {
   // Шапка «Мои проекты» (заголовок + счётчик + «+») рендерится всегда, чтобы юзер мог
   // создать первый проект. Сам заголовок кликается — сворачивает секцию (как в Todoist).
   const myProjectsHeader = (
-    <div className="sticky top-0 z-10 flex items-center justify-between gap-1 rounded bg-sidebar/90 px-2 py-1 backdrop-blur-sm">
+    <div className="sticky top-0 z-10 flex items-center justify-between gap-1 rounded bg-sidebar/90 px-2 py-1.5 backdrop-blur-sm">
       <button
         type="button"
         onClick={toggleMainCollapsed}
@@ -559,10 +559,9 @@ export function SidebarProjectList(): React.ReactElement {
     // Колонка на всю высоту: поиск закреплён сверху (его focus-ring не обрезается
     // overflow-контейнером), список проектов скроллится в своём min-h-0 боксе — профиль
     // снизу остаётся видимым при любом числе проектов.
-    <div className="flex h-full flex-col gap-1.5">
-      {/* «Недавнее» — над поиском, всегда видимо (не скроллится со списком проектов).
-          Сам блок прячется, пока юзер не открыл ни одной задачи. */}
-      <RecentTasksBlock />
+    <div className="flex h-full flex-col gap-2">
+      {/* Поиск закреплён сверху (его focus-ring не обрезается overflow-контейнером) и НЕ
+          скроллится. «Недавнее» переехало вниз — внутрь скролла, над списком проектов. */}
       {visible.length > 1 && (
         <div className="relative shrink-0">
           <FolderSearch className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -576,7 +575,9 @@ export function SidebarProjectList(): React.ReactElement {
         </div>
       )}
 
-      <div className="pf-scroll-visible -mx-1 min-h-0 flex-1 space-y-1.5 px-1">
+      <div className="pf-scroll-visible -mx-1 min-h-0 flex-1 space-y-2 px-1">
+        {/* «Недавнее» — скроллится вместе с проектами. Прячется, пока юзер не открыл задачу. */}
+        <RecentTasksBlock />
 
       {/* «Избранное» — самостоятельная секция НАД «Мои проекты». Скрывается в режиме поиска
           (тогда выдача плоская, без дублей). Заголовок кликается — сворачивает секцию. */}
@@ -586,7 +587,7 @@ export function SidebarProjectList(): React.ReactElement {
             type="button"
             onClick={toggleFavCollapsed}
             aria-expanded={!favCollapsed}
-            className="sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-sidebar/90 px-2 py-1 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
+            className="sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-sidebar/90 px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
           >
             <ChevronDown
               className={cn(
@@ -633,7 +634,7 @@ export function SidebarProjectList(): React.ReactElement {
             type="button"
             onClick={toggleArchivedCollapsed}
             aria-expanded={!archivedCollapsed}
-            className="sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-sidebar/90 px-2 py-1 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
+            className="sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-sidebar/90 px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
           >
             <ChevronDown
               className={cn('size-3 shrink-0 transition-transform', archivedCollapsed && '-rotate-90')}

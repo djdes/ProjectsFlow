@@ -25,7 +25,6 @@ function notif(id: string, type: string, at: string, projectId: string | null, r
 function makeFeed(opts: {
   events?: ActivityEvent[];
   notifs?: Notification[];
-  wsProjects?: string[];
 }) {
   const events = opts.events ?? [];
   const activity: ActivityRepository = {
@@ -49,8 +48,7 @@ function makeFeed(opts: {
       return [...filtered].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, q.limit);
     },
   };
-  const workspaceProjectIds = async (): Promise<Set<string>> => new Set(opts.wsProjects ?? ['p1']);
-  return new GetActivityFeed({ activity, notifications, workspaceProjectIds });
+  return new GetActivityFeed({ activity, notifications });
 }
 
 test('all: merges activity + notifications sorted by createdAt desc', async () => {
@@ -65,23 +63,26 @@ test('all: merges activity + notifications sorted by createdAt desc', async () =
   );
 });
 
-test('all: notifications scoped to workspace projects; out-of-workspace excluded', async () => {
+test('all: notifications are global (NOT scoped by workspace) — bell is gone, feed is the only surface', async () => {
+  // Уведомления персональные: показываем все, независимо от проекта/пространства
+  // (раньше фильтровались по проектам пространства — теперь нет, иначе сводки терялись).
   const feed = makeFeed({
     events: [],
     notifs: [
-      notif('in', 'comment_mention', '2026-06-24T10:00:00Z', 'p1'),
-      notif('out', 'comment_mention', '2026-06-24T11:00:00Z', 'pX'),
+      notif('p1notif', 'comment_mention', '2026-06-24T10:00:00Z', 'p1'),
+      notif('otherWs', 'daily_digest', '2026-06-24T11:00:00Z', 'pX'),
     ],
-    wsProjects: ['p1'],
   });
   const items = await feed.execute('u1', 'w1', { tab: 'all', limit: 10 });
-  assert.deepEqual(items.map((i) => (i.type === 'notification' ? i.notification.id : '')), ['in']);
+  assert.deepEqual(
+    items.map((i) => (i.type === 'notification' ? i.notification.id : '')),
+    ['otherWs', 'p1notif'],
+  );
 });
 
-test('all: project-less personal notification (inbox delegation) always included', async () => {
+test('all: project-less personal notification (inbox delegation) included', async () => {
   const feed = makeFeed({
     notifs: [notif('d1', 'task_delegation', '2026-06-24T10:00:00Z', null)],
-    wsProjects: ['p1'],
   });
   const items = await feed.execute('u1', 'w1', { tab: 'all', limit: 10 });
   assert.equal(items.length, 1);

@@ -95,23 +95,36 @@ function renderText(item: ActivityEventItem): React.ReactNode {
   }
 }
 
-// Строка амбиентного действия в ленте «Все». Клик ведёт на доску проекта.
+// Куда ведёт клик: задача+коммент для task_commented, открытие карточки для созданной/
+// перенесённой задачи, иначе — доска проекта (удалённую задачу не открываем).
+function targetUrl(item: ActivityEventItem): string {
+  const base = `/projects/${item.projectId}`;
+  const taskId = item.payload?.taskId;
+  if (!taskId) return base;
+  if (item.kind === 'task_commented' && item.payload?.commentId)
+    return `${base}?task=${taskId}#comment-${item.payload.commentId}`;
+  if (item.kind === 'task_created' || item.kind === 'task_status_changed')
+    return `${base}?task=${taskId}`;
+  return base;
+}
+
+// Строка амбиентного действия в ленте «Все». Клик ведёт к задаче/коммену/доске.
 export function ActivityItem({ item }: { item: ActivityEventItem }): React.ReactElement {
   const navigate = useNavigate();
   const Icon = KIND_ICON[item.kind] ?? SquarePen;
   return (
     <li
-      onClick={() => navigate(`/projects/${item.projectId}`)}
+      onClick={() => navigate(targetUrl(item))}
       className={cn(
-        'group flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/40',
+        'group flex cursor-pointer items-start gap-2.5 px-3 py-2 transition-colors hover:bg-muted/40',
       )}
     >
-      <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
-        <Icon className="size-3.5" />
+      <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+        <Icon className="size-3" />
       </span>
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="text-sm leading-snug">{renderText(item)}</p>
-        <p className="text-[11px] text-muted-foreground">{relativeTime(item.createdAt)}</p>
+        <p className="text-xs text-muted-foreground">{relativeTime(item.createdAt)}</p>
       </div>
     </li>
   );

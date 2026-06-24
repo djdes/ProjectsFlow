@@ -314,8 +314,6 @@ const activityRecorder = new ActivityRecorder({
 const getActivityFeed = new GetActivityFeed({
   activity: activityRepo,
   notifications: notificationRepo,
-  workspaceProjectIds: async (workspaceId) =>
-    new Set((await projectRepo.listByWorkspace(workspaceId)).map((p) => p.id)),
 });
 // GC: чистим события старше 30 дней (на старте + раз в сутки).
 const ACTIVITY_TTL_MS = 30 * 24 * 60 * 60 * 1000;

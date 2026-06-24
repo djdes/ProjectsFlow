@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { notifications, type NotificationRow } from '../db/schema.js';
 import type {
@@ -67,6 +67,22 @@ export class DrizzleNotificationRepository implements NotificationRepository {
       .select({ count: sql<number>`COUNT(*)` })
       .from(notifications)
       .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+    return Number(rows[0]?.count ?? 0);
+  }
+
+  async countActionableUnread(userId: string): Promise<number> {
+    // Actionable-типы (кнопки Принять/Отклонить) — те же, что формируют вкладку «Действие».
+    // См. GetActivityFeed.ACTIONABLE_TYPES. Сводки/упоминания сюда НЕ входят.
+    const rows = await this.db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          isNull(notifications.readAt),
+          inArray(notifications.type, ['project_invite', 'join_request', 'task_delegation']),
+        ),
+      );
     return Number(rows[0]?.count ?? 0);
   }
 

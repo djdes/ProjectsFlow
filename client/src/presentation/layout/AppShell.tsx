@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Menu, X } from 'lucide-react';
 import {
-  AnimatedBell,
+  AnimatedChat,
   AnimatedFolder,
   AnimatedInbox,
   AnimatedUser,
@@ -22,7 +22,7 @@ import { WorkspaceIcon } from './WorkspaceIcon';
 import { GithubConnectionProvider } from '@/presentation/hooks/GithubConnectionProvider';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useNotificationStream } from '@/presentation/hooks/useNotificationStream';
-import { useUnreadNotificationsCount } from '@/presentation/hooks/useUnreadNotificationsCount';
+import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
 import { Sidebar } from './Sidebar';
 
@@ -155,7 +155,7 @@ type NavItem = {
 // панели — стеклянный индикатор пружинисто едет за пальцем (motion layout), на отпускании
 // выбирается вкладка под ним. Обычный тап и клавиатура (Enter/Space) тоже работают.
 function MobileBottomNav({ onOpenProjects }: { onOpenProjects: () => void }): React.ReactElement {
-  const { count: unreadCount } = useUnreadNotificationsCount();
+  const { count: actionable } = useActionableUnreadCount();
   const { animations } = useMotion();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -170,7 +170,7 @@ function MobileBottomNav({ onOpenProjects }: { onOpenProjects: () => void }): Re
   const items: NavItem[] = [
     { key: 'inbox', label: 'Входящие', icon: <AnimatedInbox className="size-5" />, active: pathname === '/', run: () => navigate('/') },
     { key: 'projects', label: 'Проекты', icon: <AnimatedFolder className="size-5" />, active: false, run: onOpenProjects },
-    { key: 'notifications', label: 'Уведомления', icon: <AnimatedBell className="size-5" />, badge: unreadCount, active: pathname.startsWith('/notifications'), run: () => navigate('/notifications') },
+    { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: actionable, active: false, run: () => { try { localStorage.setItem('pf_sidebar_rail', 'chat'); } catch { /* ignore */ } onOpenProjects(); } },
     { key: 'profile', label: 'Профиль', icon: <AnimatedUser className="size-5" />, active: pathname.startsWith('/profile'), run: () => navigate('/profile') },
   ];
   const activeIndex = items.findIndex((i) => i.active);

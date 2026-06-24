@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useAddTaskDialog } from '@/presentation/components/forms/AddTaskDialogProvider';
 import { useGlobalSearch } from '@/presentation/components/search/GlobalSearchProvider';
-import { useUnreadNotificationsCount } from '@/presentation/hooks/useUnreadNotificationsCount';
+import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { useChatUnread } from '@/presentation/hooks/useChatUnread';
@@ -23,7 +23,6 @@ import {
   AnimatedChat,
   AnimatedInbox,
   AnimatedSearch,
-  AnimatedBell,
 } from '@/presentation/components/nav/AnimatedNavIcons';
 import { CommunicationPanel } from '@/presentation/chat/CommunicationPanel';
 import type { Project } from '@/domain/project/Project';
@@ -56,7 +55,9 @@ type SidebarProps = {
 };
 
 export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): React.ReactElement {
-  const { count: unreadCount } = useUnreadNotificationsCount();
+  // Колокольчик убран — единственная поверхность уведомлений теперь чат-лента. Сигнал
+  // «нужно действие» вешаем на rail-кнопку «Чат», чтобы он был виден и на «Главной».
+  const { count: actionable } = useActionableUnreadCount();
   const { open: openSearch } = useGlobalSearch();
   const { open: openAddTask } = useAddTaskDialog();
   const { user } = useCurrentUser();
@@ -81,7 +82,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
   // 4-кнопочный rail: активная — широкая (иконка+текст), остальные — узкие иконки.
   const railItems: RailItem[] = [
     { key: 'home', label: 'Главная', icon: <AnimatedHome className="size-5" /> },
-    { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: chatUnread },
+    { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: chatUnread + actionable },
     { key: 'inbox', label: 'Входящие', icon: <AnimatedInbox className="size-5" /> },
     { key: 'search', label: 'Поиск', icon: <AnimatedSearch className="size-5" /> },
   ];
@@ -135,15 +136,13 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
             ))}
           </div>
 
-          <div className="my-0.5 h-px w-6 bg-border" />
-
-          <RailNavLink to="/notifications" label="Уведомления" badge={unreadCount} animated>
-            <AnimatedBell className="size-4" active={unreadCount > 0} />
-          </RailNavLink>
           {user?.isAdmin && (
-            <RailNavLink to="/admin" label="Администрирование">
-              <Shield className="size-4" />
-            </RailNavLink>
+            <>
+              <div className="my-0.5 h-px w-6 bg-border" />
+              <RailNavLink to="/admin" label="Администрирование">
+                <Shield className="size-4" />
+              </RailNavLink>
+            </>
           )}
         </TooltipProvider>
       </aside>
@@ -152,31 +151,11 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
 
   return (
     <aside className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_auto_1fr_auto] gap-3 overflow-hidden bg-sidebar p-3">
-      {/* Шапка: компактное лого + поиск + колокольчик + тоггл панели. На мобиле (drawer)
-          правый отступ, чтобы контролы не лезли под крестик SheetContent (top-4 right-4). */}
+      {/* Шапка: переключатель пространства + тоггл панели. Уведомления переехали в чат-ленту
+          (вкладки «Все»/«Действие»), колокольчика больше нет. На мобиле (drawer) правый
+          отступ, чтобы контролы не лезли под крестик SheetContent. */}
       <div className="flex items-center gap-1 max-md:pr-8">
         <WorkspaceSwitcher />
-
-        <NavLink
-          to="/notifications"
-          aria-label="Уведомления"
-          className={({ isActive }) =>
-            cn(
-              'relative grid size-8 shrink-0 place-items-center rounded-md transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]',
-              isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-            )
-          }
-        >
-          <AnimatedBell className="size-4" active={unreadCount > 0} />
-          {unreadCount > 0 && (
-            <span
-              className="absolute -right-0.5 -top-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-medium leading-4 text-primary-foreground"
-              aria-label={`${unreadCount} непрочитанных`}
-            >
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </span>
-          )}
-        </NavLink>
 
         {onToggleCollapse && (
           <button

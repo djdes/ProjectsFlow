@@ -79,7 +79,7 @@ export class CreateTaskComment {
         projectId: input.projectId,
         actorUserId: input.ownerUserId,
         kind: 'task_commented',
-        payload: { taskId: task.id, taskExcerpt: excerpt(task.description), commentExcerpt: excerpt(body) },
+        payload: { taskId: task.id, commentId: comment.id, taskExcerpt: excerpt(task.description), commentExcerpt: excerpt(body) },
       });
     }
 

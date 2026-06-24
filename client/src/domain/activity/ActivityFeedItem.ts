@@ -15,6 +15,7 @@ export type ActivityKind =
 export type ActivityPayload = {
   readonly projectName?: string;
   readonly taskId?: string;
+  readonly commentId?: string;
   readonly taskExcerpt?: string;
   readonly oldStatus?: string;
   readonly newStatus?: string;

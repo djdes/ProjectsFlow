@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity,
-  Bell,
   Inbox,
   Moon,
   Monitor,
@@ -142,15 +141,6 @@ export function TaskSearchDialog({
         run: () => {
           close();
           navigate('/');
-        },
-      },
-      {
-        key: 'notifications',
-        label: 'Уведомления',
-        icon: <Bell className="size-4 text-muted-foreground" />,
-        run: () => {
-          close();
-          navigate('/notifications');
         },
       },
       {

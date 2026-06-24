@@ -7,7 +7,6 @@ import { MonitoringOverviewPage } from '@/presentation/pages/MonitoringOverviewP
 import { AlertCenterPage } from '@/presentation/pages/AlertCenterPage';
 import { TasksPage } from '@/presentation/pages/TasksPage';
 import { InboxPage } from '@/presentation/pages/InboxPage';
-import { NotificationsPage } from '@/presentation/pages/NotificationsPage';
 import { ProfilePage } from '@/presentation/pages/ProfilePage';
 import { WorkspaceSettingsPage } from '@/presentation/pages/WorkspaceSettingsPage';
 import { FinancePage } from '@/presentation/pages/FinancePage';
@@ -62,7 +61,8 @@ export const router = createBrowserRouter([
       { index: true, element: <InboxPage /> },
       // Старые ссылки на /inbox редиректим на канонический «/».
       { path: 'inbox', element: <Navigate to="/" replace /> },
-      { path: 'notifications', element: <NotificationsPage /> },
+      // Уведомления переехали в чат-ленту; старые ссылки редиректим на главную.
+      { path: 'notifications', element: <Navigate to="/" replace /> },
       { path: 'monitoring', element: <MonitoringOverviewPage /> },
       { path: 'monitoring/alerts', element: <AlertCenterPage /> },
       // Доска задач — «дом» проекта: при входе сразу показываем kanban.

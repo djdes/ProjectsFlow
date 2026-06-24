@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
-import { useUnreadNotificationsCount } from '@/presentation/hooks/useUnreadNotificationsCount';
+import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
 import { useActivityFeed } from '@/presentation/hooks/useActivityFeed';
 import { NotificationItem } from '@/presentation/notifications/NotificationItem';
 import { useNotificationActions } from '@/presentation/notifications/useNotificationActions';
@@ -25,7 +25,7 @@ function readTab(): CommTab {
 // «Все» и «Требуется действие» — лента активности пространства; «Чат» — общий чат.
 export function CommunicationPanel(): React.ReactElement {
   const [tab, setTab] = useState<CommTab>(readTab);
-  const { count: unread } = useUnreadNotificationsCount();
+  const { count: actionable } = useActionableUnreadCount();
 
   const select = (t: CommTab): void => {
     setTab(t);
@@ -42,7 +42,7 @@ export function CommunicationPanel(): React.ReactElement {
         <TabButton active={tab === 'all'} onClick={() => select('all')}>
           Все
         </TabButton>
-        <TabButton active={tab === 'action'} onClick={() => select('action')} badge={unread}>
+        <TabButton active={tab === 'action'} onClick={() => select('action')} badge={actionable}>
           Действие
         </TabButton>
         <TabButton active={tab === 'chat'} onClick={() => select('chat')}>
