@@ -39,6 +39,7 @@ export type UseChatResult = {
   send: (body: string, files?: File[], replyToId?: string | null) => Promise<void>;
   edit: (messageId: string, body: string) => Promise<void>;
   remove: (messageId: string) => Promise<void>;
+  removeMany: (messageIds: readonly string[]) => Promise<void>;
   toggleReaction: (messageId: string, emoji: string, reactedByMe: boolean) => Promise<void>;
   markReadToNewest: () => void;
 };
@@ -178,6 +179,22 @@ export function useChat(workspaceId: string | null): UseChatResult {
     [workspaceId, chatRepository],
   );
 
+  const removeMany = useCallback(
+    async (messageIds: readonly string[]) => {
+      if (!workspaceId || messageIds.length === 0) return;
+      const ids = new Set(messageIds);
+      await Promise.allSettled(
+        messageIds.map((id) => chatRepository.deleteMessage(workspaceId, id)),
+      );
+      setMessages((prev) =>
+        prev.map((x) =>
+          ids.has(x.id) ? { ...x, deleted: true, body: '', reactions: [], attachments: [] } : x,
+        ),
+      );
+    },
+    [workspaceId, chatRepository],
+  );
+
   const toggleReaction = useCallback(
     async (messageId: string, emoji: string, reactedByMe: boolean) => {
       if (!workspaceId) return;
@@ -204,6 +221,7 @@ export function useChat(workspaceId: string | null): UseChatResult {
     send,
     edit,
     remove,
+    removeMany,
     toggleReaction,
     markReadToNewest,
   };

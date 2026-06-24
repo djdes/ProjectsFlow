@@ -16,6 +16,8 @@ type Props = {
   readonly onDelete: (m: ChatMessage) => void;
   readonly onToggleReaction: (messageId: string, emoji: string, reactedByMe: boolean) => void;
   readonly onReachedBottom: () => void;
+  readonly selectedIds: ReadonlySet<string>;
+  readonly onSelectionChange: (ids: ReadonlySet<string>) => void;
 };
 
 const BOTTOM_THRESHOLD = 80;
@@ -107,6 +109,39 @@ export function ChatMessageList(props: Props): React.ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
+  // Drag-выделение: зажать в области рядом с сообщением и протянуть мышью → сообщения под
+  // протяжкой выделяются (для массового удаления). На пузыре/кнопке/ссылке не начинаем —
+  // там работает выделение текста / клик.
+  const dragStart = useRef<{ y: number; base: Set<string> } | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const onSelMouseDown = (e: React.MouseEvent): void => {
+    if (e.button !== 0) return;
+    const t = e.target as HTMLElement;
+    if (t.closest('[data-chat-bubble]') || t.closest('button') || t.closest('a')) return;
+    dragStart.current = { y: e.clientY, base: new Set(props.selectedIds) };
+  };
+  const onSelMouseMove = (e: React.MouseEvent): void => {
+    const d = dragStart.current;
+    if (!d) return;
+    const lo = Math.min(d.y, e.clientY);
+    const hi = Math.max(d.y, e.clientY);
+    if (hi - lo < 5) return;
+    if (!dragging) setDragging(true);
+    const next = new Set(d.base);
+    for (const [id, node] of rowRefs.current) {
+      const r = node.getBoundingClientRect();
+      const mid = (r.top + r.bottom) / 2;
+      if (mid >= lo && mid <= hi) next.add(id);
+    }
+    props.onSelectionChange(next);
+    window.getSelection()?.removeAllRanges();
+  };
+  const endSelDrag = (): void => {
+    dragStart.current = null;
+    if (dragging) setDragging(false);
+  };
+
   const jumpTo = useCallback((messageId: string) => {
     const node = rowRefs.current.get(messageId);
     if (!node) return;
@@ -125,7 +160,11 @@ export function ChatMessageList(props: Props): React.ReactElement {
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        className="pf-scroll-visible h-full space-y-0.5 px-0.5 py-1"
+        onMouseDown={onSelMouseDown}
+        onMouseMove={onSelMouseMove}
+        onMouseUp={endSelDrag}
+        onMouseLeave={endSelDrag}
+        className={cn('pf-scroll-visible h-full space-y-0.5 px-0.5 py-1', dragging && 'select-none')}
       >
         {props.loadingOlder && (
           <div className="py-2 text-center text-xs text-muted-foreground">Загрузка…</div>
@@ -142,9 +181,11 @@ export function ChatMessageList(props: Props): React.ReactElement {
               if (node) rowRefs.current.set(m.id, node);
               else rowRefs.current.delete(m.id);
             }}
+            onDoubleClick={() => props.onReply(m)}
             className={cn(
               'rounded-lg transition-colors',
               highlightId === m.id && 'bg-primary/10',
+              props.selectedIds.has(m.id) && 'bg-primary/15 ring-1 ring-inset ring-primary/30',
             )}
           >
             <ChatBubble

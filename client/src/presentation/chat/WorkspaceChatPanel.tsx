@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MessagesSquare } from 'lucide-react';
+import { MessagesSquare, Trash2, X } from 'lucide-react';
 import { useChat } from '@/presentation/hooks/useChat';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
@@ -15,9 +15,18 @@ export function WorkspaceChatPanel(): React.ReactElement {
   const chat = useChat(workspaceId);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
+  // Множественное выделение (drag по области рядом с сообщениями) для массового удаления.
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const canModerate = workspace?.role === 'owner';
   const currentUserId = user?.id ?? '';
+
+  const clearSelection = (): void => setSelectedIds(new Set());
+  const handleBulkDelete = async (): Promise<void> => {
+    const ids = [...selectedIds];
+    clearSelection();
+    await chat.removeMany(ids);
+  };
 
   const handleSend = async (body: string, files: File[]): Promise<void> => {
     await chat.send(body, files, replyTo?.id ?? null);
@@ -32,10 +41,35 @@ export function WorkspaceChatPanel(): React.ReactElement {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-2 px-2 pb-2 text-sm font-medium">
-        <MessagesSquare className="size-4 text-muted-foreground" />
-        <span className="truncate">Чат · {workspace?.name ?? 'Пространство'}</span>
-      </div>
+      {selectedIds.size > 0 ? (
+        // Бар массового действия: «N выбрано · Удалить · Отмена».
+        <div className="flex shrink-0 items-center justify-between gap-2 px-2 pb-2 text-sm">
+          <span className="font-medium">{selectedIds.size} выбрано</span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => void handleBulkDelete()}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
+            >
+              <Trash2 className="size-3.5" />
+              Удалить
+            </button>
+            <button
+              type="button"
+              onClick={clearSelection}
+              aria-label="Отмена"
+              className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex shrink-0 items-center gap-2 px-2 pb-2 text-sm font-medium">
+          <MessagesSquare className="size-4 text-muted-foreground" />
+          <span className="truncate">Чат · {workspace?.name ?? 'Пространство'}</span>
+        </div>
+      )}
 
       {chat.loading ? (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -71,6 +105,8 @@ export function WorkspaceChatPanel(): React.ReactElement {
           onDelete={(m) => void chat.remove(m.id)}
           onToggleReaction={(id, emoji, mine) => void chat.toggleReaction(id, emoji, mine)}
           onReachedBottom={chat.markReadToNewest}
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
         />
       )}
 
