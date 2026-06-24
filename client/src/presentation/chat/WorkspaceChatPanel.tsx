@@ -20,7 +20,7 @@ export function WorkspaceChatPanel(): React.ReactElement {
   const currentUserId = user?.id ?? '';
 
   const handleSend = async (body: string, files: File[]): Promise<void> => {
-    await chat.send(body, files);
+    await chat.send(body, files, replyTo?.id ?? null);
     setReplyTo(null);
   };
 

@@ -36,7 +36,7 @@ export type UseChatResult = {
   hasMoreOlder: boolean;
   loadingOlder: boolean;
   loadOlder: () => void;
-  send: (body: string, files?: File[]) => Promise<void>;
+  send: (body: string, files?: File[], replyToId?: string | null) => Promise<void>;
   edit: (messageId: string, body: string) => Promise<void>;
   remove: (messageId: string) => Promise<void>;
   toggleReaction: (messageId: string, emoji: string, reactedByMe: boolean) => Promise<void>;
@@ -148,9 +148,9 @@ export function useChat(workspaceId: string | null): UseChatResult {
   }, [workspaceId, chatRepository, loadingOlder]);
 
   const send = useCallback(
-    async (body: string, files?: File[]) => {
+    async (body: string, files?: File[], replyToId?: string | null) => {
       if (!workspaceId) return;
-      const msg = await chatRepository.sendMessage(workspaceId, { body, files });
+      const msg = await chatRepository.sendMessage(workspaceId, { body, files, replyToId });
       setMessages((prev) => upsert(prev, msg));
     },
     [workspaceId, chatRepository],

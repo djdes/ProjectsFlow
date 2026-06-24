@@ -222,6 +222,7 @@ export function ChatBubble({
               <button
                 type="button"
                 aria-label="Реакция"
+                title="Реакция"
                 className="grid size-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
               >
                 <SmilePlus className="size-3.5" />
@@ -249,6 +250,7 @@ export function ChatBubble({
           <button
             type="button"
             aria-label="Ответить"
+            title="Ответить"
             onClick={() => onReply(message)}
             className="grid size-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
           >
@@ -258,6 +260,7 @@ export function ChatBubble({
             <button
               type="button"
               aria-label="Редактировать"
+              title="Редактировать"
               onClick={() => onEdit(message)}
               className="grid size-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
             >
@@ -268,6 +271,7 @@ export function ChatBubble({
             <button
               type="button"
               aria-label="Удалить"
+              title="Удалить"
               onClick={() => onDelete(message)}
               className="grid size-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
             >
