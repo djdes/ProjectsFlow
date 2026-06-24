@@ -1,5 +1,4 @@
 import { cloneElement, isValidElement } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 
@@ -10,10 +9,12 @@ export type RailItem = {
   readonly badge?: number;
 };
 
-// Навигационный рейл в стиле Notion: активная кнопка — широкая, с иконкой + текстом; три
-// остальные — узкие, только иконки. Переключение плавно «перетекает» (motion layout):
-// активная расширяется и проявляет подпись, прочие сжимаются. Подложка активной едет между
-// кнопками через layoutId. Любая из 4 может быть активной.
+// Навигационный рейл в стиле Notion: активная кнопка — широкая (иконка + текст), три
+// остальные — узкие, только иконки. Морф — на ЧИСТОМ CSS (кроссфейд фона + max-width у
+// подписи), без motion-layout/layoutId. Это важно для плавности: motion-layout заставлял бы
+// браузер мерить layout каждый кадр (forced reflow) и анимировать `width` через JS — отсюда
+// подлагивание. CSS-переходы идут по оптимизированному пути и «летают». Иконки внутри
+// (AnimatedXxx) сохраняют свои микро-анимации через прокинутый active.
 export function SidebarNavRail({
   items,
   activeIndex,
@@ -24,64 +25,47 @@ export function SidebarNavRail({
   readonly onSelect: (index: number) => void;
 }): React.ReactElement {
   const { animations } = useMotion();
-  // Твин (не пружина) + layout="position" — морф без переколбаса и без scale-дисторшна
-  // содержимого, чтобы переключение не «подлагивало».
-  const t = animations
-    ? { duration: 0.2, ease: [0.22, 1, 0.36, 1] as const }
-    : { duration: 0 };
-
   return (
-    <div className="flex items-stretch gap-1">
+    <div className="flex items-center gap-1">
       {items.map((item, idx) => {
         const active = idx === activeIndex;
         const icon = isValidElement(item.icon)
           ? cloneElement(item.icon as React.ReactElement<{ active?: boolean }>, { active })
           : item.icon;
         return (
-          <motion.button
-            layout="position"
+          <button
             key={item.key}
             type="button"
             onClick={() => onSelect(idx)}
             aria-label={item.label}
             aria-current={active ? 'page' : undefined}
-            transition={t}
             className={cn(
-              'relative flex min-w-0 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-medium transition-colors',
+              'relative flex items-center rounded-xl px-2.5 py-2 text-xs font-medium',
+              animations && 'transition-colors duration-200 ease-out',
               active
-                ? 'flex-1 text-foreground'
-                : 'px-2.5 text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]',
+                ? 'bg-foreground/[0.06] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] ring-1 ring-black/[0.04] dark:bg-white/10 dark:ring-white/10'
+                : 'text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]',
             )}
           >
-            {active && (
-              <motion.span
-                aria-hidden
-                layoutId="pf-rail-active"
-                transition={t}
-                className="absolute inset-0 rounded-xl bg-foreground/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] ring-1 ring-black/[0.04] dark:bg-white/10 dark:ring-white/10"
-              />
-            )}
-            <span className="relative z-10 inline-flex shrink-0">{icon}</span>
-            <AnimatePresence initial={false}>
-              {active && (
-                <motion.span
-                  key="label"
-                  initial={animations ? { opacity: 0, width: 0 } : false}
-                  animate={{ opacity: 1, width: 'auto' }}
-                  exit={animations ? { opacity: 0, width: 0 } : undefined}
-                  transition={t}
-                  className="relative z-10 overflow-hidden whitespace-nowrap"
-                >
-                  {item.label}
-                </motion.span>
+            <span className="relative inline-flex shrink-0">
+              {icon}
+              {item.badge !== undefined && item.badge > 0 && (
+                <span className="absolute -right-1.5 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
+                  {item.badge > 99 ? '99+' : item.badge}
+                </span>
               )}
-            </AnimatePresence>
-            {item.badge !== undefined && item.badge > 0 && (
-              <span className="absolute right-1 top-0.5 z-10 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
-                {item.badge > 99 ? '99+' : item.badge}
-              </span>
-            )}
-          </motion.button>
+            </span>
+            {/* Подпись активной кнопки: разворачивается через max-width (CSS, без JS-анимации). */}
+            <span
+              className={cn(
+                'overflow-hidden whitespace-nowrap',
+                animations && 'transition-all duration-200 ease-out',
+                active ? 'ml-1.5 max-w-[120px] opacity-100' : 'ml-0 max-w-0 opacity-0',
+              )}
+            >
+              {item.label}
+            </span>
+          </button>
         );
       })}
     </div>
