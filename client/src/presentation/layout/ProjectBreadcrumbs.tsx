@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity,
@@ -22,8 +23,9 @@ import { useProjects } from '@/presentation/hooks/useProjects';
 import { avatarColor } from './projectIcons';
 
 // Notion-style крошки для страниц проекта: «Проекты ▾ · {проект} ▾ · {вид}».
-// Каждый сегмент с иконкой, hover-подсветкой и кликом-дропдауном навигации:
-// «Проекты» → переход к любому проекту; сегмент проекта → переключение между его видами.
+// Каждый сегмент с иконкой, hover-подсветкой и дропдауном навигации, который
+// раскрывается ПРИ НАВЕДЕНИИ (не по клику): «Проекты» → переход к любому проекту;
+// сегмент проекта → переключение между его видами.
 
 export type ProjectViewKey = 'board' | 'overview' | 'kb' | 'monitoring' | 'finance';
 
@@ -36,6 +38,33 @@ const VIEWS: readonly ViewDef[] = [
   { key: 'monitoring', label: 'Мониторинг', Icon: Activity, path: (id) => `/projects/${id}/monitoring` },
   { key: 'finance', label: 'Финансы', Icon: Wallet, path: (id) => `/projects/${id}/finance` },
 ];
+
+// Раскрытие дропдауна по наведению с небольшой задержкой на закрытие — чтобы успеть
+// перевести курсор с триггера на контент (между ними есть зазор).
+function useHoverMenu(): {
+  open: boolean;
+  setOpen: (v: boolean) => void;
+  openNow: () => void;
+  closeSoon: () => void;
+} {
+  const [open, setOpen] = useState(false);
+  const timer = useRef<number | null>(null);
+  const cancel = (): void => {
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+  };
+  const openNow = (): void => {
+    cancel();
+    setOpen(true);
+  };
+  const closeSoon = (): void => {
+    cancel();
+    timer.current = window.setTimeout(() => setOpen(false), 140);
+  };
+  return { open, setOpen, openNow, closeSoon };
+}
 
 // Маленький чип-аватар проекта: эмодзи (если задан) или цветная буква (как в сайдбаре).
 function ProjectChip({ name, icon }: { name: string; icon?: string | null }): React.ReactElement {
@@ -84,17 +113,29 @@ export function ProjectBreadcrumbs({
   const { data: projects } = useProjects();
   const allProjects = (projects ?? []).filter((p) => !p.isInbox);
 
+  const projectsMenu = useHoverMenu();
+  const viewsMenu = useHoverMenu();
   const currentView = VIEWS.find((v) => v.key === view);
 
   return (
     <nav className="flex min-w-0 items-center gap-0.5 text-sm" aria-label="Хлебные крошки">
       {/* Сегмент «Проекты» — дропдаун со всеми проектами для быстрого перехода. */}
-      <DropdownMenu>
-        <DropdownMenuTrigger className={segmentClass()}>
+      <DropdownMenu open={projectsMenu.open} onOpenChange={projectsMenu.setOpen} modal={false}>
+        <DropdownMenuTrigger
+          className={segmentClass()}
+          onMouseEnter={projectsMenu.openNow}
+          onMouseLeave={projectsMenu.closeSoon}
+        >
           <FolderOpen className="size-3.5 shrink-0" />
           <span>Проекты</span>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="max-h-80 w-56 overflow-y-auto">
+        <DropdownMenuContent
+          align="start"
+          className="max-h-80 w-56 overflow-y-auto"
+          onMouseEnter={projectsMenu.openNow}
+          onMouseLeave={projectsMenu.closeSoon}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
           <DropdownMenuLabel>Перейти к проекту</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {allProjects.map((p) => (
@@ -113,12 +154,22 @@ export function ProjectBreadcrumbs({
       <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
 
       {/* Сегмент проекта — дропдаун с видами (Доска / Обзор / База знаний / …). */}
-      <DropdownMenu>
-        <DropdownMenuTrigger className={cn(segmentClass(view === 'board'), 'min-w-0')}>
+      <DropdownMenu open={viewsMenu.open} onOpenChange={viewsMenu.setOpen} modal={false}>
+        <DropdownMenuTrigger
+          className={cn(segmentClass(view === 'board'), 'min-w-0')}
+          onMouseEnter={viewsMenu.openNow}
+          onMouseLeave={viewsMenu.closeSoon}
+        >
           <ProjectChip name={projectName} icon={projectIcon} />
           <span className="truncate">{projectName}</span>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-52">
+        <DropdownMenuContent
+          align="start"
+          className="w-52"
+          onMouseEnter={viewsMenu.openNow}
+          onMouseLeave={viewsMenu.closeSoon}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
           <DropdownMenuLabel>Разделы проекта</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {VIEWS.map(({ key, label, Icon, path }) => (

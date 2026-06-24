@@ -8,8 +8,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import type { User } from '@/domain/user/User';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
@@ -17,6 +19,19 @@ import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { useSwitchWorkspace } from '@/presentation/hooks/useSwitchWorkspace';
 import { NewWorkspaceDialog } from '@/presentation/components/forms/NewWorkspaceDialog';
 import { WorkspaceIcon } from './WorkspaceIcon';
+import { avatarColor, getInitials } from './projectIcons';
+
+// Аватар пользователя: фото (если есть) или цветной чип с инициалами (как в делегациях).
+function UserAvatar({ user, className }: { user: User; className?: string }): React.ReactElement {
+  return (
+    <Avatar className={cn('shrink-0 rounded-md', className)}>
+      {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.displayName} />}
+      <AvatarFallback className={cn('rounded-md font-semibold', avatarColor(user.displayName))}>
+        {getInitials(user.displayName)}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
 
 // compact — режим icon-rail (свёрнутая панель): триггер только иконка пространства.
 export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {}): React.ReactElement {
@@ -70,20 +85,17 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
     <>
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger
-          title={current.name}
+          title={user.displayName}
           className={cn(
             'group flex items-center rounded-md text-left text-sm transition-colors hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-white/[0.06]',
             compact ? 'justify-center p-1' : 'min-w-0 flex-1 gap-2 px-2 py-1.5',
           )}
         >
-          <WorkspaceIcon name={current.name} icon={current.icon} className={compact ? 'size-7 text-sm' : 'size-6'} />
+          <UserAvatar user={user} className={compact ? 'size-7 text-sm' : 'size-6 text-xs'} />
           {!compact && (
             <>
-              <span
-                key={current.id}
-                className="min-w-0 flex-1 truncate font-semibold tracking-tight motion-safe:animate-in motion-safe:fade-in"
-              >
-                {current.name}
+              <span className="min-w-0 flex-1 truncate font-semibold tracking-tight">
+                {user.displayName}
               </span>
               <ChevronsUpDown
                 className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-data-[state=open]:opacity-100"
@@ -99,13 +111,26 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
           sideOffset={compact ? 8 : 4}
           className="w-72 p-0"
         >
-          {/* Шапка: крупная иконка + название + тариф */}
+          {/* Шапка: аватар + никнейм пользователя + email (с копированием). */}
           <div className="flex items-center gap-3 px-3 py-3">
-            <WorkspaceIcon name={current.name} icon={current.icon} className="size-10 rounded-lg text-lg" />
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold leading-tight">{current.name}</div>
-              <div className="text-xs text-muted-foreground">Free plan</div>
+            <UserAvatar user={user} className="size-10 text-base" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold leading-tight">{user.displayName}</div>
+              <div className="truncate text-xs text-muted-foreground">{user.email}</div>
             </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                copyEmail();
+              }}
+              aria-label="Скопировать email"
+              title="Скопировать email"
+              className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            </button>
           </div>
 
           <DropdownMenuSeparator className="my-0" />
@@ -128,22 +153,9 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
 
           <DropdownMenuSeparator className="my-0" />
 
-          {/* Аккаунт: email + список пространств */}
-          <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground">
-            <span className="min-w-0 flex-1 truncate">{user.email}</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                copyEmail();
-              }}
-              aria-label="Скопировать email"
-              title="Скопировать email"
-              className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            </button>
+          {/* Список пространств */}
+          <div className="px-3 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+            Пространства
           </div>
 
           <div className="max-h-56 overflow-y-auto p-1">
