@@ -251,7 +251,7 @@ function SidebarProjectRow({
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             className={cn(
-              'absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground dark:hover:bg-white/10',
+              'absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded text-muted-foreground transition-all duration-200 hover:bg-foreground/[0.06] hover:text-foreground dark:hover:bg-white/10',
               'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100',
               menuOpen && 'opacity-100',
             )}
@@ -472,7 +472,7 @@ export function SidebarProjectList(): React.ReactElement {
       >
         <ChevronDown
           className={cn(
-            'hidden size-3 shrink-0 transition-transform group-hover:block',
+            'h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:w-3 group-hover:opacity-100',
             mainCollapsed && '-rotate-90',
           )}
         />
@@ -601,7 +601,7 @@ export function SidebarProjectList(): React.ReactElement {
           >
             <ChevronDown
               className={cn(
-                'hidden size-3 shrink-0 transition-transform group-hover:block',
+                'h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:w-3 group-hover:opacity-100',
                 favCollapsed && '-rotate-90',
               )}
             />
@@ -647,7 +647,7 @@ export function SidebarProjectList(): React.ReactElement {
             className="group sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-sidebar/90 px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
           >
             <ChevronDown
-              className={cn('hidden size-3 shrink-0 transition-transform group-hover:block', archivedCollapsed && '-rotate-90')}
+              className={cn('h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:w-3 group-hover:opacity-100', archivedCollapsed && '-rotate-90')}
             />
             <span>Архивные</span>
             {archived.length > 0 && <span className="tabular-nums opacity-70">{archived.length}</span>}
