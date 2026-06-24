@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Columns3, Eye, EyeOff, Inbox as InboxIcon, List as ListIcon } from 'lucide-react';
+import { Columns3, Eye, EyeOff, List as ListIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { AnimatedInbox } from '@/presentation/components/nav/AnimatedNavIcons';
 import {
   Tooltip,
   TooltipContent,
@@ -121,7 +122,7 @@ export function InboxPage(): React.ReactElement {
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <InboxIcon className="size-5 text-primary" />
+          <AnimatedInbox active className="size-5 text-primary" />
           <h1 className="text-xl font-semibold tracking-tight">Входящие</h1>
         </div>
         <div className="flex items-center gap-2">
