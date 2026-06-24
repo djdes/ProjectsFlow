@@ -1,19 +1,12 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { CornerUpLeft, Download, Pencil, SmilePlus, Trash2, X } from 'lucide-react';
+import { Download, SmilePlus, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
+import { ChatMessageMenu, type ChatMenuTarget } from './ChatMessageMenu';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
-
-const QUICK_EMOJIS = ['👍', '❤️', '😂', '🎉', '🙏', '🔥'];
 
 function formatTime(d: Date): string {
   return d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
@@ -60,6 +53,16 @@ export function ChatBubble({
 }: Props): React.ReactElement {
   const { animations } = useMotion();
   const [preview, setPreview] = useState<{ url: string; filename: string } | null>(null);
+  const [menu, setMenu] = useState<ChatMenuTarget | null>(null);
+  const lpTimer = useRef<number | null>(null);
+  const openMenu = (x: number, y: number): void =>
+    setMenu({ x, y, isOwn, canModerate, currentUserId, body: message.body, reactions: message.reactions });
+  const cancelLongPress = (): void => {
+    if (lpTimer.current) {
+      clearTimeout(lpTimer.current);
+      lpTimer.current = null;
+    }
+  };
 
   if (message.deleted) {
     return (
@@ -118,6 +121,18 @@ export function ChatBubble({
 
         <div
           data-chat-bubble
+          onContextMenu={(e) => {
+            e.preventDefault();
+            openMenu(e.clientX, e.clientY);
+          }}
+          onTouchStart={(e) => {
+            const t = e.touches[0];
+            if (!t) return;
+            const { clientX, clientY } = t;
+            lpTimer.current = window.setTimeout(() => openMenu(clientX, clientY), 450);
+          }}
+          onTouchEnd={cancelLongPress}
+          onTouchMove={cancelLongPress}
           className={cn(
             'relative rounded-2xl px-3 py-1.5 text-sm text-foreground',
             // Мягкий полупрозрачный акцент вместо «бьющего» синего — нежно, как в TG.
@@ -207,79 +222,23 @@ export function ChatBubble({
           </div>
         )}
 
-        {/* Видимый hover-тулбар: кнопки прямо на виду (реакция / ответить / ред. / удалить),
-            не спрятаны в меню. Сидит ВНУТРИ угла пузыря (inner-side) — поэтому не «выезжает
-            за блок» и не обрезается скроллом. Раскрывается только пикер эмодзи (портал). */}
-        <div
+        {/* hover-«⋯»: одна иконка (всегда влезает) — открывает контекст-меню. На пузыре
+            также работают правый клик и long-press; меню — портал, по точке клика. */}
+        <button
+          type="button"
+          aria-label="Действия с сообщением"
+          title="Действия"
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            openMenu(r.left, r.bottom + 4);
+          }}
           className={cn(
-            'absolute top-1/2 z-20 flex -translate-y-1/2 items-center gap-0.5 rounded-full border bg-background/95 px-0.5 py-0.5 opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 focus-within:opacity-100',
-            // В боковом жёлобе рядом с пузырём, по центру по вертикали: не поверх текста,
-            // не поверх соседнего сообщения и не режется скроллом. Свои — слева, чужие — справа.
-            isOwn ? 'right-full mr-1' : 'left-full ml-1',
+            'absolute top-0.5 z-20 grid size-6 place-items-center rounded-full border bg-background/95 text-muted-foreground opacity-0 shadow-sm backdrop-blur transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100',
+            isOwn ? 'left-0.5' : 'right-0.5',
           )}
         >
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label="Реакция"
-                title="Реакция"
-                className="grid size-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
-              >
-                <SmilePlus className="size-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" sideOffset={6} collisionPadding={8} className="flex w-auto gap-0.5 p-1">
-              {QUICK_EMOJIS.map((e) => {
-                const mine =
-                  message.reactions.find((r) => r.emoji === e)?.userIds.includes(currentUserId) ?? false;
-                return (
-                  <DropdownMenuItem
-                    key={e}
-                    onSelect={() => onToggleReaction(message.id, e, mine)}
-                    className={cn(
-                      'grid size-8 place-items-center rounded-md p-0 text-lg transition-transform hover:scale-110',
-                      mine && 'bg-primary/10',
-                    )}
-                  >
-                    {e}
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <button
-            type="button"
-            aria-label="Ответить"
-            title="Ответить"
-            onClick={() => onReply(message)}
-            className="grid size-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
-          >
-            <CornerUpLeft className="size-3.5" />
-          </button>
-          {isOwn && (
-            <button
-              type="button"
-              aria-label="Редактировать"
-              title="Редактировать"
-              onClick={() => onEdit(message)}
-              className="grid size-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
-            >
-              <Pencil className="size-3.5" />
-            </button>
-          )}
-          {(isOwn || canModerate) && (
-            <button
-              type="button"
-              aria-label="Удалить"
-              title="Удалить"
-              onClick={() => onDelete(message)}
-              className="grid size-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-            >
-              <Trash2 className="size-3.5" />
-            </button>
-          )}
-        </div>
+          <SmilePlus className="size-3.5" />
+        </button>
       </div>
 
       {/* Лайтбокс картинки — открываем прямо на сайте (модалка), а не отдельной вкладкой. */}
@@ -317,6 +276,17 @@ export function ChatBubble({
           </div>
         </DialogContent>
       </Dialog>
+
+      {menu && (
+        <ChatMessageMenu
+          target={menu}
+          onClose={() => setMenu(null)}
+          onReact={(emoji, mine) => onToggleReaction(message.id, emoji, mine)}
+          onReply={() => onReply(message)}
+          onEdit={() => onEdit(message)}
+          onDelete={() => onDelete(message)}
+        />
+      )}
     </Wrapper>
   );
 }
