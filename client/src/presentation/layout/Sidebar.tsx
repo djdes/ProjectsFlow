@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
+import { cloneElement, isValidElement, useCallback, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Inbox, MessageCircle, PanelLeft, Plus, Search, Shield } from 'lucide-react';
+import { PanelLeft, Plus, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -104,11 +104,11 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
           <RailButton onClick={openAddTask} label="Добавить задачу">
             <Plus className="size-4 text-success" />
           </RailButton>
-          <RailButton onClick={openSearch} label="Глобальный поиск">
-            <Search className="size-4" />
+          <RailButton onClick={openSearch} label="Глобальный поиск" animated>
+            <AnimatedSearch className="size-4" />
           </RailButton>
-          <RailNavLink to="/" end label="Входящие">
-            <Inbox className="size-4" />
+          <RailNavLink to="/" end label="Входящие" animated>
+            <AnimatedInbox className="size-4" />
           </RailNavLink>
           <RailButton
             onClick={() => {
@@ -117,8 +117,9 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
             }}
             label="Чат"
             badge={chatUnread}
+            animated
           >
-            <MessageCircle className="size-4" />
+            <AnimatedChat className="size-4" />
           </RailButton>
 
           <div className="my-0.5 h-px w-6 bg-border" />
@@ -131,7 +132,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
 
           <div className="my-0.5 h-px w-6 bg-border" />
 
-          <RailNavLink to="/notifications" label="Уведомления" badge={unreadCount}>
+          <RailNavLink to="/notifications" label="Уведомления" badge={unreadCount} animated>
             <AnimatedBell className="size-4" active={unreadCount > 0} />
           </RailNavLink>
           {user?.isAdmin && (
@@ -259,23 +260,35 @@ function RailButton({
   onClick,
   label,
   badge,
+  animated,
   children,
 }: {
   onClick: () => void;
   label: string;
   badge?: number;
+  // Если иконка «живая» (AnimatedXxx) — оживляем её при наведении на узкий рейл.
+  animated?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
+  const [hover, setHover] = useState(false);
+  const icon =
+    animated && isValidElement(children)
+      ? cloneElement(children as React.ReactElement<{ active?: boolean }>, { active: hover })
+      : children;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
           onClick={onClick}
+          onMouseEnter={() => setHover(true)}
+          onMouseLeave={() => setHover(false)}
+          onFocus={() => setHover(true)}
+          onBlur={() => setHover(false)}
           aria-label={label}
           className="relative grid size-9 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06] hover:text-foreground"
         >
-          {children}
+          {icon}
           {badge !== undefined && badge > 0 && (
             <span className="absolute -right-0.5 -top-0.5 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-medium text-primary-foreground">
               {badge > 99 ? '99+' : badge}
@@ -293,14 +306,22 @@ function RailNavLink({
   end,
   label,
   badge,
+  animated,
   children,
 }: {
   to: string;
   end?: boolean;
   label: string;
   badge?: number;
+  animated?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
+  const [hover, setHover] = useState(false);
+  // Сохраняем уже заданный active (напр. колокольчик звенит при непрочитанных) и добавляем
+  // оживление на hover/активном маршруте.
+  const childActive = isValidElement(children)
+    ? Boolean((children.props as { active?: boolean }).active)
+    : false;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -308,6 +329,8 @@ function RailNavLink({
           to={to}
           end={end}
           aria-label={label}
+          onMouseEnter={() => setHover(true)}
+          onMouseLeave={() => setHover(false)}
           className={({ isActive }) =>
             cn(
               'relative grid size-9 shrink-0 place-items-center rounded-md transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]',
@@ -317,11 +340,19 @@ function RailNavLink({
             )
           }
         >
-          {children}
-          {badge !== undefined && badge > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-medium text-primary-foreground">
-              {badge > 99 ? '99+' : badge}
-            </span>
+          {({ isActive }) => (
+            <>
+              {animated && isValidElement(children)
+                ? cloneElement(children as React.ReactElement<{ active?: boolean }>, {
+                    active: hover || isActive || childActive,
+                  })
+                : children}
+              {badge !== undefined && badge > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-medium text-primary-foreground">
+                  {badge > 99 ? '99+' : badge}
+                </span>
+              )}
+            </>
           )}
         </NavLink>
       </TooltipTrigger>
