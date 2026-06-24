@@ -547,12 +547,16 @@ export function TaskDrawer({
         type="button"
         variant="ghost"
         size="icon"
-        className="size-7 shrink-0"
+        className="group/exp size-8 shrink-0"
         onClick={() => setExpanded((v) => !v)}
         aria-label={expanded ? 'Свернуть' : 'Развернуть'}
         title={expanded ? 'Свернуть' : 'Развернуть'}
       >
-        {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+        {expanded ? (
+          <Minimize2 className="size-4 transition-transform duration-150 group-hover/exp:scale-90" />
+        ) : (
+          <Maximize2 className="size-4 transition-transform duration-150 group-hover/exp:scale-110" />
+        )}
       </Button>
     );
   };
@@ -562,11 +566,11 @@ export function TaskDrawer({
       type="button"
       variant="ghost"
       size="icon"
-      className="size-7 shrink-0"
+      className="group/x size-8 shrink-0"
       onClick={onClose}
       aria-label="Закрыть"
     >
-      <X className="size-4" />
+      <X className="size-4 transition-transform duration-200 group-hover/x:rotate-90" />
     </Button>
   );
 
@@ -697,11 +701,11 @@ export function TaskDrawer({
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="size-7 text-muted-foreground"
+                            className="group/cu size-8 text-muted-foreground"
                             onClick={() => setDescExpanded(false)}
                             aria-label="Свернуть описание"
                           >
-                            <ChevronUp className="size-4" />
+                            <ChevronUp className="size-4 transition-transform duration-150 group-hover/cu:-translate-y-0.5" />
                           </Button>
                         </div>
                         {task.description?.trim() ? (
@@ -903,7 +907,7 @@ export function TaskDrawer({
                       onKeyDown={createDescFmt.keyDownHandler}
                       maxLength={50000}
                       rows={4}
-                      placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
+                      placeholder="Что нужно сделать?"
                       className="block w-full resize-none bg-transparent text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none"
                     />
                   </ContextMenuTrigger>
@@ -918,27 +922,27 @@ export function TaskDrawer({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-9 text-muted-foreground hover:text-foreground"
+                  className="group/at size-8 text-muted-foreground hover:text-foreground"
                   onClick={() => createFileInputRef.current?.click()}
                   disabled={saving}
                   aria-label="Вложение"
                   title="Вложение (или перетащи файл / Ctrl+V)"
                 >
-                  <Paperclip className="size-4" />
+                  <Paperclip className="size-4 transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110" />
                 </Button>
                 <PrioritySelect
                   value={createPriority}
                   onChange={setCreatePriority}
                   disabled={saving}
                   iconOnly
-                  className="size-9"
+                  className="size-8"
                 />
                 <DeadlinePicker
                   value={createDeadline}
                   onChange={setCreateDeadline}
                   disabled={saving}
                   iconOnly
-                  className={cn('h-9', createDeadline === null ? 'w-9 px-0' : 'px-2')}
+                  className={cn('h-8', createDeadline === null ? 'w-8 px-0' : 'px-2')}
                 />
                 {(isInbox || isShared) && (
                   <DelegateSelect
@@ -946,7 +950,7 @@ export function TaskDrawer({
                     onChange={setCreateDelegateUserId}
                     disabled={saving}
                     projectId={isShared && aiProjectId ? aiProjectId : undefined}
-                    className="size-9"
+                    className="size-8"
                   />
                 )}
                 <input
@@ -1710,7 +1714,7 @@ function CommentComposer({
               onPaste={handlePaste}
               rows={2}
               disabled={submitting}
-              placeholder="Написать комментарий… Markdown, файлы (Ctrl+V)"
+              placeholder="Комментарий…"
               className="block w-full resize-none rounded-md bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
             />
           </ContextMenuTrigger>
@@ -1722,23 +1726,27 @@ function CommentComposer({
           type="button"
           variant="ghost"
           size="icon"
-          className="size-7"
+          className="group/at size-8"
           onClick={() => fileInputRef.current?.click()}
           disabled={submitting}
           aria-label="Прикрепить файл"
         >
-          <Paperclip className="size-3.5" />
+          <Paperclip className="size-4 transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110" />
         </Button>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="size-7"
+          className="group/send size-8 text-primary hover:text-primary disabled:text-muted-foreground"
           onClick={() => void submit()}
           disabled={submitting || (body.trim().length === 0 && pending.length === 0)}
           aria-label="Отправить"
         >
-          {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+          {submitting ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Send className="size-4 transition-transform duration-150 group-hover/send:-translate-y-0.5 group-hover/send:translate-x-0.5 group-active/send:scale-90" />
+          )}
         </Button>
       </div>
       <input

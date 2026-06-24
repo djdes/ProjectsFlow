@@ -235,7 +235,7 @@ export function TaskDrawerComposer({
             }}
             rows={1}
             disabled={submitting}
-            placeholder="Написать комментарий…"
+            placeholder="Комментарий…"
             className="block w-full resize-none bg-transparent px-4 py-2.5 text-sm leading-snug placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50"
           />
         </ContextMenuTrigger>
@@ -248,13 +248,13 @@ export function TaskDrawerComposer({
             type="button"
             variant="ghost"
             size="icon"
-            className="size-8 text-muted-foreground hover:text-foreground"
+            className="group/at size-8 text-muted-foreground hover:text-foreground"
             onClick={() => fileInputRef.current?.click()}
             disabled={submitting}
             aria-label="Прикрепить файл"
             title="Прикрепить файл (или Ctrl+V)"
           >
-            <Paperclip className="size-3.5" />
+            <Paperclip className="size-4 transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110" />
           </Button>
           <NotifyAudienceControl
             projectId={task.projectId}

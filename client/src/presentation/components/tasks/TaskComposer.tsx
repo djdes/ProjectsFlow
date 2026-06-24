@@ -244,8 +244,8 @@ export function TaskComposer({
   const placeholder = isInline
     ? 'Новая задача…'
     : quickStatus === 'backlog'
-      ? 'Добавить в черновик'
-      : 'Задача воркеру';
+      ? 'В черновик…'
+      : 'Воркеру…';
 
   const card = (
     <div

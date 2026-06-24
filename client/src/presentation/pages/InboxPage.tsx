@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Columns3, Eye, EyeOff, Inbox as InboxIcon, List as ListIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import {
   Tooltip,
   TooltipContent,
@@ -158,13 +159,17 @@ function HideDoneToggle({
             aria-pressed={value}
             aria-label={label}
             className={cn(
-              'inline-flex size-8 items-center justify-center rounded-md border bg-card transition-colors',
+              'group inline-flex size-9 items-center justify-center rounded-lg border bg-card transition active:scale-95 max-sm:size-11',
               value
                 ? 'border-foreground/30 text-foreground'
-                : 'text-muted-foreground hover:text-foreground',
+                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
             )}
           >
-            {value ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            {value ? (
+              <EyeOff className="size-4 transition-transform group-active:scale-90" />
+            ) : (
+              <Eye className="size-4 transition-transform group-active:scale-90" />
+            )}
           </button>
         </TooltipTrigger>
         <TooltipContent>{label}</TooltipContent>
@@ -181,52 +186,14 @@ function ViewToggle({
   onChange: (next: ViewMode) => void;
 }): React.ReactElement {
   return (
-    <div
-      className="inline-flex items-center gap-0.5 rounded-md border bg-card p-0.5 text-xs"
-      role="group"
-      aria-label="Вид"
-    >
-      <ToggleButton
-        active={value === 'kanban'}
-        onClick={() => onChange('kanban')}
-        icon={<Columns3 className="size-3.5" />}
-        label="Канбан"
-      />
-      <ToggleButton
-        active={value === 'list'}
-        onClick={() => onChange('list')}
-        icon={<ListIcon className="size-3.5" />}
-        label="Список"
-      />
-    </div>
-  );
-}
-
-function ToggleButton({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}): React.ReactElement {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded px-2.5 py-1 transition-colors',
-        active
-          ? 'bg-primary text-primary-foreground shadow-sm'
-          : 'text-muted-foreground hover:text-foreground',
-      )}
-      aria-pressed={active}
-    >
-      {icon}
-      {label}
-    </button>
+    <SegmentedControl
+      value={value}
+      onChange={onChange}
+      size="md"
+      options={[
+        { value: 'kanban', label: 'Канбан', icon: <Columns3 className="size-3.5" /> },
+        { value: 'list', label: 'Список', icon: <ListIcon className="size-3.5" /> },
+      ]}
+    />
   );
 }

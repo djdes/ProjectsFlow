@@ -328,26 +328,26 @@ function TaskListRow({
         <Button
           variant="ghost"
           size="icon"
-          className="size-7"
+          className="group/edit size-8"
           onClick={(e) => {
             e.stopPropagation();
             onEdit();
           }}
           aria-label="Редактировать"
         >
-          <Pencil className="size-3.5" />
+          <Pencil className="size-3.5 transition-transform duration-150 group-hover/edit:-rotate-12 group-hover/edit:scale-110" />
         </Button>
         <Button
           variant="ghost"
           size="icon"
-          className="size-7 text-destructive hover:text-destructive"
+          className="group/del size-8 text-destructive hover:text-destructive"
           onClick={(e) => {
             e.stopPropagation();
             onDelete();
           }}
           aria-label="Удалить"
         >
-          <Trash2 className="size-3.5" />
+          <Trash2 className="size-3.5 transition-transform duration-150 group-hover/del:scale-110" />
         </Button>
       </div>
     </li>
