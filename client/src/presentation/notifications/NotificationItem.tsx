@@ -28,16 +28,16 @@ export function NotificationItem({
     <li
       onClick={() => actions.handleClick(n)}
       className={cn(
-        'group flex cursor-pointer items-start gap-2.5 px-3 py-2 transition-colors',
+        'group flex cursor-pointer items-start gap-2 px-2.5 py-1.5 transition-colors',
         isUnread ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/40',
       )}
     >
       <span
-        className={cn('mt-1.5 size-2 shrink-0 rounded-full', isUnread ? 'bg-primary' : 'bg-transparent')}
+        className={cn('mt-1.5 size-1.5 shrink-0 rounded-full', isUnread ? 'bg-primary' : 'bg-transparent')}
         aria-hidden
       />
-      <Avatar className="size-7 shrink-0">
-        <AvatarFallback className="text-xs">
+      <Avatar className="size-6 shrink-0">
+        <AvatarFallback className="text-[10px]">
           {getInitials(
             payload.type === 'server_alert'
               ? payload.serverName
@@ -47,10 +47,11 @@ export function NotificationItem({
           )}
         </AvatarFallback>
       </Avatar>
-      <div className="min-w-0 flex-1 space-y-0.5">
+      {/* Компактные action-кнопки внутри карточки: меньше высота/паддинги/шрифт. */}
+      <div className="min-w-0 flex-1 space-y-0.5 [&_button]:h-7 [&_button]:gap-1 [&_button]:px-2.5 [&_button]:text-xs">
         {payload.type === 'comment_mention' && (
           <>
-            <p className="text-sm leading-snug">
+            <p className="text-sm leading-tight">
               <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> упомянул тебя в{' '}
               <span className="font-medium">«{payload.projectName}»</span>
               {payload.taskStatus === 'awaiting_clarification' && (
@@ -79,7 +80,7 @@ export function NotificationItem({
 
         {payload.type === 'project_invite' && (
           <>
-            <p className="text-sm leading-snug">
+            <p className="text-sm leading-tight">
               <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> приглашает вас в{' '}
               <span className="font-medium">«{payload.projectName}»</span> как {roleLabel[payload.role]}
             </p>
@@ -99,7 +100,7 @@ export function NotificationItem({
 
         {payload.type === 'task_delegation' && (
           <>
-            <p className="text-sm leading-snug">
+            <p className="text-sm leading-tight">
               <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> делегировал вам задачу:
             </p>
             <p className="line-clamp-2 text-xs italic text-muted-foreground">
@@ -141,7 +142,7 @@ export function NotificationItem({
         )}
 
         {payload.type === 'task_delegation_resolved' && (
-          <p className="text-sm leading-snug">
+          <p className="text-sm leading-tight">
             <span className="font-medium">{payload.actorDisplayName}</span>{' '}
             {payload.resolution === 'accepted' ? 'принял' : 'отклонил'} делегированную вами задачу
             {payload.taskExcerpt && (
@@ -154,7 +155,7 @@ export function NotificationItem({
         )}
 
         {payload.type === 'task_assigned_to_project' && (
-          <p className="text-sm leading-snug">
+          <p className="text-sm leading-tight">
             <span className="font-medium">{payload.actorDisplayName}</span> перенёс делегированную вам задачу в{' '}
             <span className="font-medium">«{payload.projectName}»</span>
             {payload.taskExcerpt && (
@@ -167,7 +168,7 @@ export function NotificationItem({
         )}
 
         {payload.type === 'server_alert' && (
-          <p className="text-sm leading-snug">
+          <p className="text-sm leading-tight">
             {payload.alertStatus === 'resolved' ? '✅ ' : payload.severity === 'critical' ? '🔴 ' : '🟠 '}
             <span className="font-medium">{payload.serverName}</span>
             {' · '}
@@ -178,7 +179,7 @@ export function NotificationItem({
         )}
 
         {payload.type === 'daily_digest' && (
-          <p className="text-sm leading-snug">
+          <p className="text-sm leading-tight">
             🗂️ Ежедневная сводка по <span className="font-medium">«{payload.projectName}»</span>
             {' · '}
             {payload.taskCount} задач
@@ -187,7 +188,7 @@ export function NotificationItem({
 
         {payload.type === 'join_request' && (
           <>
-            <p className="text-sm leading-snug">
+            <p className="text-sm leading-tight">
               <span className="font-medium">{payload.requesterDisplayName ?? 'Пользователь'}</span> просит доступ к
               проекту <span className="font-medium">«{payload.projectName}»</span>
             </p>

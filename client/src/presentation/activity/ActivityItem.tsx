@@ -116,14 +116,14 @@ export function ActivityItem({ item }: { item: ActivityEventItem }): React.React
     <li
       onClick={() => navigate(targetUrl(item))}
       className={cn(
-        'group flex cursor-pointer items-start gap-2.5 px-3 py-2 transition-colors hover:bg-muted/40',
+        'group flex cursor-pointer items-start gap-2 px-2.5 py-1.5 transition-colors hover:bg-muted/40',
       )}
     >
-      <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+      <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
         <Icon className="size-3" />
       </span>
       <div className="min-w-0 flex-1 space-y-0.5">
-        <p className="text-sm leading-snug">{renderText(item)}</p>
+        <p className="text-sm leading-tight">{renderText(item)}</p>
         <p className="text-xs text-muted-foreground">{relativeTime(item.createdAt)}</p>
       </div>
     </li>
