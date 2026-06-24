@@ -276,7 +276,7 @@ function MonitoringCard(): React.ReactElement {
 
 export function ProfilePage(): React.ReactElement {
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-6">
+    <div className="mx-auto max-w-2xl space-y-5 p-5">
       <Button asChild variant="ghost" size="sm" className="-ml-3 gap-1">
         <Link to="/">
           <ArrowLeft />
@@ -284,7 +284,7 @@ export function ProfilePage(): React.ReactElement {
         </Link>
       </Button>
 
-      <h1 className="text-2xl font-semibold tracking-tight">Настройки</h1>
+      <h1 className="text-xl font-semibold tracking-tight">Настройки</h1>
 
       <PersonalDataCard />
       <ProjectsShareCard />

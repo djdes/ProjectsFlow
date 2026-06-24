@@ -60,10 +60,10 @@ export function AlertCenterPage(): React.ReactElement {
   const critical = data?.active.filter((a) => a.severity === 'critical') ?? [];
 
   return (
-    <div className="flex h-full flex-col gap-4 p-4 sm:gap-6 sm:p-6">
-      <div className="flex items-center gap-2">
-        <BellRing className="size-6" />
-        <h1 className="text-2xl font-semibold tracking-tight">Алерты — все проекты</h1>
+    <div className="flex h-full flex-col gap-4 p-4 sm:gap-5 sm:p-5">
+      <div className="flex items-center gap-2.5">
+        <BellRing className="size-5 text-primary" />
+        <h1 className="text-xl font-semibold tracking-tight">Алерты — все проекты</h1>
         {data && data.active.length > 0 && (
           <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-sm font-semibold text-white">
             {data.active.length}
