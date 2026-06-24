@@ -468,17 +468,17 @@ export function SidebarProjectList(): React.ReactElement {
         type="button"
         onClick={toggleMainCollapsed}
         aria-expanded={!mainCollapsed}
-        className="group flex flex-1 items-center gap-1.5 rounded text-left text-xs font-medium text-muted-foreground/80 hover:text-foreground"
+        className="group flex flex-1 items-center rounded text-left text-xs font-medium text-muted-foreground/80 hover:text-foreground"
       >
         <ChevronDown
           className={cn(
-            'h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:w-3 group-hover:opacity-100',
+            'h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:mr-1.5 group-hover:w-3 group-hover:opacity-100',
             mainCollapsed && '-rotate-90',
           )}
         />
         <span>Мои проекты</span>
         {/* Лимит показываем только когда он реально есть (тарифы); «/∞» — дев-шум. */}
-        <span className="tabular-nums opacity-70">
+        <span className="ml-1.5 tabular-nums opacity-70">
           {PROJECT_LIMIT === Infinity ? visible.length : `${visible.length}/${PROJECT_LIMIT}`}
         </span>
       </button>
@@ -597,11 +597,11 @@ export function SidebarProjectList(): React.ReactElement {
             type="button"
             onClick={toggleFavCollapsed}
             aria-expanded={!favCollapsed}
-            className="group sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-sidebar/90 px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
+            className="group sticky top-0 z-10 flex w-full items-center rounded bg-sidebar/90 px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
           >
             <ChevronDown
               className={cn(
-                'h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:w-3 group-hover:opacity-100',
+                'h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:mr-1.5 group-hover:w-3 group-hover:opacity-100',
                 favCollapsed && '-rotate-90',
               )}
             />
@@ -644,13 +644,13 @@ export function SidebarProjectList(): React.ReactElement {
             type="button"
             onClick={toggleArchivedCollapsed}
             aria-expanded={!archivedCollapsed}
-            className="group sticky top-0 z-10 flex w-full items-center gap-1.5 rounded bg-sidebar/90 px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
+            className="group sticky top-0 z-10 flex w-full items-center rounded bg-sidebar/90 px-2 py-1.5 text-left text-xs font-medium text-muted-foreground/80 backdrop-blur-sm hover:text-foreground"
           >
             <ChevronDown
-              className={cn('h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:w-3 group-hover:opacity-100', archivedCollapsed && '-rotate-90')}
+              className={cn('h-3 w-0 shrink-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:mr-1.5 group-hover:w-3 group-hover:opacity-100', archivedCollapsed && '-rotate-90')}
             />
             <span>Архивные</span>
-            {archived.length > 0 && <span className="tabular-nums opacity-70">{archived.length}</span>}
+            {archived.length > 0 && <span className="ml-1.5 tabular-nums opacity-70">{archived.length}</span>}
           </button>
           <Collapse open={!archivedCollapsed}>
             {archived.length > 0 ? (

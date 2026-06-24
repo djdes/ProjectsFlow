@@ -46,7 +46,7 @@ export function SidebarNavRail({
             aria-label={item.label}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'relative flex items-center rounded-xl px-2.5 py-2 text-xs font-medium',
+              'relative flex items-center rounded-xl px-2 py-2 text-xs font-medium',
               animations && 'transition-colors duration-200 ease-out',
               active
                 ? 'bg-foreground/[0.06] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] ring-1 ring-black/[0.04] dark:bg-white/10 dark:ring-white/10'
