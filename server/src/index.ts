@@ -20,6 +20,9 @@ import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleP
 import { DrizzleProjectMemberRepository } from './infrastructure/repositories/DrizzleProjectMemberRepository.js';
 import { DrizzleWorkspaceRepository } from './infrastructure/repositories/DrizzleWorkspaceRepository.js';
 import { WorkspaceService } from './application/workspace/WorkspaceService.js';
+import { DrizzleActivityRepository } from './infrastructure/repositories/DrizzleActivityRepository.js';
+import { ActivityRecorder } from './application/activity/ActivityRecorder.js';
+import { GetActivityFeed } from './application/activity/GetActivityFeed.js';
 import { DrizzleProjectInviteRepository } from './infrastructure/repositories/DrizzleProjectInviteRepository.js';
 import { DrizzleNotificationRepository } from './infrastructure/repositories/DrizzleNotificationRepository.js';
 import { DrizzleRecentTaskViewRepository } from './infrastructure/repositories/DrizzleRecentTaskViewRepository.js';
@@ -298,6 +301,29 @@ const notificationRepo = new PublishingNotificationRepository(
   new DrizzleNotificationRepository(db),
   notificationHub,
 );
+
+// === Лента действий (activity feed) ===
+const activityRepo = new DrizzleActivityRepository(db);
+// best-effort рекордер: инжектится в мутирующие use-case'ы (создание/статус/удаление задач,
+// комментарии, создание проекта, изменения участников). Резолвит пространство по проекту.
+const activityRecorder = new ActivityRecorder({
+  activity: activityRepo,
+  resolveWorkspaceId: (projectId) => projectRepo.getWorkspaceId(projectId),
+  idGen: idGenerator,
+});
+const getActivityFeed = new GetActivityFeed({
+  activity: activityRepo,
+  notifications: notificationRepo,
+  workspaceProjectIds: async (workspaceId) =>
+    new Set((await projectRepo.listByWorkspace(workspaceId)).map((p) => p.id)),
+});
+// GC: чистим события старше 30 дней (на старте + раз в сутки).
+const ACTIVITY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const sweepActivity = (): void => {
+  void activityRepo.deleteOlderThan(new Date(Date.now() - ACTIVITY_TTL_MS)).catch(() => {});
+};
+sweepActivity();
+setInterval(sweepActivity, 24 * 60 * 60 * 1000).unref();
 // Real-time-события (task/project changed) для live-обновления UI без перезагрузки.
 // Транслируются всем участникам проекта по тому же SSE-коннекту, что и уведомления.
 const realtimeHub = new RealtimeHub();
@@ -539,6 +565,7 @@ const createTaskCommentUseCase = new CreateTaskComment({
   notifications: notificationRepo,
   delegations: taskDelegationRepo,
   idGen: idGenerator,
+  activityRecorder,
 });
 const maybeReopenForClarification = new MaybeReopenForClarification({ tasks: taskRepo });
 
@@ -582,6 +609,7 @@ const telegramComposer = new TelegramComposerService({
     email: emailSender,
     idGen: idGenerator,
     appUrl: appBaseUrl,
+    activityRecorder,
   }),
   getOrCreateInbox: new GetOrCreateInbox({
     repo: projectRepo,
@@ -1116,6 +1144,7 @@ const { app, devProxyUpgrade } = createApp({
       idGen: idGenerator,
       resolveWorkspaceId,
       resolveDefaultDispatcher,
+      activityRecorder,
     }),
     updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo }),
     deleteProject: new DeleteProject({
@@ -1174,10 +1203,11 @@ const { app, devProxyUpgrade } = createApp({
       resolveWorkspaceId,
     }),
     listMembers: new ListProjectMembers({ projects: projectRepo, members: projectMemberRepo }),
-    removeMember: new RemoveProjectMember({ projects: projectRepo, members: projectMemberRepo }),
+    removeMember: new RemoveProjectMember({ projects: projectRepo, members: projectMemberRepo, activityRecorder }),
     updateMemberRole: new UpdateProjectMemberRole({
       projects: projectRepo,
       members: projectMemberRepo,
+      activityRecorder,
     }),
     transferOwnership: new TransferProjectOwnership({
       projects: projectRepo,
@@ -1262,6 +1292,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       users: userRepo,
       now,
+      activityRecorder,
     }),
   },
   search: {
@@ -1394,6 +1425,7 @@ const { app, devProxyUpgrade } = createApp({
       email: emailSender,
       idGen: idGenerator,
       appUrl: appBaseUrl,
+      activityRecorder,
     }),
     updateTask: new UpdateTask({
       projects: projectRepo,
@@ -1406,6 +1438,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       delegations: taskDelegationRepo,
+      activityRecorder,
     }),
     deleteTask: new DeleteTask({
       projects: projectRepo,
@@ -1413,6 +1446,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       comments: taskCommentRepo,
       delegations: taskDelegationRepo,
+      activityRecorder,
     }),
     linkCommit: new LinkCommit({
       projects: projectRepo,
@@ -1665,6 +1699,7 @@ const { app, devProxyUpgrade } = createApp({
         idGen: idGenerator,
         resolveWorkspaceId,
         resolveDefaultDispatcher,
+        activityRecorder,
       }),
       updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo }),
       tokens: githubTokenRepo,
@@ -1696,6 +1731,7 @@ const { app, devProxyUpgrade } = createApp({
       email: emailSender,
       idGen: idGenerator,
       appUrl: appBaseUrl,
+      activityRecorder,
     }),
     createComment: createTaskCommentUseCase,
     // Чтение комментариев задачи (Ralph F11 polling): фильтры since/limit/marker
@@ -1713,6 +1749,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       delegations: taskDelegationRepo,
+      activityRecorder,
     }),
     linkCommit: new LinkCommit({
       projects: projectRepo,
@@ -1810,6 +1847,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       comments: taskCommentRepo,
       delegations: taskDelegationRepo,
+      activityRecorder,
     }),
     listTaskCommits: new ListTaskCommits({
       projects: projectRepo,

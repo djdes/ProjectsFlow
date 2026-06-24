@@ -51,6 +51,9 @@ export class DeleteProject {
     const storageKeys = await this.deps.attachments.listStorageKeysByProject(projectId);
 
     // 4. Каскадное удаление в одной транзакции (всё-или-ничего по БД).
+    // Прим.: project_deleted В ЛЕНТУ НЕ пишем — activity_events.project_id каскадно
+    // удаляются вместе с проектом (и участники тоже), а лента скоупится по членству.
+    // Уведомление об удалении оставшимся участникам идёт письмом через notifier.
     await this.deps.projects.deleteCascade(projectId);
 
     // 5. Файлы с диска — fire-and-forget. Ошибки логируем, удаление проекта

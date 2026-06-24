@@ -26,6 +26,7 @@ import type {
   KanbanDefaultColors,
 } from '../../domain/kanban/KanbanSettings.js';
 import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
+import type { ActivityPayload } from '../../domain/activity/ActivityEvent.js';
 import type { UiPrefs } from '../../domain/user/UiPrefs.js';
 import type {
   TelegramDraftOffered,
@@ -358,6 +359,29 @@ export const workspaceChatAttachments = mysqlTable(
 
 export type WorkspaceChatAttachmentRow = typeof workspaceChatAttachments.$inferSelect;
 export type NewWorkspaceChatAttachmentRow = typeof workspaceChatAttachments.$inferInsert;
+
+// Лента действий: амбиентная активность по проектам для вкладки «Все». Одна строка на
+// событие; скоуп при чтении по project_members + workspace_id. Хранение 30 дней (GC). См. db/078.
+export const activityEvents = mysqlTable(
+  'activity_events',
+  {
+    id: id(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    actorUserId: char('actor_user_id', { length: 36 }),
+    kind: varchar('kind', { length: 40 }).notNull(),
+    payload: json('payload').$type<ActivityPayload | null>(),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    index('idx_ae_ws_created').on(t.workspaceId, t.createdAt),
+    index('idx_ae_project_created').on(t.projectId, t.createdAt),
+    index('idx_ae_created').on(t.createdAt),
+  ],
+);
+
+export type ActivityEventRow = typeof activityEvents.$inferSelect;
+export type NewActivityEventRow = typeof activityEvents.$inferInsert;
 
 // Multi-tenancy: участники проекта + их роли. См. spec
 // docs/superpowers/specs/2026-05-19-multi-tenant-projects-design.md.

@@ -5,12 +5,15 @@ import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
+import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly delegations: TaskDelegationRepository;
+  // Лента действий (best-effort). Опционально.
+  readonly activityRecorder?: ActivityRecorder;
 };
 
 // Клиент сообщает соседей в целевой колонке — сервер сам считает midpoint position.
@@ -90,6 +93,21 @@ export class MoveTask {
         : {}),
     });
     if (!updated) throw new TaskNotFoundError(input.taskId);
+
+    // Лента действий: только при реальной смене статуса (не при reorder внутри колонки).
+    if (updated.status !== task.status) {
+      void this.deps.activityRecorder?.record({
+        projectId: input.projectId,
+        actorUserId: input.ownerUserId,
+        kind: 'task_status_changed',
+        payload: {
+          taskId: task.id,
+          taskExcerpt: task.description.slice(0, 120),
+          oldStatus: task.status,
+          newStatus: updated.status,
+        },
+      });
+    }
     return updated;
   }
 

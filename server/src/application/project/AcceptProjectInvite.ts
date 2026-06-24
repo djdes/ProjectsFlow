@@ -6,12 +6,15 @@ import {
 import type { ProjectInviteRepository } from './ProjectInviteRepository.js';
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
+import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 
 type Deps = {
   readonly invites: ProjectInviteRepository;
   readonly members: ProjectMemberRepository;
   readonly users: UserRepository;
   readonly now: () => Date;
+  // Лента действий (best-effort). Опционально.
+  readonly activityRecorder?: ActivityRecorder;
 };
 
 export type AcceptInviteResult = {
@@ -47,6 +50,13 @@ export class AcceptProjectInvite {
       } catch {
         // Best-effort: ошибка копирования prefs не должна блокировать вступление.
       }
+      // Лента действий (best-effort): новый участник присоединился по инвайту.
+      void this.deps.activityRecorder?.record({
+        projectId: invite.projectId,
+        actorUserId: userId,
+        kind: 'member_added',
+        payload: { targetUserId: userId, role: invite.role },
+      });
     }
 
     await this.deps.invites.markAccepted({

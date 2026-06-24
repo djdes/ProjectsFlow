@@ -5,6 +5,7 @@ import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
 import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import { requireTaskDeleteAccess } from './taskAuthorization.js';
+import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -12,6 +13,8 @@ type Deps = {
   readonly tasks: TaskRepository;
   readonly comments: TaskCommentRepository;
   readonly delegations: TaskDelegationRepository;
+  // Лента действий (best-effort). Опционально.
+  readonly activityRecorder?: ActivityRecorder;
 };
 
 export class DeleteTask {
@@ -30,5 +33,13 @@ export class DeleteTask {
 
     const ok = await this.deps.tasks.delete(taskId);
     if (!ok) throw new TaskNotFoundError(taskId);
+
+    // Лента действий (best-effort).
+    void this.deps.activityRecorder?.record({
+      projectId,
+      actorUserId: ownerUserId,
+      kind: 'task_deleted',
+      payload: { taskId, taskExcerpt: task.description.slice(0, 120) },
+    });
   }
 }

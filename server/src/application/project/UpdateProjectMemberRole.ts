@@ -6,10 +6,13 @@ import type { ProjectMembership, ProjectRole } from '../../domain/project/Projec
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
 import { requireProjectAccess } from './projectAccess.js';
+import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
+  // Лента действий (best-effort). Опционально.
+  readonly activityRecorder?: ActivityRecorder;
 };
 
 export type UpdateMemberRoleCommand = {
@@ -46,6 +49,14 @@ export class UpdateProjectMemberRole {
       input.role,
     );
     if (!updated) throw new ProjectNotFoundError();
+
+    // Лента действий (best-effort).
+    void this.deps.activityRecorder?.record({
+      projectId: input.projectId,
+      actorUserId: input.actorUserId,
+      kind: 'member_role_changed',
+      payload: { targetUserId: input.targetUserId, role: input.role },
+    });
     return updated;
   }
 }

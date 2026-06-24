@@ -2,6 +2,7 @@ import type { Project } from '../../domain/project/Project.js';
 import { ProjectNameEmptyError } from '../../domain/project/errors.js';
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
+import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 
 export type CreateProjectCommand = {
   readonly ownerId: string;
@@ -14,6 +15,8 @@ type Deps = {
   readonly idGen: () => string;
   // Активное пространство владельца — новый проект создаётся в нём. Бросает если нет пространства.
   readonly resolveWorkspaceId: (ownerId: string) => Promise<string>;
+  // Лента действий (best-effort). Опционально.
+  readonly activityRecorder?: ActivityRecorder;
   // Опциональная политика «авто-дефолт Ralph-диспетчера на новый проект».
   // Возвращает userId дежурного admin'а (с активным токеном) либо null —
   // тогда проект остаётся без диспетчера (ручной режим). Best-effort: если
@@ -35,6 +38,15 @@ export class CreateProject {
       id: this.deps.idGen(),
       ownerId: cmd.ownerId,
       name,
+      workspaceId,
+    });
+
+    // Лента действий (best-effort). workspaceId уже известен — без лишнего lookup.
+    void this.deps.activityRecorder?.record({
+      projectId: project.id,
+      actorUserId: cmd.ownerId,
+      kind: 'project_created',
+      payload: { projectName: name },
       workspaceId,
     });
 

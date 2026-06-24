@@ -9,6 +9,7 @@ import type { TaskCommentRepository } from './TaskCommentRepository.js';
 import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
 import { parseMentions } from './parseMentions.js';
+import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -18,6 +19,8 @@ type Deps = {
   readonly notifications: NotificationRepository;
   readonly delegations: TaskDelegationRepository;
   readonly idGen: () => string;
+  // Лента действий (best-effort). Опционально.
+  readonly activityRecorder?: ActivityRecorder;
 };
 
 export type CreateTaskCommentCommand = {
@@ -66,6 +69,14 @@ export class CreateTaskComment {
       actorKind: input.actorKind,
       agentName: input.agentName,
       notifyMode: input.notifyMode,
+    });
+
+    // Лента действий (best-effort): комментарий = активность проекта.
+    void this.deps.activityRecorder?.record({
+      projectId: input.projectId,
+      actorUserId: input.ownerUserId,
+      kind: 'task_commented',
+      payload: { taskId: task.id, taskExcerpt: excerpt(task.description), commentExcerpt: excerpt(body) },
     });
 
     // Mention-парсинг. Уведомления — best-effort: если что-то упадёт здесь, комментарий

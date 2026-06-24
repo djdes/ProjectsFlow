@@ -17,6 +17,7 @@ import type { UserRepository } from '../user/UserRepository.js';
 import type { NotificationRepository } from '../notifications/NotificationRepository.js';
 import type { EmailSender } from '../notifications/EmailSender.js';
 import { renderDelegationEmail } from '../notifications/emails/delegationEmail.js';
+import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -29,6 +30,8 @@ type Deps = {
   readonly idGen: () => string;
   // Base URL для accept/decline ссылки в письме. /inbox#delegation=<id>.
   readonly appUrl: string;
+  // Лента действий (best-effort). Опционально — старые caller'ы/тесты не ломаются.
+  readonly activityRecorder?: ActivityRecorder;
 };
 
 export type CreateTaskCommand = {
@@ -74,6 +77,14 @@ export class CreateTask {
       ralphMode: input.ralphMode,
       deadline: input.deadline ?? null,
       priority: input.priority ?? null,
+    });
+
+    // Лента действий (best-effort, не блокирует создание).
+    void this.deps.activityRecorder?.record({
+      projectId: input.projectId,
+      actorUserId: input.ownerUserId,
+      kind: 'task_created',
+      payload: { taskId: task.id, taskExcerpt: description.slice(0, 120) },
     });
 
     let delegation: TaskDelegation | null = null;

@@ -1,0 +1,38 @@
+// Вид амбиентного действия в ленте «Все». Адресные actionable-события (делегирования,
+// инвайты) живут в notifications и подмешиваются в ленту отдельно — здесь только активность.
+export type ActivityKind =
+  | 'task_created'
+  | 'task_status_changed'
+  | 'task_deleted'
+  | 'task_commented'
+  | 'project_created'
+  | 'project_archived'
+  | 'project_deleted'
+  | 'member_added'
+  | 'member_removed'
+  | 'member_role_changed';
+
+// Денормализованный payload — чтобы лента читалась без джойнов и переживала удаление
+// сущности (показываем «что было»). Все поля опциональны; набор зависит от kind.
+export type ActivityPayload = {
+  readonly projectName?: string;
+  readonly taskId?: string;
+  readonly taskExcerpt?: string;
+  readonly oldStatus?: string;
+  readonly newStatus?: string;
+  readonly commentExcerpt?: string;
+  readonly targetUserId?: string;
+  readonly targetDisplayName?: string;
+  readonly role?: string;
+  readonly actorDisplayName?: string;
+};
+
+export type ActivityEvent = {
+  readonly id: string;
+  readonly workspaceId: string;
+  readonly projectId: string;
+  readonly actorUserId: string | null;
+  readonly kind: ActivityKind;
+  readonly payload: ActivityPayload | null;
+  readonly createdAt: Date;
+};
