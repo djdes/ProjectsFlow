@@ -9,16 +9,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { cn } from '@/lib/utils';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useContainer } from '@/infrastructure/di/container';
-import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
 import { AutomationDialog } from '@/presentation/components/project/AutomationDialog';
 import { EditableProjectTitle } from '@/presentation/components/project/EditableProjectTitle';
 import { ProjectIconPicker } from '@/presentation/components/project/ProjectIconPicker';
+import { MemberAvatarStack } from '@/presentation/components/project/MemberAvatarStack';
 
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -129,31 +127,8 @@ export function TasksPage(): React.ReactElement {
             мультизадачного воркера переехал в диалог «Автоматизация». */}
         <TooltipProvider delayDuration={300}>
           <div className="flex items-center gap-0.5">
-            {/* Аватар-стек участников совместного проекта; клик — общий доступ. */}
-            {members.length > 1 && (
-              <Link
-                to={`/projects/${data.id}/overview`}
-                className="mr-1.5 flex items-center -space-x-1.5"
-                title={members.map((m) => m.user.displayName).join(', ')}
-                aria-label="Участники проекта"
-              >
-                {members.slice(0, 4).map((m) => (
-                  <Avatar key={m.userId} className="size-6 ring-2 ring-background">
-                    {m.user.avatarUrl ? (
-                      <AvatarImage src={m.user.avatarUrl} alt={m.user.displayName} />
-                    ) : null}
-                    <AvatarFallback className={cn('text-[9px]', avatarColor(m.user.displayName))}>
-                      {getInitials(m.user.displayName)}
-                    </AvatarFallback>
-                  </Avatar>
-                ))}
-                {members.length > 4 && (
-                  <span className="grid size-6 place-items-center rounded-full bg-muted text-[9px] font-medium text-muted-foreground ring-2 ring-background">
-                    +{members.length - 4}
-                  </span>
-                )}
-              </Link>
-            )}
+            {/* Аватар-стек участников: наведение/клик → панель участников с зумом аватара. */}
+            {members.length > 1 && <MemberAvatarStack members={members} />}
             {financeVisible && (
               <PageActionButton label="Финансы" to={`/projects/${data.id}/finance`}>
                 <Wallet className="size-4" />

@@ -288,14 +288,15 @@ export function KanbanCard({
               )}
             </div>
           )}
-          {/* Футер: только кнопки действий справа (относительная дата создания убрана —
-              шум; осмысленная дата — это чип дедлайна в мета-строке). Кнопки «тихие» —
-              проявляются на hover/focus карточки (на таче — всегда); прячутся целиком
-              в режиме выделения (булк-действия сверху) и в drag-preview (чистый оверлей).
-              Рендерим футер только когда есть что показать, чтобы не плодить пустой ряд. */}
+          {/* Футер: кнопки действий — абсолютный оверлей в правом-нижнем углу карточки
+              (карточка `relative`). Раньше это был flow-ряд `mt-2`, который резервировал
+              ~32px высоты даже будучи невидимым → «пустая половина» на коротких карточках.
+              Теперь высоту не занимает; проявляется на hover/focus (на таче — всегда).
+              Лёгкая подложка под кнопками, чтобы они не сливались с текстом описания.
+              Прячется в режиме выделения (булк-действия сверху) и в drag-preview. */}
           {!selecting && !preview && (
             <div
-              className="mt-2 flex shrink-0 justify-end gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
+              className="absolute bottom-1 right-1 flex shrink-0 justify-end gap-0.5 rounded-md bg-card/80 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
               {...stopDragProps}
             >
               {onQuickPromote && (

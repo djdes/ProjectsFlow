@@ -15,7 +15,41 @@ export interface FloatingAnchor {
   bottom: number;
 }
 
-const PAD = 8; // отступ от краёв вьюпорта
+export const PAD = 8; // отступ от краёв вьюпорта
+
+// Прямоугольник якоря (основного окна меню) в координатах вьюпорта — для flyout-подменю.
+export interface BesideRect {
+  left: number;
+  right: number;
+  top: number;
+}
+
+// Самокорректирующееся позиционирование flyout-подменю СБОКУ от основного окна.
+// Тот же приём, что и place() ниже: меряем, где элемент реально оказался при текущем
+// style.left/top, и сдвигаем на дельту до желаемой viewport-позиции. Работает при любом
+// transform-предке (Sheet) без его поиска. Предпочтительно справа от окна; не влезает —
+// флип влево; верх — на высоте пункта (anchor.top); вертикальный кламп по вьюпорту.
+export function placeBeside(
+  el: HTMLElement,
+  anchor: BesideRect,
+  gap = 6,
+): { left: number; top: number } {
+  const styleLeft = parseFloat(el.style.left) || 0;
+  const styleTop = parseFloat(el.style.top) || 0;
+  const m = el.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  let vpLeft = anchor.right + gap; // справа от основного окна
+  if (vpLeft + m.width > vw - PAD) {
+    const flipped = anchor.left - gap - m.width; // не влезает справа — флип влево
+    vpLeft = flipped >= PAD ? flipped : Math.max(PAD, vw - PAD - m.width);
+  }
+  if (vpLeft < PAD) vpLeft = PAD;
+  let vpTop = anchor.top; // на высоте пункта-триггера
+  if (vpTop + m.height > vh - PAD) vpTop = Math.max(PAD, vh - PAD - m.height);
+  if (vpTop < PAD) vpTop = PAD;
+  return { left: styleLeft + (vpLeft - m.left), top: styleTop + (vpTop - m.top) };
+}
 
 // Плавающее меню форматирования (по выделению И по правому клику). В отличие от
 // Tiptap BubbleMenu / Radix Popover — полностью самоуправляемое: `position: fixed`,

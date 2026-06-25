@@ -1,4 +1,4 @@
-import { ChevronDown } from 'lucide-react';
+import { Bot, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -48,7 +48,6 @@ export function RalphModeSelect({
           <MetaChip
             label={
               <span className="flex items-center gap-1.5">
-                <span aria-hidden="true">{meta.icon}</span>
                 <span className="truncate">{chipLabel}</span>
                 <ChevronDown className="size-3 shrink-0 opacity-60" />
               </span>
@@ -69,15 +68,15 @@ export function RalphModeSelect({
           >
             {iconOnly ? (
               <>
-                <span aria-hidden="true" className="text-base leading-none">{meta.icon}</span>
+                {/* Компактный квадрат: статичная нейтральная иконка «режим воркера»
+                    (не меняется при смене режима — менявшийся эмодзи раздражал).
+                    Конкретный режим виден в title и в выпадающем списке. */}
+                <Bot aria-hidden="true" className="size-4 shrink-0 opacity-70" />
                 {showCaret && <ChevronDown className="size-3 shrink-0 opacity-60" />}
               </>
             ) : (
               <>
-                <span className="flex items-center gap-2 truncate">
-                  <span aria-hidden="true">{meta.icon}</span>
-                  <span className="truncate">{meta.label}</span>
-                </span>
+                <span className="truncate">{meta.label}</span>
                 <ChevronDown className="size-4 shrink-0 opacity-60" />
               </>
             )}
@@ -91,10 +90,7 @@ export function RalphModeSelect({
             return (
               <DropdownMenuRadioItem key={mode} value={mode} className="items-start py-2 pr-2">
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="flex items-center gap-1.5 text-sm font-medium">
-                    <span aria-hidden="true">{m.icon}</span>
-                    {m.label}
-                  </span>
+                  <span className="text-sm font-medium">{m.label}</span>
                   <span className="text-[11px] leading-snug text-muted-foreground">
                     {m.description}
                   </span>
