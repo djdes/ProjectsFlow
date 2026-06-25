@@ -124,7 +124,9 @@ export function FloatingFormatMenu({
         animations && 'animate-in fade-in-0 zoom-in-95',
       )}
     >
-      <FormatMenu editor={editor} onAction={onClose} getRange={getRange} />
+      {/* onAction НЕ передаём: меню остаётся открытым после применения формата
+          (закрытие — Escape / клик вне / смена выделения). */}
+      <FormatMenu editor={editor} getRange={getRange} />
     </div>
   );
 }
