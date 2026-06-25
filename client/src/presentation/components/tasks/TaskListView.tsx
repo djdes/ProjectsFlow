@@ -292,7 +292,11 @@ function TaskListRow({
           : { duration: 0 }
       }
       className={cn(
-        'group flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40',
+        // Notion-плотность: компактные паддинги (px-3 py-1.5), спокойный neutral-hover.
+        'group flex cursor-pointer items-center gap-3 px-3 py-1.5 transition-colors hover:bg-hover',
+        // Done-строка: мягкая зелёная заливка (НЕ серый/НЕ opacity) — спокойный
+        // Notion-маркер готовности; чуть насыщеннее на hover. Текст остаётся читаемым.
+        isDone && 'bg-success/[0.08] hover:bg-success/[0.12]',
         // Priority-accent — левый цветной border 4px. На List-row даёт визуально
         // понятный «прокрашенный» strip слева, не меняя bg и не конкурируя с
         // bg-muted hover.
@@ -310,14 +314,19 @@ function TaskListRow({
       )}
       <div className="min-w-0 flex-1">
         {task.description?.trim() ? (
-          <ExpandableMarkdown className={cn(isDone && 'opacity-60')}>
+          // Done-текст остаётся полноцветным (Notion: готовая задача не «гасится»);
+          // маркер готовности — зелёная заливка строки + чек в чекбоксе.
+          <ExpandableMarkdown>
             {task.description}
           </ExpandableMarkdown>
         ) : (
           <p className="text-sm leading-snug text-muted-foreground">—</p>
         )}
         {hasBadges && (
-          <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground">
+          // Вторичная мета (дедлайн/счётчики/ralph/делегирование/относительная дата) —
+          // скрыта по умолчанию, проявляется на hover строки (Notion reveal-on-hover).
+          // На таче (max-sm) и при фокусе внутри строки — всегда видна.
+          <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
             {task.delegation && currentUserId && (
               <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
             )}
@@ -344,7 +353,7 @@ function TaskListRow({
           </div>
         )}
       </div>
-      <div className="flex shrink-0 gap-0.5">
+      <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
         <Button
           variant="ghost"
           size="icon"

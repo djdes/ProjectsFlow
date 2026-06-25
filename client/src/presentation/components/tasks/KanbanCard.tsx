@@ -134,8 +134,11 @@ export function KanbanCard({
           'group relative flex select-none items-start gap-2 rounded-lg border border-black/[0.06] bg-card p-3 shadow-sm outline-none dark:border-white/[0.08]',
           // Базовый transition только для тех свойств, которые меняем CSS-ом —
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
-          'transition-[box-shadow,border-color,opacity] duration-150 ease-out',
+          'transition-[box-shadow,border-color,opacity,background-color] duration-150 ease-out',
           'hover:shadow-md',
+          // Done-карточка: мягкая зелёная заливка (Notion-style спокойный маркер
+          // готовности) вместо серого/opacity. Текст остаётся читаемым.
+          !preview && task.status === 'done' && 'border-success/20 bg-success/[0.06] hover:bg-success/[0.1]',
           // Priority-accent: цветной левый кант (2px, rose/orange/blue/slate) —
           // спокойный индикатор важности в стиле Todoist (меняется в дравере).
           task.priority && cn('border-l-2', PRIORITY_META[task.priority].border),
@@ -199,9 +202,8 @@ export function KanbanCard({
               className={cn(
                 MARKDOWN_COMPACT,
                 'line-clamp-3',
-                // Done: приглушаем, но НЕ зачёркиваем — line-through на 3 строках
-                // markdown-текста нечитаем; зелёный чек и так маркирует готовность.
-                task.status === 'done' && 'opacity-60',
+                // Done-текст остаётся полноцветным (Notion: готовая задача не «гасится»);
+                // маркер готовности — мягкая зелёная заливка карточки + чек в чекбоксе.
               )}
             >
               {task.description}
@@ -220,45 +222,52 @@ export function KanbanCard({
             task.deadline !== null ||
             checklist !== null) && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-              {task.delegation && currentUserId && (
-                <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
-              )}
-              {/* Прогресс чеклиста из описания; зелёный когда всё выполнено. */}
-              {checklist && (
-                <span
-                  className={cn(
-                    'flex items-center gap-1 tabular-nums',
-                    checklist.done === checklist.total &&
-                      'text-emerald-600 dark:text-emerald-400',
-                  )}
-                  title="Чеклист в описании"
-                >
-                  <ListChecks className="size-3" />
-                  {checklist.done}/{checklist.total}
-                </span>
-              )}
-              {/* Счётчики — монохром без цветных подложек (Notion-style): цвет на карточке
-                  остаётся только у семантики (дедлайн/статус/приоритет). */}
-              {(task.commentCount ?? 0) > 0 && (
-                <span className="flex items-center gap-1">
-                  <MessageSquare className="size-3" />
-                  {task.commentCount}
-                </span>
-              )}
-              {(task.attachmentCount ?? 0) > 0 && (
-                <span className="flex items-center gap-1">
-                  <ImageIcon className="size-3" />
-                  {task.attachmentCount}
-                </span>
-              )}
-              {/* Бейдж режима Ralph — только для не-дефолта (показывать каждой задаче '🤖 Обычный'
-                  было бы шумом). Component сам возвращает null если showDefault=false и mode='normal'. */}
-              <RalphModeBadge mode={task.ralphMode} />
-              {task.deadline && (
-                <DeadlineBadge deadline={task.deadline} status={task.status} />
-              )}
+              {/* Вторичная мета (делегирование/чеклист/счётчики/ralph/дедлайн) — скрыта
+                  по умолчанию, проявляется на hover карточки (Notion reveal-on-hover).
+                  На таче (max-sm) и при фокусе внутри — всегда видна. Дедлайн больше не
+                  «висит» отдельным чипом без контекста. */}
+              <span className="flex flex-wrap items-center gap-2 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
+                {task.delegation && currentUserId && (
+                  <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
+                )}
+                {/* Прогресс чеклиста из описания; зелёный когда всё выполнено. */}
+                {checklist && (
+                  <span
+                    className={cn(
+                      'flex items-center gap-1 tabular-nums',
+                      checklist.done === checklist.total &&
+                        'text-emerald-600 dark:text-emerald-400',
+                    )}
+                    title="Чеклист в описании"
+                  >
+                    <ListChecks className="size-3" />
+                    {checklist.done}/{checklist.total}
+                  </span>
+                )}
+                {/* Счётчики — монохром без цветных подложек (Notion-style): цвет на карточке
+                    остаётся только у семантики (дедлайн/статус/приоритет). */}
+                {(task.commentCount ?? 0) > 0 && (
+                  <span className="flex items-center gap-1">
+                    <MessageSquare className="size-3" />
+                    {task.commentCount}
+                  </span>
+                )}
+                {(task.attachmentCount ?? 0) > 0 && (
+                  <span className="flex items-center gap-1">
+                    <ImageIcon className="size-3" />
+                    {task.attachmentCount}
+                  </span>
+                )}
+                {/* Бейдж режима Ralph — только для не-дефолта (показывать каждой задаче '🤖 Обычный'
+                    было бы шумом). Component сам возвращает null если showDefault=false и mode='normal'. */}
+                <RalphModeBadge mode={task.ralphMode} />
+                {task.deadline && (
+                  <DeadlineBadge deadline={task.deadline} status={task.status} />
+                )}
+              </span>
               {/* Status-бэйдж справа для статусов, у которых нет своей колонки:
-                  in_progress и awaiting_clarification визуально лежат в TODO. */}
+                  in_progress и awaiting_clarification визуально лежат в TODO. Это
+                  существенный сигнал состояния — оставляем видимым всегда. */}
               {task.status === 'in_progress' && (
                 <span className="ml-auto flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400">
                   <span aria-hidden className="size-2 rounded-full bg-emerald-500" />
@@ -277,7 +286,12 @@ export function KanbanCard({
               на hover/focus карточки (на таче — всегда); прячутся целиком в режиме
               выделения (булк-действия сверху) и в drag-preview (чистый оверлей). */}
           <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-            <span className="opacity-60" title={task.createdAt.toLocaleString('ru-RU')}>
+            {/* Относительная дата создания — вторичный шум: скрыта по умолчанию,
+                проявляется на hover карточки (на таче — всегда). */}
+            <span
+              className="opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-60"
+              title={task.createdAt.toLocaleString('ru-RU')}
+            >
               {relativeTime(task.createdAt)}
             </span>
             <div

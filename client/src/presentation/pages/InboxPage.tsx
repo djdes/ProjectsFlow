@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
 import { Columns3, Eye, EyeOff, List as ListIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { useMotion } from '@/presentation/components/motion/MotionProvider';
+import { fadeInUp } from '@/presentation/components/motion/presets';
 import { AnimatedInbox } from '@/presentation/components/nav/AnimatedNavIcons';
 import { InboxBreadcrumbs } from '@/presentation/layout/InboxBreadcrumbs';
 import {
@@ -39,6 +42,7 @@ function loadHideDone(): boolean {
 // с группировкой). Выбор юзера сохраняем в localStorage.
 export function InboxPage(): React.ReactElement {
   const { projectRepository } = useContainer();
+  const { animations } = useMotion();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +122,8 @@ export function InboxPage(): React.ReactElement {
       className={cn(
         // Те же отступы/ритм, что у страниц проекта (TasksPage) — единый Notion-стиль:
         // строка крошек сверху, затем заголовок. Так «Входящие» встаёт на ту же линию.
-        'flex h-full flex-col gap-1.5 p-3 pt-3.5 sm:gap-4 sm:p-6 sm:pt-4',
+        // Notion-tight chrome: верх/лево поджаты (крошки ближе к углу), тело — комфортно.
+        'flex h-full flex-col gap-1.5 px-3 pb-3 pt-2 sm:gap-4 sm:px-5 sm:pb-6 sm:pt-2.5',
         // Список — узкая центрированная читаемая колонка (как Todoist). Канбан-доске нужна
         // вся ширина, поэтому ограничение применяем только в list-режиме.
         view === 'list' && 'mx-auto w-full max-w-3xl',
@@ -143,11 +148,22 @@ export function InboxPage(): React.ReactElement {
 
       <AssignedToMeBlock onChanged={() => setRefetchKey((k) => k + 1)} />
 
-      {view === 'kanban' ? (
-        <KanbanBoard key={refetchKey} projectId={project.id} showCommits={false} hideDone={hideDone} />
-      ) : (
-        <TaskListView key={refetchKey} projectId={project.id} showCommits={false} hideDone={hideDone} />
-      )}
+      {/* Мягкое появление списка/доски при входе на страницу — fadeInUp, гейтится
+          useMotion(). При выключенных анимациях initial={false} → мгновенно, без
+          сдвига лэйаута. Ключ по view, чтобы переключение канбан↔список тоже мягко вплывало. */}
+      <motion.div
+        key={view}
+        className="flex min-h-0 flex-1 flex-col"
+        variants={fadeInUp}
+        initial={animations ? 'hidden' : false}
+        animate="visible"
+      >
+        {view === 'kanban' ? (
+          <KanbanBoard key={refetchKey} projectId={project.id} showCommits={false} hideDone={hideDone} />
+        ) : (
+          <TaskListView key={refetchKey} projectId={project.id} showCommits={false} hideDone={hideDone} />
+        )}
+      </motion.div>
     </div>
   );
 }

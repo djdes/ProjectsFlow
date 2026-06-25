@@ -101,8 +101,9 @@ export function TasksPage(): React.ReactElement {
     );
   }
 
+  // Notion-tight chrome: верх/лево поджаты (крошки ближе к углу), тело — комфортно.
   return (
-    <div className="flex h-full flex-col gap-1.5 p-3 pt-3.5 sm:gap-4 sm:p-6 sm:pt-4">
+    <div className="flex h-full flex-col gap-1.5 px-3 pb-3 pt-2 sm:gap-4 sm:px-5 sm:pb-6 sm:pt-2.5">
       {/* Хлебные крошки прячем на мобиле: имя проекта дублируется в заголовке ниже,
           навигация — в нижнем таб-баре/drawer. Это возвращает вертикальное место канбану. */}
       <div className="hidden sm:block">
