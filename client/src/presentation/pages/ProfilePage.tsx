@@ -19,6 +19,7 @@ import { useUpdateProfile } from '@/presentation/hooks/useUpdateProfile';
 import { useContainer } from '@/infrastructure/di/container';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
+import { AvatarCropDialog } from '@/presentation/components/user/AvatarCropDialog';
 import { useTheme } from '@/presentation/components/theme/ThemeProvider';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { GithubAccountSection } from '@/presentation/components/github/GithubAccountSection';
@@ -36,11 +37,12 @@ function PersonalDataCard(): React.ReactElement {
   const { uploadAvatar } = useContainer();
   const { applyUserUpdate } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  // Выбранный файл открывает диалог кадрирования; реальная загрузка — после «Сохранить».
+  const [cropFile, setCropFile] = useState<File | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
 
-  const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+  const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const file = e.target.files?.[0];
     e.target.value = ''; // позволяем выбрать тот же файл повторно
     if (!file) return;
@@ -48,15 +50,19 @@ function PersonalDataCard(): React.ReactElement {
       toast.error('Можно загрузить только изображение');
       return;
     }
-    setUploadingAvatar(true);
+    setCropFile(file);
+  };
+
+  // Кадрированный квадрат (webp) — грузим на сервер. Бросаем ошибку наружу, чтобы диалог
+  // остался открытым и показал её тостом; на успех — диалог проиграет галочку.
+  const handleCropped = async (blob: Blob): Promise<void> => {
+    const cropped = new File([blob], 'avatar.webp', { type: blob.type || 'image/webp' });
     try {
-      const updated = await uploadAvatar.execute(file);
+      const updated = await uploadAvatar.execute(cropped);
       applyUserUpdate(updated); // обновляем юзера в AuthContext → аватар везде сразу
-      toast.success('Аватар обновлён');
     } catch (err) {
-      toast.error((err as Error).message ?? 'Не&nbsp;удалось загрузить аватар');
-    } finally {
-      setUploadingAvatar(false);
+      toast.error((err as Error).message ?? 'Не удалось загрузить аватар');
+      throw err;
     }
   };
 
@@ -111,18 +117,26 @@ function PersonalDataCard(): React.ReactElement {
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => void handleAvatarFile(e)}
+              onChange={handleAvatarFile}
             />
             <Button
               type="button"
               variant="outline"
               size="sm"
-              disabled={uploadingAvatar}
+              className="transition-transform active:scale-95"
               onClick={() => fileRef.current?.click()}
             >
-              {uploadingAvatar ? 'Загрузка…' : 'Загрузить аватар'}
+              Загрузить аватар
             </Button>
           </div>
+
+          {cropFile && (
+            <AvatarCropDialog
+              file={cropFile}
+              onConfirm={handleCropped}
+              onClose={() => setCropFile(null)}
+            />
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="displayName">Имя</Label>

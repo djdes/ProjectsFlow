@@ -14,10 +14,11 @@ export function UserAvatar({
   avatarUrl?: string | null;
   className?: string;
 }): React.ReactElement {
+  // rounded-[25%] — скруглённый квадрат как в Notion (не круг), размер-независимо.
   return (
-    <Avatar className={cn('shrink-0', className)}>
+    <Avatar className={cn('shrink-0 rounded-[25%]', className)}>
       {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName} className="object-cover" />}
-      <AvatarFallback className={cn('font-semibold', avatarColor(displayName))}>
+      <AvatarFallback className={cn('rounded-[25%] font-semibold', avatarColor(displayName))}>
         {getInitials(displayName)}
       </AvatarFallback>
     </Avatar>
