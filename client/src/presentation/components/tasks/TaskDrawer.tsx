@@ -1858,7 +1858,9 @@ function CommentItem({
         </Avatar>
       )}
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
+        {/* Шапка строки коммента — высотой с аватар (min-h-7, items-center), чтобы ник/
+            время были по центру относительно аватара (раньше items-baseline «ронял» аву). */}
+        <div className="flex min-h-7 items-center gap-2">
           {isAgent ? (
             // Notion-style: плоский комментарий без тонированной плиты; идентичность
             // агента — peach-аватар ✻ + имя цветом Claude + модель приглушённо.
@@ -1881,7 +1883,9 @@ function CommentItem({
             {formatCommentTime(comment.createdAt)}
             {isEdited && <span className="ml-1 opacity-70">· изменён</span>}
           </span>
-          <div className="ml-auto flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          {/* Действия — ровный ряд size-6 кнопок (карандаш + три точки). Удаление
+              переехало в меню три-точки. Native title — подпись при наведении. */}
+          <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
             <Button
               type="button"
               variant="ghost"
@@ -1889,20 +1893,16 @@ function CommentItem({
               className="size-6"
               onClick={enterEdit}
               aria-label="Редактировать"
+              title="Редактировать"
             >
               <Pencil className="size-3" />
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-6 text-muted-foreground hover:text-destructive"
-              onClick={() => void remove()}
-              aria-label="Удалить"
-            >
-              <Trash2 className="size-3" />
-            </Button>
-            <CommentActionsMenu projectId={projectId} taskId={taskId} comment={comment} />
+            <CommentActionsMenu
+              projectId={projectId}
+              taskId={taskId}
+              comment={comment}
+              onDelete={() => void remove()}
+            />
           </div>
         </div>
         {editing ? (
@@ -1924,7 +1924,8 @@ function CommentItem({
             </Suspense>
           </div>
         ) : (
-          <div className="mt-0.5">
+          // Notion-style: тело коммента с тонкой левой линией-коннектором.
+          <div className="mt-1 border-l-2 border-border/40 pl-3">
             <CommentBody body={comment.body} />
             {ralphQuestion && !answeredQids.has(ralphQuestion.qid) && (
               <RalphAnswerControls

@@ -11,6 +11,7 @@ import {
   MinusCircle,
   MoreHorizontal,
   Send,
+  Trash2,
   Users,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -41,6 +42,8 @@ type Props = {
   projectId: string;
   taskId: string;
   comment: TaskComment;
+  /** Удаление комментария — пункт меню (перенесено из отдельной кнопки-корзины). */
+  onDelete?: () => void;
 };
 
 // Человеко-читаемая причина пропуска/ошибки доставки.
@@ -105,7 +108,7 @@ function groupByRecipient(recipients: readonly CommentNotification[]): Grouped[]
 
 // Меню ⋮ у отправленного комментария: «Кто уведомлён» (журнал доставки), копирование
 // ссылки на сам комментарий и текста.
-export function CommentActionsMenu({ projectId, taskId, comment }: Props): React.ReactElement {
+export function CommentActionsMenu({ projectId, taskId, comment, onDelete }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -145,8 +148,9 @@ export function CommentActionsMenu({ projectId, taskId, comment }: Props): React
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="grid size-6 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Действия с комментарием"
+            title="Ещё"
           >
             <MoreHorizontal className="size-3.5" />
           </button>
@@ -165,6 +169,18 @@ export function CommentActionsMenu({ projectId, taskId, comment }: Props): React
             <Copy className="size-3.5" />
             Скопировать текст
           </DropdownMenuItem>
+          {onDelete && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => onDelete()}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="size-3.5" />
+                Удалить
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
