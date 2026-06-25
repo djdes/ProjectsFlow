@@ -17,27 +17,6 @@ export interface FloatingAnchor {
 
 const PAD = 8; // отступ от краёв вьюпорта
 
-// Ближайший предок, создающий containing-block для position:fixed (transform / filter
-// / perspective / will-change). Внутри Sheet (slide-анимация оставляет такой предок)
-// fixed считается от него, а не от вьюпорта — поэтому координаты надо сместить на его
-// origin. null — фиксед считается от вьюпорта (обычный случай).
-function fixedContainingBlock(el: HTMLElement): HTMLElement | null {
-  let p = el.parentElement;
-  while (p) {
-    const s = getComputedStyle(p);
-    if (
-      s.transform !== 'none' ||
-      s.perspective !== 'none' ||
-      (s.filter && s.filter !== 'none') ||
-      s.willChange.includes('transform')
-    ) {
-      return p;
-    }
-    p = p.parentElement;
-  }
-  return null;
-}
-
 // Плавающее меню форматирования (по выделению И по правому клику). В отличие от
 // Tiptap BubbleMenu / Radix Popover — полностью самоуправляемое: `position: fixed`,
 // клампится по вьюпорту (цвет/преобразование-панели НИКОГДА не уезжают в угол 0,0 —
@@ -70,12 +49,18 @@ export function FloatingFormatMenu({
 
   // Пересчёт позиции с клампом по вьюпорту. Зовём на смену якоря и на ресайз меню
   // (панели «Цвет»/«Преобразовать» выше главной — высота меняется).
+  // Самокорректирующееся позиционирование: anchor в координатах ВЬЮПОРТА, но fixed
+  // внутри Sheet считается от его transform-border-box (а не от вьюпорта). Меряем, где
+  // меню реально оказалось при текущем style.left/top, и сдвигаем на дельту до желаемой
+  // viewport-позиции. Работает при любом containing-block без его поиска.
   const place = React.useCallback(() => {
-    if (!anchor || !ref.current) return;
-    const m = ref.current.getBoundingClientRect();
+    const el = ref.current;
+    if (!anchor || !el) return;
+    const styleLeft = parseFloat(el.style.left) || 0;
+    const styleTop = parseFloat(el.style.top) || 0;
+    const m = el.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    // 1) Желаемая позиция в координатах ВЬЮПОРТА (anchor — viewport-coords).
     let vpLeft = anchor.x;
     if (vpLeft + m.width > vw - PAD) vpLeft = vw - PAD - m.width;
     if (vpLeft < PAD) vpLeft = PAD;
@@ -83,10 +68,13 @@ export function FloatingFormatMenu({
     let vpTop = anchor.top - m.height - PAD;
     if (vpTop < PAD) vpTop = anchor.bottom + PAD;
     if (vpTop + m.height > vh - PAD) vpTop = Math.max(PAD, vh - PAD - m.height);
-    // 2) Перевод в координаты containing-block'а (если fixed «пойман» transform-предком).
-    const cb = fixedContainingBlock(ref.current);
-    const origin = cb ? cb.getBoundingClientRect() : { left: 0, top: 0 };
-    setPos({ left: vpLeft - origin.left, top: vpTop - origin.top, ready: true });
+    const nextLeft = styleLeft + (vpLeft - m.left);
+    const nextTop = styleTop + (vpTop - m.top);
+    if (Math.abs(nextLeft - styleLeft) < 0.5 && Math.abs(nextTop - styleTop) < 0.5) {
+      setPos((p) => ({ ...p, ready: true }));
+      return;
+    }
+    setPos({ left: nextLeft, top: nextTop, ready: true });
   }, [anchor]);
 
   React.useLayoutEffect(() => {
