@@ -17,6 +17,27 @@ export interface FloatingAnchor {
 
 const PAD = 8; // отступ от краёв вьюпорта
 
+// Ближайший предок, создающий containing-block для position:fixed (transform / filter
+// / perspective / will-change). Внутри Sheet (slide-анимация оставляет такой предок)
+// fixed считается от него, а не от вьюпорта — поэтому координаты надо сместить на его
+// origin. null — фиксед считается от вьюпорта (обычный случай).
+function fixedContainingBlock(el: HTMLElement): HTMLElement | null {
+  let p = el.parentElement;
+  while (p) {
+    const s = getComputedStyle(p);
+    if (
+      s.transform !== 'none' ||
+      s.perspective !== 'none' ||
+      (s.filter && s.filter !== 'none') ||
+      s.willChange.includes('transform')
+    ) {
+      return p;
+    }
+    p = p.parentElement;
+  }
+  return null;
+}
+
 // Плавающее меню форматирования (по выделению И по правому клику). В отличие от
 // Tiptap BubbleMenu / Radix Popover — полностью самоуправляемое: `position: fixed`,
 // клампится по вьюпорту (цвет/преобразование-панели НИКОГДА не уезжают в угол 0,0 —
@@ -54,14 +75,18 @@ export function FloatingFormatMenu({
     const m = ref.current.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    let left = anchor.x;
-    if (left + m.width > vw - PAD) left = vw - PAD - m.width;
-    if (left < PAD) left = PAD;
+    // 1) Желаемая позиция в координатах ВЬЮПОРТА (anchor — viewport-coords).
+    let vpLeft = anchor.x;
+    if (vpLeft + m.width > vw - PAD) vpLeft = vw - PAD - m.width;
+    if (vpLeft < PAD) vpLeft = PAD;
     // Предпочтительно НАД выделением; не влезает сверху — ПОД ним.
-    let top = anchor.top - m.height - PAD;
-    if (top < PAD) top = anchor.bottom + PAD;
-    if (top + m.height > vh - PAD) top = Math.max(PAD, vh - PAD - m.height);
-    setPos({ left, top, ready: true });
+    let vpTop = anchor.top - m.height - PAD;
+    if (vpTop < PAD) vpTop = anchor.bottom + PAD;
+    if (vpTop + m.height > vh - PAD) vpTop = Math.max(PAD, vh - PAD - m.height);
+    // 2) Перевод в координаты containing-block'а (если fixed «пойман» transform-предком).
+    const cb = fixedContainingBlock(ref.current);
+    const origin = cb ? cb.getBoundingClientRect() : { left: 0, top: 0 };
+    setPos({ left: vpLeft - origin.left, top: vpTop - origin.top, ready: true });
   }, [anchor]);
 
   React.useLayoutEffect(() => {
