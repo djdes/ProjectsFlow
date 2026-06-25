@@ -32,6 +32,7 @@ export class DrizzleTaskSearchRepository implements TaskSearchRepository {
       projectName: projects.name,
       status: tasks.status,
       description: tasks.description,
+      createdAt: tasks.createdAt,
     };
 
     const rows = q.includeAllProjects
@@ -63,6 +64,7 @@ export class DrizzleTaskSearchRepository implements TaskSearchRepository {
       projectName: r.projectName,
       status: r.status as TaskStatus,
       excerpt: toExcerpt(r.description),
+      createdAt: r.createdAt,
     }));
   }
 }

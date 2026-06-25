@@ -8,6 +8,8 @@ export type TaskSearchResult = {
   readonly projectName: string;
   readonly status: TaskStatus;
   readonly excerpt: string;
+  // Дата создания задачи — нужна сайдбар-поиску для сортировки по свежести.
+  readonly createdAt: Date;
 };
 
 export type TaskSearchQuery = {

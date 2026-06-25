@@ -43,7 +43,10 @@ import { useUpdateProject } from '@/presentation/hooks/useUpdateProject';
 import { useDuplicateProject } from '@/presentation/hooks/useDuplicateProject';
 import { useNewProjectDialog } from '@/presentation/components/forms/NewProjectDialogProvider';
 import { useSidebarSectionCollapse } from '@/presentation/hooks/useSidebarSectionCollapse';
+import { useSidebarTaskSearch } from '@/presentation/hooks/useSidebarTaskSearch';
+import { Highlight } from '@/presentation/components/search/Highlight';
 import { RecentTasksBlock } from './RecentTasksBlock';
+import { SidebarTaskResults } from './SidebarTaskResults';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,6 +76,8 @@ type RowProps = {
   isFirst: boolean;
   isLast: boolean;
   onMove: (projectId: string, dir: MoveDir) => void;
+  // Активный поисковый запрос — подсвечиваем совпадение в имени проекта (пусто = без подсветки).
+  highlightQuery?: string;
 };
 
 function SidebarProjectRow({
@@ -82,6 +87,7 @@ function SidebarProjectRow({
   isFirst,
   isLast,
   onMove,
+  highlightQuery,
 }: RowProps): React.ReactElement {
   const navigate = useNavigate();
   const location = useLocation();
@@ -210,7 +216,9 @@ function SidebarProjectRow({
                 />
               )}
             </span>
-            <span className="min-w-0 flex-1 truncate">{project.name}</span>
+            <span className="min-w-0 flex-1 truncate">
+              <Highlight text={project.name} query={highlightQuery ?? ''} />
+            </span>
             {/* В покое справа — только иконка совместного проекта (ровный правый край).
                 По наведению она гаснет: на её место выезжают число задач + «три точки». */}
             {(project.memberCount ?? 0) > 1 && (
@@ -384,12 +392,14 @@ function ProjectGroup({
   reorderable,
   onReorderEnd,
   onMove,
+  highlightQuery,
 }: {
   projects: readonly Project[];
   bucket: Bucket;
   reorderable: boolean;
   onReorderEnd: (event: DragEndEvent) => void;
   onMove: (projectId: string, dir: MoveDir) => void;
+  highlightQuery?: string;
 }): React.ReactElement {
   // Мышь — порог 8px (быстрый reorder). Тач — long-press ~220мс, чтобы скролл списка
   // проектов пальцем не «хватал» строку (строки — это ещё и навигация по тапу).
@@ -410,6 +420,7 @@ function ProjectGroup({
           isFirst={idx === 0}
           isLast={idx === projects.length - 1}
           onMove={onMove}
+          highlightQuery={highlightQuery}
         />
       ))}
     </div>
@@ -443,6 +454,8 @@ export function SidebarProjectList(): React.ReactElement {
   const { collapsed: archivedCollapsed, toggle: toggleArchivedCollapsed } =
     useSidebarSectionCollapse('archived', true);
   const [query, setQuery] = useState('');
+  // Поиск ищет И по проектам (по имени, мгновенно), И по задачам (по описанию, дебаунс).
+  const taskSearch = useSidebarTaskSearch(query);
 
   if (loading) return <SidebarProjectListSkeleton />;
 
@@ -563,7 +576,10 @@ export function SidebarProjectList(): React.ReactElement {
     void reorder(ids, next);
   };
 
-  const noMatches = searching && favorites.length === 0 && regular.length === 0;
+  const hasTaskMatches = taskSearch.results.length > 0;
+  const hasProjectMatches = regular.length > 0;
+  // Совсем ничего не нашли — ни в задачах, ни в проектах — и поиск задач уже отработал.
+  const nothingFound = searching && !taskSearch.loading && !hasTaskMatches && !hasProjectMatches;
 
   return (
     // Колонка на всю высоту: поиск закреплён сверху (его focus-ring не обрезается
@@ -586,8 +602,13 @@ export function SidebarProjectList(): React.ReactElement {
       )}
 
       <div className="pf-scroll-visible -mx-1 min-h-0 flex-1 space-y-4 px-1">
-        {/* «Недавнее» — скроллится вместе с проектами. Прячется, пока юзер не открыл задачу. */}
-        <RecentTasksBlock />
+        {/* Вне поиска — «Недавнее» (недавно открытые задачи). В поиске — найденные задачи
+            (блок «Задачи»: 3 → «ещё» до 10, сортировка по дате создания, подсветка). */}
+        {searching ? (
+          hasTaskMatches && <SidebarTaskResults results={taskSearch.results} query={query} />
+        ) : (
+          <RecentTasksBlock />
+        )}
 
       {/* «Избранное» — самостоятельная секция НАД «Мои проекты». Скрывается в режиме поиска
           (тогда выдача плоская, без дублей). Заголовок кликается — сворачивает секцию. */}
@@ -619,22 +640,30 @@ export function SidebarProjectList(): React.ReactElement {
         </div>
       )}
 
-      <div className="space-y-1">
-        {myProjectsHeader}
-        <Collapse open={!mainCollapsed}>
-          {noMatches ? (
-            <p className="px-2 py-1.5 text-sm text-muted-foreground">Ничего не найдено.</p>
-          ) : regular.length > 0 ? (
-            <ProjectGroup
-              projects={regular}
-              bucket="main"
-              reorderable={reorderable}
-              onReorderEnd={handleRegularDragEnd}
-              onMove={moveInRegular}
-            />
-          ) : null}
-        </Collapse>
-      </div>
+      {/* «Мои проекты». В поиске показываем только если есть совпадения по проектам —
+          при «только задачи» блок проектов скрыт целиком (как и просили). */}
+      {(!searching || hasProjectMatches) && (
+        <div className="space-y-1">
+          {myProjectsHeader}
+          <Collapse open={!mainCollapsed}>
+            {regular.length > 0 ? (
+              <ProjectGroup
+                projects={regular}
+                bucket="main"
+                reorderable={reorderable}
+                onReorderEnd={handleRegularDragEnd}
+                onMove={moveInRegular}
+                highlightQuery={searching ? query : undefined}
+              />
+            ) : null}
+          </Collapse>
+        </div>
+      )}
+
+      {/* Совсем ничего не нашлось — ни в задачах, ни в проектах. */}
+      {nothingFound && (
+        <p className="px-2 py-1.5 text-sm text-muted-foreground">Ничего не найдено.</p>
+      )}
 
       {/* «Архивные» — спрятанные проекты. Показываем ВСЕГДА (вне поиска), чтобы пункт был
           обнаружим даже без архивных. По умолчанию свёрнута; «Вернуть из архива» — в меню строки. */}

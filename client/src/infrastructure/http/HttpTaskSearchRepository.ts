@@ -9,6 +9,7 @@ type TaskSearchResultDto = {
   projectName: string;
   status: TaskStatus;
   excerpt: string;
+  createdAt: string;
 };
 
 export class HttpTaskSearchRepository implements TaskSearchRepository {
