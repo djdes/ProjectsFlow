@@ -161,29 +161,26 @@ export function AssignedToMeBlock({ onChanged }: Props): React.ReactElement | nu
   if (total === 0) return null;
 
   return (
-    <section
-      id="assigned-to-me"
-      className="space-y-3 rounded-lg border border-primary/30 bg-primary/[0.04] p-3 dark:border-primary/25 dark:bg-primary/[0.06]"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+    // Notion-стиль: НЕ карточка-в-рамке, а чистая секция. Заголовок — тихий muted-лейбл
+    // (как разделы Notion), строки ниже — без тяжёлого бордера, разделены hairline-дивайдерами.
+    <section id="assigned-to-me" className="space-y-2">
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <h2 className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Поручено мне
-          <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-            {total}
-          </span>
+          <span className="text-muted-foreground/60">{total}</span>
         </h2>
         <GroupingMenu value={grouping} onChange={handleGroupingChange} />
       </div>
 
       <div className="space-y-3">
         {groups.map((group) => (
-          <div key={group.key} className="space-y-1.5">
+          <div key={group.key} className="space-y-0.5">
             <div className="flex items-center gap-1.5 px-0.5 text-xs font-medium text-muted-foreground">
               <GroupIcon mode={grouping} isInbox={group.isInbox} />
               <span className="truncate">{group.label}</span>
               <span className="text-muted-foreground/60">· {group.items.length}</span>
             </div>
-            <ul className="divide-y overflow-hidden rounded-md border bg-card">
+            <ul className="divide-y divide-border/60">
               {/* Хелпер уже отсортировал: ожидающие (pending) наверх, затем по релевантному ключу. */}
               {group.items.map((item) =>
                 item.delegation.status === 'pending' ? (
@@ -238,7 +235,7 @@ function GroupingMenu({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
           title="Группировка"
         >
           <ListFilter className="size-3.5" />
@@ -299,7 +296,7 @@ function AcceptedRow({
   return (
     <li
       className={cn(
-        'group flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/40',
+        'group flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-hover',
         // Done-строка: мягкая зелёная заливка (НЕ серый/НЕ opacity), как в TaskListView/
         // KanbanCard — спокойный Notion-маркер готовности; текст остаётся полноцветным.
         isDone && 'bg-success/[0.08] hover:bg-success/[0.12]',
@@ -374,7 +371,8 @@ function PendingRow({
   return (
     // Вертикально: сверху «<аватар> Имя поручил вам: «описание»», снизу — кнопки.
     // Так на узких экранах ничего не сжимается и кнопки ложатся ровно под текстом.
-    <li className="flex flex-col gap-2 border-l-2 border-primary px-3 py-2">
+    // Тонкая акцент-полоска слева маркирует «ожидает ответа», но спокойно (без насыщенной заливки).
+    <li className="flex flex-col gap-2 rounded-md border-l-2 border-primary/40 bg-hover/60 px-2.5 py-2">
       <div className="flex items-start gap-2.5">
         <Avatar className="size-7 shrink-0">
           <AvatarFallback
@@ -396,7 +394,7 @@ function PendingRow({
       <div className="flex gap-1.5 pl-[2.375rem]">
         <Button
           size="sm"
-          className="h-7 gap-1 bg-emerald-600 hover:bg-emerald-700"
+          className="h-7 gap-1 bg-success text-white hover:bg-success/90"
           disabled={busy}
           onClick={onAccept}
         >

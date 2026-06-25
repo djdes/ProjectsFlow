@@ -10,57 +10,60 @@ export type KanbanColorClasses = {
 };
 
 // ВАЖНО: только статические литеральные классы — Tailwind JIT не видит интерполированные имена.
-// Пастель Notion: пилюля — спокойный *-100 фон, тело колонки — едва заметная тонировка
-// (/40 в светлой, /[0.07] в тёмной). `gray` — тёплый stone (в пару к тёплым нейтралям темы).
+// Notion-calm: цвет колонки несёт маленькая точка-маркер (`dot`) рядом с подписью, а тело
+// колонки — почти-нейтральная едва заметная тонировка низкой насыщенности (/25 в светлой,
+// /[0.05] в тёмной), чтобы доска читалась спокойно, без громких заливок. `pill` оставлен
+// в типе для обратной совместимости (используется как приглушённый текстовый цвет, если нужно).
+// `gray` — тёплый stone (в пару к тёплым нейтралям темы).
 export const KANBAN_COLOR_CLASSES: Record<KanbanColor, KanbanColorClasses> = {
   default: {
-    pill: 'bg-muted text-muted-foreground',
-    body: 'bg-muted/60 sm:bg-muted/30',
+    pill: 'text-muted-foreground',
+    body: 'bg-muted/40 sm:bg-muted/25',
     dot: 'bg-muted-foreground/40',
   },
   gray: {
-    pill: 'bg-stone-200/70 text-stone-700 dark:bg-stone-500/20 dark:text-stone-300',
-    body: 'bg-stone-100/50 dark:bg-stone-500/[0.07]',
+    pill: 'text-stone-600 dark:text-stone-300',
+    body: 'bg-stone-100/40 dark:bg-stone-500/[0.05]',
     dot: 'bg-stone-400',
   },
   brown: {
-    pill: 'bg-amber-100 text-amber-900 dark:bg-amber-700/20 dark:text-amber-200',
-    body: 'bg-amber-100/40 dark:bg-amber-800/[0.07]',
+    pill: 'text-amber-800 dark:text-amber-200',
+    body: 'bg-amber-100/25 dark:bg-amber-800/[0.05]',
     dot: 'bg-amber-700',
   },
   orange: {
-    pill: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200',
-    body: 'bg-orange-100/40 dark:bg-orange-500/[0.07]',
+    pill: 'text-orange-700 dark:text-orange-200',
+    body: 'bg-orange-100/25 dark:bg-orange-500/[0.05]',
     dot: 'bg-orange-500',
   },
   yellow: {
-    pill: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-100',
-    body: 'bg-yellow-100/40 dark:bg-yellow-500/[0.07]',
+    pill: 'text-yellow-700 dark:text-yellow-100',
+    body: 'bg-yellow-100/25 dark:bg-yellow-500/[0.05]',
     dot: 'bg-yellow-400',
   },
   green: {
-    pill: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-200',
-    body: 'bg-green-100/40 dark:bg-green-500/[0.07]',
+    pill: 'text-green-700 dark:text-green-200',
+    body: 'bg-green-100/25 dark:bg-green-500/[0.05]',
     dot: 'bg-green-500',
   },
   blue: {
-    pill: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-200',
-    body: 'bg-blue-100/40 dark:bg-blue-500/[0.07]',
+    pill: 'text-blue-700 dark:text-blue-200',
+    body: 'bg-blue-100/25 dark:bg-blue-500/[0.05]',
     dot: 'bg-blue-500',
   },
   purple: {
-    pill: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-200',
-    body: 'bg-purple-100/40 dark:bg-purple-500/[0.07]',
+    pill: 'text-purple-700 dark:text-purple-200',
+    body: 'bg-purple-100/25 dark:bg-purple-500/[0.05]',
     dot: 'bg-purple-500',
   },
   pink: {
-    pill: 'bg-pink-100 text-pink-800 dark:bg-pink-500/20 dark:text-pink-200',
-    body: 'bg-pink-100/40 dark:bg-pink-500/[0.07]',
+    pill: 'text-pink-700 dark:text-pink-200',
+    body: 'bg-pink-100/25 dark:bg-pink-500/[0.05]',
     dot: 'bg-pink-500',
   },
   red: {
-    pill: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-200',
-    body: 'bg-red-100/40 dark:bg-red-500/[0.07]',
+    pill: 'text-red-700 dark:text-red-200',
+    body: 'bg-red-100/25 dark:bg-red-500/[0.05]',
     dot: 'bg-red-500',
   },
 };

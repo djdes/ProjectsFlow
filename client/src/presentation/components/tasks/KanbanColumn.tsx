@@ -15,6 +15,9 @@ import type { SelectModifiers } from './selection/selectionReducer';
 export type KanbanColumnColorClasses = {
   readonly pill: string;
   readonly body: string;
+  // Маленький цветной маркер-точка рядом с подписью колонки (Notion-стиль:
+  // спокойный нейтральный заголовок + точка цвета вместо громкой заливки-пилюли).
+  readonly dot: string;
 };
 
 type InlineCreateInput = {
@@ -197,25 +200,27 @@ export function KanbanColumn({
           </>
         ) : (
           <>
-            <div className="flex min-w-0 items-center gap-2">
+            <div className="flex min-w-0 items-center gap-1.5">
               {label.length > 0 && (
-                <div className="min-w-0">
+                <>
+                  {/* Цветная точка вместо громкой пилюли-заливки — спокойный Notion-маркер колонки. */}
                   <span
-                    className={cn(
-                      'inline-block max-w-full truncate rounded-md px-1.5 py-0.5 text-[13px] font-medium leading-snug',
-                      colorClasses?.pill ?? 'text-muted-foreground',
+                    className={cn('size-2 shrink-0 rounded-full', colorClasses?.dot ?? 'bg-muted-foreground/40')}
+                    aria-hidden
+                  />
+                  <div className="min-w-0">
+                    <span className="inline-block max-w-full truncate text-[13px] font-medium leading-snug text-foreground/80">
+                      {label}
+                    </span>
+                    {STATUS_SUBTITLE[status] && (
+                      <p className="truncate text-[10px] leading-tight text-muted-foreground/60">
+                        {STATUS_SUBTITLE[status]}
+                      </p>
                     )}
-                  >
-                    {label}
-                  </span>
-                  {STATUS_SUBTITLE[status] && (
-                    <p className="truncate text-[10px] leading-tight text-muted-foreground/60">
-                      {STATUS_SUBTITLE[status]}
-                    </p>
-                  )}
-                </div>
+                  </div>
+                </>
               )}
-              <span className="shrink-0 px-0.5 text-xs tabular-nums text-muted-foreground">
+              <span className="shrink-0 px-0.5 text-xs tabular-nums text-muted-foreground/70">
                 {tasks.length}
               </span>
             </div>
