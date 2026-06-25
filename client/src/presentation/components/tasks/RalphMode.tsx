@@ -7,6 +7,8 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
+import { MetaChip } from './MetaChip';
 import { RALPH_MODE_META, RALPH_MODES, type RalphMode } from '@/domain/task/Task';
 
 // Селектор режима Ralph — нейтрально стилизованный dropdown с двустрочными элементами
@@ -21,6 +23,7 @@ export function RalphModeSelect({
   variant = 'outline',
   iconOnly = false,
   showCaret = false,
+  chip = false,
 }: {
   value: RalphMode;
   onChange: (next: RalphMode) => void;
@@ -31,33 +34,55 @@ export function RalphModeSelect({
   iconOnly?: boolean;
   // В iconOnly-режиме показать маленькую каретку (для чипа-режима в шапке дравера).
   showCaret?: boolean;
+  // Notion-style чип для ряда свойств шапки задачи: текст «Режим» (для дефолта) или
+  // имя режима + эмодзи + каретка, единый вид с MetaChip (h-7 rounded-md px-2 text-xs).
+  chip?: boolean;
 }): React.ReactElement {
   const meta = RALPH_MODE_META[value];
+  // Чип-режим: по умолчанию (normal) показываем нейтральное «Режим», иначе — имя режима.
+  const chipLabel = value === 'normal' ? 'Режим' : meta.label;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant={variant}
-          disabled={disabled}
-          title={`Режим воркера: ${meta.label}`}
-          className={`${iconOnly ? 'justify-center' : 'w-full justify-between'} font-normal ${className ?? ''}`}
-        >
-          {iconOnly ? (
-            <>
-              <span aria-hidden="true" className="text-base leading-none">{meta.icon}</span>
-              {showCaret && <ChevronDown className="size-3 shrink-0 opacity-60" />}
-            </>
-          ) : (
-            <>
-              <span className="flex items-center gap-2 truncate">
+        {chip ? (
+          <MetaChip
+            label={
+              <span className="flex items-center gap-1.5">
                 <span aria-hidden="true">{meta.icon}</span>
-                <span className="truncate">{meta.label}</span>
+                <span className="truncate">{chipLabel}</span>
+                <ChevronDown className="size-3 shrink-0 opacity-60" />
               </span>
-              <ChevronDown className="size-4 shrink-0 opacity-60" />
-            </>
-          )}
-        </Button>
+            }
+            filled={value !== 'normal'}
+            showPlusWhenEmpty={false}
+            disabled={disabled}
+            title={`Режим воркера: ${meta.label}`}
+            className={className}
+          />
+        ) : (
+          <Button
+            type="button"
+            variant={variant}
+            disabled={disabled}
+            title={`Режим воркера: ${meta.label}`}
+            className={cn(iconOnly ? 'justify-center' : 'w-full justify-between', 'font-normal', className)}
+          >
+            {iconOnly ? (
+              <>
+                <span aria-hidden="true" className="text-base leading-none">{meta.icon}</span>
+                {showCaret && <ChevronDown className="size-3 shrink-0 opacity-60" />}
+              </>
+            ) : (
+              <>
+                <span className="flex items-center gap-2 truncate">
+                  <span aria-hidden="true">{meta.icon}</span>
+                  <span className="truncate">{meta.label}</span>
+                </span>
+                <ChevronDown className="size-4 shrink-0 opacity-60" />
+              </>
+            )}
+          </Button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[280px]">
         <DropdownMenuRadioGroup value={value} onValueChange={(v) => onChange(v as RalphMode)}>

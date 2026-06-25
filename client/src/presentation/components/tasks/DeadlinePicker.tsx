@@ -100,8 +100,8 @@ export function DeadlinePicker({
             disabled={disabled}
             className={cn(
               iconOnly ? 'shrink-0 gap-1.5 text-xs' : 'h-7 gap-1.5 px-2 text-xs',
-              value ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
               className,
+              value ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
             title={value ? `Срок: ${value}` : 'Выбрать срок выполнения'}
             aria-label={value ? `Срок: ${value}` : 'Срок выполнения'}

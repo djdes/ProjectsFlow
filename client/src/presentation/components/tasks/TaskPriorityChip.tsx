@@ -3,6 +3,7 @@ import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import type { Task, TaskPriority } from '@/domain/task/Task';
 import { PrioritySelect } from './PrioritySelect';
+import { META_CHIP_CLASS } from './MetaChip';
 
 type Props = {
   task: Task;
@@ -31,5 +32,13 @@ export function TaskPriorityChip({ task, onChanged }: Props): React.ReactElement
     }
   };
 
-  return <PrioritySelect value={value} onChange={(v) => void change(v)} disabled={saving} compact />;
+  return (
+    <PrioritySelect
+      value={value}
+      onChange={(v) => void change(v)}
+      disabled={saving}
+      compact
+      className={META_CHIP_CLASS}
+    />
+  );
 }

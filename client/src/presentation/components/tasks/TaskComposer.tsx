@@ -342,7 +342,7 @@ export function TaskComposer({
         </ContextMenu>
         <div className="flex shrink-0 items-center pb-1.5">
           <SendTargetButton
-            size="md"
+            size="sm"
             options={forcedStatus ? undefined : QUICK_STATUS_OPTIONS}
             value={quickStatus}
             onChange={setQuickStatus}

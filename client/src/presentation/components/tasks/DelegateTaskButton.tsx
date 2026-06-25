@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, Loader2, Send, X } from 'lucide-react';
+import { ChevronDown, Loader2, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -11,6 +11,7 @@ import {
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
+import { META_CHIP_CLASS } from './MetaChip';
 import type { SharedMember } from '@/application/project/ProjectRepository';
 import type { Task } from '@/domain/task/Task';
 
@@ -101,7 +102,7 @@ export function DelegateTaskButton({ task, currentUserId, onChanged, projectId }
         variant="ghost"
         size="sm"
         disabled={submitting}
-        className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-destructive"
+        className={cn(META_CHIP_CLASS, 'hover:text-destructive')}
         onClick={() => void handleWithdraw()}
         title="Отозвать делегирование (пока делегат не ответил)"
       >
@@ -121,12 +122,12 @@ export function DelegateTaskButton({ task, currentUserId, onChanged, projectId }
           variant="ghost"
           size="sm"
           disabled={submitting}
-          className={cn('h-7 gap-1.5 px-2 text-xs')}
-          title="Делегировать одному из участников ваших общих проектов"
+          className={META_CHIP_CLASS}
+          title="Назначить ответственного — делегировать участнику проекта"
         >
-          {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-          Делегировать
-          <ChevronDown className="size-3" />
+          {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <UserPlus className="size-3.5" />}
+          ответственный
+          <ChevronDown className="size-3 opacity-60" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[240px]">

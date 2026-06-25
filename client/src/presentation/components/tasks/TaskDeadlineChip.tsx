@@ -3,6 +3,7 @@ import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import type { Task } from '@/domain/task/Task';
 import { DeadlinePicker } from './DeadlinePicker';
+import { META_CHIP_CLASS } from './MetaChip';
 
 type Props = {
   task: Task;
@@ -31,5 +32,12 @@ export function TaskDeadlineChip({ task, onChanged }: Props): React.ReactElement
     }
   };
 
-  return <DeadlinePicker value={value} onChange={(v) => void change(v)} disabled={saving} />;
+  return (
+    <DeadlinePicker
+      value={value}
+      onChange={(v) => void change(v)}
+      disabled={saving}
+      className={META_CHIP_CLASS}
+    />
+  );
 }

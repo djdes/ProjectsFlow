@@ -69,9 +69,9 @@ export function PrioritySelect({
           disabled={disabled}
           className={cn(
             'h-7 gap-1.5 px-2 text-xs',
+            className,
             !meta && 'text-muted-foreground hover:text-foreground',
             meta && meta.textColor,
-            className,
           )}
           title="Приоритет задачи"
         >

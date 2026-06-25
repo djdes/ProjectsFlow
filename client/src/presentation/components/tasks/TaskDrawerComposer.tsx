@@ -273,6 +273,7 @@ export function TaskDrawerComposer({
           onSend={() => void submit()}
           submitting={submitting}
           disabled={!canSubmit}
+          showLabel={false}
         />
 
         <input

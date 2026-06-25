@@ -8,7 +8,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { ArrowRight, ChevronDown, ChevronsRight, ChevronUp, Download, FileText, Loader2, Map, Maximize2, Minimize2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
+import { ArrowRight, ChevronDown, ChevronsRight, ChevronUp, Download, FileText, ListChecks, Loader2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,11 +47,7 @@ import {
 import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import { toggleChecklistItem } from '@/lib/checklist';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
-import {
-  useTextFieldFormatting,
-  copyMarkdownForTelegram,
-  TelegramCopyButton,
-} from '@/presentation/hooks/useTextFieldFormatting';
+import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
 import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
 import { LiveTab } from './LiveTab';
 import { ClaudeIcon } from './ClaudeIcon';
@@ -71,6 +67,11 @@ import { DeadlinePicker } from './DeadlinePicker';
 import { PrioritySelect } from './PrioritySelect';
 import { TaskPriorityChip } from './TaskPriorityChip';
 import { TaskDeadlineChip } from './TaskDeadlineChip';
+import { MetaChip } from './MetaChip';
+import { CopyTaskButton } from './CopyTaskButton';
+import { ReworkTaskButton } from './ReworkTaskButton';
+import { PlanTaskButton } from './PlanTaskButton';
+import { formatTaskCreated } from '@/lib/datetime';
 import type { TaskPriority } from '@/domain/task/Task';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
@@ -161,16 +162,13 @@ function TaskRalphModeChip({
     }
   };
 
-  // Тихий чип в ряду свойств шапки — только иконка режима + каретка (без текста «Обычный»).
+  // Notion-style чип в ряду свойств шапки: «+ режим» / имя режима + эмодзи + каретка.
   return (
     <RalphModeSelect
       value={mode}
       onChange={(v) => void change(v)}
       disabled={saving}
-      variant="ghost"
-      iconOnly
-      showCaret
-      className="!h-7 w-auto gap-1 !px-1.5 !py-0 text-muted-foreground hover:text-foreground"
+      chip
     />
   );
 }
@@ -356,11 +354,6 @@ export function TaskDrawer({
   const [createDragActive, setCreateDragActive] = useState(false);
   // Ref на скрытый file input для кнопки «Вложение» в create-mode.
   const createFileInputRef = useRef<HTMLInputElement>(null);
-  // Expand-toggle: false → drawer 640px; true → full-width. На mobile (pointer: coarse)
-  // toggle всегда скрыт, drawer и так почти на весь экран (sheet.tsx default = w-3/4).
-  const [expanded, setExpanded] = useState(false);
-  const isCoarsePointer =
-    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
   // Ref-канал для footer-композера → TaskCommentsSection: после создания комментария
   // композер дёргает текущий handler чтобы вставить созданный коммент в список.
   const onCommentCreatedRef = useRef<((c: TaskComment) => void) | null>(null);
@@ -381,6 +374,8 @@ export function TaskDrawer({
   const [activeTab, setActiveTab] = useState<'discussion' | 'live'>('discussion');
   // Есть ли running LIVE-сессия (бейдж 🔴 на триггере вкладки). LiveTab сообщает через колбэк.
   const [liveRunning, setLiveRunning] = useState(false);
+  // Кол-во комментариев — свёрнуто в триггер «Обсуждение · N». TaskCommentsSection сообщает.
+  const [commentCount, setCommentCount] = useState(0);
   // Cache аттачей для header-row.
   const [headerAttachments, setHeaderAttachments] = useState<TaskAttachment[]>([]);
 
@@ -428,10 +423,10 @@ export function TaskDrawer({
     setCreateDeadline(null);
     setCreatePriority(null);
     setError(null);
-    setExpanded(false);
     setDescExpanded(false);
     setActiveTab('discussion');
     setLiveRunning(false);
+    setCommentCount(0);
     setCreateDragActive(false);
     // При закрытии/смене диалога чистим pending — URL.revokeObjectURL для blob'ов.
     setPendingFiles((prev) => {
@@ -466,6 +461,24 @@ export function TaskDrawer({
     }
     onCommitsChange?.();
     refetchHeaderAttachments();
+  };
+
+  // «+ подзадача» (edit-mode): дописываем пустой checklist-пункт `- [ ]` в конец описания
+  // и раскрываем описание, чтобы юзер сразу набрал текст пункта. Бэкенда для подзадач нет —
+  // это markdown-чеклист внутри описания (тот же механизм, что toggleCheckbox в редакторе).
+  const appendSubtask = async (): Promise<void> => {
+    if (state?.mode !== 'edit') return;
+    const { projectId, id } = state.task;
+    const current = state.task.description ?? '';
+    const sep = current.length === 0 ? '' : current.endsWith('\n') ? '' : '\n';
+    const next = `${current}${sep}- [ ] `;
+    try {
+      await taskRepository.update(projectId, id, { description: next });
+      onCommitsChange?.();
+      setDescExpanded(true);
+    } catch (e) {
+      toast.error(`Не удалось добавить подзадачу: ${(e as Error).message}`);
+    }
   };
 
   // Form-level paste handler — ловит Ctrl+V где угодно внутри формы (textarea, секция, пустое место).
@@ -543,27 +556,6 @@ export function TaskDrawer({
     }
   };
 
-  const renderExpandButton = (): React.ReactElement | null => {
-    if (isCoarsePointer) return null;
-    return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="group/exp size-8 shrink-0"
-        onClick={() => setExpanded((v) => !v)}
-        aria-label={expanded ? 'Свернуть' : 'Развернуть'}
-        title={expanded ? 'Свернуть' : 'Развернуть'}
-      >
-        {expanded ? (
-          <Minimize2 className="size-4 transition-transform duration-150 group-hover/exp:scale-90" />
-        ) : (
-          <Maximize2 className="size-4 transition-transform duration-150 group-hover/exp:scale-110" />
-        )}
-      </Button>
-    );
-  };
-
   // Закрытие шторки — двойная стрелка вправо (как «свернуть» у левой панели): окно
   // «уезжает» обратно за правый край. Стоит слева в шапке, крестика справа больше нет.
   const renderCloseButton = (): React.ReactElement => (
@@ -589,10 +581,7 @@ export function TaskDrawer({
       <SheetContent
         side="right"
         showClose={false}
-        className={cn(
-          'grid h-dvh w-full grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0',
-          expanded ? 'sm:max-w-none' : 'sm:max-w-[640px]',
-        )}
+        className="grid h-dvh w-full grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-[900px]"
       >
         {/* a11y stub for Radix — visually hidden. */}
         <SheetTitle className="sr-only">
@@ -605,13 +594,13 @@ export function TaskDrawer({
 
         {state?.mode === 'edit' && task ? (
           <>
-            {/* === STICKY HEADER === Notion-style: тонкий топ-бар (контекст · статус ·
-                закрыть), под ним один спокойный ряд чипов-свойств одинаковой высоты.
-                Аттачи (когда есть) переносятся на свою строку через basis-full. */}
+            {/* === STICKY HEADER === Notion-style. Единственный нижний бордер на всём
+                контейнере шапки — это ЕДИНСТВЕННЫЙ разделитель между телом задачи и
+                переключателем вкладок (никаких border-t у описания и border-b у вкладок). */}
             <div className="border-b bg-background/95 backdrop-blur-md">
+              {/* Row A: контекст · короткий id · дата создания (слева), передать/статус (справа). */}
               <div className="flex items-center gap-2 px-4 pt-3">
                 {renderCloseButton()}
-                {renderExpandButton()}
                 <div className="flex min-w-0 flex-1 items-baseline gap-2">
                   {projectName && (
                     <span className="truncate text-xs font-medium text-muted-foreground">
@@ -620,6 +609,9 @@ export function TaskDrawer({
                   )}
                   <span className="font-mono text-[10px] text-muted-foreground/50">
                     {taskShortId(task.id)}
+                  </span>
+                  <span className="truncate text-[11px] text-muted-foreground/60">
+                    {formatTaskCreated(task.createdAt)}
                   </span>
                 </div>
                 {onMove && (
@@ -647,47 +639,68 @@ export function TaskDrawer({
                 )}
               </div>
 
-              {/* Порядок: Файл · Делегировать · Дедлайн · Приоритет · Режим (крайний справа). */}
-              <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 px-4 pb-2.5 pt-1.5">
-                <TaskDrawerAttachmentRow
-                  items={headerAttachments}
-                  canEdit={canEdit}
-                  onAddFiles={(files) => {
-                    void uploadFilesDirectly(files);
-                  }}
-                />
-                {(isInbox || isShared) && (
-                  <DelegateTaskButton
-                    task={task}
-                    currentUserId={currentUser?.id ?? null}
-                    onChanged={() => onCommitsChange?.()}
-                    projectId={isShared ? task.projectId : undefined}
-                  />
-                )}
-                {isInbox && (
-                  <AssignToProjectSelect
-                    task={task}
-                    onAssigned={() => {
-                      onCommitsChange?.();
-                      onClose();
+              {/* Row B: слева — ряд тихих «+» чипов-свойств (одинаковая высота h-7,
+                  rounded-md, px-2, text-xs через MetaChip / META_CHIP_CLASS); справа —
+                  группа из 3 единообразных иконок-действий: Копировать · Переработка · План.
+                  Аттачи (когда есть) переносятся на свою строку через basis-full. */}
+              <div className="flex flex-wrap items-start gap-x-2 gap-y-1.5 px-4 pb-2 pt-1.5">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1 gap-y-1.5">
+                  <TaskDrawerAttachmentRow
+                    items={headerAttachments}
+                    canEdit={canEdit}
+                    onAddFiles={(files) => {
+                      void uploadFilesDirectly(files);
                     }}
                   />
-                )}
-                <TaskDeadlineChip task={task} onChanged={() => onCommitsChange?.()} />
-                <TaskPriorityChip task={task} onChanged={() => onCommitsChange?.()} />
-                {(task.status === 'backlog' ||
-                  task.status === 'todo' ||
-                  task.status === 'awaiting_clarification') && (
-                  <div className="ml-auto">
+                  {(isInbox || isShared) && (
+                    <DelegateTaskButton
+                      task={task}
+                      currentUserId={currentUser?.id ?? null}
+                      onChanged={() => onCommitsChange?.()}
+                      projectId={isShared ? task.projectId : undefined}
+                    />
+                  )}
+                  {isInbox && (
+                    <AssignToProjectSelect
+                      task={task}
+                      onAssigned={() => {
+                        onCommitsChange?.();
+                        onClose();
+                      }}
+                    />
+                  )}
+                  <TaskDeadlineChip task={task} onChanged={() => onCommitsChange?.()} />
+                  <TaskPriorityChip task={task} onChanged={() => onCommitsChange?.()} />
+                  {(task.status === 'backlog' ||
+                    task.status === 'todo' ||
+                    task.status === 'awaiting_clarification') && (
                     <TaskRalphModeChip task={task} onChanged={() => onCommitsChange?.()} />
-                  </div>
-                )}
+                  )}
+                  {canEdit && (
+                    <MetaChip
+                      icon={ListChecks}
+                      label="подзадача"
+                      onClick={() => void appendSubtask()}
+                    />
+                  )}
+                </div>
+                {/* Группа действий справа: единый стиль (size-8, hover bg-hover). */}
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <CopyTaskButton description={task.description ?? ''} />
+                  {canEdit && (
+                    <>
+                      <ReworkTaskButton projectId={task.projectId} taskId={task.id} />
+                      <PlanTaskButton projectId={task.projectId} taskId={task.id} />
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Закреплённое описание: всегда под рукой (тело скроллится к свежим
                   комментариям). Клик по свёрнутому превью раскрывает полный текст;
-                  для не-done внутри — прежний inline-редактор (клик по тексту = правка). */}
-              <div className="border-t border-border/60 px-4 py-2">
+                  для не-done внутри — прежний inline-редактор (клик по тексту = правка).
+                  Без собственного border-t — единственный разделитель ниже всей шапки. */}
+              <div className="px-4 pb-2.5 pt-0.5">
                 {descExpanded ? (
                   <div className="max-h-[50vh] overflow-y-auto overscroll-contain">
                     {canEdit ? (
@@ -756,10 +769,18 @@ export function TaskDrawer({
               onValueChange={(v: string) => setActiveTab(v as 'discussion' | 'live')}
               className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
             >
-              <div className="border-b px-4 pt-2">
+              {/* Центрированный переключатель Обсуждение | LIVE. Без собственного border —
+                  единственный разделитель идёт по нижнему краю шапки выше. Счётчик
+                  комментариев свёрнут в триггер «Обсуждение · N». */}
+              <div className="flex justify-center px-4 py-2">
                 <TabsList className="h-8">
                   <TabsTrigger value="discussion" className="text-xs">
                     Обсуждение
+                    {commentCount > 0 && (
+                      <span className="ml-1 tabular-nums text-muted-foreground/70">
+                        · {commentCount}
+                      </span>
+                    )}
                   </TabsTrigger>
                   <TabsTrigger value="live" className="text-xs">
                     LIVE
@@ -787,6 +808,7 @@ export function TaskDrawer({
                     taskId={task.id}
                     onCommentCreatedRef={onCommentCreatedRef}
                     onFirstLoad={scrollBodyToBottom}
+                    onCountChange={setCommentCount}
                     scrollToCommentId={scrollToCommentId}
                   />
                 </div>
@@ -849,7 +871,6 @@ export function TaskDrawer({
             <div className="border-b bg-background/95 px-4 pb-2 pt-4 backdrop-blur-md">
               <div className="flex items-center gap-2">
                 {renderCloseButton()}
-                {renderExpandButton()}
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {projectName ? `${projectName} · ` : ''}Новая задача
                 </span>
@@ -1238,16 +1259,10 @@ function TaskDescriptionEditor({
   return (
     <div className="relative">
       {/* Действия описания — поверх текста в правом верхнем углу, не занимают отдельную строку.
-          AI-кнопка ВСЕГДА видна. bg/blur — чтобы текст под кластером оставался читаемым. */}
+          Копировать/Переработка/План переехали в группу действий шапки задачи; здесь
+          остаётся только AI-контрол (всегда виден) + сворачивание. bg/blur — чтобы текст
+          под кластером оставался читаемым. */}
       <div className="absolute right-0 top-0 z-10 flex items-center gap-0.5 rounded-md bg-background/85 px-0.5 backdrop-blur-sm">
-          {/* Копирует текущий текст описания с вёрсткой → вставка в Telegram применит формат.
-              onMouseDown.preventDefault внутри кнопки не уводит фокус (без лишнего blur-save). */}
-          {(editing ? draft : description).trim().length > 0 && (
-            <TelegramCopyButton
-              className="size-8"
-              onCopy={() => copyMarkdownForTelegram(editing ? draft : description)}
-            />
-          )}
           {/* preventDefault — клик по AI не уводит фокус мгновенно; aiOpeningRef гасит
               blur-save, который иначе сработает, когда Radix-диалог перехватит фокус. */}
           <div
@@ -1271,34 +1286,6 @@ function TaskDescriptionEditor({
               compact
             />
           </div>
-          {/* «Составить план»: постит маркер ralph-plan-request. Ralph изучит репозиторий,
-              пришлёт план на одобрение (Telegram/дашборд), затем воркер выполнит по плану. */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-8 text-muted-foreground hover:text-primary"
-            disabled={saving}
-            title="Составить план — Ralph изучит код и пришлёт план на одобрение"
-            aria-label="Составить план"
-            onClick={() => {
-              void (async () => {
-                try {
-                  await taskRepository.createComment(
-                    projectId,
-                    taskId,
-                    '🗺 Запрошен план реализации\n\n<!-- ralph-plan-request {"v":1} -->',
-                    { mode: 'none' },
-                  );
-                  toast.success('План запрошен — Ralph составит и пришлёт на одобрение');
-                } catch (e) {
-                  toast.error(`Не удалось запросить план: ${(e as Error).message}`);
-                }
-              })();
-            }}
-          >
-            <Map className="size-4" />
-          </Button>
           {onCollapse && (
             <Button
               type="button"
@@ -1376,6 +1363,8 @@ function TaskCommentsSection({
   // Дёргается один раз после первой успешной загрузки комментариев — drawer
   // использует это, чтобы скроллнуть body вниз (к последнему сообщению).
   onFirstLoad,
+  // Сообщает текущее число комментариев — drawer сворачивает его в триггер «Обсуждение · N».
+  onCountChange,
   // Deep-link: id комментария, к которому надо скроллнуть после загрузки (?task=X#comment-Y).
   scrollToCommentId,
 }: {
@@ -1383,6 +1372,7 @@ function TaskCommentsSection({
   taskId: string;
   onCommentCreatedRef?: React.MutableRefObject<((c: TaskComment) => void) | null>;
   onFirstLoad?: () => void;
+  onCountChange?: (count: number) => void;
   scrollToCommentId?: string;
 }): React.ReactElement {
   const { taskRepository, projectRepository } = useContainer();
@@ -1463,15 +1453,13 @@ function TaskCommentsSection({
   // qid'ы, на которые уже есть ответ — чтобы прятать кнопки у отвеченных вопросов.
   const answeredQids = answeredQidSet(comments);
 
+  // Сообщаем drawer'у число комментариев (после загрузки) — для триггера «Обсуждение · N».
+  useEffect(() => {
+    if (!loading) onCountChange?.(comments.length);
+  }, [loading, comments.length, onCountChange]);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Комментарии</span>
-        {!loading && comments.length > 0 && (
-          <span className="text-xs tabular-nums text-muted-foreground/60">{comments.length}</span>
-        )}
-      </div>
-
       {loading ? (
         <div className="space-y-2">
           <div className="h-12 animate-pulse rounded-md bg-muted" />
