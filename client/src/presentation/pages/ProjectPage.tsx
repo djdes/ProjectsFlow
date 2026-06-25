@@ -63,14 +63,19 @@ export function ProjectPage(): React.ReactElement {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-12 pt-3.5 sm:px-6">
-      <ProjectBreadcrumbs
-        projectId={data.id}
-        projectName={data.name}
-        projectIcon={data.icon}
-        view="overview"
-      />
+    <>
+      {/* Хлебные крошки: строка min-h-11 (44px), вертикально центрирована, прижата к верху —
+          на одной горизонтали со свитчером пространства в сайдбаре (Notion top-alignment). */}
+      <div className="flex min-h-11 items-center px-2.5 pt-2">
+        <ProjectBreadcrumbs
+          projectId={data.id}
+          projectName={data.name}
+          projectIcon={data.icon}
+          view="overview"
+        />
+      </div>
 
+      <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-12 pt-1 sm:px-6">
       <div className="space-y-3">
         <EditableProjectTitle projectId={data.id} name={data.name} />
         <div className="flex flex-wrap items-center gap-2">
@@ -142,6 +147,7 @@ export function ProjectPage(): React.ReactElement {
           />
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }

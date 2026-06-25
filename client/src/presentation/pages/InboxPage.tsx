@@ -120,21 +120,23 @@ export function InboxPage(): React.ReactElement {
   return (
     <div
       className={cn(
-        // Те же отступы/ритм, что у страниц проекта (TasksPage) — единый Notion-стиль:
-        // строка крошек сверху, затем заголовок. Так «Входящие» встаёт на ту же линию.
-        // Notion-tight chrome: верх/лево поджаты (крошки ближе к углу), тело — комфортно.
-        'flex h-full flex-col gap-1.5 px-3 pb-3 pt-2 sm:gap-4 sm:px-5 sm:pb-6 sm:pt-2.5',
+        'flex h-full flex-col',
         // Список — узкая центрированная читаемая колонка (как Todoist). Канбан-доске нужна
         // вся ширина, поэтому ограничение применяем только в list-режиме.
         view === 'list' && 'mx-auto w-full max-w-3xl',
       )}
     >
       {/* Хлебные крошки (как у страниц проекта): «<Пространство> ▾ · Входящие» — сегмент
-          пространства раскрывается при наведении для быстрого переключения. Прячем на мобиле. */}
-      <div className="hidden sm:block">
+          пространства раскрывается при наведении для быстрого переключения. Прячем на мобиле.
+          Строка крошек = min-h-11 (44px), вертикально центрирована, прижата к верху — ровно
+          на одной горизонтали со свитчером пространства в сайдбаре (Notion top-alignment). */}
+      <div className="hidden min-h-11 items-center px-2.5 pt-2 sm:flex">
         <InboxBreadcrumbs />
       </div>
 
+      {/* Тело страницы: комфортные отступы ПОД строкой крошек. На мобиле крошек нет —
+          даём небольшой верхний отступ, чтобы заголовок не липнул к краю. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-3 pb-3 pt-2 sm:gap-4 sm:px-5 sm:pb-6 sm:pt-1">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <AnimatedInbox active className="size-5 text-primary" />
@@ -164,6 +166,7 @@ export function InboxPage(): React.ReactElement {
           <TaskListView key={refetchKey} projectId={project.id} showCommits={false} hideDone={hideDone} />
         )}
       </motion.div>
+      </div>
     </div>
   );
 }

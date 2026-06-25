@@ -45,14 +45,20 @@ export function MonitoringPage(): React.ReactElement {
   const alertsFor = (serverId: string): typeof alerts => alerts.filter((a) => a.serverId === serverId);
 
   return (
-    <div className="flex h-full flex-col gap-5 p-4 pt-3.5 sm:p-6 sm:pt-4">
-      <ProjectBreadcrumbs
-        projectId={pid ?? ''}
-        projectName={data?.name ?? 'Проект'}
-        projectIcon={data?.icon}
-        view="monitoring"
-      />
+    <div className="flex h-full flex-col">
+      {/* Хлебные крошки: строка min-h-11 (44px), вертикально центрирована, прижата к верху —
+          на одной горизонтали со свитчером пространства в сайдбаре (Notion top-alignment). */}
+      <div className="flex min-h-11 items-center px-2.5 pt-2">
+        <ProjectBreadcrumbs
+          projectId={pid ?? ''}
+          projectName={data?.name ?? 'Проект'}
+          projectIcon={data?.icon}
+          view="monitoring"
+        />
+      </div>
 
+      {/* Тело страницы: комфортные отступы ПОД строкой крошек. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-5 p-4 pt-1 sm:p-6 sm:pt-1">
       <div className="flex items-center gap-2">
         <Activity className="size-5 text-primary" />
         <h1 className="text-xl font-semibold tracking-tight">Мониторинг</h1>
@@ -174,6 +180,7 @@ export function MonitoringPage(): React.ReactElement {
       />
       <AddServerDialog projectId={pid} open={addOpen} onOpenChange={setAddOpen} onSaved={reload} />
       <AlertRulesDialog projectId={pid} open={rulesOpen} onOpenChange={setRulesOpen} />
+      </div>
     </div>
   );
 }

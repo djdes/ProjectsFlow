@@ -101,12 +101,13 @@ export function TasksPage(): React.ReactElement {
     );
   }
 
-  // Notion-tight chrome: верх/лево поджаты (крошки ближе к углу), тело — комфортно.
+  // Notion top-alignment: строка крошек (min-h-11, по центру, прижата к верху) встаёт на
+  // одну горизонталь со свитчером пространства в сайдбаре; тело — комфортные отступы ниже.
   return (
-    <div className="flex h-full flex-col gap-1.5 px-3 pb-3 pt-2 sm:gap-4 sm:px-5 sm:pb-6 sm:pt-2.5">
+    <div className="flex h-full flex-col">
       {/* Хлебные крошки прячем на мобиле: имя проекта дублируется в заголовке ниже,
           навигация — в нижнем таб-баре/drawer. Это возвращает вертикальное место канбану. */}
-      <div className="hidden sm:block">
+      <div className="hidden min-h-11 items-center px-2.5 pt-2 sm:flex">
         <ProjectBreadcrumbs
           projectId={data.id}
           projectName={data.name}
@@ -115,6 +116,8 @@ export function TasksPage(): React.ReactElement {
         />
       </div>
 
+      {/* Тело страницы: комфортные отступы ПОД строкой крошек. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-3 pb-3 pt-2 sm:gap-4 sm:px-5 sm:pb-6 sm:pt-1">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Notion-style: иконка проекта + имя как заголовок страницы (клик — переименовать).
             Генерик-«Задачи» убран — контекст и так в хлебных крошках. */}
@@ -209,6 +212,7 @@ export function TasksPage(): React.ReactElement {
         hasDispatcher={data.dispatcherUserId !== null}
         multiTaskWorker={data.multiTaskWorker}
       />
+      </div>
     </div>
   );
 }

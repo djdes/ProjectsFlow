@@ -298,7 +298,12 @@ function AcceptedRow({
   const isDone = item.status === 'done';
   return (
     <li
-      className="group flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/40"
+      className={cn(
+        'group flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/40',
+        // Done-строка: мягкая зелёная заливка (НЕ серый/НЕ opacity), как в TaskListView/
+        // KanbanCard — спокойный Notion-маркер готовности; текст остаётся полноцветным.
+        isDone && 'bg-success/[0.08] hover:bg-success/[0.12]',
+      )}
       onClick={onOpen}
     >
       <InboxCheckbox
@@ -311,7 +316,8 @@ function AcceptedRow({
       />
       <div className="min-w-0 flex-1">
         {item.description?.trim() ? (
-          <ExpandableMarkdown className={cn(isDone && 'opacity-60')}>
+          // Done-текст остаётся полноцветным (Notion: готовая задача не «гасится»).
+          <ExpandableMarkdown>
             {item.description}
           </ExpandableMarkdown>
         ) : (

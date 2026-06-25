@@ -84,14 +84,19 @@ export function FinancePage(): React.ReactElement {
   const activeEmployees = employees.filter((e) => e.active);
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-12 pt-3.5 sm:px-6">
-      <ProjectBreadcrumbs
-        projectId={pid ?? ''}
-        projectName={project.name}
-        projectIcon={project.icon}
-        view="finance"
-      />
+    <>
+      {/* Хлебные крошки: строка min-h-11 (44px), вертикально центрирована, прижата к верху —
+          на одной горизонтали со свитчером пространства в сайдбаре (Notion top-alignment). */}
+      <div className="flex min-h-11 items-center px-2.5 pt-2">
+        <ProjectBreadcrumbs
+          projectId={pid ?? ''}
+          projectName={project.name}
+          projectIcon={project.icon}
+          view="finance"
+        />
+      </div>
 
+      <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-12 pt-1 sm:px-6">
       <div className="flex items-center gap-3">
         <Wallet className="size-5 text-primary" />
         <h1 className="text-xl font-semibold tracking-tight">Финансы</h1>
@@ -230,7 +235,8 @@ export function FinancePage(): React.ReactElement {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 
