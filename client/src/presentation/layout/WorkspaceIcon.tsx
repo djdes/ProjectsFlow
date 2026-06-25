@@ -1,5 +1,4 @@
 import { cn } from '@/lib/utils';
-import { avatarColor } from './projectIcons';
 
 type Props = {
   name: string;
@@ -8,15 +7,16 @@ type Props = {
   className?: string;
 };
 
-// Квадратная иконка пространства: эмодзи (если задано) или первая буква названия
-// на детерминированном по названию цветном фоне.
+// Квадратная иконка пространства (Notion-style): нейтральный СЕРЫЙ квадрат с первой буквой
+// названия — единообразно для всех пространств (без рандомных цветов). Если задан эмодзи —
+// показываем его на том же сером фоне.
 export function WorkspaceIcon({ name, icon, className }: Props): React.ReactElement {
   return (
     <span
       aria-hidden="true"
       className={cn(
-        'grid shrink-0 place-items-center rounded-md text-[11px] font-semibold',
-        icon ? 'bg-foreground/[0.04] dark:bg-white/[0.06]' : avatarColor(name),
+        'grid shrink-0 place-items-center rounded-md text-[11px] font-semibold leading-none',
+        'bg-foreground/[0.06] text-foreground/70 dark:bg-white/[0.08] dark:text-white/80',
         className ?? 'size-6',
       )}
     >
