@@ -194,10 +194,12 @@ export function TaskDrawerComposer({
 
   const canSubmit = (body.trim().length > 0 || pending.length > 0) && !submitting;
 
+  // Notion-style: композер — отдельная «карточка» со скруглением и мягким фокус-рингом,
+  // а не плоский футер на всю ширину. БЕЗ backdrop-blur: filter создаёт containing-block
+  // для position:fixed и зажимал бы плавающее меню форматирования внутри overflow-hidden
+  // карточки композера.
   return (
-    // Notion-style: композер — отдельная «карточка» со скруглением и мягким фокус-рингом,
-    // а не плоский футер на всю ширину. Минималистично, в стиле сайта.
-    <div className="bg-background/95 px-3 pb-3 pt-2 backdrop-blur-md">
+    <div className="bg-background/95 px-3 pb-3 pt-2">
       <div className="overflow-hidden rounded-2xl border border-input bg-background shadow-sm transition-[border-color,box-shadow] duration-150 focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/15">
         {pending.length > 0 && (
           <div className="flex flex-wrap gap-1.5 border-b bg-muted/30 px-3 py-1.5">

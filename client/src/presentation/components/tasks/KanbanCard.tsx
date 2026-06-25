@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
-import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Trash2 } from 'lucide-react';
+import { Check, ImageIcon, ListChecks, MessageSquare, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SelectModifiers } from './selection/selectionReducer';
@@ -63,7 +63,6 @@ export function KanbanCard({
   onEdit,
   onDelete,
   preview = false,
-  onQuickPromote,
   onTaskChanged,
   showCheckbox = false,
   lastDoneTaskId = null,
@@ -130,7 +129,9 @@ export function KanbanCard({
           // НЕ ставим touch-action:none — иначе палец не сможет скроллить колонку/доску
           // (любое касание карточки превращалось бы в drag). Long-press TouchSensor (~220мс)
           // сам отличает скролл от переноса.
-          'group relative flex select-none items-start gap-2 rounded-lg border border-black/[0.06] bg-card p-3 shadow-sm outline-none dark:border-white/[0.08]',
+          // Notion-style компактная карточка: минимальный отступ (px-2 py-1.5), без
+          // лишнего «воздуха». При hover — только маленькая корзина (оверлей ниже).
+          'group relative flex select-none items-start gap-1.5 rounded-lg border border-black/[0.06] bg-card px-2 py-1.5 shadow-sm outline-none dark:border-white/[0.08]',
           // Базовый transition только для тех свойств, которые меняем CSS-ом —
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
           'transition-[box-shadow,border-color,opacity,background-color] duration-150 ease-out',
@@ -288,36 +289,18 @@ export function KanbanCard({
               )}
             </div>
           )}
-          {/* Футер: кнопки действий — абсолютный оверлей в правом-нижнем углу карточки
-              (карточка `relative`). Раньше это был flow-ряд `mt-2`, который резервировал
-              ~32px высоты даже будучи невидимым → «пустая половина» на коротких карточках.
-              Теперь высоту не занимает; проявляется на hover/focus (на таче — всегда).
-              Лёгкая подложка под кнопками, чтобы они не сливались с текстом описания.
-              Прячется в режиме выделения (булк-действия сверху) и в drag-preview. */}
+          {/* Футер: при hover/focus — ТОЛЬКО маленькая корзина (Notion-минимализм; никаких
+              лишних действий на карточке). Абсолютный оверлей в правом-нижнем углу,
+              высоту не занимает. Прячется в режиме выделения и в drag-preview. */}
           {!selecting && !preview && (
             <div
-              className="absolute bottom-1 right-1 flex shrink-0 justify-end gap-0.5 rounded-md bg-card/80 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
+              className="absolute bottom-0.5 right-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
               {...stopDragProps}
             >
-              {onQuickPromote && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="group/promote size-6 cursor-pointer text-muted-foreground hover:text-foreground"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onQuickPromote(task);
-                  }}
-                  aria-label="Передать воркеру"
-                  title="Передать воркеру"
-                >
-                  <ArrowRight className="size-3.5 transition-transform duration-150 group-hover/promote:translate-x-0.5" />
-                </Button>
-              )}
               <Button
                 variant="ghost"
                 size="icon"
-                className="group/del size-6 cursor-pointer text-muted-foreground hover:text-destructive"
+                className="group/del size-5 cursor-pointer rounded-md bg-card/70 text-muted-foreground hover:bg-card hover:text-destructive"
                 onClick={(e) => {
                   // Чтобы клик по корзине не открыл диалог через onClick на родителе.
                   e.stopPropagation();
@@ -325,7 +308,7 @@ export function KanbanCard({
                 }}
                 aria-label="Удалить"
               >
-                <Trash2 className="size-3.5 transition-transform duration-150 group-hover/del:scale-110" />
+                <Trash2 className="size-3 transition-transform duration-150 group-hover/del:scale-110" />
               </Button>
             </div>
           )}

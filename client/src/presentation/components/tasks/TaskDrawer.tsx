@@ -780,7 +780,11 @@ export function TaskDrawer({
                 разделитель — вертикальная линия справа от колонки). */}
             <div
               className={cn(
-                'bg-background/95 backdrop-blur-md',
+                // БЕЗ backdrop-blur: backdrop-filter создаёт stacking-context и делает
+                // колонку containing-block'ом для position:fixed — тогда плавающее меню
+                // форматирования зажимается overflow-колонки и уезжает ЗА правую панель
+                // комментов в split. Непрозрачный bg-background/95 это не ломает.
+                'bg-background/95',
                 isSplit
                   ? 'min-w-0 flex-1 overflow-y-auto overscroll-contain'
                   : 'min-h-0 flex-[1.3] overflow-y-auto overscroll-contain border-b',
@@ -1136,7 +1140,9 @@ export function TaskDrawer({
             {/* ЛЕВАЯ КОЛОНКА: скроллящаяся форма + футер (Отмена/Создать). */}
             <div
               className={cn(
-                'flex min-h-0 flex-col bg-background/95 backdrop-blur-md',
+                // БЕЗ backdrop-blur — см. коммент у edit-колонки (иначе плавающее меню
+                // форматирования зажимается stacking-context'ом колонки в split).
+                'flex min-h-0 flex-col bg-background/95',
                 isSplit ? 'min-w-0 flex-1' : 'min-h-0 flex-[1.3] border-b',
               )}
             >
