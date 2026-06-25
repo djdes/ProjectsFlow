@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ChevronRight, Columns3, Eye, EyeOff, List as ListIcon } from 'lucide-react';
+import { Columns3, Eye, EyeOff, List as ListIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AnimatedInbox } from '@/presentation/components/nav/AnimatedNavIcons';
-import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
-import { WorkspaceIcon } from '@/presentation/layout/WorkspaceIcon';
+import { InboxBreadcrumbs } from '@/presentation/layout/InboxBreadcrumbs';
 import {
   Tooltip,
   TooltipContent,
@@ -41,7 +39,6 @@ function loadHideDone(): boolean {
 // с группировкой). Выбор юзера сохраняем в localStorage.
 export function InboxPage(): React.ReactElement {
   const { projectRepository } = useContainer();
-  const { workspace } = useCurrentWorkspace();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -127,22 +124,11 @@ export function InboxPage(): React.ReactElement {
         view === 'list' && 'mx-auto w-full max-w-3xl',
       )}
     >
-      {/* Хлебные крошки (как у проектов): «Пространство · Входящие». Прячем на мобиле —
-          там контекст в нижнем таб-баре, а место отдаём контенту. */}
-      <nav className="hidden min-w-0 items-center gap-0.5 text-sm sm:flex" aria-label="Хлебные крошки">
-        <Link
-          to="/"
-          className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground dark:hover:bg-white/10"
-        >
-          <WorkspaceIcon name={workspace?.name ?? 'П'} icon={workspace?.icon ?? null} className="size-4 text-[9px]" />
-          <span className="truncate">{workspace?.name ?? 'Пространство'}</span>
-        </Link>
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
-        <span className="flex items-center gap-1.5 rounded px-1.5 py-0.5 font-medium text-foreground">
-          <AnimatedInbox active className="size-3.5" />
-          <span className="truncate">Входящие</span>
-        </span>
-      </nav>
+      {/* Хлебные крошки (как у страниц проекта): «<Пространство> ▾ · Входящие» — сегмент
+          пространства раскрывается при наведении для быстрого переключения. Прячем на мобиле. */}
+      <div className="hidden sm:block">
+        <InboxBreadcrumbs />
+      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
