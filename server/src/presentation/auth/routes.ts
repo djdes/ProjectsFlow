@@ -1,8 +1,10 @@
 import { Router, type CookieOptions, type Request, type Response, type NextFunction } from 'express';
+import multer from 'multer';
 import type { Register } from '../../application/auth/Register.js';
 import type { Login } from '../../application/auth/Login.js';
 import type { Logout } from '../../application/auth/Logout.js';
 import type { UpdateProfile } from '../../application/user/UpdateProfile.js';
+import type { UploadUserAvatar } from '../../application/user/UploadUserAvatar.js';
 import type { User } from '../../domain/user/User.js';
 import type { Session } from '../../domain/session/Session.js';
 import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemoryRateLimiter.js';
@@ -10,11 +12,15 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { config, isProd, sessionTtlMs } from '../config.js';
 import { loginSchema, registerSchema, updateProfileSchema } from './schemas.js';
 
+// Лимит размера аватара (5 МБ) — картинки профиля заведомо меньше аттачей (25 МБ).
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+
 type Deps = {
   readonly register: Register;
   readonly login: Login;
   readonly logout: Logout;
   readonly updateProfile: UpdateProfile;
+  readonly uploadAvatar: UploadUserAvatar;
   // Опционально: rate-limiter для anti-brute-force на /login и /register.
   // Если не передан — лимита нет (для тестов).
   readonly rateLimiter?: InMemoryRateLimiter;
@@ -112,6 +118,39 @@ export function authRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  // Загрузка аватара — multipart/form-data, поле 'file'. Принимаем любые картинки
+  // (png/jpeg/webp/gif/avif…), лимит 5 МБ. memoryStorage → буфер уходит в use-case.
+  const avatarUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: AVATAR_MAX_BYTES },
+  });
+  router.post(
+    '/me/avatar',
+    requireAuth,
+    avatarUpload.single('file'),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const file = req.file;
+        if (!file) {
+          res.status(400).json({ error: 'no_file', message: 'Файл не приложен' });
+          return;
+        }
+        if (!file.mimetype.startsWith('image/')) {
+          res.status(400).json({ error: 'not_image', message: 'Можно загрузить только изображение' });
+          return;
+        }
+        const updated = await deps.uploadAvatar.execute({
+          userId: req.user!.id,
+          mimeType: file.mimetype,
+          data: file.buffer,
+        });
+        res.json({ user: publicUser(updated) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   return router;
 }

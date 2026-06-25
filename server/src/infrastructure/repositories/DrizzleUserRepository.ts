@@ -78,6 +78,13 @@ export class DrizzleUserRepository implements UserRepository {
     return updated;
   }
 
+  async setAvatarUrl(id: string, avatarUrl: string | null): Promise<User> {
+    await this.db.update(users).set({ avatarUrl }).where(eq(users.id, id));
+    const updated = await this.getById(id);
+    if (!updated) throw new Error('User disappeared during setAvatarUrl');
+    return updated;
+  }
+
   async getManyByIds(ids: readonly string[]): Promise<User[]> {
     if (ids.length === 0) return [];
     const rows = await this.db

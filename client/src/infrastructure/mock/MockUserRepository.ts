@@ -24,6 +24,12 @@ export class MockUserRepository implements UserRepository {
     return delay(this.current);
   }
 
+  uploadAvatar(file: File): Promise<User> {
+    // Мок: отдаём локальный object-URL, чтобы превью работало без сервера.
+    this.current = { ...this.current, avatarUrl: URL.createObjectURL(file) };
+    return delay(this.current);
+  }
+
   getDefaultNotificationPrefs(): Promise<NotificationPrefs> {
     return delay(this.defaultPrefs);
   }

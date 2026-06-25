@@ -12,6 +12,7 @@ import type { Register } from '../application/auth/Register.js';
 import type { Login } from '../application/auth/Login.js';
 import type { Logout } from '../application/auth/Logout.js';
 import type { UpdateProfile } from '../application/user/UpdateProfile.js';
+import type { UploadUserAvatar } from '../application/user/UploadUserAvatar.js';
 import type { ListProjects } from '../application/project/ListProjects.js';
 import type { GetProject } from '../application/project/GetProject.js';
 import type { CreateProject } from '../application/project/CreateProject.js';
@@ -148,6 +149,7 @@ import type { ProjectMemberRepository } from '../application/project/ProjectMemb
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './auth/routes.js';
+import { avatarRouter } from './users/avatarRoutes.js';
 import { projectsRouter } from './projects/routes.js';
 import { workspacesRouter } from './workspaces/routes.js';
 import type { WorkspaceService } from '../application/workspace/WorkspaceService.js';
@@ -223,6 +225,7 @@ type AppDeps = {
   };
   readonly user: {
     readonly updateProfile: UpdateProfile;
+    readonly uploadAvatar: UploadUserAvatar;
   };
   readonly fileSync: {
     readonly service: FileSyncService;
@@ -528,6 +531,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       login: deps.auth.login,
       logout: deps.auth.logout,
       updateProfile: deps.user.updateProfile,
+      uploadAvatar: deps.user.uploadAvatar,
       // Шарим тот же агентский лимитер: процесс single-PM2, ключи изолированы префиксом.
       rateLimiter: deps.agent.rateLimiter,
     }),
@@ -603,6 +607,9 @@ export function createApp(deps: AppDeps): CreatedApp {
     }),
   );
   app.use('/api/attachments', attachmentBinaryRouter(deps.tasks));
+  // Аватары пользователей (тот же файловый storage, что и аттачи). Served-URL вида
+  // /api/avatars/:userId/:file сам кодирует storage-key.
+  app.use('/api/avatars', avatarRouter({ storage: deps.chat.storage }));
   app.use('/api/inbox', inboxRouter({ getOrCreateInbox: deps.projects.getOrCreateInbox }));
   app.use(
     '/api/me/telegram',

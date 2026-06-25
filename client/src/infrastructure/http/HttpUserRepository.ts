@@ -38,6 +38,26 @@ export class HttpUserRepository implements UserRepository {
     return fromDto(user);
   }
 
+  // multipart/form-data: httpClient под JSON, поэтому fetch вручную (как в attachments).
+  async uploadAvatar(file: File): Promise<User> {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/api/auth/me/avatar', {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    const text = await res.text();
+    const data = text
+      ? (JSON.parse(text) as { user?: UserDto; error?: string; message?: string })
+      : null;
+    if (!res.ok || !data?.user) {
+      const msg = data?.message ?? data?.error ?? `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    return fromDto(data.user);
+  }
+
   async getDefaultNotificationPrefs(): Promise<NotificationPrefs> {
     const { prefs } = await httpClient.get<{ prefs: NotificationPrefs }>('/me/notification-prefs');
     return prefs;

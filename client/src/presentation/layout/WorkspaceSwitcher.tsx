@@ -8,10 +8,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
-import type { User } from '@/domain/user/User';
+import { UserAvatar } from '@/presentation/components/user/UserAvatar';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
@@ -19,19 +18,6 @@ import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { useSwitchWorkspace } from '@/presentation/hooks/useSwitchWorkspace';
 import { NewWorkspaceDialog } from '@/presentation/components/forms/NewWorkspaceDialog';
 import { WorkspaceIcon } from './WorkspaceIcon';
-import { avatarColor, getInitials } from './projectIcons';
-
-// Аватар пользователя: фото (если есть) или цветной чип с инициалами (как в делегациях).
-function UserAvatar({ user, className }: { user: User; className?: string }): React.ReactElement {
-  return (
-    <Avatar className={cn('shrink-0 rounded-md', className)}>
-      {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.displayName} />}
-      <AvatarFallback className={cn('rounded-md font-semibold', avatarColor(user.displayName))}>
-        {getInitials(user.displayName)}
-      </AvatarFallback>
-    </Avatar>
-  );
-}
 
 // compact — режим icon-rail (свёрнутая панель): триггер только иконка пространства.
 export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {}): React.ReactElement {
@@ -91,7 +77,11 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
             compact ? 'justify-center p-1' : 'min-w-0 flex-1 gap-2 px-2 py-1.5',
           )}
         >
-          <UserAvatar user={user} className={compact ? 'size-7 text-sm' : 'size-6 text-xs'} />
+          <UserAvatar
+            displayName={user.displayName}
+            avatarUrl={user.avatarUrl}
+            className={compact ? 'size-7 text-sm' : 'size-6 text-xs'}
+          />
           {!compact && (
             <>
               <span className="min-w-0 flex-1 truncate font-semibold tracking-tight">
@@ -113,7 +103,11 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
         >
           {/* Шапка: аватар + никнейм пользователя + email (с копированием). */}
           <div className="flex items-center gap-3 px-3 py-3">
-            <UserAvatar user={user} className="size-10 text-base" />
+            <UserAvatar
+              displayName={user.displayName}
+              avatarUrl={user.avatarUrl}
+              className="size-10 text-base"
+            />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold leading-tight">{user.displayName}</div>
               <div className="truncate text-xs text-muted-foreground">{user.email}</div>

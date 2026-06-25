@@ -44,6 +44,7 @@ import { ToggleProjectFavorite } from '@/application/project/ToggleProjectFavori
 import { ReorderFavoriteProjects } from '@/application/project/ReorderFavoriteProjects';
 import { GetCurrentUser } from '@/application/user/GetCurrentUser';
 import { UpdateProfile } from '@/application/user/UpdateProfile';
+import { UploadAvatar } from '@/application/user/UploadAvatar';
 import type { AuthRepository } from '@/application/auth/AuthRepository';
 import type { ProjectRepository } from '@/application/project/ProjectRepository';
 import type { GithubRepository } from '@/application/github/GithubRepository';
@@ -79,6 +80,7 @@ type Container = {
   reorderFavoriteProjects: ReorderFavoriteProjects;
   getCurrentUser: GetCurrentUser;
   updateProfile: UpdateProfile;
+  uploadAvatar: UploadAvatar;
   searchTasks: SearchTasks;
   projectRepository: ProjectRepository;
   authRepository: AuthRepository;
@@ -150,6 +152,7 @@ function buildContainer(): Container {
     reorderFavoriteProjects: new ReorderFavoriteProjects(projectRepo),
     getCurrentUser: new GetCurrentUser(userRepo),
     updateProfile: new UpdateProfile(userRepo),
+    uploadAvatar: new UploadAvatar(userRepo),
     searchTasks: new SearchTasks(taskSearchRepo),
     projectRepository: projectRepo,
     authRepository: authRepo,

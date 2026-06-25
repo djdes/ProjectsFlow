@@ -45,6 +45,7 @@ import { Login } from './application/auth/Login.js';
 import { Logout } from './application/auth/Logout.js';
 import { GetCurrentUser } from './application/auth/GetCurrentUser.js';
 import { UpdateProfile } from './application/user/UpdateProfile.js';
+import { UploadUserAvatar } from './application/user/UploadUserAvatar.js';
 import { ListProjects } from './application/project/ListProjects.js';
 import { configureAdminBypass } from './application/project/projectAccess.js';
 import { GetProject } from './application/project/GetProject.js';
@@ -1147,6 +1148,7 @@ const { app, devProxyUpgrade } = createApp({
   },
   user: {
     updateProfile: new UpdateProfile(userRepo),
+    uploadAvatar: new UploadUserAvatar({ users: userRepo, storage: attachmentStorage }),
   },
   fileSync: {
     service: fileSyncService,

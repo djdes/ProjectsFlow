@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Activity, ArrowLeft, Monitor, Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -15,14 +14,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/sonner';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useUpdateProfile } from '@/presentation/hooks/useUpdateProfile';
+import { useContainer } from '@/infrastructure/di/container';
+import { useAuth } from '@/presentation/auth/AuthProvider';
+import { UserAvatar } from '@/presentation/components/user/UserAvatar';
 import { useTheme } from '@/presentation/components/theme/ThemeProvider';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { GithubAccountSection } from '@/presentation/components/github/GithubAccountSection';
@@ -33,13 +29,36 @@ import { ProjectsShareCard } from '@/presentation/components/profile/ProjectsSha
 import { NotificationDefaultsCard } from '@/presentation/components/profile/NotificationDefaultsCard';
 import { KanbanColorsCard } from '@/presentation/components/profile/KanbanColorsCard';
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
-import { getInitials } from '@/presentation/layout/projectIcons';
 
 function PersonalDataCard(): React.ReactElement {
   const { user, loading } = useCurrentUser();
   const { submit, saving } = useUpdateProfile();
+  const { uploadAvatar } = useContainer();
+  const { applyUserUpdate } = useAuth();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
+
+  const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // позволяем выбрать тот же файл повторно
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Можно загрузить только изображение');
+      return;
+    }
+    setUploadingAvatar(true);
+    try {
+      const updated = await uploadAvatar.execute(file);
+      applyUserUpdate(updated); // обновляем юзера в AuthContext → аватар везде сразу
+      toast.success('Аватар обновлён');
+    } catch (err) {
+      toast.error((err as Error).message ?? 'Не&nbsp;удалось загрузить аватар');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -82,23 +101,27 @@ function PersonalDataCard(): React.ReactElement {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex items-center gap-4">
-            <Avatar className="size-12">
-              <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
-            </Avatar>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span tabIndex={0}>
-                    <Button type="button" variant="outline" size="sm" disabled>
-                      Загрузить аватар
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Появится в&nbsp;Spec #3 (auth)
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <UserAvatar
+              displayName={user.displayName}
+              avatarUrl={user.avatarUrl}
+              className="size-12 text-base"
+            />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => void handleAvatarFile(e)}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={uploadingAvatar}
+              onClick={() => fileRef.current?.click()}
+            >
+              {uploadingAvatar ? 'Загрузка…' : 'Загрузить аватар'}
+            </Button>
           </div>
 
           <div className="space-y-2">

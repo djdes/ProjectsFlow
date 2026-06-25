@@ -38,6 +38,8 @@ export interface UserRepository {
   listAdmins(): Promise<User[]>;
   create(input: CreateUserInput): Promise<User>;
   updateProfile(id: string, input: UpdateProfileInput): Promise<User>;
+  // Установка/сброс аватара (URL на served-файл). null — удалить аватар.
+  setAvatarUrl(id: string, avatarUrl: string | null): Promise<User>;
 
   // Telegram-привязка. Все методы opt-in: если юзер не использует TG — никогда не зовутся.
   getTelegramLink(userId: string): Promise<TelegramLink | null>;

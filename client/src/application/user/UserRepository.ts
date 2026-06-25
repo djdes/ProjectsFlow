@@ -11,6 +11,8 @@ export type UpdateProfileInput = {
 export interface UserRepository {
   getCurrent(): Promise<User>;
   updateProfile(input: UpdateProfileInput): Promise<User>;
+  // Загрузка аватара (multipart). Возвращает обновлённого юзера с новым avatarUrl.
+  uploadAvatar(file: File): Promise<User>;
   getDefaultNotificationPrefs(): Promise<NotificationPrefs>;
   setDefaultNotificationPrefs(prefs: NotificationPrefs): Promise<NotificationPrefs>;
   applyDefaultNotificationPrefsToAll(): Promise<number>;
