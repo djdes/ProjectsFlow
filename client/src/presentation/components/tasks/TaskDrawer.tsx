@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, ChevronUp, Clock, Download, FileText, Flag, ListChecks, Loader2, Paperclip, Pencil, Plus, Send, Trash2, UserPlus, X } from 'lucide-react';
+import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, ChevronUp, Clock, Download, FileText, Flag, Loader2, Paperclip, Pencil, Plus, Send, Trash2, UserPlus, X } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -661,10 +661,63 @@ export function TaskDrawer({
                 )}
               </div>
 
+              {/* Закреплённое описание (заголовок/тело задачи): всегда под рукой и всегда
+                  редактируемо — TaskDescriptionEditor работает в ЛЮБОМ статусе, включая done
+                  (клик по тексту = правка). Без собственного border-t — единственный
+                  разделитель идёт ниже всей шапки. Описание всегда раскрыто. */}
+              <div className="px-4 pb-1 pt-1">
+                <div className="max-h-[50vh] overflow-y-auto overscroll-contain">
+                  <TaskDescriptionEditor
+                    key={task.id}
+                    projectId={task.projectId}
+                    taskId={task.id}
+                    initialDescription={task.description ?? ''}
+                    onSaved={() => onCommitsChange?.()}
+                    onPasteFiles={(files) => void uploadFilesDirectly(files)}
+                  />
+                </div>
+              </div>
+
+              {/* === ПЛЮСИКИ === Горизонтальный ряд add-кнопок (Notion «+Add»-style) прямо
+                  под заголовком/описанием и НАД блоком свойств. Только поддерживаемые
+                  действия: «+ Подзадача» (дописывает `- [ ]` в описание) и «+ Файл»
+                  (открывает скрытый file-picker → uploadFilesDirectly). Переносятся
+                  на узких экранах (flex-wrap, вплоть до 320px). */}
+              {canEdit && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pb-1 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => void appendSubtask()}
+                    className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <Plus className="size-4 shrink-0" />
+                    Подзадача
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => attachFileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <Plus className="size-4 shrink-0" />
+                    Файл
+                  </button>
+                  <input
+                    ref={attachFileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files) void uploadFilesDirectly(Array.from(e.target.files));
+                      e.target.value = '';
+                    }}
+                  />
+                </div>
+              )}
+
               {/* === PROPERTIES === Notion-style вертикальные строки свойств. Рендерятся
                   ВСЕГДА (для любого статуса, включая done) — строка не прячется по статусу;
                   если контрол неправим для done — показываем значение, контрол disabled. */}
-              <div className="px-3 pb-1.5 pt-2">
+              <div className="px-3 pb-2.5 pt-1">
                 {/* Ответственный — делегирование. Показываем бейдж текущей делегации
                     (если есть) и/или кнопку «назначить»; для проектов без делегирования —
                     «Никто». Гейтим только ВОЗМОЖНОСТЬ делегировать, не саму строку. */}
@@ -728,8 +781,8 @@ export function TaskDrawer({
                 </PropertyRow>
 
                 {/* Файлы — чипы вложений или «Пусто». Когда файлов нет — показываем
-                    «Пусто» (загрузка — через add-affordance «+ Файл» ниже), чтобы не
-                    дублировать пустую кнопку-плейсхолдер ряда вложений. */}
+                    «Пусто» (загрузка — через add-affordance «+ Файл» в ряду плюсиков
+                    над свойствами), чтобы не дублировать пустую кнопку-плейсхолдер. */}
                 <PropertyRow icon={Paperclip} label="Файлы">
                   {headerAttachments.length > 0 ? (
                     <TaskDrawerAttachmentRow
@@ -752,64 +805,6 @@ export function TaskDrawer({
                     {formatTaskCreated(task.createdAt)}
                   </span>
                 </PropertyRow>
-
-                {/* Add-affordances («плюсики») в стиле Notion «+ Add a property». */}
-                {canEdit && (
-                  <div className="mt-0.5 flex flex-wrap items-center gap-1 px-1.5 pt-0.5">
-                    <button
-                      type="button"
-                      onClick={() => void appendSubtask()}
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
-                    >
-                      <Plus className="size-3.5" />
-                      <ListChecks className="size-3.5" />
-                      Подзадача
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => attachFileInputRef.current?.click()}
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
-                    >
-                      <Plus className="size-3.5" />
-                      <Paperclip className="size-3.5" />
-                      Файл
-                    </button>
-                    <input
-                      ref={attachFileInputRef}
-                      type="file"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => {
-                        if (e.target.files) void uploadFilesDirectly(Array.from(e.target.files));
-                        e.target.value = '';
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Закреплённое описание: всегда под рукой (тело скроллится к свежим
-                  комментариям). Клик по свёрнутому превью раскрывает полный текст;
-                  для не-done внутри — прежний inline-редактор (клик по тексту = правка).
-                  Без собственного border-t — единственный разделитель ниже всей шапки. */}
-              {/* Описание всегда раскрыто — без кнопки раскрытия/сворачивания. */}
-              <div className="px-4 pb-2.5 pt-0.5">
-                <div className="max-h-[50vh] overflow-y-auto overscroll-contain">
-                  {canEdit ? (
-                    <TaskDescriptionEditor
-                      key={task.id}
-                      projectId={task.projectId}
-                      taskId={task.id}
-                      initialDescription={task.description ?? ''}
-                      onSaved={() => onCommitsChange?.()}
-                      onPasteFiles={(files) => void uploadFilesDirectly(files)}
-                    />
-                  ) : task.description?.trim() ? (
-                    <Markdown className="p-1">{task.description}</Markdown>
-                  ) : (
-                    <span className="text-sm italic text-muted-foreground">Без описания</span>
-                  )}
-                </div>
               </div>
             </div>
 
