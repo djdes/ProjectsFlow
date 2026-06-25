@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, ChevronUp, Clock, Download, FileText, Flag, Loader2, Paperclip, Pencil, Plus, Send, Trash2, UserPlus, X } from 'lucide-react';
+import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, Clock, Download, FileText, Flag, Loader2, Paperclip, Pencil, Plus, Send, Trash2, UserPlus, X } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,8 +46,6 @@ import {
   answeredQidSet,
   RalphAnswerControls,
 } from './RalphQuestionControls';
-import { Markdown } from '@/presentation/components/markdown/Markdown';
-import { toggleChecklistItem } from '@/lib/checklist';
 import { LiveTab } from './LiveTab';
 import { ClaudeIcon } from './ClaudeIcon';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
@@ -74,11 +72,13 @@ import { PlanTaskButton } from './PlanTaskButton';
 import { formatTaskCreated } from '@/lib/datetime';
 import type { TaskPriority } from '@/domain/task/Task';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
+import { TaskTitleEditor } from './TaskTitleEditor';
+import { TaskBodyEditor } from './TaskBodyEditor';
+import { splitTitleBody, joinTitleBody } from '@/lib/taskTitleBody';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
 import { STATUS_LABEL } from './statusLabels';
 import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
-import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
 import type { MentionMember } from '@/presentation/components/editor/RichTextEditor';
 
 // Tiptap-редактор грузим лениво — он тяжёлый и не нужен на read-heavy экранах,
@@ -353,8 +353,8 @@ export function TaskDrawer({
       .then(() => window.dispatchEvent(new CustomEvent('pf:recent-changed')))
       .catch(() => {});
   }, [openTaskId, recordTaskView]);
-  // В create-mode description редактируется обычной textarea на форме; в edit-mode
-  // компонент TaskDescriptionEditor самостоятельно фетчит/сохраняет через taskRepository,
+  // В create-mode description редактируется одним RichTextEditor на форме; в edit-mode
+  // заголовок/тело живут в editDescription + TaskTitleEditor/TaskBodyEditor (см. ниже),
   // а это локальное состояние используется только в create-режиме (submit формы).
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
@@ -424,6 +424,103 @@ export function TaskDrawer({
     const { projectId, id } = state.task;
     void taskRepository.listAttachments(projectId, id).then(setHeaderAttachments).catch(() => undefined);
   }, [state, taskRepository]);
+
+  // === EDIT-MODE: единое описание-источник правды для заголовка + тела ===
+  // Доменная модель хранит ОДНО поле `description` (markdown). Notion-style мы режем его
+  // на заголовок (1-я строка, plain) и тело (остаток, markdown) через splitTitleBody, а
+  // сохраняем склейкой joinTitleBody. Источник правды — здесь (а не внутри редакторов),
+  // чтобы смена заголовка не затирала тело и наоборот. Сеется из task.description и
+  // пере-сеется при смене задачи (родитель не обновляет task.description у открытого
+  // дровера — поэтому держим локально, как делал прежний TaskDescriptionEditor).
+  const editTaskId = state?.mode === 'edit' ? state.task.id : null;
+  const [editDescription, setEditDescription] = useState('');
+  // Идёт ли сохранение описания — state (а не ref), т.к. дизейблит редакторы (render-relevant).
+  const [editSaving, setEditSaving] = useState(false);
+  useEffect(() => {
+    if (state?.mode === 'edit') setEditDescription(state.task.description ?? '');
+    else setEditDescription('');
+    // Пере-сеем только при смене задачи (id) или режима — правки в открытом дровере
+    // не должны сбрасываться родительским refetch'ем (он не меняет task.description здесь).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editTaskId, state?.mode]);
+
+  const { title: editTitle, body: editBody } = splitTitleBody(editDescription);
+
+  // Единый путь сохранения описания (title+body) → taskRepository.update. Возвращаемое
+  // описание становится новым источником правды (на случай нормализации сервером).
+  // No-op, если ничего не изменилось.
+  const commitDescription = useCallback(
+    async (nextDescription: string): Promise<void> => {
+      if (state?.mode !== 'edit') return;
+      const { projectId, id } = state.task;
+      const trimmed = nextDescription.trim();
+      // Заголовок (1-я строка) обязателен: пустое описание — не сохраняем (как прежде).
+      if (splitTitleBody(trimmed).title.length === 0) return;
+      if (trimmed === editDescription.trim()) return;
+      setEditSaving(true);
+      try {
+        const updated = await taskRepository.update(projectId, id, { description: trimmed });
+        setEditDescription(updated.description ?? '');
+        onCommitsChange?.();
+      } catch (e) {
+        toast.error(`Не удалось сохранить: ${(e as Error).message}`);
+      } finally {
+        setEditSaving(false);
+      }
+    },
+    [state, taskRepository, editDescription, onCommitsChange],
+  );
+
+  // Локальные правки заголовка/тела — обновляют общий источник (пересборка description).
+  const handleTitleChange = useCallback(
+    (nextTitle: string): void => {
+      setEditDescription((prev) => joinTitleBody(nextTitle, splitTitleBody(prev).body));
+    },
+    [],
+  );
+  const handleBodyChange = useCallback(
+    (nextBody: string): void => {
+      setEditDescription((prev) => joinTitleBody(splitTitleBody(prev).title, nextBody));
+    },
+    [],
+  );
+
+  // Enter в заголовке → фокус в тело. Тело — лениво-загружаемый Tiptap (ProseMirror);
+  // дотягиваться рефом через два слоя дорого, поэтому фокусим contenteditable напрямую
+  // через контейнер. requestAnimationFrame — дать редактору смонтироваться/раскрыться.
+  const bodyContainerRef = useRef<HTMLDivElement>(null);
+  const focusBody = useCallback((): void => {
+    requestAnimationFrame(() => {
+      const pm = bodyContainerRef.current?.querySelector<HTMLElement>('.ProseMirror');
+      pm?.focus();
+    });
+  }, []);
+
+  // Unmount-save: дровер закрывают/переключают задачу, не сняв фокус с редактора. blur-save
+  // ловит клик мимо поля; этот хук — страховка. latest-ref обновляем в эффекте (включая
+  // projectId — в cleanup-замыкании `state` был бы уже null после закрытия).
+  const editProjectId = state?.mode === 'edit' ? state.task.projectId : null;
+  const editLiveRef = useRef({ description: editDescription, taskId: editTaskId, projectId: editProjectId, saving: editSaving });
+  useEffect(() => {
+    editLiveRef.current = { description: editDescription, taskId: editTaskId, projectId: editProjectId, saving: editSaving };
+  });
+  useEffect(
+    () => () => {
+      const s = editLiveRef.current;
+      if (!s.taskId || !s.projectId || s.saving) return;
+      const trimmed = s.description.trim();
+      if (splitTitleBody(trimmed).title.length === 0) return;
+      // Fire-and-forget — компонент уже размонтируется. update идемпотентен по содержимому
+      // (server не плодит ревизию при том же description).
+      void taskRepository
+        .update(s.projectId, s.taskId, { description: trimmed })
+        .catch(() => undefined);
+    },
+    // Зависимость только от taskId — хук-cleanup стреляет при размонтировании/смене задачи.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editTaskId],
+  );
+
   // autoFocus только на desktop — на мобильных клавиатура сразу перекрывает диалог.
   const isCoarsePointer =
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
@@ -477,21 +574,17 @@ export function TaskDrawer({
     refetchHeaderAttachments();
   };
 
-  // «+ подзадача» (edit-mode): дописываем пустой checklist-пункт `- [ ]` в конец описания
-  // и раскрываем описание, чтобы юзер сразу набрал текст пункта. Бэкенда для подзадач нет —
-  // это markdown-чеклист внутри описания (тот же механизм, что toggleCheckbox в редакторе).
+  // «+ подзадача» (edit-mode): дописываем пустой checklist-пункт `- [ ]` в конец ТЕЛА
+  // (не заголовка) задачи. Бэкенда для подзадач нет — это markdown-чеклист внутри тела
+  // (TaskItem в RichTextEditor его рендерит интерактивным). Работаем над live-описанием
+  // (editDescription), чтобы не потерять несохранённые правки заголовка/тела.
   const appendSubtask = async (): Promise<void> => {
     if (state?.mode !== 'edit') return;
-    const { projectId, id } = state.task;
-    const current = state.task.description ?? '';
-    const sep = current.length === 0 ? '' : current.endsWith('\n') ? '' : '\n';
-    const next = `${current}${sep}- [ ] `;
-    try {
-      await taskRepository.update(projectId, id, { description: next });
-      onCommitsChange?.();
-    } catch (e) {
-      toast.error(`Не удалось добавить подзадачу: ${(e as Error).message}`);
-    }
+    const { title, body } = splitTitleBody(editDescription);
+    const sep = body.length === 0 ? '' : body.endsWith('\n') ? '' : '\n';
+    const nextBody = `${body}${sep}- [ ] `;
+    setEditDescription(joinTitleBody(title, nextBody));
+    await commitDescription(joinTitleBody(title, nextBody));
   };
 
   // Form-level paste handler — ловит Ctrl+V где угодно внутри формы (textarea, секция, пустое место).
@@ -628,7 +721,7 @@ export function TaskDrawer({
                 {/* Группа действий: единый стиль (size-8, hover bg-hover). Видны для
                     релевантных статусов (Переработка/План — только пока задача правится). */}
                 <div className="flex shrink-0 items-center gap-0.5">
-                  <CopyTaskButton description={task.description ?? ''} />
+                  <CopyTaskButton description={editDescription || (task.description ?? '')} />
                   {canEdit && (
                     <>
                       <ReworkTaskButton projectId={task.projectId} taskId={task.id} />
@@ -661,21 +754,22 @@ export function TaskDrawer({
                 )}
               </div>
 
-              {/* Закреплённое описание (заголовок/тело задачи): всегда под рукой и всегда
-                  редактируемо — TaskDescriptionEditor работает в ЛЮБОМ статусе, включая done
-                  (клик по тексту = правка). Без собственного border-t — единственный
-                  разделитель идёт ниже всей шапки. Описание всегда раскрыто. */}
-              <div className="px-4 pb-1 pt-1">
-                <div className="max-h-[50vh] overflow-y-auto overscroll-contain">
-                  <TaskDescriptionEditor
-                    key={task.id}
-                    projectId={task.projectId}
-                    taskId={task.id}
-                    initialDescription={task.description ?? ''}
-                    onSaved={() => onCommitsChange?.()}
-                    onPasteFiles={(files) => void uploadFilesDirectly(files)}
-                  />
-                </div>
+              {/* === ЗАГОЛОВОК === Notion-style: 1-я строка описания как всегда-жирный
+                  заголовок, редактируемый по одному клику (plain, без форматирования).
+                  Enter переводит фокус в тело. Сохраняется склейкой title+body →
+                  description (см. commitDescription). Работает в ЛЮБОМ статусе, включая
+                  done. Без собственного border-t — единственный разделитель ниже всей шапки. */}
+              <div className="px-4 pb-1 pt-1.5">
+                {/* disabled НЕ привязываем к editSaving: заголовок сохраняется по debounce
+                    во время набора — дизейбл посреди ввода ронял бы нажатия. Сохранение
+                    идемпотентно (no-op guard в commitDescription), гонок нет. */}
+                <TaskTitleEditor
+                  key={`title-${task.id}`}
+                  value={editTitle}
+                  onChange={handleTitleChange}
+                  onCommit={() => void commitDescription(editDescription)}
+                  onEnter={focusBody}
+                />
               </div>
 
               {/* === ПЛЮСИКИ === Горизонтальный ряд add-кнопок (Notion «+Add»-style) прямо
@@ -805,6 +899,31 @@ export function TaskDrawer({
                     {formatTaskCreated(task.createdAt)}
                   </span>
                 </PropertyRow>
+              </div>
+
+              {/* === ТЕЛО === Всегда-редактируемый WYSIWYG (markdown тела, без заголовка)
+                  ПОД блоком свойств (Notion-порядок: заголовок → плюсики → свойства → тело).
+                  Своего border-t нет — единственный разделитель идёт ниже всей шапки. */}
+              <div ref={bodyContainerRef} className="px-4 pb-2 pt-1">
+                <div className="max-h-[50vh] overflow-y-auto overscroll-contain">
+                  <TaskBodyEditor
+                    key={`body-${task.id}`}
+                    projectId={task.projectId}
+                    taskId={task.id}
+                    body={editBody}
+                    fullDescription={editDescription}
+                    onBodyChange={handleBodyChange}
+                    onCommit={() => void commitDescription(editDescription)}
+                    onAiImproved={(next) => {
+                      // AI вернул переработанное ПОЛНОЕ описание → делим на title/body и сохраняем.
+                      setEditDescription(next);
+                      void commitDescription(next);
+                    }}
+                    onAiDistributed={() => onCommitsChange?.()}
+                    onPasteFiles={(files) => void uploadFilesDirectly(files)}
+                    disabled={editSaving}
+                  />
+                </div>
               </div>
             </div>
 
@@ -1086,268 +1205,6 @@ export function TaskDrawer({
         )}
       </SheetContent>
     </Sheet>
-  );
-}
-
-// =========================================================
-// Inline-edit описания задачи. По дефолту — статичный текст; клик → textarea, autofocus,
-// курсор в конец. Сохраняем на blur (если изменилось) или Ctrl/Cmd+Enter; Esc — отмена.
-// =========================================================
-
-function TaskDescriptionEditor({
-  projectId,
-  taskId,
-  initialDescription,
-  onSaved,
-  onCollapse,
-  onPasteFiles,
-}: {
-  projectId: string;
-  taskId: string;
-  initialDescription: string;
-  onSaved: () => void;
-  // Если задан — в шапке появляется кнопка «свернуть» (описание закреплено в header'е drawer'а).
-  onCollapse?: () => void;
-  // Вставка картинок из буфера (Ctrl+V) → прикрепляем к задаче через drawer.
-  onPasteFiles?: (files: File[]) => void;
-}): React.ReactElement {
-  const { taskRepository } = useContainer();
-  const [description, setDescription] = useState(initialDescription);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(initialDescription);
-  const [saving, setSaving] = useState(false);
-  // Клик по AI открывает Radix-диалог, который перехватывает фокус → редактор получает
-  // blur. Этот флаг (взводится на mousedown по AI) гасит blur-save, чтобы не было лишней
-  // записи и преждевременного сворачивания: запись делает сам AI-flow.
-  const aiOpeningRef = useRef(false);
-
-  // Если родитель открыл другой task — синхронизируем initial внутрь.
-  useEffect(() => {
-    setDescription(initialDescription);
-    setDraft(initialDescription);
-    setEditing(false);
-  }, [initialDescription, taskId]);
-
-  const enterEdit = (): void => {
-    setDraft(description);
-    setEditing(true);
-  };
-
-  const save = async (): Promise<void> => {
-    const trimmed = draft.trim();
-    if (trimmed.length === 0) {
-      toast.error('Описание не может быть пустым');
-      setDraft(description);
-      setEditing(false);
-      return;
-    }
-    if (trimmed === description.trim()) {
-      // Изменений нет — просто свернуться.
-      setEditing(false);
-      return;
-    }
-    setSaving(true);
-    try {
-      const updated = await taskRepository.update(projectId, taskId, { description: trimmed });
-      setDescription(updated.description ?? '');
-      setDraft(updated.description ?? '');
-      setEditing(false);
-      onSaved();
-    } catch (e) {
-      toast.error(`Не удалось сохранить: ${(e as Error).message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // AI «Применить» (одно поле) → сразу пишем в задачу (без ручного Ctrl+Enter).
-  const applyAndSave = async (next: string): Promise<void> => {
-    const trimmed = next.trim();
-    if (trimmed.length === 0) return;
-    if (trimmed === description.trim()) {
-      // AI вернул то же самое — не дёргаем сервер, просто свернёмся.
-      setEditing(false);
-      return;
-    }
-    setSaving(true);
-    try {
-      const updated = await taskRepository.update(projectId, taskId, { description: trimmed });
-      setDescription(updated.description ?? '');
-      setDraft(updated.description ?? '');
-      setEditing(false);
-      onSaved();
-    } catch (e) {
-      toast.error(`Не удалось сохранить: ${(e as Error).message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const cancel = (): void => {
-    setDraft(description);
-    setEditing(false);
-  };
-
-  // Интерактивный чеклист в режиме просмотра: клик по чекбоксу переключает пункт
-  // и сразу PATCH'ит описание (оптимистично, откат при ошибке).
-  const toggleCheckbox = (index: number, checked: boolean): void => {
-    const prev = description;
-    const next = toggleChecklistItem(prev, index, checked);
-    if (next === prev) return;
-    setDescription(next);
-    setDraft(next);
-    void taskRepository
-      .update(projectId, taskId, { description: next })
-      .then(() => onSaved())
-      .catch((e: unknown) => {
-        setDescription(prev);
-        setDraft(prev);
-        toast.error(`Не удалось обновить чеклист: ${(e as Error).message}`);
-      });
-  };
-
-  // Автосохранение при закрытии окна задачи. blur-save ловит клик мимо поля; этот unmount-хук —
-  // страховка, когда дровер закрывают/переключают задачу (key={task.id} → remount), не сняв
-  // фокус с textarea. Esc по-прежнему отменяет (cancel сбрасывает draft → editing=false → guard).
-  // latest-ref обновляем в эффекте (нельзя писать ref во время рендера).
-  const liveRef = useRef({ editing, saving, draft, description });
-  useEffect(() => {
-    liveRef.current = { editing, saving, draft, description };
-  });
-  useEffect(
-    () => () => {
-      const s = liveRef.current;
-      const trimmed = s.draft.trim();
-      if (!s.editing || s.saving || trimmed.length === 0 || trimmed === s.description.trim()) return;
-      void taskRepository.update(projectId, taskId, { description: trimmed }).catch(() => undefined);
-    },
-    [taskRepository, projectId, taskId],
-  );
-
-  // blur редактора → сохранить, КРОМЕ случая, когда фокус ушёл в открывшийся AI-диалог
-  // (там своя запись). RichTextEditor сам уже не зовёт onBlur, когда фокус ушёл в его
-  // floating-UI (bubble/slash/@-mention). aiOpeningRef гасит save при открытии AI-диалога.
-  const handleEditorBlur = (): void => {
-    if (aiOpeningRef.current) {
-      aiOpeningRef.current = false;
-      return;
-    }
-    void save();
-  };
-
-  // Esc внутри редактора → отмена правки (capture на обёртке, т.к. редактор Esc не отдаёт).
-  const handleWrapperKeyDownCapture = (e: React.KeyboardEvent<HTMLDivElement>): void => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      cancel();
-    }
-  };
-
-  // Клик по тексту → режим редактирования, КРОМЕ клика по ссылке или чекбоксу внутри
-  // markdown (их обрабатываем по назначению). Контейнер — div, а не <button>: rendered
-  // markdown содержит блочные элементы (<p>/<ul>/<pre>), невалидные внутри <button>.
-  const handleDisplayClick = (e: React.MouseEvent<HTMLDivElement>): void => {
-    if ((e.target as HTMLElement).closest('a,input')) return;
-    enterEdit();
-  };
-  const handleDisplayKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
-    // Enter/Space на ссылке/чекбоксе внутри markdown — их собственное действие, не edit.
-    if ((e.target as HTMLElement).closest('a,input')) return;
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      enterEdit();
-    }
-  };
-
-  return (
-    <div className="relative">
-      {/* Действия описания — поверх текста в правом верхнем углу, не занимают отдельную строку.
-          Копировать/Переработка/План переехали в группу действий шапки задачи; здесь
-          остаётся только AI-контрол (всегда виден) + сворачивание. bg/blur — чтобы текст
-          под кластером оставался читаемым. */}
-      <div className="absolute right-0 top-0 z-10 flex items-center gap-0.5 rounded-md bg-background/85 px-0.5 backdrop-blur-sm">
-          {/* preventDefault — клик по AI не уводит фокус мгновенно; aiOpeningRef гасит
-              blur-save, который иначе сработает, когда Radix-диалог перехватит фокус. */}
-          <div
-            onMouseDown={(e) => {
-              e.preventDefault();
-              aiOpeningRef.current = true;
-              // Подстраховка: если диалог не открылся (кнопка disabled) — снять флаг,
-              // чтобы не подавить следующий настоящий blur.
-              window.setTimeout(() => {
-                aiOpeningRef.current = false;
-              }, 300);
-            }}
-          >
-            <AiComposeDialog
-              text={editing ? draft : description}
-              projectId={projectId}
-              editTask={{ projectId, taskId }}
-              onImproved={(next) => void applyAndSave(next)}
-              onDistributed={() => onSaved()}
-              disabled={saving}
-              compact
-            />
-          </div>
-          {onCollapse && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 text-muted-foreground"
-              onClick={onCollapse}
-              aria-label="Свернуть описание"
-              title="Свернуть описание"
-            >
-              <ChevronUp className="size-4" />
-            </Button>
-          )}
-      </div>
-
-      {editing ? (
-        <div
-          className="space-y-1"
-          onKeyDownCapture={handleWrapperKeyDownCapture}
-        >
-          {/* WYSIWYG-редактор: padding/leading/шрифт 1-в-1 с display ниже, чтобы
-              текст не «прыгал» при переключении. Сохранение — blur / Ctrl+Cmd+Enter. */}
-          <Suspense
-            fallback={
-              <div className="max-h-[60vh] min-h-[1.75rem] py-1.5 text-sm leading-snug">{draft}</div>
-            }
-          >
-            <RichTextEditor
-              variant="description"
-              value={draft}
-              onChange={setDraft}
-              onSubmit={() => void save()}
-              onBlur={handleEditorBlur}
-              autoFocus
-              disabled={saving}
-              onPasteFiles={onPasteFiles}
-              className="max-h-[60vh] overflow-y-auto py-1.5 text-sm leading-snug"
-            />
-          </Suspense>
-        </div>
-      ) : (
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={handleDisplayClick}
-          onKeyDown={handleDisplayKeyDown}
-          className="group w-full cursor-text rounded-md border border-dashed border-transparent px-0 py-1.5 text-left transition-colors hover:border-border hover:bg-muted/30"
-          aria-label="Редактировать описание"
-        >
-          {description.trim().length > 0 ? (
-            <Markdown onCheckboxToggle={toggleCheckbox}>{description}</Markdown>
-          ) : (
-            <span className="text-sm italic leading-snug text-muted-foreground">
-              Нажми, чтобы добавить описание…
-            </span>
-          )}
-        </div>
-      )}
-    </div>
   );
 }
 
