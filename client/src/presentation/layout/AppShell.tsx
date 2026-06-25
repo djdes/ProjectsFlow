@@ -95,7 +95,8 @@ export function AppShell(): React.ReactElement {
             className={cn(
               'grid h-dvh overflow-hidden bg-background text-foreground',
               // Свёрнутая панель скрывается ЦЕЛИКОМ (Notion-style), а не превращается в rail.
-              collapsed ? 'grid-cols-[1fr]' : 'grid-cols-[260px_1fr]',
+              // Ширина 270px — измеренная по живому Notion (плотный chrome).
+              collapsed ? 'grid-cols-[1fr]' : 'grid-cols-[270px_1fr]',
             )}
           >
             {!collapsed && <Sidebar collapsed={collapsed} onToggleCollapse={toggleCollapse} />}
@@ -111,7 +112,7 @@ export function AppShell(): React.ReactElement {
                         type="button"
                         onClick={toggleCollapse}
                         aria-label="Развернуть панель"
-                        className="absolute left-2 top-2.5 z-30 grid size-8 place-items-center rounded-md bg-background/80 text-muted-foreground backdrop-blur-sm transition-colors hover:bg-foreground/[0.06] hover:text-foreground dark:hover:bg-white/10"
+                        className="absolute left-2 top-2.5 z-30 grid size-8 place-items-center rounded-md bg-background/80 text-muted-foreground backdrop-blur-sm transition-colors hover:bg-hover hover:text-foreground"
                       >
                         <ChevronsRight className="size-4" />
                       </button>
@@ -130,7 +131,7 @@ export function AppShell(): React.ReactElement {
           </div>
         ) : (
           <div className="flex h-dvh flex-col bg-background text-foreground">
-            <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2">
+            <header className="flex min-h-11 shrink-0 items-center gap-2 border-b px-2">
               <Button
                 variant="ghost"
                 size="icon"
@@ -159,7 +160,7 @@ export function AppShell(): React.ReactElement {
                   type="button"
                   onClick={() => setDrawerOpen(false)}
                   aria-label="Закрыть"
-                  className="absolute right-2 top-3 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground dark:hover:bg-white/10"
+                  className="absolute right-2 top-3 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                 >
                   <X className="size-4" />
                 </button>

@@ -165,7 +165,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
                   type="button"
                   onClick={onToggleCollapse}
                   aria-label="Свернуть панель"
-                  className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06] hover:text-foreground"
+                  className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                 >
                   <ChevronsLeft className="size-4" />
                 </button>
@@ -190,7 +190,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
       <button
         type="button"
         onClick={openAddTask}
-        className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition hover:bg-foreground/[0.04] active:scale-[0.985] dark:hover:bg-white/[0.06]"
+        className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition hover:bg-hover active:scale-[0.985]"
       >
         <Plus className="size-4 shrink-0 text-success transition-transform duration-300 group-hover:rotate-90" />
         <span className="flex-1 text-left">Добавить задачу</span>
@@ -233,8 +233,8 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
             to="/admin"
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]',
-                isActive && 'bg-foreground/[0.06] font-medium text-foreground dark:bg-white/10',
+                'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-hover',
+                isActive && 'bg-active font-medium text-foreground',
               )
             }
           >
@@ -279,7 +279,7 @@ function RailButton({
           onFocus={() => setHover(true)}
           onBlur={() => setHover(false)}
           aria-label={label}
-          className="relative grid size-9 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06] hover:text-foreground"
+          className="relative grid size-9 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
         >
           {icon}
           {badge !== undefined && badge > 0 && (
@@ -326,9 +326,9 @@ function RailNavLink({
           onMouseLeave={() => setHover(false)}
           className={({ isActive }) =>
             cn(
-              'relative grid size-9 shrink-0 place-items-center rounded-md transition-colors hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06]',
+              'relative grid size-9 shrink-0 place-items-center rounded-md transition-colors hover:bg-hover',
               isActive
-                ? 'bg-foreground/[0.06] text-foreground dark:bg-white/10'
+                ? 'bg-active text-foreground'
                 : 'text-muted-foreground hover:text-foreground',
             )
           }
