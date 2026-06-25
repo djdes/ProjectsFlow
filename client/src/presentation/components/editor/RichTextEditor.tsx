@@ -262,13 +262,19 @@ export function RichTextEditor({
       window.clearTimeout(timer);
       timer = window.setTimeout(compute, 150);
     };
-    // pointerdown вне меню → закрыть (клик внутри портал-меню игнорируем). Клик в
-    // редакторе тоже закрывает текущее меню; новое выделение откроет его заново.
+    // pointerdown по самому меню — игнорируем (работа с меню). Новый жест в редакторе —
+    // снимаем «закрытость» (чтобы повторное выделение того же диапазона снова открыло
+    // меню); схлопывание выделения закроет меню через compute. Клик строго вне меню и
+    // редактора — закрываем сразу.
     const onPointerDown = (ev: PointerEvent): void => {
       const t = ev.target as Node | null;
       if (!t) return;
       const el = t instanceof Element ? t : t.parentElement;
       if (el && el.closest('[data-format-menu]')) return;
+      if (editor.view?.dom.contains(t)) {
+        dismissedKeyRef.current = null;
+        return;
+      }
       closeMenu();
     };
     editor.on('selectionUpdate', onSel);
