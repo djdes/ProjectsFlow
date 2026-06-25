@@ -594,8 +594,8 @@ export function SidebarProjectList(): React.ReactElement {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Проект"
-            aria-label="Проект"
+            placeholder="Проект, задачи"
+            aria-label="Поиск: проект, задачи"
             className="h-8 w-full pl-7 text-sm"
           />
         </div>
