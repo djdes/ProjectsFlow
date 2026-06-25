@@ -223,7 +223,9 @@ export function RichTextEditor({
   }, [disabled, editor]);
 
   // Notion-style: непустое выделение → плавающее меню над ним. Дебаунс 150мс, чтобы
-  // меню не дёргалось во время протяжки мышью. Пустое выделение / blur → скрыть.
+  // меню не дёргалось во время протяжки мышью. Закрытие — по схлопыванию выделения
+  // ИЛИ клику вне меню и редактора (НЕ по blur: фокус уходит в портал-меню при работе
+  // с цветом/преобразованием, и blur-закрытие убивало бы меню в момент клика).
   React.useEffect(() => {
     if (!editor) return;
     let timer: number | undefined;
@@ -231,7 +233,8 @@ export function RichTextEditor({
       if (editor.isDestroyed) return;
       const { state, view } = editor;
       const { from, to, empty } = state.selection;
-      if (empty || !editor.isEditable || !editor.isFocused) {
+      if (empty || !editor.isEditable) {
+        dismissedKeyRef.current = null;
         setMenuAnchor(null);
         return;
       }
@@ -249,23 +252,24 @@ export function RichTextEditor({
       window.clearTimeout(timer);
       timer = window.setTimeout(compute, 150);
     };
-    const onBlur = (): void => {
-      // Фокус мог уйти в само меню (портал в body) — не считаем это уходом.
-      window.setTimeout(() => {
-        if (editor.isDestroyed || editor.isFocused) return;
-        const active = document.activeElement;
-        if (active && active.closest('[data-format-menu]')) return;
-        setMenuAnchor(null);
-      }, 0);
+    // Клик вне меню И вне этого редактора → закрыть. Клик внутри меню (портал в body)
+    // или внутри редактора игнорируем.
+    const onPointerDown = (ev: PointerEvent): void => {
+      const t = ev.target as Node | null;
+      if (!t) return;
+      const el = t instanceof Element ? t : t.parentElement;
+      if (el && el.closest('[data-format-menu]')) return;
+      if (editor.view?.dom.contains(t)) return;
+      closeMenu();
     };
     editor.on('selectionUpdate', onSel);
-    editor.on('blur', onBlur);
+    document.addEventListener('pointerdown', onPointerDown, true);
     return () => {
       window.clearTimeout(timer);
       editor.off('selectionUpdate', onSel);
-      editor.off('blur', onBlur);
+      document.removeEventListener('pointerdown', onPointerDown, true);
     };
-  }, [editor]);
+  }, [editor, closeMenu]);
 
   return (
     <div className={cn('relative', className)}>
