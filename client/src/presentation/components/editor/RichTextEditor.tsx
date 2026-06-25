@@ -5,8 +5,7 @@ import { TextSelection } from '@tiptap/pm/state';
 import { cn } from '@/lib/utils';
 import { buildExtensions, type MentionMember } from './extensions/buildExtensions';
 import { SlashCommand } from './extensions/slashCommand';
-import { BubbleToolbar } from './BubbleToolbar';
-import { ContextFormatMenu, type ContextMenuState } from './ContextFormatMenu';
+import { FloatingFormatMenu, type FloatingAnchor } from './FloatingFormatMenu';
 
 export type { MentionMember };
 
@@ -114,11 +113,22 @@ export function RichTextEditor({
     onPasteFilesRef.current = onPasteFiles;
   });
 
-  // Контекстное меню форматирования (правый клик). Храним координаты события.
-  const [ctxMenu, setCtxMenu] = React.useState<ContextMenuState>({ open: false, x: 0, y: 0 });
+  // Плавающее меню форматирования (по выделению И по правому клику). Якорь в
+  // координатах вьюпорта; null — меню скрыто.
+  const [menuAnchor, setMenuAnchor] = React.useState<FloatingAnchor | null>(null);
+  // Ключ «закрытого» выделения — чтобы после Escape/действия меню не всплывало
+  // снова для того же выделения (всплывёт, когда выделение сменится).
+  const dismissedKeyRef = React.useRef<string | null>(null);
   // editor нужен внутри handleDOMEvents, который создаётся до объявления editor —
   // читаем через ref, чтобы не пересоздавать конфигурацию.
   const editorRef = React.useRef<Editor | null>(null);
+
+  const selectionKey = (e: Editor): string => `${e.state.selection.from}-${e.state.selection.to}`;
+  const closeMenu = React.useCallback(() => {
+    const e = editorRef.current;
+    if (e && !e.isDestroyed) dismissedKeyRef.current = selectionKey(e);
+    setMenuAnchor(null);
+  }, []);
 
   const editor = useEditor({
     extensions: [...buildExtensions({ placeholder, members }), SlashCommand],
@@ -140,7 +150,10 @@ export function RichTextEditor({
           event.preventDefault();
           // Нет выделения — выделяем слово под курсором, чтобы формат применился к нему.
           selectWordAt(e, event.clientX, event.clientY);
-          setCtxMenu({ open: true, x: event.clientX, y: event.clientY });
+          // Якорим у курсора; отмечаем выделение «показанным», чтобы selection-эффект
+          // не перепозиционировал меню к краю выделения.
+          dismissedKeyRef.current = null;
+          setMenuAnchor({ x: event.clientX, top: event.clientY, bottom: event.clientY });
           return true;
         },
       },
@@ -209,15 +222,55 @@ export function RichTextEditor({
     editor?.setEditable(!disabled);
   }, [disabled, editor]);
 
+  // Notion-style: непустое выделение → плавающее меню над ним. Дебаунс 150мс, чтобы
+  // меню не дёргалось во время протяжки мышью. Пустое выделение / blur → скрыть.
+  React.useEffect(() => {
+    if (!editor) return;
+    let timer: number | undefined;
+    const compute = (): void => {
+      if (editor.isDestroyed) return;
+      const { state, view } = editor;
+      const { from, to, empty } = state.selection;
+      if (empty || !editor.isEditable || !editor.isFocused) {
+        setMenuAnchor(null);
+        return;
+      }
+      const key = `${from}-${to}`;
+      if (dismissedKeyRef.current === key) return; // уже закрыли это выделение
+      const start = view.coordsAtPos(from);
+      const end = view.coordsAtPos(to);
+      setMenuAnchor({
+        x: Math.min(start.left, end.left),
+        top: Math.min(start.top, end.top),
+        bottom: Math.max(start.bottom, end.bottom),
+      });
+    };
+    const onSel = (): void => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(compute, 150);
+    };
+    const onBlur = (): void => {
+      // Фокус мог уйти в само меню (портал в body) — не считаем это уходом.
+      window.setTimeout(() => {
+        if (editor.isDestroyed || editor.isFocused) return;
+        const active = document.activeElement;
+        if (active && active.closest('[data-format-menu]')) return;
+        setMenuAnchor(null);
+      }, 0);
+    };
+    editor.on('selectionUpdate', onSel);
+    editor.on('blur', onBlur);
+    return () => {
+      window.clearTimeout(timer);
+      editor.off('selectionUpdate', onSel);
+      editor.off('blur', onBlur);
+    };
+  }, [editor]);
+
   return (
     <div className={cn('relative', className)}>
-      {editor ? <BubbleToolbar editor={editor} /> : null}
       {editor ? (
-        <ContextFormatMenu
-          editor={editor}
-          state={ctxMenu}
-          onClose={() => setCtxMenu((s) => ({ ...s, open: false }))}
-        />
+        <FloatingFormatMenu editor={editor} anchor={menuAnchor} onClose={closeMenu} />
       ) : null}
       <EditorContent editor={editor} />
     </div>
