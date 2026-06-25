@@ -13,7 +13,6 @@ import { InboxCheckbox } from './InboxCheckbox';
 import { RalphModeBadge } from './RalphMode';
 import { DeadlineBadge } from './DeadlineBadge';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
-import { relativeTime } from '@/lib/relativeTime';
 import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL } from './statusLabels';
 
@@ -201,7 +200,14 @@ export function KanbanCard({
             <Markdown
               className={cn(
                 MARKDOWN_COMPACT,
-                'line-clamp-3',
+                // Notion-доска: на карточке показываем больше текста (4 строки),
+                // чтобы задача не обрезалась слишком рано.
+                'line-clamp-4',
+                // Карточный текст — обычного веса (Notion-style): первая строка описания
+                // (markdown-заголовок `#` или `**жирный**`) НЕ должна быть bold на превью.
+                // Перебиваем font-semibold заголовков из MARKDOWN_COMPACT и bold у strong/b.
+                '[&_h1]:font-normal [&_h2]:font-normal [&_h3]:font-normal [&_h4]:font-normal',
+                '[&_strong]:font-normal [&_b]:font-normal',
                 // Done-текст остаётся полноцветным (Notion: готовая задача не «гасится»);
                 // маркер готовности — мягкая зелёная заливка карточки + чек в чекбоксе.
               )}
@@ -221,12 +227,12 @@ export function KanbanCard({
             !!task.delegation ||
             task.deadline !== null ||
             checklist !== null) && (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <div className="mt-2 flex min-w-0 flex-nowrap items-center gap-1.5 text-[11px] text-muted-foreground">
               {/* Вторичная мета (делегирование/чеклист/счётчики/ralph/дедлайн) — скрыта
                   по умолчанию, проявляется на hover карточки (Notion reveal-on-hover).
-                  На таче (max-sm) и при фокусе внутри — всегда видна. Дедлайн больше не
-                  «висит» отдельным чипом без контекста. */}
-              <span className="flex flex-wrap items-center gap-2 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
+                  На таче (max-sm) и при фокусе внутри — всегда видна. Один ряд без
+                  «переноса»: min-w-0 + flex-nowrap, лишнее аккуратно обрезается. */}
+              <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
                 {task.delegation && currentUserId && (
                   <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
                 )}
@@ -269,39 +275,30 @@ export function KanbanCard({
                   in_progress и awaiting_clarification визуально лежат в TODO. Это
                   существенный сигнал состояния — оставляем видимым всегда. */}
               {task.status === 'in_progress' && (
-                <span className="ml-auto flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400">
+                <span className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-emerald-700 dark:text-emerald-400">
                   <span aria-hidden className="size-2 rounded-full bg-emerald-500" />
                   {STATUS_LABEL.in_progress}
                 </span>
               )}
               {task.status === 'awaiting_clarification' && (
-                <span className="ml-auto flex items-center gap-1 font-medium text-amber-600 dark:text-amber-400">
+                <span className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-amber-600 dark:text-amber-400">
                   <ClaudeIcon className="size-3" />
                   {STATUS_LABEL.awaiting_clarification}
                 </span>
               )}
             </div>
           )}
-          {/* Футер: дата слева, кнопки действий справа. Кнопки «тихие» — проявляются
-              на hover/focus карточки (на таче — всегда); прячутся целиком в режиме
-              выделения (булк-действия сверху) и в drag-preview (чистый оверлей). */}
-          <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-            {/* Относительная дата создания — вторичный шум: скрыта по умолчанию,
-                проявляется на hover карточки (на таче — всегда). */}
-            <span
-              className="opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-60"
-              title={task.createdAt.toLocaleString('ru-RU')}
-            >
-              {relativeTime(task.createdAt)}
-            </span>
+          {/* Футер: только кнопки действий справа (относительная дата создания убрана —
+              шум; осмысленная дата — это чип дедлайна в мета-строке). Кнопки «тихие» —
+              проявляются на hover/focus карточки (на таче — всегда); прячутся целиком
+              в режиме выделения (булк-действия сверху) и в drag-preview (чистый оверлей).
+              Рендерим футер только когда есть что показать, чтобы не плодить пустой ряд. */}
+          {!selecting && !preview && (
             <div
-              className={cn(
-                'flex shrink-0 gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100',
-                (selecting || preview) && 'hidden',
-              )}
+              className="mt-2 flex shrink-0 justify-end gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
               {...stopDragProps}
             >
-              {onQuickPromote && !preview && (
+              {onQuickPromote && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -330,7 +327,7 @@ export function KanbanCard({
                 <Trash2 className="size-3.5 transition-transform duration-150 group-hover/del:scale-110" />
               </Button>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </Wrapper>
