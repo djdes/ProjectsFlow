@@ -20,10 +20,10 @@
 
     --border: 45 10% 90%;
     --input: 45 10% 90%;
-    --ring: 217 82% 62%;
+    --ring: 210 77% 52%;
 
-    /* Чуть мягче неонового синего (91%→82%) — акценты спокойнее, не «бьют». */
-    --primary: 217 82% 60%;
+    /* Синий акцент Notion #2383E2 (rgb 35,131,226) — см. план Phase 0/0.1. */
+    --primary: 210 77% 51%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 45 6% 94%;
@@ -49,6 +49,12 @@
     --claude-cream: #faf9f5;
 
     --radius: 0.5rem;
+
+    /* Notion-style мягкие заливки интерактивных поверхностей (hover/active/выделение).
+       Содержат собственную альфу; используются как bg-hover / bg-active и в ::selection. */
+    --hover: rgba(55, 53, 47, 0.06);
+    --active: rgba(55, 53, 47, 0.08);
+    --selection: rgba(35, 131, 226, 0.14);
   }
 
   /* Тёмная тема — нейтральный графит Notion (#191919/#202020), без тёплого сдвига. */
@@ -67,10 +73,10 @@
 
     --border: 0 0% 18%;
     --input: 0 0% 18%;
-    --ring: 217 76% 64%;
+    --ring: 210 75% 58%;
 
-    /* В тёмной — мягче и чуть светлее, чтобы синий не резал на графите. */
-    --primary: 217 76% 64%;
+    /* В тёмной — Notion-синий чуть светлее, чтобы не резал на графите. */
+    --primary: 210 78% 60%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 0 0% 15%;
@@ -86,6 +92,10 @@
     --success: 142 64% 52%;
 
     --sidebar: 0 0% 13%;
+
+    --hover: rgba(255, 255, 255, 0.055);
+    --active: rgba(255, 255, 255, 0.075);
+    --selection: rgba(35, 131, 226, 0.24);
   }
 
   * {
@@ -96,6 +106,11 @@
     @apply bg-background text-foreground antialiased;
     font-feature-settings: 'rlig' 1, 'calt' 1;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Notion-style выделение текста — мягкий синий тинт во всём приложении. */
+  ::selection {
+    background: var(--selection);
   }
 
   /* Тонкие скроллбары в тон темы: системные (особенно в dark) выглядят ярким
@@ -267,4 +282,49 @@
   }
 
   html.pf-no-motion .pf-claude-agent-icon { animation: none; }
+}
+
+/* Tiptap WYSIWYG-редактор (RichTextEditor): placeholder, mention, task-list. */
+@layer components {
+  .ProseMirror {
+    outline: none;
+  }
+
+  /* Placeholder из @tiptap/extension-placeholder. */
+  .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    color: hsl(var(--muted-foreground));
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+
+  /* @-упоминание. */
+  .pf-mention {
+    color: hsl(var(--primary));
+    background: hsl(var(--primary) / 0.1);
+    border-radius: 0.25rem;
+    padding: 0 0.15em;
+    font-weight: 500;
+  }
+
+  /* Чек-листы (TaskList/TaskItem). */
+  .ProseMirror ul[data-type='taskList'] {
+    list-style: none;
+    padding-left: 0;
+    margin: 0.375rem 0;
+  }
+  .ProseMirror ul[data-type='taskList'] li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .ProseMirror ul[data-type='taskList'] li > label {
+    margin-top: 0.2em;
+    user-select: none;
+  }
+  .ProseMirror ul[data-type='taskList'] li > div {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
 }

@@ -9,8 +9,28 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter Variable', 'Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono Variable', 'JetBrains Mono', 'ui-monospace', 'monospace'],
+        // Системный стек Notion 1:1 — без веб-шрифтов (см. план Phase 0/0.1).
+        sans: [
+          'ui-sans-serif',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          '"Segoe UI Variable Display"',
+          '"Segoe UI"',
+          'Helvetica',
+          '"Apple Color Emoji"',
+          'Arial',
+          'sans-serif',
+          '"Segoe UI Emoji"',
+          '"Segoe UI Symbol"',
+        ],
+        mono: [
+          'ui-monospace',
+          'SFMono-Regular',
+          'Menlo',
+          'Consolas',
+          '"Liberation Mono"',
+          'monospace',
+        ],
       },
       colors: {
         border: 'hsl(var(--border))',
@@ -50,6 +70,11 @@ const config: Config = {
           foreground: 'hsl(var(--popover-foreground))',
         },
         sidebar: 'hsl(var(--sidebar))',
+        // Notion-style мягкие заливки интерактивных поверхностей (hover/active/selection).
+        // Содержат собственную альфу — поэтому var() напрямую, без hsl()-обёртки.
+        hover: 'var(--hover)',
+        active: 'var(--active)',
+        selection: 'var(--selection)',
       },
       borderRadius: {
         lg: 'var(--radius)',
