@@ -28,6 +28,10 @@ const CASES: Array<[name: string, md: string]> = [
   ['strike', '~~зачёркнуто~~'],
   ['inline code', '`код`'],
   ['highlight ==', '==выделено=='],
+  // Цвет текста/фона хранится как inline-HTML (TextStyle.renderMarkdown → SANITIZE_SCHEMA).
+  ['text color', '<span style="color:#d44c47">красный</span>'],
+  ['bg color', '<span style="background-color:#faebdd">фон</span>'],
+  ['text color inline', 'до <span style="color:#337ea9">синий</span> после'],
   ['heading', '# Заголовок'],
   ['bullet list', '- один\n- два'],
   ['ordered list', '1. один\n2. два'],

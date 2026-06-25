@@ -7,12 +7,27 @@ import { cn } from '@/lib/utils';
 
 // Дефолтная схема rehype-sanitize уже разрешает <del>/<s> (~~зачёркнутый~~) и <blockquote>
 // (> цитата), но НЕ <u> — в markdown нет подчёркивания, поэтому меню форматирования пишет
-// сырой <u>…</u>. Расширяем whitelist тегов на 'u', чтобы подчёркивание рендерилось везде
-// (описания, комментарии, карточки, LIVE). Остальная XSS-санитизация (script/on*/javascript:)
-// остаётся нетронутой.
+// сырой <u>…</u>. Расширяем whitelist тегов на 'u'/'mark'/'span'.
+//
+// Цвет текста/фона хранится как inline-HTML (`<span style="color:…">` /
+// `<span style="background-color:…">`, см. buildExtensions.ts → TextStyle.renderMarkdown).
+// Чтобы цвета показывались в read-вью, разрешаем атрибут `style` на span/mark, НО строго
+// ограничиваем его значение регуляркой: только свойства `color`/`background-color` со
+// значениями named/hex/rgb(a)/hsl(a). Любой `url()`, `expression()`, посторонние свойства
+// → атрибут целиком вырезается (см. propertyValuePrimitive в hast-util-sanitize: при
+// нескольких элементах в PropertyDefinition значение проверяется по allow-list/регуляркам).
+// Остальная XSS-санитизация (script/on*/javascript:) остаётся нетронутой.
+const SAFE_COLOR_STYLE =
+  /^(?:(?:color|background-color)\s*:\s*(?:#[0-9a-fA-F]{3,8}|rgba?\([\d.,%\s]*\)|hsla?\([\d.,%\s]*\)|[a-zA-Z]+)\s*;?\s*)+$/;
+
 const SANITIZE_SCHEMA = {
   ...defaultSchema,
-  tagNames: [...(defaultSchema.tagNames ?? []), 'u', 'mark'],
+  tagNames: [...(defaultSchema.tagNames ?? []), 'u', 'mark', 'span'],
+  attributes: {
+    ...defaultSchema.attributes,
+    span: [...(defaultSchema.attributes?.span ?? []), ['style', SAFE_COLOR_STYLE]],
+    mark: [...(defaultSchema.attributes?.mark ?? []), ['style', SAFE_COLOR_STYLE]],
+  },
 };
 
 // Notion-style выделение фоном: ==текст== → <mark> (remark-gfm такого синтаксиса

@@ -4,12 +4,34 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Placeholder from '@tiptap/extension-placeholder';
 import Mention from '@tiptap/extension-mention';
-import type { Extensions } from '@tiptap/core';
+import {
+  TextStyle as BaseTextStyle,
+  Color,
+  BackgroundColor,
+} from '@tiptap/extension-text-style';
+import type { Extensions, JSONContent } from '@tiptap/core';
 
 import { HighlightMark } from './HighlightMark';
 import { createMentionSuggestion, type MentionMember } from './mentionSuggestion';
 
 export type { MentionMember };
+
+// TextStyle сериализует цвет текста/фона в inline-HTML, чтобы он пережил round-trip
+// markdown ↔ doc. Базовый TextStyle парсит `<span style>` (parseHTML), но НЕ умеет
+// рендерить его в markdown — getMarkdown() молча терял бы style. Добавляем renderMarkdown:
+// `<span style="color:…;background-color:…">текст</span>`. Read-вью (Markdown.tsx)
+// разрешает ровно эти style-свойства в SANITIZE_SCHEMA — связка симметрична.
+const TextStyle = BaseTextStyle.extend({
+  renderMarkdown(node: JSONContent, helpers: { renderChildren: (n: JSONContent[]) => string }) {
+    const attrs = (node.attrs ?? {}) as { color?: string | null; backgroundColor?: string | null };
+    const styles: string[] = [];
+    if (attrs.color) styles.push(`color:${attrs.color}`);
+    if (attrs.backgroundColor) styles.push(`background-color:${attrs.backgroundColor}`);
+    const inner = helpers.renderChildren(node.content ?? []);
+    if (styles.length === 0) return inner; // пустой textStyle — без обёртки
+    return `<span style="${styles.join(';')}">${inner}</span>`;
+  },
+});
 
 interface BuildExtensionsOptions {
   placeholder?: string;
@@ -27,6 +49,12 @@ export function buildExtensions({ placeholder, members }: BuildExtensionsOptions
     TaskList,
     TaskItem.configure({ nested: true }),
     HighlightMark,
+    // Цвет текста/фона через textStyle-mark. Color/BackgroundColor добавляют
+    // глобальные атрибуты color/backgroundColor к textStyle и команды
+    // setColor/setBackgroundColor (см. меню форматирования).
+    TextStyle,
+    Color,
+    BackgroundColor,
     Placeholder.configure({ placeholder: placeholder ?? '' }),
   ];
 

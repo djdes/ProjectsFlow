@@ -1,12 +1,62 @@
 import * as React from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, type Editor } from '@tiptap/react';
+import { TextSelection } from '@tiptap/pm/state';
 
 import { cn } from '@/lib/utils';
 import { buildExtensions, type MentionMember } from './extensions/buildExtensions';
 import { SlashCommand } from './extensions/slashCommand';
 import { BubbleToolbar } from './BubbleToolbar';
+import { ContextFormatMenu, type ContextMenuState } from './ContextFormatMenu';
 
 export type { MentionMember };
+
+// Если выделения нет — выделяем слово под курсором в точке клика, чтобы форматирование
+// из контекстного меню применилось к нему (поведение Notion). Возвращает true, если
+// курсор попал в текст (меню имеет смысл открывать).
+function selectWordAt(editor: Editor, clientX: number, clientY: number): boolean {
+  const { view } = editor;
+  const posInfo = view.posAtCoords({ left: clientX, top: clientY });
+  if (!posInfo) return false;
+  const { state } = view;
+  const { selection } = state;
+
+  // Уже есть непустое выделение — не трогаем его (правый клик не должен «сбрасывать»).
+  if (!selection.empty) return true;
+
+  const pos = posInfo.pos;
+  const $pos = state.doc.resolve(pos);
+  const parent = $pos.parent;
+  if (!parent.isTextblock) {
+    // Не текстовый блок (например, hr) — просто ставим курсор, меню всё равно полезно.
+    return true;
+  }
+
+  const blockStart = $pos.start();
+  const text = parent.textContent;
+  if (!text) {
+    return true; // пустой блок — оставляем курсор, форматирование применится к набору
+  }
+
+  const offset = pos - blockStart;
+  const isWord = (ch: string): boolean => /[\p{L}\p{N}_]/u.test(ch);
+
+  let from = offset;
+  let to = offset;
+  while (from > 0 && isWord(text[from - 1] ?? '')) from -= 1;
+  while (to < text.length && isWord(text[to] ?? '')) to += 1;
+
+  if (from === to) {
+    // Курсор на пробеле/пунктуации — просто ставим каретку.
+    editor.chain().setTextSelection(pos).run();
+    return true;
+  }
+
+  const tr = state.tr.setSelection(
+    TextSelection.create(state.doc, blockStart + from, blockStart + to),
+  );
+  view.dispatch(tr);
+  return true;
+}
 
 export interface RichTextEditorProps {
   /** Markdown-строка (хранение неизменно — backend/mock получают markdown). */
@@ -64,6 +114,12 @@ export function RichTextEditor({
     onPasteFilesRef.current = onPasteFiles;
   });
 
+  // Контекстное меню форматирования (правый клик). Храним координаты события.
+  const [ctxMenu, setCtxMenu] = React.useState<ContextMenuState>({ open: false, x: 0, y: 0 });
+  // editor нужен внутри handleDOMEvents, который создаётся до объявления editor —
+  // читаем через ref, чтобы не пересоздавать конфигурацию.
+  const editorRef = React.useRef<Editor | null>(null);
+
   const editor = useEditor({
     extensions: [...buildExtensions({ placeholder, members }), SlashCommand],
     content: value,
@@ -73,6 +129,18 @@ export function RichTextEditor({
     immediatelyRender: true,
     editorProps: {
       attributes: { class: PROSE_CLASS },
+      handleDOMEvents: {
+        // Правый клик внутри редактора → своё меню форматирования вместо нативного.
+        contextmenu: (_view, event) => {
+          const e = editorRef.current;
+          if (!e || !e.isEditable) return false; // в режиме read-only — нативное меню
+          event.preventDefault();
+          // Нет выделения — выделяем слово под курсором, чтобы формат применился к нему.
+          selectWordAt(e, event.clientX, event.clientY);
+          setCtxMenu({ open: true, x: event.clientX, y: event.clientY });
+          return true;
+        },
+      },
       handleKeyDown: (_view, event) => {
         if (event.key !== 'Enter') return false;
         if (variant === 'comment') {
@@ -120,6 +188,11 @@ export function RichTextEditor({
     },
   });
 
+  // Держим ref на editor актуальным для handleDOMEvents (создаётся раньше editor).
+  React.useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
+
   // Внешнее изменение value (AI-improve, сброс формы) → синхронизируем без эха onUpdate.
   React.useEffect(() => {
     if (!editor) return;
@@ -135,6 +208,13 @@ export function RichTextEditor({
   return (
     <div className={cn('relative', className)}>
       {editor ? <BubbleToolbar editor={editor} /> : null}
+      {editor ? (
+        <ContextFormatMenu
+          editor={editor}
+          state={ctxMenu}
+          onClose={() => setCtxMenu((s) => ({ ...s, open: false }))}
+        />
+      ) : null}
       <EditorContent editor={editor} />
     </div>
   );
