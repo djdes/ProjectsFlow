@@ -8,11 +8,21 @@ import { META_CHIP_CLASS } from './MetaChip';
 type Props = {
   task: Task;
   onChanged?: () => void;
+  // Класс на триггер пикера — для Notion-ряда свойств (PROPERTY_VALUE_CLASS).
+  // По умолчанию — META_CHIP_CLASS (исторический chip-вид).
+  className?: string;
+  // Запретить правку (done-задача) — значение всё равно показываем.
+  disabled?: boolean;
 };
 
 // Chip-обёртка вокруг PrioritySelect для шапки TaskDrawer'а в edit-mode.
 // При изменении сразу PATCH (best-effort, error → toast).
-export function TaskPriorityChip({ task, onChanged }: Props): React.ReactElement {
+export function TaskPriorityChip({
+  task,
+  onChanged,
+  className = META_CHIP_CLASS,
+  disabled = false,
+}: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const [value, setValue] = useState<TaskPriority | null>(task.priority ?? null);
   const [saving, setSaving] = useState(false);
@@ -36,9 +46,9 @@ export function TaskPriorityChip({ task, onChanged }: Props): React.ReactElement
     <PrioritySelect
       value={value}
       onChange={(v) => void change(v)}
-      disabled={saving}
+      disabled={saving || disabled}
       compact
-      className={META_CHIP_CLASS}
+      className={className}
     />
   );
 }

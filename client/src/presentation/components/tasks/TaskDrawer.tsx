@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { ArrowRight, ChevronDown, ChevronsRight, ChevronUp, Download, FileText, ListChecks, Loader2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
+import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, ChevronUp, Clock, Download, FileText, Flag, ListChecks, Loader2, Paperclip, Pencil, Plus, Send, Trash2, UserPlus, X } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,11 +62,12 @@ import { TASK_STATUSES } from '@/domain/task/Task';
 import { DelegateSelect } from './DelegateSelect';
 import { AssignToProjectSelect } from './AssignToProjectSelect';
 import { DelegateTaskButton } from './DelegateTaskButton';
+import { DelegationBadge } from './DelegationBadge';
 import { DeadlinePicker } from './DeadlinePicker';
 import { PrioritySelect } from './PrioritySelect';
 import { TaskPriorityChip } from './TaskPriorityChip';
 import { TaskDeadlineChip } from './TaskDeadlineChip';
-import { MetaChip } from './MetaChip';
+import { PropertyRow, EmptyValue, PROPERTY_VALUE_CLASS } from './PropertyRow';
 import { CopyTaskButton } from './CopyTaskButton';
 import { ReworkTaskButton } from './ReworkTaskButton';
 import { PlanTaskButton } from './PlanTaskButton';
@@ -146,9 +147,13 @@ type Props = {
 function TaskRalphModeChip({
   task,
   onChanged,
+  className,
+  disabled = false,
 }: {
   task: Task;
   onChanged: () => void;
+  className?: string;
+  disabled?: boolean;
 }): React.ReactElement {
   const { taskRepository } = useContainer();
   const [mode, setMode] = useState<RalphMode>(task.ralphMode);
@@ -180,8 +185,9 @@ function TaskRalphModeChip({
     <RalphModeSelect
       value={mode}
       onChange={(v) => void change(v)}
-      disabled={saving}
+      disabled={saving || disabled}
       chip
+      className={className}
     />
   );
 }
@@ -367,6 +373,8 @@ export function TaskDrawer({
   const [createDragActive, setCreateDragActive] = useState(false);
   // Ref на скрытый file input для кнопки «Вложение» в create-mode.
   const createFileInputRef = useRef<HTMLInputElement>(null);
+  // Ref на скрытый file input для add-affordance «+ Файл» в edit-mode (ряд свойств).
+  const attachFileInputRef = useRef<HTMLInputElement>(null);
   // Ref-канал для footer-композера → TaskCommentsSection: после создания комментария
   // композер дёргает текущий handler чтобы вставить созданный коммент в список.
   const onCommentCreatedRef = useRef<((c: TaskComment) => void) | null>(null);
@@ -603,7 +611,8 @@ export function TaskDrawer({
                 контейнере шапки — это ЕДИНСТВЕННЫЙ разделитель между телом задачи и
                 переключателем вкладок (никаких border-t у описания и border-b у вкладок). */}
             <div className="border-b bg-background/95 backdrop-blur-md">
-              {/* Row A: контекст · короткий id · дата создания (слева), передать/статус (справа). */}
+              {/* Row A: контекст · короткий id (слева), действия (Копир./Переработка/План)
+                  + передать/статус (справа). Дата создания переехала в ряд свойств «Создано». */}
               <div className="flex items-center gap-2 px-4 pt-3">
                 {renderCloseButton()}
                 <div className="flex min-w-0 flex-1 items-baseline gap-2">
@@ -615,9 +624,17 @@ export function TaskDrawer({
                   <span className="font-mono text-[10px] text-muted-foreground/50">
                     {taskShortId(task.id)}
                   </span>
-                  <span className="truncate text-[11px] text-muted-foreground/60">
-                    {formatTaskCreated(task.createdAt)}
-                  </span>
+                </div>
+                {/* Группа действий: единый стиль (size-8, hover bg-hover). Видны для
+                    релевантных статусов (Переработка/План — только пока задача правится). */}
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <CopyTaskButton description={task.description ?? ''} />
+                  {canEdit && (
+                    <>
+                      <ReworkTaskButton projectId={task.projectId} taskId={task.id} />
+                      <PlanTaskButton projectId={task.projectId} taskId={task.id} />
+                    </>
+                  )}
                 </div>
                 {onMove && (
                   <TaskAdvanceButton
@@ -644,61 +661,131 @@ export function TaskDrawer({
                 )}
               </div>
 
-              {/* Row B: слева — ряд тихих «+» чипов-свойств (одинаковая высота h-7,
-                  rounded-md, px-2, text-xs через MetaChip / META_CHIP_CLASS); справа —
-                  группа из 3 единообразных иконок-действий: Копировать · Переработка · План.
-                  Аттачи (когда есть) переносятся на свою строку через basis-full. */}
-              <div className="flex flex-wrap items-start gap-x-2 gap-y-1.5 px-4 pb-2 pt-1.5">
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1 gap-y-1.5">
-                  <TaskDrawerAttachmentRow
-                    items={headerAttachments}
-                    canEdit={canEdit}
-                    onAddFiles={(files) => {
-                      void uploadFilesDirectly(files);
-                    }}
+              {/* === PROPERTIES === Notion-style вертикальные строки свойств. Рендерятся
+                  ВСЕГДА (для любого статуса, включая done) — строка не прячется по статусу;
+                  если контрол неправим для done — показываем значение, контрол disabled. */}
+              <div className="px-3 pb-1.5 pt-2">
+                {/* Ответственный — делегирование. Показываем бейдж текущей делегации
+                    (если есть) и/или кнопку «назначить»; для проектов без делегирования —
+                    «Никто». Гейтим только ВОЗМОЖНОСТЬ делегировать, не саму строку. */}
+                <PropertyRow icon={UserPlus} label="Ответственный">
+                  <div className="flex min-h-7 flex-wrap items-center gap-1.5">
+                    {task.delegation && currentUser?.id && (
+                      <DelegationBadge delegation={task.delegation} currentUserId={currentUser.id} />
+                    )}
+                    {canEdit && (isInbox || isShared) ? (
+                      <DelegateTaskButton
+                        task={task}
+                        currentUserId={currentUser?.id ?? null}
+                        onChanged={() => onCommitsChange?.()}
+                        projectId={isShared ? task.projectId : undefined}
+                      />
+                    ) : null}
+                    {!task.delegation && !(canEdit && (isInbox || isShared)) && (
+                      <EmptyValue>Никто</EmptyValue>
+                    )}
+                    {isInbox && canEdit && (
+                      <AssignToProjectSelect
+                        task={task}
+                        onAssigned={() => {
+                          onCommitsChange?.();
+                          onClose();
+                        }}
+                      />
+                    )}
+                  </div>
+                </PropertyRow>
+
+                {/* Дедлайн — пикер inline; пустое значение читается как «Пусто». */}
+                <PropertyRow icon={CalendarClock} label="Дедлайн">
+                  <TaskDeadlineChip
+                    task={task}
+                    onChanged={() => onCommitsChange?.()}
+                    className={PROPERTY_VALUE_CLASS}
+                    emptyLabel="Пусто"
+                    disabled={!canEdit}
                   />
-                  {(isInbox || isShared) && (
-                    <DelegateTaskButton
-                      task={task}
-                      currentUserId={currentUser?.id ?? null}
-                      onChanged={() => onCommitsChange?.()}
-                      projectId={isShared ? task.projectId : undefined}
-                    />
-                  )}
-                  {isInbox && (
-                    <AssignToProjectSelect
-                      task={task}
-                      onAssigned={() => {
-                        onCommitsChange?.();
-                        onClose();
+                </PropertyRow>
+
+                {/* Приоритет — пикер inline; пустое значение → «Без приоритета». */}
+                <PropertyRow icon={Flag} label="Приоритет">
+                  <TaskPriorityChip
+                    task={task}
+                    onChanged={() => onCommitsChange?.()}
+                    className={PROPERTY_VALUE_CLASS}
+                    disabled={!canEdit}
+                  />
+                </PropertyRow>
+
+                {/* Режим воркера — селектор inline. */}
+                <PropertyRow icon={Bot} label="Режим">
+                  <TaskRalphModeChip
+                    task={task}
+                    onChanged={() => onCommitsChange?.()}
+                    className={PROPERTY_VALUE_CLASS}
+                    disabled={!canEdit}
+                  />
+                </PropertyRow>
+
+                {/* Файлы — чипы вложений или «Пусто». Когда файлов нет — показываем
+                    «Пусто» (загрузка — через add-affordance «+ Файл» ниже), чтобы не
+                    дублировать пустую кнопку-плейсхолдер ряда вложений. */}
+                <PropertyRow icon={Paperclip} label="Файлы">
+                  {headerAttachments.length > 0 ? (
+                    <TaskDrawerAttachmentRow
+                      items={headerAttachments}
+                      canEdit={canEdit}
+                      onAddFiles={(files) => {
+                        void uploadFilesDirectly(files);
                       }}
                     />
+                  ) : (
+                    <span className="inline-flex min-h-7 items-center px-1.5">
+                      <EmptyValue />
+                    </span>
                   )}
-                  <TaskDeadlineChip task={task} onChanged={() => onCommitsChange?.()} />
-                  <TaskPriorityChip task={task} onChanged={() => onCommitsChange?.()} />
-                  {(task.status === 'backlog' ||
-                    task.status === 'todo' ||
-                    task.status === 'awaiting_clarification') && (
-                    <TaskRalphModeChip task={task} onChanged={() => onCommitsChange?.()} />
-                  )}
-                  {canEdit && (
-                    <MetaChip
-                      icon={ListChecks}
-                      label="подзадача"
+                </PropertyRow>
+
+                {/* Создано — read-only, приглушённо. */}
+                <PropertyRow icon={Clock} label="Создано">
+                  <span className="inline-flex min-h-7 items-center px-1.5 text-sm text-muted-foreground/70">
+                    {formatTaskCreated(task.createdAt)}
+                  </span>
+                </PropertyRow>
+
+                {/* Add-affordances («плюсики») в стиле Notion «+ Add a property». */}
+                {canEdit && (
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1 px-1.5 pt-0.5">
+                    <button
+                      type="button"
                       onClick={() => void appendSubtask()}
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+                    >
+                      <Plus className="size-3.5" />
+                      <ListChecks className="size-3.5" />
+                      Подзадача
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => attachFileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+                    >
+                      <Plus className="size-3.5" />
+                      <Paperclip className="size-3.5" />
+                      Файл
+                    </button>
+                    <input
+                      ref={attachFileInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files) void uploadFilesDirectly(Array.from(e.target.files));
+                        e.target.value = '';
+                      }}
                     />
-                  )}
-                </div>
-                {/* Группа действий справа: единый стиль (size-8, hover bg-hover). */}
-                <div className="flex shrink-0 items-center gap-0.5">
-                  <CopyTaskButton description={task.description ?? ''} />
-                  {canEdit && (
-                    <>
-                      <ReworkTaskButton projectId={task.projectId} taskId={task.id} />
-                      <PlanTaskButton projectId={task.projectId} taskId={task.id} />
-                    </>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
 
               {/* Закреплённое описание: всегда под рукой (тело скроллится к свежим

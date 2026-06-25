@@ -8,11 +8,24 @@ import { META_CHIP_CLASS } from './MetaChip';
 type Props = {
   task: Task;
   onChanged?: () => void;
+  // Класс на триггер пикера — для Notion-ряда свойств (PROPERTY_VALUE_CLASS).
+  // По умолчанию — META_CHIP_CLASS (исторический chip-вид).
+  className?: string;
+  // Текст в пустом состоянии триггера. Для ряда свойств — «Пусто».
+  emptyLabel?: string;
+  // Запретить правку (done-задача) — значение всё равно показываем.
+  disabled?: boolean;
 };
 
 // Chip-обёртка вокруг DeadlinePicker для шапки TaskDrawer'а в edit-mode.
 // При изменении сразу PATCH.
-export function TaskDeadlineChip({ task, onChanged }: Props): React.ReactElement {
+export function TaskDeadlineChip({
+  task,
+  onChanged,
+  className = META_CHIP_CLASS,
+  emptyLabel,
+  disabled = false,
+}: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const [value, setValue] = useState<string | null>(task.deadline ?? null);
   const [saving, setSaving] = useState(false);
@@ -36,8 +49,9 @@ export function TaskDeadlineChip({ task, onChanged }: Props): React.ReactElement
     <DeadlinePicker
       value={value}
       onChange={(v) => void change(v)}
-      disabled={saving}
-      className={META_CHIP_CLASS}
+      disabled={saving || disabled}
+      className={className}
+      emptyLabel={emptyLabel}
     />
   );
 }

@@ -17,6 +17,8 @@ type Props = {
   className?: string;
   // Icon-only режим для композеров: иконка календаря, дата появляется рядом только когда задана.
   iconOnly?: boolean;
+  // Текст в пустом состоянии (по умолчанию «Дедлайн»). Для Notion-ряда свойств — «Пусто».
+  emptyLabel?: string;
 };
 
 // Краткий формат для кнопки: «27 май» / «27 май 2026» (если другой год).
@@ -70,6 +72,7 @@ export function DeadlinePicker({
   disabled,
   className,
   iconOnly = false,
+  emptyLabel = 'Дедлайн',
 }: Props): React.ReactElement {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -87,7 +90,7 @@ export function DeadlinePicker({
     }
   };
 
-  const label = value ? formatShort(value) : 'Дедлайн';
+  const label = value ? formatShort(value) : emptyLabel;
 
   return (
     <span className="inline-flex items-center">
