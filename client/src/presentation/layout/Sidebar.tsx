@@ -29,16 +29,16 @@ import { SidebarProjectList } from './SidebarProjectList';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { avatarColor, getInitials } from './projectIcons';
 
-// Активная кнопка рейла. Главная/Входящие/Поиск показывают список проектов в нижней
-// области; Чат — общий чат пространства. Любая из 4 может быть активной (как в Notion).
-type RailKey = 'home' | 'chat' | 'inbox' | 'search';
-const RAIL_ORDER: readonly RailKey[] = ['home', 'chat', 'inbox', 'search'];
+// Активная вкладка рейла (только переключатели слева): Главная показывает список проектов
+// в нижней области, Чат — общий чат пространства. Входящие/Поиск — это icon-кнопки действий
+// справа, они НЕ становятся активной вкладкой (просто выполняют переход/открывают поиск).
+type RailKey = 'home' | 'chat';
+const RAIL_ORDER: readonly RailKey[] = ['home', 'chat'];
 const RAIL_KEY = 'pf_sidebar_rail';
 
 function readRail(): RailKey {
   try {
-    const v = localStorage.getItem(RAIL_KEY);
-    return v === 'chat' || v === 'inbox' || v === 'search' ? v : 'home';
+    return localStorage.getItem(RAIL_KEY) === 'chat' ? 'chat' : 'home';
   } catch {
     return 'home';
   }
@@ -79,18 +79,29 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
   // Нижняя область = чат только когда активен Чат; для Главная/Входящие/Поиск — проекты.
   const showChat = activeRail === 'chat';
 
-  // 4-кнопочный rail: активная — широкая (иконка+текст), остальные — узкие иконки.
+  // Rail: слева вкладки-переключатели (Главная/Чат — активная разворачивается с подписью),
+  // справа icon-кнопки действий (Входящие/Поиск — без активного состояния, клик = действие).
   const railItems: RailItem[] = [
-    { key: 'home', label: 'Главная', icon: <AnimatedHome className="size-5" /> },
-    { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: chatUnread + actionable },
-    { key: 'inbox', label: 'Входящие', icon: <AnimatedInbox className="size-5" /> },
-    { key: 'search', label: 'Поиск', icon: <AnimatedSearch className="size-5" /> },
+    { key: 'home', label: 'Главная', icon: <AnimatedHome className="size-5" />, variant: 'tab' },
+    { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: chatUnread + actionable, variant: 'tab' },
+    {
+      key: 'inbox',
+      label: 'Входящие',
+      icon: <AnimatedInbox className="size-5" />,
+      variant: 'action',
+      onAction: () => navigate('/'),
+    },
+    {
+      key: 'search',
+      label: 'Поиск',
+      icon: <AnimatedSearch className="size-5" />,
+      variant: 'action',
+      onAction: openSearch,
+    },
   ];
+  // Клик по вкладке-переключателю (только Главная/Чат). Входящие/Поиск идут через onAction.
   const onRailSelect = (i: number): void => {
-    const key = RAIL_ORDER[i] ?? 'home';
-    setRailPersist(key);
-    if (key === 'inbox') navigate('/');
-    else if (key === 'search') openSearch();
+    setRailPersist(RAIL_ORDER[i] ?? 'home');
   };
 
   if (collapsed) {

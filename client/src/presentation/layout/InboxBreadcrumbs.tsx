@@ -46,11 +46,14 @@ function useHoverMenu(): {
   return { open, setOpen, openNow, closeSoon };
 }
 
-// Notion-style: hover — нейтральная заливка bg-hover; текущий сегмент — bg-active.
+// Notion-style: hover — нейтральная заливка bg-hover; текущий сегмент — отчётливая мягкая
+// «пилюля» (более плотная заливка), чтобы текущая страница ясно читалась.
 const segmentClass = (current?: boolean): string =>
   cn(
-    'flex items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-hover',
-    current ? 'bg-active font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
+    'flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors',
+    current
+      ? 'bg-foreground/[0.08] font-medium text-foreground dark:bg-white/[0.10]'
+      : 'text-muted-foreground hover:bg-hover hover:text-foreground',
   );
 
 export function InboxBreadcrumbs(): React.ReactElement {
