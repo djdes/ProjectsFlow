@@ -1,4 +1,7 @@
+import * as React from 'react';
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useRef,
@@ -6,7 +9,6 @@ import {
   type ClipboardEvent,
   type DragEvent,
   type FormEvent,
-  type KeyboardEvent,
 } from 'react';
 import { ArrowRight, ChevronDown, ChevronsRight, ChevronUp, Download, FileText, ListChecks, Loader2, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
 import {
@@ -46,9 +48,6 @@ import {
 } from './RalphQuestionControls';
 import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import { toggleChecklistItem } from '@/lib/checklist';
-import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
-import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
 import { LiveTab } from './LiveTab';
 import { ClaudeIcon } from './ClaudeIcon';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
@@ -79,6 +78,20 @@ import { CancelWorkButton } from './CancelWorkButton';
 import { STATUS_LABEL } from './statusLabels';
 import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
 import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
+import type { MentionMember } from '@/presentation/components/editor/RichTextEditor';
+
+// Tiptap-редактор грузим лениво — он тяжёлый и не нужен на read-heavy экранах,
+// которые не открывают drawer. Suspense-fallback держит высоту, чтобы layout не прыгал.
+const RichTextEditor = lazy(() =>
+  import('@/presentation/components/editor/RichTextEditor').then((m) => ({
+    default: m.RichTextEditor,
+  })),
+);
+
+// Маппинг участников проекта → формат редактора для @-упоминаний (literal `@displayName`).
+function toMentionMembers(members: readonly ProjectMember[]): MentionMember[] {
+  return members.map((m) => ({ userId: m.userId, displayName: m.user.displayName }));
+}
 
 type PendingFile = {
   readonly id: string;
@@ -405,15 +418,10 @@ export function TaskDrawer({
     void taskRepository.listAttachments(projectId, id).then(setHeaderAttachments).catch(() => undefined);
   }, [state, taskRepository]);
   // autoFocus только на desktop — на мобильных клавиатура сразу перекрывает диалог.
-  // descNodeRef — объектный ref для меню форматирования (хук читает .current).
-  const descNodeRef = useRef<HTMLTextAreaElement | null>(null);
-  const descRef = useCallback((el: HTMLTextAreaElement | null) => {
-    descNodeRef.current = el;
-    if (el && !window.matchMedia('(pointer: coarse)').matches) el.focus();
-  }, []);
-  const createDescFmt = useTextFieldFormatting(descNodeRef);
-  // Авто-рост поля описания новой задачи до 12 строк (site-wide правило).
-  useAutoGrowTextarea(descNodeRef, description, { minRows: 4 });
+  const isCoarsePointer =
+    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+  // Ref на форму создания — Ctrl/Cmd+Enter внутри редактора сабмитит её программно.
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (!state) return;
@@ -877,6 +885,7 @@ export function TaskDrawer({
               </div>
             </div>
             <form
+              ref={formRef}
               id="task-drawer-form"
               onSubmit={handleSubmit}
               onPaste={handleFormPaste}
@@ -924,22 +933,25 @@ export function TaskDrawer({
                     ))}
                   </div>
                 )}
-                <ContextMenu onOpenChange={createDescFmt.onMenuOpenChange}>
-                  <ContextMenuTrigger asChild>
-                    <textarea
-                      id="task-desc"
-                      ref={descRef}
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      onKeyDown={createDescFmt.keyDownHandler}
-                      maxLength={50000}
-                      rows={4}
-                      placeholder="Что нужно сделать?"
-                      className="block w-full resize-none bg-transparent text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none"
-                    />
-                  </ContextMenuTrigger>
-                  {createDescFmt.menuContent}
-                </ContextMenu>
+                <Suspense fallback={<div className="min-h-[5.5rem]" />}>
+                  <RichTextEditor
+                    variant="description"
+                    value={description}
+                    onChange={setDescription}
+                    onSubmit={() => {
+                      // Ctrl/Cmd+Enter внутри редактора → сабмит формы создания задачи.
+                      if (description.trim().length === 0) {
+                        setError('Введите описание');
+                        return;
+                      }
+                      formRef.current?.requestSubmit();
+                    }}
+                    placeholder="Что нужно сделать?"
+                    autoFocus={!isCoarsePointer}
+                    onPasteFiles={addPendingFiles}
+                    className="min-h-[5.5rem] text-sm leading-snug"
+                  />
+                </Suspense>
               </div>
 
               {/* Иконки-свойства под полем (единый стиль с композерами доски):
@@ -1064,9 +1076,7 @@ function TaskDescriptionEditor({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(initialDescription);
   const [saving, setSaving] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fmt = useTextFieldFormatting(textareaRef);
-  // Клик по AI открывает Radix-диалог, который перехватывает фокус → textarea получает
+  // Клик по AI открывает Radix-диалог, который перехватывает фокус → редактор получает
   // blur. Этот флаг (взводится на mousedown по AI) гасит blur-save, чтобы не было лишней
   // записи и преждевременного сворачивания: запись делает сам AI-flow.
   const aiOpeningRef = useRef(false);
@@ -1077,34 +1087,6 @@ function TaskDescriptionEditor({
     setDraft(initialDescription);
     setEditing(false);
   }, [initialDescription, taskId]);
-
-  // Авто-высота: поле ровно по содержимому (без пустой «коробки»), но не выше 60vh —
-  // длинное описание скроллится внутри поля, а не распирает весь дровер.
-  const autosize = useCallback((): void => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    const sh = el.scrollHeight;
-    if (sh === 0) return; // скрытое поддерево (display:none) — не схлопываем в 0
-    const max = Math.round(window.innerHeight * 0.6);
-    el.style.height = `${Math.min(sh, max)}px`;
-    el.style.overflowY = sh > max ? 'auto' : 'hidden';
-  }, []);
-
-  useEffect(() => {
-    if (editing && textareaRef.current) {
-      const el = textareaRef.current;
-      el.focus();
-      // Курсор в конец — стандартный UX «продолжить писать».
-      el.setSelectionRange(el.value.length, el.value.length);
-      autosize();
-    }
-  }, [editing, autosize]);
-
-  // Подгоняем высоту, когда draft меняется извне (например, AI подставил текст).
-  useEffect(() => {
-    if (editing) autosize();
-  }, [draft, editing, autosize]);
 
   const enterEdit = (): void => {
     setDraft(description);
@@ -1202,42 +1184,23 @@ function TaskDescriptionEditor({
     [taskRepository, projectId, taskId],
   );
 
-  // blur textarea → сохранить, КРОМЕ случая, когда фокус ушёл в открывшийся AI-диалог
-  // (там своя запись) ИЛИ в меню форматирования (его открытие уводит фокус — иначе редактор
-  // схлопнулся бы до выбора пункта). aiOpeningRef/isMenuOpenRef — на случай пустого relatedTarget.
-  const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>): void => {
-    const next = e.relatedTarget as HTMLElement | null;
-    if (
-      aiOpeningRef.current ||
-      fmt.isMenuOpenRef.current ||
-      (next && next.closest('[role="dialog"],[role="menu"]'))
-    ) {
+  // blur редактора → сохранить, КРОМЕ случая, когда фокус ушёл в открывшийся AI-диалог
+  // (там своя запись). RichTextEditor сам уже не зовёт onBlur, когда фокус ушёл в его
+  // floating-UI (bubble/slash/@-mention). aiOpeningRef гасит save при открытии AI-диалога.
+  const handleEditorBlur = (): void => {
+    if (aiOpeningRef.current) {
       aiOpeningRef.current = false;
       return;
     }
     void save();
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+  // Esc внутри редактора → отмена правки (capture на обёртке, т.к. редактор Esc не отдаёт).
+  const handleWrapperKeyDownCapture = (e: React.KeyboardEvent<HTMLDivElement>): void => {
     if (e.key === 'Escape') {
       e.preventDefault();
       cancel();
-      return;
     }
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      void save();
-    }
-  };
-
-  // Ctrl+V с картинкой/файлом в буфере → прикрепляем к задаче (а не вставляем binary в текст).
-  // Обычная текстовая вставка идёт по дефолту: extractClipboardFiles вернёт пусто.
-  const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>): void => {
-    if (!onPasteFiles) return;
-    const files = extractClipboardFiles(e.clipboardData);
-    if (files.length === 0) return;
-    e.preventDefault();
-    onPasteFiles(files);
   };
 
   // Клик по тексту → режим редактирования, КРОМЕ клика по ссылке или чекбоксу внутри
@@ -1247,7 +1210,7 @@ function TaskDescriptionEditor({
     if ((e.target as HTMLElement).closest('a,input')) return;
     enterEdit();
   };
-  const handleDisplayKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
+  const handleDisplayKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
     // Enter/Space на ссылке/чекбоксе внутри markdown — их собственное действие, не edit.
     if ((e.target as HTMLElement).closest('a,input')) return;
     if (e.key === 'Enter' || e.key === ' ') {
@@ -1302,29 +1265,29 @@ function TaskDescriptionEditor({
       </div>
 
       {editing ? (
-        <div className="space-y-1">
-          {/* Безрамочное авто-растущее поле: padding/leading/шрифт 1-в-1 с display ниже,
-              чтобы текст не «прыгал» при переключении. */}
-          <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
-            <ContextMenuTrigger asChild>
-              <textarea
-                ref={textareaRef}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onBlur={handleBlur}
-                onPaste={handlePaste}
-                onKeyDown={(e) => {
-                  fmt.keyDownHandler(e);
-                  if (!e.defaultPrevented) handleKeyDown(e);
-                }}
-                maxLength={50000}
-                rows={1}
-                disabled={saving}
-                className="block max-h-[60vh] w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-0 py-1.5 text-sm leading-snug focus:outline-none disabled:opacity-50"
-              />
-            </ContextMenuTrigger>
-            {fmt.menuContent}
-          </ContextMenu>
+        <div
+          className="space-y-1"
+          onKeyDownCapture={handleWrapperKeyDownCapture}
+        >
+          {/* WYSIWYG-редактор: padding/leading/шрифт 1-в-1 с display ниже, чтобы
+              текст не «прыгал» при переключении. Сохранение — blur / Ctrl+Cmd+Enter. */}
+          <Suspense
+            fallback={
+              <div className="max-h-[60vh] min-h-[1.75rem] py-1.5 text-sm leading-snug">{draft}</div>
+            }
+          >
+            <RichTextEditor
+              variant="description"
+              value={draft}
+              onChange={setDraft}
+              onSubmit={() => void save()}
+              onBlur={handleEditorBlur}
+              autoFocus
+              disabled={saving}
+              onPasteFiles={onPasteFiles}
+              className="max-h-[60vh] overflow-y-auto py-1.5 text-sm leading-snug"
+            />
+          </Suspense>
         </div>
       ) : (
         <div
@@ -1496,18 +1459,11 @@ function TaskCommentsSection({
 }
 
 // =========================================================
-// New-comment composer. Textarea + @-mention picker (popover с участниками команды).
-// Триггер пикера — символ `@` на границе слова (старт строки, после пробела или \n).
-// На select подставляет `@<DisplayName> `, server потом распарсит mention'ы и зарегает
-// notification'ы для тех, кого зовут.
+// New-comment composer. WYSIWYG-редактор (RichTextEditor) с встроенными @-упоминаниями
+// (mention сериализуется в literal `@DisplayName` — server потом распарсит и зарегает
+// notification'ы). Enter — отправка, Shift+Enter — перенос строки. Превью использует
+// CommentBody (read-view идентичен сохранённому markdown).
 // =========================================================
-
-type MentionState = {
-  // Индекс символа `@` в textarea (включительно).
-  start: number;
-  // Текст после @ до курсора (может содержать пробелы — display name многоscлoвный).
-  query: string;
-};
 
 function CommentComposer({
   projectId,
@@ -1527,14 +1483,10 @@ function CommentComposer({
   const [preview, setPreview] = useState(false);
   // Адресация уведомления (по умолчанию — все участники).
   const [notify, setNotify] = useState<NotifyAudience>({ mode: 'all' });
-  const [mention, setMention] = useState<MentionState | null>(null);
-  const [pickerIndex, setPickerIndex] = useState(0);
   const [pending, setPending] = useState<PendingFile[]>([]);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const fmt = useTextFieldFormatting(textareaRef);
-  // Авто-рост поля комментария до 12 строк (site-wide правило).
-  useAutoGrowTextarea(textareaRef, body, { minRows: 2 });
+  // Кандидаты в @-упоминания — все участники кроме автора.
+  const mentionMembers = toMentionMembers(members.filter((m) => m.userId !== currentUser?.id));
 
   const addFiles = (raw: FileList | File[]): void => {
     const list = Array.from(raw);
@@ -1552,76 +1504,6 @@ function CommentComposer({
     setPending((prev) => {
       prev.filter((p) => p.id === id).forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
       return prev.filter((p) => p.id !== id);
-    });
-  };
-
-  // Paste внутри composer'а: перехватываем файлы сюда (а не в аттачи задачи). stopPropagation
-  // не даёт form-level paste-handler'у TaskDialog увести файл в аттачи задачи.
-  const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>): void => {
-    const files = extractClipboardFiles(e.clipboardData);
-    e.stopPropagation();
-    if (files.length > 0) {
-      e.preventDefault();
-      addFiles(files);
-    }
-  };
-
-  // Кандидаты в пикере — кто угодно из команды кроме автора. Фильтруем по includes
-  // (case-insensitive) — display name'ы могут содержать пробелы.
-  const candidates = members
-    .filter((m) => m.userId !== currentUser?.id)
-    .filter((m) =>
-      mention
-        ? m.user.displayName.toLowerCase().includes(mention.query.toLowerCase())
-        : true,
-    );
-
-  // Сбрасываем active-индекс при смене query.
-  useEffect(() => {
-    setPickerIndex(0);
-  }, [mention?.query]);
-
-  const detectMention = (text: string, cursor: number): MentionState | null => {
-    const before = text.slice(0, cursor);
-    const lastAt = before.lastIndexOf('@');
-    if (lastAt === -1) return null;
-    // @ должен стоять на границе слова — иначе email'ы (`user@gmail.com`) триггерили бы пикер.
-    const charBefore = lastAt === 0 ? ' ' : before[lastAt - 1];
-    if (charBefore !== ' ' && charBefore !== '\n' && charBefore !== '\t') return null;
-    const query = before.slice(lastAt + 1);
-    // Newline в query → пикер закрываем (юзер ушёл на новую строку).
-    if (query.includes('\n')) return null;
-    // Длинный query без матчей — нет смысла держать пикер открытым.
-    if (query.length > 50) return null;
-    return { start: lastAt, query };
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>): void => {
-    setBody(e.target.value);
-    setMention(detectMention(e.target.value, e.target.selectionStart));
-  };
-
-  const handleSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>): void => {
-    const target = e.currentTarget;
-    setMention(detectMention(body, target.selectionStart));
-  };
-
-  const insertMention = (member: ProjectMember): void => {
-    if (!mention) return;
-    const before = body.slice(0, mention.start);
-    const after = body.slice(mention.start + 1 + mention.query.length);
-    const insertion = `@${member.user.displayName} `;
-    const newBody = before + insertion + after;
-    setBody(newBody);
-    setMention(null);
-    // Возвращаем фокус и ставим курсор сразу после вставки.
-    const newCursor = before.length + insertion.length;
-    requestAnimationFrame(() => {
-      const ta = textareaRef.current;
-      if (ta) {
-        ta.focus();
-        ta.setSelectionRange(newCursor, newCursor);
-      }
     });
   };
 
@@ -1644,7 +1526,6 @@ function CommentComposer({
       }
       onCreated({ ...created, attachments: uploaded });
       setBody('');
-      setMention(null);
       pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
       setPending([]);
     } catch (e) {
@@ -1653,41 +1534,6 @@ function CommentComposer({
       setSubmitting(false);
     }
   };
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (mention && candidates.length > 0) {
-      // Когда пикер открыт, перехватываем стрелки/Enter/Esc для навигации.
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setPickerIndex((i) => (i + 1) % candidates.length);
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setPickerIndex((i) => (i - 1 + candidates.length) % candidates.length);
-        return;
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
-        const selected = candidates[pickerIndex];
-        if (selected) insertMention(selected);
-        return;
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setMention(null);
-        return;
-      }
-    }
-
-    // Обычная отправка по Enter (без Shift).
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      void submit();
-    }
-  };
-
-  const showPicker = mention !== null && candidates.length > 0;
 
   return (
     <div className="relative rounded-md border bg-card transition-colors focus-within:border-foreground/30">
@@ -1700,26 +1546,19 @@ function CommentComposer({
           )}
         </div>
       ) : (
-        <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
-          <ContextMenuTrigger asChild>
-            <textarea
-              ref={textareaRef}
-              value={body}
-              onChange={handleChange}
-              onSelect={handleSelect}
-              onKeyDown={(e) => {
-                fmt.keyDownHandler(e);
-                if (!e.defaultPrevented) handleKeyDown(e);
-              }}
-              onPaste={handlePaste}
-              rows={2}
-              disabled={submitting}
-              placeholder="Комментарий…"
-              className="block w-full resize-none rounded-md bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
-            />
-          </ContextMenuTrigger>
-          {fmt.menuContent}
-        </ContextMenu>
+        <Suspense fallback={<div className="min-h-[2.75rem] px-3 py-2 text-sm">{body}</div>}>
+          <RichTextEditor
+            variant="comment"
+            value={body}
+            onChange={setBody}
+            onSubmit={() => void submit()}
+            members={mentionMembers}
+            onPasteFiles={addFiles}
+            disabled={submitting}
+            placeholder="Комментарий…"
+            className="min-h-[2.75rem] px-3 py-2 text-sm"
+          />
+        </Suspense>
       )}
       <div className="absolute right-1.5 top-1.5 flex gap-0.5">
         <Button
@@ -1785,15 +1624,6 @@ function CommentComposer({
         </div>
       )}
 
-      {!preview && showPicker && (
-        <MentionPicker
-          candidates={candidates}
-          activeIndex={pickerIndex}
-          onSelect={insertMention}
-          onHoverIndex={setPickerIndex}
-        />
-      )}
-
       <div className="flex items-center gap-3 px-3 pb-1.5 text-[11px]">
         <button
           type="button"
@@ -1820,51 +1650,6 @@ function CommentComposer({
           />
         </div>
       </div>
-    </div>
-  );
-}
-
-function MentionPicker({
-  candidates,
-  activeIndex,
-  onSelect,
-  onHoverIndex,
-}: {
-  candidates: readonly ProjectMember[];
-  activeIndex: number;
-  onSelect: (m: ProjectMember) => void;
-  onHoverIndex: (i: number) => void;
-}): React.ReactElement {
-  return (
-    <div className="absolute bottom-full left-0 z-10 mb-1 w-64 overflow-hidden rounded-md border bg-popover shadow-md">
-      <ul className="max-h-56 overflow-y-auto py-1 text-sm">
-        {candidates.map((m, i) => (
-          <li key={m.userId}>
-            <button
-              type="button"
-              onClick={() => onSelect(m)}
-              onMouseEnter={() => onHoverIndex(i)}
-              // mousedown — чтобы клик не успел снять фокус с textarea до того, как
-              // мы вставим mention (иначе textarea теряет selection и cursor-restore сломан).
-              onMouseDown={(e) => e.preventDefault()}
-              className={cn(
-                'flex w-full items-center gap-2 px-2 py-1.5 text-left',
-                i === activeIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/60',
-              )}
-            >
-              <Avatar className="size-6 shrink-0">
-                {m.user.avatarUrl ? (
-                  <AvatarImage src={m.user.avatarUrl} alt={m.user.displayName} />
-                ) : null}
-                <AvatarFallback className="text-[10px]">
-                  {getInitials(m.user.displayName)}
-                </AvatarFallback>
-              </Avatar>
-              <span className="truncate">{m.user.displayName}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
@@ -1927,18 +1712,6 @@ function CommentItem({
   const [draft, setDraft] = useState(comment.body);
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState<TaskAttachment | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fmt = useTextFieldFormatting(textareaRef);
-  // Авто-рост поля правки комментария до 12 строк (site-wide правило).
-  useAutoGrowTextarea(textareaRef, draft, { minRows: 2 });
-
-  useEffect(() => {
-    if (editing && textareaRef.current) {
-      const el = textareaRef.current;
-      el.focus();
-      el.setSelectionRange(el.value.length, el.value.length);
-    }
-  }, [editing]);
 
   const enterEdit = (): void => {
     setDraft(comment.body);
@@ -1982,17 +1755,15 @@ function CommentItem({
     }
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+  // Esc внутри редактора → отмена правки (capture на обёртке, редактор Esc не отдаёт).
+  const handleWrapperKeyDownCapture = (e: React.KeyboardEvent<HTMLDivElement>): void => {
     if (e.key === 'Escape') {
       e.preventDefault();
       cancel();
-      return;
-    }
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      void save();
     }
   };
+  // Кандидаты в @-упоминания — все участники кроме автора этого комментария.
+  const mentionMembers = toMentionMembers(members.filter((m) => m.userId !== comment.ownerUserId));
 
   const isEdited = comment.updatedAt.getTime() - comment.createdAt.getTime() > 1500;
   // Автор резолвится по ownerUserId через участников проекта (в совместных проектах
@@ -2075,31 +1846,23 @@ function CommentItem({
           </div>
         </div>
         {editing ? (
-          <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
-            <ContextMenuTrigger asChild>
-              <textarea
-                ref={textareaRef}
+          // WYSIWYG-правка комментария. Enter — сохранить, Shift+Enter — перенос,
+          // Esc — отмена (capture). blur-save с no-op-guard внутри save() (если не менялось).
+          <div className="mt-0.5" onKeyDownCapture={handleWrapperKeyDownCapture}>
+            <Suspense fallback={<div className="text-sm leading-snug">{draft}</div>}>
+              <RichTextEditor
+                variant="comment"
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                // blur-save, КРОМЕ ухода фокуса в меню форматирования (иначе правка
-                // схлопнулась бы при открытии меню).
-                onBlur={(e) => {
-                  const next = e.relatedTarget as HTMLElement | null;
-                  if (fmt.isMenuOpenRef.current || next?.closest('[role="menu"]')) return;
-                  void save();
-                }}
-                onKeyDown={(e) => {
-                  fmt.keyDownHandler(e);
-                  if (!e.defaultPrevented) handleKeyDown(e);
-                }}
-                maxLength={10000}
-                rows={2}
+                onChange={setDraft}
+                onSubmit={() => void save()}
+                onBlur={() => void save()}
+                members={mentionMembers}
+                autoFocus
                 disabled={saving}
-                className="mt-0.5 block w-full resize-none bg-transparent p-0 text-sm leading-snug focus:outline-none disabled:opacity-50"
+                className="text-sm leading-snug"
               />
-            </ContextMenuTrigger>
-            {fmt.menuContent}
-          </ContextMenu>
+            </Suspense>
+          </div>
         ) : (
           <div className="mt-0.5">
             <CommentBody body={comment.body} />

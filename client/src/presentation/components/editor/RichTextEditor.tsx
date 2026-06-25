@@ -14,6 +14,12 @@ export interface RichTextEditorProps {
   onChange: (markdown: string) => void;
   /** Comment-variant: Enter; description-variant: Ctrl/Cmd+Enter. */
   onSubmit?: () => void;
+  /**
+   * Потеря фокуса полем редактора. НЕ срабатывает, когда фокус ушёл во
+   * floating-UI самого редактора (bubble-меню / slash / @-упоминания —
+   * они портируются в body с классом `bg-popover`).
+   */
+  onBlur?: () => void;
   placeholder?: string;
   autoFocus?: boolean;
   disabled?: boolean;
@@ -37,6 +43,7 @@ export function RichTextEditor({
   value,
   onChange,
   onSubmit,
+  onBlur,
   placeholder,
   autoFocus = false,
   disabled = false,
@@ -48,10 +55,12 @@ export function RichTextEditor({
   // Колбэки через ref — чтобы не пересоздавать editor на каждом рендере.
   const onChangeRef = React.useRef(onChange);
   const onSubmitRef = React.useRef(onSubmit);
+  const onBlurRef = React.useRef(onBlur);
   const onPasteFilesRef = React.useRef(onPasteFiles);
   React.useEffect(() => {
     onChangeRef.current = onChange;
     onSubmitRef.current = onSubmit;
+    onBlurRef.current = onBlur;
     onPasteFilesRef.current = onPasteFiles;
   });
 
@@ -84,6 +93,9 @@ export function RichTextEditor({
         const files = Array.from(event.clipboardData?.files ?? []);
         if (files.length > 0 && onPasteFilesRef.current) {
           event.preventDefault();
+          // stopPropagation — иначе native-событие всплывёт до form-level onPaste
+          // (TaskDrawer) и файл прикрепится дважды.
+          event.stopPropagation();
           onPasteFilesRef.current(files);
           return true;
         }
@@ -92,6 +104,19 @@ export function RichTextEditor({
     },
     onUpdate: ({ editor: e }) => {
       onChangeRef.current(e.getMarkdown());
+    },
+    onBlur: ({ editor: e }) => {
+      if (!onBlurRef.current) return;
+      // Откладываем на тик: focus может уйти во floating-UI редактора (bubble-меню /
+      // slash / @-упоминания — портированы в body с классом `bg-popover`). В этом
+      // случае blur НЕ считаем настоящим уходом из поля.
+      window.setTimeout(() => {
+        if (e.isDestroyed) return;
+        if (e.isFocused) return;
+        const activeEl = document.activeElement;
+        if (activeEl && activeEl.closest('.bg-popover')) return;
+        onBlurRef.current?.();
+      }, 0);
     },
   });
 

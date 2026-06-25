@@ -1,26 +1,23 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ClipboardEvent,
-  type KeyboardEvent,
-} from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { FileText, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import type { Task, TaskStatus } from '@/domain/task/Task';
 import type { NotifyAudience, TaskComment } from '@/domain/task/TaskComment';
+import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
-import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
-import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
-import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import { SendTargetButton } from '@/presentation/components/tasks/SendTargetButton';
-import {
-  extractClipboardFiles,
-  isImageMime,
-} from '@/presentation/components/attachments/files';
+import { isImageMime } from '@/presentation/components/attachments/files';
+import type { MentionMember } from '@/presentation/components/editor/RichTextEditor';
+
+// Tiptap-редактор грузим лениво (тяжёлый chunk, не нужен на read-heavy экранах).
+const RichTextEditor = lazy(() =>
+  import('@/presentation/components/editor/RichTextEditor').then((m) => ({
+    default: m.RichTextEditor,
+  })),
+);
 
 type PendingFile = {
   readonly id: string;
@@ -73,7 +70,7 @@ export function TaskDrawerComposer({
   onCommentCreated,
   onTaskChanged,
 }: Props): React.ReactElement {
-  const { taskRepository } = useContainer();
+  const { taskRepository, projectRepository } = useContainer();
   const { user: currentUser } = useCurrentUser();
   const [body, setBody] = useState('');
   const [pending, setPending] = useState<PendingFile[]>([]);
@@ -85,17 +82,35 @@ export function TaskDrawerComposer({
     task.status === 'awaiting_clarification' ? 'worker' : readTarget(task.projectId),
   );
   const [submitting, setSubmitting] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fmt = useTextFieldFormatting(textareaRef);
+  // Участники проекта для @-упоминаний. Грузим как TaskCommentsSection; ошибка не блокирует
+  // композер (degrade gracefully — без упоминаний).
+  const [members, setMembers] = useState<ProjectMember[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Авто-рост до 12 строк (site-wide правило), дальше внутренний скролл.
-  useAutoGrowTextarea(textareaRef, body, { minRows: 1 });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(targetStorageKey(task.projectId), target);
   }, [task.projectId, target]);
+
+  useEffect(() => {
+    let cancelled = false;
+    projectRepository
+      .listMembers(task.projectId)
+      .then((list) => {
+        if (!cancelled) setMembers(list);
+      })
+      .catch(() => {
+        /* tolerate — без members просто нет @-упоминаний */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [task.projectId, projectRepository]);
+
+  // Кандидаты в @-упоминания — все участники кроме автора.
+  const mentionMembers: MentionMember[] = members
+    .filter((m) => m.userId !== currentUser?.id)
+    .map((m) => ({ userId: m.userId, displayName: m.user.displayName }));
 
   const addFiles = (raw: FileList | File[]): void => {
     const list = Array.from(raw);
@@ -116,13 +131,6 @@ export function TaskDrawerComposer({
       if (t?.previewUrl) URL.revokeObjectURL(t.previewUrl);
       return prev.filter((p) => p.id !== id);
     });
-  };
-
-  const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>): void => {
-    const files = extractClipboardFiles(e.clipboardData);
-    if (files.length === 0) return;
-    e.preventDefault();
-    addFiles(files);
   };
 
   const submit = async (): Promise<void> => {
@@ -177,13 +185,6 @@ export function TaskDrawerComposer({
     }
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      void submit();
-    }
-  };
-
   useEffect(() => {
     return () => {
       pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
@@ -222,25 +223,19 @@ export function TaskDrawerComposer({
         </div>
       )}
 
-      <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
-        <ContextMenuTrigger asChild>
-          <textarea
-            ref={textareaRef}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            onPaste={handlePaste}
-            onKeyDown={(e) => {
-              fmt.keyDownHandler(e);
-              if (!e.defaultPrevented) handleKeyDown(e);
-            }}
-            rows={1}
-            disabled={submitting}
-            placeholder="Комментарий…"
-            className="block w-full resize-none bg-transparent px-4 py-2.5 text-sm leading-snug placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50"
-          />
-        </ContextMenuTrigger>
-        {fmt.menuContent}
-      </ContextMenu>
+      <Suspense fallback={<div className="px-4 py-2.5 text-sm leading-snug">{body}</div>}>
+        <RichTextEditor
+          variant="comment"
+          value={body}
+          onChange={setBody}
+          onSubmit={() => void submit()}
+          members={mentionMembers}
+          onPasteFiles={addFiles}
+          disabled={submitting}
+          placeholder="Комментарий…"
+          className="px-4 py-2.5 text-sm leading-snug"
+        />
+      </Suspense>
 
       <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2">
         <div className="flex items-center gap-1">
