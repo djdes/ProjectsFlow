@@ -1195,27 +1195,39 @@ export function TaskDrawer({
                 </Suspense>
               </div>
 
-              {/* Иконки-свойства под полем (единый стиль с композерами доски):
-                  скрепка, приоритет, дедлайн, делегат. Мягко всплывают при открытии
-                  create-дравера — gated useMotion (reduced-motion → мгновенно). */}
+              {/* Плюсики (как в edit-режиме): + Подзадача (дописывает `- [ ]` в описание)
+                  и + Файл (открывает выбор файла). Горизонтальный ряд под полем. */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-0.5">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() =>
+                    setDescription((d) => `${d}${d.length === 0 || d.endsWith('\n') ? '' : '\n'}- [ ] `)
+                  }
+                  className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                >
+                  <Plus className="size-4 shrink-0" />
+                  Подзадача
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => createFileInputRef.current?.click()}
+                  className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                >
+                  <Plus className="size-4 shrink-0" />
+                  Файл
+                </button>
+              </div>
+
+              {/* Иконки-свойства под полем: приоритет, дедлайн, делегат. Мягко всплывают
+                  при открытии create-дравера — gated useMotion (reduced-motion → мгновенно). */}
               <motion.div
                 initial={animations ? { opacity: 0, y: 8 } : false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={animations ? { duration: 0.28, ease: 'easeOut', delay: 0.08 } : { duration: 0 }}
                 className="flex flex-wrap items-center gap-1"
               >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="group/at size-8 text-muted-foreground hover:text-foreground"
-                  onClick={() => createFileInputRef.current?.click()}
-                  disabled={saving}
-                  aria-label="Вложение"
-                  title="Вложение (или перетащи файл / Ctrl+V)"
-                >
-                  <Paperclip className="size-4 transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110" />
-                </Button>
                 <PrioritySelect
                   value={createPriority}
                   onChange={setCreatePriority}

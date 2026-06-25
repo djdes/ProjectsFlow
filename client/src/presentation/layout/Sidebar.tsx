@@ -161,7 +161,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
   }
 
   return (
-    <aside className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_auto_1fr_auto] gap-3 overflow-hidden bg-sidebar px-2 pb-3 pt-2">
+    <aside className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_auto_1fr_auto] gap-3 overflow-hidden bg-sidebar px-2.5 pb-3 pt-1">
       {/* Шапка: переключатель пространства + тоггл панели. Высота строки = min-h-11 (44px)
           с вертикальным центрированием — ровно как верхняя строка крошек на страницах
           (Notion-style: свитчер пространства и топбар на одной горизонтали). Уведомления
