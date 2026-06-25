@@ -26,10 +26,13 @@ export function FloatingFormatMenu({
   editor,
   anchor,
   onClose,
+  getRange,
 }: {
   editor: Editor;
   anchor: FloatingAnchor | null;
   onClose: () => void;
+  /** Снимок диапазона выделения на момент открытия (восстанавливается перед командой). */
+  getRange?: () => { from: number; to: number } | null;
 }): React.ReactElement | null {
   const { animations } = useMotion();
   const ref = React.useRef<HTMLDivElement>(null);
@@ -103,7 +106,7 @@ export function FloatingFormatMenu({
         animations && 'animate-in fade-in-0 zoom-in-95',
       )}
     >
-      <FormatMenu editor={editor} onAction={onClose} />
+      <FormatMenu editor={editor} onAction={onClose} getRange={getRange} />
     </div>,
     document.body,
   );

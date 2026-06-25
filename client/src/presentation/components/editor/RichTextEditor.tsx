@@ -119,6 +119,10 @@ export function RichTextEditor({
   // Ключ «закрытого» выделения — чтобы после Escape/действия меню не всплывало
   // снова для того же выделения (всплывёт, когда выделение сменится).
   const dismissedKeyRef = React.useRef<string | null>(null);
+  // Снимок диапазона выделения на момент открытия меню. Клик по кнопке меню (портал
+  // в body) уводит фокус и схлопывает выделение редактора — поэтому перед каждой
+  // командой восстанавливаем диапазон из снимка.
+  const savedRangeRef = React.useRef<{ from: number; to: number } | null>(null);
   // editor нужен внутри handleDOMEvents, который создаётся до объявления editor —
   // читаем через ref, чтобы не пересоздавать конфигурацию.
   const editorRef = React.useRef<Editor | null>(null);
@@ -150,9 +154,10 @@ export function RichTextEditor({
           event.preventDefault();
           // Нет выделения — выделяем слово под курсором, чтобы формат применился к нему.
           selectWordAt(e, event.clientX, event.clientY);
-          // Якорим у курсора; отмечаем выделение «показанным», чтобы selection-эффект
-          // не перепозиционировал меню к краю выделения.
+          // Якорим у курсора; снимок диапазона — для восстановления перед командой.
           dismissedKeyRef.current = null;
+          const sel = e.state.selection;
+          savedRangeRef.current = { from: sel.from, to: sel.to };
           setMenuAnchor({ x: event.clientX, top: event.clientY, bottom: event.clientY });
           return true;
         },
@@ -234,12 +239,17 @@ export function RichTextEditor({
       const { state, view } = editor;
       const { from, to, empty } = state.selection;
       if (empty || !editor.isEditable) {
+        // Выделение схлопнулось из-за клика по самому меню (фокус ушёл в портал) —
+        // не закрываем, меню живёт по снимку диапазона. Иначе (клик/стрелки в
+        // редакторе) — закрываем.
+        if (document.activeElement?.closest('[data-format-menu]')) return;
         dismissedKeyRef.current = null;
         setMenuAnchor(null);
         return;
       }
       const key = `${from}-${to}`;
       if (dismissedKeyRef.current === key) return; // уже закрыли это выделение
+      savedRangeRef.current = { from, to };
       const start = view.coordsAtPos(from);
       const end = view.coordsAtPos(to);
       setMenuAnchor({
@@ -252,14 +262,13 @@ export function RichTextEditor({
       window.clearTimeout(timer);
       timer = window.setTimeout(compute, 150);
     };
-    // Клик вне меню И вне этого редактора → закрыть. Клик внутри меню (портал в body)
-    // или внутри редактора игнорируем.
+    // pointerdown вне меню → закрыть (клик внутри портал-меню игнорируем). Клик в
+    // редакторе тоже закрывает текущее меню; новое выделение откроет его заново.
     const onPointerDown = (ev: PointerEvent): void => {
       const t = ev.target as Node | null;
       if (!t) return;
       const el = t instanceof Element ? t : t.parentElement;
       if (el && el.closest('[data-format-menu]')) return;
-      if (editor.view?.dom.contains(t)) return;
       closeMenu();
     };
     editor.on('selectionUpdate', onSel);
@@ -274,7 +283,12 @@ export function RichTextEditor({
   return (
     <div className={cn('relative', className)}>
       {editor ? (
-        <FloatingFormatMenu editor={editor} anchor={menuAnchor} onClose={closeMenu} />
+        <FloatingFormatMenu
+          editor={editor}
+          anchor={menuAnchor}
+          onClose={closeMenu}
+          getRange={() => savedRangeRef.current}
+        />
       ) : null}
       <EditorContent editor={editor} />
     </div>

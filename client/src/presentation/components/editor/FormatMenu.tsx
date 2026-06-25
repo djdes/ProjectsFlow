@@ -187,9 +187,12 @@ type Panel = 'main' | 'turn' | 'color';
 export function FormatMenu({
   editor,
   onAction,
+  getRange,
 }: {
   editor: Editor;
   onAction?: () => void;
+  /** Снимок диапазона выделения — восстанавливается перед командой (фокус мог уйти в меню). */
+  getRange?: () => { from: number; to: number } | null;
 }): React.ReactElement {
   const [panel, setPanel] = React.useState<Panel>('main');
 
@@ -210,8 +213,14 @@ export function FormatMenu({
   });
 
   // fire применяет команду и закрывает меню; guard против разрушенного editor.
+  // Перед командой восстанавливаем диапазон выделения из снимка — клик по кнопке
+  // меню (портал в body) уводит фокус и схлопывает выделение редактора.
   const fire = (fn: () => void): void => {
     if (editor.isDestroyed) return;
+    const range = getRange?.();
+    if (range && range.from !== range.to) {
+      editor.commands.setTextSelection(range);
+    }
     fn();
     onAction?.();
   };
