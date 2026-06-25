@@ -78,6 +78,8 @@ import { splitTitleBody, joinTitleBody } from '@/lib/taskTitleBody';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
 import { STATUS_LABEL } from './statusLabels';
+import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
+import { useResizableWidth } from '@/presentation/hooks/useResizableWidth';
 import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
 import type { MentionMember } from '@/presentation/components/editor/RichTextEditor';
 
@@ -682,13 +684,58 @@ export function TaskDrawer({
   const scrollToCommentId = state?.mode === 'edit' ? state.scrollToCommentId : undefined;
   const canEdit = !!task && task.status !== 'done';
 
+  // === Resizable + split drawer (EDIT-mode, desktop only) ===
+  // Coarse pointer / narrow viewport → resize disabled, keep default full-width
+  // stacked Sheet (mobile untouched). `md` breakpoint is 768px (Tailwind default).
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const isFinePointer = useMediaQuery('(pointer: fine)');
+  const resizeEnabled = state?.mode === 'edit' && isDesktop && isFinePointer;
+  const { width, dragging, isSplit, onHandlePointerDown } = useResizableWidth(
+    resizeEnabled,
+    state !== null,
+  );
+
   return (
     <Sheet open={state !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
         side="right"
         showClose={false}
-        className="grid h-dvh w-full grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-[900px]"
+        className={cn(
+          'grid h-dvh w-full gap-0 overflow-hidden p-0 sm:max-w-[900px]',
+          // EDIT-mode разбивается на header + (toggle+tabs+footer)-колонку:
+          // одна grid-строка под скролл-тело, шапка/панель сами рулят высотой.
+          state?.mode === 'edit'
+            ? 'grid-rows-[minmax(0,1fr)]'
+            : 'grid-rows-[auto_minmax(0,1fr)_auto]',
+          // Во время drag'а гасим Sheet-translate-анимацию, чтобы ширина тянулась
+          // мгновенно без рывков.
+          dragging && '!transition-none',
+        )}
+        // Resizable: переопределяем max-width инлайн-стилем (desktop). На mobile —
+        // resizeEnabled=false, стиль не задаём → остаётся w-3/4 / sm:max-w-[900px].
+        style={
+          resizeEnabled
+            ? { width: `${width}px`, maxWidth: '96vw' }
+            : undefined
+        }
       >
+        {/* Drag-ручка на ЛЕВОМ крае дравера (тонкая вертикальная полоса). Тянем
+            влево — шире, вправо — уже. Только desktop (resizeEnabled). */}
+        {resizeEnabled && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Изменить ширину панели"
+            onPointerDown={onHandlePointerDown}
+            className={cn(
+              'group/resize absolute inset-y-0 left-0 z-50 w-1.5 -translate-x-1/2 cursor-col-resize touch-none',
+              'before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-transparent before:transition-colors',
+              'hover:before:bg-primary/40',
+              dragging && 'before:bg-primary/60',
+            )}
+          />
+        )}
+
         {/* a11y stub for Radix — visually hidden. */}
         <SheetTitle className="sr-only">
           {state?.mode === 'edit' ? 'Задача' : 'Новая задача'}
@@ -699,11 +746,30 @@ export function TaskDrawer({
         </SheetDescription>
 
         {state?.mode === 'edit' && task ? (
-          <>
-            {/* === STICKY HEADER === Notion-style. Единственный нижний бордер на всём
-                контейнере шапки — это ЕДИНСТВЕННЫЙ разделитель между телом задачи и
-                переключателем вкладок (никаких border-t у описания и border-b у вкладок). */}
-            <div className="border-b bg-background/95 backdrop-blur-md">
+          // Внешний контейнер раскладки EDIT-mode (заполняет единственную grid-строку
+          // SheetContent). isSplit (широкая ширина) → две колонки: задача слева,
+          // обсуждение справа, серый разделитель между; иначе — привычный стек
+          // (шапка сверху, ниже центрированный переключатель + комменты + композер).
+          <div
+            className={cn(
+              'min-h-0',
+              isSplit
+                ? 'flex h-full'
+                : 'grid h-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden',
+            )}
+          >
+            {/* === HEADER / ЛЕВАЯ КОЛОНКА === Notion-style. В стеке — sticky-шапка с
+                нижним бордером (единственный разделитель до переключателя вкладок).
+                В split — самостоятельная скроллящаяся левая колонка (бордера снизу нет,
+                разделитель — вертикальная линия справа от колонки). */}
+            <div
+              className={cn(
+                'bg-background/95 backdrop-blur-md',
+                isSplit
+                  ? 'min-w-0 flex-1 overflow-y-auto overscroll-contain'
+                  : 'border-b',
+              )}
+            >
               {/* Row A: контекст · короткий id (слева), действия (Копир./Переработка/План)
                   + передать/статус (справа). Дата создания переехала в ряд свойств «Создано». */}
               <div className="flex items-center gap-2 px-4 pt-3">
@@ -905,7 +971,14 @@ export function TaskDrawer({
                   ПОД блоком свойств (Notion-порядок: заголовок → плюсики → свойства → тело).
                   Своего border-t нет — единственный разделитель идёт ниже всей шапки. */}
               <div ref={bodyContainerRef} className="px-4 pb-2 pt-1">
-                <div className="max-h-[50vh] overflow-y-auto overscroll-contain">
+                {/* В split левая колонка скроллит целиком — снимаем 50vh-кап с тела
+                    (иначе вложенный скролл дублировался бы). В стеке кап остаётся. */}
+                <div
+                  className={cn(
+                    'overflow-y-auto overscroll-contain',
+                    isSplit ? 'max-h-none' : 'max-h-[50vh]',
+                  )}
+                >
                   <TaskBodyEditor
                     key={`body-${task.id}`}
                     projectId={task.projectId}
@@ -927,15 +1000,28 @@ export function TaskDrawer({
               </div>
             </div>
 
-            {/* === SCROLLABLE BODY — вкладки Обсуждение | LIVE === */}
-            {/* Tabs занимает grid-строку minmax(0,1fr); каждая вкладка — свой scroll-контейнер.
-                forceMount на обеих вкладках, чтобы LiveTab жил в фоне (бейдж 🔴 / live-стрим
-                работают даже когда открыта «Обсуждение»). Неактивная скрыта через hidden. */}
-            <Tabs
-              value={activeTab}
-              onValueChange={(v: string) => setActiveTab(v as 'discussion' | 'live')}
-              className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
+            {/* === РАЗДЕЛИТЕЛЬ (split) === Вертикальная серая линия между колонками. */}
+            {isSplit && <div aria-hidden className="w-px shrink-0 bg-border" />}
+
+            {/* === ОБСУЖДЕНИЕ === Переключатель Обсуждение/LIVE + лента + композер.
+                Рендерится ОДНИМ блоком (Tabs смонтирован единожды, forceMount у обеих
+                вкладок — бейдж 🔴 живёт в фоне). В стеке — нижняя grid-строка (1fr);
+                в split — правая колонка фикс-доли с собственным скроллом и футером. */}
+            <div
+              className={cn(
+                'flex min-h-0 flex-col overflow-hidden',
+                isSplit ? 'w-[42%] shrink-0' : 'min-w-0',
+              )}
             >
+              {/* === SCROLLABLE BODY — вкладки Обсуждение | LIVE === */}
+              {/* Tabs тянется flex-1; каждая вкладка — свой scroll-контейнер. forceMount
+                  на обеих вкладках, чтобы LiveTab жил в фоне (бейдж 🔴 / live-стрим
+                  работают даже когда открыта «Обсуждение»). Неактивная скрыта через hidden. */}
+              <Tabs
+                value={activeTab}
+                onValueChange={(v: string) => setActiveTab(v as 'discussion' | 'live')}
+                className="grid min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
+              >
               {/* Центрированный переключатель Обсуждение | LIVE. Без собственного border —
                   единственный разделитель идёт по нижнему краю шапки выше. Счётчик
                   комментариев свёрнут в триггер «Обсуждение · N». */}
@@ -1002,35 +1088,36 @@ export function TaskDrawer({
                   onTaskChanged={() => onCommitsChange?.()}
                 />
               </TabsContent>
-            </Tabs>
+              </Tabs>
 
-            {/* === STICKY FOOTER — композер только на вкладке «Обсуждение» === */}
-            {activeTab === 'discussion' &&
-              (task.status === 'in_progress' ? (
-                <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
-              ) : (
-                // Один grid-ребёнок (строка 3): иначе на awaiting_clarification фрагмент
-                // из двух элементов создаёт лишнюю неявную grid-строку и ломает раскладку
-                // [header / body(1fr) / footer].
-                <div>
-                  {/* На awaiting_clarification — композер для ralph-answer'а + cancel над ним. */}
-                  {task.status === 'awaiting_clarification' && (
-                    <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
-                  )}
-                  <TaskDrawerComposer
-                    task={task}
-                    backlogTail={backlogTail}
-                    todoTail={todoTail}
-                    onCommentCreated={(c) => {
-                      onCommentCreatedRef.current?.(c);
-                      scrollBodyToBottom();
-                      onCommitsChange?.();
-                    }}
-                    onTaskChanged={() => onCommitsChange?.()}
-                  />
-                </div>
-              ))}
-          </>
+              {/* === STICKY FOOTER — композер только на вкладке «Обсуждение» === */}
+              {/* Сидит в самом низу колонки обсуждения (shrink-0 авто-высота). */}
+              {activeTab === 'discussion' &&
+                (task.status === 'in_progress' ? (
+                  <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
+                ) : (
+                  // Один ребёнок: иначе на awaiting_clarification фрагмент из двух
+                  // элементов создаёт лишний неявный flex-ребёнок и ломает раскладку.
+                  <div className="shrink-0">
+                    {/* На awaiting_clarification — композер для ralph-answer'а + cancel над ним. */}
+                    {task.status === 'awaiting_clarification' && (
+                      <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
+                    )}
+                    <TaskDrawerComposer
+                      task={task}
+                      backlogTail={backlogTail}
+                      todoTail={todoTail}
+                      onCommentCreated={(c) => {
+                        onCommentCreatedRef.current?.(c);
+                        scrollBodyToBottom();
+                        onCommitsChange?.();
+                      }}
+                      onTaskChanged={() => onCommitsChange?.()}
+                    />
+                  </div>
+                ))}
+            </div>
+          </div>
         ) : (
           // === CREATE MODE === — Todoist-style: textarea + chips сверху, pills под
           // полем, footer = RalphMode + AI + Cancel + Submit. Файлы — chips НАД textarea.

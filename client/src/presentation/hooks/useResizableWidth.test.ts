@@ -1,0 +1,115 @@
+// Тесты чистых хелперов ресайза дравера: clamp ширины в [min, viewport-зависимый max],
+// порог переключения на двухпанельный split, и round-trip персиста в localStorage.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  DRAWER_DEFAULT_WIDTH,
+  DRAWER_MIN_WIDTH,
+  DRAWER_MAX_WIDTH_HARD,
+  DRAWER_SPLIT_CAP,
+  drawerMaxWidth,
+  clampDrawerWidth,
+  computeIsSplit,
+  readStoredWidth,
+  writeStoredWidth,
+  DRAWER_WIDTH_STORAGE_KEY,
+} from './useResizableWidth';
+
+test('drawerMaxWidth: 96vw, но не больше жёсткого потолка 1400', () => {
+  // Узкий вьюпорт — 96vw.
+  assert.equal(drawerMaxWidth(1000), 960);
+  // Широкий вьюпорт — упирается в 1400.
+  assert.equal(drawerMaxWidth(3000), DRAWER_MAX_WIDTH_HARD);
+});
+
+test('clampDrawerWidth: зажимает снизу в DRAWER_MIN_WIDTH', () => {
+  assert.equal(clampDrawerWidth(100, 1920), DRAWER_MIN_WIDTH);
+  assert.equal(clampDrawerWidth(DRAWER_MIN_WIDTH - 1, 1920), DRAWER_MIN_WIDTH);
+});
+
+test('clampDrawerWidth: зажимает сверху в viewport-зависимый max', () => {
+  // 1200 * 0.96 = 1152 → запрошенные 1300 режутся до 1152.
+  assert.equal(clampDrawerWidth(1300, 1200), 1152);
+  // На очень широком — режется до жёсткого 1400.
+  assert.equal(clampDrawerWidth(5000, 4000), DRAWER_MAX_WIDTH_HARD);
+});
+
+test('clampDrawerWidth: значение в диапазоне проходит как есть (округлённое)', () => {
+  assert.equal(clampDrawerWidth(900, 1920), 900);
+  assert.equal(clampDrawerWidth(900.6, 1920), 901);
+});
+
+test('clampDrawerWidth: на крошечном вьюпорте min побеждает max', () => {
+  // 300 * 0.96 = 288 < min(480) → отдаём min, не падаем ниже.
+  assert.equal(clampDrawerWidth(400, 300), DRAWER_MIN_WIDTH);
+});
+
+test('clampDrawerWidth: NaN/мусор → дефолт затем clamp', () => {
+  assert.equal(clampDrawerWidth(Number.NaN, 1920), DRAWER_DEFAULT_WIDTH);
+  assert.equal(clampDrawerWidth(Number.POSITIVE_INFINITY, 1920), DRAWER_DEFAULT_WIDTH);
+});
+
+test('computeIsSplit: ниже порога (≈50vw, cap 860) — стек', () => {
+  // viewport 1000 → порог = min(500, 860) = 500.
+  assert.equal(computeIsSplit(499, 1000), false);
+  assert.equal(computeIsSplit(500, 1000), true);
+});
+
+test('computeIsSplit: на широком вьюпорте порог упирается в cap 860', () => {
+  // viewport 2000 → 50vw=1000, но cap=860 → split включается уже на 860.
+  assert.equal(computeIsSplit(DRAWER_SPLIT_CAP, 2000), true);
+  assert.equal(computeIsSplit(DRAWER_SPLIT_CAP - 1, 2000), false);
+});
+
+test('readStoredWidth / writeStoredWidth: round-trip через localStorage', () => {
+  installMemoryLocalStorage();
+  try {
+    assert.equal(readStoredWidth(), null);
+    writeStoredWidth(1024.4);
+    // Пишем округлённым.
+    assert.equal(localStorage.getItem(DRAWER_WIDTH_STORAGE_KEY), '1024');
+    assert.equal(readStoredWidth(), 1024);
+  } finally {
+    restoreLocalStorage();
+  }
+});
+
+test('readStoredWidth: битое значение → null', () => {
+  installMemoryLocalStorage();
+  try {
+    localStorage.setItem(DRAWER_WIDTH_STORAGE_KEY, 'not-a-number');
+    assert.equal(readStoredWidth(), null);
+  } finally {
+    restoreLocalStorage();
+  }
+});
+
+// --- минимальный in-memory localStorage для node-теста (без happy-dom) ---
+let savedLocalStorage: Storage | undefined;
+function installMemoryLocalStorage(): void {
+  const store = new Map<string, string>();
+  const mock = {
+    getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+    setItem: (k: string, v: string) => void store.set(k, String(v)),
+    removeItem: (k: string) => void store.delete(k),
+    clear: () => store.clear(),
+    key: (i: number) => Array.from(store.keys())[i] ?? null,
+    get length() {
+      return store.size;
+    },
+  } as Storage;
+  savedLocalStorage = (globalThis as { localStorage?: Storage }).localStorage;
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: mock,
+    configurable: true,
+    writable: true,
+  });
+}
+function restoreLocalStorage(): void {
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: savedLocalStorage,
+    configurable: true,
+    writable: true,
+  });
+}
