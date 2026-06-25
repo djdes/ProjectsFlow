@@ -195,92 +195,96 @@ export function TaskDrawerComposer({
   const canSubmit = (body.trim().length > 0 || pending.length > 0) && !submitting;
 
   return (
-    <div className="border-t bg-background/95 backdrop-blur-md">
-      {pending.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 border-b bg-muted/30 px-3 py-1.5">
-          {pending.map((pf) => (
-            <span
-              key={pf.id}
-              className="inline-flex items-center gap-1.5 rounded border bg-background py-0.5 pl-1.5 pr-1 text-[11px]"
-              title={pf.file.name}
-            >
-              {pf.previewUrl ? (
-                <img src={pf.previewUrl} alt="" className="size-4 rounded object-cover" />
-              ) : (
-                <FileText className="size-3.5 text-muted-foreground" />
-              )}
-              <span className="max-w-[140px] truncate">{pf.file.name}</span>
-              <button
-                type="button"
-                onClick={() => removeFile(pf.id)}
-                className="grid size-4 place-items-center rounded-full text-muted-foreground hover:bg-destructive hover:text-white"
-                aria-label="Убрать"
+    // Notion-style: композер — отдельная «карточка» со скруглением и мягким фокус-рингом,
+    // а не плоский футер на всю ширину. Минималистично, в стиле сайта.
+    <div className="bg-background/95 px-3 pb-3 pt-2 backdrop-blur-md">
+      <div className="overflow-hidden rounded-2xl border border-input bg-background shadow-sm transition-[border-color,box-shadow] duration-150 focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/15">
+        {pending.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 border-b bg-muted/30 px-3 py-1.5">
+            {pending.map((pf) => (
+              <span
+                key={pf.id}
+                className="inline-flex items-center gap-1.5 rounded-md border bg-background py-0.5 pl-1.5 pr-1 text-[11px]"
+                title={pf.file.name}
               >
-                <X className="size-2.5" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
+                {pf.previewUrl ? (
+                  <img src={pf.previewUrl} alt="" className="size-4 rounded object-cover" />
+                ) : (
+                  <FileText className="size-3.5 text-muted-foreground" />
+                )}
+                <span className="max-w-[140px] truncate">{pf.file.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removeFile(pf.id)}
+                  className="grid size-4 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive hover:text-white"
+                  aria-label="Убрать"
+                >
+                  <X className="size-2.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
-      <Suspense fallback={<div className="px-4 py-2.5 text-sm leading-snug">{body}</div>}>
-        <RichTextEditor
-          variant="comment"
-          value={body}
-          onChange={setBody}
-          onSubmit={() => void submit()}
-          members={mentionMembers}
-          onPasteFiles={addFiles}
-          disabled={submitting}
-          placeholder="Комментарий…"
-          className="px-4 py-2.5 text-sm leading-snug"
-        />
-      </Suspense>
+        <Suspense fallback={<div className="px-3.5 py-2.5 text-sm leading-snug">{body}</div>}>
+          <RichTextEditor
+            variant="comment"
+            value={body}
+            onChange={setBody}
+            onSubmit={() => void submit()}
+            members={mentionMembers}
+            onPasteFiles={addFiles}
+            disabled={submitting}
+            placeholder="Комментарий…"
+            className="px-3.5 py-2.5 text-sm leading-snug"
+          />
+        </Suspense>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2">
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="group/at size-8 text-muted-foreground hover:text-foreground"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={submitting}
-            aria-label="Прикрепить файл"
-            title="Прикрепить файл (или Ctrl+V)"
-          >
-            <Paperclip className="size-4 transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110" />
-          </Button>
-          <NotifyAudienceControl
-            projectId={task.projectId}
-            excludeUserId={currentUser?.id ?? null}
-            value={notify}
-            onChange={setNotify}
-            disabled={submitting}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2 pt-0.5">
+          <div className="flex items-center gap-0.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="group/at size-8 rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={submitting}
+              aria-label="Прикрепить файл"
+              title="Прикрепить файл (или Ctrl+V)"
+            >
+              <Paperclip className="size-4 transition-transform duration-200 ease-out group-hover/at:-rotate-12 group-hover/at:scale-110" />
+            </Button>
+            <NotifyAudienceControl
+              projectId={task.projectId}
+              excludeUserId={currentUser?.id ?? null}
+              value={notify}
+              onChange={setNotify}
+              disabled={submitting}
+            />
+          </div>
+
+          <SendTargetButton
+            size="sm"
+            options={DRAWER_TARGETS}
+            value={target}
+            onChange={setTarget}
+            onSend={() => void submit()}
+            submitting={submitting}
+            disabled={!canSubmit}
+            showLabel={false}
+          />
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) addFiles(e.target.files);
+              e.target.value = '';
+            }}
           />
         </div>
-
-        <SendTargetButton
-          size="sm"
-          options={DRAWER_TARGETS}
-          value={target}
-          onChange={setTarget}
-          onSend={() => void submit()}
-          submitting={submitting}
-          disabled={!canSubmit}
-          showLabel={false}
-        />
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) addFiles(e.target.files);
-            e.target.value = '';
-          }}
-        />
       </div>
     </div>
   );

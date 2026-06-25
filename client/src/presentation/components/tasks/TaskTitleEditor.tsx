@@ -7,6 +7,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import {
   parseTitleHeading,
   formatTitleHeading,
+  stripInlineMarkdown,
   type TitleHeadingLevel,
 } from '@/lib/taskTitleBody';
 
@@ -64,7 +65,10 @@ export function TaskTitleEditor({
   });
 
   // Парсим «сырой» заголовок: на экран — чистый текст, размер — по уровню.
-  const { text, level } = parseTitleHeading(value);
+  // Дополнительно срезаем инлайн-markdown (`**`, `*`, `` ` ``, … ) — заголовок plain,
+  // символов форматирования на экране быть не должно.
+  const { text: rawText, level } = parseTitleHeading(value);
+  const text = stripInlineMarkdown(rawText);
 
   // Меню выбора размера (правый клик), позиционируется у курсора.
   const [menu, setMenu] = useState<{ open: boolean; x: number; y: number }>({

@@ -25,11 +25,9 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
-import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { taskShortId, type Task } from '@/domain/task/Task';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
@@ -72,6 +70,7 @@ import { PlanTaskButton } from './PlanTaskButton';
 import { formatTaskCreated } from '@/lib/datetime';
 import type { TaskPriority } from '@/domain/task/Task';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
+import { CommentsEmptyState } from './CommentsEmptyState';
 import { TaskTitleEditor } from './TaskTitleEditor';
 import { TaskBodyEditor } from './TaskBodyEditor';
 import { splitTitleBody, joinTitleBody } from '@/lib/taskTitleBody';
@@ -340,7 +339,6 @@ export function TaskDrawer({
 }: Props): React.ReactElement {
   const { user: currentUser } = useCurrentUser();
   const { taskRepository, recordTaskView } = useContainer();
-  const { animations } = useMotion();
   // Фиксируем «юзер открыл задачу» — единая точка для всех мест, где открывается drawer
   // (доска, «Поручено мне», блок «Недавнее»). Только edit-mode с реальной задачей; раз на
   // taskId. Fire-and-forget (ошибки глотаем), затем шлём 'pf:recent-changed' — блок
@@ -375,6 +373,8 @@ export function TaskDrawer({
   const [createDragActive, setCreateDragActive] = useState(false);
   // Ref на скрытый file input для кнопки «Вложение» в create-mode.
   const createFileInputRef = useRef<HTMLInputElement>(null);
+  // Контейнер тела create-формы — чтобы Enter в заголовке переводил фокус в тело.
+  const createBodyContainerRef = useRef<HTMLDivElement>(null);
   // Ref на скрытый file input для add-affordance «+ Файл» в edit-mode (ряд свойств).
   const attachFileInputRef = useRef<HTMLInputElement>(null);
   // Ref-канал для footer-композера → TaskCommentsSection: после создания комментария
@@ -691,11 +691,26 @@ export function TaskDrawer({
   // stacked Sheet (mobile untouched). `md` breakpoint is 768px (Tailwind default).
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const isFinePointer = useMediaQuery('(pointer: fine)');
-  const resizeEnabled = state?.mode === 'edit' && isDesktop && isFinePointer;
+  // Resizable + split включаем И для edit, И для create (окно создания = окно редактирования).
+  const resizeEnabled = (state?.mode === 'edit' || state?.mode === 'create') && isDesktop && isFinePointer;
   const { width, dragging, isSplit, onHandlePointerDown } = useResizableWidth(
     resizeEnabled,
     state !== null,
   );
+
+  // Create-mode: заголовок/тело — как в edit. Источник правды — единое `description`,
+  // делим splitTitleBody, склеиваем joinTitleBody (см. taskTitleBody).
+  const createSplit = splitTitleBody(description);
+  const handleCreateTitleChange = (nextRawTitle: string): void =>
+    setDescription(joinTitleBody(nextRawTitle, createSplit.body));
+  const handleCreateBodyChange = (nextBody: string): void =>
+    setDescription(joinTitleBody(createSplit.title, nextBody));
+  const focusCreateBody = (): void => {
+    const el = createBodyContainerRef.current?.querySelector(
+      '[contenteditable="true"]',
+    ) as HTMLElement | null;
+    el?.focus();
+  };
 
   return (
     <Sheet open={state !== null} onOpenChange={(open) => !open && onClose()}>
@@ -704,11 +719,9 @@ export function TaskDrawer({
         showClose={false}
         className={cn(
           'grid h-dvh w-full gap-0 overflow-hidden p-0 sm:max-w-[900px]',
-          // EDIT-mode разбивается на header + (toggle+tabs+footer)-колонку:
-          // одна grid-строка под скролл-тело, шапка/панель сами рулят высотой.
-          state?.mode === 'edit'
-            ? 'grid-rows-[minmax(0,1fr)]'
-            : 'grid-rows-[auto_minmax(0,1fr)_auto]',
+          // Оба режима (edit/create) — одна grid-строка под скролл-тело; внутренний
+          // flex-контейнер сам рулит колонками (split) и футером.
+          'grid-rows-[minmax(0,1fr)]',
           // Во время drag'а гасим Sheet-translate-анимацию, чтобы ширина тянулась
           // мгновенно без рывков.
           dragging && '!transition-none',
@@ -787,17 +800,8 @@ export function TaskDrawer({
                     {taskShortId(task.id)}
                   </span>
                 </div>
-                {/* Группа действий: единый стиль (size-8, hover bg-hover). Видны для
-                    релевантных статусов (Переработка/План — только пока задача правится). */}
-                <div className="flex shrink-0 items-center gap-0.5">
-                  <CopyTaskButton description={editDescription || (task.description ?? '')} />
-                  {canEdit && (
-                    <>
-                      <ReworkTaskButton projectId={task.projectId} taskId={task.id} />
-                      <PlanTaskButton projectId={task.projectId} taskId={task.id} />
-                    </>
-                  )}
-                </div>
+                {/* Кнопки Копировать/Переработка/План переехали в ряд плюсиков под
+                    заголовком (по правому краю) — см. ниже. */}
                 {onMove && (
                   <TaskAdvanceButton
                     task={task}
@@ -847,33 +851,42 @@ export function TaskDrawer({
                   (открывает скрытый file-picker → uploadFilesDirectly). Переносятся
                   на узких экранах (flex-wrap, вплоть до 320px). */}
               {canEdit && (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pb-1 pt-0.5">
-                  <button
-                    type="button"
-                    onClick={() => void appendSubtask()}
-                    className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    <Plus className="size-4 shrink-0" />
-                    Подзадача
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => attachFileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    <Plus className="size-4 shrink-0" />
-                    Файл
-                  </button>
-                  <input
-                    ref={attachFileInputRef}
-                    type="file"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files) void uploadFilesDirectly(Array.from(e.target.files));
-                      e.target.value = '';
-                    }}
-                  />
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 pb-1 pt-0.5">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <button
+                      type="button"
+                      onClick={() => void appendSubtask()}
+                      className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <Plus className="size-4 shrink-0" />
+                      Подзадача
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => attachFileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <Plus className="size-4 shrink-0" />
+                      Файл
+                    </button>
+                    <input
+                      ref={attachFileInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files) void uploadFilesDirectly(Array.from(e.target.files));
+                        e.target.value = '';
+                      }}
+                    />
+                  </div>
+                  {/* Действия по правому краю ряда плюсиков: Копировать / Переработка / План
+                      (раньше были в шапке Row A). */}
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <CopyTaskButton description={editDescription || (task.description ?? '')} />
+                    <ReworkTaskButton projectId={task.projectId} taskId={task.id} />
+                    <PlanTaskButton projectId={task.projectId} taskId={task.id} />
+                  </div>
                 </div>
               )}
 
@@ -1114,188 +1127,236 @@ export function TaskDrawer({
             </div>
           </div>
         ) : (
-          // === CREATE MODE === — Todoist-style: textarea + chips сверху, pills под
-          // полем, footer = RalphMode + AI + Cancel + Submit. Файлы — chips НАД textarea.
-          <>
-            <div className="border-b bg-background/95 px-4 pb-2 pt-4 backdrop-blur-md">
-              <div className="flex items-center gap-2">
-                {renderCloseButton()}
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {projectName ? `${projectName} · ` : ''}Новая задача
-                </span>
-              </div>
-            </div>
-            <form
-              ref={formRef}
-              id="task-drawer-form"
-              onSubmit={handleSubmit}
-              onPaste={handleFormPaste}
-              onDragOver={handleCreateDragOver}
-              onDragLeave={handleCreateDragLeave}
-              onDrop={handleCreateDrop}
-              className="space-y-3 overflow-y-auto px-4 pb-4 pt-4"
+          // === CREATE MODE === — окно создания = окно редактирования: заголовок +
+          // плюсики + ряд свойств + тело, resizable + split (справа — плейсхолдер
+          // пустых комментариев). Источник правды — единое `description`.
+          <div
+            className={cn('min-h-0 overflow-hidden', isSplit ? 'flex h-full' : 'flex h-full flex-col')}
+          >
+            {/* ЛЕВАЯ КОЛОНКА: скроллящаяся форма + футер (Отмена/Создать). */}
+            <div
+              className={cn(
+                'flex min-h-0 flex-col bg-background/95 backdrop-blur-md',
+                isSplit ? 'min-w-0 flex-1' : 'min-h-0 flex-[1.3] border-b',
+              )}
             >
-              {/* Textarea с chips вложений сверху (как в AddTaskDialog / QuickAddTodo) */}
-              <div
+              <form
+                ref={formRef}
+                id="task-drawer-form"
+                onSubmit={handleSubmit}
+                onPaste={handleFormPaste}
+                onDragOver={handleCreateDragOver}
+                onDragLeave={handleCreateDragLeave}
+                onDrop={handleCreateDrop}
                 className={cn(
-                  'relative space-y-2 rounded-md border bg-background px-2 py-2 transition-colors',
-                  createDragActive ? 'border-primary bg-primary/5' : 'border-input',
+                  'min-h-0 flex-1 overflow-y-auto overscroll-contain transition-colors',
+                  createDragActive && 'bg-primary/5',
                 )}
               >
-                {pendingFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {pendingFiles.map((pf) => (
-                      <span
-                        key={pf.id}
-                        className="inline-flex items-center gap-1.5 rounded border bg-background py-0.5 pl-1.5 pr-1 text-[11px]"
-                        title={pf.file.name}
-                      >
-                        {pf.previewUrl ? (
-                          <img src={pf.previewUrl} alt="" className="size-4 rounded object-cover" />
-                        ) : (
-                          <FileText className="size-3.5 text-muted-foreground" />
-                        )}
-                        <span className="max-w-[160px] truncate">{pf.file.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPendingFiles((prev) => {
-                              const target = prev.find((p) => p.id === pf.id);
-                              if (target) URL.revokeObjectURL(target.previewUrl);
-                              return prev.filter((p) => p.id !== pf.id);
-                            });
-                          }}
-                          className="grid size-4 place-items-center rounded-full text-muted-foreground hover:bg-destructive hover:text-white"
-                          aria-label="Убрать"
-                        >
-                          <X className="size-2.5" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <Suspense fallback={<div className="min-h-[5.5rem]" />}>
-                  <RichTextEditor
-                    variant="description"
-                    value={description}
-                    onChange={setDescription}
-                    onSubmit={() => {
-                      // Ctrl/Cmd+Enter внутри редактора → сабмит формы создания задачи.
-                      if (description.trim().length === 0) {
-                        setError('Введите описание');
-                        return;
-                      }
-                      formRef.current?.requestSubmit();
-                    }}
+                {/* Row A: close + контекст (без Копир./Переработка/План — задачи ещё нет). */}
+                <div className="flex items-center gap-2 px-4 pt-3">
+                  {renderCloseButton()}
+                  <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {projectName ? `${projectName} · ` : ''}Новая задача
+                  </span>
+                </div>
+
+                {/* Заголовок (как в edit): plain, всегда-жирный, Enter → фокус в тело. */}
+                <div className="px-4 pb-1 pt-1.5">
+                  <TaskTitleEditor
+                    key="create-title"
+                    value={createSplit.title}
+                    onChange={handleCreateTitleChange}
+                    onCommit={() => {}}
+                    onEnter={focusCreateBody}
                     placeholder="Что нужно сделать?"
                     autoFocus={!isCoarsePointer}
-                    onPasteFiles={addPendingFiles}
-                    className="min-h-[5.5rem] text-sm leading-snug"
                   />
-                </Suspense>
-              </div>
+                </div>
 
-              {/* Плюсики (как в edit-режиме): + Подзадача (дописывает `- [ ]` в описание)
-                  и + Файл (открывает выбор файла). Горизонтальный ряд под полем. */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-0.5">
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() =>
-                    setDescription((d) => `${d}${d.length === 0 || d.endsWith('\n') ? '' : '\n'}- [ ] `)
-                  }
-                  className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                >
-                  <Plus className="size-4 shrink-0" />
-                  Подзадача
-                </button>
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => createFileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                >
-                  <Plus className="size-4 shrink-0" />
-                  Файл
-                </button>
-              </div>
-
-              {/* Иконки-свойства под полем: приоритет, дедлайн, делегат. Мягко всплывают
-                  при открытии create-дравера — gated useMotion (reduced-motion → мгновенно). */}
-              <motion.div
-                initial={animations ? { opacity: 0, y: 8 } : false}
-                animate={{ opacity: 1, y: 0 }}
-                transition={animations ? { duration: 0.28, ease: 'easeOut', delay: 0.08 } : { duration: 0 }}
-                className="flex flex-wrap items-center gap-1"
-              >
-                <PrioritySelect
-                  value={createPriority}
-                  onChange={setCreatePriority}
-                  disabled={saving}
-                  iconOnly
-                  className="size-8"
-                />
-                <DeadlinePicker
-                  value={createDeadline}
-                  onChange={setCreateDeadline}
-                  disabled={saving}
-                  iconOnly
-                  className={cn('h-8', createDeadline === null ? 'w-8 px-0' : 'px-2')}
-                />
-                {(isInbox || isShared) && (
-                  <DelegateSelect
-                    value={createDelegateUserId}
-                    onChange={setCreateDelegateUserId}
+                {/* Плюсики: + Подзадача / + Файл. */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pb-1 pt-0.5">
+                  <button
+                    type="button"
                     disabled={saving}
-                    projectId={isShared && aiProjectId ? aiProjectId : undefined}
-                    className="size-8"
+                    onClick={() =>
+                      setDescription((d) => `${d}${d.length === 0 || d.endsWith('\n') ? '' : '\n'}- [ ] `)
+                    }
+                    className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                  >
+                    <Plus className="size-4 shrink-0" />
+                    Подзадача
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => createFileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                  >
+                    <Plus className="size-4 shrink-0" />
+                    Файл
+                  </button>
+                  <input
+                    ref={createFileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files) addPendingFiles(Array.from(e.target.files));
+                      e.target.value = '';
+                    }}
                   />
-                )}
-                <input
-                  ref={createFileInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files) addPendingFiles(Array.from(e.target.files));
-                    e.target.value = '';
-                  }}
-                />
-              </motion.div>
+                </div>
 
-              {error && <p className="text-xs text-destructive">{error}</p>}
-            </form>
+                {/* Ряд свойств (как в edit): Ответственный / Дедлайн / Приоритет / Режим /
+                    Файлы. Без «Создано» и статуса — их нет до создания. */}
+                <div className="px-3 pb-2.5 pt-1">
+                  <PropertyRow icon={UserPlus} label="Ответственный">
+                    <div className="flex min-h-7 flex-wrap items-center gap-1.5">
+                      {isInbox || isShared ? (
+                        <DelegateSelect
+                          value={createDelegateUserId}
+                          onChange={setCreateDelegateUserId}
+                          disabled={saving}
+                          projectId={isShared && aiProjectId ? aiProjectId : undefined}
+                          className={PROPERTY_VALUE_CLASS}
+                        />
+                      ) : (
+                        <EmptyValue>Никто</EmptyValue>
+                      )}
+                    </div>
+                  </PropertyRow>
 
-            {/* Footer: RalphMode + AI слева, Cancel + Submit справа */}
-            <div className="flex flex-col gap-2 border-t bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <RalphModeSelect
-                  value={createRalphMode}
-                  onChange={setCreateRalphMode}
-                  disabled={saving}
-                  variant="ghost"
-                  iconOnly
-                  className="!size-9 shrink-0 !p-0"
-                />
-                <AiImproveButton
-                  text={description}
-                  projectId={aiProjectId}
-                  onImproved={setDescription}
-                  disabled={saving}
-                  compact
-                />
-              </div>
-              <div className="flex items-center justify-end gap-2">
-                <Button type="button" variant="ghost" size="sm" className="h-8" onClick={onClose}>
-                  Отмена
-                </Button>
-                <Button type="submit" form="task-drawer-form" size="sm" className="h-8" disabled={saving}>
-                  {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-                  Создать
-                </Button>
+                  <PropertyRow icon={CalendarClock} label="Дедлайн">
+                    <DeadlinePicker
+                      value={createDeadline}
+                      onChange={setCreateDeadline}
+                      disabled={saving}
+                      className={PROPERTY_VALUE_CLASS}
+                    />
+                  </PropertyRow>
+
+                  <PropertyRow icon={Flag} label="Приоритет">
+                    <PrioritySelect
+                      value={createPriority}
+                      onChange={setCreatePriority}
+                      disabled={saving}
+                      className={PROPERTY_VALUE_CLASS}
+                    />
+                  </PropertyRow>
+
+                  <PropertyRow icon={Bot} label="Режим">
+                    <RalphModeSelect
+                      value={createRalphMode}
+                      onChange={setCreateRalphMode}
+                      disabled={saving}
+                      variant="ghost"
+                      className={PROPERTY_VALUE_CLASS}
+                    />
+                  </PropertyRow>
+
+                  <PropertyRow icon={Paperclip} label="Файлы">
+                    {pendingFiles.length > 0 ? (
+                      <div className="flex min-h-7 flex-wrap items-center gap-1.5 py-1">
+                        {pendingFiles.map((pf) => (
+                          <span
+                            key={pf.id}
+                            className="inline-flex items-center gap-1.5 rounded-md border bg-background py-0.5 pl-1.5 pr-1 text-[11px]"
+                            title={pf.file.name}
+                          >
+                            {pf.previewUrl ? (
+                              <img src={pf.previewUrl} alt="" className="size-4 rounded object-cover" />
+                            ) : (
+                              <FileText className="size-3.5 text-muted-foreground" />
+                            )}
+                            <span className="max-w-[160px] truncate">{pf.file.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPendingFiles((prev) => {
+                                  const target = prev.find((p) => p.id === pf.id);
+                                  if (target) URL.revokeObjectURL(target.previewUrl);
+                                  return prev.filter((p) => p.id !== pf.id);
+                                });
+                              }}
+                              className="grid size-4 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive hover:text-white"
+                              aria-label="Убрать"
+                            >
+                              <X className="size-2.5" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="inline-flex min-h-7 items-center px-1.5">
+                        <EmptyValue />
+                      </span>
+                    )}
+                  </PropertyRow>
+                </div>
+
+                {/* Серая линия перед телом — как в edit. */}
+                <div className="mx-3 border-t border-border/60" aria-hidden />
+
+                {/* Тело — WYSIWYG (как в edit). Ctrl/Cmd+Enter → сабмит формы. */}
+                <div ref={createBodyContainerRef} className="px-4 pb-3 pt-2">
+                  <Suspense fallback={<div className="min-h-[6rem]" />}>
+                    <RichTextEditor
+                      variant="description"
+                      value={createSplit.body}
+                      onChange={handleCreateBodyChange}
+                      onSubmit={() => {
+                        if (description.trim().length === 0) {
+                          setError('Введите описание');
+                          return;
+                        }
+                        formRef.current?.requestSubmit();
+                      }}
+                      placeholder="Добавьте описание, детали, подзадачи…"
+                      onPasteFiles={addPendingFiles}
+                      className="min-h-[6rem] text-sm leading-snug"
+                    />
+                  </Suspense>
+                </div>
+
+                {error && <p className="px-4 pb-2 text-xs text-destructive">{error}</p>}
+              </form>
+
+              {/* Футер: AI слева, Отмена/Создать справа. */}
+              <div className="flex flex-col gap-2 border-t bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <AiImproveButton
+                    text={description}
+                    projectId={aiProjectId}
+                    onImproved={setDescription}
+                    disabled={saving}
+                    compact
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <Button type="button" variant="ghost" size="sm" className="h-8" onClick={onClose}>
+                    Отмена
+                  </Button>
+                  <Button type="submit" form="task-drawer-form" size="sm" className="h-8" disabled={saving}>
+                    {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+                    Создать
+                  </Button>
+                </div>
               </div>
             </div>
-          </>
+
+            {/* ПРАВАЯ КОЛОНКА (split): плейсхолдер — комментарии появятся после создания. */}
+            {isSplit && <div aria-hidden className="w-px shrink-0 bg-border" />}
+            {isSplit && (
+              <div className="w-[44%] shrink-0 overflow-y-auto">
+                <CommentsEmptyState
+                  className="min-h-full"
+                  label="Комментарии появятся после создания"
+                  hint="Сначала создайте задачу — обсуждение откроется здесь."
+                />
+              </div>
+            )}
+          </div>
         )}
       </SheetContent>
     </Sheet>
@@ -1435,7 +1496,9 @@ function TaskCommentsSection({
             />
           ))}
         </ul>
-      ) : null}
+      ) : (
+        <CommentsEmptyState className="min-h-[40vh]" />
+      )}
 
       {!onCommentCreatedRef && (
         <CommentComposer

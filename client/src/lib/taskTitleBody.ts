@@ -50,3 +50,29 @@ export function formatTitleHeading(text: string, level: TitleHeadingLevel): stri
   const t = (text ?? '').replace(/\r?\n/g, ' ');
   return level > 0 ? `${'#'.repeat(level)} ${t}` : t;
 }
+
+// Срезать инлайн-markdown для ОТОБРАЖЕНИЯ заголовка: `**жирный**`, `*курсив*`, `__b__`,
+// `~~зач~~`, `` `код` ``, `==выд==`, ссылки `[t](u)→t`, картинки `![a](u)→a`. Оставляет
+// видимый текст. Одиночный `_` НЕ трогаем (защита snake_case). Заголовок — plain, символов
+// форматирования на экране быть не должно (см. таски редизайна).
+export function stripInlineMarkdown(input: string): string {
+  let s = input ?? '';
+  // Картинки и ссылки — раскрываем в alt/текст (картинки до ссылок).
+  s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1');
+  s = s.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+  const passes: RegExp[] = [
+    /\*\*([^*]+)\*\*/g, // жирный **
+    /__([^_]+)__/g, // жирный __
+    /~~([^~]+)~~/g, // зачёркнутый
+    /==([^=]+)==/g, // выделение
+    /`([^`]+)`/g, // инлайн-код
+    /\*([^*\n]+)\*/g, // курсив *
+  ];
+  // Несколько проходов — на случай вложенности (`***x***`, `**`код` **` и т.п.).
+  for (let i = 0; i < 3; i += 1) {
+    const before = s;
+    for (const re of passes) s = s.replace(re, '$1');
+    if (s === before) break;
+  }
+  return s;
+}

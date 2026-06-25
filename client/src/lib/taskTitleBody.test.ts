@@ -8,7 +8,33 @@ import {
   joinTitleBody,
   parseTitleHeading,
   formatTitleHeading,
+  stripInlineMarkdown,
 } from './taskTitleBody';
+
+test('stripInlineMarkdown: срезает парные маркеры, оставляет текст', () => {
+  assert.equal(stripInlineMarkdown('**жирный**'), 'жирный');
+  assert.equal(stripInlineMarkdown('*курсив*'), 'курсив');
+  assert.equal(stripInlineMarkdown('__bold__'), 'bold');
+  assert.equal(stripInlineMarkdown('~~зач~~'), 'зач');
+  assert.equal(stripInlineMarkdown('==выд=='), 'выд');
+  assert.equal(stripInlineMarkdown('`код`'), 'код');
+  assert.equal(stripInlineMarkdown('**жирный** и `код`'), 'жирный и код');
+});
+
+test('stripInlineMarkdown: ссылки и картинки → видимый текст', () => {
+  assert.equal(stripInlineMarkdown('[ProjectsFlow](https://x.ru)'), 'ProjectsFlow');
+  assert.equal(stripInlineMarkdown('![аватар](https://x.ru/a.png)'), 'аватар');
+});
+
+test('stripInlineMarkdown: вложенность ***x*** раскрывается', () => {
+  assert.equal(stripInlineMarkdown('***важно***'), 'важно');
+});
+
+test('stripInlineMarkdown: не ломает snake_case и одиночные символы', () => {
+  assert.equal(stripInlineMarkdown('foo_bar_baz'), 'foo_bar_baz');
+  assert.equal(stripInlineMarkdown('5 * 3 = 15'), '5 * 3 = 15');
+  assert.equal(stripInlineMarkdown('обычный текст'), 'обычный текст');
+});
 
 test('parseTitleHeading: срезает ведущие ## и отдаёт уровень', () => {
   assert.deepEqual(parseTitleHeading('## История постов'), { text: 'История постов', level: 2 });
