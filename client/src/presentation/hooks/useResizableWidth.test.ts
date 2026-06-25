@@ -50,14 +50,14 @@ test('clampDrawerWidth: NaN/мусор → дефолт затем clamp', () =>
   assert.equal(clampDrawerWidth(Number.POSITIVE_INFINITY, 1920), DRAWER_DEFAULT_WIDTH);
 });
 
-test('computeIsSplit: ниже порога (≈50vw, cap 860) — стек', () => {
-  // viewport 1000 → порог = min(500, 860) = 500.
-  assert.equal(computeIsSplit(499, 1000), false);
-  assert.equal(computeIsSplit(500, 1000), true);
+test('computeIsSplit: ниже порога (≈62vw, cap 1024) — стек', () => {
+  // viewport 1000 → порог = min(620, 1024) = 620.
+  assert.equal(computeIsSplit(619, 1000), false);
+  assert.equal(computeIsSplit(620, 1000), true);
 });
 
-test('computeIsSplit: на широком вьюпорте порог упирается в cap 860', () => {
-  // viewport 2000 → 50vw=1000, но cap=860 → split включается уже на 860.
+test('computeIsSplit: на широком вьюпорте порог упирается в cap 1024', () => {
+  // viewport 2000 → 62vw=1240, но cap=1024 → split включается на 1024.
   assert.equal(computeIsSplit(DRAWER_SPLIT_CAP, 2000), true);
   assert.equal(computeIsSplit(DRAWER_SPLIT_CAP - 1, 2000), false);
 });

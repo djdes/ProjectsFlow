@@ -1,26 +1,28 @@
 import * as React from 'react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Check } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import {
+  parseTitleHeading,
+  formatTitleHeading,
+  type TitleHeadingLevel,
+} from '@/lib/taskTitleBody';
 
-// Notion-style редактор ЗАГОЛОВКА задачи. В отличие от тела (RichTextEditor / WYSIWYG)
-// это всегда-редактируемое plain-поле: одна строка, жирный крупный шрифт, без какого-либо
-// форматирования (никаких markdown/bold-меню — заголовок всегда просто жирный текст).
+// Notion-style редактор ЗАГОЛОВКА задачи. Всегда-редактируемое plain-поле: одна строка,
+// жирный шрифт, БЕЗ видимых markdown-символов (`##` не показываем). Уровень заголовка
+// (H1/H2/H3 или обычный текст) хранится в markdown-префиксе `#` первой строки, но НА ЭКРАНЕ
+// его нет — размер задаётся стилем, а сменить размер можно правым кликом по заголовку.
 //
-// Поведение:
-//  - редактируется по ОДНОМУ клику (textarea всегда в DOM, фокус по клику мгновенный);
-//  - auto-grow по высоте (перенос длинного заголовка на узких экранах вплоть до 320px);
-//  - Enter НЕ вставляет перенос строки — переводит фокус в тело (onEnter);
-//  - сохранение — debounce при наборе + немедленно на blur (через onCommit).
+// Контракт `value`/`onChange` — «сырая» первая строка (с `#`-префиксом, как в description).
+// Внутри парсим её в {text, level}: в textarea кладём чистый text, наружу отдаём
+// formatTitleHeading(text, level).
 
 type Props = {
   value: string;
-  // Локальное изменение (каждый ввод) — родитель держит актуальное значение в state.
   onChange: (next: string) => void;
-  // Сохранить текущее значение (debounced при наборе / сразу на blur). Родитель
-  // склеивает заголовок с телом и пишет в `description`.
   onCommit: () => void;
-  // Enter в заголовке → перевести фокус в тело (вместо переноса строки).
   onEnter?: () => void;
   placeholder?: string;
   disabled?: boolean;
@@ -28,8 +30,21 @@ type Props = {
   className?: string;
 };
 
-// Задержка автосейва при наборе — чтобы не дёргать сервер на каждый символ.
 const COMMIT_DEBOUNCE_MS = 600;
+
+const LEVELS: ReadonlyArray<{ level: TitleHeadingLevel; label: string; cls: string }> = [
+  { level: 0, label: 'Обычный текст', cls: 'text-base' },
+  { level: 1, label: 'Заголовок 1', cls: 'text-2xl' },
+  { level: 2, label: 'Заголовок 2', cls: 'text-xl' },
+  { level: 3, label: 'Заголовок 3', cls: 'text-lg' },
+];
+
+const SIZE_BY_LEVEL: Record<TitleHeadingLevel, string> = {
+  0: 'text-lg',
+  1: 'text-2xl',
+  2: 'text-xl',
+  3: 'text-lg',
+};
 
 export function TaskTitleEditor({
   value,
@@ -43,14 +58,21 @@ export function TaskTitleEditor({
 }: Props): React.ReactElement {
   const ref = useRef<HTMLTextAreaElement>(null);
   const debounceRef = useRef<number | null>(null);
-  // Колбэк через ref — чтобы debounce-таймер всегда видел свежий onCommit без перезапуска.
   const onCommitRef = useRef(onCommit);
   useEffect(() => {
     onCommitRef.current = onCommit;
   });
 
-  // Auto-grow: высота по контенту. Сбрасываем в 'auto' перед чтением scrollHeight, иначе
-  // поле не умеет ужиматься обратно после удаления строк.
+  // Парсим «сырой» заголовок: на экран — чистый текст, размер — по уровню.
+  const { text, level } = parseTitleHeading(value);
+
+  // Меню выбора размера (правый клик), позиционируется у курсора.
+  const [menu, setMenu] = useState<{ open: boolean; x: number; y: number }>({
+    open: false,
+    x: 0,
+    y: 0,
+  });
+
   const resize = useCallback((): void => {
     const el = ref.current;
     if (!el) return;
@@ -58,13 +80,10 @@ export function TaskTitleEditor({
     el.style.height = `${el.scrollHeight}px`;
   }, []);
 
-  // Подгоняем высоту при внешнем изменении value (смена задачи, AI-improve тела и т.п.).
   useEffect(() => {
     resize();
-  }, [value, resize]);
+  }, [text, resize]);
 
-  // Чистим debounce при размонтировании (без финального flush — blur/unmount тела
-  // у родителя страхуют сохранение; здесь важно лишь не стрелять таймером в мёртвый компонент).
   useEffect(
     () => () => {
       if (debounceRef.current !== null) window.clearTimeout(debounceRef.current);
@@ -80,31 +99,7 @@ export function TaskTitleEditor({
     }, COMMIT_DEBOUNCE_MS);
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>): void => {
-    // Гарантируем одну строку: вставленные переносы (paste многострочного текста)
-    // схлопываем в пробелы — заголовок всегда однострочный.
-    const next = e.target.value.replace(/\r?\n/g, ' ');
-    onChange(next);
-    resize();
-    scheduleCommit();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (e.key === 'Enter') {
-      // Enter не переносит строку — уводит фокус в тело.
-      e.preventDefault();
-      // Сразу зафиксируем заголовок перед уходом, отменив pending-debounce.
-      if (debounceRef.current !== null) {
-        window.clearTimeout(debounceRef.current);
-        debounceRef.current = null;
-      }
-      onCommitRef.current();
-      onEnter?.();
-    }
-  };
-
-  const handleBlur = (): void => {
-    // На blur — сохраняем немедленно, отменяя pending-debounce.
+  const flushCommit = (): void => {
     if (debounceRef.current !== null) {
       window.clearTimeout(debounceRef.current);
       debounceRef.current = null;
@@ -112,28 +107,75 @@ export function TaskTitleEditor({
     onCommitRef.current();
   };
 
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>): void => {
+    const nextText = e.target.value.replace(/\r?\n/g, ' ');
+    onChange(formatTitleHeading(nextText, level));
+    resize();
+    scheduleCommit();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      flushCommit();
+      onEnter?.();
+    }
+  };
+
+  const pickLevel = (lvl: TitleHeadingLevel): void => {
+    onChange(formatTitleHeading(text, lvl));
+    setMenu((s) => ({ ...s, open: false }));
+    flushCommit();
+  };
+
   return (
-    <textarea
-      ref={ref}
-      value={value}
-      onChange={handleChange}
-      onKeyDown={handleKeyDown}
-      onBlur={handleBlur}
-      placeholder={placeholder}
-      disabled={disabled}
-      rows={1}
-      autoFocus={autoFocus}
-      spellCheck={false}
-      aria-label="Название задачи"
-      className={cn(
-        // Всегда жирный крупный заголовок (ink-цвет). resize-none + overflow-hidden —
-        // высоту контролирует auto-grow. Без рамки/фона: выглядит как чистый текст.
-        'block w-full resize-none overflow-hidden border-0 bg-transparent p-0 ' +
-          'text-2xl font-semibold leading-tight tracking-tight text-foreground ' +
-          'outline-none placeholder:font-semibold placeholder:text-muted-foreground/50 ' +
-          'focus:outline-none focus-visible:outline-none disabled:opacity-60',
-        className,
-      )}
-    />
+    <>
+      <textarea
+        ref={ref}
+        value={text}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onBlur={flushCommit}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setMenu({ open: true, x: e.clientX, y: e.clientY });
+        }}
+        placeholder={placeholder}
+        disabled={disabled}
+        rows={1}
+        autoFocus={autoFocus}
+        spellCheck={false}
+        aria-label="Название задачи"
+        className={cn(
+          'block w-full resize-none overflow-hidden border-0 bg-transparent p-0 ' +
+            'font-semibold leading-tight tracking-tight text-foreground ' +
+            'outline-none placeholder:font-semibold placeholder:text-muted-foreground/50 ' +
+            'focus:outline-none focus-visible:outline-none disabled:opacity-60',
+          SIZE_BY_LEVEL[level],
+          className,
+        )}
+      />
+
+      {/* Правый клик по заголовку → выбор размера (Текст / H1 / H2 / H3). */}
+      <Popover open={menu.open} onOpenChange={(o) => setMenu((s) => ({ ...s, open: o }))}>
+        <PopoverAnchor asChild>
+          <span aria-hidden style={{ position: 'fixed', left: menu.x, top: menu.y }} />
+        </PopoverAnchor>
+        <PopoverContent align="start" side="bottom" sideOffset={4} className="w-48 p-1">
+          <div className="px-2 py-1 text-xs text-muted-foreground">Размер заголовка</div>
+          {LEVELS.map((l) => (
+            <button
+              key={l.level}
+              type="button"
+              onClick={() => pickLevel(l.level)}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-hover"
+            >
+              <span className={cn('flex-1 truncate font-semibold', l.cls)}>{l.label}</span>
+              {l.level === level ? <Check className="size-4 shrink-0 text-foreground" /> : null}
+            </button>
+          ))}
+        </PopoverContent>
+      </Popover>
+    </>
   );
 }

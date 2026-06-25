@@ -28,3 +28,25 @@ export function joinTitleBody(title: string, body: string): string {
   const b = body ?? '';
   return b.length > 0 ? `${t}\n${b}` : t;
 }
+
+// Уровень заголовка по markdown-префиксу первой строки. 0 = обычный текст (без `#`).
+export type TitleHeadingLevel = 0 | 1 | 2 | 3;
+export type TitleHeading = { readonly text: string; readonly level: TitleHeadingLevel };
+
+// Распарсить «сырую» первую строку: ведущие `#{1..6}` + пробел → уровень (клампим к 1–3,
+// т.к. в UI только H1/H2/H3), остальное — чистый текст для отображения. Без `#` → level 0.
+export function parseTitleHeading(rawTitle: string): TitleHeading {
+  const m = /^(#{1,6})\s+([\s\S]*)$/.exec(rawTitle ?? '');
+  if (m) {
+    const level = Math.min(m[1].length, 3) as 1 | 2 | 3;
+    return { text: m[2], level };
+  }
+  return { text: rawTitle ?? '', level: 0 };
+}
+
+// Собрать «сырую» первую строку из чистого текста + уровня. level>0 → `#`*level + ' ' + текст.
+// Переносы в тексте схлопываем в пробелы (заголовок всегда однострочный).
+export function formatTitleHeading(text: string, level: TitleHeadingLevel): string {
+  const t = (text ?? '').replace(/\r?\n/g, ' ');
+  return level > 0 ? `${'#'.repeat(level)} ${t}` : t;
+}

@@ -26,7 +26,6 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
-import { relativeTime } from '@/lib/relativeTime';
 import type { Task, RalphMode, TaskPriority } from '@/domain/task/Task';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
 import {
@@ -347,9 +346,6 @@ function AcceptedRow({
             <PriorityBadge priority={item.priority} />
           )}
           {item.deadline && <DeadlineBadge deadline={item.deadline} status={item.status} />}
-          <span className="opacity-60" title={item.createdAt.toLocaleString('ru-RU')}>
-            {relativeTime(item.createdAt)}
-          </span>
         </div>
       </div>
     </li>

@@ -126,14 +126,17 @@ export function RichTextEditor({
     contentType: 'markdown',
     autofocus: autoFocus ? 'end' : false,
     editable: !disabled,
-    immediatelyRender: true,
+    // false: editor создаётся в эффекте после маунта, а не во время рендера. В React 19
+    // StrictMode immediatelyRender:true двойным рендером плодит два инстанса (первый сразу
+    // destroy), и команда на разрушенном editor падала «commandManager is null».
+    immediatelyRender: false,
     editorProps: {
       attributes: { class: PROSE_CLASS },
       handleDOMEvents: {
         // Правый клик внутри редактора → своё меню форматирования вместо нативного.
         contextmenu: (_view, event) => {
           const e = editorRef.current;
-          if (!e || !e.isEditable) return false; // в режиме read-only — нативное меню
+          if (!e || e.isDestroyed || !e.isEditable) return false; // read-only/teardown — нативное меню
           event.preventDefault();
           // Нет выделения — выделяем слово под курсором, чтобы формат применился к нему.
           selectWordAt(e, event.clientX, event.clientY);
@@ -171,6 +174,7 @@ export function RichTextEditor({
       },
     },
     onUpdate: ({ editor: e }) => {
+      if (e.isDestroyed) return;
       onChangeRef.current(e.getMarkdown());
     },
     onBlur: ({ editor: e }) => {
@@ -195,7 +199,7 @@ export function RichTextEditor({
 
   // Внешнее изменение value (AI-improve, сброс формы) → синхронизируем без эха onUpdate.
   React.useEffect(() => {
-    if (!editor) return;
+    if (!editor || editor.isDestroyed) return;
     if (value !== editor.getMarkdown()) {
       editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
     }

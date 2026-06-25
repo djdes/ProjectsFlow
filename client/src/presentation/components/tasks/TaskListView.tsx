@@ -20,7 +20,6 @@ import { DelegationBadge } from './DelegationBadge';
 import { DeadlineBadge } from './DeadlineBadge';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
-import { relativeTime } from '@/lib/relativeTime';
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
   backlog: -1,
@@ -344,12 +343,6 @@ function TaskListRow({
             )}
             <RalphModeBadge mode={task.ralphMode} />
             {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
-            <span
-              className="opacity-60"
-              title={task.createdAt.toLocaleString('ru-RU')}
-            >
-              {relativeTime(task.createdAt)}
-            </span>
           </div>
         )}
       </div>

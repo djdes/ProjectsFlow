@@ -26,10 +26,11 @@ export const DRAWER_MIN_WIDTH = 480;
 export const DRAWER_MAX_WIDTH_HARD = 1400;
 export const DRAWER_MAX_VIEWPORT_RATIO = 0.96;
 
-// Split threshold: once the drawer is at least ~half the viewport (capped at
-// 860px so it also triggers on smaller laptops) switch to the two-pane layout.
-export const DRAWER_SPLIT_VIEWPORT_RATIO = 0.5;
-export const DRAWER_SPLIT_CAP = 860;
+// Split threshold: switch to the two-pane layout only when the drawer is clearly
+// wide — at least ~62% of the viewport, capped at 1024px. Below this the drawer
+// stays a single stacked column (task → comments), so comments are always visible.
+export const DRAWER_SPLIT_VIEWPORT_RATIO = 0.62;
+export const DRAWER_SPLIT_CAP = 1024;
 
 /** Upper bound for the drawer width given the current viewport width. */
 export function drawerMaxWidth(viewportWidth: number): number {

@@ -682,7 +682,9 @@ export function TaskDrawer({
 
   const task = state?.mode === 'edit' ? state.task : null;
   const scrollToCommentId = state?.mode === 'edit' ? state.scrollToCommentId : undefined;
-  const canEdit = !!task && task.status !== 'done';
+  // Редактируем задачу в ЛЮБОМ статусе, включая done (по требованию: «задача всегда
+  // редактируема» — плюсики, свойства, тело и кнопки доступны и для выполненных).
+  const canEdit = !!task;
 
   // === Resizable + split drawer (EDIT-mode, desktop only) ===
   // Coarse pointer / narrow viewport → resize disabled, keep default full-width
@@ -752,10 +754,11 @@ export function TaskDrawer({
           // (шапка сверху, ниже центрированный переключатель + комменты + композер).
           <div
             className={cn(
-              'min-h-0',
-              isSplit
-                ? 'flex h-full'
-                : 'grid h-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden',
+              'min-h-0 overflow-hidden',
+              // split — две колонки в ряд; narrow — колонка: задача сверху (скроллится),
+              // обсуждение снизу (flex-1, тоже скроллится). flex (а не grid) гарантирует,
+              // что комментам всегда достаётся высота и они видны/скроллятся.
+              isSplit ? 'flex h-full' : 'flex h-full flex-col',
             )}
           >
             {/* === HEADER / ЛЕВАЯ КОЛОНКА === Notion-style. В стеке — sticky-шапка с
@@ -767,7 +770,7 @@ export function TaskDrawer({
                 'bg-background/95 backdrop-blur-md',
                 isSplit
                   ? 'min-w-0 flex-1 overflow-y-auto overscroll-contain'
-                  : 'border-b',
+                  : 'min-h-0 flex-[1.3] overflow-y-auto overscroll-contain border-b',
               )}
             >
               {/* Row A: контекст · короткий id (слева), действия (Копир./Переработка/План)
@@ -967,36 +970,28 @@ export function TaskDrawer({
                 </PropertyRow>
               </div>
 
-              {/* === ТЕЛО === Всегда-редактируемый WYSIWYG (markdown тела, без заголовка)
-                  ПОД блоком свойств (Notion-порядок: заголовок → плюсики → свойства → тело).
-                  Своего border-t нет — единственный разделитель идёт ниже всей шапки. */}
-              <div ref={bodyContainerRef} className="px-4 pb-2 pt-1">
-                {/* В split левая колонка скроллит целиком — снимаем 50vh-кап с тела
-                    (иначе вложенный скролл дублировался бы). В стеке кап остаётся. */}
-                <div
-                  className={cn(
-                    'overflow-y-auto overscroll-contain',
-                    isSplit ? 'max-h-none' : 'max-h-[50vh]',
-                  )}
-                >
-                  <TaskBodyEditor
-                    key={`body-${task.id}`}
-                    projectId={task.projectId}
-                    taskId={task.id}
-                    body={editBody}
-                    fullDescription={editDescription}
-                    onBodyChange={handleBodyChange}
-                    onCommit={() => void commitDescription(editDescription)}
-                    onAiImproved={(next) => {
-                      // AI вернул переработанное ПОЛНОЕ описание → делим на title/body и сохраняем.
-                      setEditDescription(next);
-                      void commitDescription(next);
-                    }}
-                    onAiDistributed={() => onCommitsChange?.()}
-                    onPasteFiles={(files) => void uploadFilesDirectly(files)}
-                    disabled={editSaving}
-                  />
-                </div>
+              {/* Серая линия между последним свойством (Создано) и телом — как в Notion. */}
+              <div className="mx-3 border-t border-border/60" aria-hidden />
+
+              {/* === ТЕЛО === Всегда-редактируемый WYSIWYG (markdown тела, без заголовка).
+                  Левая колонка скроллится целиком — у тела своего скролла/капа нет. */}
+              <div ref={bodyContainerRef} className="px-4 pb-3 pt-2">
+                <TaskBodyEditor
+                  key={`body-${task.id}`}
+                  projectId={task.projectId}
+                  taskId={task.id}
+                  body={editBody}
+                  fullDescription={editDescription}
+                  onBodyChange={handleBodyChange}
+                  onCommit={() => void commitDescription(editDescription)}
+                  onAiImproved={(next) => {
+                    setEditDescription(next);
+                    void commitDescription(next);
+                  }}
+                  onAiDistributed={() => onCommitsChange?.()}
+                  onPasteFiles={(files) => void uploadFilesDirectly(files)}
+                  disabled={editSaving}
+                />
               </div>
             </div>
 
@@ -1010,7 +1005,7 @@ export function TaskDrawer({
             <div
               className={cn(
                 'flex min-h-0 flex-col overflow-hidden',
-                isSplit ? 'w-[42%] shrink-0' : 'min-w-0',
+                isSplit ? 'w-[44%] shrink-0' : 'min-w-0 flex-1',
               )}
             >
               {/* === SCROLLABLE BODY — вкладки Обсуждение | LIVE === */}

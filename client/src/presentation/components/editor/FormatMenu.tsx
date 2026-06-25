@@ -10,6 +10,7 @@ import {
   Highlighter,
   Link2,
   ChevronRight,
+  ChevronLeft,
   ChevronsUpDown,
   Type,
   Heading1,
@@ -22,19 +23,12 @@ import {
   Code2,
   Minus,
   Baseline,
+  Eraser,
   Check,
   type LucideIcon,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
   TooltipContent,
@@ -43,15 +37,16 @@ import {
 } from '@/components/ui/tooltip';
 import { TEXT_COLORS, BG_COLORS, type ColorSwatch } from './extensions/colorPalette';
 
-// Notion-style вертикальное меню форматирования. Переиспользуется в двух местах:
-// 1) bubble-меню по выделению (BubbleToolbar), 2) контекстное меню по правому клику
-// (ContextFormatMenu). Сам контейнер (border/bg/shadow) задаёт вызывающая сторона —
-// здесь только содержимое: «Преобразовать в…» → ряд иконок форматирования → цвет.
+// Notion-style вертикальное меню форматирования. Переиспользуется в bubble-меню (по выделению)
+// и контекстном меню (правый клик). Контейнер (border/bg/shadow) задаёт вызывающая сторона.
+//
+// Подменю «Преобразовать в…» и «Цвет» раскрываются INLINE (внутри того же floating-меню),
+// а НЕ во вложенном Radix-портале. Это чинит баг, когда вложенное меню открывалось в углу
+// экрана (0,0): портал терял якорь внутри tippy/popover-обёртки. Inline-панели всегда на месте.
 
 interface TurnIntoItem {
   id: string;
   label: string;
-  /** Подсказка в стиле Notion — «как это работает». */
   hint: string;
   icon: LucideIcon;
   run: (e: Editor) => void;
@@ -125,7 +120,7 @@ const TURN_INTO: TurnIntoItem[] = [
   },
   {
     id: 'code',
-    label: 'Код',
+    label: 'Блок кода',
     hint: 'Блок кода с моноширинным шрифтом.',
     icon: Code2,
     run: (e) => e.chain().focus().toggleCodeBlock().run(),
@@ -143,7 +138,6 @@ const TURN_INTO: TurnIntoItem[] = [
 
 interface FormatBtn {
   id: 'bold' | 'italic' | 'underline' | 'strike' | 'code' | 'highlight' | 'link';
-  /** Имя + шорткат, показывается в тултипе. */
   tooltip: string;
   icon: LucideIcon;
 }
@@ -154,16 +148,10 @@ const FORMAT_BTNS: FormatBtn[] = [
   { id: 'underline', tooltip: 'Подчёркнутый · Ctrl+U', icon: UnderlineIcon },
   { id: 'strike', tooltip: 'Зачёркнутый · Ctrl+Shift+S', icon: Strikethrough },
   { id: 'link', tooltip: 'Ссылка · Ctrl+K', icon: Link2 },
-  { id: 'code', tooltip: 'Код · Ctrl+E', icon: Code },
+  { id: 'code', tooltip: 'Инлайн-код · Ctrl+E', icon: Code },
   { id: 'highlight', tooltip: 'Выделение фоном', icon: Highlighter },
 ];
 
-function currentBlockLabel(editor: Editor): string {
-  const match = TURN_INTO.find((it) => it.id !== 'p' && it.id !== 'divider' && it.isActive(editor));
-  return match ? match.label : 'Обычный текст';
-}
-
-// Свотч цвета: для текста — буква «А» нужного цвета на фоне, для фона — квадрат фона.
 function ColorDot({ swatch, kind }: { swatch: ColorSwatch; kind: 'text' | 'bg' }): React.ReactElement {
   if (kind === 'text') {
     return (
@@ -187,9 +175,14 @@ function ColorDot({ swatch, kind }: { swatch: ColorSwatch; kind: 'text' | 'bg' }
   );
 }
 
+const ROW =
+  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-hover';
+
+type Panel = 'main' | 'turn' | 'color';
+
 /**
- * Содержимое меню форматирования. `onAction` дёргается после любого действия,
- * чтобы вызывающая сторона могла закрыть popover (для контекстного меню).
+ * Содержимое меню форматирования. `onAction` дёргается после применённого действия,
+ * чтобы вызывающая сторона могла закрыть popover (контекстное меню).
  */
 export function FormatMenu({
   editor,
@@ -198,6 +191,8 @@ export function FormatMenu({
   editor: Editor;
   onAction?: () => void;
 }): React.ReactElement {
+  const [panel, setPanel] = React.useState<Panel>('main');
+
   const active = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -208,13 +203,15 @@ export function FormatMenu({
       code: e.isActive('code'),
       highlight: e.isActive('highlight'),
       link: e.isActive('link'),
-      blockLabel: currentBlockLabel(e),
+      blockLabel: (TURN_INTO.find((it) => it.id !== 'p' && it.id !== 'divider' && it.isActive(e))?.label) ?? 'Обычный текст',
       textColor: (e.getAttributes('textStyle').color as string | undefined) ?? null,
       bgColor: (e.getAttributes('textStyle').backgroundColor as string | undefined) ?? null,
     }),
   });
 
+  // fire применяет команду и закрывает меню; guard против разрушенного editor.
   const fire = (fn: () => void): void => {
+    if (editor.isDestroyed) return;
     fn();
     onAction?.();
   };
@@ -229,131 +226,154 @@ export function FormatMenu({
       if (url) fire(() => editor.chain().focus().setLink({ href: url }).run());
       return;
     }
-    if (id === 'highlight') {
-      fire(() => editor.chain().focus().toggleMark('highlight').run());
-      return;
-    }
-    if (id === 'bold') fire(() => editor.chain().focus().toggleBold().run());
-    else if (id === 'italic') fire(() => editor.chain().focus().toggleItalic().run());
-    else if (id === 'underline') fire(() => editor.chain().focus().toggleUnderline().run());
-    else if (id === 'strike') fire(() => editor.chain().focus().toggleStrike().run());
-    else if (id === 'code') fire(() => editor.chain().focus().toggleCode().run());
+    if (id === 'highlight') return fire(() => editor.chain().focus().toggleMark('highlight').run());
+    if (id === 'bold') return fire(() => editor.chain().focus().toggleBold().run());
+    if (id === 'italic') return fire(() => editor.chain().focus().toggleItalic().run());
+    if (id === 'underline') return fire(() => editor.chain().focus().toggleUnderline().run());
+    if (id === 'strike') return fire(() => editor.chain().focus().toggleStrike().run());
+    if (id === 'code') return fire(() => editor.chain().focus().toggleCode().run());
   };
 
-  const setTextColor = (sw: ColorSwatch): void => {
-    if (sw.value === null) fire(() => editor.chain().focus().unsetColor().run());
-    else fire(() => editor.chain().focus().setColor(sw.value as string).run());
-  };
-  const setBgColor = (sw: ColorSwatch): void => {
-    if (sw.value === null) fire(() => editor.chain().focus().unsetBackgroundColor().run());
-    else fire(() => editor.chain().focus().setBackgroundColor(sw.value as string).run());
-  };
+  const setTextColor = (sw: ColorSwatch): void =>
+    sw.value === null
+      ? fire(() => editor.chain().focus().unsetColor().run())
+      : fire(() => editor.chain().focus().setColor(sw.value as string).run());
+  const setBgColor = (sw: ColorSwatch): void =>
+    sw.value === null
+      ? fire(() => editor.chain().focus().unsetBackgroundColor().run())
+      : fire(() => editor.chain().focus().setBackgroundColor(sw.value as string).run());
 
+  const backHeader = (title: string): React.ReactElement => (
+    <button
+      type="button"
+      onMouseDown={(e) => {
+        e.preventDefault();
+        setPanel('main');
+      }}
+      className="mb-0.5 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-hover"
+    >
+      <ChevronLeft className="size-3.5" />
+      {title}
+    </button>
+  );
+
+  // === Панель «Преобразовать в…» (inline) ===
+  if (panel === 'turn') {
+    return (
+      <div className="flex w-60 max-w-[calc(100vw-1.5rem)] flex-col">
+        {backHeader('Преобразовать в')}
+        <div className="max-h-[60vh] overflow-y-auto">
+          {TURN_INTO.map((it) => (
+            <button
+              key={it.id}
+              type="button"
+              title={it.hint}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                fire(() => it.run(editor));
+              }}
+              className={ROW}
+            >
+              <it.icon className="size-4 shrink-0 text-muted-foreground" />
+              <span className="flex-1 truncate">{it.label}</span>
+              {it.isActive(editor) ? <Check className="size-4 text-foreground" /> : null}
+            </button>
+          ))}
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              fire(() => editor.chain().focus().unsetAllMarks().clearNodes().run());
+            }}
+            className={cn(ROW, 'text-muted-foreground')}
+          >
+            <Eraser className="size-4 shrink-0" />
+            <span className="flex-1 truncate">Очистить форматирование</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // === Панель «Цвет» (inline) ===
+  if (panel === 'color') {
+    return (
+      <div className="flex w-60 max-w-[calc(100vw-1.5rem)] flex-col">
+        {backHeader('Цвет')}
+        <div className="max-h-[60vh] overflow-y-auto">
+          <div className="px-2 py-1 text-xs text-muted-foreground">Цвет текста</div>
+          {TEXT_COLORS.map((sw) => (
+            <button key={`t-${sw.id}`} type="button" onMouseDown={(e) => { e.preventDefault(); setTextColor(sw); }} className={ROW}>
+              <ColorDot swatch={sw} kind="text" />
+              <span className="flex-1 truncate">{sw.label}</span>
+              {active.textColor === sw.value || (sw.value === null && !active.textColor) ? (
+                <Check className="size-4 text-foreground" />
+              ) : null}
+            </button>
+          ))}
+          <div className="my-1 h-px bg-border" aria-hidden />
+          <div className="px-2 py-1 text-xs text-muted-foreground">Цвет фона</div>
+          {BG_COLORS.map((sw) => (
+            <button key={`b-${sw.id}`} type="button" onMouseDown={(e) => { e.preventDefault(); setBgColor(sw); }} className={ROW}>
+              <ColorDot swatch={sw} kind="bg" />
+              <span className="flex-1 truncate">{sw.label}</span>
+              {active.bgColor === sw.value || (sw.value === null && !active.bgColor) ? (
+                <Check className="size-4 text-foreground" />
+              ) : null}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // === Главная панель ===
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex w-60 max-w-[calc(100vw-1.5rem)] flex-col gap-1">
-        {/* «Преобразовать в…» — кнопка с текущим типом блока + сабменю */}
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-hover"
-                  onMouseDown={(e) => e.preventDefault()}
-                >
-                  <span className="flex-1 truncate text-left text-muted-foreground">
-                    {active.blockLabel}
-                  </span>
-                  <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
-                </button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="top">Преобразовать в…</TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent align="start" className="w-64">
-            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-              Преобразовать в
-            </DropdownMenuLabel>
-            {TURN_INTO.map((it) => (
-              <Tooltip key={it.id}>
-                <TooltipTrigger asChild>
-                  <DropdownMenuItem onSelect={() => fire(() => it.run(editor))}>
-                    <it.icon className="text-muted-foreground" />
-                    <span className="flex-1 truncate">{it.label}</span>
-                    {it.isActive(editor) ? <Check className="size-4 text-foreground" /> : null}
-                  </DropdownMenuItem>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="max-w-48">
-                  {it.hint}
-                </TooltipContent>
-              </Tooltip>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* «Преобразовать в…» — открывает inline-панель */}
+        <button
+          type="button"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setPanel('turn');
+          }}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-hover"
+        >
+          <span className="flex-1 truncate text-left text-muted-foreground">{active.blockLabel}</span>
+          <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
+        </button>
 
         <div className="-mx-1 h-px bg-border" aria-hidden />
 
         {/* Ряд иконок форматирования + цвет */}
         <div className="flex items-center gap-0.5">
-          {/* Цвет (А с цветом) — сабменю текст/фон */}
-          <DropdownMenu>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Цвет"
-                    onMouseDown={(e) => e.preventDefault()}
-                    className={cn(
-                      'flex h-7 items-center gap-0.5 rounded-md px-1.5 text-muted-foreground transition-colors',
-                      'hover:bg-hover hover:text-foreground',
-                      (active.textColor || active.bgColor) && 'text-foreground',
-                    )}
-                  >
-                    <span
-                      className="text-[15px] font-medium leading-none"
-                      style={{
-                        color: active.textColor ?? undefined,
-                        backgroundColor: active.bgColor ?? undefined,
-                      }}
-                    >
-                      A
-                    </span>
-                    <ChevronRight className="size-3 rotate-90" />
-                  </button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="top">Цвет текста и фона</TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent align="start" className="max-h-[60vh] w-56 overflow-y-auto">
-              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                Цвет текста
-              </DropdownMenuLabel>
-              {TEXT_COLORS.map((sw) => (
-                <DropdownMenuItem key={`t-${sw.id}`} onSelect={() => setTextColor(sw)}>
-                  <ColorDot swatch={sw} kind="text" />
-                  <span className="flex-1 truncate">{sw.label}</span>
-                  {active.textColor === sw.value || (sw.value === null && !active.textColor) ? (
-                    <Check className="size-4 text-foreground" />
-                  ) : null}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                Цвет фона
-              </DropdownMenuLabel>
-              {BG_COLORS.map((sw) => (
-                <DropdownMenuItem key={`b-${sw.id}`} onSelect={() => setBgColor(sw)}>
-                  <ColorDot swatch={sw} kind="bg" />
-                  <span className="flex-1 truncate">{sw.label}</span>
-                  {active.bgColor === sw.value || (sw.value === null && !active.bgColor) ? (
-                    <Check className="size-4 text-foreground" />
-                  ) : null}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Цвет"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setPanel('color');
+                }}
+                className={cn(
+                  'flex h-7 items-center gap-0.5 rounded-md px-1.5 text-muted-foreground transition-colors',
+                  'hover:bg-hover hover:text-foreground',
+                  (active.textColor || active.bgColor) && 'text-foreground',
+                )}
+              >
+                <span
+                  className="text-[15px] font-medium leading-none"
+                  style={{ color: active.textColor ?? undefined, backgroundColor: active.bgColor ?? undefined }}
+                >
+                  A
+                </span>
+                <ChevronRight className="size-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Цвет текста и фона</TooltipContent>
+          </Tooltip>
 
           <span className="mx-0.5 h-5 w-px bg-border" aria-hidden />
 

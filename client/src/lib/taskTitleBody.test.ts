@@ -3,7 +3,35 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { splitTitleBody, joinTitleBody } from './taskTitleBody';
+import {
+  splitTitleBody,
+  joinTitleBody,
+  parseTitleHeading,
+  formatTitleHeading,
+} from './taskTitleBody';
+
+test('parseTitleHeading: срезает ведущие ## и отдаёт уровень', () => {
+  assert.deepEqual(parseTitleHeading('## История постов'), { text: 'История постов', level: 2 });
+  assert.deepEqual(parseTitleHeading('# Заголовок'), { text: 'Заголовок', level: 1 });
+  assert.deepEqual(parseTitleHeading('### Малый'), { text: 'Малый', level: 3 });
+  assert.deepEqual(parseTitleHeading('Без решётки'), { text: 'Без решётки', level: 0 });
+  // 4+ решёток клампим к 3 (в UI только H1–H3).
+  assert.equal(parseTitleHeading('###### Глубокий').level, 3);
+});
+
+test('formatTitleHeading: восстанавливает префикс по уровню', () => {
+  assert.equal(formatTitleHeading('Текст', 0), 'Текст');
+  assert.equal(formatTitleHeading('Текст', 2), '## Текст');
+  // Переносы схлопываются (заголовок однострочный).
+  assert.equal(formatTitleHeading('а\nб', 1), '# а б');
+});
+
+test('parse/format round-trip заголовка без потерь', () => {
+  for (const raw of ['## История', '# A', 'plain', '### x']) {
+    const { text, level } = parseTitleHeading(raw);
+    assert.equal(formatTitleHeading(text, level), raw);
+  }
+});
 
 test('split: нет переноса строки → всё это заголовок, тело пустое', () => {
   assert.deepEqual(splitTitleBody('Купить молоко'), {
