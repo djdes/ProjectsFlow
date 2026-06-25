@@ -1,4 +1,5 @@
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
+import type { ChatParticipant } from '@/domain/chat/ChatParticipant';
 import type { ChatRoom } from '@/domain/chat/ChatRoom';
 
 export type ListChatMessagesQuery = {
@@ -18,6 +19,8 @@ export type SendChatMessageInput = {
 export interface ChatRepository {
   // Чат-комнаты текущего юзера (для вкладки «Чат»: какой workspace-чат показывать/выбирать).
   listRooms(): Promise<ChatRoom[]>;
+  // Состав комнаты: все участники пространства (для поповера «кто в чате»).
+  listRoomParticipants(workspaceId: string): Promise<ChatParticipant[]>;
   listMessages(workspaceId: string, query?: ListChatMessagesQuery): Promise<ChatMessage[]>;
   sendMessage(workspaceId: string, input: SendChatMessageInput): Promise<ChatMessage>;
   editMessage(workspaceId: string, messageId: string, body: string): Promise<ChatMessage>;

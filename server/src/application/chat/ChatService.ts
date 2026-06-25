@@ -49,6 +49,14 @@ export type SendMessageInput = {
   readonly attachments?: readonly SendAttachmentDescriptor[];
 };
 
+// Участник чат-комнаты (для поповера состава). email/avatarUrl приходят из join с users.
+export type ChatParticipantView = {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly email: string | null;
+  readonly avatarUrl: string | null;
+};
+
 // Чат-комната в списке юзера: пространство, где он состоит + непрочитанное.
 export type ChatRoomSummary = {
   readonly workspaceId: string;
@@ -134,6 +142,19 @@ export class ChatService {
     );
     withUnread.sort((a, b) => b.lastMessageSeq - a.lastMessageSeq);
     return withUnread;
+  }
+
+  // Состав комнаты: все участники пространства (для поповера «кто в чате»). Доступ —
+  // только участникам пространства (как и лента сообщений).
+  async listParticipants(workspaceId: string, userId: string): Promise<ChatParticipantView[]> {
+    await requireWorkspaceMember(this.deps.workspaces, workspaceId, userId);
+    const members = await this.deps.workspaces.listMembers(workspaceId);
+    return members.map((m) => ({
+      userId: m.userId,
+      displayName: m.displayName ?? '',
+      email: m.email ?? null,
+      avatarUrl: m.avatarUrl ?? null,
+    }));
   }
 
   async markRead(workspaceId: string, userId: string, lastReadSeq: number): Promise<void> {

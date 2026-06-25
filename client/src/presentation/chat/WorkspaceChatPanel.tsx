@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { MessagesSquare, Trash2, Users, X } from 'lucide-react';
+import { MessagesSquare, Trash2, X } from 'lucide-react';
 import { useChat } from '@/presentation/hooks/useChat';
 import { useChatRooms } from '@/presentation/hooks/useChatRooms';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
@@ -7,6 +7,7 @@ import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatComposer } from './ChatComposer';
+import { ParticipantsPopover } from './ParticipantsPopover';
 
 // Один общий чат активного пространства — НЕ список комнат/пространств. Участники = все люди
 // по всем проектам этого пространства (для дефолт-хаба это все мои коллабораторы, для
@@ -85,11 +86,8 @@ export function WorkspaceChatPanel(): React.ReactElement {
         <div className="flex shrink-0 items-center gap-2 px-2 pb-2 text-sm font-medium">
           <MessagesSquare className="size-4 text-muted-foreground" />
           <span className="truncate">Чат</span>
-          {selectedRoom && selectedRoom.memberCount > 1 && (
-            <span className="ml-auto inline-flex items-center gap-1 text-xs font-normal text-muted-foreground">
-              <Users className="size-3.5" />
-              {selectedRoom.memberCount}
-            </span>
+          {selectedRoom && selectedRoom.memberCount > 1 && selectedId && (
+            <ParticipantsPopover workspaceId={selectedId} memberCount={selectedRoom.memberCount} />
           )}
         </div>
       )}

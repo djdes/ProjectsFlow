@@ -160,6 +160,16 @@ export function chatRouter(deps: ChatRouterDeps): Router {
     }
   });
 
+  // Состав комнаты: участники пространства (для поповера «кто в чате»).
+  router.get('/:workspaceId/chat/participants', async (req, res, next) => {
+    try {
+      const participants = await svc.listParticipants(wid(req), uid(req));
+      res.json({ participants });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   // Бинарь вложения (auth + участник пространства; вложение принадлежит сообщению этого ws).
   router.get('/:workspaceId/chat/attachments/:id', async (req, res, next) => {
     try {
