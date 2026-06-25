@@ -46,7 +46,7 @@ import {
   answeredQidSet,
   RalphAnswerControls,
 } from './RalphQuestionControls';
-import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
+import { Markdown } from '@/presentation/components/markdown/Markdown';
 import { toggleChecklistItem } from '@/lib/checklist';
 import { LiveTab } from './LiveTab';
 import { ClaudeIcon } from './ClaudeIcon';
@@ -381,8 +381,7 @@ export function TaskDrawer({
       el.scrollTo({ top: el.scrollHeight, behavior: 'auto' });
     });
   }, []);
-  // Закреплённое описание в шапке: по умолчанию свёрнуто до 2 строк, клик раскрывает.
-  const [descExpanded, setDescExpanded] = useState(false);
+  // Описание задачи всегда раскрыто — без кнопки раскрытия/сворачивания (по требованию).
   // Активная вкладка тела edit-режима: «Обсуждение» (комментарии) | LIVE (лента воркера).
   const [activeTab, setActiveTab] = useState<'discussion' | 'live'>('discussion');
   // Есть ли running LIVE-сессия (бейдж 🔴 на триггере вкладки). LiveTab сообщает через колбэк.
@@ -431,7 +430,6 @@ export function TaskDrawer({
     setCreateDeadline(null);
     setCreatePriority(null);
     setError(null);
-    setDescExpanded(false);
     setActiveTab('discussion');
     setLiveRunning(false);
     setCommentCount(0);
@@ -483,7 +481,6 @@ export function TaskDrawer({
     try {
       await taskRepository.update(projectId, id, { description: next });
       onCommitsChange?.();
-      setDescExpanded(true);
     } catch (e) {
       toast.error(`Не удалось добавить подзадачу: ${(e as Error).message}`);
     }
@@ -708,63 +705,24 @@ export function TaskDrawer({
                   комментариям). Клик по свёрнутому превью раскрывает полный текст;
                   для не-done внутри — прежний inline-редактор (клик по тексту = правка).
                   Без собственного border-t — единственный разделитель ниже всей шапки. */}
+              {/* Описание всегда раскрыто — без кнопки раскрытия/сворачивания. */}
               <div className="px-4 pb-2.5 pt-0.5">
-                {descExpanded ? (
-                  <div className="max-h-[50vh] overflow-y-auto overscroll-contain">
-                    {canEdit ? (
-                      <TaskDescriptionEditor
-                        key={task.id}
-                        projectId={task.projectId}
-                        taskId={task.id}
-                        initialDescription={task.description ?? ''}
-                        onSaved={() => onCommitsChange?.()}
-                        onCollapse={() => setDescExpanded(false)}
-                        onPasteFiles={(files) => void uploadFilesDirectly(files)}
-                      />
-                    ) : (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="group/cu size-8 text-muted-foreground"
-                            onClick={() => setDescExpanded(false)}
-                            aria-label="Свернуть описание"
-                          >
-                            <ChevronUp className="size-4 transition-transform duration-150 group-hover/cu:-translate-y-0.5" />
-                          </Button>
-                        </div>
-                        {task.description?.trim() ? (
-                          <Markdown className="p-1">{task.description}</Markdown>
-                        ) : (
-                          <span className="text-sm italic text-muted-foreground">
-                            Без описания
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setDescExpanded(true)}
-                    aria-expanded={false}
-                    aria-label="Показать описание задачи"
-                    className="group/desc -m-1 flex w-full items-start gap-2 rounded-md p-1 text-left transition-colors hover:bg-accent/60"
-                  >
-                    <div className="min-w-0 flex-1">
-                      {task.description?.trim() ? (
-                        <Markdown className={cn(MARKDOWN_COMPACT, 'line-clamp-2')}>
-                          {task.description}
-                        </Markdown>
-                      ) : (
-                        <span className="text-sm italic text-muted-foreground">Без описания</span>
-                      )}
-                    </div>
-                    <ChevronDown className="mt-0.5 size-4 shrink-0 text-muted-foreground/50 transition-colors group-hover/desc:text-muted-foreground" />
-                  </button>
-                )}
+                <div className="max-h-[50vh] overflow-y-auto overscroll-contain">
+                  {canEdit ? (
+                    <TaskDescriptionEditor
+                      key={task.id}
+                      projectId={task.projectId}
+                      taskId={task.id}
+                      initialDescription={task.description ?? ''}
+                      onSaved={() => onCommitsChange?.()}
+                      onPasteFiles={(files) => void uploadFilesDirectly(files)}
+                    />
+                  ) : task.description?.trim() ? (
+                    <Markdown className="p-1">{task.description}</Markdown>
+                  ) : (
+                    <span className="text-sm italic text-muted-foreground">Без описания</span>
+                  )}
+                </div>
               </div>
             </div>
 
