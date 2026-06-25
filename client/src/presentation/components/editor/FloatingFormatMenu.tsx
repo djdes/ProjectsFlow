@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { createPortal } from 'react-dom';
 import type { Editor } from '@tiptap/react';
 
 import { cn } from '@/lib/utils';
@@ -19,9 +18,15 @@ export interface FloatingAnchor {
 const PAD = 8; // отступ от краёв вьюпорта
 
 // Плавающее меню форматирования (по выделению И по правому клику). В отличие от
-// Tiptap BubbleMenu / Radix Popover — полностью самоуправляемое: `position: fixed`
-// портал в body, клампится по вьюпорту (цвет/преобразование-панели НИКОГДА не уезжают
-// в угол 0,0 — это та же коробка), закрывается по Escape / уходу выделения.
+// Tiptap BubbleMenu / Radix Popover — полностью самоуправляемое: `position: fixed`,
+// клампится по вьюпорту (цвет/преобразование-панели НИКОГДА не уезжают в угол 0,0 —
+// это та же коробка), закрывается по Escape / уходу выделения.
+//
+// ВАЖНО: рендерим IN-TREE (без портала в body). Дровер — это Sheet (Radix Dialog) с
+// focus-trap'ом; меню-портал в body оказывался ВНЕ диалога, и Radix синхронно
+// возвращал фокус в диалог при первом же pointerdown по кнопке меню — выделение
+// схлопывалось, меню рушилось. Внутри поддерева диалога focus-trap не мешает, а
+// `position: fixed` всё равно выходит за overflow-обрезку.
 export function FloatingFormatMenu({
   editor,
   anchor,
@@ -87,7 +92,7 @@ export function FloatingFormatMenu({
 
   if (!anchor) return null;
 
-  return createPortal(
+  return (
     <div
       ref={ref}
       data-format-menu
@@ -107,7 +112,6 @@ export function FloatingFormatMenu({
       )}
     >
       <FormatMenu editor={editor} onAction={onClose} getRange={getRange} />
-    </div>,
-    document.body,
+    </div>
   );
 }
