@@ -118,7 +118,9 @@ export function TaskBodyEditor({
           disabled={disabled}
           onPasteFiles={onPasteFiles}
           placeholder="Описание, детали, подзадачи…"
-          className="max-h-[50vh] overflow-y-auto py-1.5 text-sm leading-snug"
+          // БЕЗ собственного max-h/scroll: тело всегда раскрыто на полную высоту, чтобы
+          // скролл был ОДИН (колонка в split / окно в narrow), а не «2 поля» внутри задачи.
+          className="py-1.5 text-sm leading-snug"
         />
       </Suspense>
     </div>
