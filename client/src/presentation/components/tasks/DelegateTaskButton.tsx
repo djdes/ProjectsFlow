@@ -23,13 +23,15 @@ type Props = {
   // Если передан — грузим участников конкретного проекта (listMembers) вместо
   // глобального listSharedMembers. Для совместных (не inbox) проектов.
   projectId?: string;
+  // Доп. классы на кнопку — для выравнивания значения в ряду свойств (PROPERTY_VALUE_CLASS).
+  className?: string;
 };
 
 // Кнопка делегирования для существующей inbox-задачи. Три состояния:
 //  - нет активной делегации + caller=creator → dropdown с DelegateSelect.
 //  - pending + caller=creator → кнопка «Отозвать» (withdraw).
 //  - accepted ИЛИ caller≠creator → не рендерим (DelegationBadge сам покажет статус).
-export function DelegateTaskButton({ task, currentUserId, onChanged, projectId }: Props): React.ReactElement | null {
+export function DelegateTaskButton({ task, currentUserId, onChanged, projectId, className }: Props): React.ReactElement | null {
   const { projectRepository, taskRepository, taskDelegationRepository } = useContainer();
   const [members, setMembers] = useState<SharedMember[] | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -102,7 +104,7 @@ export function DelegateTaskButton({ task, currentUserId, onChanged, projectId }
         variant="ghost"
         size="sm"
         disabled={submitting}
-        className={cn(META_CHIP_CLASS, 'hover:text-destructive')}
+        className={cn(META_CHIP_CLASS, 'hover:text-destructive', className)}
         onClick={() => void handleWithdraw()}
         title="Отозвать делегирование (пока делегат не ответил)"
       >
@@ -122,7 +124,7 @@ export function DelegateTaskButton({ task, currentUserId, onChanged, projectId }
           variant="ghost"
           size="sm"
           disabled={submitting}
-          className={META_CHIP_CLASS}
+          className={cn(META_CHIP_CLASS, className)}
           title="Назначить ответственного — делегировать участнику проекта"
         >
           {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <UserPlus className="size-3.5" />}

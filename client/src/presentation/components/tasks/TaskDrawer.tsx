@@ -959,6 +959,7 @@ export function TaskDrawer({
                         currentUserId={currentUser?.id ?? null}
                         onChanged={() => onCommitsChange?.()}
                         projectId={isShared ? task.projectId : undefined}
+                        className={PROPERTY_VALUE_CLASS}
                       />
                     ) : null}
                     {!task.delegation && !(canEdit && (isInbox || isShared)) && (
@@ -1020,7 +1021,7 @@ export function TaskDrawer({
                       }}
                     />
                   ) : (
-                    <span className="inline-flex min-h-7 items-center px-1.5">
+                    <span className="inline-flex min-h-7 items-center">
                       <EmptyValue />
                     </span>
                   )}
@@ -1028,7 +1029,7 @@ export function TaskDrawer({
 
                 {/* Создано — read-only, приглушённо. */}
                 <PropertyRow icon={Clock} label="Создано">
-                  <span className="inline-flex min-h-7 items-center px-1.5 text-sm text-muted-foreground/70">
+                  <span className="inline-flex min-h-7 items-center text-sm text-muted-foreground/70">
                     {formatTaskCreated(task.createdAt)}
                   </span>
                 </PropertyRow>
@@ -1362,7 +1363,7 @@ export function TaskDrawer({
                         ))}
                       </div>
                     ) : (
-                      <span className="inline-flex min-h-7 items-center px-1.5">
+                      <span className="inline-flex min-h-7 items-center">
                         <EmptyValue />
                       </span>
                     )}
