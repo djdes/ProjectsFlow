@@ -599,6 +599,9 @@ export const taskComments = mysqlTable(
     // Режим адресации уведомления, выбранный автором в композере: 'all' | 'selected' | 'none'.
     // Питает меню ⋮ «Кто уведомлён» (отличить «Никто» от «всех отфильтровало»). См. db/047.
     notifyMode: varchar('notify_mode', { length: 16 }).notNull().default('all'),
+    // Ответ/цитата (db/080). NULL у обычных комментов.
+    replyToCommentId: char('reply_to_comment_id', { length: 36 }),
+    quotedText: text('quoted_text'),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },

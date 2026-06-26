@@ -73,6 +73,9 @@ export const createTaskCommentSchema = z.object({
   body: z.string().trim().min(1, 'Введите текст комментария').max(10000),
   // Опционально: старые клиенты без поля → дефолт 'all' на роуте.
   notify: notifyAudienceSchema.optional(),
+  // Ответ/цитата (db/080). Опциональны → старые клиенты не присылают.
+  replyToCommentId: z.string().min(1).max(64).nullable().optional(),
+  quotedText: z.string().max(2000).nullable().optional(),
 });
 
 // Agent-вариант: тот же body + optional agentName. Поле опциональное чтобы старые

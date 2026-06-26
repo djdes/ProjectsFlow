@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { FileText, Paperclip, X } from 'lucide-react';
+import { CornerDownRight, FileText, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import type { Task, TaskStatus } from '@/domain/task/Task';
@@ -32,6 +32,8 @@ const DRAWER_TARGETS = [
   { value: 'worker', label: 'Воркеру' },
 ] as const;
 
+type ReplyDraft = { commentId: string; authorName: string; quotedText: string | null };
+
 type Props = {
   task: Task;
   // Последняя задача в целевой колонке backlog/todo — для расчёта beforeTaskId при
@@ -40,6 +42,10 @@ type Props = {
   todoTail: { readonly id: string } | null;
   onCommentCreated: (created: TaskComment) => void;
   onTaskChanged: () => void;
+  // Ответ/цитата (db/080): на какой коммент отвечаем + опц. фрагмент. Плашка над полем.
+  replyDraft?: ReplyDraft | null;
+  onClearReply?: () => void;
+  onNavigateToComment?: (commentId: string, quotedText?: string | null) => void;
 };
 
 function targetStorageKey(projectId: string): string {
@@ -69,6 +75,9 @@ export function TaskDrawerComposer({
   todoTail,
   onCommentCreated,
   onTaskChanged,
+  replyDraft,
+  onClearReply,
+  onNavigateToComment,
 }: Props): React.ReactElement {
   const { taskRepository, projectRepository } = useContainer();
   const { user: currentUser } = useCurrentUser();
@@ -143,7 +152,11 @@ export function TaskDrawerComposer({
         task.id,
         trimmed || ' ',
         notify,
+        replyDraft
+          ? { replyToCommentId: replyDraft.commentId, quotedText: replyDraft.quotedText }
+          : undefined,
       );
+      onClearReply?.();
       const uploaded = [];
       for (const pf of pending) {
         try {
@@ -201,6 +214,31 @@ export function TaskDrawerComposer({
   return (
     <div className="bg-background/95 px-3 pb-3 pt-2">
       <div className="overflow-hidden rounded-2xl border border-input bg-background shadow-sm transition-[border-color,box-shadow] duration-150 focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/15">
+        {replyDraft && (
+          <div className="flex items-center gap-1.5 border-b bg-primary/[0.06] px-3 py-1.5 text-xs text-muted-foreground">
+            <CornerDownRight className="size-3 shrink-0 text-primary/70" />
+            <button
+              type="button"
+              onClick={() => onNavigateToComment?.(replyDraft.commentId, replyDraft.quotedText)}
+              className="min-w-0 flex-1 truncate text-left hover:text-foreground"
+              title="Перейти к исходному комментарию"
+            >
+              В ответ <span className="font-medium text-foreground/80">{replyDraft.authorName}</span>
+              {replyDraft.quotedText ? (
+                <span className="text-muted-foreground/80">: «{replyDraft.quotedText}»</span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              onClick={() => onClearReply?.()}
+              className="grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Отменить ответ"
+              title="Отменить ответ"
+            >
+              <X className="size-3" />
+            </button>
+          </div>
+        )}
         {pending.length > 0 && (
           <div className="flex flex-wrap gap-1.5 border-b bg-muted/30 px-3 py-1.5">
             {pending.map((pf) => (

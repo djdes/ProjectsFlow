@@ -250,6 +250,13 @@
     border-radius: 0.375rem;
   }
 
+  /* Точечная подсветка процитированного фрагмента при переходе по баннеру «в ответ …»
+     (CSS Custom Highlight API; db/080). Поддержка — Chrome 105+/Safari 17.2+. */
+  ::highlight(pf-quote) {
+    background-color: rgba(59, 130, 246, 0.28);
+    border-radius: 0.125rem;
+  }
+
   /* Конфетти при переносе задачи в «Готово» (см. ConfettiBurst.tsx). */
   @keyframes pf-confetti-fall {
     0% {

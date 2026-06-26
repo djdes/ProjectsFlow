@@ -35,6 +35,9 @@ export type CreateTaskCommentCommand = {
   // Режим адресации уведомления (из композера). По умолчанию 'all'. Сохраняется на
   // комментарии для меню ⋮ «Кто уведомлён». Сама рассылка — в DispatchCommentNotifications.
   readonly notifyMode?: CommentNotifyMode;
+  // Ответ/цитата (db/080). NULL по умолчанию.
+  readonly replyToCommentId?: string | null;
+  readonly quotedText?: string | null;
 };
 
 const EXCERPT_LIMIT = 80;
@@ -69,6 +72,8 @@ export class CreateTaskComment {
       actorKind: input.actorKind,
       agentName: input.agentName,
       notifyMode: input.notifyMode,
+      replyToCommentId: input.replyToCommentId ?? null,
+      quotedText: input.quotedText ?? null,
     });
 
     // Лента действий (best-effort): комментарий = активность проекта. Агентские

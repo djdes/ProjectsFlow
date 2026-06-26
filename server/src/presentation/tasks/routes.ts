@@ -634,6 +634,8 @@ export function tasksRouter(deps: Deps): Router {
         // Все человеческие роуты — actorKind='user' (default, но явно для читаемости).
         actorKind: 'user',
         notifyMode: audience.mode,
+        replyToCommentId: body.replyToCommentId ?? null,
+        quotedText: body.quotedText ?? null,
       });
       deps.notifyTaskChanged(projectId);
       deps.notifyCommentAdded(

@@ -95,11 +95,13 @@ export interface TaskRepository {
   ): Promise<void>;
   listComments(projectId: string, taskId: string): Promise<TaskComment[]>;
   // notify — адресация уведомления из композера (по умолчанию все участники).
+  // reply — ответ/цитата (db/080): на какой коммент отвечаем + опц. цитируемый фрагмент.
   createComment(
     projectId: string,
     taskId: string,
     body: string,
     notify?: NotifyAudience,
+    reply?: { replyToCommentId?: string | null; quotedText?: string | null },
   ): Promise<TaskComment>;
   // Журнал доставки уведомлений по комментарию — для меню ⋮ «Кто уведомлён».
   listCommentNotifications(

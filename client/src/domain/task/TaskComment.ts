@@ -40,6 +40,10 @@ export type TaskComment = {
   readonly agentName: string | null;
   // Режим адресации уведомления (для меню ⋮ «Кто уведомлён»). Fallback 'all'.
   readonly notifyMode: CommentNotifyMode;
+  // Ответ/цитата (db/080). replyToCommentId — id коммента, на который отвечают (обычный
+  // ответ И цитата); quotedText — выделенный фрагмент (только цитата), иначе null.
+  readonly replyToCommentId: string | null;
+  readonly quotedText: string | null;
   // Вложения комментария (на list-эндпоинте). На create — пусто (грузятся отдельно).
   readonly attachments: TaskAttachment[];
 };

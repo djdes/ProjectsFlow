@@ -27,6 +27,11 @@ export type TaskComment = {
   readonly agentName: string | null;
   // Режим адресации уведомления (для меню ⋮ «Кто уведомлён»). DEFAULT 'all'.
   readonly notifyMode: CommentNotifyMode;
+  // Ответ/цитата (db/080). replyToCommentId — id коммента, на который отвечают (и обычный
+  // ответ, и цитата); quotedText — выделенный фрагмент исходного коммента (только цитата),
+  // иначе NULL.
+  readonly replyToCommentId: string | null;
+  readonly quotedText: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };

@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, Clock, Download, FileText, Flag, Loader2, Paperclip, Pencil, Plus, Send, Trash2, UserPlus, X } from 'lucide-react';
+import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, Clock, CornerDownRight, Download, FileText, Flag, Loader2, Paperclip, Pencil, Plus, Reply, Send, Trash2, UserPlus, X } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -93,6 +93,45 @@ const RichTextEditor = lazy(() =>
 // Маппинг участников проекта → формат редактора для @-упоминаний (literal `@displayName`).
 function toMentionMembers(members: readonly ProjectMember[]): MentionMember[] {
   return members.map((m) => ({ userId: m.userId, displayName: m.user.displayName }));
+}
+
+// Контекст ответа/цитаты, выбранный в треде (для плашки в композере).
+type ReplyDraft = { commentId: string; authorName: string; quotedText: string | null };
+
+// Найти Range первого вхождения фрагмента внутри элемента (в пределах одного text-node).
+function findTextRange(root: HTMLElement, needle: string): Range | null {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node: Node | null = walker.nextNode();
+  while (node) {
+    const idx = (node.textContent ?? '').indexOf(needle);
+    if (idx >= 0) {
+      const range = document.createRange();
+      range.setStart(node, idx);
+      range.setEnd(node, idx + needle.length);
+      return range;
+    }
+    node = walker.nextNode();
+  }
+  return null;
+}
+
+// Прокрутка к комментарию + мягкая вспышка; при наличии quotedText — точечная подсветка
+// найденного фрагмента (CSS Custom Highlight API, best-effort; иначе только вспышка).
+function flashComment(commentId: string, quotedText?: string | null): void {
+  const el = document.getElementById(`comment-${commentId}`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('pf-comment-flash');
+  window.setTimeout(() => el.classList.remove('pf-comment-flash'), 2000);
+  const q = (quotedText ?? '').trim();
+  if (!q) return;
+  const registry = (CSS as unknown as { highlights?: { set(k: string, v: unknown): void; delete(k: string): void } }).highlights;
+  const HighlightCtor = (window as unknown as { Highlight?: new (...r: Range[]) => unknown }).Highlight;
+  if (!registry || !HighlightCtor) return;
+  const range = findTextRange(el, q);
+  if (!range) return;
+  registry.set('pf-quote', new HighlightCtor(range));
+  window.setTimeout(() => registry.delete('pf-quote'), 2600);
 }
 
 type PendingFile = {
@@ -682,6 +721,9 @@ export function TaskDrawer({
 
   const task = state?.mode === 'edit' ? state.task : null;
   const scrollToCommentId = state?.mode === 'edit' ? state.scrollToCommentId : undefined;
+  // Контекст ответа/цитаты: выбран в треде (кнопка «Ответить» / выделение), читается
+  // композером-футером (плашка «в ответ …») и уходит в createComment. db/080.
+  const [replyDraft, setReplyDraft] = useState<ReplyDraft | null>(null);
   // Редактируем задачу в ЛЮБОМ статусе, включая done (по требованию: «задача всегда
   // редактируема» — плюсики, свойства, тело и кнопки доступны и для выполненных).
   const canEdit = !!task;
@@ -1090,6 +1132,9 @@ export function TaskDrawer({
                     onFirstLoad={scrollBodyToBottom}
                     onCountChange={setCommentCount}
                     scrollToCommentId={scrollToCommentId}
+                    onReply={(commentId, authorName, quotedText) =>
+                      setReplyDraft({ commentId, authorName, quotedText })
+                    }
                   />
                 </div>
               </TabsContent>
@@ -1139,6 +1184,9 @@ export function TaskDrawer({
                       task={task}
                       backlogTail={backlogTail}
                       todoTail={todoTail}
+                      replyDraft={replyDraft}
+                      onClearReply={() => setReplyDraft(null)}
+                      onNavigateToComment={flashComment}
                       onCommentCreated={(c) => {
                         onCommentCreatedRef.current?.(c);
                         scrollBodyToBottom();
@@ -1408,6 +1456,8 @@ function TaskCommentsSection({
   onCountChange,
   // Deep-link: id комментария, к которому надо скроллнуть после загрузки (?task=X#comment-Y).
   scrollToCommentId,
+  // Ответ/цитата: тред просит композер ответить на коммент (с опц. выделенным фрагментом).
+  onReply,
 }: {
   projectId: string;
   taskId: string;
@@ -1415,6 +1465,7 @@ function TaskCommentsSection({
   onFirstLoad?: () => void;
   onCountChange?: (count: number) => void;
   scrollToCommentId?: string;
+  onReply?: (commentId: string, authorName: string, quotedText: string | null) => void;
 }): React.ReactElement {
   const { taskRepository, projectRepository } = useContainer();
   const [comments, setComments] = useState<TaskComment[]>([]);
@@ -1519,6 +1570,11 @@ function TaskCommentsSection({
               onAnswerCreated={handleCreated}
               onUpdated={handleUpdated}
               onDeleted={handleDeleted}
+              onReply={onReply}
+              replyParent={
+                c.replyToCommentId ? (comments.find((x) => x.id === c.replyToCommentId) ?? null) : null
+              }
+              onNavigateToComment={flashComment}
             />
           ))}
         </ul>
@@ -1774,6 +1830,9 @@ function CommentItem({
   onAnswerCreated,
   onUpdated,
   onDeleted,
+  onReply,
+  replyParent,
+  onNavigateToComment,
 }: {
   projectId: string;
   taskId: string;
@@ -1784,8 +1843,13 @@ function CommentItem({
   onAnswerCreated: (created: TaskComment) => void;
   onUpdated: (updated: TaskComment) => void;
   onDeleted: (id: string) => void;
+  // Ответ/цитата (db/080).
+  onReply?: (commentId: string, authorName: string, quotedText: string | null) => void;
+  replyParent?: TaskComment | null;
+  onNavigateToComment?: (commentId: string, quotedText?: string | null) => void;
 }): React.ReactElement {
   const { taskRepository } = useContainer();
+  const bodyRef = useRef<HTMLDivElement>(null);
   // Вопрос Ralph (F11) в этом комментарии → инлайн-кнопки ответа (как в CLI/Telegram).
   const ralphQuestion = parseRalphQuestion(comment.body);
   const [editing, setEditing] = useState(false);
@@ -1860,6 +1924,24 @@ function CommentItem({
     author?.avatarUrl ?? (user && comment.ownerUserId === user.id ? user.avatarUrl : null);
   const initials = getInitials(displayName);
 
+  // Имя автора родительского коммента — для баннера «в ответ …» (db/080).
+  const replyParentName = replyParent
+    ? (members.find((m) => m.userId === replyParent.ownerUserId)?.user.displayName ??
+      (user && replyParent.ownerUserId === user.id ? user.displayName : '—'))
+    : null;
+  // Клик «Ответить»: если внутри тела ЭТОГО коммента есть выделение — берём его как цитату.
+  const handleReplyClick = (): void => {
+    const sel = window.getSelection();
+    const text = sel && !sel.isCollapsed ? sel.toString().trim() : '';
+    const within = !!(
+      sel &&
+      sel.anchorNode &&
+      bodyRef.current &&
+      bodyRef.current.contains(sel.anchorNode)
+    );
+    onReply?.(comment.id, displayName, within && text ? text : null);
+  };
+
   // Вертикальная линия-коннектор идёт по КОЛОНКЕ АВАТАРОК (Notion-thread): от низа
   // аватара к верху аватара следующего коммента. Псевдо `after` на х=центр аватара
   // (size-7 → 14px), мостит зазор space-y-4 (-bottom-4); у последнего скрыта.
@@ -1912,6 +1994,23 @@ function CommentItem({
           {/* Действия — ровный ряд size-6 кнопок (карандаш + три точки). Удаление
               переехало в меню три-точки. Native title — подпись при наведении. */}
           <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+            {onReply && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                // onMouseDown (не onClick): успеваем считать выделение ДО его схлопывания.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleReplyClick();
+                }}
+                aria-label="Ответить"
+                title="Ответить (выдели текст для цитаты)"
+              >
+                <Reply className="size-3" />
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
@@ -1931,6 +2030,22 @@ function CommentItem({
             />
           </div>
         </div>
+        {/* Баннер «в ответ …» (db/080): клик → прокрутка+подсветка исходного коммента
+            (и точечно — процитированного фрагмента). Приятная заливка. */}
+        {comment.replyToCommentId && (
+          <button
+            type="button"
+            onClick={() => onNavigateToComment?.(comment.replyToCommentId as string, comment.quotedText)}
+            className="mt-1 flex max-w-full items-center gap-1.5 rounded-md border-l-2 border-primary/40 bg-primary/[0.06] px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-primary/10"
+            title="Перейти к исходному комментарию"
+          >
+            <CornerDownRight className="size-3 shrink-0 text-primary/70" />
+            <span className="truncate">
+              в ответ <span className="font-medium text-foreground/80">{replyParentName ?? '…'}</span>
+              {comment.quotedText ? <span className="text-muted-foreground/80">: «{comment.quotedText}»</span> : null}
+            </span>
+          </button>
+        )}
         {editing ? (
           // WYSIWYG-правка комментария. Enter — сохранить, Shift+Enter — перенос,
           // Esc — отмена (capture). blur-save с no-op-guard внутри save() (если не менялось).
@@ -1950,7 +2065,7 @@ function CommentItem({
             </Suspense>
           </div>
         ) : (
-          <div className="mt-0.5">
+          <div className="mt-0.5" ref={bodyRef}>
             <CommentBody body={comment.body} />
             {ralphQuestion && !answeredQids.has(ralphQuestion.qid) && (
               <RalphAnswerControls

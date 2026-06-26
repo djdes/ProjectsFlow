@@ -26,6 +26,9 @@ function toComment(row: TaskCommentRow): TaskComment {
     agentName: row.agentName ?? null,
     // Колонка NOT NULL DEFAULT 'all' (db/047). Cast: enum.
     notifyMode: (row.notifyMode as TaskComment['notifyMode']) ?? 'all',
+    // Ответ/цитата (db/080).
+    replyToCommentId: row.replyToCommentId ?? null,
+    quotedText: row.quotedText ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -45,6 +48,9 @@ export class DrizzleTaskCommentRepository implements TaskCommentRepository {
       agentName: input.agentName ?? null,
       // Дефолт 'all' — соответствует SQL DEFAULT (db/047).
       notifyMode: input.notifyMode ?? 'all',
+      // Ответ/цитата (db/080).
+      replyToCommentId: input.replyToCommentId ?? null,
+      quotedText: input.quotedText ?? null,
     });
     const fresh = await this.getById(input.id);
     if (!fresh) throw new Error('Failed to read back task comment after insert');

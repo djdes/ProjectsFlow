@@ -15,6 +15,9 @@ export type CreateTaskCommentInput = {
   readonly agentName?: string | null;
   // Режим адресации уведомления. DEFAULT 'all'. См. db/047.
   readonly notifyMode?: CommentNotifyMode;
+  // Ответ/цитата (db/080). NULL по умолчанию.
+  readonly replyToCommentId?: string | null;
+  readonly quotedText?: string | null;
 };
 
 export type UpdateTaskCommentInput = {

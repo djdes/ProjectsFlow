@@ -135,6 +135,9 @@ function commentFromDto(dto: CommentDto): TaskComment {
     agentName: dto.agentName ?? null,
     // Fallback 'all' — старый backend без db/047 не присылает поле.
     notifyMode: dto.notifyMode ?? 'all',
+    // Ответ/цитата (db/080). Старый backend без миграции → null.
+    replyToCommentId: dto.replyToCommentId ?? null,
+    quotedText: dto.quotedText ?? null,
     attachments: (dto.attachments ?? []).map(attachmentFromDto),
   };
 }
@@ -243,10 +246,15 @@ export class HttpTaskRepository implements TaskRepository {
     taskId: string,
     body: string,
     notify?: NotifyAudience,
+    reply?: { replyToCommentId?: string | null; quotedText?: string | null },
   ): Promise<TaskComment> {
+    const payload: Record<string, unknown> = { body };
+    if (notify) payload['notify'] = notify;
+    if (reply?.replyToCommentId) payload['replyToCommentId'] = reply.replyToCommentId;
+    if (reply?.quotedText) payload['quotedText'] = reply.quotedText;
     const { comment } = await httpClient.post<{ comment: CommentDto }>(
       `/projects/${projectId}/tasks/${taskId}/comments`,
-      notify ? { body, notify } : { body },
+      payload,
     );
     return commentFromDto(comment);
   }
