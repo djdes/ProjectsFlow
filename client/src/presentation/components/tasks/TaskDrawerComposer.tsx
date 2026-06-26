@@ -280,13 +280,15 @@ export function TaskDrawerComposer({
           />
         </Suspense>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2 pt-0.5">
-          <div className="flex items-center gap-0.5">
+        {/* nowrap: кнопка отправки НЕ переносится на отдельную строку на узких экранах —
+            левая группа (скрепка + «кому уведомить») сжимается, send всегда справа. */}
+        <div className="flex items-center gap-2 px-2 pb-2 pt-0.5">
+          <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="group/at size-8 rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+              className="group/at size-8 shrink-0 rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
               onClick={() => fileInputRef.current?.click()}
               disabled={submitting}
               aria-label="Прикрепить файл"
@@ -303,16 +305,18 @@ export function TaskDrawerComposer({
             />
           </div>
 
-          <SendTargetButton
-            size="sm"
-            options={DRAWER_TARGETS}
-            value={target}
-            onChange={setTarget}
-            onSend={() => void submit()}
-            submitting={submitting}
-            disabled={!canSubmit}
-            showLabel={false}
-          />
+          <div className="shrink-0">
+            <SendTargetButton
+              size="sm"
+              options={DRAWER_TARGETS}
+              value={target}
+              onChange={setTarget}
+              onSend={() => void submit()}
+              submitting={submitting}
+              disabled={!canSubmit}
+              showLabel={false}
+            />
+          </div>
 
           <input
             ref={fileInputRef}

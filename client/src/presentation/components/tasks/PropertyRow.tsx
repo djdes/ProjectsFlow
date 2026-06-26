@@ -14,12 +14,15 @@ interface PropertyRowProps {
 
 export function PropertyRow({ icon: Icon, label, children }: PropertyRowProps): React.ReactElement {
   return (
-    <div className="group/prop flex items-start gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-hover">
-      <span className="flex w-[130px] shrink-0 items-center gap-1.5 pt-1 text-sm text-muted-foreground sm:w-[150px]">
+    <div className="group/prop flex min-h-8 items-center gap-2 rounded-md px-1.5 py-0.5 transition-colors hover:bg-hover">
+      <span className="flex w-[130px] shrink-0 items-center gap-1.5 text-sm text-muted-foreground sm:w-[150px]">
         <Icon className="size-4 shrink-0" aria-hidden />
         <span className="min-w-0 break-words">{label}</span>
       </span>
-      <div className="min-w-0 flex-1">{children}</div>
+      {/* Значение — flex-контейнер: одинаковая вертикаль у всех контролов (chip/inline-flex
+          типа Режима больше не «съезжает» по baseline). Перенос на 2-ю строку (напр.
+          Ответственный + «Перенести в проект») разрешён. */}
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">{children}</div>
     </div>
   );
 }
