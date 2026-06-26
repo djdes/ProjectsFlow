@@ -41,6 +41,8 @@ type Props = {
   // Вставка файлов из буфера → прикрепляем к задаче через drawer.
   onPasteFiles?: (files: File[]) => void;
   disabled?: boolean;
+  // Плейсхолдер редактора (по умолчанию — для тела; для объединённого поля переопределяем).
+  placeholder?: string;
 };
 
 export function TaskBodyEditor({
@@ -54,6 +56,7 @@ export function TaskBodyEditor({
   onAiDistributed,
   onPasteFiles,
   disabled = false,
+  placeholder = 'Описание, детали, подзадачи…',
 }: Props): React.ReactElement {
   // Клик по AI открывает Radix-диалог, который перехватывает фокус → редактор получает
   // blur. Этот флаг (взводится на mousedown по AI) гасит blur-save, чтобы не было лишней
@@ -117,7 +120,7 @@ export function TaskBodyEditor({
           onBlur={handleEditorBlur}
           disabled={disabled}
           onPasteFiles={onPasteFiles}
-          placeholder="Описание, детали, подзадачи…"
+          placeholder={placeholder}
           // БЕЗ собственного max-h/scroll: тело всегда раскрыто на полную высоту, чтобы
           // скролл был ОДИН (колонка в split / окно в narrow), а не «2 поля» внутри задачи.
           className="py-1.5 text-sm leading-snug"

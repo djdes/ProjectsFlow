@@ -71,7 +71,6 @@ import { formatTaskCreated } from '@/lib/datetime';
 import type { TaskPriority } from '@/domain/task/Task';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
 import { CommentsEmptyState } from './CommentsEmptyState';
-import { TaskTitleEditor } from './TaskTitleEditor';
 import { TaskBodyEditor } from './TaskBodyEditor';
 import { splitTitleBody, joinTitleBody } from '@/lib/taskTitleBody';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
@@ -485,8 +484,6 @@ export function TaskDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editTaskId, state?.mode]);
 
-  const { title: editTitle, body: editBody } = splitTitleBody(editDescription);
-
   // Единый путь сохранения описания (title+body) → taskRepository.update. Возвращаемое
   // описание становится новым источником правды (на случай нормализации сервером).
   // No-op, если ничего не изменилось.
@@ -512,30 +509,11 @@ export function TaskDrawer({
     [state, taskRepository, editDescription, onCommitsChange],
   );
 
-  // Локальные правки заголовка/тела — обновляют общий источник (пересборка description).
-  const handleTitleChange = useCallback(
-    (nextTitle: string): void => {
-      setEditDescription((prev) => joinTitleBody(nextTitle, splitTitleBody(prev).body));
-    },
-    [],
-  );
-  const handleBodyChange = useCallback(
-    (nextBody: string): void => {
-      setEditDescription((prev) => joinTitleBody(splitTitleBody(prev).title, nextBody));
-    },
-    [],
-  );
-
-  // Enter в заголовке → фокус в тело. Тело — лениво-загружаемый Tiptap (ProseMirror);
-  // дотягиваться рефом через два слоя дорого, поэтому фокусим contenteditable напрямую
-  // через контейнер. requestAnimationFrame — дать редактору смонтироваться/раскрыться.
-  const bodyContainerRef = useRef<HTMLDivElement>(null);
-  const focusBody = useCallback((): void => {
-    requestAnimationFrame(() => {
-      const pm = bodyContainerRef.current?.querySelector<HTMLElement>('.ProseMirror');
-      pm?.focus();
-    });
+  // Заголовок и описание — ОДНО поле: правим полное описание напрямую (1-я строка = заголовок).
+  const handleDescriptionChange = useCallback((next: string): void => {
+    setEditDescription(next);
   }, []);
+  const bodyContainerRef = useRef<HTMLDivElement>(null);
 
   // Unmount-save: дровер закрывают/переключают задачу, не сняв фокус с редактора. blur-save
   // ловит клик мимо поля; этот хук — страховка. latest-ref обновляем в эффекте (включая
@@ -740,20 +718,6 @@ export function TaskDrawer({
     state !== null,
   );
 
-  // Create-mode: заголовок/тело — как в edit. Источник правды — единое `description`,
-  // делим splitTitleBody, склеиваем joinTitleBody (см. taskTitleBody).
-  const createSplit = splitTitleBody(description);
-  const handleCreateTitleChange = (nextRawTitle: string): void =>
-    setDescription(joinTitleBody(nextRawTitle, createSplit.body));
-  const handleCreateBodyChange = (nextBody: string): void =>
-    setDescription(joinTitleBody(createSplit.title, nextBody));
-  const focusCreateBody = (): void => {
-    const el = createBodyContainerRef.current?.querySelector(
-      '[contenteditable="true"]',
-    ) as HTMLElement | null;
-    el?.focus();
-  };
-
   return (
     <Sheet open={state !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
@@ -878,21 +842,26 @@ export function TaskDrawer({
                 )}
               </div>
 
-              {/* === ЗАГОЛОВОК === Notion-style: 1-я строка описания как всегда-жирный
-                  заголовок, редактируемый по одному клику (plain, без форматирования).
-                  Enter переводит фокус в тело. Сохраняется склейкой title+body →
-                  description (см. commitDescription). Работает в ЛЮБОМ статусе, включая
-                  done. Без собственного border-t — единственный разделитель ниже всей шапки. */}
-              <div className="px-4 pb-1 pt-1.5">
-                {/* disabled НЕ привязываем к editSaving: заголовок сохраняется по debounce
-                    во время набора — дизейбл посреди ввода ронял бы нажатия. Сохранение
-                    идемпотентно (no-op guard в commitDescription), гонок нет. */}
-                <TaskTitleEditor
-                  key={`title-${task.id}`}
-                  value={editTitle}
-                  onChange={handleTitleChange}
+              {/* === ОПИСАНИЕ === Заголовок и описание ОДНИМ полем сверху (1-я строка —
+                  по сути заголовок). Полное editDescription редактируется напрямую,
+                  сохраняется по blur / Ctrl+Cmd+Enter. Работает в любом статусе. */}
+              <div ref={bodyContainerRef} className="px-4 pb-1 pt-1.5">
+                <TaskBodyEditor
+                  key={`desc-${task.id}`}
+                  projectId={task.projectId}
+                  taskId={task.id}
+                  body={editDescription}
+                  fullDescription={editDescription}
+                  onBodyChange={handleDescriptionChange}
                   onCommit={() => void commitDescription(editDescription)}
-                  onEnter={focusBody}
+                  onAiImproved={(next) => {
+                    setEditDescription(next);
+                    void commitDescription(next);
+                  }}
+                  onAiDistributed={() => onCommitsChange?.()}
+                  onPasteFiles={(files) => void uploadFilesDirectly(files)}
+                  disabled={editSaving}
+                  placeholder="Название и описание…"
                 />
               </div>
 
@@ -1033,30 +1002,6 @@ export function TaskDrawer({
                     {formatTaskCreated(task.createdAt)}
                   </span>
                 </PropertyRow>
-              </div>
-
-              {/* Серая линия между последним свойством (Создано) и телом — как в Notion. */}
-              <div className="mx-3 border-t border-border/60" aria-hidden />
-
-              {/* === ТЕЛО === Всегда-редактируемый WYSIWYG (markdown тела, без заголовка).
-                  Левая колонка скроллится целиком — у тела своего скролла/капа нет. */}
-              <div ref={bodyContainerRef} className="px-4 pb-3 pt-2">
-                <TaskBodyEditor
-                  key={`body-${task.id}`}
-                  projectId={task.projectId}
-                  taskId={task.id}
-                  body={editBody}
-                  fullDescription={editDescription}
-                  onBodyChange={handleBodyChange}
-                  onCommit={() => void commitDescription(editDescription)}
-                  onAiImproved={(next) => {
-                    setEditDescription(next);
-                    void commitDescription(next);
-                  }}
-                  onAiDistributed={() => onCommitsChange?.()}
-                  onPasteFiles={(files) => void uploadFilesDirectly(files)}
-                  disabled={editSaving}
-                />
               </div>
             </div>
 
@@ -1236,17 +1181,26 @@ export function TaskDrawer({
                   </span>
                 </div>
 
-                {/* Заголовок (как в edit): plain, всегда-жирный, Enter → фокус в тело. */}
-                <div className="px-4 pb-1 pt-1.5">
-                  <TaskTitleEditor
-                    key="create-title"
-                    value={createSplit.title}
-                    onChange={handleCreateTitleChange}
-                    onCommit={() => {}}
-                    onEnter={focusCreateBody}
-                    placeholder="Что нужно сделать?"
-                    autoFocus={!isCoarsePointer}
-                  />
+                {/* Заголовок и описание — ОДНИМ полем сверху (1-я строка = заголовок). */}
+                <div ref={createBodyContainerRef} className="px-4 pb-1 pt-1.5">
+                  <Suspense fallback={<div className="min-h-[6rem]" />}>
+                    <RichTextEditor
+                      variant="description"
+                      value={description}
+                      onChange={setDescription}
+                      onSubmit={() => {
+                        if (description.trim().length === 0) {
+                          setError('Введите описание');
+                          return;
+                        }
+                        formRef.current?.requestSubmit();
+                      }}
+                      placeholder="Название и описание…"
+                      autoFocus={!isCoarsePointer}
+                      onPasteFiles={addPendingFiles}
+                      className="min-h-[6rem] text-sm leading-snug"
+                    />
+                  </Suspense>
                 </div>
 
                 {/* Плюсики: + Подзадача / + Файл. */}
@@ -1368,30 +1322,6 @@ export function TaskDrawer({
                       </span>
                     )}
                   </PropertyRow>
-                </div>
-
-                {/* Серая линия перед телом — как в edit. */}
-                <div className="mx-3 border-t border-border/60" aria-hidden />
-
-                {/* Тело — WYSIWYG (как в edit). Ctrl/Cmd+Enter → сабмит формы. */}
-                <div ref={createBodyContainerRef} className="px-4 pb-3 pt-2">
-                  <Suspense fallback={<div className="min-h-[6rem]" />}>
-                    <RichTextEditor
-                      variant="description"
-                      value={createSplit.body}
-                      onChange={handleCreateBodyChange}
-                      onSubmit={() => {
-                        if (description.trim().length === 0) {
-                          setError('Введите описание');
-                          return;
-                        }
-                        formRef.current?.requestSubmit();
-                      }}
-                      placeholder="Добавьте описание, детали, подзадачи…"
-                      onPasteFiles={addPendingFiles}
-                      className="min-h-[6rem] text-sm leading-snug"
-                    />
-                  </Suspense>
                 </div>
 
                 {error && <p className="px-4 pb-2 text-xs text-destructive">{error}</p>}
