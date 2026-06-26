@@ -767,11 +767,14 @@ export function TaskDrawer({
           // (шапка сверху, ниже центрированный переключатель + комменты + композер).
           <div
             className={cn(
-              'min-h-0 overflow-hidden',
-              // split — две колонки в ряд; narrow — колонка: задача сверху (скроллится),
-              // обсуждение снизу (flex-1, тоже скроллится). flex (а не grid) гарантирует,
-              // что комментам всегда достаётся высота и они видны/скроллятся.
-              isSplit ? 'flex h-full' : 'flex h-full flex-col',
+              'min-h-0',
+              // split — две колонки в ряд, у каждой свой скролл; narrow — ОДИН общий
+              // скролл всего окна (скроллится этот контейнер, внутренние блоки —
+              // натуральной высоты, без своих overflow). Так задача+комменты+композер
+              // прокручиваются единой лентой (по просьбе: без разделения на блоки).
+              isSplit
+                ? 'flex h-full overflow-hidden'
+                : 'flex h-full flex-col overflow-y-auto overscroll-contain',
             )}
           >
             {/* === HEADER / ЛЕВАЯ КОЛОНКА === Notion-style. В стеке — sticky-шапка с
@@ -785,9 +788,11 @@ export function TaskDrawer({
                 // форматирования зажимается overflow-колонки и уезжает ЗА правую панель
                 // комментов в split. Непрозрачный bg-background/95 это не ломает.
                 'bg-background/95',
+                // split — своя скроллящаяся колонка; narrow — натуральная высота
+                // (скроллит общий контейнер выше), внизу разделитель-бордер.
                 isSplit
                   ? 'min-w-0 flex-1 overflow-y-auto overscroll-contain'
-                  : 'min-h-0 flex-[1.3] overflow-y-auto overscroll-contain border-b',
+                  : 'shrink-0 border-b',
               )}
             >
               {/* Row A: контекст · короткий id (слева), действия (Копир./Переработка/План)
@@ -1021,8 +1026,10 @@ export function TaskDrawer({
                 в split — правая колонка фикс-доли с собственным скроллом и футером. */}
             <div
               className={cn(
-                'flex min-h-0 flex-col overflow-hidden',
-                isSplit ? 'w-[44%] shrink-0' : 'min-w-0 flex-1',
+                'flex flex-col',
+                // split — отдельная колонка со своим скроллом; narrow — натуральная
+                // высота внутри общего скролла окна.
+                isSplit ? 'min-h-0 w-[44%] shrink-0 overflow-hidden' : 'shrink-0',
               )}
             >
               {/* === SCROLLABLE BODY — вкладки Обсуждение | LIVE === */}
@@ -1032,7 +1039,14 @@ export function TaskDrawer({
               <Tabs
                 value={activeTab}
                 onValueChange={(v: string) => setActiveTab(v as 'discussion' | 'live')}
-                className="grid min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
+                className={cn(
+                  'min-w-0',
+                  // split — grid с фикс-высотой под собственный скролл вкладки; narrow —
+                  // натуральный flex (высоту даёт контент, скроллит общий контейнер).
+                  isSplit
+                    ? 'grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden'
+                    : 'flex flex-col',
+                )}
               >
               {/* Центрированный переключатель Обсуждение | LIVE. Без собственного border —
                   единственный разделитель идёт по нижнему краю шапки выше. Счётчик
@@ -1063,11 +1077,12 @@ export function TaskDrawer({
               <TabsContent
                 value="discussion"
                 forceMount
-                className="min-h-0 overflow-hidden data-[state=inactive]:hidden"
+                className={cn('data-[state=inactive]:hidden', isSplit && 'min-h-0 overflow-hidden')}
               >
                 {/* Описание закреплено в шапке, коммиты скрыты — тело целиком отдано
-                    обсуждению (Notion-style: комментарии и есть страница). */}
-                <div ref={bodyRef} className="h-full overflow-y-auto px-4 py-5">
+                    обсуждению (Notion-style: комментарии и есть страница). В split — свой
+                    скролл; в narrow — натуральная высота (скроллит общий контейнер). */}
+                <div ref={bodyRef} className={cn('px-4 py-5', isSplit && 'h-full overflow-y-auto')}>
                   <TaskCommentsSection
                     projectId={task.projectId}
                     taskId={task.id}
@@ -1084,7 +1099,10 @@ export function TaskDrawer({
               <TabsContent
                 value="live"
                 forceMount
-                className="flex min-h-0 flex-col overflow-hidden data-[state=inactive]:hidden"
+                className={cn(
+                  'flex flex-col data-[state=inactive]:hidden',
+                  isSplit && 'min-h-0 overflow-hidden',
+                )}
               >
                 <LiveTab
                   task={task}
@@ -1110,7 +1128,9 @@ export function TaskDrawer({
                 ) : (
                   // Один ребёнок: иначе на awaiting_clarification фрагмент из двух
                   // элементов создаёт лишний неявный flex-ребёнок и ломает раскладку.
-                  <div className="shrink-0">
+                  // В narrow (общий скролл) композер липнет к низу окна, чтобы оставаться
+                  // под рукой; в split — обычный футер колонки.
+                  <div className={cn('shrink-0', !isSplit && 'sticky bottom-0 z-10 bg-background')}>
                     {/* На awaiting_clarification — композер для ralph-answer'а + cancel над ним. */}
                     {task.status === 'awaiting_clarification' && (
                       <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
