@@ -334,12 +334,14 @@ function TaskStatusChip({
           type="button"
           disabled={saving}
           className={cn(
-            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors hover:ring-1 hover:ring-foreground/20 disabled:opacity-50',
+            // Чистая «таблетка» статуса: мягкая заливка по статусу, без странной hover-окантовки;
+            // лёгкое затемнение и press-feedback. Комфортный тап-таргет (py-1, text-xs).
+            'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50',
             STATUS_BADGE_COLOR[status],
           )}
         >
           {STATUS_LABEL[status]}
-          <ChevronDown className="size-3 opacity-60" />
+          <ChevronDown className="size-3.5 opacity-50" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[180px]">
@@ -1039,22 +1041,26 @@ export function TaskDrawer({
               {/* Центрированный переключатель Обсуждение | LIVE. Без собственного border —
                   единственный разделитель идёт по нижнему краю шапки выше. Счётчик
                   комментариев свёрнут в триггер «Обсуждение · N». */}
-              <div className="flex justify-center px-4 py-2">
-                <TabsList className="h-8">
-                  <TabsTrigger value="discussion" className="text-xs">
+              <div className="flex justify-center px-4 py-2.5">
+                <TabsList className="h-8 gap-0.5 rounded-full bg-muted/70 p-0.5">
+                  <TabsTrigger
+                    value="discussion"
+                    className="rounded-full px-4 text-xs font-medium text-muted-foreground transition-colors data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  >
                     Обсуждение
                     {commentCount > 0 && (
-                      <span className="ml-1 tabular-nums text-muted-foreground/70">
-                        · {commentCount}
-                      </span>
+                      <span className="ml-1 tabular-nums opacity-60">· {commentCount}</span>
                     )}
                   </TabsTrigger>
-                  <TabsTrigger value="live" className="text-xs">
+                  <TabsTrigger
+                    value="live"
+                    className="gap-1.5 rounded-full px-4 text-xs font-medium text-muted-foreground transition-colors data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  >
                     LIVE
                     {liveRunning && (
                       <span
                         aria-hidden
-                        className="size-2 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.6)]"
+                        className="size-1.5 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.7)]"
                       />
                     )}
                   </TabsTrigger>

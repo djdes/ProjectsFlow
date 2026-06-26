@@ -73,10 +73,9 @@ export function TaskBodyEditor({
 
   return (
     <div className="relative">
-      {/* AI-контрол — поверх текста в правом верхнем углу тела (как было у описания).
-          Работает над ПОЛНЫМ описанием (заголовок + тело). bg/blur — чтобы текст под
-          кластером оставался читаемым. */}
-      <div className="absolute right-0 top-0 z-10 flex items-center gap-0.5 rounded-md bg-background/85 px-0.5 backdrop-blur-sm">
+      {/* AI-контрол — аккуратная плавающая «таблетка» в правом верхнем углу тела (отступ
+          от края, бордер + тень, чтобы не выглядела криво и не сливалась с текстом). */}
+      <div className="absolute right-1 top-1 z-10 flex items-center rounded-lg border bg-background/95 shadow-sm backdrop-blur-sm">
         {/* preventDefault — клик по AI не уводит фокус мгновенно; aiOpeningRef гасит
             blur-save, который иначе сработает, когда Radix-диалог перехватит фокус. */}
         <div
