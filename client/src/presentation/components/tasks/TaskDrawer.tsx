@@ -1841,7 +1841,13 @@ function CommentItem({
   const initials = getInitials(displayName);
 
   return (
-    <li id={`comment-${comment.id}`} className="group flex scroll-mt-4 items-start gap-3">
+    {/* Вертикальная линия-коннектор идёт по КОЛОНКЕ АВАТАРОК (Notion-thread): от низа
+        аватара к верху аватара следующего коммента. Псевдо `after` на х=центр аватара
+        (size-7 → 14px), мостит зазор space-y-4 (-bottom-4); у последнего скрыта. */}
+    <li
+      id={`comment-${comment.id}`}
+      className="group relative flex scroll-mt-4 items-start gap-3 after:absolute after:left-[14px] after:top-7 after:bottom-[-1rem] after:w-px after:-translate-x-1/2 after:bg-border/70 after:content-[''] last:after:hidden"
+    >
       {isAgent ? (
         // Avatar заменён на «✻»-плашку — иконка Claude в peach-кружке, не путается с
         // юзер-аватаром Denis (он был источником путаницы в исходном issue).
@@ -1924,8 +1930,7 @@ function CommentItem({
             </Suspense>
           </div>
         ) : (
-          // Notion-style: тело коммента с тонкой левой линией-коннектором.
-          <div className="mt-1 border-l-2 border-border/40 pl-3">
+          <div className="mt-0.5">
             <CommentBody body={comment.body} />
             {ralphQuestion && !answeredQids.has(ralphQuestion.qid) && (
               <RalphAnswerControls
