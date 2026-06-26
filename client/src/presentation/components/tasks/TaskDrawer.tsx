@@ -1579,7 +1579,8 @@ function TaskCommentsSection({
           ))}
         </ul>
       ) : (
-        <CommentsEmptyState className="min-h-[40vh]" />
+        // Мобайл — компактнее (иначе огромная пустота над композером); десктоп — выше/по центру.
+        <CommentsEmptyState className="min-h-[180px] py-6 sm:min-h-[40vh] sm:py-10" />
       )}
 
       {!onCommentCreatedRef && (
