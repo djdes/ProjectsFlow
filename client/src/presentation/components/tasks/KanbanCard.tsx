@@ -197,122 +197,90 @@ export function KanbanCard({
           )
         )}
         <div className="min-w-0 flex-1">
-          {task.description?.trim() ? (
-            <Markdown
-              className={cn(
-                MARKDOWN_COMPACT,
-                // Notion-доска: на карточке показываем больше текста (4 строки),
-                // чтобы задача не обрезалась слишком рано.
-                'line-clamp-4',
-                // Карточный текст — обычного веса (Notion-style): первая строка описания
-                // (markdown-заголовок `#` или `**жирный**`) НЕ должна быть bold на превью.
-                // Перебиваем font-semibold заголовков из MARKDOWN_COMPACT и bold у strong/b.
-                '[&_h1]:font-normal [&_h2]:font-normal [&_h3]:font-normal [&_h4]:font-normal',
-                '[&_strong]:font-normal [&_b]:font-normal',
-                // Done-текст остаётся полноцветным (Notion: готовая задача не «гасится»);
-                // маркер готовности — мягкая зелёная заливка карточки + чек в чекбоксе.
+          {/* Текст карточки. На hover ЗАТЕМНЯЕТСЯ — чтобы наложенные снизу мета/корзина
+              читались (внахлёст). Высоты под мету НЕ резервируем (нет «пустого промежутка»). */}
+          <div className="transition-opacity duration-150 group-hover:opacity-40 group-focus-within:opacity-40 max-sm:!opacity-100">
+            {task.description?.trim() ? (
+              <Markdown
+                className={cn(
+                  MARKDOWN_COMPACT,
+                  'line-clamp-4',
+                  '[&_h1]:font-normal [&_h2]:font-normal [&_h3]:font-normal [&_h4]:font-normal',
+                  '[&_strong]:font-normal [&_b]:font-normal',
+                )}
+              >
+                {task.description}
+              </Markdown>
+            ) : (
+              <p className="text-sm leading-snug text-muted-foreground">—</p>
+            )}
+          </div>
+        </div>
+        {/* Оверлей мета+действий: НЕ занимает высоту (карточка = только текст), на hover
+            наложен поверх затемнённого текста снизу. Градиент from-card маскирует текст
+            под иконками. Прячется в режиме выделения и drag-preview. */}
+        {!selecting && !preview && (
+          <div
+            className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 rounded-b-lg bg-gradient-to-t from-card via-card/90 to-transparent px-2 pb-1 pt-6 text-[11px] text-muted-foreground opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
+            {...stopDragProps}
+          >
+            <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
+              {task.delegation && currentUserId && (
+                <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
               )}
-            >
-              {task.description}
-            </Markdown>
-          ) : (
-            <p className="text-sm leading-snug text-muted-foreground">—</p>
-          )}
-          {/* Мета-строка: делегирование → чеклист → счётчики (💬/🖼) → ralph → дедлайн → статус.
-              Рендерим только если есть что показать (иначе остаётся лишь футер). */}
-          {((task.attachmentCount ?? 0) > 0 ||
-            (task.commentCount ?? 0) > 0 ||
-            task.ralphMode !== 'normal' ||
-            task.status === 'in_progress' ||
-            task.status === 'awaiting_clarification' ||
-            !!task.delegation ||
-            task.deadline !== null ||
-            checklist !== null) && (
-            <div className="mt-2 flex min-w-0 flex-nowrap items-center gap-1.5 text-[11px] text-muted-foreground">
-              {/* Вторичная мета (делегирование/чеклист/счётчики/ralph/дедлайн) — скрыта
-                  по умолчанию, проявляется на hover карточки (Notion reveal-on-hover).
-                  На таче (max-sm) и при фокусе внутри — всегда видна. Один ряд без
-                  «переноса»: min-w-0 + flex-nowrap, лишнее аккуратно обрезается. */}
-              <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
-                {task.delegation && currentUserId && (
-                  <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
-                )}
-                {/* Прогресс чеклиста из описания; зелёный когда всё выполнено. */}
-                {checklist && (
-                  <span
-                    className={cn(
-                      'flex items-center gap-1 tabular-nums',
-                      checklist.done === checklist.total &&
-                        'text-emerald-600 dark:text-emerald-400',
-                    )}
-                    title="Чеклист в описании"
-                  >
-                    <ListChecks className="size-3" />
-                    {checklist.done}/{checklist.total}
-                  </span>
-                )}
-                {/* Счётчики — монохром без цветных подложек (Notion-style): цвет на карточке
-                    остаётся только у семантики (дедлайн/статус/приоритет). */}
-                {(task.commentCount ?? 0) > 0 && (
-                  <span className="flex items-center gap-1">
-                    <MessageSquare className="size-3" />
-                    {task.commentCount}
-                  </span>
-                )}
-                {(task.attachmentCount ?? 0) > 0 && (
-                  <span className="flex items-center gap-1">
-                    <ImageIcon className="size-3" />
-                    {task.attachmentCount}
-                  </span>
-                )}
-                {/* Бейдж режима Ralph — только для не-дефолта (показывать каждой задаче '🤖 Обычный'
-                    было бы шумом). Component сам возвращает null если showDefault=false и mode='normal'. */}
-                <RalphModeBadge mode={task.ralphMode} />
-                {task.deadline && (
-                  <DeadlineBadge deadline={task.deadline} status={task.status} />
-                )}
-              </span>
-              {/* Status-бэйдж справа для статусов, у которых нет своей колонки:
-                  in_progress и awaiting_clarification визуально лежат в TODO. Это
-                  существенный сигнал состояния — оставляем видимым всегда. */}
+              {checklist && (
+                <span
+                  className={cn(
+                    'flex items-center gap-1 tabular-nums',
+                    checklist.done === checklist.total && 'text-emerald-600 dark:text-emerald-400',
+                  )}
+                  title="Чеклист в описании"
+                >
+                  <ListChecks className="size-3" />
+                  {checklist.done}/{checklist.total}
+                </span>
+              )}
+              {(task.commentCount ?? 0) > 0 && (
+                <span className="flex items-center gap-1">
+                  <MessageSquare className="size-3" />
+                  {task.commentCount}
+                </span>
+              )}
+              {(task.attachmentCount ?? 0) > 0 && (
+                <span className="flex items-center gap-1">
+                  <ImageIcon className="size-3" />
+                  {task.attachmentCount}
+                </span>
+              )}
+              <RalphModeBadge mode={task.ralphMode} />
+              {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
               {task.status === 'in_progress' && (
-                <span className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-emerald-700 dark:text-emerald-400">
+                <span className="flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-emerald-700 dark:text-emerald-400">
                   <span aria-hidden className="size-2 rounded-full bg-emerald-500" />
                   {STATUS_LABEL.in_progress}
                 </span>
               )}
               {task.status === 'awaiting_clarification' && (
-                <span className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-amber-600 dark:text-amber-400">
+                <span className="flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-amber-600 dark:text-amber-400">
                   <ClaudeIcon className="size-3" />
                   {STATUS_LABEL.awaiting_clarification}
                 </span>
               )}
-            </div>
-          )}
-          {/* Футер: при hover/focus — ТОЛЬКО маленькая корзина (Notion-минимализм; никаких
-              лишних действий на карточке). Абсолютный оверлей в правом-нижнем углу,
-              высоту не занимает. Прячется в режиме выделения и в drag-preview. */}
-          {!selecting && !preview && (
-            <div
-              className="absolute bottom-0.5 right-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
-              {...stopDragProps}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="group/del ml-auto size-5 shrink-0 cursor-pointer rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(task);
+              }}
+              aria-label="Удалить"
             >
-              <Button
-                variant="ghost"
-                size="icon"
-                className="group/del size-5 cursor-pointer rounded-md bg-card/70 text-muted-foreground hover:bg-card hover:text-destructive"
-                onClick={(e) => {
-                  // Чтобы клик по корзине не открыл диалог через onClick на родителе.
-                  e.stopPropagation();
-                  onDelete(task);
-                }}
-                aria-label="Удалить"
-              >
-                <Trash2 className="size-3 transition-transform duration-150 group-hover/del:scale-110" />
-              </Button>
-            </div>
-          )}
-        </div>
+              <Trash2 className="size-3 transition-transform duration-150 group-hover/del:scale-110" />
+            </Button>
+          </div>
+        )}
       </div>
     </Wrapper>
   );
