@@ -1455,10 +1455,10 @@ export function TaskDrawer({
               {/* Row A: контекст · короткий id (слева), статус (справа). Высота/вертикальное
                   выравнивание как у строки хлебных крошек страницы (min-h-11, по центру) —
                   чтобы кнопки закрыть/развернуть стояли на одной линии с крошками. */}
+              {/* Название проекта + id — у ЛЕВОГО края (px-4), ровно над заголовком задачи
+                  (тоже px-4). Кнопки закрыть/развернуть/ширина переехали ВПРАВО к статусу,
+                  чтобы не сдвигать название и оно стояло вровень с заголовком. */}
               <div className="flex min-h-11 items-center gap-2 px-4 pt-2">
-                {renderCloseButton()}
-                {renderMaximizeButton()}
-                {renderPageWidthToggle()}
                 <div className="flex min-w-0 flex-1 items-baseline gap-2">
                   {projectName && (
                     <span className="truncate text-xs font-medium text-muted-foreground">
@@ -1469,8 +1469,7 @@ export function TaskDrawer({
                     {taskShortId(task.id)}
                   </span>
                 </div>
-                {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка). Кнопки
-                    Копировать/AI/Переработка/План — в ряду плюсиков ниже. */}
+                {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка). */}
                 {onMove ? (
                   <TaskStatusChip
                     task={task}
@@ -1487,6 +1486,9 @@ export function TaskDrawer({
                     {STATUS_LABEL[task.status]}
                   </span>
                 )}
+                {renderMaximizeButton()}
+                {renderPageWidthToggle()}
+                {renderCloseButton()}
               </div>
 
               {/* === ОПИСАНИЕ === Заголовок и описание ОДНИМ полем сверху (1-я строка —
@@ -1840,13 +1842,13 @@ export function TaskDrawer({
                 onPaste={handleFormPaste}
                 className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
               >
-                {/* Row A: close + контекст. Высота/выравнивание как у строки крошек (min-h-11). */}
+                {/* Row A: контекст слева (вровень с заголовком ниже), кнопки — справа. */}
                 <div className="flex min-h-11 items-center gap-2 px-4 pt-2">
-                  {renderCloseButton()}
-                  {renderMaximizeButton()}
-                  <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     {projectName ? `${projectName} · ` : ''}Новая задача
                   </span>
+                  {renderMaximizeButton()}
+                  {renderCloseButton()}
                 </div>
 
                 {/* Заголовок и описание — ОДНИМ полем сверху (1-я строка = заголовок). */}
