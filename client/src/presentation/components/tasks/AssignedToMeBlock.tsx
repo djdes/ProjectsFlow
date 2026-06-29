@@ -162,7 +162,7 @@ export function AssignedToMeBlock({ onChanged }: Props): React.ReactElement | nu
   return (
     // Notion-стиль: НЕ карточка-в-рамке, а чистая секция. Заголовок — тихий muted-лейбл
     // (как разделы Notion), строки ниже — без тяжёлого бордера, разделены hairline-дивайдерами.
-    <section id="assigned-to-me" className="space-y-2">
+    <section id="assigned-to-me" className="space-y-4">
       <div className="flex items-center justify-between gap-2 px-0.5">
         <h2 className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Поручено мне
@@ -171,10 +171,10 @@ export function AssignedToMeBlock({ onChanged }: Props): React.ReactElement | nu
         <GroupingMenu value={grouping} onChange={handleGroupingChange} />
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-6">
         {groups.map((group) => (
-          <div key={group.key} className="space-y-0.5">
-            <div className="flex items-center gap-1.5 px-0.5 text-xs font-medium text-muted-foreground">
+          <div key={group.key} className="space-y-1.5">
+            <div className="flex items-center gap-1.5 px-0.5 pb-0.5 text-xs font-medium text-muted-foreground">
               <GroupIcon mode={grouping} isInbox={group.isInbox} />
               <span className="truncate">{group.label}</span>
               <span className="text-muted-foreground/60">· {group.items.length}</span>
@@ -295,7 +295,7 @@ function AcceptedRow({
   return (
     <li
       className={cn(
-        'group flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-hover',
+        'group flex cursor-pointer items-center gap-3 rounded-md px-2.5 py-3 transition-colors hover:bg-hover',
         // Done-строка: мягкая зелёная заливка (НЕ серый/НЕ opacity), как в TaskListView/
         // KanbanCard — спокойный Notion-маркер готовности; текст остаётся полноцветным.
         isDone && 'bg-success/[0.08] hover:bg-success/[0.12]',
@@ -368,7 +368,7 @@ function PendingRow({
     // Вертикально: сверху «<аватар> Имя поручил вам: «описание»», снизу — кнопки.
     // Так на узких экранах ничего не сжимается и кнопки ложатся ровно под текстом.
     // Тонкая акцент-полоска слева маркирует «ожидает ответа», но спокойно (без насыщенной заливки).
-    <li className="flex flex-col gap-2 rounded-md border-l-2 border-primary/40 bg-hover/60 px-2.5 py-2">
+    <li className="flex flex-col gap-3 rounded-md border-l-2 border-primary/40 bg-hover/60 px-3 py-3">
       <div className="flex items-start gap-2.5">
         <Avatar className="size-7 shrink-0">
           <AvatarFallback
