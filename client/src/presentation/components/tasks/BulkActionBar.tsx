@@ -89,7 +89,12 @@ export function BulkActionBar({
       : projectRepository.listMembers(projectId).then((list) =>
           list
             .filter((m) => m.userId !== currentUserId)
-            .map((m) => ({ id: m.userId, displayName: m.user.displayName, email: m.user.email })),
+            .map((m) => ({
+              id: m.userId,
+              displayName: m.user.displayName,
+              email: m.user.email,
+              avatarUrl: m.user.avatarUrl,
+            })),
         );
     load
       .then((list) => {

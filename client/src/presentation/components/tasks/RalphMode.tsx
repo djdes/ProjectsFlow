@@ -69,7 +69,11 @@ export function RalphModeSelect({
             variant={variant}
             disabled={disabled}
             title={`Режим воркера: ${meta.label}`}
-            className={cn(iconOnly ? 'justify-center' : 'w-full justify-between', 'font-normal', className)}
+            className={cn(
+              iconOnly ? 'justify-center' : inPropertyRow ? '' : 'w-full justify-between',
+              'font-normal',
+              className,
+            )}
           >
             {iconOnly ? (
               <>
@@ -82,9 +86,9 @@ export function RalphModeSelect({
             ) : (
               <>
                 <span className={cn('truncate', showModePlaceholder && 'text-muted-foreground')}>
-                  {showModePlaceholder ? 'Выбрать…' : meta.label}
+                  {showModePlaceholder ? 'Выбрать режим…' : meta.label}
                 </span>
-                <ChevronDown className="size-4 shrink-0 opacity-60" />
+                {!inPropertyRow && <ChevronDown className="size-4 shrink-0 opacity-60" />}
               </>
             )}
           </Button>

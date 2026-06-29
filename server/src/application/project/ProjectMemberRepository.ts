@@ -86,4 +86,5 @@ export type SharedUser = {
   readonly id: string;
   readonly displayName: string;
   readonly email: string;
+  readonly avatarUrl: string | null;
 };

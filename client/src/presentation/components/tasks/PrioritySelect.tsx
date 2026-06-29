@@ -73,7 +73,7 @@ export function PrioritySelect({
           size="sm"
           disabled={disabled}
           className={cn(
-            'h-7 gap-1.5 px-2 text-xs',
+            inPropertyRow ? '' : 'h-7 gap-1.5 px-2 text-xs',
             className,
             !meta && 'text-muted-foreground hover:text-foreground',
             meta && meta.textColor,
@@ -85,8 +85,8 @@ export function PrioritySelect({
           ) : (
             !inPropertyRow && <Flag className="size-3.5" />
           )}
-          {meta ? meta.label : inPropertyRow ? 'Выбрать…' : 'Без приоритета'}
-          <ChevronDown className="size-3" />
+          {meta ? meta.label : inPropertyRow ? 'Выбрать приоритет…' : 'Без приоритета'}
+          {!inPropertyRow && <ChevronDown className="size-3" />}
         </Button>
       </DropdownMenuTrigger>
       <PriorityMenuContent value={value} onChange={onChange} />

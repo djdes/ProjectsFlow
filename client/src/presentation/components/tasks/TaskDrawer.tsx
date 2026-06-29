@@ -370,13 +370,14 @@ function TaskRalphModeChip({
     }
   };
 
-  // Notion-style чип в ряду свойств шапки: «+ режим» / имя режима + эмодзи + каретка.
+  // Notion-style значение в ряду свойств: текстовая ghost-кнопка без иконок,
+  // «Выбрать режим…» для дефолта / имя режима когда выбран (единый вид с дедлайном).
   return (
     <RalphModeSelect
       value={mode}
       onChange={(v) => void change(v)}
       disabled={saving || disabled}
-      chip
+      variant="ghost"
       className={className}
     />
   );
@@ -1318,7 +1319,6 @@ export function TaskDrawer({
                         task={task}
                         onChanged={() => notifyChanged()}
                         className={PROPERTY_VALUE_CLASS}
-                        emptyLabel="Пусто"
                         disabled={!canEdit}
                       />
                     ),

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, Loader2, UserPlus, X } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,7 +53,12 @@ export function DelegateTaskButton({ task, currentUserId, onChanged, projectId, 
       ? projectRepository.listMembers(projectId).then((list) =>
           list
             .filter((m) => m.userId !== currentUserId)
-            .map((m) => ({ id: m.userId, displayName: m.user.displayName, email: m.user.email })),
+            .map((m) => ({
+              id: m.userId,
+              displayName: m.user.displayName,
+              email: m.user.email,
+              avatarUrl: m.user.avatarUrl,
+            })),
         )
       : projectRepository.listSharedMembers();
     loadMembers
@@ -116,6 +123,11 @@ export function DelegateTaskButton({ task, currentUserId, onChanged, projectId, 
 
   if (!noActiveDelegation) return null;
 
+  // Ряд свойств задачи передаёт PROPERTY_VALUE_CLASS (justify-start) — там кнопка
+  // текстовая, без иконок: «Выбрать ответственного…», единый шрифт с остальными
+  // свойствами. В композерах/диалогах — исторический chip-вид.
+  const inPropertyRow = (className ?? '').includes('justify-start');
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -124,12 +136,16 @@ export function DelegateTaskButton({ task, currentUserId, onChanged, projectId, 
           variant="ghost"
           size="sm"
           disabled={submitting}
-          className={cn(META_CHIP_CLASS, className)}
+          className={cn(inPropertyRow ? '' : META_CHIP_CLASS, className)}
           title="Назначить ответственного — делегировать участнику проекта"
         >
-          {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <UserPlus className="size-3.5" />}
-          ответственный
-          <ChevronDown className="size-3 opacity-60" />
+          {submitting ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            !inPropertyRow && <UserPlus className="size-3.5" />
+          )}
+          {inPropertyRow ? 'Выбрать ответственного…' : 'ответственный'}
+          {!inPropertyRow && <ChevronDown className="size-3 opacity-60" />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[240px]">
@@ -145,8 +161,14 @@ export function DelegateTaskButton({ task, currentUserId, onChanged, projectId, 
                 onClick={() => void handleDelegate(m.id)}
                 className="gap-2"
               >
-                <span>{m.displayName}</span>
-                <span className="ml-auto text-[10px] text-muted-foreground">{m.email}</span>
+                <Avatar className="size-5 shrink-0">
+                  {m.avatarUrl && <AvatarImage src={m.avatarUrl} alt={m.displayName} />}
+                  <AvatarFallback className={cn('text-[9px]', avatarColor(m.displayName))}>
+                    {getInitials(m.displayName)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="min-w-0 truncate">{m.displayName}</span>
+                <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{m.email}</span>
               </DropdownMenuItem>
             ))}
           </>

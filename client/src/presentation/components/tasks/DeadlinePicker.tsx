@@ -95,7 +95,7 @@ export function DeadlinePicker({
     }
   };
 
-  const placeholder = emptyLabel ?? (inPropertyRow ? 'Выбрать…' : 'Дедлайн');
+  const placeholder = emptyLabel ?? (inPropertyRow ? 'Выбрать дедлайн…' : 'Дедлайн');
   const label = value ? formatShort(value) : placeholder;
   // Ведущую иконку прячем только в ряду свойств (не в icon-only/обычном виде).
   const showLeadingIcon = iconOnly || !inPropertyRow;
@@ -110,7 +110,7 @@ export function DeadlinePicker({
             size={iconOnly && !value ? 'icon' : 'sm'}
             disabled={disabled}
             className={cn(
-              iconOnly ? 'shrink-0 gap-1.5 text-xs' : 'h-7 gap-1.5 px-2 text-xs',
+              iconOnly ? 'shrink-0 gap-1.5 text-xs' : inPropertyRow ? '' : 'h-7 gap-1.5 px-2 text-xs',
               className,
               value ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
@@ -119,7 +119,7 @@ export function DeadlinePicker({
           >
             {showLeadingIcon && <CalendarClock className={iconOnly ? 'size-4' : 'size-3.5'} />}
             {(!iconOnly || value !== null) && label}
-            {!iconOnly && <ChevronDown className="size-3" />}
+            {!iconOnly && !inPropertyRow && <ChevronDown className="size-3" />}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="min-w-44">

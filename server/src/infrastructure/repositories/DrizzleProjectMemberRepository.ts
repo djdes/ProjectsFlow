@@ -231,6 +231,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
         id: users.id,
         displayName: users.displayName,
         email: users.email,
+        avatarUrl: users.avatarUrl,
       })
       .from(pm1)
       .innerJoin(pm2, eq(pm2.projectId, pm1.projectId))

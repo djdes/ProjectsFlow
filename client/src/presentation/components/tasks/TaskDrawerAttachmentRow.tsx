@@ -77,7 +77,7 @@ export function TaskDrawerAttachmentRow({
           className="-ml-1.5 inline-flex h-7 items-center rounded-md px-1.5 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
           title="Прикрепить файл (или Ctrl+V в комментарий)"
         >
-          Выбрать…
+          Выбрать файл…
         </button>
         {fileInput}
       </>

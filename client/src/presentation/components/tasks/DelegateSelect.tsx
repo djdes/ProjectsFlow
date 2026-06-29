@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { User, UserPlus } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -36,7 +36,12 @@ export function DelegateSelect({ value, onChange, disabled, className, projectId
     let cancelled = false;
     const loadMembers = projectId
       ? projectRepository.listMembers(projectId).then((list) =>
-          list.map((m) => ({ id: m.userId, displayName: m.user.displayName, email: m.user.email })),
+          list.map((m) => ({
+            id: m.userId,
+            displayName: m.user.displayName,
+            email: m.user.email,
+            avatarUrl: m.user.avatarUrl,
+          })),
         )
       : projectRepository.listSharedMembers();
     loadMembers
@@ -117,8 +122,16 @@ export function DelegateSelect({ value, onChange, disabled, className, projectId
         {members && members.length > 0 && <DropdownMenuSeparator />}
         {(members ?? []).map((m) => (
           <DropdownMenuItem key={m.id} onClick={() => onChange(m.id)} className="gap-2">
-            <span className={cn(m.id === value && 'font-medium')}>{m.displayName}</span>
-            <span className="ml-auto text-[10px] text-muted-foreground">{m.email}</span>
+            <Avatar className="size-5 shrink-0">
+              {m.avatarUrl && <AvatarImage src={m.avatarUrl} alt={m.displayName} />}
+              <AvatarFallback className={cn('text-[9px]', avatarColor(m.displayName))}>
+                {getInitials(m.displayName)}
+              </AvatarFallback>
+            </Avatar>
+            <span className={cn('min-w-0 truncate', m.id === value && 'font-medium')}>
+              {m.displayName}
+            </span>
+            <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{m.email}</span>
           </DropdownMenuItem>
         ))}
         {members && members.length === 0 && (
