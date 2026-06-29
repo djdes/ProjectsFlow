@@ -2,7 +2,7 @@ import { Download, FileText, X } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
-import { formatBytes, isImageMime } from './files';
+import { formatBytes, isImageFile } from './files';
 
 // Превью вложения с увеличением. Картинки — полноразмерный <img>; не-картинки —
 // иконка + кнопка скачать (бинарь отдаётся сервером как attachment).
@@ -13,7 +13,7 @@ export function AttachmentLightbox({
   attachment: TaskAttachment | null;
   onClose: () => void;
 }): React.ReactElement {
-  const image = attachment ? isImageMime(attachment.mimeType) : false;
+  const image = attachment ? isImageFile(attachment.mimeType, attachment.filename) : false;
   return (
     <Dialog open={attachment !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="grid max-h-[90dvh] max-w-4xl gap-0 overflow-hidden p-0">

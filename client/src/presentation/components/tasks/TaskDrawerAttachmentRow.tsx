@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
-import { formatBytes, isImageMime } from '@/presentation/components/attachments/files';
+import { formatBytes, isImageFile } from '@/presentation/components/attachments/files';
 
 // Локальный файл, ещё не загруженный на сервер (create-mode): тот же чип, что и у
 // загруженного вложения, но без url/размера и с «убрать» вместо «удалить».
@@ -115,7 +115,7 @@ export function TaskDrawerAttachmentRow({
                 title={att.filename}
                 aria-label={`Открыть ${att.filename}`}
               >
-                {isImageMime(att.mimeType) && att.url ? (
+                {isImageFile(att.mimeType, att.filename) && att.url ? (
                   <img src={att.url} alt="" loading="lazy" className="size-5 shrink-0 rounded object-cover" />
                 ) : (
                   <FileText className="size-4 shrink-0 text-muted-foreground" />

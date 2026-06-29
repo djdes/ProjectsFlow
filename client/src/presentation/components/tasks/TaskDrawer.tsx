@@ -51,7 +51,7 @@ import { AttachmentLightbox } from '@/presentation/components/attachments/Attach
 import {
   extractClipboardFiles,
   formatBytes,
-  isImageMime,
+  isImageFile,
 } from '@/presentation/components/attachments/files';
 import { RalphModeSelect } from './RalphMode';
 import type { RalphMode, TaskStatus } from '@/domain/task/Task';
@@ -220,6 +220,8 @@ function DrawerShell({
   onOpenChange,
   contentClassName,
   contentStyle,
+  dragHandlers,
+  dragOverlay,
   children,
 }: {
   asPage: boolean;
@@ -228,11 +230,23 @@ function DrawerShell({
   onOpenChange: (open: boolean) => void;
   contentClassName: string;
   contentStyle: React.CSSProperties | undefined;
+  // drag&drop вешаем на видимую коробку окна — оверлей покрывает ровно её (любой размер/скролл).
+  dragHandlers: {
+    onDragEnter: (e: DragEvent<HTMLElement>) => void;
+    onDragOver: (e: DragEvent<HTMLElement>) => void;
+    onDragLeave: (e: DragEvent<HTMLElement>) => void;
+    onDrop: (e: DragEvent<HTMLElement>) => void;
+  };
+  dragOverlay: React.ReactNode;
   children: React.ReactNode;
 }): React.ReactElement {
   if (asPage) {
     return (
-      <div className="flex h-full w-full flex-col overflow-hidden bg-background">
+      <div
+        className="relative flex h-full w-full flex-col overflow-hidden bg-background"
+        {...dragHandlers}
+      >
+        {dragOverlay}
         <div className="flex min-h-11 shrink-0 items-center px-3 pt-2 sm:px-6">{breadcrumbs}</div>
         <div className="mx-auto grid w-full max-w-3xl flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden">
           {children}
@@ -242,7 +256,10 @@ function DrawerShell({
   }
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" showClose={false} className={contentClassName} style={contentStyle}>
+      {/* SheetContent уже position:fixed → служит containing-block'ом для absolute-оверлея,
+          поэтому dragOverlay (absolute inset-0) покрывает ровно видимую коробку окна. */}
+      <SheetContent side="right" showClose={false} className={contentClassName} style={contentStyle} {...dragHandlers}>
+        {dragOverlay}
         {children}
       </SheetContent>
     </Sheet>
@@ -481,13 +498,13 @@ export function TaskDrawer({
   // Срок и приоритет для create-mode (применимо к любому проекту).
   const [createDeadline, setCreateDeadline] = useState<string | null>(null);
   const [createPriority, setCreatePriority] = useState<TaskPriority | null>(null);
-  // Drag-active флаг для create-mode (подсветка рамки при перетаскивании файлов).
-  const [createDragActive, setCreateDragActive] = useState(false);
-  // Drag-active флаг для edit-mode (большой оверлей «Перетащите сюда файл»).
-  const [editDragActive, setEditDragActive] = useState(false);
+  // Единый флаг перетаскивания файла из ОС на окно (create И edit). Большой оверлей
+  // «Перетащите сюда файл» рендерится на уровне видимой коробки окна (см. DrawerShell),
+  // поэтому покрывает ровно то, что юзер видит, при любом размере/скролле.
+  const [dragActive, setDragActive] = useState(false);
   // Счётчик dragenter/dragleave (вложенные элементы шлют события) — оверлей гаснет
   // только когда курсор реально покинул окно, а не при наведении на дочерний элемент.
-  const editDragDepth = useRef(0);
+  const dragDepth = useRef(0);
   // Активные аплоады (edit-mode) — прогресс-бары под рядом свойств «Файлы».
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   // Императивные handle'ы редакторов — для «+ Подзадача» (вставить пункт и сфокусироваться).
@@ -641,9 +658,8 @@ export function TaskDrawer({
     setActiveTab('discussion');
     setLiveRunning(false);
     setCommentCount(0);
-    setCreateDragActive(false);
-    setEditDragActive(false);
-    editDragDepth.current = 0;
+    setDragActive(false);
+    dragDepth.current = 0;
     setUploads([]);
     // При закрытии/смене диалога чистим pending — URL.revokeObjectURL для blob'ов.
     setPendingFiles((prev) => {
@@ -659,7 +675,7 @@ export function TaskDrawer({
       id: crypto.randomUUID(),
       file,
       // Blob URL только для картинок (для thumbnail); иначе превью не нужно.
-      previewUrl: isImageMime(file.type) ? URL.createObjectURL(file) : '',
+      previewUrl: isImageFile(file.type, file.name) ? URL.createObjectURL(file) : '',
     }));
     setPendingFiles((prev) => [...prev, ...additions]);
   };
@@ -741,56 +757,59 @@ export function TaskDrawer({
     }
   };
 
-  // Create-mode drag handlers (form-level, как в AddTaskDialog).
-  const handleCreateDragOver = (e: DragEvent<HTMLFormElement>): void => {
-    e.preventDefault();
-    setCreateDragActive(true);
-  };
-  const handleCreateDragLeave = (e: DragEvent<HTMLFormElement>): void => {
-    e.preventDefault();
-    setCreateDragActive(false);
-  };
-  const handleCreateDrop = (e: DragEvent<HTMLFormElement>): void => {
-    e.preventDefault();
-    setCreateDragActive(false);
-    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-      addPendingFiles(Array.from(e.dataTransfer.files));
-    }
-  };
-
-  // Edit-mode drag&drop: перетаскивание файла из ОС на ВСЁ окно показывает большой
-  // оверлей. Реагируем только на файлы (types включает 'Files'), чтобы внутренний
-  // drag текста/блоков редактора не триггерил оверлей. dragenter/leave считаем глубину —
-  // вложенные элементы шлют свои события, иначе оверлей мигает.
-  const hasFiles = (e: DragEvent<HTMLDivElement>): boolean =>
+  // Единый drag&drop файла из ОС (create И edit). Вешается на видимую коробку окна
+  // (DrawerShell), поэтому drop работает в любой её части, а оверлей покрывает ровно
+  // видимую область (не скролл-контент). Реагируем только на файлы (types includes
+  // 'Files'), чтобы внутренний drag текста/блоков редактора не триггерил оверлей.
+  // dragenter/leave считаем глубину — вложенные элементы шлют свои события, иначе мигает.
+  const hasFiles = (e: DragEvent<HTMLElement>): boolean =>
     Array.from(e.dataTransfer?.types ?? []).includes('Files');
-  const handleEditDragEnter = (e: DragEvent<HTMLDivElement>): void => {
-    if (state?.mode !== 'edit' || !hasFiles(e)) return;
+  const handleDragEnter = (e: DragEvent<HTMLElement>): void => {
+    if (!hasFiles(e)) return;
     e.preventDefault();
-    editDragDepth.current += 1;
-    setEditDragActive(true);
+    dragDepth.current += 1;
+    setDragActive(true);
   };
-  const handleEditDragOver = (e: DragEvent<HTMLDivElement>): void => {
-    if (state?.mode !== 'edit' || !hasFiles(e)) return;
+  const handleDragOver = (e: DragEvent<HTMLElement>): void => {
+    if (!hasFiles(e)) return;
     e.preventDefault();
   };
-  const handleEditDragLeave = (): void => {
-    if (state?.mode !== 'edit') return;
-    editDragDepth.current -= 1;
-    if (editDragDepth.current <= 0) {
-      editDragDepth.current = 0;
-      setEditDragActive(false);
+  const handleDragLeave = (): void => {
+    dragDepth.current -= 1;
+    if (dragDepth.current <= 0) {
+      dragDepth.current = 0;
+      setDragActive(false);
     }
   };
-  const handleEditDrop = (e: DragEvent<HTMLDivElement>): void => {
-    if (state?.mode !== 'edit') return;
+  const handleDrop = (e: DragEvent<HTMLElement>): void => {
     e.preventDefault();
-    editDragDepth.current = 0;
-    setEditDragActive(false);
-    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-      void uploadFilesDirectly(Array.from(e.dataTransfer.files));
-    }
+    dragDepth.current = 0;
+    setDragActive(false);
+    const files = Array.from(e.dataTransfer?.files ?? []);
+    if (files.length === 0) return;
+    if (state?.mode === 'create') addPendingFiles(files);
+    else void uploadFilesDirectly(files);
   };
+  const dragHandlers = {
+    onDragEnter: handleDragEnter,
+    onDragOver: handleDragOver,
+    onDragLeave: handleDragLeave,
+    onDrop: handleDrop,
+  };
+  // Большой оверлей-зона. Рендерится в DrawerShell поверх видимой коробки окна
+  // (absolute inset-0), pointer-events-none — чтобы не перехватывать drop/dragleave.
+  const dragOverlay = dragActive ? (
+    <div
+      className={cn(
+        'pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-primary/60 bg-background/85 backdrop-blur-sm',
+        animations && 'duration-150 animate-in fade-in-0',
+      )}
+    >
+      <UploadCloud className="size-10 text-primary" />
+      <span className="text-sm font-medium text-foreground">Перетащите сюда файл</span>
+      <span className="text-xs text-muted-foreground">Файл прикрепится к задаче</span>
+    </div>
+  ) : null;
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -926,6 +945,8 @@ export function TaskDrawer({
         dragging && '!transition-none',
       )}
       contentStyle={resizeEnabled ? { width: `${width}px`, maxWidth: '96vw' } : undefined}
+      dragHandlers={dragHandlers}
+      dragOverlay={dragOverlay}
     >
         {/* Drag-ручка на ЛЕВОМ крае дравера (тонкая вертикальная полоса). Тянем
             влево — шире, вправо — уже. Только desktop (resizeEnabled). */}
@@ -963,37 +984,18 @@ export function TaskDrawer({
           // обсуждение справа, серый разделитель между; иначе — привычный стек
           // (шапка сверху, ниже центрированный переключатель + комменты + композер).
           <div
-            onDragEnter={handleEditDragEnter}
-            onDragOver={handleEditDragOver}
-            onDragLeave={handleEditDragLeave}
-            onDrop={handleEditDrop}
             className={cn(
               'relative min-h-0',
               // split — две колонки в ряд, у каждой свой скролл; narrow — ОДИН общий
               // скролл всего окна (скроллится этот контейнер, внутренние блоки —
               // натуральной высоты, без своих overflow). Так задача+комменты+композер
               // прокручиваются единой лентой (по просьбе: без разделения на блоки).
+              // Drag&drop файла обрабатывается на уровне видимой коробки окна (DrawerShell).
               isSplit
                 ? 'flex h-full overflow-hidden'
                 : 'flex h-full flex-col overflow-y-auto overscroll-contain',
             )}
           >
-            {/* Оверлей перетаскивания файла из ОС: большой пунктирный плейсхолдер поверх
-                окна. pointer-events-none — чтобы не перехватывать drop/dragleave (его
-                ловит контейнер). Анимация появления — под useMotion. */}
-            {editDragActive && (
-              <div
-                className={cn(
-                  'pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-primary/60 bg-background/85 backdrop-blur-sm',
-                  animations && 'duration-150 animate-in fade-in-0',
-                )}
-              >
-                <UploadCloud className="size-10 text-primary" />
-                <span className="text-sm font-medium text-foreground">Перетащите сюда файл</span>
-                <span className="text-xs text-muted-foreground">Файл прикрепится к задаче</span>
-              </div>
-            )}
-
             {/* === HEADER / ЛЕВАЯ КОЛОНКА === Notion-style. В стеке — sticky-шапка с
                 нижним бордером (единственный разделитель до переключателя вкладок).
                 В split — самостоятельная скроллящаяся левая колонка (бордера снизу нет,
@@ -1378,13 +1380,7 @@ export function TaskDrawer({
                 id="task-drawer-form"
                 onSubmit={handleSubmit}
                 onPaste={handleFormPaste}
-                onDragOver={handleCreateDragOver}
-                onDragLeave={handleCreateDragLeave}
-                onDrop={handleCreateDrop}
-                className={cn(
-                  'min-h-0 flex-1 overflow-y-auto overscroll-contain transition-colors',
-                  createDragActive && 'bg-primary/5',
-                )}
+                className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
               >
                 {/* Row A: close + контекст (без Копир./Переработка/План — задачи ещё нет). */}
                 <div className="flex items-center gap-2 px-4 pt-3">
@@ -1761,7 +1757,7 @@ function CommentComposer({
       ...list.map((file) => ({
         id: crypto.randomUUID(),
         file,
-        previewUrl: isImageMime(file.type) ? URL.createObjectURL(file) : '',
+        previewUrl: isImageFile(file.type, file.name) ? URL.createObjectURL(file) : '',
       })),
     ]);
   };
@@ -2209,7 +2205,7 @@ function CommentItem({
         {comment.attachments.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {comment.attachments.map((att) =>
-              isImageMime(att.mimeType) ? (
+              isImageFile(att.mimeType, att.filename) ? (
                 <button
                   key={att.id}
                   type="button"

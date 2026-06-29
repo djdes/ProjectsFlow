@@ -6,6 +6,19 @@ export function isImageMime(mime: string): boolean {
   return mime.startsWith('image/') && mime !== 'image/svg+xml';
 }
 
+// Растровые расширения — фолбэк, когда MIME пустой/кривой (часто у .webp и файлов из
+// мессенджеров). Тогда определяем картинку по имени и всё равно показываем превью.
+const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico', 'jfif', 'apng'];
+
+// Картинка ли это — по MIME ИЛИ по расширению имени файла. Используется для рендера
+// <img>-превью (чипы вложений, лайтбокс) и зеркалится на сервере (inline-отдача).
+export function isImageFile(mime: string | null | undefined, filename?: string | null): boolean {
+  if (mime === 'image/svg+xml') return false; // svg всегда download (анти-XSS)
+  if (mime && mime.startsWith('image/')) return true;
+  const ext = (filename ?? '').split('.').pop()?.toLowerCase() ?? '';
+  return IMAGE_EXTS.includes(ext);
+}
+
 // Извлекает ВСЕ файлы из буфера обмена (любой тип, не только картинки). Возвращает []
 // если файлов нет — тогда caller не делает preventDefault (обычная вставка текста).
 export function extractClipboardFiles(clipboardData: DataTransfer | null): File[] {

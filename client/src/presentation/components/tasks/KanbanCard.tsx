@@ -142,10 +142,9 @@ export function KanbanCard({
           'transition-[box-shadow,border-color,opacity,background-color] duration-150 ease-out',
           'hover:shadow-md',
           // Done-карточка: мягкая зелёная заливка (Notion-style спокойный маркер
-          // готовности) вместо серого/opacity. Текст остаётся читаемым.
-          // Done: спокойная зелёная заливка; на hover ЗАМЕТНО темнеет зелёным (тот же
-          // success-цвет), а не нейтрально. Усиленная заливка + рамка.
-          doneCard && 'border-success/20 bg-success/[0.06] hover:border-success/40 hover:bg-success/[0.22] dark:hover:bg-success/[0.28]',
+          // готовности). На hover — МЯГКОЕ зелёное затемнение (не резкое); текст за
+          // кнопками снизу скрывается зелёным градиентом-оверлеем (ниже), как у черновиков.
+          doneCard && 'border-success/20 bg-success/[0.06] hover:border-success/30 hover:bg-success/[0.1] dark:hover:bg-success/[0.14]',
           // Priority-accent: цветной левый кант (2px, rose/orange/blue/slate) —
           // спокойный индикатор важности в стиле Todoist (меняется в дравере).
           task.priority && cn('border-l-2', PRIORITY_META[task.priority].border),
@@ -233,8 +232,12 @@ export function KanbanCard({
           <div
             className={cn(
               'pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 rounded-b-lg bg-gradient-to-t to-transparent px-2 pb-1 pt-5 text-[11px] text-muted-foreground opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100',
-              // На done — зелёный градиент (в тон карточке), иначе нейтральный card.
-              doneCard ? 'from-success/40 via-success/25' : 'from-card via-card/90',
+              // На done — мягкий зелёный градиент-маска (card, подмешанный к success):
+              // снизу непрозрачный (текст за кнопками полностью скрыт), плавно к прозрачному
+              // выше. На обычных — нейтральный card. Тот же приём, что у черновиков.
+              doneCard
+                ? 'from-[color-mix(in_srgb,hsl(var(--card)),hsl(var(--success))_20%)] via-[color-mix(in_srgb,hsl(var(--card)),hsl(var(--success))_20%)]'
+                : 'from-card via-card/90',
             )}
           >
             <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
