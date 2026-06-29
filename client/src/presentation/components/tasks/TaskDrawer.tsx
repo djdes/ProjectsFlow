@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import {
   lazy,
   Suspense,
@@ -141,12 +142,50 @@ type PendingFile = {
   readonly previewUrl: string;
 };
 
-// In-flight аплоад файла (edit-mode): имя + прогресс в процентах для прогресс-бара.
+// In-flight аплоад файла (edit-mode): имя + прогресс + оценка оставшегося времени.
 type UploadItem = {
   readonly id: string;
   readonly name: string;
   readonly progress: number;
+  // Момент старта (Date.now()) — для оценки оставшегося времени по скорости.
+  readonly startedAt: number;
+  // Оценка секунд до конца (null — ещё считаем, 0 — почти готово).
+  readonly etaSec: number | null;
 };
+
+// Человекочитаемая оценка оставшегося времени загрузки.
+function formatUploadEta(sec: number | null): string {
+  if (sec === null) return 'оценка…';
+  if (sec <= 0) return 'почти готово';
+  if (sec < 60) return `~${sec} с осталось`;
+  return `~${Math.ceil(sec / 60)} мин осталось`;
+}
+
+// Плавающий индикатор загрузки файлов (правый нижний угол). Портал в body, чтобы
+// position:fixed считался от вьюпорта, а не от transform-предка (Sheet).
+function UploadProgressOverlay({ uploads }: { uploads: readonly UploadItem[] }): React.ReactElement {
+  return (
+    <div className="fixed bottom-4 right-4 z-[60] w-72 max-w-[calc(100vw-2rem)] rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg">
+      <div className="mb-2 flex items-center gap-2 text-xs font-medium">
+        <Loader2 className="size-3.5 animate-spin text-primary" />
+        Загрузка файлов · {uploads.length}
+      </div>
+      <div className="flex flex-col gap-2.5">
+        {uploads.map((u) => (
+          <div key={u.id} className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5">
+              <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="min-w-0 flex-1 truncate text-xs">{u.name}</span>
+              <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{u.progress}%</span>
+            </div>
+            <Progress value={u.progress} className="h-1.5" />
+            <span className="text-[10px] text-muted-foreground">{formatUploadEta(u.etaSec)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export type TaskDrawerState =
   | { mode: 'create'; status: Task['status'] }
@@ -608,16 +647,30 @@ export function TaskDrawer({
     if (state?.mode !== 'edit') return;
     const { projectId, id } = state.task;
     const items = files.map((file) => ({ uploadId: crypto.randomUUID(), file }));
+    const startedAt = Date.now();
     setUploads((prev) => [
       ...prev,
-      ...items.map((it) => ({ id: it.uploadId, name: it.file.name, progress: 0 })),
+      ...items.map((it) => ({ id: it.uploadId, name: it.file.name, progress: 0, startedAt, etaSec: null })),
     ]);
     await Promise.all(
       items.map(async ({ uploadId, file }) => {
         try {
           await taskRepository.uploadAttachment(projectId, id, file, (loaded, total) => {
-            const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
-            setUploads((prev) => prev.map((u) => (u.id === uploadId ? { ...u, progress: pct } : u)));
+            setUploads((prev) =>
+              prev.map((u) => {
+                if (u.id !== uploadId) return u;
+                const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
+                const elapsed = (Date.now() - u.startedAt) / 1000;
+                // ETA по средней скорости; первые ~0.4с не оцениваем (шум).
+                const etaSec =
+                  loaded > 0 && elapsed > 0.4 && total > loaded
+                    ? Math.max(1, Math.round((elapsed / loaded) * (total - loaded)))
+                    : pct >= 100
+                      ? 0
+                      : null;
+                return { ...u, progress: pct, etaSec };
+              }),
+            );
           });
         } catch (err) {
           toast.error(`Не удалось загрузить ${file.name}: ${(err as Error).message}`);
@@ -819,6 +872,7 @@ export function TaskDrawer({
     useResizableWidth(resizeEnabled, state !== null);
 
   return (
+    <>
     <Sheet open={state !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
         side="right"
@@ -1099,38 +1153,19 @@ export function TaskDrawer({
                   />
                 </PropertyRow>
 
-                {/* Файлы — чипы вложений (с именем, размером и кнопкой удаления) + «+»
-                    для добавления прямо из строки. Ряд рендерится всегда: пустое
-                    состояние показывает тихий чип «Файл». Под чипами — прогресс-бары
-                    активных аплоадов. */}
+                {/* Файлы — чипы вложений (имя, размер, удаление) + «+» для добавления
+                    прямо из строки. Прогресс активных аплоадов — в плавающем индикаторе
+                    справа снизу (UploadProgressOverlay), а не под строкой. */}
                 <PropertyRow icon={Paperclip} label="Файлы">
-                  <div className="flex min-w-0 flex-1 basis-full flex-col gap-1.5">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <TaskDrawerAttachmentRow
-                        items={headerAttachments}
-                        canEdit={canEdit}
-                        onAddFiles={(files) => {
-                          void uploadFilesDirectly(files);
-                        }}
-                        onDelete={deleteAttachmentDirectly}
-                      />
-                    </div>
-                    {uploads.length > 0 && (
-                      <div className="flex basis-full flex-col gap-1.5 pt-0.5">
-                        {uploads.map((u) => (
-                          <div key={u.id} className="flex min-w-0 items-center gap-2">
-                            <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                            <span className="max-w-[160px] shrink-0 truncate text-[11px] text-muted-foreground">
-                              {u.name}
-                            </span>
-                            <Progress value={u.progress} className="min-w-0 flex-1" />
-                            <span className="w-8 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
-                              {u.progress}%
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <TaskDrawerAttachmentRow
+                      items={headerAttachments}
+                      canEdit={canEdit}
+                      onAddFiles={(files) => {
+                        void uploadFilesDirectly(files);
+                      }}
+                      onDelete={deleteAttachmentDirectly}
+                    />
                   </div>
                 </PropertyRow>
 
@@ -1506,6 +1541,8 @@ export function TaskDrawer({
         )}
       </SheetContent>
     </Sheet>
+    {uploads.length > 0 && createPortal(<UploadProgressOverlay uploads={uploads} />, document.body)}
+    </>
   );
 }
 

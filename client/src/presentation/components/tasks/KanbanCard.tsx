@@ -103,6 +103,10 @@ export function KanbanCard({
   // Прогресс GFM-чеклиста из описания — бейдж «3/7» в мета-строке.
   const checklist = task.description ? checklistProgress(task.description) : null;
 
+  // Выполненная задача — для зелёного hover-затемнения и зелёного градиента оверлея
+  // (иначе на зелёной карточке нижний градиент from-card давал нейтральную полосу).
+  const doneCard = !preview && task.status === 'done';
+
   return (
     <Wrapper layoutId={task.id}>
       <div
@@ -139,7 +143,9 @@ export function KanbanCard({
           'hover:shadow-md',
           // Done-карточка: мягкая зелёная заливка (Notion-style спокойный маркер
           // готовности) вместо серого/opacity. Текст остаётся читаемым.
-          !preview && task.status === 'done' && 'border-success/20 bg-success/[0.06] hover:border-success/30 hover:bg-success/[0.18]',
+          // Done: спокойная зелёная заливка; на hover ЗАМЕТНО темнеет зелёным (тот же
+          // success-цвет), а не нейтрально. Усиленная заливка + рамка.
+          doneCard && 'border-success/20 bg-success/[0.06] hover:border-success/40 hover:bg-success/[0.22] dark:hover:bg-success/[0.28]',
           // Priority-accent: цветной левый кант (2px, rose/orange/blue/slate) —
           // спокойный индикатор важности в стиле Todoist (меняется в дравере).
           task.priority && cn('border-l-2', PRIORITY_META[task.priority].border),
@@ -225,7 +231,11 @@ export function KanbanCard({
             ловят только кнопки (pointer-events-auto, и только когда оверлей реально виден). */}
         {!selecting && !preview && (
           <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 rounded-b-lg bg-gradient-to-t from-card via-card/90 to-transparent px-2 pb-1 pt-5 text-[11px] text-muted-foreground opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
+            className={cn(
+              'pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 rounded-b-lg bg-gradient-to-t to-transparent px-2 pb-1 pt-5 text-[11px] text-muted-foreground opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100',
+              // На done — зелёный градиент (в тон карточке), иначе нейтральный card.
+              doneCard ? 'from-success/40 via-success/25' : 'from-card via-card/90',
+            )}
           >
             <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
               {task.delegation && currentUserId && (

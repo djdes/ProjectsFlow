@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { FileText, Loader2, Paperclip, Plus, X } from 'lucide-react';
+import { FileText, Loader2, Plus, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
@@ -50,10 +50,10 @@ export function TaskDrawerAttachmentRow({
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           title="Прикрепить файл (или Ctrl+V в комментарий)"
         >
-          <Paperclip className="size-3.5" />
+          <Plus className="size-3.5" />
           Файл
         </button>
         {fileInput}
