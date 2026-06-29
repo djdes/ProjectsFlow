@@ -1353,8 +1353,11 @@ export function TaskDrawer({
       onClick={scrollToTaskTop}
       title="К началу задачи"
       className={cn(
-        'sticky top-0 z-20 block w-full shrink-0 border-b bg-background/95 px-4 py-2 text-left backdrop-blur-sm',
-        'cursor-pointer transition-colors hover:bg-hover',
+        // Непрозрачный фон (без /95 и backdrop-blur) — иначе сквозь «фрост» просвечивал
+        // скроллящийся контент и на hover казалось, что фон пропадает. Hover — мягкий
+        // СПЛОШНОЙ серый (bg-muted), а не полупрозрачный оверлей.
+        'sticky top-0 z-20 block w-full shrink-0 border-b bg-background px-4 py-2 text-left',
+        'cursor-pointer transition-colors hover:bg-muted',
         animations && 'duration-150 animate-in fade-in-0 slide-in-from-top-1',
       )}
     >
@@ -1455,10 +1458,14 @@ export function TaskDrawer({
               {/* Row A: контекст · короткий id (слева), статус (справа). Высота/вертикальное
                   выравнивание как у строки хлебных крошек страницы (min-h-11, по центру) —
                   чтобы кнопки закрыть/развернуть стояли на одной линии с крошками. */}
-              {/* Название проекта + id — у ЛЕВОГО края (px-4), ровно над заголовком задачи
-                  (тоже px-4). Кнопки закрыть/развернуть/ширина переехали ВПРАВО к статусу,
-                  чтобы не сдвигать название и оно стояло вровень с заголовком. */}
+              {/* Кнопки »/↗/ширина — слева (как «ава» в сайдбаре). Название проекта идёт
+                  ПОСЛЕ них (как «ник»), а заголовок задачи ниже остаётся у левого края —
+                  то есть ровно слева относительно названия проекта (как контент в сайдбаре
+                  стоит слева, а ник отступлен аватаркой). */}
               <div className="flex min-h-11 items-center gap-2 px-4 pt-2">
+                {renderCloseButton()}
+                {renderMaximizeButton()}
+                {renderPageWidthToggle()}
                 <div className="flex min-w-0 flex-1 items-baseline gap-2">
                   {projectName && (
                     <span className="truncate text-xs font-medium text-muted-foreground">
@@ -1486,9 +1493,6 @@ export function TaskDrawer({
                     {STATUS_LABEL[task.status]}
                   </span>
                 )}
-                {renderMaximizeButton()}
-                {renderPageWidthToggle()}
-                {renderCloseButton()}
               </div>
 
               {/* === ОПИСАНИЕ === Заголовок и описание ОДНИМ полем сверху (1-я строка —
@@ -1842,13 +1846,13 @@ export function TaskDrawer({
                 onPaste={handleFormPaste}
                 className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
               >
-                {/* Row A: контекст слева (вровень с заголовком ниже), кнопки — справа. */}
+                {/* Row A: кнопки слева, контекст после них (как ава→ник в сайдбаре). */}
                 <div className="flex min-h-11 items-center gap-2 px-4 pt-2">
+                  {renderCloseButton()}
+                  {renderMaximizeButton()}
                   <span className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     {projectName ? `${projectName} · ` : ''}Новая задача
                   </span>
-                  {renderMaximizeButton()}
-                  {renderCloseButton()}
                 </div>
 
                 {/* Заголовок и описание — ОДНИМ полем сверху (1-я строка = заголовок). */}
