@@ -472,16 +472,29 @@ export function TaskDrawer({
   // (доска, «Поручено мне», блок «Недавнее»). Только edit-mode с реальной задачей; раз на
   // taskId. Fire-and-forget (ошибки глотаем), затем шлём 'pf:recent-changed' — блок
   // «Недавнее» в сайдбаре перефетчит без перезагрузки.
+  // Поднимаем задачу в «Недавнее» ТОЛЬКО при реальной правке (а не при простом открытии):
+  // раньше любой просмотр помечал задачу «только что» и кидал её наверх. Один раз на taskId.
   const recordedTaskIdRef = useRef<string | null>(null);
   const openTaskId = state?.mode === 'edit' ? state.task.id : null;
+  const openTaskIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!openTaskId || recordedTaskIdRef.current === openTaskId) return;
-    recordedTaskIdRef.current = openTaskId;
+    openTaskIdRef.current = openTaskId;
+  }, [openTaskId]);
+  const markViewedOnEdit = useCallback(() => {
+    const id = openTaskIdRef.current;
+    if (!id || recordedTaskIdRef.current === id) return;
+    recordedTaskIdRef.current = id;
     void recordTaskView
-      .execute(openTaskId)
+      .execute(id)
       .then(() => window.dispatchEvent(new CustomEvent('pf:recent-changed')))
       .catch(() => {});
-  }, [openTaskId, recordTaskView]);
+  }, [recordTaskView]);
+  // Любая правка (описание/свойства/комменты/файлы) идёт через этот колбэк: фиксируем
+  // просмотр (для «Недавнее») и уведомляем родителя обновить бейджи.
+  const notifyChanged = useCallback(() => {
+    markViewedOnEdit();
+    onCommitsChange?.();
+  }, [markViewedOnEdit, onCommitsChange]);
   // В create-mode description редактируется одним RichTextEditor на форме; в edit-mode
   // заголовок/тело живут в editDescription + TaskTitleEditor/TaskBodyEditor (см. ниже),
   // а это локальное состояние используется только в create-режиме (submit формы).
@@ -532,7 +545,22 @@ export function TaskDrawer({
   }, []);
   // Описание задачи всегда раскрыто — без кнопки раскрытия/сворачивания (по требованию).
   // Активная вкладка тела edit-режима: «Обсуждение» (комментарии) | LIVE (лента воркера).
-  const [activeTab, setActiveTab] = useState<'discussion' | 'live'>('discussion');
+  // Запоминаем выбор в localStorage — иначе ре-рендер родителя (напр. сворачивание сайдбара)
+  // сбрасывал бы на «Обсуждение». Не форсим reset на открытии (см. эффект сброса ниже).
+  const [activeTab, setActiveTab] = useState<'discussion' | 'live'>(() => {
+    try {
+      return localStorage.getItem('pf-task-tab') === 'live' ? 'live' : 'discussion';
+    } catch {
+      return 'discussion';
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('pf-task-tab', activeTab);
+    } catch {
+      /* localStorage недоступен */
+    }
+  }, [activeTab]);
   // Есть ли running LIVE-сессия (бейдж 🔴 на триггере вкладки). LiveTab сообщает через колбэк.
   const [liveRunning, setLiveRunning] = useState(false);
   // Кол-во комментариев — свёрнуто в триггер «Обсуждение · N». TaskCommentsSection сообщает.
@@ -600,14 +628,14 @@ export function TaskDrawer({
       try {
         const updated = await taskRepository.update(projectId, id, { description: trimmed });
         setEditDescription(updated.description ?? '');
-        onCommitsChange?.();
+        notifyChanged();
       } catch (e) {
         toast.error(`Не удалось сохранить: ${(e as Error).message}`);
       } finally {
         setEditSaving(false);
       }
     },
-    [state, taskRepository, editDescription, onCommitsChange],
+    [state, taskRepository, editDescription, notifyChanged],
   );
 
   // Заголовок и описание — ОДНО поле: правим полное описание напрямую (1-я строка = заголовок).
@@ -655,7 +683,8 @@ export function TaskDrawer({
     setCreateDeadline(null);
     setCreatePriority(null);
     setError(null);
-    setActiveTab('discussion');
+    // activeTab НЕ сбрасываем — он запоминается (localStorage), чтобы ре-рендер
+    // родителя (сворачивание сайдбара и т.п.) не выкидывал из LIVE в «Обсуждение».
     setLiveRunning(false);
     setCommentCount(0);
     setDragActive(false);
@@ -714,7 +743,7 @@ export function TaskDrawer({
         }
       }),
     );
-    onCommitsChange?.();
+    notifyChanged();
     refetchHeaderAttachments();
   };
 
@@ -725,7 +754,7 @@ export function TaskDrawer({
     void taskRepository
       .deleteAttachment(projectId, id, att.id)
       .then(() => {
-        onCommitsChange?.();
+        notifyChanged();
         refetchHeaderAttachments();
       })
       .catch((err) =>
@@ -863,7 +892,7 @@ export function TaskDrawer({
               ? 'Картинки прикреплены'
               : `Прикреплено ${ok} из ${pendingFiles.length}`,
           );
-          onCommitsChange?.();
+          notifyChanged();
         }
       }
       onClose();
@@ -1035,14 +1064,14 @@ export function TaskDrawer({
                   <TaskAdvanceButton
                     task={task}
                     onMove={onMove}
-                    onChanged={() => onCommitsChange?.()}
+                    onChanged={() => notifyChanged()}
                   />
                 )}
                 {onMove ? (
                   <TaskStatusChip
                     task={task}
                     onMove={onMove}
-                    onChanged={() => onCommitsChange?.()}
+                    onChanged={() => notifyChanged()}
                   />
                 ) : (
                   <span
@@ -1073,7 +1102,7 @@ export function TaskDrawer({
                     setEditDescription(next);
                     void commitDescription(next);
                   }}
-                  onAiDistributed={() => onCommitsChange?.()}
+                  onAiDistributed={() => notifyChanged()}
                   onPasteFiles={(files) => void uploadFilesDirectly(files)}
                   disabled={editSaving}
                   placeholder="Название и описание…"
@@ -1141,7 +1170,7 @@ export function TaskDrawer({
                       <DelegateTaskButton
                         task={task}
                         currentUserId={currentUser?.id ?? null}
-                        onChanged={() => onCommitsChange?.()}
+                        onChanged={() => notifyChanged()}
                         projectId={isShared ? task.projectId : undefined}
                         className={PROPERTY_VALUE_CLASS}
                       />
@@ -1153,7 +1182,7 @@ export function TaskDrawer({
                       <AssignToProjectSelect
                         task={task}
                         onAssigned={() => {
-                          onCommitsChange?.();
+                          notifyChanged();
                           onClose();
                         }}
                       />
@@ -1165,7 +1194,7 @@ export function TaskDrawer({
                 <PropertyRow icon={CalendarClock} label="Дедлайн">
                   <TaskDeadlineChip
                     task={task}
-                    onChanged={() => onCommitsChange?.()}
+                    onChanged={() => notifyChanged()}
                     className={PROPERTY_VALUE_CLASS}
                     emptyLabel="Пусто"
                     disabled={!canEdit}
@@ -1176,7 +1205,7 @@ export function TaskDrawer({
                 <PropertyRow icon={Flag} label="Приоритет">
                   <TaskPriorityChip
                     task={task}
-                    onChanged={() => onCommitsChange?.()}
+                    onChanged={() => notifyChanged()}
                     className={PROPERTY_VALUE_CLASS}
                     disabled={!canEdit}
                   />
@@ -1186,7 +1215,7 @@ export function TaskDrawer({
                 <PropertyRow icon={Bot} label="Режим">
                   <TaskRalphModeChip
                     task={task}
-                    onChanged={() => onCommitsChange?.()}
+                    onChanged={() => notifyChanged()}
                     className={PROPERTY_VALUE_CLASS}
                     disabled={!canEdit}
                   />
@@ -1319,9 +1348,9 @@ export function TaskDrawer({
                   onRunningChange={setLiveRunning}
                   onCommentCreated={(c) => {
                     onCommentCreatedRef.current?.(c);
-                    onCommitsChange?.();
+                    notifyChanged();
                   }}
-                  onTaskChanged={() => onCommitsChange?.()}
+                  onTaskChanged={() => notifyChanged()}
                 />
               </TabsContent>
               </Tabs>
@@ -1330,7 +1359,7 @@ export function TaskDrawer({
               {/* Сидит в самом низу колонки обсуждения (shrink-0 авто-высота). */}
               {activeTab === 'discussion' &&
                 (task.status === 'in_progress' ? (
-                  <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
+                  <CancelWorkButton task={task} onChanged={() => notifyChanged()} />
                 ) : (
                   // Один ребёнок: иначе на awaiting_clarification фрагмент из двух
                   // элементов создаёт лишний неявный flex-ребёнок и ломает раскладку.
@@ -1339,7 +1368,7 @@ export function TaskDrawer({
                   <div className={cn('shrink-0', !isSplit && 'sticky bottom-0 z-10 bg-background')}>
                     {/* На awaiting_clarification — композер для ralph-answer'а + cancel над ним. */}
                     {task.status === 'awaiting_clarification' && (
-                      <CancelWorkButton task={task} onChanged={() => onCommitsChange?.()} />
+                      <CancelWorkButton task={task} onChanged={() => notifyChanged()} />
                     )}
                     <TaskDrawerComposer
                       task={task}
@@ -1351,9 +1380,9 @@ export function TaskDrawer({
                       onCommentCreated={(c) => {
                         onCommentCreatedRef.current?.(c);
                         scrollBodyToBottom();
-                        onCommitsChange?.();
+                        notifyChanged();
                       }}
-                      onTaskChanged={() => onCommitsChange?.()}
+                      onTaskChanged={() => notifyChanged()}
                     />
                   </div>
                 ))}

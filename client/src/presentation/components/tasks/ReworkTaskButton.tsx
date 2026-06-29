@@ -45,8 +45,8 @@ export function ReworkTaskButton({
       type="button"
       disabled={disabled || submitting}
       onClick={() => void handleRework()}
-      title="Переработка — Ralph пересоберёт результат предыдущей попытки"
-      aria-label="Запросить переработку"
+      title="Переработать: Ralph заново выполнит задачу и переделает результат прошлой попытки"
+      aria-label="Переработать результат"
       className={cn(
         'grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-40',
         className,
