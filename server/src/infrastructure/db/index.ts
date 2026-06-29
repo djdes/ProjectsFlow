@@ -35,6 +35,20 @@ export const pool = mysql.createPool({
   connectionLimit: Number(process.env.DB_CONNECTION_LIMIT ?? 10),
   waitForConnections: true,
   charset: 'utf8mb4_unicode_ci',
+  // Read/write all DATETIME/TIMESTAMP values as UTC. Without this mysql2 defaults
+  // to timezone 'local' and parses MySQL's datetime strings (rendered in the DB's
+  // session time_zone) as the Node process's local tz. In prod Node runs with TZ=UTC
+  // while MySQL's SYSTEM tz is MSK, so timestamps came back +3h ahead. 'Z' makes
+  // mysql2 treat every datetime string as UTC; the SET time_zone below forces MySQL
+  // to render them in UTC too — so the round-trip is correct regardless of host tz.
+  timezone: 'Z',
+});
+
+// Force every pooled connection onto UTC so MySQL emits/accepts datetime strings in
+// UTC (pairs with timezone: 'Z' above). Runs before any user query on a fresh
+// connection — mysql2 pipelines queries per connection in order.
+pool.on('connection', (connection) => {
+  connection.query("SET time_zone='+00:00'");
 });
 
 export const db = drizzle(pool, { schema, mode: 'default' });
