@@ -18,7 +18,7 @@ import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useUpdateProfile } from '@/presentation/hooks/useUpdateProfile';
 import { useContainer } from '@/infrastructure/di/container';
 import { useAuth } from '@/presentation/auth/AuthProvider';
-import { UserAvatar } from '@/presentation/components/user/UserAvatar';
+import { ViewableAvatar } from '@/presentation/components/user/ViewableAvatar';
 import { AvatarCropDialog } from '@/presentation/components/user/AvatarCropDialog';
 import { useTheme } from '@/presentation/components/theme/ThemeProvider';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -107,7 +107,7 @@ function PersonalDataCard(): React.ReactElement {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex items-center gap-4">
-            <UserAvatar
+            <ViewableAvatar
               displayName={user.displayName}
               avatarUrl={user.avatarUrl}
               className="size-12 text-base"

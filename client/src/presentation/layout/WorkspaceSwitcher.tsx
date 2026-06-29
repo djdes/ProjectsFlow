@@ -11,6 +11,7 @@ import {
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
+import { ViewableAvatar } from '@/presentation/components/user/ViewableAvatar';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
@@ -103,7 +104,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
         >
           {/* Шапка: аватар + никнейм пользователя + email (с копированием). */}
           <div className="flex items-center gap-3 px-3 py-3">
-            <UserAvatar
+            <ViewableAvatar
               displayName={user.displayName}
               avatarUrl={user.avatarUrl}
               className="size-10 text-base"
