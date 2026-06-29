@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, Clock, CornerDownRight, Download, FileText, Flag, GripVertical, Loader2, Maximize2, Paperclip, Pencil, Plus, Reply, Send, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, Clock, CornerDownRight, Download, FileText, Flag, GripVertical, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Reply, Send, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -221,12 +221,16 @@ type Props = {
   breadcrumbs?: React.ReactNode;
 };
 
+// localStorage-ключ режима ширины страницы задачи (asPage): '1' = во всю ширину.
+const TASK_PAGE_WIDE_KEY = 'pf-task-page-wide';
+
 // Обёртка содержимого дровера: в обычном режиме — Sheet-оверлей; в asPage —
 // inline-страница во всю высоту с хлебными крошками и центрированной колонкой.
 // Объявлена на уровне модуля (стабильный тип) — иначе пересоздание на каждый рендер
 // ремонтировало бы всё поддерево (потеря фокуса/состояния редактора).
 function DrawerShell({
   asPage,
+  asPageWide,
   breadcrumbs,
   open,
   onOpenChange,
@@ -237,6 +241,8 @@ function DrawerShell({
   children,
 }: {
   asPage: boolean;
+  // asPage: колонка во всю ширину (true) или центрированная читаемая колонка (false).
+  asPageWide: boolean;
   breadcrumbs: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -260,7 +266,12 @@ function DrawerShell({
       >
         {dragOverlay}
         <div className="flex min-h-11 shrink-0 items-center px-3 pt-2 sm:px-6">{breadcrumbs}</div>
-        <div className="mx-auto grid w-full max-w-3xl flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden">
+        <div
+          className={cn(
+            'mx-auto grid w-full flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden',
+            asPageWide ? 'max-w-none' : 'max-w-3xl',
+          )}
+        >
           {children}
         </div>
       </div>
@@ -504,6 +515,27 @@ export function TaskDrawer({
   const { user: currentUser } = useCurrentUser();
   const { taskRepository, recordTaskView, userRepository } = useContainer();
   const navigate = useNavigate();
+  // Ширина колонки на отдельной странице задачи (asPage): по центру (читаемая колонка)
+  // или во всю ширину. Запоминаем в localStorage — следующая открытая страница задачи
+  // стартует в том же режиме. На обычное окно-оверлей не влияет.
+  const [asPageWide, setAsPageWide] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(TASK_PAGE_WIDE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleAsPageWide = useCallback((): void => {
+    setAsPageWide((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(TASK_PAGE_WIDE_KEY, next ? '1' : '0');
+      } catch {
+        /* localStorage недоступен — режим действует только на эту сессию */
+      }
+      return next;
+    });
+  }, []);
   // Task 11: порядок строк-свойств — за пользователем (ui_prefs), один на все проекты.
   const [propertyOrder, setPropertyOrder] = useState<TaskPropertyKey[]>(() =>
     normalizeTaskPropertyOrder(undefined),
@@ -1015,12 +1047,28 @@ export function TaskDrawer({
     </Button>
   );
 
-  // Кнопка «развернуть на весь экран» — рядом с кнопкой закрытия. Открывает задачу
-  // ОТДЕЛЬНОЙ СТРАНИЦЕЙ (/projects/:id/tasks/:taskId) с хлебными крошками — не виджет.
-  // На самой странице (asPage) кнопки нет; в create нет задачи для ссылки.
+  // Кнопка «развернуть/свернуть окно» — рядом с кнопкой закрытия. В обычном окне-оверлее
+  // открывает задачу ОТДЕЛЬНОЙ СТРАНИЦЕЙ (/projects/:id/tasks/:taskId). На самой странице
+  // НЕ исчезает (по просьбе): сворачивает обратно в окно-оверлей внутри проекта
+  // (/projects/:id?task=:taskId) — задача не закрывается, просто открывается окном, как было.
   const renderMaximizeButton = (): React.ReactElement | null => {
     const pageTask = state?.mode === 'edit' ? state.task : null;
-    if (asPage || !pageTask || !isDesktop) return null;
+    if (!pageTask || !isDesktop) return null;
+    if (asPage) {
+      return (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0 text-muted-foreground hover:text-foreground sm:size-7"
+          onClick={() => navigate(`/projects/${pageTask.projectId}?task=${pageTask.id}`)}
+          aria-label="Открыть окном в проекте"
+          title="Открыть окном в проекте"
+        >
+          <Minimize2 className="size-3.5" />
+        </Button>
+      );
+    }
     return (
       <Button
         type="button"
@@ -1032,6 +1080,29 @@ export function TaskDrawer({
         title="Развернуть на весь экран"
       >
         <Maximize2 className="size-3.5" />
+      </Button>
+    );
+  };
+
+  // Переключатель ширины колонки на странице задачи (asPage): по центру ↔ во всю ширину.
+  // Режим запоминается (localStorage), следующая открытая страница задачи стартует так же.
+  const renderPageWidthToggle = (): React.ReactElement | null => {
+    if (!asPage || !isDesktop) return null;
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-7 shrink-0 text-muted-foreground hover:text-foreground sm:size-7"
+        onClick={toggleAsPageWide}
+        aria-label={asPageWide ? 'Колонка по центру' : 'Во всю ширину'}
+        title={asPageWide ? 'Колонка по центру' : 'Во всю ширину'}
+      >
+        {asPageWide ? (
+          <ChevronsRightLeft className="size-3.5" />
+        ) : (
+          <ChevronsLeftRight className="size-3.5" />
+        )}
       </Button>
     );
   };
@@ -1068,6 +1139,7 @@ export function TaskDrawer({
   return (
     <DrawerShell
       asPage={asPage}
+      asPageWide={asPageWide}
       breadcrumbs={breadcrumbs}
       open={state !== null}
       onOpenChange={(open) => !open && onClose()}
@@ -1170,6 +1242,7 @@ export function TaskDrawer({
               <div className="flex min-h-11 items-center gap-2 px-4 pt-2">
                 {renderCloseButton()}
                 {renderMaximizeButton()}
+                {renderPageWidthToggle()}
                 <div className="flex min-w-0 flex-1 items-baseline gap-2">
                   {projectName && (
                     <span className="truncate text-xs font-medium text-muted-foreground">
