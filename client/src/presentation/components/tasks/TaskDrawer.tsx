@@ -754,9 +754,14 @@ export function TaskDrawer({
   const [editDescription, setEditDescription] = useState('');
   // Идёт ли сохранение описания — state (а не ref), т.к. дизейблит редакторы (render-relevant).
   const [editSaving, setEditSaving] = useState(false);
+  // Исходное описание задачи на момент открытия — чтобы НЕ слать update (и не бампить
+  // updatedAt → не выталкивать задачу наверх) при простом открытии/переключении без правок.
+  const originalEditDescRef = useRef('');
   useEffect(() => {
-    if (state?.mode === 'edit') setEditDescription(state.task.description ?? '');
-    else setEditDescription('');
+    if (state?.mode === 'edit') {
+      setEditDescription(state.task.description ?? '');
+      originalEditDescRef.current = state.task.description ?? '';
+    } else setEditDescription('');
     // Пере-сеем только при смене задачи (id) или режима — правки в открытом дровере
     // не должны сбрасываться родительским refetch'ем (он не меняет task.description здесь).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -777,6 +782,7 @@ export function TaskDrawer({
       try {
         const updated = await taskRepository.update(projectId, id, { description: trimmed });
         setEditDescription(updated.description ?? '');
+        originalEditDescRef.current = updated.description ?? '';
         notifyChanged();
       } catch (e) {
         toast.error(`Не удалось сохранить: ${(e as Error).message}`);
@@ -846,8 +852,10 @@ export function TaskDrawer({
       if (!s.taskId || !s.projectId || s.saving) return;
       const trimmed = s.description.trim();
       if (splitTitleBody(trimmed).title.length === 0) return;
-      // Fire-and-forget — компонент уже размонтируется. update идемпотентен по содержимому
-      // (server не плодит ревизию при том же description).
+      // Ничего не правили — НЕ шлём update: иначе сервер бампит updatedAt и задача
+      // всплывает наверх «как отредактированная» при простом открытии/переключении.
+      if (trimmed === originalEditDescRef.current.trim()) return;
+      // Fire-and-forget — компонент уже размонтируется.
       void taskRepository
         .update(s.projectId, s.taskId, { description: trimmed })
         .catch(() => undefined);
