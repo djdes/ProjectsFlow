@@ -57,6 +57,15 @@ function selectWordAt(editor: Editor, clientX: number, clientY: number): boolean
   return true;
 }
 
+// Императивный handle редактора — для действий извне (напр. кнопка «+ Подзадача»
+// в TaskDrawer добавляет чек-лист-пункт и сразу ставит в него курсор).
+export interface RichTextEditorHandle {
+  /** Добавить пустой чек-лист-пункт в конец и поставить в него курсор (focus). */
+  appendChecklistItem: () => void;
+  /** Поставить фокус в конец содержимого. */
+  focusEnd: () => void;
+}
+
 export interface RichTextEditorProps {
   /** Markdown-строка (хранение неизменно — backend/mock получают markdown). */
   value: string;
@@ -88,19 +97,23 @@ const PROSE_CLASS =
   'prose-p:my-1.5 prose-headings:mb-1 prose-headings:mt-3 prose-pre:my-2 ' +
   'prose-ul:my-1.5 prose-ol:my-1.5 prose-blockquote:my-2';
 
-export function RichTextEditor({
-  value,
-  onChange,
-  onSubmit,
-  onBlur,
-  placeholder,
-  autoFocus = false,
-  disabled = false,
-  className,
-  variant = 'description',
-  members,
-  onPasteFiles,
-}: RichTextEditorProps): React.ReactElement {
+export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEditorProps>(
+  function RichTextEditor(
+    {
+      value,
+      onChange,
+      onSubmit,
+      onBlur,
+      placeholder,
+      autoFocus = false,
+      disabled = false,
+      className,
+      variant = 'description',
+      members,
+      onPasteFiles,
+    },
+    ref,
+  ): React.ReactElement {
   // Колбэки через ref — чтобы не пересоздавать editor на каждом рендере.
   const onChangeRef = React.useRef(onChange);
   const onSubmitRef = React.useRef(onSubmit);
@@ -215,6 +228,45 @@ export function RichTextEditor({
     editorRef.current = editor;
   }, [editor]);
 
+  // Императивный API для родителя (кнопка «+ Подзадача» и т.п.). Читает editor через
+  // editorRef, поэтому handle стабилен (deps []).
+  React.useImperativeHandle(
+    ref,
+    () => ({
+      focusEnd(): void {
+        const ed = editorRef.current;
+        if (!ed || ed.isDestroyed) return;
+        ed.chain().focus('end').run();
+      },
+      appendChecklistItem(): void {
+        const ed = editorRef.current;
+        if (!ed || ed.isDestroyed || !ed.isEditable) return;
+        ed.chain()
+          .focus()
+          .command(({ tr, state, dispatch }) => {
+            const { schema, doc } = state;
+            const taskItemType = schema.nodes['taskItem'];
+            const taskListType = schema.nodes['taskList'];
+            const paragraphType = schema.nodes['paragraph'];
+            if (!taskItemType || !taskListType || !paragraphType) return false;
+            if (dispatch) {
+              const item = taskItemType.create({ checked: false }, paragraphType.create());
+              const list = taskListType.create(null, item);
+              const endPos = doc.content.size;
+              tr.insert(endPos, list);
+              // Курсор внутрь пустого параграфа нового пункта: list(+1) item(+1) para(+1).
+              const cursor = Math.min(endPos + 3, tr.doc.content.size);
+              tr.setSelection(TextSelection.create(tr.doc, cursor));
+              tr.scrollIntoView();
+            }
+            return true;
+          })
+          .run();
+      },
+    }),
+    [],
+  );
+
   // Внешнее изменение value (AI-improve, сброс формы) → синхронизируем без эха onUpdate.
   React.useEffect(() => {
     if (!editor || editor.isDestroyed) return;
@@ -299,4 +351,5 @@ export function RichTextEditor({
       <EditorContent editor={editor} />
     </div>
   );
-}
+  },
+);

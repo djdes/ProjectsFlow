@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Download, FileText, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -18,15 +18,12 @@ import type {
   LiveToolUsePayload,
 } from '@/domain/live/LiveEvent';
 import type { LiveFileDiff } from '@/domain/live/LiveFileDiff';
-import { taskShortId, type Task } from '@/domain/task/Task';
-import type { TaskAttachment } from '@/domain/task/TaskAttachment';
+import { type Task } from '@/domain/task/Task';
 import type { TaskComment } from '@/domain/task/TaskComment';
 import { CommentBody } from './CommentBody';
 import { DiffView } from '@/presentation/components/diff/DiffView';
 import { CancelWorkButton } from './CancelWorkButton';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
-import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
-import { formatBytes, isImageMime } from '@/presentation/components/attachments/files';
 import { LIVE_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 
 const DOM_CAP = 300;
@@ -57,7 +54,6 @@ const RICH_MD =
 
 type Props = {
   task: Task;
-  attachments: TaskAttachment[];
   active?: boolean;
   backlogTail: { readonly id: string } | null;
   todoTail: { readonly id: string } | null;
@@ -72,7 +68,6 @@ type Props = {
 // или большая кнопка отмены (когда идёт).
 export function LiveTab({
   task,
-  attachments,
   active = true,
   backlogTail,
   todoTail,
@@ -87,7 +82,6 @@ export function LiveTab({
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(DOM_CAP);
-  const [preview, setPreview] = useState<TaskAttachment | null>(null);
 
   const reloadSessions = useCallback(() => {
     let cancelled = false;
@@ -185,8 +179,7 @@ export function LiveTab({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#f6f6f7] text-zinc-700 dark:bg-[#1e1e1e] dark:text-[#d4d4d4]">
-      {/* Шапка: сама задача + кликабельные фото. */}
-      <LiveTaskHeader task={task} attachments={attachments} onOpen={setPreview} />
+      {/* Шапка задачи убрана — задача видна в левой колонке окна (split/edit). */}
 
       {/* Селектор попыток. */}
       {sessions.length > 0 && (
@@ -299,70 +292,6 @@ export function LiveTab({
           />
         )}
       </div>
-
-      <AttachmentLightbox attachment={preview} onClose={() => setPreview(null)} />
-    </div>
-  );
-}
-
-// === Заголовок задачи ===
-function LiveTaskHeader({
-  task,
-  attachments,
-  onOpen,
-}: {
-  task: Task;
-  attachments: TaskAttachment[];
-  onOpen: (a: TaskAttachment) => void;
-}): React.ReactElement {
-  const images = attachments.filter((a) => isImageMime(a.mimeType));
-  const files = attachments.filter((a) => !isImageMime(a.mimeType));
-  const description = task.description?.trim() ?? '';
-
-  return (
-    <div className="shrink-0 border-b border-zinc-200 bg-zinc-100 px-3 py-2.5 dark:border-white/10 dark:bg-[#252526]">
-      <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-zinc-500 dark:text-[#8b949e]">
-        <span className="font-mono">[{taskShortId(task.id)}]</span>
-        <span className="opacity-70">задача</span>
-      </div>
-      {description.length > 0 ? (
-        <div className="max-h-28 overflow-y-auto pr-1">
-          <CommentBody body={description} className={RICH_MD} />
-        </div>
-      ) : (
-        <p className="text-xs italic text-zinc-400 dark:text-[#8b949e]">Без описания</p>
-      )}
-
-      {(images.length > 0 || files.length > 0) && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {images.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              onClick={() => onOpen(a)}
-              className="size-12 overflow-hidden rounded border border-zinc-300 transition-transform hover:scale-105 hover:border-zinc-400 dark:border-white/10 dark:hover:border-white/30"
-              title={a.filename}
-              aria-label={`Открыть ${a.filename}`}
-            >
-              <img src={a.url} alt={a.filename} loading="lazy" className="size-full object-cover" />
-            </button>
-          ))}
-          {files.map((a) => (
-            <a
-              key={a.id}
-              href={a.url}
-              download={a.filename}
-              className="inline-flex items-center gap-1.5 rounded border border-zinc-200 bg-white px-2 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-[#cccccc] dark:hover:bg-white/10"
-              title={a.filename}
-            >
-              <FileText className="size-3.5 shrink-0 text-zinc-400 dark:text-[#8b949e]" />
-              <span className="max-w-[140px] truncate">{a.filename}</span>
-              <span className="text-zinc-400 dark:text-[#8b949e]">{formatBytes(a.sizeBytes)}</span>
-              <Download className="size-3 shrink-0 text-zinc-400 dark:text-[#8b949e]" />
-            </a>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

@@ -79,7 +79,13 @@ export interface TaskRepository {
   unlinkCommit(projectId: string, taskId: string, sha: string): Promise<void>;
   syncCommits(projectId: string): Promise<SyncCommitsResult>;
   listAttachments(projectId: string, taskId: string): Promise<TaskAttachment[]>;
-  uploadAttachment(projectId: string, taskId: string, file: File): Promise<TaskAttachment>;
+  // onProgress — опциональный колбэк прогресса аплоада (loaded/total байт) для прогресс-бара.
+  uploadAttachment(
+    projectId: string,
+    taskId: string,
+    file: File,
+    onProgress?: (loaded: number, total: number) => void,
+  ): Promise<TaskAttachment>;
   deleteAttachment(projectId: string, taskId: string, attachmentId: string): Promise<void>;
   uploadCommentAttachment(
     projectId: string,

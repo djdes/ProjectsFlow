@@ -743,7 +743,7 @@ const uploadsDir = resolvePath(process.env['UPLOADS_DIR'] ?? 'uploads');
 const attachmentStorage = new FileSystemAttachmentStorage(uploadsDir);
 console.log(`[projectsflow] attachments dir: ${uploadsDir}`);
 
-const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB. Любой тип файла (валидация = размер).
+const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024; // 100 MB. Любой тип файла (валидация = размер).
 
 // --- file-sync (PF Desktop Companion, миграция db/044) ---
 const syncBlobsDir = resolvePath(process.env['SYNC_BLOBS_DIR'] ?? 'sync-blobs');

@@ -3,6 +3,7 @@ import { lazy, Suspense, useRef } from 'react';
 
 import { Markdown } from '@/presentation/components/markdown/Markdown';
 import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
+import type { RichTextEditorHandle } from '@/presentation/components/editor/RichTextEditor';
 
 // Tiptap-редактор грузим лениво (тяжёлый). Тот же модуль, что и в TaskDrawer/комментариях —
 // Vite дедуплицирует chunk, повторной загрузки нет.
@@ -43,6 +44,9 @@ type Props = {
   disabled?: boolean;
   // Плейсхолдер редактора (по умолчанию — для тела; для объединённого поля переопределяем).
   placeholder?: string;
+  // Императивный handle редактора — даёт родителю вставить чек-лист-пункт и сфокусироваться
+  // (кнопка «+ Подзадача» в TaskDrawer).
+  editorRef?: React.Ref<RichTextEditorHandle>;
 };
 
 export function TaskBodyEditor({
@@ -57,6 +61,7 @@ export function TaskBodyEditor({
   onPasteFiles,
   disabled = false,
   placeholder = 'Описание, детали, подзадачи…',
+  editorRef,
 }: Props): React.ReactElement {
   // Клик по AI открывает Radix-диалог, который перехватывает фокус → редактор получает
   // blur. Этот флаг (взводится на mousedown по AI) гасит blur-save, чтобы не было лишней
@@ -111,6 +116,7 @@ export function TaskBodyEditor({
         }
       >
         <RichTextEditor
+          ref={editorRef}
           variant="description"
           value={body}
           onChange={onBodyChange}

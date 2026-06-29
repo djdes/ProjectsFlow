@@ -84,12 +84,16 @@ function viewport(): number {
 }
 
 export type ResizableWidth = {
-  /** Current clamped width in px. */
+  /** Current clamped width in px (when maximized — the viewport-max width). */
   readonly width: number;
   /** True while the user is actively dragging the handle (gate transitions off). */
   readonly dragging: boolean;
   /** True when the layout should be the two-pane split. */
   readonly isSplit: boolean;
+  /** True when the drawer is expanded to full (max) width. */
+  readonly maximized: boolean;
+  /** Toggle the full-width (fullscreen) state. */
+  readonly toggleMaximized: () => void;
   /** pointerdown handler to attach to the drag handle. */
   readonly onHandlePointerDown: (e: React.PointerEvent<HTMLElement>) => void;
 };
@@ -109,6 +113,9 @@ export function useResizableWidth(enabled: boolean, open: boolean): ResizableWid
     clampDrawerWidth(readStoredWidth() ?? DRAWER_DEFAULT_WIDTH, viewport()),
   );
   const [dragging, setDragging] = useState(false);
+  // «Развернуть на весь экран» — окно растягивается на максимум (drawerMaxWidth).
+  // Не персистится: каждое открытие стартует в обычной ширине.
+  const [maximized, setMaximized] = useState(false);
   const [vw, setVw] = useState<number>(() => viewport());
 
   // On open (and when enabling), restore persisted width and re-clamp to the
@@ -118,7 +125,12 @@ export function useResizableWidth(enabled: boolean, open: boolean): ResizableWid
     const nextVw = viewport();
     setVw(nextVw);
     setWidth(clampDrawerWidth(readStoredWidth() ?? DRAWER_DEFAULT_WIDTH, nextVw));
+    setMaximized(false);
   }, [open]);
+
+  const toggleMaximized = useCallback((): void => {
+    setMaximized((m) => !m);
+  }, []);
 
   // Recompute split + re-clamp on window resize (keeps both layouts honest when
   // the user resizes the browser with the drawer open).
@@ -149,6 +161,8 @@ export function useResizableWidth(enabled: boolean, open: boolean): ResizableWid
       }
       const nextVw = viewport();
       setVw(nextVw);
+      // Ручной ресайз выходит из fullscreen-режима.
+      setMaximized(false);
       dragRef.current = { startX: e.clientX, startWidth: width };
       setDragging(true);
 
@@ -185,10 +199,17 @@ export function useResizableWidth(enabled: boolean, open: boolean): ResizableWid
     [enabled, width],
   );
 
+  // В fullscreen окно растягивается почти на весь вьюпорт (96vw, без жёсткого потолка
+  // 1400 — это осознанный «во весь экран»); split в этом режиме всегда включён.
+  const effectiveWidth =
+    enabled && maximized ? Math.round(vw * DRAWER_MAX_VIEWPORT_RATIO) : width;
+
   return {
-    width,
+    width: effectiveWidth,
     dragging: enabled && dragging,
-    isSplit: enabled && computeIsSplit(width, vw),
+    isSplit: enabled && (maximized || computeIsSplit(effectiveWidth, vw)),
+    maximized: enabled && maximized,
+    toggleMaximized,
     onHandlePointerDown,
   };
 }

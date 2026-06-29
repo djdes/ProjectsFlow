@@ -259,6 +259,17 @@ export function tasksRouter(deps: Deps): Router {
     limits: { fileSize: deps.maxAttachmentBytes },
   });
 
+  // multer декодирует `originalname` из заголовка как latin1 — кириллица (и любые
+  // не-ASCII имена) превращаются в мохибейк. Перекодируем обратно latin1 → utf8,
+  // чтобы имя файла отображалось корректно.
+  const decodeFilename = (raw: string): string => {
+    try {
+      return Buffer.from(raw, 'latin1').toString('utf8');
+    } catch {
+      return raw;
+    }
+  };
+
   router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const projectId = req.params['projectId'] as string;
@@ -550,7 +561,7 @@ export function tasksRouter(deps: Deps): Router {
           projectId,
           ownerUserId: req.user!.id,
           taskId,
-          filename: file.originalname,
+          filename: decodeFilename(file.originalname),
           mimeType: file.mimetype,
           data: file.buffer,
         });
@@ -746,7 +757,7 @@ export function tasksRouter(deps: Deps): Router {
           ownerUserId: req.user!.id,
           taskId,
           commentId,
-          filename: file.originalname,
+          filename: decodeFilename(file.originalname),
           mimeType: file.mimetype,
           data: file.buffer,
         });

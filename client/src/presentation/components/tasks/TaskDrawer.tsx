@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, Clock, CornerDownRight, Download, FileText, Flag, Loader2, Paperclip, Pencil, Plus, Reply, Send, Trash2, UserPlus, X } from 'lucide-react';
+import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, Clock, CornerDownRight, Download, FileText, Flag, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Reply, Send, Trash2, UploadCloud, UserPlus, X } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,14 +72,16 @@ import type { TaskPriority } from '@/domain/task/Task';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
 import { CommentsEmptyState } from './CommentsEmptyState';
 import { TaskBodyEditor } from './TaskBodyEditor';
-import { splitTitleBody, joinTitleBody } from '@/lib/taskTitleBody';
+import { splitTitleBody } from '@/lib/taskTitleBody';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
 import { STATUS_LABEL } from './statusLabels';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useResizableWidth } from '@/presentation/hooks/useResizableWidth';
 import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
-import type { MentionMember } from '@/presentation/components/editor/RichTextEditor';
+import type { MentionMember, RichTextEditorHandle } from '@/presentation/components/editor/RichTextEditor';
+import { useMotion } from '@/presentation/components/motion/MotionProvider';
+import { Progress } from '@/components/ui/progress';
 
 // Tiptap-редактор грузим лениво — он тяжёлый и не нужен на read-heavy экранах,
 // которые не открывают drawer. Suspense-fallback держит высоту, чтобы layout не прыгал.
@@ -137,6 +139,13 @@ type PendingFile = {
   readonly id: string;
   readonly file: File;
   readonly previewUrl: string;
+};
+
+// In-flight аплоад файла (edit-mode): имя + прогресс в процентах для прогресс-бара.
+type UploadItem = {
+  readonly id: string;
+  readonly name: string;
+  readonly progress: number;
 };
 
 export type TaskDrawerState =
@@ -379,6 +388,7 @@ export function TaskDrawer({
 }: Props): React.ReactElement {
   const { user: currentUser } = useCurrentUser();
   const { taskRepository, recordTaskView } = useContainer();
+  const { animations } = useMotion();
   // Фиксируем «юзер открыл задачу» — единая точка для всех мест, где открывается drawer
   // (доска, «Поручено мне», блок «Недавнее»). Только edit-mode с реальной задачей; раз на
   // taskId. Fire-and-forget (ошибки глотаем), затем шлём 'pf:recent-changed' — блок
@@ -411,6 +421,16 @@ export function TaskDrawer({
   const [createPriority, setCreatePriority] = useState<TaskPriority | null>(null);
   // Drag-active флаг для create-mode (подсветка рамки при перетаскивании файлов).
   const [createDragActive, setCreateDragActive] = useState(false);
+  // Drag-active флаг для edit-mode (большой оверлей «Перетащите сюда файл»).
+  const [editDragActive, setEditDragActive] = useState(false);
+  // Счётчик dragenter/dragleave (вложенные элементы шлют события) — оверлей гаснет
+  // только когда курсор реально покинул окно, а не при наведении на дочерний элемент.
+  const editDragDepth = useRef(0);
+  // Активные аплоады (edit-mode) — прогресс-бары под рядом свойств «Файлы».
+  const [uploads, setUploads] = useState<UploadItem[]>([]);
+  // Императивные handle'ы редакторов — для «+ Подзадача» (вставить пункт и сфокусироваться).
+  const bodyEditorRef = useRef<RichTextEditorHandle>(null);
+  const createEditorRef = useRef<RichTextEditorHandle>(null);
   // Ref на скрытый file input для кнопки «Вложение» в create-mode.
   const createFileInputRef = useRef<HTMLInputElement>(null);
   // Контейнер тела create-формы — чтобы Enter в заголовке переводил фокус в тело.
@@ -560,6 +580,9 @@ export function TaskDrawer({
     setLiveRunning(false);
     setCommentCount(0);
     setCreateDragActive(false);
+    setEditDragActive(false);
+    editDragDepth.current = 0;
+    setUploads([]);
     // При закрытии/смене диалога чистим pending — URL.revokeObjectURL для blob'ов.
     setPendingFiles((prev) => {
       prev.forEach((p) => URL.revokeObjectURL(p.previewUrl));
@@ -579,33 +602,57 @@ export function TaskDrawer({
     setPendingFiles((prev) => [...prev, ...additions]);
   };
 
-  // Direct upload for edit-mode paste (no AttachmentsSection in body anymore).
+  // Direct upload for edit-mode (paste, drag&drop, «+ Файл»). Каждый файл получает
+  // прогресс-бар (uploads); грузим параллельно — несколько баров одновременно.
   const uploadFilesDirectly = async (files: File[]): Promise<void> => {
     if (state?.mode !== 'edit') return;
     const { projectId, id } = state.task;
-    for (const file of files) {
-      try {
-        await taskRepository.uploadAttachment(projectId, id, file);
-        toast.success(`${file.name} прикреплён`);
-      } catch (err) {
-        toast.error(`Не удалось загрузить ${file.name}: ${(err as Error).message}`);
-      }
-    }
+    const items = files.map((file) => ({ uploadId: crypto.randomUUID(), file }));
+    setUploads((prev) => [
+      ...prev,
+      ...items.map((it) => ({ id: it.uploadId, name: it.file.name, progress: 0 })),
+    ]);
+    await Promise.all(
+      items.map(async ({ uploadId, file }) => {
+        try {
+          await taskRepository.uploadAttachment(projectId, id, file, (loaded, total) => {
+            const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
+            setUploads((prev) => prev.map((u) => (u.id === uploadId ? { ...u, progress: pct } : u)));
+          });
+        } catch (err) {
+          toast.error(`Не удалось загрузить ${file.name}: ${(err as Error).message}`);
+        } finally {
+          setUploads((prev) => prev.filter((u) => u.id !== uploadId));
+        }
+      }),
+    );
     onCommitsChange?.();
     refetchHeaderAttachments();
   };
 
-  // «+ подзадача» (edit-mode): дописываем пустой checklist-пункт `- [ ]` в конец ТЕЛА
-  // (не заголовка) задачи. Бэкенда для подзадач нет — это markdown-чеклист внутри тела
-  // (TaskItem в RichTextEditor его рендерит интерактивным). Работаем над live-описанием
-  // (editDescription), чтобы не потерять несохранённые правки заголовка/тела.
-  const appendSubtask = async (): Promise<void> => {
+  // Удаление вложения (edit-mode) — кнопка «×» на чипе файла в ряду свойств.
+  const deleteAttachmentDirectly = (att: TaskAttachment): void => {
     if (state?.mode !== 'edit') return;
-    const { title, body } = splitTitleBody(editDescription);
-    const sep = body.length === 0 ? '' : body.endsWith('\n') ? '' : '\n';
-    const nextBody = `${body}${sep}- [ ] `;
-    setEditDescription(joinTitleBody(title, nextBody));
-    await commitDescription(joinTitleBody(title, nextBody));
+    const { projectId, id } = state.task;
+    void taskRepository
+      .deleteAttachment(projectId, id, att.id)
+      .then(() => {
+        onCommitsChange?.();
+        refetchHeaderAttachments();
+      })
+      .catch((err) =>
+        toast.error(`Не удалось удалить ${att.filename}: ${(err as Error).message}`),
+      );
+  };
+
+  // «+ подзадача» (edit-mode): вставляем пустой checklist-пункт через императивный
+  // handle редактора и СРАЗУ ставим в него курсор — пользователь печатает без клика
+  // мышью. onChange редактора обновит editDescription; запись — по blur/unmount-save.
+  // (Бэкенда для подзадач нет — это markdown-чеклист внутри тела, TaskItem рендерит
+  // его интерактивным.)
+  const appendSubtask = (): void => {
+    if (state?.mode !== 'edit') return;
+    bodyEditorRef.current?.appendChecklistItem();
   };
 
   // Form-level paste handler — ловит Ctrl+V где угодно внутри формы (textarea, секция, пустое место).
@@ -636,6 +683,40 @@ export function TaskDrawer({
     setCreateDragActive(false);
     if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
       addPendingFiles(Array.from(e.dataTransfer.files));
+    }
+  };
+
+  // Edit-mode drag&drop: перетаскивание файла из ОС на ВСЁ окно показывает большой
+  // оверлей. Реагируем только на файлы (types включает 'Files'), чтобы внутренний
+  // drag текста/блоков редактора не триггерил оверлей. dragenter/leave считаем глубину —
+  // вложенные элементы шлют свои события, иначе оверлей мигает.
+  const hasFiles = (e: DragEvent<HTMLDivElement>): boolean =>
+    Array.from(e.dataTransfer?.types ?? []).includes('Files');
+  const handleEditDragEnter = (e: DragEvent<HTMLDivElement>): void => {
+    if (state?.mode !== 'edit' || !hasFiles(e)) return;
+    e.preventDefault();
+    editDragDepth.current += 1;
+    setEditDragActive(true);
+  };
+  const handleEditDragOver = (e: DragEvent<HTMLDivElement>): void => {
+    if (state?.mode !== 'edit' || !hasFiles(e)) return;
+    e.preventDefault();
+  };
+  const handleEditDragLeave = (): void => {
+    if (state?.mode !== 'edit') return;
+    editDragDepth.current -= 1;
+    if (editDragDepth.current <= 0) {
+      editDragDepth.current = 0;
+      setEditDragActive(false);
+    }
+  };
+  const handleEditDrop = (e: DragEvent<HTMLDivElement>): void => {
+    if (state?.mode !== 'edit') return;
+    e.preventDefault();
+    editDragDepth.current = 0;
+    setEditDragActive(false);
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      void uploadFilesDirectly(Array.from(e.dataTransfer.files));
     }
   };
 
@@ -699,6 +780,25 @@ export function TaskDrawer({
     </Button>
   );
 
+  // Кнопка «развернуть/свернуть на весь экран» — рядом с кнопкой закрытия. Только
+  // desktop (resizeEnabled): на мобильных окно и так во весь экран.
+  const renderMaximizeButton = (): React.ReactElement | null => {
+    if (!resizeEnabled) return null;
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+        onClick={toggleMaximized}
+        aria-label={maximized ? 'Свернуть' : 'Развернуть на весь экран'}
+        title={maximized ? 'Свернуть' : 'Развернуть на весь экран'}
+      >
+        {maximized ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+      </Button>
+    );
+  };
+
   const task = state?.mode === 'edit' ? state.task : null;
   const scrollToCommentId = state?.mode === 'edit' ? state.scrollToCommentId : undefined;
   // Контекст ответа/цитаты: выбран в треде (кнопка «Ответить» / выделение), читается
@@ -715,10 +815,8 @@ export function TaskDrawer({
   const isFinePointer = useMediaQuery('(pointer: fine)');
   // Resizable + split включаем И для edit, И для create (окно создания = окно редактирования).
   const resizeEnabled = (state?.mode === 'edit' || state?.mode === 'create') && isDesktop && isFinePointer;
-  const { width, dragging, isSplit, onHandlePointerDown } = useResizableWidth(
-    resizeEnabled,
-    state !== null,
-  );
+  const { width, dragging, isSplit, maximized, toggleMaximized, onHandlePointerDown } =
+    useResizableWidth(resizeEnabled, state !== null);
 
   return (
     <Sheet open={state !== null} onOpenChange={(open) => !open && onClose()}>
@@ -774,8 +872,12 @@ export function TaskDrawer({
           // обсуждение справа, серый разделитель между; иначе — привычный стек
           // (шапка сверху, ниже центрированный переключатель + комменты + композер).
           <div
+            onDragEnter={handleEditDragEnter}
+            onDragOver={handleEditDragOver}
+            onDragLeave={handleEditDragLeave}
+            onDrop={handleEditDrop}
             className={cn(
-              'min-h-0',
+              'relative min-h-0',
               // split — две колонки в ряд, у каждой свой скролл; narrow — ОДИН общий
               // скролл всего окна (скроллится этот контейнер, внутренние блоки —
               // натуральной высоты, без своих overflow). Так задача+комменты+композер
@@ -785,6 +887,22 @@ export function TaskDrawer({
                 : 'flex h-full flex-col overflow-y-auto overscroll-contain',
             )}
           >
+            {/* Оверлей перетаскивания файла из ОС: большой пунктирный плейсхолдер поверх
+                окна. pointer-events-none — чтобы не перехватывать drop/dragleave (его
+                ловит контейнер). Анимация появления — под useMotion. */}
+            {editDragActive && (
+              <div
+                className={cn(
+                  'pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-primary/60 bg-background/85 backdrop-blur-sm',
+                  animations && 'duration-150 animate-in fade-in-0',
+                )}
+              >
+                <UploadCloud className="size-10 text-primary" />
+                <span className="text-sm font-medium text-foreground">Перетащите сюда файл</span>
+                <span className="text-xs text-muted-foreground">Файл прикрепится к задаче</span>
+              </div>
+            )}
+
             {/* === HEADER / ЛЕВАЯ КОЛОНКА === Notion-style. В стеке — sticky-шапка с
                 нижним бордером (единственный разделитель до переключателя вкладок).
                 В split — самостоятельная скроллящаяся левая колонка (бордера снизу нет,
@@ -807,6 +925,7 @@ export function TaskDrawer({
                   + передать/статус (справа). Дата создания переехала в ряд свойств «Создано». */}
               <div className="flex items-center gap-2 px-4 pt-3">
                 {renderCloseButton()}
+                {renderMaximizeButton()}
                 <div className="flex min-w-0 flex-1 items-baseline gap-2">
                   {projectName && (
                     <span className="truncate text-xs font-medium text-muted-foreground">
@@ -850,6 +969,7 @@ export function TaskDrawer({
               <div ref={bodyContainerRef} className="px-4 pb-1 pt-1.5">
                 <TaskBodyEditor
                   key={`desc-${task.id}`}
+                  editorRef={bodyEditorRef}
                   projectId={task.projectId}
                   taskId={task.id}
                   body={editDescription}
@@ -877,7 +997,7 @@ export function TaskDrawer({
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <button
                       type="button"
-                      onClick={() => void appendSubtask()}
+                      onClick={() => appendSubtask()}
                       className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
                     >
                       <Plus className="size-4 shrink-0" />
@@ -979,23 +1099,39 @@ export function TaskDrawer({
                   />
                 </PropertyRow>
 
-                {/* Файлы — чипы вложений или «Пусто». Когда файлов нет — показываем
-                    «Пусто» (загрузка — через add-affordance «+ Файл» в ряду плюсиков
-                    над свойствами), чтобы не дублировать пустую кнопку-плейсхолдер. */}
+                {/* Файлы — чипы вложений (с именем, размером и кнопкой удаления) + «+»
+                    для добавления прямо из строки. Ряд рендерится всегда: пустое
+                    состояние показывает тихий чип «Файл». Под чипами — прогресс-бары
+                    активных аплоадов. */}
                 <PropertyRow icon={Paperclip} label="Файлы">
-                  {headerAttachments.length > 0 ? (
-                    <TaskDrawerAttachmentRow
-                      items={headerAttachments}
-                      canEdit={canEdit}
-                      onAddFiles={(files) => {
-                        void uploadFilesDirectly(files);
-                      }}
-                    />
-                  ) : (
-                    <span className="inline-flex min-h-7 items-center">
-                      <EmptyValue />
-                    </span>
-                  )}
+                  <div className="flex min-w-0 flex-1 basis-full flex-col gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <TaskDrawerAttachmentRow
+                        items={headerAttachments}
+                        canEdit={canEdit}
+                        onAddFiles={(files) => {
+                          void uploadFilesDirectly(files);
+                        }}
+                        onDelete={deleteAttachmentDirectly}
+                      />
+                    </div>
+                    {uploads.length > 0 && (
+                      <div className="flex basis-full flex-col gap-1.5 pt-0.5">
+                        {uploads.map((u) => (
+                          <div key={u.id} className="flex min-w-0 items-center gap-2">
+                            <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                            <span className="max-w-[160px] shrink-0 truncate text-[11px] text-muted-foreground">
+                              {u.name}
+                            </span>
+                            <Progress value={u.progress} className="min-w-0 flex-1" />
+                            <span className="w-8 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
+                              {u.progress}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </PropertyRow>
 
                 {/* Создано — read-only, приглушённо. */}
@@ -1103,7 +1239,6 @@ export function TaskDrawer({
               >
                 <LiveTab
                   task={task}
-                  attachments={headerAttachments}
                   active={activeTab === 'live'}
                   backlogTail={backlogTail}
                   todoTail={todoTail}
@@ -1182,6 +1317,7 @@ export function TaskDrawer({
                 {/* Row A: close + контекст (без Копир./Переработка/План — задачи ещё нет). */}
                 <div className="flex items-center gap-2 px-4 pt-3">
                   {renderCloseButton()}
+                  {renderMaximizeButton()}
                   <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     {projectName ? `${projectName} · ` : ''}Новая задача
                   </span>
@@ -1191,6 +1327,7 @@ export function TaskDrawer({
                 <div ref={createBodyContainerRef} className="px-4 pb-1 pt-1.5">
                   <Suspense fallback={<div className="min-h-[6rem]" />}>
                     <RichTextEditor
+                      ref={createEditorRef}
                       variant="description"
                       value={description}
                       onChange={setDescription}
@@ -1214,9 +1351,7 @@ export function TaskDrawer({
                   <button
                     type="button"
                     disabled={saving}
-                    onClick={() =>
-                      setDescription((d) => `${d}${d.length === 0 || d.endsWith('\n') ? '' : '\n'}- [ ] `)
-                    }
+                    onClick={() => createEditorRef.current?.appendChecklistItem()}
                     className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
                   >
                     <Plus className="size-4 shrink-0" />

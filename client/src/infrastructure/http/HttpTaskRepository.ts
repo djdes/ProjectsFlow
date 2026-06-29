@@ -108,21 +108,49 @@ function attachmentFromDto(dto: AttachmentDto): TaskAttachment {
   return { ...dto, uploadedAt: new Date(dto.uploadedAt) };
 }
 
-// multipart/form-data upload: httpClient рассчитан под JSON, поэтому fetch вручную.
-// credentials:'include' для cookie-сессии. Content-Type браузер выставит сам с boundary.
-async function uploadFile(url: string, file: File): Promise<TaskAttachment> {
-  const form = new FormData();
-  form.append('file', file);
-  const res = await fetch(url, { method: 'POST', credentials: 'include', body: form });
-  const text = await res.text();
-  const data = text
-    ? (JSON.parse(text) as { attachment?: AttachmentDto; error?: string; message?: string })
-    : null;
-  if (!res.ok || !data?.attachment) {
-    const msg = data?.message ?? data?.error ?? `HTTP ${res.status}`;
-    throw new Error(msg);
-  }
-  return attachmentFromDto(data.attachment);
+// multipart/form-data upload: httpClient рассчитан под JSON, поэтому XHR вручную.
+// XHR (а не fetch) — чтобы получать события прогресса аплоада (upload.onprogress);
+// fetch их не отдаёт. withCredentials для cookie-сессии. Content-Type браузер
+// выставит сам с boundary.
+function uploadFile(
+  url: string,
+  file: File,
+  onProgress?: (loaded: number, total: number) => void,
+): Promise<TaskAttachment> {
+  return new Promise<TaskAttachment>((resolve, reject) => {
+    const form = new FormData();
+    form.append('file', file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.withCredentials = true;
+
+    if (onProgress) {
+      xhr.upload.onprogress = (e: ProgressEvent): void => {
+        if (e.lengthComputable) onProgress(e.loaded, e.total);
+      };
+    }
+
+    xhr.onload = (): void => {
+      const text = xhr.responseText;
+      type UploadResponse = { attachment?: AttachmentDto; error?: string; message?: string };
+      let data: UploadResponse | null;
+      try {
+        data = text ? (JSON.parse(text) as UploadResponse) : null;
+      } catch {
+        data = null;
+      }
+      if (xhr.status < 200 || xhr.status >= 300 || !data?.attachment) {
+        reject(new Error(data?.message ?? data?.error ?? `HTTP ${xhr.status}`));
+        return;
+      }
+      resolve(attachmentFromDto(data.attachment));
+    };
+    xhr.onerror = (): void => reject(new Error('Сетевая ошибка при загрузке'));
+    xhr.onabort = (): void => reject(new Error('Загрузка отменена'));
+
+    xhr.send(form);
+  });
 }
 
 function commentFromDto(dto: CommentDto): TaskComment {
@@ -206,8 +234,13 @@ export class HttpTaskRepository implements TaskRepository {
     );
     return attachments.map(attachmentFromDto);
   }
-  async uploadAttachment(projectId: string, taskId: string, file: File): Promise<TaskAttachment> {
-    return uploadFile(`/api/projects/${projectId}/tasks/${taskId}/attachments`, file);
+  async uploadAttachment(
+    projectId: string,
+    taskId: string,
+    file: File,
+    onProgress?: (loaded: number, total: number) => void,
+  ): Promise<TaskAttachment> {
+    return uploadFile(`/api/projects/${projectId}/tasks/${taskId}/attachments`, file, onProgress);
   }
   async deleteAttachment(projectId: string, taskId: string, attachmentId: string): Promise<void> {
     await httpClient.delete<void>(
