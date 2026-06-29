@@ -67,6 +67,7 @@ import { TaskDeadlineChip } from './TaskDeadlineChip';
 import { PropertyRow, EmptyValue, PROPERTY_VALUE_CLASS } from './PropertyRow';
 import { CopyTaskButton } from './CopyTaskButton';
 import { ReworkTaskButton } from './ReworkTaskButton';
+import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
 import { PlanTaskButton } from './PlanTaskButton';
 import { formatTaskCreated } from '@/lib/datetime';
 import type { TaskPriority } from '@/domain/task/Task';
@@ -954,9 +955,11 @@ export function TaskDrawer({
   // stacked Sheet (mobile untouched). `md` breakpoint is 768px (Tailwind default).
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const isFinePointer = useMediaQuery('(pointer: fine)');
-  // Resizable + split включаем И для edit, И для create (окно создания = окно редактирования).
+  // Resizable + split — на десктопе (edit И create). НЕ завязываем на state.mode: иначе при
+  // закрытии (state→null) инлайн-ширина мгновенно слетала на дефолтные 900px → окно «дёргано»
+  // расширялось перед закрытием. Без mode-гейта ширина держится всю анимацию закрытия.
   // В asPage (отдельная страница) ресайз не нужен — фиксированная центрированная колонка.
-  const resizeEnabled = !asPage && (state?.mode === 'edit' || state?.mode === 'create') && isDesktop && isFinePointer;
+  const resizeEnabled = !asPage && isDesktop && isFinePointer;
   const { width, dragging, isSplit: isSplitRaw, onHandlePointerDown } =
     useResizableWidth(resizeEnabled, state !== null);
   // В asPage — всегда одна центрированная колонка (Notion-style страница), без split.
@@ -1043,9 +1046,10 @@ export function TaskDrawer({
                   : 'shrink-0 border-b',
               )}
             >
-              {/* Row A: контекст · короткий id (слева), действия (Копир./Переработка/План)
-                  + передать/статус (справа). Дата создания переехала в ряд свойств «Создано». */}
-              <div className="flex items-center gap-2 px-4 pt-3">
+              {/* Row A: контекст · короткий id (слева), статус (справа). Высота/вертикальное
+                  выравнивание как у строки хлебных крошек страницы (min-h-11, по центру) —
+                  чтобы кнопки закрыть/развернуть стояли на одной линии с крошками. */}
+              <div className="flex min-h-11 items-center gap-2 px-4 pt-2">
                 {renderCloseButton()}
                 {renderMaximizeButton()}
                 <div className="flex min-w-0 flex-1 items-baseline gap-2">
@@ -1092,17 +1096,9 @@ export function TaskDrawer({
                 <TaskBodyEditor
                   key={`desc-${task.id}`}
                   editorRef={bodyEditorRef}
-                  projectId={task.projectId}
-                  taskId={task.id}
                   body={editDescription}
-                  fullDescription={editDescription}
                   onBodyChange={handleDescriptionChange}
                   onCommit={() => void commitDescription(editDescription)}
-                  onAiImproved={(next) => {
-                    setEditDescription(next);
-                    void commitDescription(next);
-                  }}
-                  onAiDistributed={() => notifyChanged()}
                   onPasteFiles={(files) => void uploadFilesDirectly(files)}
                   disabled={editSaving}
                   placeholder="Название и описание…"
@@ -1148,6 +1144,20 @@ export function TaskDrawer({
                       (раньше были в шапке Row A). */}
                   <div className="flex shrink-0 items-center gap-0.5">
                     <CopyTaskButton description={editDescription || (task.description ?? '')} />
+                    {/* AI переехала сюда (из плавающей таблетки над телом) — компактная,
+                        в один ряд с Копировать/Переработать/План. */}
+                    <AiComposeDialog
+                      text={editDescription}
+                      projectId={task.projectId}
+                      editTask={{ projectId: task.projectId, taskId: task.id }}
+                      onImproved={(next) => {
+                        setEditDescription(next);
+                        void commitDescription(next);
+                      }}
+                      onDistributed={() => notifyChanged()}
+                      disabled={editSaving}
+                      compact
+                    />
                     <ReworkTaskButton projectId={task.projectId} taskId={task.id} />
                     <PlanTaskButton projectId={task.projectId} taskId={task.id} />
                   </div>
@@ -1158,37 +1168,39 @@ export function TaskDrawer({
                   ВСЕГДА (для любого статуса, включая done) — строка не прячется по статусу;
                   если контрол неправим для done — показываем значение, контрол disabled. */}
               <div className="px-3 pb-2.5 pt-1">
-                {/* Ответственный — делегирование. Показываем бейдж текущей делегации
-                    (если есть) и/или кнопку «назначить»; для проектов без делегирования —
-                    «Никто». Гейтим только ВОЗМОЖНОСТЬ делегировать, не саму строку. */}
-                <PropertyRow icon={UserPlus} label="Ответственный">
-                  <div className="flex min-h-7 flex-wrap items-center gap-1.5">
-                    {task.delegation && currentUser?.id && (
-                      <DelegationBadge delegation={task.delegation} currentUserId={currentUser.id} />
-                    )}
-                    {canEdit && (isInbox || isShared) ? (
-                      <DelegateTaskButton
-                        task={task}
-                        currentUserId={currentUser?.id ?? null}
-                        onChanged={() => notifyChanged()}
-                        projectId={isShared ? task.projectId : undefined}
-                        className={PROPERTY_VALUE_CLASS}
-                      />
-                    ) : null}
-                    {!task.delegation && !(canEdit && (isInbox || isShared)) && (
-                      <EmptyValue>Никто</EmptyValue>
-                    )}
-                    {isInbox && canEdit && (
-                      <AssignToProjectSelect
-                        task={task}
-                        onAssigned={() => {
-                          notifyChanged();
-                          onClose();
-                        }}
-                      />
-                    )}
-                  </div>
-                </PropertyRow>
+                {/* Ответственный — показываем строку ТОЛЬКО когда есть кого назначить:
+                    совместный проект (isShared) / inbox (делегирование) / уже делегировано.
+                    В личных одиночных проектах строки нет (некому назначать). */}
+                {(isInbox || isShared || !!task.delegation) && (
+                  <PropertyRow icon={UserPlus} label="Ответственный">
+                    <div className="flex min-h-7 flex-wrap items-center gap-1.5">
+                      {task.delegation && currentUser?.id && (
+                        <DelegationBadge delegation={task.delegation} currentUserId={currentUser.id} />
+                      )}
+                      {canEdit && (isInbox || isShared) ? (
+                        <DelegateTaskButton
+                          task={task}
+                          currentUserId={currentUser?.id ?? null}
+                          onChanged={() => notifyChanged()}
+                          projectId={isShared ? task.projectId : undefined}
+                          className={PROPERTY_VALUE_CLASS}
+                        />
+                      ) : null}
+                      {!task.delegation && !(canEdit && (isInbox || isShared)) && (
+                        <EmptyValue>Никто</EmptyValue>
+                      )}
+                      {isInbox && canEdit && (
+                        <AssignToProjectSelect
+                          task={task}
+                          onAssigned={() => {
+                            notifyChanged();
+                            onClose();
+                          }}
+                        />
+                      )}
+                    </div>
+                  </PropertyRow>
+                )}
 
                 {/* Дедлайн — пикер inline; пустое значение читается как «Пусто». */}
                 <PropertyRow icon={CalendarClock} label="Дедлайн">
@@ -1411,8 +1423,8 @@ export function TaskDrawer({
                 onPaste={handleFormPaste}
                 className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
               >
-                {/* Row A: close + контекст (без Копир./Переработка/План — задачи ещё нет). */}
-                <div className="flex items-center gap-2 px-4 pt-3">
+                {/* Row A: close + контекст. Высота/выравнивание как у строки крошек (min-h-11). */}
+                <div className="flex min-h-11 items-center gap-2 px-4 pt-2">
                   {renderCloseButton()}
                   {renderMaximizeButton()}
                   <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -1478,9 +1490,10 @@ export function TaskDrawer({
                 {/* Ряд свойств (как в edit): Ответственный / Дедлайн / Приоритет / Режим /
                     Файлы. Без «Создано» и статуса — их нет до создания. */}
                 <div className="px-3 pb-2.5 pt-1">
-                  <PropertyRow icon={UserPlus} label="Ответственный">
-                    <div className="flex min-h-7 flex-wrap items-center gap-1.5">
-                      {isInbox || isShared ? (
+                  {/* Ответственный — только когда есть кого назначить (inbox/совместный). */}
+                  {(isInbox || isShared) && (
+                    <PropertyRow icon={UserPlus} label="Ответственный">
+                      <div className="flex min-h-7 flex-wrap items-center gap-1.5">
                         <DelegateSelect
                           value={createDelegateUserId}
                           onChange={setCreateDelegateUserId}
@@ -1488,11 +1501,9 @@ export function TaskDrawer({
                           projectId={isShared && aiProjectId ? aiProjectId : undefined}
                           className={PROPERTY_VALUE_CLASS}
                         />
-                      ) : (
-                        <EmptyValue>Никто</EmptyValue>
-                      )}
-                    </div>
-                  </PropertyRow>
+                      </div>
+                    </PropertyRow>
+                  )}
 
                   <PropertyRow icon={CalendarClock} label="Дедлайн">
                     <DeadlinePicker
