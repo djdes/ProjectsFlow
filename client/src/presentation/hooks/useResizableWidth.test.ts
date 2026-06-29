@@ -6,7 +6,6 @@ import assert from 'node:assert/strict';
 import {
   DRAWER_DEFAULT_WIDTH,
   DRAWER_MIN_WIDTH,
-  DRAWER_MAX_WIDTH_HARD,
   DRAWER_SPLIT_CAP,
   drawerMaxWidth,
   clampDrawerWidth,
@@ -16,11 +15,10 @@ import {
   DRAWER_WIDTH_STORAGE_KEY,
 } from './useResizableWidth';
 
-test('drawerMaxWidth: 96vw, но не больше жёсткого потолка 1400', () => {
-  // Узкий вьюпорт — 96vw.
-  assert.equal(drawerMaxWidth(1000), 960);
-  // Широкий вьюпорт — упирается в 1400.
-  assert.equal(drawerMaxWidth(3000), DRAWER_MAX_WIDTH_HARD);
+test('drawerMaxWidth: доля вьюпорта (0.99), без жёсткого потолка в px', () => {
+  // Без верхнего px-потолка — тянуть можно до ~99vw на любом мониторе (task 16).
+  assert.equal(drawerMaxWidth(1000), 990);
+  assert.equal(drawerMaxWidth(3000), 2970);
 });
 
 test('clampDrawerWidth: зажимает снизу в DRAWER_MIN_WIDTH', () => {
@@ -28,11 +26,11 @@ test('clampDrawerWidth: зажимает снизу в DRAWER_MIN_WIDTH', () => 
   assert.equal(clampDrawerWidth(DRAWER_MIN_WIDTH - 1, 1920), DRAWER_MIN_WIDTH);
 });
 
-test('clampDrawerWidth: зажимает сверху в viewport-зависимый max', () => {
-  // 1200 * 0.96 = 1152 → запрошенные 1300 режутся до 1152.
-  assert.equal(clampDrawerWidth(1300, 1200), 1152);
-  // На очень широком — режется до жёсткого 1400.
-  assert.equal(clampDrawerWidth(5000, 4000), DRAWER_MAX_WIDTH_HARD);
+test('clampDrawerWidth: зажимает сверху в viewport-зависимый max (0.99vw)', () => {
+  // 1200 * 0.99 = 1188 → запрошенные 1300 режутся до 1188.
+  assert.equal(clampDrawerWidth(1300, 1200), 1188);
+  // На очень широком — режется до 0.99vw (без жёсткого px-потолка).
+  assert.equal(clampDrawerWidth(5000, 4000), 3960);
 });
 
 test('clampDrawerWidth: значение в диапазоне проходит как есть (округлённое)', () => {

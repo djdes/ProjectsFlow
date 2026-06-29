@@ -65,6 +65,24 @@ export function AppShell(): React.ReactElement {
     });
   }, []);
 
+  // Окно задачи дотянули ресайзом до левой панели → сворачиваем её (task 16).
+  // Сигнал шлёт useResizableWidth (window-событие), чтобы не тянуть проп через полдерева.
+  useEffect(() => {
+    const onOverSidebar = (): void => {
+      setCollapsed((v) => {
+        if (v) return v;
+        try {
+          localStorage.setItem(COLLAPSE_KEY, '1');
+        } catch {
+          /* localStorage недоступен */
+        }
+        return true;
+      });
+    };
+    window.addEventListener('pf:drawer-over-sidebar', onOverSidebar);
+    return () => window.removeEventListener('pf:drawer-over-sidebar', onOverSidebar);
+  }, []);
+
   // Хоткей Ctrl+\ (Cmd+\ на mac) — тоггл левой панели, как в Notion.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {

@@ -21,10 +21,16 @@ export const DRAWER_DEFAULT_WIDTH = 900;
 // Lower clamp: below this the two columns / property rows get unusably cramped.
 export const DRAWER_MIN_WIDTH = 480;
 
-// Upper clamp is viewport-relative: never wider than 96vw, and never beyond
-// 1400px on very wide monitors (a full-screen drawer stops feeling like a panel).
-export const DRAWER_MAX_WIDTH_HARD = 1400;
-export const DRAWER_MAX_VIEWPORT_RATIO = 0.96;
+// Upper clamp is viewport-relative. По задаче 16 — тянуть можно «до какого угодно размера»,
+// поэтому жёсткого потолка в px больше нет: только доля вьюпорта (почти во всю ширину).
+export const DRAWER_MAX_VIEWPORT_RATIO = 0.99;
+
+// Ширина левой панели (px) — когда левый край окна доезжает до неё, шлём событие
+// «свернуть сайдбар» (AppShell слушает). Должна совпадать с grid-cols в AppShell.
+export const SIDEBAR_WIDTH = 270;
+
+// Доля вьюпорта, после которой отпускание ручки = «развернуть на весь экран» → страница.
+export const DRAWER_EDGE_RATIO = 0.97;
 
 // Split threshold: switch to the two-pane layout only when the drawer is clearly
 // wide — at least ~62% of the viewport, capped at 1024px. Below this the drawer
@@ -32,9 +38,9 @@ export const DRAWER_MAX_VIEWPORT_RATIO = 0.96;
 export const DRAWER_SPLIT_VIEWPORT_RATIO = 0.62;
 export const DRAWER_SPLIT_CAP = 1024;
 
-/** Upper bound for the drawer width given the current viewport width. */
+/** Upper bound for the drawer width given the current viewport width (доля вьюпорта). */
 export function drawerMaxWidth(viewportWidth: number): number {
-  return Math.min(DRAWER_MAX_WIDTH_HARD, Math.round(viewportWidth * DRAWER_MAX_VIEWPORT_RATIO));
+  return Math.round(viewportWidth * DRAWER_MAX_VIEWPORT_RATIO);
 }
 
 /**
@@ -108,11 +114,24 @@ export type ResizableWidth = {
  * @param open     Re-clamp + restore from storage each time the drawer opens
  *                 (viewport may have changed since last open).
  */
-export function useResizableWidth(enabled: boolean, open: boolean): ResizableWidth {
+export function useResizableWidth(
+  enabled: boolean,
+  open: boolean,
+  // Вызывается на отпускании ручки, если окно дотянули почти до края (≈весь экран) —
+  // консьюмер открывает задачу отдельной страницей (как кнопка «развернуть»).
+  onDragToEdge?: () => void,
+): ResizableWidth {
   const [width, setWidth] = useState<number>(() =>
     clampDrawerWidth(readStoredWidth() ?? DRAWER_DEFAULT_WIDTH, viewport()),
   );
   const [dragging, setDragging] = useState(false);
+  // Один раз за перетаскивание шлём «свернуть сайдбар», когда левый край доехал до него.
+  const reachedSidebarRef = useRef(false);
+  // Свежий onDragToEdge без переподписки слушателей.
+  const onDragToEdgeRef = useRef(onDragToEdge);
+  useEffect(() => {
+    onDragToEdgeRef.current = onDragToEdge;
+  }, [onDragToEdge]);
   // «Развернуть на весь экран» — окно растягивается на максимум (drawerMaxWidth).
   // Не персистится: каждое открытие стартует в обычной ширине.
   const [maximized, setMaximized] = useState(false);
@@ -163,6 +182,7 @@ export function useResizableWidth(enabled: boolean, open: boolean): ResizableWid
       setVw(nextVw);
       // Ручной ресайз выходит из fullscreen-режима.
       setMaximized(false);
+      reachedSidebarRef.current = false;
       dragRef.current = { startX: e.clientX, startWidth: width };
       setDragging(true);
 
@@ -172,7 +192,14 @@ export function useResizableWidth(enabled: boolean, open: boolean): ResizableWid
         // Handle is on the LEFT edge of a right-anchored panel: moving the
         // pointer left (smaller clientX) must WIDEN the drawer → subtract delta.
         const delta = ev.clientX - d.startX;
-        setWidth(clampDrawerWidth(d.startWidth - delta, nextVw));
+        const newWidth = clampDrawerWidth(d.startWidth - delta, nextVw);
+        // Левый край окна = nextVw - newWidth. Доехал до сайдбара → один раз просим
+        // AppShell свернуть панель (освобождаем место под окно).
+        if (nextVw - newWidth <= SIDEBAR_WIDTH && !reachedSidebarRef.current) {
+          reachedSidebarRef.current = true;
+          window.dispatchEvent(new CustomEvent('pf:drawer-over-sidebar'));
+        }
+        setWidth(newWidth);
       };
       const onUp = (): void => {
         dragRef.current = null;
@@ -185,8 +212,13 @@ export function useResizableWidth(enabled: boolean, open: boolean): ResizableWid
         target.removeEventListener('pointermove', onMove);
         target.removeEventListener('pointerup', onUp);
         target.removeEventListener('pointercancel', onUp);
-        // Persist the final width (read latest via functional setState).
         setWidth((w) => {
+          // Дотянули почти до края (≈весь экран) → открыть отдельной страницей
+          // (как кнопка «развернуть»). Почти-полную ширину НЕ персистим.
+          if (w >= nextVw * DRAWER_EDGE_RATIO && onDragToEdgeRef.current) {
+            onDragToEdgeRef.current();
+            return w;
+          }
           writeStoredWidth(w);
           return w;
         });

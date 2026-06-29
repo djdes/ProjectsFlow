@@ -982,7 +982,12 @@ export function TaskDrawer({
   // В asPage (отдельная страница) ресайз не нужен — фиксированная центрированная колонка.
   const resizeEnabled = !asPage && isDesktop && isFinePointer;
   const { width, dragging, isSplit: isSplitRaw, onHandlePointerDown } =
-    useResizableWidth(resizeEnabled, state !== null);
+    useResizableWidth(resizeEnabled, state !== null, () => {
+      // Дотянули окно до самого края — открываем задачу отдельной страницей.
+      if (state?.mode === 'edit') {
+        navigate(`/projects/${state.task.projectId}/tasks/${state.task.id}`);
+      }
+    });
   // В asPage — всегда одна центрированная колонка (Notion-style страница), без split.
   const isSplit = asPage ? false : isSplitRaw;
 
