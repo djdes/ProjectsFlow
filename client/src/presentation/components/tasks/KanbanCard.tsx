@@ -281,7 +281,7 @@ export function KanbanCard({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="group/promote size-4 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-hover hover:text-foreground"
+                  className="group/promote size-6 shrink-0 cursor-pointer rounded sm:size-6 text-muted-foreground hover:bg-hover hover:text-foreground"
                   onClick={(e) => {
                     e.stopPropagation();
                     onQuickPromote(task);
@@ -295,7 +295,7 @@ export function KanbanCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-4 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                className="size-6 shrink-0 cursor-pointer rounded sm:size-6 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(task);
