@@ -29,6 +29,10 @@ export const DRAWER_MAX_VIEWPORT_RATIO = 0.99;
 // «свернуть сайдбар» (AppShell слушает). Должна совпадать с grid-cols в AppShell.
 export const SIDEBAR_WIDTH = 270;
 
+// Гистерезис восстановления сайдбара: возвращаем панель, только когда левый край окна
+// отъехал от неё чуть дальше, чем порог сворачивания — иначе на самой границе дёргалось бы.
+export const SIDEBAR_RESTORE_MARGIN = 32;
+
 // Доля вьюпорта, после которой отпускание ручки = «развернуть на весь экран» → страница.
 export const DRAWER_EDGE_RATIO = 0.97;
 
@@ -193,11 +197,16 @@ export function useResizableWidth(
         // pointer left (smaller clientX) must WIDEN the drawer → subtract delta.
         const delta = ev.clientX - d.startX;
         const newWidth = clampDrawerWidth(d.startWidth - delta, nextVw);
-        // Левый край окна = nextVw - newWidth. Доехал до сайдбара → один раз просим
-        // AppShell свернуть панель (освобождаем место под окно).
-        if (nextVw - newWidth <= SIDEBAR_WIDTH && !reachedSidebarRef.current) {
+        // Левый край окна = nextVw - newWidth. Доехал до сайдбара → просим AppShell
+        // свернуть панель (освобождаем место под окно). Поехал обратно (с гистерезисом
+        // SIDEBAR_RESTORE_MARGIN, чтобы не дёргалось на границе) → просим вернуть.
+        const leftEdge = nextVw - newWidth;
+        if (leftEdge <= SIDEBAR_WIDTH && !reachedSidebarRef.current) {
           reachedSidebarRef.current = true;
           window.dispatchEvent(new CustomEvent('pf:drawer-over-sidebar'));
+        } else if (leftEdge > SIDEBAR_WIDTH + SIDEBAR_RESTORE_MARGIN && reachedSidebarRef.current) {
+          reachedSidebarRef.current = false;
+          window.dispatchEvent(new CustomEvent('pf:drawer-clear-sidebar'));
         }
         setWidth(newWidth);
       };

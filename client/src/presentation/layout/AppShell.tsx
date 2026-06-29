@@ -53,7 +53,12 @@ export function AppShell(): React.ReactElement {
       return false;
     }
   });
+  // Сворачивание принадлежит окну задачи (auto), а не ручному тогглу — чтобы при
+  // сужении окна вернуть панель только если её свернуло перетаскивание, а не юзер.
+  const autoCollapsedRef = useRef(false);
   const toggleCollapse = useCallback(() => {
+    // Ручной тоггл «забирает» владение: после него ресайз окна панель не вернёт.
+    autoCollapsedRef.current = false;
     setCollapsed((v) => {
       const next = !v;
       try {
@@ -67,20 +72,35 @@ export function AppShell(): React.ReactElement {
 
   // Окно задачи дотянули ресайзом до левой панели → сворачиваем её (task 16).
   // Сигнал шлёт useResizableWidth (window-событие), чтобы не тянуть проп через полдерева.
+  // При обратном сужении окна (pf:drawer-clear-sidebar) панель возвращаем — но только
+  // если её свернуло именно перетаскивание окна (autoCollapsedRef), а не ручной тоггл.
   useEffect(() => {
-    const onOverSidebar = (): void => {
+    const setCollapsedPersisted = (next: boolean): void => {
       setCollapsed((v) => {
-        if (v) return v;
+        if (v === next) return v;
         try {
-          localStorage.setItem(COLLAPSE_KEY, '1');
+          localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0');
         } catch {
           /* localStorage недоступен */
         }
-        return true;
+        return next;
       });
     };
+    const onOverSidebar = (): void => {
+      autoCollapsedRef.current = true;
+      setCollapsedPersisted(true);
+    };
+    const onClearSidebar = (): void => {
+      if (!autoCollapsedRef.current) return;
+      autoCollapsedRef.current = false;
+      setCollapsedPersisted(false);
+    };
     window.addEventListener('pf:drawer-over-sidebar', onOverSidebar);
-    return () => window.removeEventListener('pf:drawer-over-sidebar', onOverSidebar);
+    window.addEventListener('pf:drawer-clear-sidebar', onClearSidebar);
+    return () => {
+      window.removeEventListener('pf:drawer-over-sidebar', onOverSidebar);
+      window.removeEventListener('pf:drawer-clear-sidebar', onClearSidebar);
+    };
   }, []);
 
   // Хоткей Ctrl+\ (Cmd+\ на mac) — тоггл левой панели, как в Notion.
