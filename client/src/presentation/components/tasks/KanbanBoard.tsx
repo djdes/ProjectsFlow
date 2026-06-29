@@ -60,7 +60,7 @@ import {
 import { KanbanHiddenColumnsMenu } from './KanbanHiddenColumnsMenu';
 import { KANBAN_COLOR_CLASSES } from './kanbanColors';
 import { QuickAddTodo } from './QuickAddTodo';
-import { STATUS_LABEL } from './statusLabels';
+import { STATUS_LABEL, quickPromoteNext } from './statusLabels';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import { useKanbanSettings } from '@/presentation/hooks/useKanbanSettings';
 import {
@@ -580,15 +580,12 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   };
 
   const handleQuickPromote = async (task: Task): Promise<void> => {
-    // Кидаем в самый верх TODO: beforeTaskId=null + afterTaskId=первая карточка
-    // (или null если TODO пуст). Server'ный MoveTask посчитает position сам.
-    const todoFirst = grouped.todo[0] ?? null;
+    // «Шаг вперёд» по колонкам: Черновики→Вручную→Воркер→Готово (quickPromoteNext).
+    const next = quickPromoteNext(task.status);
+    if (!next) return;
     try {
-      await move(task.id, {
-        targetStatus: 'todo',
-        beforeTaskId: null,
-        afterTaskId: todoFirst?.id ?? null,
-      });
+      await move(task.id, { targetStatus: next, beforeTaskId: null, afterTaskId: null });
+      toast.success(`Передано: ${STATUS_LABEL[next]}`);
     } catch (err) {
       toast.error(`Не удалось перенести: ${(err as Error).message}`);
     }
@@ -762,7 +759,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
                 onEdit={(t) => setDialog({ mode: 'edit', task: t })}
                 onDelete={handleDelete}
                 showShortId={showCommits}
-                onQuickPromote={status === 'backlog' ? handleQuickPromote : undefined}
+                onQuickPromote={handleQuickPromote}
                 onTaskChanged={() => void refetch()}
                 showCheckbox
                 lastDoneTaskId={lastDoneTaskId}

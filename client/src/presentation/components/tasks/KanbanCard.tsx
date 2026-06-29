@@ -14,7 +14,7 @@ import { RalphModeBadge } from './RalphMode';
 import { DeadlineBadge } from './DeadlineBadge';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { checklistProgress } from '@/lib/checklist';
-import { STATUS_LABEL } from './statusLabels';
+import { STATUS_LABEL, quickPromoteNext } from './statusLabels';
 
 type Props = {
   task: Task;
@@ -106,6 +106,10 @@ export function KanbanCard({
   // Выполненная задача — для зелёного hover-затемнения и зелёного градиента оверлея
   // (иначе на зелёной карточке нижний градиент from-card давал нейтральную полосу).
   const doneCard = !preview && task.status === 'done';
+
+  // Цель «шага вперёд» для кнопки на hover: Черновики→Вручную, Вручную→Воркер, Воркер→Готово.
+  // null (напр. в «Готово») — кнопку не показываем.
+  const promoteNext = onQuickPromote ? quickPromoteNext(task.status) : null;
 
   return (
     <Wrapper layoutId={task.id}>
@@ -290,7 +294,7 @@ export function KanbanCard({
               className="pointer-events-none ml-auto flex shrink-0 items-center gap-0.5 group-focus-within:pointer-events-auto group-hover:pointer-events-auto max-sm:pointer-events-auto"
               {...stopDragProps}
             >
-              {onQuickPromote && (
+              {onQuickPromote && promoteNext && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -299,8 +303,8 @@ export function KanbanCard({
                     e.stopPropagation();
                     onQuickPromote(task);
                   }}
-                  aria-label="Передать воркеру"
-                  title="Передать воркеру"
+                  aria-label={`Передать в «${STATUS_LABEL[promoteNext]}»`}
+                  title={`Передать в «${STATUS_LABEL[promoteNext]}»`}
                 >
                   <ArrowRight className="size-3 transition-transform duration-150 group-hover/promote:translate-x-0.5" />
                 </Button>

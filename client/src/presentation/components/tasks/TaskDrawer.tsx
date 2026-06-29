@@ -88,7 +88,7 @@ import { TaskBodyEditor } from './TaskBodyEditor';
 import { splitTitleBody, parseTitleHeading, stripInlineMarkdown } from '@/lib/taskTitleBody';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
-import { STATUS_LABEL } from './statusLabels';
+import { STATUS_LABEL, ADVANCE_NEXT } from './statusLabels';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useResizableWidth } from '@/presentation/hooks/useResizableWidth';
 import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
@@ -382,57 +382,6 @@ function TaskRalphModeChip({
   );
 }
 
-// Цепочка «передать дальше»: следующая колонка для кнопки быстрого продвижения
-// задачи в шапке дравера (черновики → вручную → воркер → готово).
-const ADVANCE_NEXT: Partial<Record<TaskStatus, TaskStatus>> = {
-  backlog: 'manual',
-  manual: 'todo',
-  todo: 'done',
-};
-
-// Кнопка «передать в следующую колонку» в шапке edit-mode. Лейбл = имя следующего
-// статуса; для статусов вне цепочки (in_progress/awaiting/done) не рендерится.
-function TaskAdvanceButton({
-  task,
-  onMove,
-  onChanged,
-}: {
-  task: Task;
-  onMove: (taskId: string, targetStatus: TaskStatus) => Promise<void>;
-  onChanged: () => void;
-}): React.ReactElement | null {
-  const [saving, setSaving] = useState(false);
-  const next = ADVANCE_NEXT[task.status];
-  if (!next) return null;
-
-  const advance = async (): Promise<void> => {
-    if (saving) return;
-    setSaving(true);
-    try {
-      await onMove(task.id, next);
-      onChanged();
-      toast.success(`Передано: ${STATUS_LABEL[next]}`);
-    } catch (err) {
-      toast.error(`Не удалось передать: ${(err as Error).message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <button
-      type="button"
-      disabled={saving}
-      onClick={() => void advance()}
-      title={`Передать задачу в «${STATUS_LABEL[next]}»`}
-      className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
-    >
-      {saving ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowRight className="size-3.5" />}
-      {STATUS_LABEL[next]}
-    </button>
-  );
-}
-
 // Цвета статус-пилюли — в тон колонкам доски (kanbanColors): черновики stone,
 // вручную yellow, воркер blue, готово green; активные in_progress/awaiting — свои.
 const STATUS_BADGE_COLOR: Record<TaskStatus, string> = {
@@ -470,6 +419,7 @@ function TaskStatusChip({
     try {
       await onMove(task.id, next);
       onChanged();
+      toast.success(`Передано: ${STATUS_LABEL[next]}`);
     } catch (err) {
       setStatus(prev);
       toast.error(`Не удалось сменить статус: ${(err as Error).message}`);
@@ -478,23 +428,42 @@ function TaskStatusChip({
     }
   };
 
+  const next = ADVANCE_NEXT[status];
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    // Сплит-пилюля статуса: левая часть — шаг на следующий статус (если есть), правая
+    // (шеврон) — выпадашка с любым статусом. Одна цельная «таблетка» в тон колонке.
+    <div
+      className={cn(
+        'inline-flex shrink-0 items-center overflow-hidden rounded-full text-xs font-medium',
+        STATUS_BADGE_COLOR[status],
+        saving && 'opacity-50',
+      )}
+    >
+      {next ? (
         <button
           type="button"
           disabled={saving}
-          className={cn(
-            // Чистая «таблетка» статуса: мягкая заливка по статусу, без странной hover-окантовки;
-            // лёгкое затемнение и press-feedback. Комфортный тап-таргет (py-1, text-xs).
-            'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50',
-            STATUS_BADGE_COLOR[status],
-          )}
+          onClick={() => void change(next)}
+          title={`Передать в «${STATUS_LABEL[next]}»`}
+          className="inline-flex items-center gap-1 py-1 pl-2.5 pr-1.5 transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50"
         >
           {STATUS_LABEL[status]}
-          <ChevronDown className="size-3.5 opacity-50" />
+          <ArrowRight className="size-3 opacity-60" />
         </button>
-      </DropdownMenuTrigger>
+      ) : (
+        <span className="py-1 pl-2.5 pr-1.5">{STATUS_LABEL[status]}</span>
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            disabled={saving}
+            aria-label="Сменить статус"
+            className="inline-flex items-center border-l border-black/10 py-1 pl-1 pr-2 transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50 dark:border-white/15"
+          >
+            <ChevronDown className="size-3.5 opacity-50" />
+          </button>
+        </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[180px]">
         <DropdownMenuRadioGroup value={status} onValueChange={(v) => void change(v as TaskStatus)}>
           {TASK_STATUSES.map((s) => (
@@ -511,7 +480,8 @@ function TaskStatusChip({
           ))}
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
-    </DropdownMenu>
+      </DropdownMenu>
+    </div>
   );
 }
 
@@ -1026,12 +996,12 @@ export function TaskDrawer({
       type="button"
       variant="ghost"
       size="icon"
-      className="group/x size-8 shrink-0"
+      className="group/x size-7 shrink-0 text-muted-foreground hover:text-foreground sm:size-7"
       onClick={onClose}
       aria-label="Закрыть"
       title="Закрыть"
     >
-      <ChevronsRight className="size-4 transition-transform duration-200 group-hover/x:translate-x-0.5" />
+      <ChevronsRight className="size-3.5 transition-transform duration-200 group-hover/x:translate-x-0.5" />
     </Button>
   );
 
@@ -1046,12 +1016,12 @@ export function TaskDrawer({
         type="button"
         variant="ghost"
         size="icon"
-        className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+        className="size-7 shrink-0 text-muted-foreground hover:text-foreground sm:size-7"
         onClick={() => navigate(`/projects/${pageTask.projectId}/tasks/${pageTask.id}`)}
         aria-label="Развернуть на весь экран"
         title="Развернуть на весь экран"
       >
-        <Maximize2 className="size-4" />
+        <Maximize2 className="size-3.5" />
       </Button>
     );
   };
@@ -1200,15 +1170,8 @@ export function TaskDrawer({
                     {taskShortId(task.id)}
                   </span>
                 </div>
-                {/* Кнопки Копировать/Переработка/План переехали в ряд плюсиков под
-                    заголовком (по правому краю) — см. ниже. */}
-                {onMove && (
-                  <TaskAdvanceButton
-                    task={task}
-                    onMove={onMove}
-                    onChanged={() => notifyChanged()}
-                  />
-                )}
+                {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка). Кнопки
+                    Копировать/AI/Переработка/План — в ряду плюсиков ниже. */}
                 {onMove ? (
                   <TaskStatusChip
                     task={task}
