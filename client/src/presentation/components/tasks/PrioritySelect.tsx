@@ -80,11 +80,14 @@ export function PrioritySelect({
           )}
           title="Приоритет задачи"
         >
-          {meta ? (
-            <span className={cn('size-2 rounded-full', meta.dotColor)} aria-hidden />
-          ) : (
-            !inPropertyRow && <Flag className="size-3.5" />
-          )}
+          {/* В ряду свойств — без ведущего значка (ни дота, ни флажка), чтобы значение
+              начиналось ровно на одной вертикали с остальными пунктами. */}
+          {!inPropertyRow &&
+            (meta ? (
+              <span className={cn('size-2 rounded-full', meta.dotColor)} aria-hidden />
+            ) : (
+              <Flag className="size-3.5" />
+            ))}
           {meta ? meta.label : inPropertyRow ? 'Выбрать приоритет…' : 'Без приоритета'}
           {!inPropertyRow && <ChevronDown className="size-3" />}
         </Button>
