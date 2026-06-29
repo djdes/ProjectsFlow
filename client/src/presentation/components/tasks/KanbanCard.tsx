@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
-import { Check, ImageIcon, ListChecks, MessageSquare, Trash2 } from 'lucide-react';
+import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SelectModifiers } from './selection/selectionReducer';
@@ -63,6 +63,7 @@ export function KanbanCard({
   onEdit,
   onDelete,
   preview = false,
+  onQuickPromote,
   onTaskChanged,
   showCheckbox = false,
   lastDoneTaskId = null,
@@ -138,7 +139,7 @@ export function KanbanCard({
           'hover:shadow-md',
           // Done-карточка: мягкая зелёная заливка (Notion-style спокойный маркер
           // готовности) вместо серого/opacity. Текст остаётся читаемым.
-          !preview && task.status === 'done' && 'border-success/20 bg-success/[0.06] hover:bg-success/[0.1]',
+          !preview && task.status === 'done' && 'border-success/20 bg-success/[0.06] hover:border-success/30 hover:bg-success/[0.18]',
           // Priority-accent: цветной левый кант (2px, rose/orange/blue/slate) —
           // спокойный индикатор важности в стиле Todoist (меняется в дравере).
           task.priority && cn('border-l-2', PRIORITY_META[task.priority].border),
@@ -218,11 +219,13 @@ export function KanbanCard({
         </div>
         {/* Оверлей мета+действий: НЕ занимает высоту (карточка = только текст), на hover
             наложен поверх затемнённого текста снизу. Градиент from-card маскирует текст
-            под иконками. Прячется в режиме выделения и drag-preview. */}
+            под иконками. Прячется в режиме выделения и drag-preview.
+            pointer-events-none на контейнере: иначе невидимый (opacity-0) оверлей снизу
+            перехватывал mousedown и не давал начать drag в нижней части карточки. Клики
+            ловят только кнопки (pointer-events-auto, и только когда оверлей реально виден). */}
         {!selecting && !preview && (
           <div
-            className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 rounded-b-lg bg-gradient-to-t from-card via-card/90 to-transparent px-2 pb-1 pt-6 text-[11px] text-muted-foreground opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
-            {...stopDragProps}
+            className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 rounded-b-lg bg-gradient-to-t from-card via-card/90 to-transparent px-2 pb-1 pt-5 text-[11px] text-muted-foreground opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
           >
             <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
               {task.delegation && currentUserId && (
@@ -267,18 +270,41 @@ export function KanbanCard({
                 </span>
               )}
             </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="group/del ml-auto size-5 shrink-0 cursor-pointer rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(task);
-              }}
-              aria-label="Удалить"
+            {/* Действия — кликабельны только когда оверлей виден (hover/focus/тач). До этого
+                pointer-events-none, чтобы невидимые кнопки не перехватывали клик/drag по карточке.
+                Компактные size-4 — занимают минимум места в hover-ряду. */}
+            <div
+              className="pointer-events-none ml-auto flex shrink-0 items-center gap-0.5 group-focus-within:pointer-events-auto group-hover:pointer-events-auto max-sm:pointer-events-auto"
+              {...stopDragProps}
             >
-              <Trash2 className="size-3 transition-transform duration-150 group-hover/del:scale-110" />
-            </Button>
+              {onQuickPromote && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="group/promote size-4 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-hover hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onQuickPromote(task);
+                  }}
+                  aria-label="Передать воркеру"
+                  title="Передать воркеру"
+                >
+                  <ArrowRight className="size-3 transition-transform duration-150 group-hover/promote:translate-x-0.5" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-4 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(task);
+                }}
+                aria-label="Удалить"
+              >
+                <Trash2 className="size-3" />
+              </Button>
+            </div>
           </div>
         )}
       </div>
