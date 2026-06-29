@@ -60,10 +60,13 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
     }
     return null;
   });
-  const reopenedDrawerRef = useRef(false);
+  // Гидрация edit-окна после загрузки (см. подробный комментарий в KanbanBoard):
+  // hydratedRef гейтит запись, иначе persist на маунте стёр бы сохранённый edit.
+  const hydratedRef = useRef(false);
   useEffect(() => {
-    if (loading || reopenedDrawerRef.current || dialog) return;
-    reopenedDrawerRef.current = true;
+    if (hydratedRef.current || loading) return;
+    hydratedRef.current = true;
+    if (dialog) return;
     try {
       const raw = sessionStorage.getItem(drawerStoreKey);
       const d = raw ? (JSON.parse(raw) as { mode?: string; taskId?: string }) : null;
@@ -76,6 +79,7 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
     }
   }, [loading, tasks, dialog, drawerStoreKey]);
   useEffect(() => {
+    if (!hydratedRef.current) return;
     try {
       if (!dialog) sessionStorage.removeItem(drawerStoreKey);
       else if (dialog.mode === 'edit') {

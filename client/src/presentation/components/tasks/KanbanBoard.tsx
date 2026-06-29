@@ -234,11 +234,14 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     }
     return null;
   });
-  // Реоткрытие edit-окна после загрузки задач (нужен сам объект задачи). Один раз.
-  const reopenedDrawerRef = useRef(false);
+  // Гидрация: edit-окно восстанавливаем ПОСЛЕ загрузки задач (нужен объект задачи;
+  // create восстановлен синхронно в useState). hydratedRef гейтит запись в storage,
+  // иначе persist-эффект на маунте (dialog=null) стёр бы сохранённый edit ДО восстановления.
+  const hydratedRef = useRef(false);
   useEffect(() => {
-    if (loading || reopenedDrawerRef.current || dialog) return;
-    reopenedDrawerRef.current = true;
+    if (hydratedRef.current || loading) return;
+    hydratedRef.current = true;
+    if (dialog) return; // create уже восстановлен синхронно
     try {
       const raw = sessionStorage.getItem(drawerStoreKey);
       const d = raw ? (JSON.parse(raw) as { mode?: string; taskId?: string }) : null;
@@ -250,8 +253,9 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
       /* ignore */
     }
   }, [loading, tasks, dialog, drawerStoreKey]);
-  // Зеркалим открытое окно в sessionStorage при каждом изменении.
+  // Зеркалим открытое окно в sessionStorage — только ПОСЛЕ гидрации.
   useEffect(() => {
+    if (!hydratedRef.current) return;
     try {
       if (!dialog) sessionStorage.removeItem(drawerStoreKey);
       else if (dialog.mode === 'edit') {
