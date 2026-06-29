@@ -814,7 +814,13 @@ export function TaskDrawer({
   // прокручивает обратно наверх. Sentinel у заголовка + IntersectionObserver: когда заголовок
   // ушёл под шапку — показываем sticky-бар.
   const titleSentinelRef = useRef<HTMLDivElement>(null);
+  const stickyBarRef = useRef<HTMLButtonElement>(null);
   const [showStickyTitle, setShowStickyTitle] = useState(false);
+  // Зеркало текущего состояния для гистерезиса в compute (без переподписки слушателей).
+  const showStickyRef = useRef(false);
+  useEffect(() => {
+    showStickyRef.current = showStickyTitle;
+  }, [showStickyTitle]);
   useEffect(() => {
     if (state?.mode !== 'edit') {
       setShowStickyTitle(false);
@@ -834,7 +840,17 @@ export function TaskDrawer({
         root = root.parentElement;
       }
       const topRef = root ? root.getBoundingClientRect().top : 0;
-      setShowStickyTitle(el.getBoundingClientRect().top <= topRef + 1);
+      const top = el.getBoundingClientRect().top;
+      // Гистерезис: появление sticky-бара сдвигает контент вниз на свою высоту (бар —
+      // первый ребёнок ленты). Без буфера это перещёлкивало бы show/hide на пороге.
+      // Показываем, когда сентинел доехал до верха; скрываем только когда он ушёл ниже
+      // верха больше чем на высоту бара — т.е. реально вернулись к началу задачи.
+      if (showStickyRef.current) {
+        const barH = stickyBarRef.current?.offsetHeight ?? 0;
+        if (top > topRef + barH + 8) setShowStickyTitle(false);
+      } else if (top <= topRef) {
+        setShowStickyTitle(true);
+      }
     };
     const raf = requestAnimationFrame(compute);
     // capture-фаза: события скролла не всплывают, ловим скролл ЛЮБОГО контейнера.
@@ -1318,6 +1334,29 @@ export function TaskDrawer({
   // В asPage — всегда одна центрированная колонка (Notion-style страница), без split.
   const isSplit = asPage ? false : isSplitRaw;
 
+  // Закреплённый укороченный заголовок при скролле. Клик — к началу задачи. Рендерим
+  // как первый ребёнок РЕАЛЬНОГО скролл-контейнера: в narrow это внешний контейнер
+  // (заголовок держится сквозь тело → комменты → LIVE до самого низа), в split —
+  // левая колонка (у неё свой скролл).
+  const stickyTitleBar = showStickyTitle ? (
+    <button
+      ref={stickyBarRef}
+      type="button"
+      onClick={scrollToTaskTop}
+      title="К началу задачи"
+      className={cn(
+        'sticky top-0 z-20 block w-full shrink-0 border-b bg-background/95 px-4 py-2 text-left backdrop-blur-sm',
+        'cursor-pointer transition-colors hover:bg-hover',
+        animations && 'duration-150 animate-in fade-in-0 slide-in-from-top-1',
+      )}
+    >
+      <span className="line-clamp-4 text-sm font-medium leading-snug text-foreground">
+        {stripInlineMarkdown(parseTitleHeading(splitTitleBody(editDescription).title).text) ||
+          'Без названия'}
+      </span>
+    </button>
+  ) : null;
+
   return (
     <DrawerShell
       asPage={asPage}
@@ -1382,6 +1421,9 @@ export function TaskDrawer({
                 : 'flex h-full flex-col overflow-y-auto overscroll-contain',
             )}
           >
+            {/* narrow: sticky-заголовок — первый ребёнок ОБЩЕГО скролл-контейнера, поэтому
+                держится сквозь всю ленту (задача → комменты → LIVE) до конца скролла. */}
+            {!isSplit && stickyTitleBar}
             {/* === HEADER / ЛЕВАЯ КОЛОНКА === Notion-style. В стеке — sticky-шапка с
                 нижним бордером (единственный разделитель до переключателя вкладок).
                 В split — самостоятельная скроллящаяся левая колонка (бордера снизу нет,
@@ -1400,24 +1442,8 @@ export function TaskDrawer({
                   : 'shrink-0 border-b',
               )}
             >
-              {/* Task 3: закреплённый укороченный заголовок при скролле. Клик — наверх. */}
-              {showStickyTitle && (
-                <button
-                  type="button"
-                  onClick={scrollToTaskTop}
-                  title="К началу задачи"
-                  className={cn(
-                    'sticky top-0 z-20 block w-full border-b bg-background/95 px-4 py-2 text-left backdrop-blur-sm',
-                    'cursor-pointer transition-colors hover:bg-hover',
-                    animations && 'duration-150 animate-in fade-in-0 slide-in-from-top-1',
-                  )}
-                >
-                  <span className="line-clamp-4 text-sm font-medium leading-snug text-foreground">
-                    {stripInlineMarkdown(parseTitleHeading(splitTitleBody(editDescription).title).text) ||
-                      'Без названия'}
-                  </span>
-                </button>
-              )}
+              {/* split: sticky-заголовок живёт в левой колонке (у неё свой скролл). */}
+              {isSplit && stickyTitleBar}
               {/* Row A: контекст · короткий id (слева), статус (справа). Высота/вертикальное
                   выравнивание как у строки хлебных крошек страницы (min-h-11, по центру) —
                   чтобы кнопки закрыть/развернуть стояли на одной линии с крошками. */}
