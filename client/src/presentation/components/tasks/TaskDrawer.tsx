@@ -330,7 +330,19 @@ function DrawerShell({
     <Sheet open={open} onOpenChange={onOpenChange}>
       {/* SheetContent уже position:fixed → служит containing-block'ом для absolute-оверлея,
           поэтому dragOverlay (absolute inset-0) покрывает ровно видимую коробку окна. */}
-      <SheetContent side="right" showClose={false} className={contentClassName} style={contentStyle} {...dragHandlers}>
+      <SheetContent
+        side="right"
+        showClose={false}
+        className={cn(contentClassName, 'outline-none focus:outline-none focus-visible:outline-none')}
+        style={contentStyle}
+        // НЕ авто-фокусим контент при открытии — иначе на reload Radix ставит фокус на
+        // кнопку закрытия (синее кольцо). И НЕ возвращаем фокус на контент при закрытии:
+        // при disable редактора во время отправки коммента FocusScope иначе на миг
+        // фокусит контент → у левого (единственного видимого) края мелькает чёрный outline.
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
+        {...dragHandlers}
+      >
         {dragOverlay}
         {children}
       </SheetContent>
@@ -838,6 +850,59 @@ export function TaskDrawer({
     titleSentinelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  // Сохранение/восстановление позиции скролла окна задачи — переживает перезагрузку:
+  // после reload (когда окно восстановлено) возвращаемся ровно туда, где скроллили.
+  // Ключ — по taskId. Чистится при явном закрытии окна (см. handleClose).
+  useEffect(() => {
+    if (state?.mode !== 'edit' || !editTaskId) return;
+    const key = `pf-task-scroll:${editTaskId}`;
+    const findRoot = (): HTMLElement | null => {
+      let root: HTMLElement | null = titleSentinelRef.current?.parentElement ?? null;
+      while (root) {
+        const oy = getComputedStyle(root).overflowY;
+        if (oy === 'auto' || oy === 'scroll') break;
+        root = root.parentElement;
+      }
+      return root;
+    };
+    const onScroll = (): void => {
+      const r = findRoot();
+      if (r) {
+        try {
+          sessionStorage.setItem(key, String(Math.round(r.scrollTop)));
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+    let saved = 0;
+    try {
+      saved = Number.parseInt(sessionStorage.getItem(key) ?? '0', 10) || 0;
+    } catch {
+      /* ignore */
+    }
+    let raf = 0;
+    let tries = 0;
+    // Тело подгружается лениво — восстанавливаем scrollTop, как только контент дорос
+    // до нужной высоты (или после разумного числа кадров — fallback).
+    const tryRestore = (): void => {
+      const r = findRoot();
+      if (r && (r.scrollHeight - r.clientHeight >= saved || tries > 40)) {
+        r.scrollTop = saved;
+        window.addEventListener('scroll', onScroll, true);
+        return;
+      }
+      tries += 1;
+      raf = requestAnimationFrame(tryRestore);
+    };
+    if (saved > 0) raf = requestAnimationFrame(tryRestore);
+    else window.addEventListener('scroll', onScroll, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [state?.mode, editTaskId]);
+
   // Unmount-save: дровер закрывают/переключают задачу, не сняв фокус с редактора. blur-save
   // ловит клик мимо поля; этот хук — страховка. latest-ref обновляем в эффекте (включая
   // projectId — в cleanup-замыкании `state` был бы уже null после закрытия).
@@ -928,8 +993,17 @@ export function TaskDrawer({
   // (перезагрузка — нет: она не вызывает onClose). Затем — обычное закрытие.
   const handleClose = useCallback((): void => {
     if (state?.mode === 'create') clearCreateDraft(createDraftKey);
+    // Явное закрытие — сбрасываем сохранённый скролл, чтобы следующее открытие этой
+    // задачи стартовало сверху (перезагрузка onClose не вызывает → скролл сохраняется).
+    if (state?.mode === 'edit' && editTaskId) {
+      try {
+        sessionStorage.removeItem(`pf-task-scroll:${editTaskId}`);
+      } catch {
+        /* ignore */
+      }
+    }
     onClose();
-  }, [state?.mode, createDraftKey, onClose]);
+  }, [state?.mode, createDraftKey, editTaskId, onClose]);
 
   const addPendingFiles = (raw: FileList | File[]): void => {
     const valid = Array.from(raw);

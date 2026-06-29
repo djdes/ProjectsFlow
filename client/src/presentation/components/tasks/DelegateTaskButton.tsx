@@ -136,7 +136,10 @@ export function DelegateTaskButton({ task, currentUserId, onChanged, projectId, 
           variant="ghost"
           size="sm"
           disabled={submitting}
-          className={cn(inPropertyRow ? '' : META_CHIP_CLASS, className)}
+          className={cn(
+            inPropertyRow ? 'text-muted-foreground hover:text-foreground' : META_CHIP_CLASS,
+            className,
+          )}
           title="Назначить ответственного — делегировать участнику проекта"
         >
           {submitting ? (
