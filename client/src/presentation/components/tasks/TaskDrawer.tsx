@@ -1656,36 +1656,51 @@ export function TaskDrawer({
                   </Suspense>
                 </div>
 
-                {/* Плюсики: + Подзадача / + Файл. */}
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pb-1 pt-0.5">
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => createEditorRef.current?.appendChecklistItem()}
-                    className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                  >
-                    <Plus className="size-4 shrink-0" />
-                    Подзадача
-                  </button>
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => createFileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                  >
-                    <Plus className="size-4 shrink-0" />
-                    Файл
-                  </button>
-                  <input
-                    ref={createFileInputRef}
-                    type="file"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files) addPendingFiles(Array.from(e.target.files));
-                      e.target.value = '';
-                    }}
-                  />
+                {/* Плюсики: + Подзадача / + Файл. Справа — Копировать / AI (как в edit-mode;
+                    Переработка/План тут нет — они требуют уже сохранённой задачи). */}
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 pb-1 pt-0.5">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => createEditorRef.current?.appendChecklistItem()}
+                      className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                    >
+                      <Plus className="size-4 shrink-0" />
+                      Подзадача
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => createFileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                    >
+                      <Plus className="size-4 shrink-0" />
+                      Файл
+                    </button>
+                    <input
+                      ref={createFileInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files) addPendingFiles(Array.from(e.target.files));
+                        e.target.value = '';
+                      }}
+                    />
+                  </div>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <CopyTaskButton description={description} />
+                    <AiComposeDialog
+                      text={description}
+                      projectId={aiProjectId}
+                      onImproved={setDescription}
+                      onDistributed={() => onClose()}
+                      ralphMode={createRalphMode}
+                      disabled={saving}
+                      iconOnly
+                    />
+                  </div>
                 </div>
 
                 {/* Ряд свойств (как в edit): Ответственный / Дедлайн / Приоритет / Режим /
