@@ -74,7 +74,7 @@ import type { TaskPriority } from '@/domain/task/Task';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
 import { CommentsEmptyState } from './CommentsEmptyState';
 import { TaskBodyEditor } from './TaskBodyEditor';
-import { splitTitleBody } from '@/lib/taskTitleBody';
+import { splitTitleBody, parseTitleHeading, stripInlineMarkdown } from '@/lib/taskTitleBody';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
 import { STATUS_LABEL } from './statusLabels';
@@ -644,6 +644,27 @@ export function TaskDrawer({
     setEditDescription(next);
   }, []);
   const bodyContainerRef = useRef<HTMLDivElement>(null);
+  // Task 3: при скролле вниз вверху закрепляем укороченный заголовок задачи; клик по нему
+  // прокручивает обратно наверх. Sentinel у заголовка + IntersectionObserver: когда заголовок
+  // ушёл под шапку — показываем sticky-бар.
+  const titleSentinelRef = useRef<HTMLDivElement>(null);
+  const [showStickyTitle, setShowStickyTitle] = useState(false);
+  useEffect(() => {
+    const el = titleSentinelRef.current;
+    if (!el || state?.mode !== 'edit') {
+      setShowStickyTitle(false);
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([entry]) => setShowStickyTitle(entry ? !entry.isIntersecting : false),
+      { rootMargin: '-48px 0px 0px 0px', threshold: 0 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [state?.mode, openTaskId]);
+  const scrollToTaskTop = (): void => {
+    titleSentinelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   // Unmount-save: дровер закрывают/переключают задачу, не сняв фокус с редактора. blur-save
   // ловит клик мимо поля; этот хук — страховка. latest-ref обновляем в эффекте (включая
@@ -1046,6 +1067,24 @@ export function TaskDrawer({
                   : 'shrink-0 border-b',
               )}
             >
+              {/* Task 3: закреплённый укороченный заголовок при скролле. Клик — наверх. */}
+              {showStickyTitle && (
+                <button
+                  type="button"
+                  onClick={scrollToTaskTop}
+                  title="К началу задачи"
+                  className={cn(
+                    'sticky top-0 z-20 block w-full border-b bg-background/95 px-4 py-2 text-left backdrop-blur-sm',
+                    'cursor-pointer transition-colors hover:bg-hover',
+                    animations && 'duration-150 animate-in fade-in-0 slide-in-from-top-1',
+                  )}
+                >
+                  <span className="line-clamp-3 text-sm font-medium leading-snug text-foreground">
+                    {stripInlineMarkdown(parseTitleHeading(splitTitleBody(editDescription).title).text) ||
+                      'Без названия'}
+                  </span>
+                </button>
+              )}
               {/* Row A: контекст · короткий id (слева), статус (справа). Высота/вертикальное
                   выравнивание как у строки хлебных крошек страницы (min-h-11, по центру) —
                   чтобы кнопки закрыть/развернуть стояли на одной линии с крошками. */}
@@ -1092,6 +1131,8 @@ export function TaskDrawer({
               {/* === ОПИСАНИЕ === Заголовок и описание ОДНИМ полем сверху (1-я строка —
                   по сути заголовок). Полное editDescription редактируется напрямую,
                   сохраняется по blur / Ctrl+Cmd+Enter. Работает в любом статусе. */}
+              {/* Sentinel у заголовка — когда уходит под шапку, показываем sticky-заголовок. */}
+              <div ref={titleSentinelRef} aria-hidden className="h-0" />
               <div ref={bodyContainerRef} className="px-4 pb-1 pt-1.5">
                 <TaskBodyEditor
                   key={`desc-${task.id}`}
