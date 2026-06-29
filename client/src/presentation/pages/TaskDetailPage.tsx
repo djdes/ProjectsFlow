@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useContainer } from '@/infrastructure/di/container';
+import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
 import { TaskDrawer } from '@/presentation/components/tasks/TaskDrawer';
 import type { Task } from '@/domain/task/Task';
 import { splitTitleBody, parseTitleHeading, stripInlineMarkdown } from '@/lib/taskTitleBody';
@@ -22,6 +22,7 @@ export function TaskDetailPage(): React.ReactElement {
   const { data: project } = useProject(projectId ?? '');
   const { taskRepository } = useContainer();
   const [task, setTask] = useState<Task | null>(null);
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -32,6 +33,7 @@ export function TaskDetailPage(): React.ReactElement {
       .then((tasks) => {
         const found = tasks.find((t) => t.id === taskId) ?? null;
         setTask(found);
+        setAllTasks(tasks);
         setNotFound(!found);
         setLoading(false);
       })
@@ -52,6 +54,16 @@ export function TaskDetailPage(): React.ReactElement {
       document.title = 'ProjectsFlow';
     };
   }, [task]);
+
+  // Недавно редактированные задачи проекта для дропдауна крошек (топ-8 по updatedAt).
+  const recentTasks = useMemo(
+    () =>
+      [...allTasks]
+        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+        .slice(0, 8)
+        .map((t) => ({ id: t.id, title: taskTitle(t) })),
+    [allTasks],
+  );
 
   if (loading) {
     return (
@@ -78,22 +90,16 @@ export function TaskDetailPage(): React.ReactElement {
     );
   }
 
+  // Крошки в том же виде, что и на остальных страницах проекта (ProjectBreadcrumbs):
+  // Проекты ▾ · Проект ▾ · Задача ▾ — с hover-дропдаунами навигации.
   const breadcrumbs = (
-    <nav aria-label="Хлебные крошки" className="flex min-w-0 items-center gap-1.5 text-sm">
-      <Link to="/" className="shrink-0 text-muted-foreground transition-colors hover:text-foreground">
-        Проекты
-      </Link>
-      <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50" />
-      <Link
-        to={`/projects/${projectId}`}
-        className="min-w-0 max-w-[28vw] shrink-0 truncate text-muted-foreground transition-colors hover:text-foreground"
-      >
-        {project?.name ?? '…'}
-      </Link>
-      <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50" />
-      {/* Заголовок задачи занимает остаток и обрезается многоточием (длинные не ломают строку). */}
-      <span className="min-w-0 flex-1 truncate font-medium text-foreground">{taskTitle(task)}</span>
-    </nav>
+    <ProjectBreadcrumbs
+      projectId={projectId}
+      projectName={project?.name ?? '…'}
+      projectIcon={project?.icon}
+      view="board"
+      task={{ taskId: task.id, title: taskTitle(task), recent: recentTasks }}
+    />
   );
 
   return (

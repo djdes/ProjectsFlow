@@ -99,12 +99,25 @@ const segmentClass = (current?: boolean): string =>
       : 'text-muted-foreground hover:bg-hover hover:text-foreground',
   );
 
+// Четвёртый сегмент крошек на ОТДЕЛЬНОЙ странице задачи: название текущей задачи +
+// hover-дропдаун с недавно редактированными задачами того же проекта для быстрого
+// перехода. На обычных страницах проекта не передаётся.
+export type BreadcrumbTask = {
+  taskId: string;
+  title: string;
+  // Недавно редактированные задачи проекта (уже отсортированы, обычно ≤8).
+  recent: ReadonlyArray<{ id: string; title: string }>;
+};
+
 type Props = {
   projectId: string;
   projectName: string;
   projectIcon?: string | null;
   // Активный вид — определяет, какой сегмент «текущий» (жирный, без подсветки-ссылки).
   view: ProjectViewKey;
+  // Сегмент задачи (только на странице отдельной задачи). Если задан — текущим
+  // становится он, а сегмент проекта снова кликабельный.
+  task?: BreadcrumbTask;
 };
 
 export function ProjectBreadcrumbs({
@@ -112,6 +125,7 @@ export function ProjectBreadcrumbs({
   projectName,
   projectIcon,
   view,
+  task,
 }: Props): React.ReactElement {
   const navigate = useNavigate();
   const { data: projects } = useProjects();
@@ -119,6 +133,7 @@ export function ProjectBreadcrumbs({
 
   const projectsMenu = useHoverMenu();
   const viewsMenu = useHoverMenu();
+  const taskMenu = useHoverMenu();
   const currentView = VIEWS.find((v) => v.key === view);
 
   return (
@@ -160,7 +175,7 @@ export function ProjectBreadcrumbs({
       {/* Сегмент проекта — дропдаун с видами (Доска / Обзор / База знаний / …). */}
       <DropdownMenu open={viewsMenu.open} onOpenChange={viewsMenu.setOpen} modal={false}>
         <DropdownMenuTrigger
-          className={cn(segmentClass(view === 'board'), 'min-w-0')}
+          className={cn(segmentClass(view === 'board' && !task), 'min-w-0')}
           onMouseEnter={viewsMenu.openNow}
           onMouseLeave={viewsMenu.closeSoon}
         >
@@ -189,6 +204,46 @@ export function ProjectBreadcrumbs({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Сегмент задачи — на отдельной странице задачи. Текущий (пилюля) + hover-дропдаун
+          с недавними задачами проекта для быстрого перехода между ними. */}
+      {task && (
+        <>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
+          <DropdownMenu open={taskMenu.open} onOpenChange={taskMenu.setOpen} modal={false}>
+            <DropdownMenuTrigger
+              className={cn(segmentClass(true), 'min-w-0')}
+              onMouseEnter={taskMenu.openNow}
+              onMouseLeave={taskMenu.closeSoon}
+            >
+              <span className="min-w-0 max-w-[7rem] truncate sm:max-w-[12rem]">{task.title}</span>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="max-h-80 w-64 overflow-y-auto"
+              onMouseEnter={taskMenu.openNow}
+              onMouseLeave={taskMenu.closeSoon}
+              onCloseAutoFocus={(e) => e.preventDefault()}
+            >
+              <DropdownMenuLabel>Недавние задачи</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {task.recent.length === 0 ? (
+                <div className="px-2 py-1.5 text-xs text-muted-foreground">Других задач нет</div>
+              ) : (
+                task.recent.map((t) => (
+                  <DropdownMenuItem
+                    key={t.id}
+                    onSelect={() => navigate(`/projects/${projectId}/tasks/${t.id}`)}
+                    className={cn('min-w-0', t.id === task.taskId && 'font-medium text-foreground')}
+                  >
+                    <span className="truncate">{t.title}</span>
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      )}
 
       {/* Третий сегмент — текущий вид (если это не «Доска», которая совпадает с проектом). */}
       {view !== 'board' && currentView && (
