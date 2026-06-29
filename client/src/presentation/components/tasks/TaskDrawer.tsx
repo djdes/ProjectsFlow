@@ -10,8 +10,19 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, Clock, CornerDownRight, Download, FileText, Flag, Loader2, Maximize2, Paperclip, Pencil, Plus, Reply, Send, Trash2, UploadCloud, UserPlus } from 'lucide-react';
+import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, Clock, CornerDownRight, Download, FileText, Flag, GripVertical, Loader2, Maximize2, Paperclip, Pencil, Plus, Reply, Send, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { normalizeTaskPropertyOrder, type TaskPropertyKey } from '@/domain/user/UiPrefs';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -269,6 +280,60 @@ function DrawerShell({
 
 // Chip-селектор режима Ralph в edit-mode шапки. Показывает текущий режим бейджем;
 // клик раскрывает dropdown для смены — PATCH идёт сразу же (best-effort, error → toast).
+// Иконки и подписи строк-свойств по ключу (task 11) — единый источник для порядка.
+const PROP_ICON: Record<TaskPropertyKey, LucideIcon> = {
+  assignee: UserPlus,
+  deadline: CalendarClock,
+  priority: Flag,
+  mode: Bot,
+  files: Paperclip,
+  created: Clock,
+};
+const PROP_LABEL: Record<TaskPropertyKey, string> = {
+  assignee: 'Ответственный',
+  deadline: 'Дедлайн',
+  priority: 'Приоритет',
+  mode: 'Режим',
+  files: 'Файлы',
+  created: 'Создано',
+};
+
+// Сортируемая строка свойства (task 11): обёртка dnd-kit вокруг PropertyRow. На hover
+// вместо иконки показывается ручка-grip (6 точек), за которую перетаскивают строку.
+function SortablePropertyRow({
+  id,
+  icon,
+  label,
+  children,
+}: {
+  id: TaskPropertyKey;
+  icon: LucideIcon;
+  label: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition };
+  const handle = (
+    <button
+      type="button"
+      className="grid size-4 cursor-grab touch-none place-items-center rounded text-muted-foreground hover:text-foreground active:cursor-grabbing"
+      aria-label={`Переместить «${label}»`}
+      title="Перетащите, чтобы изменить порядок"
+      {...attributes}
+      {...listeners}
+    >
+      <GripVertical className="size-3.5" />
+    </button>
+  );
+  return (
+    <div ref={setNodeRef} style={style} className={cn(isDragging && 'relative z-10 opacity-80')}>
+      <PropertyRow icon={icon} label={label} handle={handle}>
+        {children}
+      </PropertyRow>
+    </div>
+  );
+}
+
 function TaskRalphModeChip({
   task,
   onChanged,
@@ -466,8 +531,37 @@ export function TaskDrawer({
   breadcrumbs = null,
 }: Props): React.ReactElement {
   const { user: currentUser } = useCurrentUser();
-  const { taskRepository, recordTaskView } = useContainer();
+  const { taskRepository, recordTaskView, userRepository } = useContainer();
   const navigate = useNavigate();
+  // Task 11: порядок строк-свойств — за пользователем (ui_prefs), один на все проекты.
+  const [propertyOrder, setPropertyOrder] = useState<TaskPropertyKey[]>(() =>
+    normalizeTaskPropertyOrder(undefined),
+  );
+  useEffect(() => {
+    let cancelled = false;
+    void userRepository
+      .getUiPrefs()
+      .then((p) => {
+        if (!cancelled) setPropertyOrder(normalizeTaskPropertyOrder(p.taskPropertyOrder));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [userRepository]);
+  const propSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const handlePropDragEnd = (e: DragEndEvent): void => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setPropertyOrder((prev) => {
+      const from = prev.indexOf(active.id as TaskPropertyKey);
+      const to = prev.indexOf(over.id as TaskPropertyKey);
+      if (from < 0 || to < 0) return prev;
+      const next = arrayMove(prev, from, to);
+      void userRepository.setUiPrefs({ taskPropertyOrder: next }).catch(() => {});
+      return next;
+    });
+  };
   const { animations } = useMotion();
   // Фиксируем «юзер открыл задачу» — единая точка для всех мест, где открывается drawer
   // (доска, «Поручено мне», блок «Недавнее»). Только edit-mode с реальной задачей; раз на
@@ -1213,94 +1307,110 @@ export function TaskDrawer({
               {/* === PROPERTIES === Notion-style вертикальные строки свойств. Рендерятся
                   ВСЕГДА (для любого статуса, включая done) — строка не прячется по статусу;
                   если контрол неправим для done — показываем значение, контрол disabled. */}
+              {/* Task 11: строки свойств можно перетаскивать (ручка-grip на hover), порядок
+                  сохраняется в профиль (ui_prefs) для всех проектов. Значения и видимость
+                  собираем в map по ключу, рендерим в сохранённом порядке. */}
               <div className="px-3 pb-2.5 pt-1">
-                {/* Ответственный — показываем строку ТОЛЬКО когда есть кого назначить:
-                    совместный проект (isShared) / inbox (делегирование) / уже делегировано.
-                    В личных одиночных проектах строки нет (некому назначать). */}
-                {(isInbox || isShared || !!task.delegation) && (
-                  <PropertyRow icon={UserPlus} label="Ответственный">
-                    <div className="flex min-h-7 flex-wrap items-center gap-1.5">
-                      {task.delegation && currentUser?.id && (
-                        <DelegationBadge delegation={task.delegation} currentUserId={currentUser.id} />
-                      )}
-                      {canEdit && (isInbox || isShared) ? (
-                        <DelegateTaskButton
-                          task={task}
-                          currentUserId={currentUser?.id ?? null}
-                          onChanged={() => notifyChanged()}
-                          projectId={isShared ? task.projectId : undefined}
-                          className={PROPERTY_VALUE_CLASS}
-                        />
-                      ) : null}
-                      {!task.delegation && !(canEdit && (isInbox || isShared)) && (
-                        <EmptyValue>Никто</EmptyValue>
-                      )}
-                      {isInbox && canEdit && (
-                        <AssignToProjectSelect
-                          task={task}
-                          onAssigned={() => {
-                            notifyChanged();
-                            onClose();
+                {(() => {
+                  const propValues: Record<TaskPropertyKey, React.ReactNode> = {
+                    assignee: (
+                      <div className="flex min-h-7 flex-wrap items-center gap-1.5">
+                        {task.delegation && currentUser?.id && (
+                          <DelegationBadge delegation={task.delegation} currentUserId={currentUser.id} />
+                        )}
+                        {canEdit && (isInbox || isShared) ? (
+                          <DelegateTaskButton
+                            task={task}
+                            currentUserId={currentUser?.id ?? null}
+                            onChanged={() => notifyChanged()}
+                            projectId={isShared ? task.projectId : undefined}
+                            className={PROPERTY_VALUE_CLASS}
+                          />
+                        ) : null}
+                        {!task.delegation && !(canEdit && (isInbox || isShared)) && (
+                          <EmptyValue>Никто</EmptyValue>
+                        )}
+                        {isInbox && canEdit && (
+                          <AssignToProjectSelect
+                            task={task}
+                            onAssigned={() => {
+                              notifyChanged();
+                              onClose();
+                            }}
+                          />
+                        )}
+                      </div>
+                    ),
+                    deadline: (
+                      <TaskDeadlineChip
+                        task={task}
+                        onChanged={() => notifyChanged()}
+                        className={PROPERTY_VALUE_CLASS}
+                        emptyLabel="Пусто"
+                        disabled={!canEdit}
+                      />
+                    ),
+                    priority: (
+                      <TaskPriorityChip
+                        task={task}
+                        onChanged={() => notifyChanged()}
+                        className={PROPERTY_VALUE_CLASS}
+                        disabled={!canEdit}
+                      />
+                    ),
+                    mode: (
+                      <TaskRalphModeChip
+                        task={task}
+                        onChanged={() => notifyChanged()}
+                        className={PROPERTY_VALUE_CLASS}
+                        disabled={!canEdit}
+                      />
+                    ),
+                    files: (
+                      <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-1.5">
+                        <TaskDrawerAttachmentRow
+                          items={headerAttachments}
+                          canEdit={canEdit}
+                          onAddFiles={(files) => {
+                            void uploadFilesDirectly(files);
                           }}
+                          onDelete={deleteAttachmentDirectly}
+                          uploads={uploads}
                         />
-                      )}
-                    </div>
-                  </PropertyRow>
-                )}
-
-                {/* Дедлайн — пикер inline; пустое значение читается как «Пусто». */}
-                <PropertyRow icon={CalendarClock} label="Дедлайн">
-                  <TaskDeadlineChip
-                    task={task}
-                    onChanged={() => notifyChanged()}
-                    className={PROPERTY_VALUE_CLASS}
-                    emptyLabel="Пусто"
-                    disabled={!canEdit}
-                  />
-                </PropertyRow>
-
-                {/* Приоритет — пикер inline; пустое значение → «Без приоритета». */}
-                <PropertyRow icon={Flag} label="Приоритет">
-                  <TaskPriorityChip
-                    task={task}
-                    onChanged={() => notifyChanged()}
-                    className={PROPERTY_VALUE_CLASS}
-                    disabled={!canEdit}
-                  />
-                </PropertyRow>
-
-                {/* Режим воркера — селектор inline. */}
-                <PropertyRow icon={Bot} label="Режим">
-                  <TaskRalphModeChip
-                    task={task}
-                    onChanged={() => notifyChanged()}
-                    className={PROPERTY_VALUE_CLASS}
-                    disabled={!canEdit}
-                  />
-                </PropertyRow>
-
-                {/* Файлы — чипы вложений (имя, размер, удаление) + «+» для добавления
-                    прямо из строки + инлайн прогресс-бары активных загрузок. */}
-                <PropertyRow icon={Paperclip} label="Файлы">
-                  <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-1.5">
-                    <TaskDrawerAttachmentRow
-                      items={headerAttachments}
-                      canEdit={canEdit}
-                      onAddFiles={(files) => {
-                        void uploadFilesDirectly(files);
-                      }}
-                      onDelete={deleteAttachmentDirectly}
-                      uploads={uploads}
-                    />
-                  </div>
-                </PropertyRow>
-
-                {/* Создано — read-only, приглушённо. */}
-                <PropertyRow icon={Clock} label="Создано">
-                  <span className="inline-flex min-h-7 items-center text-sm text-muted-foreground/70">
-                    {formatTaskCreated(task.createdAt)}
-                  </span>
-                </PropertyRow>
+                      </div>
+                    ),
+                    created: (
+                      <span className="inline-flex min-h-7 items-center text-sm text-muted-foreground/70">
+                        {formatTaskCreated(task.createdAt)}
+                      </span>
+                    ),
+                  };
+                  const propVisible: Record<TaskPropertyKey, boolean> = {
+                    // Ответственный — только когда есть кого назначить (см. task 6a).
+                    assignee: isInbox || isShared || !!task.delegation,
+                    deadline: true,
+                    priority: true,
+                    mode: true,
+                    files: true,
+                    created: true,
+                  };
+                  const visibleKeys = propertyOrder.filter((k) => propVisible[k]);
+                  return (
+                    <DndContext
+                      sensors={propSensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handlePropDragEnd}
+                    >
+                      <SortableContext items={visibleKeys} strategy={verticalListSortingStrategy}>
+                        {visibleKeys.map((key) => (
+                          <SortablePropertyRow key={key} id={key} icon={PROP_ICON[key]} label={PROP_LABEL[key]}>
+                            {propValues[key]}
+                          </SortablePropertyRow>
+                        ))}
+                      </SortableContext>
+                    </DndContext>
+                  );
+                })()}
               </div>
             </div>
 

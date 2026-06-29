@@ -92,6 +92,9 @@ export const kanbanDefaultColorsSchema = z.record(
 // Персональные UI-настройки клиента (профиль). Все поля optional — частичный мерж.
 export const uiPrefsSchema = z.object({
   inboxAssignedGrouping: z.enum(ASSIGNED_GROUPINGS).optional(),
+  // Порядок строк-свойств окна задачи; ограничиваем длину/строки (без жёсткого enum,
+  // чтобы добавление новых ключей-свойств не требовало правки схемы).
+  taskPropertyOrder: z.array(z.string().max(32)).max(20).optional(),
 });
 
 export type CreateProjectBody = z.infer<typeof createProjectSchema>;

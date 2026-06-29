@@ -18,6 +18,37 @@ export const ASSIGNED_GROUPING_LABELS: Record<AssignedGrouping, string> = {
   priority: 'Приоритет',
 };
 
+// Ключи строк-свойств в окне задачи. Порядок ниже — дефолтный (как было исторически).
+export const TASK_PROPERTY_KEYS = [
+  'assignee',
+  'deadline',
+  'priority',
+  'mode',
+  'files',
+  'created',
+] as const;
+export type TaskPropertyKey = (typeof TASK_PROPERTY_KEYS)[number];
+
+// Нормализуем сохранённый порядок: оставляем только известные ключи, дополняем
+// недостающими в дефолтном порядке (устойчиво к добавлению новых свойств в будущем).
+export function normalizeTaskPropertyOrder(saved: readonly string[] | undefined): TaskPropertyKey[] {
+  const known = new Set<string>(TASK_PROPERTY_KEYS);
+  const seen = new Set<string>();
+  const out: TaskPropertyKey[] = [];
+  for (const k of saved ?? []) {
+    if (known.has(k) && !seen.has(k)) {
+      seen.add(k);
+      out.push(k as TaskPropertyKey);
+    }
+  }
+  for (const k of TASK_PROPERTY_KEYS) {
+    if (!seen.has(k)) out.push(k);
+  }
+  return out;
+}
+
 export type UiPrefs = {
   readonly inboxAssignedGrouping?: AssignedGrouping;
+  // Порядок строк-свойств окна задачи (TaskPropertyKey[]). Один на пользователя, все проекты.
+  readonly taskPropertyOrder?: readonly string[];
 };

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { type LucideIcon } from 'lucide-react';
+// (handle поддержан ниже — task 11 reorder)
 
 // Notion-style строка свойства под заголовком задачи: слева приглушённая иконка +
 // label в фиксированной колонке, справа — значение/контрол. Вся строка подсвечивается
@@ -10,13 +11,25 @@ interface PropertyRowProps {
   icon: LucideIcon;
   label: string;
   children: React.ReactNode;
+  // Ручка перетаскивания (task 11): на hover строки показывается ВМЕСТО иконки.
+  // Не задана — обычная иконка.
+  handle?: React.ReactNode;
 }
 
-export function PropertyRow({ icon: Icon, label, children }: PropertyRowProps): React.ReactElement {
+export function PropertyRow({ icon: Icon, label, children, handle }: PropertyRowProps): React.ReactElement {
   return (
     <div className="group/prop flex min-h-8 items-center gap-2 rounded-md px-1.5 py-0.5 transition-colors hover:bg-hover">
       <span className="flex w-[130px] shrink-0 items-center gap-1.5 text-sm text-muted-foreground sm:w-[150px]">
-        <Icon className="size-4 shrink-0" aria-hidden />
+        {handle ? (
+          <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
+            <Icon className="size-4 transition-opacity group-hover/prop:opacity-0" aria-hidden />
+            <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover/prop:opacity-100">
+              {handle}
+            </span>
+          </span>
+        ) : (
+          <Icon className="size-4 shrink-0" aria-hidden />
+        )}
         <span className="min-w-0 break-words">{label}</span>
       </span>
       {/* Значение — flex-контейнер: одинаковая вертикаль у всех контролов (chip/inline-flex

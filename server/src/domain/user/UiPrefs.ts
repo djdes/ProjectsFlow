@@ -8,4 +8,7 @@ export type AssignedGrouping = (typeof ASSIGNED_GROUPINGS)[number];
 
 export type UiPrefs = {
   readonly inboxAssignedGrouping?: AssignedGrouping;
+  // Порядок строк-свойств в окне задачи (ключи assignee/deadline/priority/mode/files/created).
+  // Один на пользователя для всех проектов; неизвестные/недостающие ключи дополняются дефолтом.
+  readonly taskPropertyOrder?: readonly string[];
 };
