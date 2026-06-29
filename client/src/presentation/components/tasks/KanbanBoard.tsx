@@ -217,7 +217,52 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   // Общие (на проект) настройки доски: цвета/переименования/скрытие колонок + глобальные
   // дефолтные цвета юзера. Резолв цвета/подписи делаем на лету при рендере колонок.
   const { settings, defaults, setColor, setLabel, setHidden } = useKanbanSettings(projectId);
-  const [dialog, setDialog] = useState<TaskDrawerState | null>(null);
+  // Перезагрузка страницы не должна закрывать открытое окно задачи. Какое окно открыто
+  // (edit-<taskId> / create-<status>) держим в sessionStorage пер-проект — переживает
+  // reload, чистится на закрытие. Черновик create-формы хранит сам TaskDrawer.
+  const drawerStoreKey = `pf-open-drawer:${projectId}`;
+  const [dialog, setDialog] = useState<TaskDrawerState | null>(() => {
+    try {
+      const raw = sessionStorage.getItem(drawerStoreKey);
+      const d = raw ? (JSON.parse(raw) as { mode?: string; status?: string }) : null;
+      // create восстанавливаем сразу (задача не нужна); edit — после загрузки списка.
+      if (d?.mode === 'create' && typeof d.status === 'string') {
+        return { mode: 'create', status: d.status as TaskStatus };
+      }
+    } catch {
+      /* ignore corrupted storage */
+    }
+    return null;
+  });
+  // Реоткрытие edit-окна после загрузки задач (нужен сам объект задачи). Один раз.
+  const reopenedDrawerRef = useRef(false);
+  useEffect(() => {
+    if (loading || reopenedDrawerRef.current || dialog) return;
+    reopenedDrawerRef.current = true;
+    try {
+      const raw = sessionStorage.getItem(drawerStoreKey);
+      const d = raw ? (JSON.parse(raw) as { mode?: string; taskId?: string }) : null;
+      if (d?.mode === 'edit' && d.taskId) {
+        const t = tasks.find((x) => x.id === d.taskId);
+        if (t) setDialog({ mode: 'edit', task: t });
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [loading, tasks, dialog, drawerStoreKey]);
+  // Зеркалим открытое окно в sessionStorage при каждом изменении.
+  useEffect(() => {
+    try {
+      if (!dialog) sessionStorage.removeItem(drawerStoreKey);
+      else if (dialog.mode === 'edit') {
+        sessionStorage.setItem(drawerStoreKey, JSON.stringify({ mode: 'edit', taskId: dialog.task.id }));
+      } else {
+        sessionStorage.setItem(drawerStoreKey, JSON.stringify({ mode: 'create', status: dialog.status }));
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [dialog, drawerStoreKey]);
   const [searchParams, setSearchParams] = useSearchParams();
   // Deep-link: ?task=<id> открывает диалог задачи. Используется email-кнопками И блоком
   // «Недавнее» в сайдбаре. Трекаем последний обработанный taskId (а не one-shot-флаг):

@@ -46,7 +46,47 @@ type Props = {
 export function TaskListView({ projectId, showCommits = true, hideDone = false }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, remove, refetch } = useTasks(projectId);
   const { user } = useCurrentUser();
-  const [dialog, setDialog] = useState<TaskDrawerState | null>(null);
+  // Открытое окно задачи переживает перезагрузку (sessionStorage пер-проект) — см. KanbanBoard.
+  const drawerStoreKey = `pf-open-drawer:${projectId}`;
+  const [dialog, setDialog] = useState<TaskDrawerState | null>(() => {
+    try {
+      const raw = sessionStorage.getItem(drawerStoreKey);
+      const d = raw ? (JSON.parse(raw) as { mode?: string; status?: string }) : null;
+      if (d?.mode === 'create' && typeof d.status === 'string') {
+        return { mode: 'create', status: d.status as TaskStatus };
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
+  });
+  const reopenedDrawerRef = useRef(false);
+  useEffect(() => {
+    if (loading || reopenedDrawerRef.current || dialog) return;
+    reopenedDrawerRef.current = true;
+    try {
+      const raw = sessionStorage.getItem(drawerStoreKey);
+      const d = raw ? (JSON.parse(raw) as { mode?: string; taskId?: string }) : null;
+      if (d?.mode === 'edit' && d.taskId) {
+        const t = tasks.find((x) => x.id === d.taskId);
+        if (t) setDialog({ mode: 'edit', task: t });
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [loading, tasks, dialog, drawerStoreKey]);
+  useEffect(() => {
+    try {
+      if (!dialog) sessionStorage.removeItem(drawerStoreKey);
+      else if (dialog.mode === 'edit') {
+        sessionStorage.setItem(drawerStoreKey, JSON.stringify({ mode: 'edit', taskId: dialog.task.id }));
+      } else {
+        sessionStorage.setItem(drawerStoreKey, JSON.stringify({ mode: 'create', status: dialog.status }));
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [dialog, drawerStoreKey]);
 
   // Deep-link `?task=<id>` — открывает drawer задачи один раз после загрузки.
   // Симметрично с KanbanBoard, чтобы переброс из notification работал и в list-view.

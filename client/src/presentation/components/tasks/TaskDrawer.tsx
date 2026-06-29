@@ -224,6 +224,55 @@ type Props = {
 // localStorage-ключ режима ширины страницы задачи (asPage): '1' = во всю ширину.
 const TASK_PAGE_WIDE_KEY = 'pf-task-page-wide';
 
+// Черновик формы создания задачи — переживает перезагрузку страницы (sessionStorage,
+// пер-проект). Файлы (File-объекты) не сериализуются и в черновик не попадают.
+type CreateDraft = {
+  description: string;
+  ralphMode: RalphMode;
+  delegateUserId: string | null;
+  deadline: string | null;
+  priority: TaskPriority | null;
+};
+function readCreateDraft(key: string): CreateDraft | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as Partial<CreateDraft>;
+    if (typeof d?.description !== 'string') return null;
+    return {
+      description: d.description,
+      ralphMode: (d.ralphMode as RalphMode) ?? 'normal',
+      delegateUserId: d.delegateUserId ?? null,
+      deadline: d.deadline ?? null,
+      priority: (d.priority as TaskPriority) ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+function writeCreateDraft(key: string, draft: CreateDraft): void {
+  try {
+    // Пустой черновик не храним — чтобы свежее «+ создать» открывалось чистым.
+    const empty =
+      draft.description.trim() === '' &&
+      draft.deadline === null &&
+      draft.priority === null &&
+      draft.delegateUserId === null &&
+      draft.ralphMode === 'normal';
+    if (empty) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, JSON.stringify(draft));
+  } catch {
+    /* sessionStorage недоступен — черновик действует только на эту сессию */
+  }
+}
+function clearCreateDraft(key: string): void {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
 // Обёртка содержимого дровера: в обычном режиме — Sheet-оверлей; в asPage —
 // inline-страница во всю высоту с хлебными крошками и центрированной колонкой.
 // Объявлена на уровне модуля (стабильный тип) — иначе пересоздание на каждый рендер
@@ -596,6 +645,8 @@ export function TaskDrawer({
   // В create-mode description редактируется одним RichTextEditor на форме; в edit-mode
   // заголовок/тело живут в editDescription + TaskTitleEditor/TaskBodyEditor (см. ниже),
   // а это локальное состояние используется только в create-режиме (submit формы).
+  // Ключ черновика create-формы — пер-проект (для inbox aiProjectId=null → 'inbox').
+  const createDraftKey = `pf-task-create-draft:${aiProjectId ?? 'inbox'}`;
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -814,11 +865,21 @@ export function TaskDrawer({
 
   useEffect(() => {
     if (!state) return;
-    setDescription(state.mode === 'edit' ? state.task.description ?? '' : '');
-    setCreateRalphMode('normal');
-    setCreateDelegateUserId(null);
-    setCreateDeadline(null);
-    setCreatePriority(null);
+    if (state.mode === 'edit') {
+      setDescription(state.task.description ?? '');
+      setCreateRalphMode('normal');
+      setCreateDelegateUserId(null);
+      setCreateDeadline(null);
+      setCreatePriority(null);
+    } else {
+      // create: восстанавливаем черновик (переживает reload), иначе — пустая форма.
+      const draft = readCreateDraft(createDraftKey);
+      setDescription(draft?.description ?? '');
+      setCreateRalphMode(draft?.ralphMode ?? 'normal');
+      setCreateDelegateUserId(draft?.delegateUserId ?? null);
+      setCreateDeadline(draft?.deadline ?? null);
+      setCreatePriority(draft?.priority ?? null);
+    }
     setError(null);
     // activeTab НЕ сбрасываем — он запоминается (localStorage), чтобы ре-рендер
     // родителя (сворачивание сайдбара и т.п.) не выкидывал из LIVE в «Обсуждение».
@@ -832,7 +893,35 @@ export function TaskDrawer({
       prev.forEach((p) => URL.revokeObjectURL(p.previewUrl));
       return [];
     });
-  }, [state]);
+  }, [state, createDraftKey]);
+
+  // Сохраняем черновик create-формы при каждом изменении полей — чтобы при перезагрузке
+  // страницы введённое не пропало. На пустой форме черновик удаляется (см. writeCreateDraft).
+  useEffect(() => {
+    if (state?.mode !== 'create') return;
+    writeCreateDraft(createDraftKey, {
+      description,
+      ralphMode: createRalphMode,
+      delegateUserId: createDelegateUserId,
+      deadline: createDeadline,
+      priority: createPriority,
+    });
+  }, [
+    state?.mode,
+    description,
+    createRalphMode,
+    createDelegateUserId,
+    createDeadline,
+    createPriority,
+    createDraftKey,
+  ]);
+
+  // Закрытие окна: в create-режиме явный «крестик»/клик-вне сбрасывает черновик
+  // (перезагрузка — нет: она не вызывает onClose). Затем — обычное закрытие.
+  const handleClose = useCallback((): void => {
+    if (state?.mode === 'create') clearCreateDraft(createDraftKey);
+    onClose();
+  }, [state?.mode, createDraftKey, onClose]);
 
   const addPendingFiles = (raw: FileList | File[]): void => {
     const valid = Array.from(raw);
@@ -1032,6 +1121,8 @@ export function TaskDrawer({
           notifyChanged();
         }
       }
+      // Задача создана — черновик больше не нужен.
+      if (state?.mode === 'create') clearCreateDraft(createDraftKey);
       onClose();
     } catch (err) {
       setError((err as Error).message ?? 'Не удалось сохранить');
@@ -1048,7 +1139,7 @@ export function TaskDrawer({
       variant="ghost"
       size="icon"
       className="group/x size-7 shrink-0 text-muted-foreground hover:text-foreground sm:size-7"
-      onClick={onClose}
+      onClick={handleClose}
       aria-label="Закрыть"
       title="Закрыть"
     >
@@ -1151,7 +1242,7 @@ export function TaskDrawer({
       asPageWide={asPageWide}
       breadcrumbs={breadcrumbs}
       open={state !== null}
-      onOpenChange={(open) => !open && onClose()}
+      onOpenChange={(open) => !open && handleClose()}
       contentClassName={cn(
         'grid h-dvh w-full gap-0 overflow-hidden p-0 sm:max-w-[900px]',
         'grid-rows-[minmax(0,1fr)]',
