@@ -86,12 +86,13 @@ export function TaskDetailPage(): React.ReactElement {
       <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50" />
       <Link
         to={`/projects/${projectId}`}
-        className="max-w-[28vw] truncate text-muted-foreground transition-colors hover:text-foreground"
+        className="min-w-0 max-w-[28vw] shrink-0 truncate text-muted-foreground transition-colors hover:text-foreground"
       >
         {project?.name ?? '…'}
       </Link>
       <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50" />
-      <span className="min-w-0 truncate font-medium text-foreground">{taskTitle(task)}</span>
+      {/* Заголовок задачи занимает остаток и обрезается многоточием (длинные не ломают строку). */}
+      <span className="min-w-0 flex-1 truncate font-medium text-foreground">{taskTitle(task)}</span>
     </nav>
   );
 

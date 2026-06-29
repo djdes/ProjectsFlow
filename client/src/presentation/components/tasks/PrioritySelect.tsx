@@ -34,6 +34,11 @@ export function PrioritySelect({
 }: Props): React.ReactElement {
   const meta = value !== null ? PRIORITY_META[value] : null;
 
+  // Ряд свойств задачи (TaskDrawer) передаёт PROPERTY_VALUE_CLASS с `justify-start` —
+  // там без флажка-иконки и с плейсхолдером «Выбрать…». В остальных местах (AddTaskDialog,
+  // bulk) оставляем флажок + «Без приоритета».
+  const inPropertyRow = (className ?? '').includes('justify-start');
+
   if (iconOnly) {
     return (
       <DropdownMenu>
@@ -78,9 +83,9 @@ export function PrioritySelect({
           {meta ? (
             <span className={cn('size-2 rounded-full', meta.dotColor)} aria-hidden />
           ) : (
-            <Flag className="size-3.5" />
+            !inPropertyRow && <Flag className="size-3.5" />
           )}
-          {meta ? meta.label : 'Без приоритета'}
+          {meta ? meta.label : inPropertyRow ? 'Выбрать…' : 'Без приоритета'}
           <ChevronDown className="size-3" />
         </Button>
       </DropdownMenuTrigger>

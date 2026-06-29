@@ -66,18 +66,18 @@ export function TaskDrawerAttachmentRow({
     />
   ) : null;
 
-  // Пусто (ни файлов, ни загрузок): один тихий чип «+ Файл».
+  // Пусто (ни файлов, ни загрузок): тихий плейсхолдер «Выбрать…» без иконки —
+  // в один стиль с пикерами дедлайна/приоритета в ряду свойств.
   if (!hasAny) {
     return (
       <>
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="-ml-1.5 inline-flex h-7 items-center rounded-md px-1.5 text-sm text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
           title="Прикрепить файл (или Ctrl+V в комментарий)"
         >
-          <Plus className="size-3.5" />
-          Файл
+          Выбрать…
         </button>
         {fileInput}
       </>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { User, UserPlus } from 'lucide-react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -9,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import { useContainer } from '@/infrastructure/di/container';
 import type { SharedMember } from '@/application/project/ProjectRepository';
 
@@ -54,26 +56,59 @@ export function DelegateSelect({ value, onChange, disabled, className, projectId
     ? `Делегировано: ${selected.displayName}`
     : 'Делегировать';
 
+  // Ряд свойств задачи (TaskDrawer «Ответственный») передаёт PROPERTY_VALUE_CLASS с
+  // `justify-start` — там кнопка текстовая: «Выбрать…» в пустом состоянии, аватар(ы)
+  // выбранного участника когда задан. В композерах/диалогах оставляем icon-кнопку.
+  const inPropertyRow = (className ?? '').includes('justify-start');
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          disabled={disabled}
-          className={cn(
-            'shrink-0',
-            value
-              ? 'text-foreground'
-              : 'text-muted-foreground hover:text-foreground',
-            className,
-          )}
-          title={title}
-          aria-label={title}
-        >
-          {value ? <UserPlus className="size-4" /> : <User className="size-4" />}
-        </Button>
+        {inPropertyRow ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            className={cn(
+              value ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+              className,
+            )}
+            title={title}
+            aria-label={title}
+          >
+            {selected ? (
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Avatar className="size-5 shrink-0">
+                  <AvatarFallback
+                    className={cn('text-[9px]', avatarColor(selected.displayName))}
+                  >
+                    {getInitials(selected.displayName)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="truncate">{selected.displayName}</span>
+              </span>
+            ) : (
+              'Выбрать…'
+            )}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            disabled={disabled}
+            className={cn(
+              'shrink-0',
+              value ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+              className,
+            )}
+            title={title}
+            aria-label={title}
+          >
+            {value ? <UserPlus className="size-4" /> : <User className="size-4" />}
+          </Button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[240px]">
         <DropdownMenuItem onClick={() => onChange(null)}>

@@ -165,7 +165,8 @@ export function ProjectBreadcrumbs({
           onMouseLeave={viewsMenu.closeSoon}
         >
           <ProjectChip name={projectName} icon={projectIcon} />
-          <span className="truncate">{projectName}</span>
+          {/* Длинное имя проекта обрезаем многоточием, чтобы крошки не растягивали хедер. */}
+          <span className="min-w-0 max-w-[9rem] truncate sm:max-w-[14rem]">{projectName}</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"

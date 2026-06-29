@@ -17,7 +17,7 @@ type Props = {
   className?: string;
   // Icon-only режим для композеров: иконка календаря, дата появляется рядом только когда задана.
   iconOnly?: boolean;
-  // Текст в пустом состоянии (по умолчанию «Дедлайн»). Для Notion-ряда свойств — «Пусто».
+  // Текст в пустом состоянии. Если не задан — в ряду свойств «Выбрать…», иначе «Дедлайн».
   emptyLabel?: string;
 };
 
@@ -72,9 +72,14 @@ export function DeadlinePicker({
   disabled,
   className,
   iconOnly = false,
-  emptyLabel = 'Дедлайн',
+  emptyLabel,
 }: Props): React.ReactElement {
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Ряд свойств задачи (TaskDrawer) передаёт PROPERTY_VALUE_CLASS с `justify-start` —
+  // там кнопка-значение без ведущей иконки и с плейсхолдером «Выбрать…». В композерах
+  // и bulk-баре (icon/обычный вид) оставляем календарь и «Дедлайн».
+  const inPropertyRow = (className ?? '').includes('justify-start');
 
   const openNativePicker = (): void => {
     const inp = inputRef.current;
@@ -90,7 +95,10 @@ export function DeadlinePicker({
     }
   };
 
-  const label = value ? formatShort(value) : emptyLabel;
+  const placeholder = emptyLabel ?? (inPropertyRow ? 'Выбрать…' : 'Дедлайн');
+  const label = value ? formatShort(value) : placeholder;
+  // Ведущую иконку прячем только в ряду свойств (не в icon-only/обычном виде).
+  const showLeadingIcon = iconOnly || !inPropertyRow;
 
   return (
     <span className="inline-flex items-center">
@@ -109,7 +117,7 @@ export function DeadlinePicker({
             title={value ? `Срок: ${value}` : 'Выбрать срок выполнения'}
             aria-label={value ? `Срок: ${value}` : 'Срок выполнения'}
           >
-            <CalendarClock className={iconOnly ? 'size-4' : 'size-3.5'} />
+            {showLeadingIcon && <CalendarClock className={iconOnly ? 'size-4' : 'size-3.5'} />}
             {(!iconOnly || value !== null) && label}
             {!iconOnly && <ChevronDown className="size-3" />}
           </Button>

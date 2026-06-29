@@ -249,16 +249,45 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
             const taskListType = schema.nodes['taskList'];
             const paragraphType = schema.nodes['paragraph'];
             if (!taskItemType || !taskListType || !paragraphType) return false;
-            if (dispatch) {
-              const item = taskItemType.create({ checked: false }, paragraphType.create());
+            if (!dispatch) return true;
+
+            const item = taskItemType.create({ checked: false }, paragraphType.create());
+
+            // Если содержимое уже заканчивается чек-листом — добавляем пункт ВНУТРЬ него,
+            // вплотную к предыдущему (без нового блока-списка и его блочного зазора).
+            // Хвостовой пустой параграф (tiptap часто держит его в конце) игнорируем.
+            let lastListPos = -1;
+            let lastListSize = 0;
+            doc.forEach((node, offset) => {
+              if (node.type === taskListType) {
+                lastListPos = offset;
+                lastListSize = node.nodeSize;
+              }
+            });
+            const lastChild = doc.lastChild;
+            const trailingEmptyPara =
+              lastChild != null && lastChild.type === paragraphType && lastChild.content.size === 0
+                ? lastChild.nodeSize
+                : 0;
+            const listIsTrailing =
+              lastListPos >= 0 && lastListPos + lastListSize === doc.content.size - trailingEmptyPara;
+
+            if (listIsTrailing) {
+              // Вставка перед закрывающим токеном списка → пункт становится последним.
+              const insertPos = lastListPos + lastListSize - 1;
+              tr.insert(insertPos, item);
+              // Курсор внутрь пустого параграфа нового пункта: item(+1) para(+1).
+              const cursor = Math.min(insertPos + 2, tr.doc.content.size);
+              tr.setSelection(TextSelection.create(tr.doc, cursor));
+            } else {
               const list = taskListType.create(null, item);
               const endPos = doc.content.size;
               tr.insert(endPos, list);
               // Курсор внутрь пустого параграфа нового пункта: list(+1) item(+1) para(+1).
               const cursor = Math.min(endPos + 3, tr.doc.content.size);
               tr.setSelection(TextSelection.create(tr.doc, cursor));
-              tr.scrollIntoView();
             }
+            tr.scrollIntoView();
             return true;
           })
           .run();
