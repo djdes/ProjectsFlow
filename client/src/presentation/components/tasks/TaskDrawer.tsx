@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { createPortal } from 'react-dom';
 import {
   lazy,
   Suspense,
@@ -11,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, Clock, CornerDownRight, Download, FileText, Flag, Loader2, Maximize2, Paperclip, Pencil, Plus, Reply, Send, Trash2, UploadCloud, UserPlus, X } from 'lucide-react';
+import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, Clock, CornerDownRight, Download, FileText, Flag, Loader2, Maximize2, Paperclip, Pencil, Plus, Reply, Send, Trash2, UploadCloud, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
@@ -83,7 +82,6 @@ import { useResizableWidth } from '@/presentation/hooks/useResizableWidth';
 import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
 import type { MentionMember, RichTextEditorHandle } from '@/presentation/components/editor/RichTextEditor';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
-import { Progress } from '@/components/ui/progress';
 
 // Tiptap-редактор грузим лениво — он тяжёлый и не нужен на read-heavy экранах,
 // которые не открывают drawer. Suspense-fallback держит высоту, чтобы layout не прыгал.
@@ -143,7 +141,8 @@ type PendingFile = {
   readonly previewUrl: string;
 };
 
-// In-flight аплоад файла (edit-mode): имя + прогресс + оценка оставшегося времени.
+// In-flight аплоад файла (create И edit): имя + прогресс + оценка оставшегося времени.
+// Прогресс-бар рисуется ИНЛАЙН в строке «Файлы» (TaskDrawerAttachmentRow), а не плавающим.
 type UploadItem = {
   readonly id: string;
   readonly name: string;
@@ -154,38 +153,13 @@ type UploadItem = {
   readonly etaSec: number | null;
 };
 
-// Человекочитаемая оценка оставшегося времени загрузки.
-function formatUploadEta(sec: number | null): string {
-  if (sec === null) return 'оценка…';
-  if (sec <= 0) return 'почти готово';
-  if (sec < 60) return `~${sec} с осталось`;
-  return `~${Math.ceil(sec / 60)} мин осталось`;
-}
-
-// Плавающий индикатор загрузки файлов (правый нижний угол). Портал в body, чтобы
-// position:fixed считался от вьюпорта, а не от transform-предка (Sheet).
-function UploadProgressOverlay({ uploads }: { uploads: readonly UploadItem[] }): React.ReactElement {
-  return (
-    <div className="fixed bottom-4 right-4 z-[60] w-72 max-w-[calc(100vw-2rem)] rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg">
-      <div className="mb-2 flex items-center gap-2 text-xs font-medium">
-        <Loader2 className="size-3.5 animate-spin text-primary" />
-        Загрузка файлов · {uploads.length}
-      </div>
-      <div className="flex flex-col gap-2.5">
-        {uploads.map((u) => (
-          <div key={u.id} className="flex flex-col gap-1">
-            <div className="flex items-center gap-1.5">
-              <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate text-xs">{u.name}</span>
-              <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{u.progress}%</span>
-            </div>
-            <Progress value={u.progress} className="h-1.5" />
-            <span className="text-[10px] text-muted-foreground">{formatUploadEta(u.etaSec)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+// Оценка секунд до конца загрузки по средней скорости (первые ~0.4с не оцениваем — шум).
+function computeEtaSec(startedAt: number, loaded: number, total: number): number | null {
+  const elapsed = (Date.now() - startedAt) / 1000;
+  if (loaded > 0 && elapsed > 0.4 && total > loaded) {
+    return Math.max(1, Math.round((elapsed / loaded) * (total - loaded)));
+  }
+  return total > 0 && loaded >= total ? 0 : null;
 }
 
 export type TaskDrawerState =
@@ -706,19 +680,15 @@ export function TaskDrawer({
         try {
           await taskRepository.uploadAttachment(projectId, id, file, (loaded, total) => {
             setUploads((prev) =>
-              prev.map((u) => {
-                if (u.id !== uploadId) return u;
-                const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
-                const elapsed = (Date.now() - u.startedAt) / 1000;
-                // ETA по средней скорости; первые ~0.4с не оцениваем (шум).
-                const etaSec =
-                  loaded > 0 && elapsed > 0.4 && total > loaded
-                    ? Math.max(1, Math.round((elapsed / loaded) * (total - loaded)))
-                    : pct >= 100
-                      ? 0
-                      : null;
-                return { ...u, progress: pct, etaSec };
-              }),
+              prev.map((u) =>
+                u.id === uploadId
+                  ? {
+                      ...u,
+                      progress: total > 0 ? Math.round((loaded / total) * 100) : 0,
+                      etaSec: computeEtaSec(u.startedAt, loaded, total),
+                    }
+                  : u,
+              ),
             );
           });
         } catch (err) {
@@ -838,15 +808,34 @@ export function TaskDrawer({
         deadline: state?.mode === 'create' ? createDeadline : undefined,
         priority: state?.mode === 'create' ? createPriority : undefined,
       });
-      // Если в create-режиме копились картинки — аплоадим их в новосозданную задачу.
+      // Если в create-режиме копились файлы — аплоадим их в новосозданную задачу
+      // С ПРОГРЕСС-БАРОМ (тот же uploads-стейт + инлайн-бар в строке «Файлы», что и в edit).
       if (state?.mode === 'create' && pendingFiles.length > 0) {
+        const startedAt = Date.now();
+        setUploads(
+          pendingFiles.map((pf) => ({ id: pf.id, name: pf.file.name, progress: 0, startedAt, etaSec: null })),
+        );
         let ok = 0;
         for (const pf of pendingFiles) {
           try {
-            await taskRepository.uploadAttachment(task.projectId, task.id, pf.file);
+            await taskRepository.uploadAttachment(task.projectId, task.id, pf.file, (loaded, total) => {
+              setUploads((prev) =>
+                prev.map((u) =>
+                  u.id === pf.id
+                    ? {
+                        ...u,
+                        progress: total > 0 ? Math.round((loaded / total) * 100) : 0,
+                        etaSec: computeEtaSec(u.startedAt, loaded, total),
+                      }
+                    : u,
+                ),
+              );
+            });
             ok += 1;
           } catch (err) {
             toast.error(`Не удалось загрузить ${pf.file.name}: ${(err as Error).message}`);
+          } finally {
+            setUploads((prev) => prev.filter((u) => u.id !== pf.id));
           }
         }
         if (ok > 0) {
@@ -926,7 +915,6 @@ export function TaskDrawer({
   const isSplit = asPage ? false : isSplitRaw;
 
   return (
-    <>
     <DrawerShell
       asPage={asPage}
       breadcrumbs={breadcrumbs}
@@ -1203,10 +1191,9 @@ export function TaskDrawer({
                 </PropertyRow>
 
                 {/* Файлы — чипы вложений (имя, размер, удаление) + «+» для добавления
-                    прямо из строки. Прогресс активных аплоадов — в плавающем индикаторе
-                    справа снизу (UploadProgressOverlay), а не под строкой. */}
+                    прямо из строки + инлайн прогресс-бары активных загрузок. */}
                 <PropertyRow icon={Paperclip} label="Файлы">
-                  <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-1.5">
                     <TaskDrawerAttachmentRow
                       items={headerAttachments}
                       canEdit={canEdit}
@@ -1214,6 +1201,7 @@ export function TaskDrawer({
                         void uploadFilesDirectly(files);
                       }}
                       onDelete={deleteAttachmentDirectly}
+                      uploads={uploads}
                     />
                   </div>
                 </PropertyRow>
@@ -1509,43 +1497,28 @@ export function TaskDrawer({
                     />
                   </PropertyRow>
 
+                  {/* Та же строка файлов, что и в edit: чипы + «+» в строке + прогресс-бары. */}
                   <PropertyRow icon={Paperclip} label="Файлы">
-                    {pendingFiles.length > 0 ? (
-                      <div className="flex min-h-7 flex-wrap items-center gap-1.5 py-1">
-                        {pendingFiles.map((pf) => (
-                          <span
-                            key={pf.id}
-                            className="inline-flex items-center gap-1.5 rounded-md border bg-background py-0.5 pl-1.5 pr-1 text-[11px]"
-                            title={pf.file.name}
-                          >
-                            {pf.previewUrl ? (
-                              <img src={pf.previewUrl} alt="" className="size-4 rounded object-cover" />
-                            ) : (
-                              <FileText className="size-3.5 text-muted-foreground" />
-                            )}
-                            <span className="max-w-[160px] truncate">{pf.file.name}</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPendingFiles((prev) => {
-                                  const target = prev.find((p) => p.id === pf.id);
-                                  if (target) URL.revokeObjectURL(target.previewUrl);
-                                  return prev.filter((p) => p.id !== pf.id);
-                                });
-                              }}
-                              className="grid size-4 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive hover:text-white"
-                              aria-label="Убрать"
-                            >
-                              <X className="size-2.5" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="inline-flex min-h-7 items-center">
-                        <EmptyValue />
-                      </span>
-                    )}
+                    <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-1.5">
+                      <TaskDrawerAttachmentRow
+                        items={[]}
+                        canEdit={!saving}
+                        onAddFiles={(files) => addPendingFiles(files)}
+                        pending={pendingFiles.map((pf) => ({
+                          id: pf.id,
+                          name: pf.file.name,
+                          previewUrl: pf.previewUrl,
+                        }))}
+                        onRemovePending={(id) =>
+                          setPendingFiles((prev) => {
+                            const target = prev.find((p) => p.id === id);
+                            if (target) URL.revokeObjectURL(target.previewUrl);
+                            return prev.filter((p) => p.id !== id);
+                          })
+                        }
+                        uploads={uploads}
+                      />
+                    </div>
                   </PropertyRow>
                 </div>
 
@@ -1589,8 +1562,6 @@ export function TaskDrawer({
           </div>
         )}
     </DrawerShell>
-    {uploads.length > 0 && createPortal(<UploadProgressOverlay uploads={uploads} />, document.body)}
-    </>
   );
 }
 
