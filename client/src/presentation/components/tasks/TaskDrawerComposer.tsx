@@ -10,7 +10,10 @@ import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import { SendTargetButton } from '@/presentation/components/tasks/SendTargetButton';
 import { isImageMime } from '@/presentation/components/attachments/files';
-import type { MentionMember } from '@/presentation/components/editor/RichTextEditor';
+import type {
+  MentionMember,
+  RichTextEditorHandle,
+} from '@/presentation/components/editor/RichTextEditor';
 
 // Tiptap-редактор грузим лениво (тяжёлый chunk, не нужен на read-heavy экранах).
 const RichTextEditor = lazy(() =>
@@ -95,6 +98,16 @@ export function TaskDrawerComposer({
   // композер (degrade gracefully — без упоминаний).
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<RichTextEditorHandle>(null);
+  // После успешной отправки редактор на миг становится disabled (теряет фокус).
+  // Возвращаем фокус, когда submit завершился — чтобы можно было сразу печатать дальше.
+  const refocusAfterSendRef = useRef(false);
+
+  useEffect(() => {
+    if (submitting || !refocusAfterSendRef.current) return;
+    refocusAfterSendRef.current = false;
+    requestAnimationFrame(() => editorRef.current?.focusEnd());
+  }, [submitting]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -191,6 +204,7 @@ export function TaskDrawerComposer({
       pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
       setPending([]);
       setBody('');
+      refocusAfterSendRef.current = true;
     } catch (e) {
       toast.error(`Не удалось отправить: ${(e as Error).message}`);
     } finally {
@@ -268,6 +282,7 @@ export function TaskDrawerComposer({
 
         <Suspense fallback={<div className="px-3.5 py-2.5 text-sm leading-snug">{body}</div>}>
           <RichTextEditor
+            ref={editorRef}
             variant="comment"
             value={body}
             onChange={setBody}

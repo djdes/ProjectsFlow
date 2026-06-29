@@ -51,6 +51,8 @@ type Props = {
   readonly disabled?: boolean;
   /** Компактная кнопка (для композера). */
   readonly compact?: boolean;
+  /** Триггер — только иконка (квадратная), в стиле кластера действий окна задачи. */
+  readonly iconOnly?: boolean;
   /**
    * Контекст правки существующей задачи. Если задан — режим «По проектам» обновляет
    * ЭТУ задачу для сегмента её проекта (без дубля), остальные проекты → новые задачи;
@@ -167,6 +169,7 @@ export function AiComposeDialog({
   ralphMode = 'normal',
   disabled,
   compact,
+  iconOnly,
   editTask,
 }: Props): React.ReactElement {
   const { composeTasks, taskRepository, projectRepository } = useContainer();
@@ -482,22 +485,38 @@ export function AiComposeDialog({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => void start()}
-        disabled={isDisabled}
-        title="Переработать текст с помощью AI"
-        className={cn('gap-1.5', compact ? 'h-8 px-2.5 text-xs' : 'h-8')}
-      >
-        {phase === 'loading' ? (
-          <Loader2 className="size-3.5 animate-spin" />
-        ) : (
-          <Sparkles className="size-3.5" />
-        )}
-        AI
-      </Button>
+      {iconOnly ? (
+        <button
+          type="button"
+          onClick={() => void start()}
+          disabled={isDisabled}
+          title="Переработать текст с помощью AI"
+          className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-40"
+        >
+          {phase === 'loading' ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Sparkles className="size-4" />
+          )}
+        </button>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void start()}
+          disabled={isDisabled}
+          title="Переработать текст с помощью AI"
+          className={cn('gap-1.5', compact ? 'h-8 px-2.5 text-xs' : 'h-8')}
+        >
+          {phase === 'loading' ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="size-3.5" />
+          )}
+          AI
+        </Button>
+      )}
 
       <Dialog
         open={phase !== 'idle'}

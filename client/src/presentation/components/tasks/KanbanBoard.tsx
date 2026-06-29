@@ -540,6 +540,12 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     const beforeTask = insertIndex > 0 ? targetList[insertIndex - 1] : null;
     const afterTask = insertIndex < targetList.length ? targetList[insertIndex] : null;
 
+    // Реордер ВНУТРИ «Готово» бессмысленен: колонка сортируется по updatedAt (см.
+    // groupByStatus), а не по position. Любой move лишь обновил бы updatedAt — и
+    // задача прыгнула бы наверх, «как будто её редактировали». Случайно вытащил и
+    // вернул в done → просто игнорируем, карточка остаётся на месте.
+    if (visibleColumn === 'done' && activeTask.status === 'done') return;
+
     // No-op: дропнули туда же, где было.
     if (toVisibleStatus(activeTask.status) === visibleColumn) {
       const currentList = grouped[visibleColumn];

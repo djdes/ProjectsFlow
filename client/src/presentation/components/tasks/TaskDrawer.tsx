@@ -719,9 +719,18 @@ export function TaskDrawer({
       setShowStickyTitle(false);
       return;
     }
+    // Root наблюдателя — реальный скролл-контейнер, а НЕ viewport: в narrow скроллит
+    // внешний контейнер, в split — левая колонка. Viewport-root с фиксированным
+    // rootMargin не совпадал с верхом контейнера, поэтому sticky не срабатывал.
+    let root: HTMLElement | null = el.parentElement;
+    while (root) {
+      const oy = getComputedStyle(root).overflowY;
+      if (oy === 'auto' || oy === 'scroll') break;
+      root = root.parentElement;
+    }
     const io = new IntersectionObserver(
       ([entry]) => setShowStickyTitle(entry ? !entry.isIntersecting : false),
-      { rootMargin: '-48px 0px 0px 0px', threshold: 0 },
+      { root, threshold: 0 },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -1259,7 +1268,7 @@ export function TaskDrawer({
                       }}
                       onDistributed={() => notifyChanged()}
                       disabled={editSaving}
-                      compact
+                      iconOnly
                     />
                     <ReworkTaskButton projectId={task.projectId} taskId={task.id} />
                     <PlanTaskButton projectId={task.projectId} taskId={task.id} />
