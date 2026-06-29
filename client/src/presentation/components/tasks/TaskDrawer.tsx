@@ -747,26 +747,35 @@ export function TaskDrawer({
   const titleSentinelRef = useRef<HTMLDivElement>(null);
   const [showStickyTitle, setShowStickyTitle] = useState(false);
   useEffect(() => {
-    const el = titleSentinelRef.current;
-    if (!el || state?.mode !== 'edit') {
+    if (state?.mode !== 'edit') {
       setShowStickyTitle(false);
       return;
     }
-    // Root наблюдателя — реальный скролл-контейнер, а НЕ viewport: в narrow скроллит
-    // внешний контейнер, в split — левая колонка. Viewport-root с фиксированным
-    // rootMargin не совпадал с верхом контейнера, поэтому sticky не срабатывал.
-    let root: HTMLElement | null = el.parentElement;
-    while (root) {
-      const oy = getComputedStyle(root).overflowY;
-      if (oy === 'auto' || oy === 'scroll') break;
-      root = root.parentElement;
-    }
-    const io = new IntersectionObserver(
-      ([entry]) => setShowStickyTitle(entry ? !entry.isIntersecting : false),
-      { root, threshold: 0 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
+    // Прямое сравнение позиций вместо IntersectionObserver: надёжнее при смене
+    // split↔narrow (скролл-контейнер — разный элемент) и при ленивой подгрузке тела.
+    // Скролл-контейнер ищем заново на каждом вызове — это ближайший scrollable-предок
+    // сентинела; sticky показываем, когда сентинел доехал до верха контейнера.
+    const compute = (): void => {
+      const el = titleSentinelRef.current;
+      if (!el) return;
+      let root: HTMLElement | null = el.parentElement;
+      while (root) {
+        const oy = getComputedStyle(root).overflowY;
+        if (oy === 'auto' || oy === 'scroll') break;
+        root = root.parentElement;
+      }
+      const topRef = root ? root.getBoundingClientRect().top : 0;
+      setShowStickyTitle(el.getBoundingClientRect().top <= topRef + 1);
+    };
+    const raf = requestAnimationFrame(compute);
+    // capture-фаза: события скролла не всплывают, ловим скролл ЛЮБОГО контейнера.
+    window.addEventListener('scroll', compute, true);
+    window.addEventListener('resize', compute);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', compute, true);
+      window.removeEventListener('resize', compute);
+    };
   }, [state?.mode, openTaskId]);
   const scrollToTaskTop = (): void => {
     titleSentinelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1230,7 +1239,7 @@ export function TaskDrawer({
                     animations && 'duration-150 animate-in fade-in-0 slide-in-from-top-1',
                   )}
                 >
-                  <span className="line-clamp-3 text-sm font-medium leading-snug text-foreground">
+                  <span className="line-clamp-4 text-sm font-medium leading-snug text-foreground">
                     {stripInlineMarkdown(parseTitleHeading(splitTitleBody(editDescription).title).text) ||
                       'Без названия'}
                   </span>
