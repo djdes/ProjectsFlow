@@ -11,7 +11,8 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, Clock, CornerDownRight, Download, FileText, Flag, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Reply, Send, Trash2, UploadCloud, UserPlus, X } from 'lucide-react';
+import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsRight, Clock, CornerDownRight, Download, FileText, Flag, Loader2, Maximize2, Paperclip, Pencil, Plus, Reply, Send, Trash2, UploadCloud, UserPlus, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -227,7 +228,52 @@ type Props = {
   aiProjectId?: string | null;
   // Колбэк для смены статуса задачи (move). Если передан — статус-бейдж кликабелен.
   onMove?: (taskId: string, targetStatus: TaskStatus) => Promise<void>;
+  // asPage — рендерить как отдельную страницу (не Sheet-оверлей): без модалки,
+  // во всю высоту, с хлебными крошками сверху. Используется на /projects/:id/tasks/:taskId.
+  asPage?: boolean;
+  // Хлебные крошки для asPage-режима (строит вызывающая страница: проект → задача).
+  breadcrumbs?: React.ReactNode;
 };
+
+// Обёртка содержимого дровера: в обычном режиме — Sheet-оверлей; в asPage —
+// inline-страница во всю высоту с хлебными крошками и центрированной колонкой.
+// Объявлена на уровне модуля (стабильный тип) — иначе пересоздание на каждый рендер
+// ремонтировало бы всё поддерево (потеря фокуса/состояния редактора).
+function DrawerShell({
+  asPage,
+  breadcrumbs,
+  open,
+  onOpenChange,
+  contentClassName,
+  contentStyle,
+  children,
+}: {
+  asPage: boolean;
+  breadcrumbs: React.ReactNode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  contentClassName: string;
+  contentStyle: React.CSSProperties | undefined;
+  children: React.ReactNode;
+}): React.ReactElement {
+  if (asPage) {
+    return (
+      <div className="flex h-full w-full flex-col overflow-hidden bg-background">
+        <div className="flex min-h-11 shrink-0 items-center px-3 pt-2 sm:px-6">{breadcrumbs}</div>
+        <div className="mx-auto grid w-full max-w-3xl flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden">
+          {children}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" showClose={false} className={contentClassName} style={contentStyle}>
+        {children}
+      </SheetContent>
+    </Sheet>
+  );
+}
 
 // Chip-селектор режима Ralph в edit-mode шапки. Показывает текущий режим бейджем;
 // клик раскрывает dropdown для смены — PATCH идёт сразу же (best-effort, error → toast).
@@ -424,9 +470,12 @@ export function TaskDrawer({
   isShared = false,
   aiProjectId = null,
   onMove,
+  asPage = false,
+  breadcrumbs = null,
 }: Props): React.ReactElement {
   const { user: currentUser } = useCurrentUser();
   const { taskRepository, recordTaskView } = useContainer();
+  const navigate = useNavigate();
   const { animations } = useMotion();
   // Фиксируем «юзер открыл задачу» — единая точка для всех мест, где открывается drawer
   // (доска, «Поручено мне», блок «Недавнее»). Только edit-mode с реальной задачей; раз на
@@ -833,21 +882,23 @@ export function TaskDrawer({
     </Button>
   );
 
-  // Кнопка «развернуть/свернуть на весь экран» — рядом с кнопкой закрытия. Только
-  // desktop (resizeEnabled): на мобильных окно и так во весь экран.
+  // Кнопка «развернуть на весь экран» — рядом с кнопкой закрытия. Открывает задачу
+  // ОТДЕЛЬНОЙ СТРАНИЦЕЙ (/projects/:id/tasks/:taskId) с хлебными крошками — не виджет.
+  // На самой странице (asPage) кнопки нет; в create нет задачи для ссылки.
   const renderMaximizeButton = (): React.ReactElement | null => {
-    if (!resizeEnabled) return null;
+    const pageTask = state?.mode === 'edit' ? state.task : null;
+    if (asPage || !pageTask || !isDesktop) return null;
     return (
       <Button
         type="button"
         variant="ghost"
         size="icon"
         className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
-        onClick={toggleMaximized}
-        aria-label={maximized ? 'Свернуть' : 'Развернуть на весь экран'}
-        title={maximized ? 'Свернуть' : 'Развернуть на весь экран'}
+        onClick={() => navigate(`/projects/${pageTask.projectId}/tasks/${pageTask.id}`)}
+        aria-label="Развернуть на весь экран"
+        title="Развернуть на весь экран"
       >
-        {maximized ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+        <Maximize2 className="size-4" />
       </Button>
     );
   };
@@ -867,33 +918,27 @@ export function TaskDrawer({
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const isFinePointer = useMediaQuery('(pointer: fine)');
   // Resizable + split включаем И для edit, И для create (окно создания = окно редактирования).
-  const resizeEnabled = (state?.mode === 'edit' || state?.mode === 'create') && isDesktop && isFinePointer;
-  const { width, dragging, isSplit, maximized, toggleMaximized, onHandlePointerDown } =
+  // В asPage (отдельная страница) ресайз не нужен — фиксированная центрированная колонка.
+  const resizeEnabled = !asPage && (state?.mode === 'edit' || state?.mode === 'create') && isDesktop && isFinePointer;
+  const { width, dragging, isSplit: isSplitRaw, onHandlePointerDown } =
     useResizableWidth(resizeEnabled, state !== null);
+  // В asPage — всегда одна центрированная колонка (Notion-style страница), без split.
+  const isSplit = asPage ? false : isSplitRaw;
 
   return (
     <>
-    <Sheet open={state !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent
-        side="right"
-        showClose={false}
-        className={cn(
-          'grid h-dvh w-full gap-0 overflow-hidden p-0 sm:max-w-[900px]',
-          // Оба режима (edit/create) — одна grid-строка под скролл-тело; внутренний
-          // flex-контейнер сам рулит колонками (split) и футером.
-          'grid-rows-[minmax(0,1fr)]',
-          // Во время drag'а гасим Sheet-translate-анимацию, чтобы ширина тянулась
-          // мгновенно без рывков.
-          dragging && '!transition-none',
-        )}
-        // Resizable: переопределяем max-width инлайн-стилем (desktop). На mobile —
-        // resizeEnabled=false, стиль не задаём → остаётся w-3/4 / sm:max-w-[900px].
-        style={
-          resizeEnabled
-            ? { width: `${width}px`, maxWidth: '96vw' }
-            : undefined
-        }
-      >
+    <DrawerShell
+      asPage={asPage}
+      breadcrumbs={breadcrumbs}
+      open={state !== null}
+      onOpenChange={(open) => !open && onClose()}
+      contentClassName={cn(
+        'grid h-dvh w-full gap-0 overflow-hidden p-0 sm:max-w-[900px]',
+        'grid-rows-[minmax(0,1fr)]',
+        dragging && '!transition-none',
+      )}
+      contentStyle={resizeEnabled ? { width: `${width}px`, maxWidth: '96vw' } : undefined}
+    >
         {/* Drag-ручка на ЛЕВОМ крае дравера (тонкая вертикальная полоса). Тянем
             влево — шире, вправо — уже. Только desktop (resizeEnabled). */}
         {resizeEnabled && (
@@ -911,14 +956,18 @@ export function TaskDrawer({
           />
         )}
 
-        {/* a11y stub for Radix — visually hidden. */}
-        <SheetTitle className="sr-only">
-          {state?.mode === 'edit' ? 'Задача' : 'Новая задача'}
-          {projectName ? ` · ${projectName}` : ''}
-        </SheetTitle>
-        <SheetDescription className="sr-only">
-          {state?.mode === 'edit' ? 'Редактирование задачи' : 'Создание новой задачи'}
-        </SheetDescription>
+        {/* a11y stub for Radix Dialog — только в Sheet-режиме (в asPage Sheet'а нет). */}
+        {!asPage && (
+          <>
+            <SheetTitle className="sr-only">
+              {state?.mode === 'edit' ? 'Задача' : 'Новая задача'}
+              {projectName ? ` · ${projectName}` : ''}
+            </SheetTitle>
+            <SheetDescription className="sr-only">
+              {state?.mode === 'edit' ? 'Редактирование задачи' : 'Создание новой задачи'}
+            </SheetDescription>
+          </>
+        )}
 
         {state?.mode === 'edit' && task ? (
           // Внешний контейнер раскладки EDIT-mode (заполняет единственную grid-строку
@@ -1539,8 +1588,7 @@ export function TaskDrawer({
             )}
           </div>
         )}
-      </SheetContent>
-    </Sheet>
+    </DrawerShell>
     {uploads.length > 0 && createPortal(<UploadProgressOverlay uploads={uploads} />, document.body)}
     </>
   );

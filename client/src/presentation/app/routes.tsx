@@ -6,6 +6,7 @@ import { MonitoringPage } from '@/presentation/pages/MonitoringPage';
 import { MonitoringOverviewPage } from '@/presentation/pages/MonitoringOverviewPage';
 import { AlertCenterPage } from '@/presentation/pages/AlertCenterPage';
 import { TasksPage } from '@/presentation/pages/TasksPage';
+import { TaskDetailPage } from '@/presentation/pages/TaskDetailPage';
 import { InboxPage } from '@/presentation/pages/InboxPage';
 import { ProfilePage } from '@/presentation/pages/ProfilePage';
 import { WorkspaceSettingsPage } from '@/presentation/pages/WorkspaceSettingsPage';
@@ -74,6 +75,8 @@ export const router = createBrowserRouter([
       { path: 'projects/:projectId/finance', element: <FinancePage /> },
       // Обратная совместимость со старыми ссылками на доску (напр. из уведомлений).
       { path: 'projects/:projectId/tasks', element: <LegacyTasksRedirect /> },
+      // Отдельная страница задачи (кнопка «развернуть на весь экран» в дровере).
+      { path: 'projects/:projectId/tasks/:taskId', element: <TaskDetailPage /> },
       { path: 'profile', element: <ProfilePage /> },
       { path: 'workspaces/:workspaceId/settings', element: <WorkspaceSettingsPage /> },
       {
