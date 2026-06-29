@@ -1462,7 +1462,7 @@ export function TaskDrawer({
                   ПОСЛЕ них (как «ник»), а заголовок задачи ниже остаётся у левого края —
                   то есть ровно слева относительно названия проекта (как контент в сайдбаре
                   стоит слева, а ник отступлен аватаркой). */}
-              <div className="flex min-h-11 items-center gap-2 px-4 pt-2">
+              <div className="flex min-h-9 items-center gap-2 px-4 pt-1.5">
                 {renderCloseButton()}
                 {renderMaximizeButton()}
                 {renderPageWidthToggle()}
@@ -1500,7 +1500,7 @@ export function TaskDrawer({
                   сохраняется по blur / Ctrl+Cmd+Enter. Работает в любом статусе. */}
               {/* Sentinel у заголовка — когда уходит под шапку, показываем sticky-заголовок. */}
               <div ref={titleSentinelRef} aria-hidden className="h-0" />
-              <div ref={bodyContainerRef} className="px-4 pb-1 pt-1.5">
+              <div ref={bodyContainerRef} className="px-4 pb-1 pt-0">
                 <TaskBodyEditor
                   key={`desc-${task.id}`}
                   editorRef={bodyEditorRef}
@@ -1847,7 +1847,7 @@ export function TaskDrawer({
                 className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
               >
                 {/* Row A: кнопки слева, контекст после них (как ава→ник в сайдбаре). */}
-                <div className="flex min-h-11 items-center gap-2 px-4 pt-2">
+                <div className="flex min-h-9 items-center gap-2 px-4 pt-1.5">
                   {renderCloseButton()}
                   {renderMaximizeButton()}
                   <span className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -1856,7 +1856,7 @@ export function TaskDrawer({
                 </div>
 
                 {/* Заголовок и описание — ОДНИМ полем сверху (1-я строка = заголовок). */}
-                <div ref={createBodyContainerRef} className="px-4 pb-1 pt-1.5">
+                <div ref={createBodyContainerRef} className="px-4 pb-1 pt-0">
                   <Suspense fallback={<div className="min-h-[6rem]" />}>
                     <RichTextEditor
                       ref={createEditorRef}
