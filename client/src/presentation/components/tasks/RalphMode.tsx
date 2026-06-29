@@ -41,11 +41,10 @@ export function RalphModeSelect({
   const meta = RALPH_MODE_META[value];
   // Чип-режим: по умолчанию (normal) показываем нейтральное «Режим», иначе — имя режима.
   const chipLabel = value === 'normal' ? 'Режим' : meta.label;
-  // Ряд свойств задачи (TaskDrawer) передаёт PROPERTY_VALUE_CLASS с `justify-start` —
-  // в нём для дефолтного режима показываем плейсхолдер «Выбрать…» (единый вид с дедлайном/
-  // приоритетом). В остальных местах (AddTaskDialog и т.п.) — всегда имя режима.
+  // Ряд свойств задачи (TaskDrawer) передаёт PROPERTY_VALUE_CLASS с `justify-start`.
+  // Режим ВСЕГДА выбран (normal — дефолт), поэтому показываем имя режима (даже «Обычный»),
+  // а не плейсхолдер «Выбрать…»: так видно текущий режим и можно сменить.
   const inPropertyRow = (className ?? '').includes('justify-start');
-  const showModePlaceholder = inPropertyRow && value === 'normal';
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -85,9 +84,7 @@ export function RalphModeSelect({
               </>
             ) : (
               <>
-                <span className={cn('truncate', showModePlaceholder && 'text-muted-foreground')}>
-                  {showModePlaceholder ? 'Выбрать режим…' : meta.label}
-                </span>
+                <span className="truncate">{meta.label}</span>
                 {!inPropertyRow && <ChevronDown className="size-4 shrink-0 opacity-60" />}
               </>
             )}

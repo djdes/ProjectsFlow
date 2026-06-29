@@ -863,7 +863,15 @@ export function TaskDrawer({
     };
   }, [state?.mode, openTaskId]);
   const scrollToTaskTop = (): void => {
-    titleSentinelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // К САМОМУ верху скролл-контейнера (а не к сентинелу, который ниже шапки), чтобы
+    // закрепление полностью пропало и были видны шапка + первая строка задачи.
+    let root: HTMLElement | null = titleSentinelRef.current?.parentElement ?? null;
+    while (root) {
+      const oy = getComputedStyle(root).overflowY;
+      if (oy === 'auto' || oy === 'scroll') break;
+      root = root.parentElement;
+    }
+    root?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Сохранение/восстановление позиции скролла окна задачи — переживает перезагрузку:
