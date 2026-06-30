@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ProjectsFlow — Variant B · Premium minimal</title>
+<style>
+  /* ===== Variant B — Премиальный минимализм =============================
+     Светлая тема, много воздуха, рефайнд-типографика, тонкие линии, мягкие
+     тени, один спокойный акцент (indigo). Linear/Notion-vibe. ============= */
+  :root{
+    --bg:#fbfbfd; --surface:#ffffff; --line:#ececf1; --line-2:#f1f1f5;
+    --text:#16181d; --muted:#6b7280; --dim:#9aa1ad;
+    --accent:#5b5bd6; --accent-soft:#eef0ff; --accent-700:#4848c4;
+    --sans:"Inter",system-ui,-apple-system,sans-serif;
+    --radius:16px; --shadow:0 1px 2px rgba(16,18,29,.04),0 12px 32px -12px rgba(16,18,29,.10);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.55;overflow-x:hidden}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  a{color:inherit;text-decoration:none}
+  .btn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 18px;border-radius:10px;font-size:14.5px;font-weight:600;transition:.15s;border:1px solid transparent}
+  .btn.ghost{color:var(--text);border-color:var(--line)} .btn.ghost:hover{background:#fff;box-shadow:var(--shadow)}
+  .btn.primary{background:var(--accent);color:#fff} .btn.primary:hover{background:var(--accent-700)}
+  .btn.lg{height:48px;padding:0 24px;font-size:15.5px}
+  /* nav */
+  nav{position:sticky;top:0;z-index:20;background:rgba(251,251,253,.8);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:64px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.02em;font-size:16px}
+  .logo .mark{width:28px;height:28px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:800;font-size:14px}
+  .navlinks{display:flex;gap:30px;color:var(--muted);font-size:14.5px}
+  .navlinks a:hover{color:var(--text)}
+  /* hero */
+  .hero{padding:104px 0 72px;text-align:center}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border:1px solid var(--line);background:#fff;border-radius:999px;font-size:13px;color:var(--muted);box-shadow:var(--shadow);margin-bottom:26px}
+  .eyebrow b{color:var(--accent);font-weight:600}
+  h1{font-size:clamp(38px,6.4vw,72px);line-height:1.05;letter-spacing:-.035em;font-weight:800}
+  .sub{max-width:600px;margin:24px auto 0;color:var(--muted);font-size:19px;line-height:1.6}
+  .cta{display:flex;gap:12px;justify-content:center;margin-top:34px}
+  .trust{margin-top:20px;color:var(--dim);font-size:13px}
+  /* product frame */
+  .frame{margin:60px auto 0;max-width:920px;border:1px solid var(--line);border-radius:20px;background:#fff;box-shadow:0 40px 90px -40px rgba(16,18,29,.22);overflow:hidden}
+  .frame .top{display:flex;align-items:center;gap:8px;height:42px;padding:0 16px;border-bottom:1px solid var(--line-2)}
+  .frame .top i{width:10px;height:10px;border-radius:50%;background:#e6e6ec}
+  .frame .top .u{margin-left:12px;font-size:12.5px;color:var(--dim)}
+  .board{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:18px}
+  .col{background:#f7f7fa;border:1px solid var(--line-2);border-radius:12px;padding:10px;min-height:180px}
+  .col h4{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+  .col h4::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--dim)}
+  .col.worker h4::before{background:var(--accent)}
+  .tk{background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px 10px;font-size:12.5px;margin-bottom:8px;box-shadow:0 1px 1px rgba(16,18,29,.03)}
+  .tk .m{color:var(--dim);font-size:11px;margin-top:4px}
+  /* sections */
+  section{padding:80px 0}
+  .stag{font-size:13px;font-weight:600;color:var(--accent);letter-spacing:.04em}
+  h2{font-size:clamp(28px,4vw,42px);letter-spacing:-.025em;font-weight:800;margin-top:8px}
+  .lead{color:var(--muted);margin-top:12px;max-width:560px;font-size:17px}
+  .feat{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:44px}
+  .card{border:1px solid var(--line);border-radius:var(--radius);background:#fff;padding:26px;box-shadow:var(--shadow);transition:.2s}
+  .card:hover{transform:translateY(-3px);box-shadow:0 1px 2px rgba(16,18,29,.04),0 22px 48px -16px rgba(16,18,29,.16)}
+  .ic{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:20px;margin-bottom:16px}
+  .card h3{font-size:17.5px;font-weight:700} .card p{color:var(--muted);font-size:15px;margin-top:7px}
+  /* pricing */
+  .price{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:44px;align-items:start}
+  .plan{border:1px solid var(--line);border-radius:18px;background:#fff;padding:28px;box-shadow:var(--shadow);position:relative}
+  .plan.pop{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 30px 70px -28px rgba(91,91,214,.4)}
+  .plan .name{font-size:14px;font-weight:700;color:var(--text)}
+  .plan .amt{font-size:38px;font-weight:800;margin:14px 0 2px;letter-spacing:-.03em}
+  .plan .amt small{font-size:15px;color:var(--muted);font-weight:500}
+  .plan ul{list-style:none;margin:20px 0 24px;display:flex;flex-direction:column;gap:11px}
+  .plan li{font-size:14.5px;color:var(--muted);display:flex;gap:10px;align-items:flex-start}
+  .plan li svg{flex:none;margin-top:2px}
+  .badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:11px;font-weight:700;padding:5px 12px;border-radius:999px;letter-spacing:.03em}
+  .full{width:100%;justify-content:center}
+  footer{border-top:1px solid var(--line);padding:44px 0;color:var(--dim);font-size:13.5px}
+  @media(max-width:760px){.feat,.price,.board{grid-template-columns:1fr}.navlinks{display:none}.board{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+  <nav><div class="wrap nav">
+    <div class="logo"><span class="mark">P</span> ProjectsFlow</div>
+    <div class="navlinks"><a>Возможности</a><a>Как это работает</a><a>Тарифы</a></div>
+    <div style="display:flex;gap:10px"><a class="btn ghost">Войти</a><a class="btn primary">Создать аккаунт</a></div>
+  </div></nav>
+
+  <main>
+    <section class="hero"><div class="wrap">
+      <span class="eyebrow">Для <b>вайб-кодеров</b> · доска задач нового типа</span>
+      <h1>Один поток для каждого<br/>проекта.</h1>
+      <p class="sub">Доска задач со встроенным AI-воркером, автоматизацией и финучётом. Бросаешь задачу — воркер пишет код по нашей подписке. Видишь расходы по каждому проекту.</p>
+      <div class="cta"><a class="btn primary lg">Создать аккаунт</a><a class="btn ghost lg">Войти</a></div>
+      <div class="trust">Без своих ключей · данные в твоём GitHub · гарантия возврата</div>
+      <div class="frame">
+        <div class="top"><i></i><i></i><i></i><span class="u">projectsflow.ru · my-saas</span></div>
+        <div class="board">
+          <div class="col"><h4>Черновики</h4><div class="tk">Идея: онбординг<div class="m">PF-21</div></div><div class="tk">Рефактор API<div class="m">PF-18</div></div></div>
+          <div class="col worker"><h4>Worker</h4><div class="tk">Dark mode дашборда<div class="m">Claude Opus · пишет…</div></div><div class="tk">Фикс пагинации<div class="m">в очереди</div></div></div>
+          <div class="col"><h4>Вручную</h4><div class="tk">Дизайн лого<div class="m">PF-09</div></div></div>
+          <div class="col"><h4>Готово</h4><div class="tk">Авторизация<div class="m">✓ задеплоено</div></div><div class="tk">Лендинг<div class="m">✓ задеплоено</div></div></div>
+        </div>
+      </div>
+    </div></section>
+
+    <section><div class="wrap">
+      <div class="stag">Возможности</div>
+      <h2>Меньше вкладок. Больше потока.</h2>
+      <p class="lead">Задачи, воркер, автоматизация и деньги по проекту — в одном спокойном интерфейсе.</p>
+      <div class="feat">
+        <div class="card"><div class="ic">▦</div><h3>Доска + колонка Worker</h3><p>Бросаешь задачу в worker — AI пишет код, коммитит и деплоит. Всё привязано к проекту и коммитам.</p></div>
+        <div class="card"><div class="ic">⟳</div><h3>Автоматизация</h3><p>Диспетчер сам придумывает и выполняет задачи по твоим критериям — в тихом режиме, до лимита.</p></div>
+        <div class="card"><div class="ic">₽</div><h3>Финучёт по проекту</h3><p>Расходы на AI и API — по каждому проекту, в рублях. Прозрачно и предсказуемо.</p></div>
+        <div class="card"><div class="ic">✦</div><h3>Встроенная AI-подписка</h3><p>Не нужны свои ключи. Один тариф — на все проекты и весь воркер.</p></div>
+      </div>
+    </div></section>
+
+    <section><div class="wrap">
+      <div class="stag">Тарифы</div>
+      <h2>Честные тарифы</h2>
+      <p class="lead">Начни бесплатно. Гарантия возврата денег, если не подойдёт.</p>
+      <div class="price">
+        <div class="plan"><div class="name">Бесплатный</div><div class="amt">0 ₽</div>
+          <ul><li>✓ до 5 проектов</li><li>✓ колонка worker</li><li>✓ задачи по твоей подписке</li><li>✓ доска + коммиты</li></ul>
+          <a class="btn ghost full">Начать бесплатно</a></div>
+        <div class="plan pop"><span class="badge">Рекомендуем</span><div class="name">Прайм</div><div class="amt">1 900 ₽<small> /мес · $20</small></div>
+          <ul><li>✓ проекты на наших подписках</li><li>✓ самостоятельно, без нашей помощи</li><li>✓ автоматизация + автодеплой</li><li>✓ можно попробовать 1 час</li></ul>
+          <a class="btn primary full">Перейти на Прайм</a></div>
+        <div class="plan"><div class="name">ВИП</div><div class="amt">3 900 ₽<small> /мес</small></div>
+          <ul><li>✓ настройка проекта с нами</li><li>✓ подробная инструкция</li><li>✓ приоритетная поддержка</li></ul>
+          <a class="btn ghost full">По запросу</a></div>
+      </div>
+    </div></section>
+  </main>
+  <footer><div class="wrap" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div class="logo" style="font-size:14px"><span class="mark" style="width:22px;height:22px;font-size:12px">P</span> ProjectsFlow</div>
+    <div>© 2026 ProjectsFlow · Сделано вручную</div>
+  </div></footer>
+</body>
+</html>

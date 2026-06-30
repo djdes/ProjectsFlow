@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ProjectsFlow — Variant A · Dev-cool</title>
+<style>
+  /* ===== Variant A — Dev-cool / технарь ===================================
+     Тёмный «терминал», моно-акценты, неон-циан + сигнальный зелёный, сетка,
+     код-мотивы. Аудитория — разработчики/вайб-кодеры. ====================== */
+  :root{
+    --bg:#06080d; --surface:#0c1018; --surface-2:#11161f; --line:rgba(255,255,255,.08);
+    --text:#e6edf3; --muted:#8b97a7; --dim:#5b6675;
+    --cyan:#22e0ff; --cyan-deep:#0892c0; --green:#4ade80; --amber:#fbbf24;
+    --mono:"JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:"Inter",system-ui,sans-serif;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.5;overflow-x:hidden}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+  a{color:inherit;text-decoration:none}
+  .mono{font-family:var(--mono)}
+  /* grid bg */
+  .gridbg{position:fixed;inset:0;z-index:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:48px 48px;mask-image:radial-gradient(ellipse 70% 55% at 50% 0%,#000 30%,transparent 80%)}
+  .glow{position:fixed;z-index:0;border-radius:50%;filter:blur(120px);opacity:.45;pointer-events:none}
+  .glow.c{width:560px;height:560px;background:var(--cyan-deep);top:-180px;left:50%;transform:translateX(-50%)}
+  .glow.g{width:380px;height:380px;background:#0e7a4d;top:420px;right:-120px;opacity:.3}
+  main{position:relative;z-index:1}
+  /* nav */
+  nav{position:sticky;top:0;z-index:20;backdrop-filter:blur(12px);background:rgba(6,8,13,.6);border-bottom:1px solid var(--line)}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:60px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.02em}
+  .logo .mark{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--cyan),var(--cyan-deep));display:grid;place-items:center;color:#04222b;font-family:var(--mono);font-weight:800;font-size:14px}
+  .navlinks{display:flex;gap:28px;color:var(--muted);font-size:14px}
+  .navlinks a:hover{color:var(--text)}
+  .btn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:9px;font-size:14px;font-weight:600;border:1px solid var(--line);transition:.15s}
+  .btn.ghost{color:var(--muted)} .btn.ghost:hover{color:var(--text);border-color:rgba(255,255,255,.2)}
+  .btn.primary{background:linear-gradient(135deg,var(--cyan),var(--cyan-deep));color:#04222b;border:none;box-shadow:0 0 0 1px rgba(34,224,255,.3),0 8px 30px -8px rgba(34,224,255,.5)}
+  .btn.primary:hover{filter:brightness(1.08)}
+  /* hero */
+  .hero{padding:96px 0 64px;text-align:center;position:relative}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;font-family:var(--mono);font-size:12px;color:var(--cyan);background:rgba(34,224,255,.05);margin-bottom:24px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+  h1{font-size:clamp(34px,6vw,68px);line-height:1.04;letter-spacing:-.03em;font-weight:800}
+  h1 .hl{background:linear-gradient(120deg,var(--cyan),#7bf0c0);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .sub{max-width:620px;margin:22px auto 0;color:var(--muted);font-size:18px}
+  .cta{display:flex;gap:12px;justify-content:center;margin-top:34px}
+  /* terminal visual */
+  .term{margin:54px auto 0;max-width:760px;border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(180deg,var(--surface),#080b11);overflow:hidden;box-shadow:0 40px 120px -40px rgba(34,224,255,.25)}
+  .term .bar{display:flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.02)}
+  .term .bar i{width:11px;height:11px;border-radius:50%}
+  .term .bar i:nth-child(1){background:#ff5f57}.term .bar i:nth-child(2){background:#febc2e}.term .bar i:nth-child(3){background:#28c840}
+  .term .bar .t{margin-left:10px;font-family:var(--mono);font-size:12px;color:var(--dim)}
+  .term .body{padding:18px 18px 22px;font-family:var(--mono);font-size:13.5px;line-height:1.8;text-align:left}
+  .term .body .c{color:var(--dim)} .term .body .p{color:var(--green)} .term .body .v{color:var(--cyan)} .term .body .w{color:var(--amber)}
+  /* sections */
+  section{padding:72px 0;position:relative}
+  .stag{font-family:var(--mono);font-size:12px;color:var(--cyan);letter-spacing:.1em;text-transform:uppercase}
+  h2{font-size:clamp(26px,4vw,40px);letter-spacing:-.02em;font-weight:800;margin-top:8px}
+  .lead{color:var(--muted);margin-top:10px;max-width:560px}
+  .feat{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:40px}
+  .card{border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.005));padding:24px;transition:.2s}
+  .card:hover{border-color:rgba(34,224,255,.35);transform:translateY(-3px)}
+  .ic{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;font-family:var(--mono);font-weight:800;color:var(--cyan);background:rgba(34,224,255,.08);border:1px solid rgba(34,224,255,.2);margin-bottom:14px}
+  .card h3{font-size:17px;font-weight:700} .card p{color:var(--muted);font-size:14.5px;margin-top:6px}
+  /* pricing */
+  .price{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px}
+  .plan{border:1px solid var(--line);border-radius:16px;background:var(--surface);padding:26px;position:relative}
+  .plan.pop{border-color:rgba(34,224,255,.5);box-shadow:0 0 0 1px rgba(34,224,255,.25),0 30px 80px -30px rgba(34,224,255,.35)}
+  .plan .name{font-family:var(--mono);font-size:13px;color:var(--cyan);letter-spacing:.08em;text-transform:uppercase}
+  .plan .amt{font-size:34px;font-weight:800;margin:12px 0 2px;letter-spacing:-.02em}
+  .plan .amt small{font-size:14px;color:var(--muted);font-weight:500}
+  .plan ul{list-style:none;margin:18px 0 22px;display:flex;flex-direction:column;gap:10px}
+  .plan li{font-size:14px;color:var(--muted);display:flex;gap:9px}
+  .plan li::before{content:"▸";color:var(--green)}
+  .badge{position:absolute;top:-11px;right:18px;background:linear-gradient(135deg,var(--cyan),var(--cyan-deep));color:#04222b;font-family:var(--mono);font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px}
+  .full{width:100%;justify-content:center}
+  footer{border-top:1px solid var(--line);padding:40px 0;color:var(--dim);font-size:13px;position:relative;z-index:1}
+  @media(max-width:760px){.feat,.price{grid-template-columns:1fr}.navlinks{display:none}}
+</style>
+</head>
+<body>
+  <div class="gridbg"></div><div class="glow c"></div><div class="glow g"></div>
+  <nav><div class="wrap nav">
+    <div class="logo"><span class="mark">PF</span> ProjectsFlow</div>
+    <div class="navlinks"><a>Возможности</a><a>Как это работает</a><a>Тарифы</a></div>
+    <div style="display:flex;gap:10px"><a class="btn ghost">Войти</a><a class="btn primary">Создать аккаунт</a></div>
+  </div></nav>
+
+  <main>
+    <section class="hero"><div class="wrap">
+      <span class="eyebrow"><span class="dot"></span> <span class="mono">for vibe-coders</span></span>
+      <h1>Бросай задачи — <span class="hl">воркер пишет код</span>.<br/>Ты на драйве.</h1>
+      <p class="sub">Доска задач для твоих проектов с встроенным AI-воркером, автоматизацией и финучётом. Кидаешь задачу в колонку <span class="mono" style="color:var(--cyan)">worker</span> — выполняется по нашей подписке. Без возни с инфрой.</p>
+      <div class="cta"><a class="btn primary" style="height:46px;padding:0 24px">Начать бесплатно →</a><a class="btn ghost" style="height:46px;padding:0 22px">Войти</a></div>
+      <div class="term">
+        <div class="bar"><i></i><i></i><i></i><span class="t">~/projects/my-saas — projectsflow</span></div>
+        <div class="body">
+          <div><span class="c"># кидаешь задачу воркеру</span></div>
+          <div><span class="p">pf</span> <span class="v">task add</span> <span class="w">"добавь dark mode на дашборд"</span> --col worker</div>
+          <div><span class="c">→ воркер взял в работу · Claude Opus · автодеплой on</span></div>
+          <div style="margin-top:10px"><span class="p">pf</span> <span class="v">finance</span> --project my-saas</div>
+          <div><span class="c">→ расход за месяц: 1 240 ₽ · по подписке Прайм</span></div>
+        </div>
+      </div>
+    </div></section>
+
+    <section><div class="wrap">
+      <div class="stag">// возможности</div>
+      <h2>Всё по проекту — в одном месте</h2>
+      <p class="lead">Доска, воркер, автоматизация и деньги. Не разбросано по чатам и вкладкам.</p>
+      <div class="feat">
+        <div class="card"><div class="ic">▤</div><h3>Доска + колонка Worker</h3><p>Канбан с колонкой воркера: бросаешь задачу — AI пишет код, коммитит, деплоит. Привязка к коммитам.</p></div>
+        <div class="card"><div class="ic">∞</div><h3>Автоматизация</h3><p>Диспетчер сам генерит задачи по твоим критериям и выполняет в тихом режиме, пока не достигнут лимит.</p></div>
+        <div class="card"><div class="ic">₽</div><h3>Финучёт по проекту</h3><p>Видишь расход на AI и API по каждому проекту. Прозрачно, в рублях, без сюрпризов.</p></div>
+        <div class="card"><div class="ic">◈</div><h3>Встроенная AI-подписка</h3><p>Не подключаешь свои ключи — работаешь по нашей подписке. Один тариф на все проекты.</p></div>
+      </div>
+    </div></section>
+
+    <section><div class="wrap">
+      <div class="stag">// тарифы</div>
+      <h2>Простые тарифы</h2>
+      <p class="lead">Начни бесплатно. Гарантия возврата — если не зашло.</p>
+      <div class="price">
+        <div class="plan"><div class="name">Бесплатный</div><div class="amt">0 ₽<small> / навсегда</small></div>
+          <ul><li>до 5 проектов</li><li>колонка worker</li><li>задачи по твоей подписке</li><li>доска + коммиты</li></ul>
+          <a class="btn ghost full">Начать</a></div>
+        <div class="plan pop"><span class="badge">POPULAR</span><div class="name">Прайм</div><div class="amt">1 900 ₽<small> / мес · $20</small></div>
+          <ul><li>проекты на наших подписках</li><li>самостоятельно, без нашей помощи</li><li>автоматизация + автодеплой</li><li>попробовать 1 час</li></ul>
+          <a class="btn primary full">Перейти на Прайм</a></div>
+        <div class="plan"><div class="name">ВИП</div><div class="amt">3 900 ₽<small> / мес</small></div>
+          <ul><li>настройка проекта с нами</li><li>подробная инструкция</li><li>приоритетная поддержка</li></ul>
+          <a class="btn ghost full">По запросу</a></div>
+      </div>
+    </div></section>
+  </main>
+  <footer><div class="wrap" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div class="logo" style="font-size:14px"><span class="mark" style="width:22px;height:22px;font-size:12px">PF</span> ProjectsFlow</div>
+    <div class="mono">© 2026 · сделано вручную</div>
+  </div></footer>
+</body>
+</html>

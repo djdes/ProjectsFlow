@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ProjectsFlow — Variant C · Bold vibrant</title>
+<style>
+  /* ===== Variant C — Смелый яркий =======================================
+     Глубокий фон + сочные градиенты (violet→fuchsia→amber), крупная
+     типографика, энергия, мягкая игривость. «Вайб» в прямом смысле. ====== */
+  :root{
+    --bg:#0b0712; --surface:#150f22; --line:rgba(255,255,255,.10);
+    --text:#f5f0ff; --muted:#b3a9c9; --dim:#7d7393;
+    --violet:#8b5cf6; --fuchsia:#e152d8; --amber:#ffb020; --cyan:#34e3ff;
+    --grad:linear-gradient(100deg,#8b5cf6,#e152d8 55%,#ffb020);
+    --sans:"Inter",system-ui,sans-serif; --radius:18px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.5;overflow-x:hidden}
+  .wrap{max-width:1140px;margin:0 auto;padding:0 24px}
+  a{color:inherit;text-decoration:none}
+  .blob{position:fixed;z-index:0;border-radius:50%;filter:blur(130px);pointer-events:none}
+  .blob.v{width:600px;height:600px;background:#7c3aed;opacity:.4;top:-200px;left:-120px}
+  .blob.f{width:520px;height:520px;background:#c026a8;opacity:.35;top:120px;right:-160px}
+  .blob.a{width:420px;height:420px;background:#b45309;opacity:.25;top:560px;left:30%}
+  main{position:relative;z-index:1}
+  .btn{display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 20px;border-radius:12px;font-size:15px;font-weight:700;transition:.16s;border:1px solid transparent}
+  .btn.ghost{color:var(--text);border-color:var(--line);background:rgba(255,255,255,.03)} .btn.ghost:hover{background:rgba(255,255,255,.07)}
+  .btn.primary{background:var(--grad);color:#1a0f24;box-shadow:0 10px 40px -10px rgba(225,82,216,.6)} .btn.primary:hover{filter:brightness(1.07);transform:translateY(-1px)}
+  .btn.lg{height:52px;padding:0 28px;font-size:16px}
+  nav{position:sticky;top:0;z-index:20;background:rgba(11,7,18,.6);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:64px}
+  .logo{display:flex;align-items:center;gap:11px;font-weight:800;letter-spacing:-.02em;font-size:17px}
+  .logo .mark{width:30px;height:30px;border-radius:9px;background:var(--grad);display:grid;place-items:center;color:#1a0f24;font-weight:900;font-size:15px}
+  .navlinks{display:flex;gap:30px;color:var(--muted);font-size:14.5px}.navlinks a:hover{color:var(--text)}
+  .hero{padding:110px 0 64px;text-align:center}
+  .eyebrow{display:inline-flex;align-items:center;gap:9px;padding:7px 16px;border-radius:999px;font-size:13px;font-weight:600;color:#fff;background:rgba(255,255,255,.06);border:1px solid var(--line);margin-bottom:28px}
+  .eyebrow .s{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;font-weight:800}
+  h1{font-size:clamp(40px,7.5vw,86px);line-height:1.0;letter-spacing:-.04em;font-weight:900}
+  h1 .g{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .sub{max-width:640px;margin:26px auto 0;color:var(--muted);font-size:20px}
+  .cta{display:flex;gap:14px;justify-content:center;margin-top:38px;flex-wrap:wrap}
+  .orbit{position:relative;margin:64px auto 0;max-width:980px;height:340px;border-radius:24px;border:1px solid var(--line);background:radial-gradient(120% 140% at 50% 0%,rgba(139,92,246,.22),transparent 60%),var(--surface);overflow:hidden;display:grid;place-items:center}
+  .orbit .ring{position:absolute;border:1px solid rgba(255,255,255,.08);border-radius:50%}
+  .orbit .r1{width:420px;height:420px}.orbit .r2{width:620px;height:620px}.orbit .r3{width:820px;height:820px}
+  .orbit .core{width:120px;height:120px;border-radius:50%;background:var(--grad);filter:blur(2px);box-shadow:0 0 100px 10px rgba(225,82,216,.55)}
+  .chip{position:absolute;padding:8px 13px;border-radius:11px;background:rgba(21,15,34,.85);border:1px solid var(--line);font-size:12.5px;font-weight:600;backdrop-filter:blur(8px)}
+  .chip b{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .c1{top:48px;left:90px}.c2{top:90px;right:70px}.c3{bottom:60px;left:130px}.c4{bottom:44px;right:120px}.c5{top:150px;left:50%;transform:translateX(-50%)}
+  section{padding:84px 0}
+  .stag{font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  h2{font-size:clamp(30px,4.6vw,48px);letter-spacing:-.03em;font-weight:900;margin-top:8px}
+  .lead{color:var(--muted);margin-top:12px;max-width:580px;font-size:18px}
+  .feat{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:46px}
+  .card{border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.01));padding:28px;transition:.2s;position:relative;overflow:hidden}
+  .card:hover{transform:translateY(-4px);border-color:rgba(225,82,216,.4)}
+  .ic{width:48px;height:48px;border-radius:13px;display:grid;place-items:center;font-size:22px;color:#1a0f24;background:var(--grad);margin-bottom:16px;font-weight:900}
+  .card h3{font-size:18px;font-weight:800} .card p{color:var(--muted);font-size:15px;margin-top:7px}
+  .price{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:46px;align-items:start}
+  .plan{border:1px solid var(--line);border-radius:20px;background:var(--surface);padding:28px;position:relative}
+  .plan.pop{border:none;background:linear-gradient(180deg,rgba(139,92,246,.16),rgba(225,82,216,.08)),var(--surface);box-shadow:0 0 0 1.5px transparent;outline:1.5px solid transparent;border:1.5px solid;border-image:var(--grad) 1;box-shadow:0 30px 80px -28px rgba(225,82,216,.5)}
+  .plan .name{font-size:14px;font-weight:800} .plan.pop .name{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .plan .amt{font-size:40px;font-weight:900;margin:14px 0 2px;letter-spacing:-.03em}
+  .plan .amt small{font-size:15px;color:var(--muted);font-weight:600}
+  .plan ul{list-style:none;margin:20px 0 24px;display:flex;flex-direction:column;gap:11px}
+  .plan li{font-size:14.5px;color:var(--muted);display:flex;gap:10px}.plan li::before{content:"✦";background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;font-weight:900}
+  .badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--grad);color:#1a0f24;font-size:11px;font-weight:900;padding:5px 13px;border-radius:999px;letter-spacing:.04em}
+  .full{width:100%;justify-content:center}
+  footer{border-top:1px solid var(--line);padding:44px 0;color:var(--dim);font-size:13.5px;position:relative;z-index:1}
+  @media(max-width:760px){.feat,.price{grid-template-columns:1fr}.navlinks{display:none}.orbit{height:280px}}
+</style>
+</head>
+<body>
+  <div class="blob v"></div><div class="blob f"></div><div class="blob a"></div>
+  <nav><div class="wrap nav">
+    <div class="logo"><span class="mark">P</span> ProjectsFlow</div>
+    <div class="navlinks"><a>Возможности</a><a>Как это работает</a><a>Тарифы</a></div>
+    <div style="display:flex;gap:10px"><a class="btn ghost" style="height:38px">Войти</a><a class="btn primary" style="height:38px">Создать аккаунт</a></div>
+  </div></nav>
+
+  <main>
+    <section class="hero"><div class="wrap">
+      <span class="eyebrow">✦ доска задач для <span class="s">вайб-кодеров</span></span>
+      <h1>Вайбь, а код<br/><span class="g">напишет воркер.</span></h1>
+      <p class="sub">Кидай задачи на доску — встроенный AI-воркер пишет, коммитит и деплоит по нашей подписке. Автоматизация и финучёт по каждому проекту. Ты на потоке.</p>
+      <div class="cta"><a class="btn primary lg">Начать бесплатно →</a><a class="btn ghost lg">Войти</a></div>
+      <div class="orbit">
+        <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
+        <div class="core"></div>
+        <div class="chip c1">▤ Доска задач</div>
+        <div class="chip c2"><b>worker</b> · Claude Opus</div>
+        <div class="chip c3">₽ Финучёт по проекту</div>
+        <div class="chip c4">⟳ Автоматизация</div>
+        <div class="chip c5">✦ AI-подписка встроена</div>
+      </div>
+    </div></section>
+
+    <section><div class="wrap">
+      <div class="stag">Возможности</div>
+      <h2>Заряжено под кодеров</h2>
+      <p class="lead">Доска, воркер, автоматизация и деньги — в одном ярком потоке.</p>
+      <div class="feat">
+        <div class="card"><div class="ic">▤</div><h3>Доска + колонка Worker</h3><p>Кидаешь задачу в worker — AI пишет код и деплоит. Привязка к проекту и коммитам.</p></div>
+        <div class="card"><div class="ic">⟳</div><h3>Автоматизация</h3><p>Диспетчер сам генерит и выполняет задачи по твоим критериям, пока не достигнут лимит.</p></div>
+        <div class="card"><div class="ic">₽</div><h3>Финучёт по проекту</h3><p>Сколько ушло на AI и API — по каждому проекту, в рублях. Никаких сюрпризов.</p></div>
+        <div class="card"><div class="ic">✦</div><h3>Встроенная AI-подписка</h3><p>Без своих ключей. Один тариф — на все проекты и весь воркер.</p></div>
+      </div>
+    </div></section>
+
+    <section><div class="wrap">
+      <div class="stag">Тарифы</div>
+      <h2>Выбирай свой вайб</h2>
+      <p class="lead">Старт бесплатно. Гарантия возврата — если не зашло, вернём деньги.</p>
+      <div class="price">
+        <div class="plan"><div class="name">Бесплатный</div><div class="amt">0 ₽</div>
+          <ul><li>до 5 проектов</li><li>колонка worker</li><li>задачи по твоей подписке</li><li>доска + коммиты</li></ul>
+          <a class="btn ghost full">Начать</a></div>
+        <div class="plan pop"><span class="badge">ОГОНЬ 🔥</span><div class="name">Прайм</div><div class="amt">1 900 ₽<small> /мес · $20</small></div>
+          <ul><li>проекты на наших подписках</li><li>самостоятельно, без нашей помощи</li><li>автоматизация + автодеплой</li><li>попробовать 1 час</li></ul>
+          <a class="btn primary full">Перейти на Прайм</a></div>
+        <div class="plan"><div class="name">ВИП</div><div class="amt">3 900 ₽<small> /мес</small></div>
+          <ul><li>настройка проекта с нами</li><li>подробная инструкция</li><li>приоритетная поддержка</li></ul>
+          <a class="btn ghost full">По запросу</a></div>
+      </div>
+    </div></section>
+  </main>
+  <footer><div class="wrap" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div class="logo" style="font-size:14px"><span class="mark" style="width:24px;height:24px;font-size:13px">P</span> ProjectsFlow</div>
+    <div>© 2026 ProjectsFlow · Сделано вручную</div>
+  </div></footer>
+</body>
+</html>

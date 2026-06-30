@@ -1,28 +1,27 @@
+/* Дизайн-токены направления «A · Dev-cool» (P0). Источник истины — tokens.css. */
+@import './tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  :root {
-    color-scheme: dark;
-  }
-
   html {
     scroll-behavior: smooth;
-    background: #0a0b10;
-    color: #e5e7eb;
+    background: var(--bg);
+    color: var(--text);
   }
 
   body {
-    font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     overflow-x: hidden;
   }
 
   ::selection {
-    background: rgba(59, 130, 246, 0.4);
-    color: #fff;
+    background: rgba(34, 224, 255, 0.32);
+    color: #04222b;
   }
 }
 
@@ -120,7 +119,7 @@
     border-radius: inherit;
     background: radial-gradient(
       280px circle at var(--mx) var(--my),
-      rgba(96, 165, 250, 0.18),
+      rgba(34, 224, 255, 0.16),
       transparent 60%
     );
     opacity: 0;
@@ -137,7 +136,7 @@
     background: linear-gradient(
       90deg,
       transparent,
-      rgba(96, 165, 250, 0.5) 50%,
+      rgba(34, 224, 255, 0.5) 50%,
       transparent
     );
     background-size: 200% 100%;
