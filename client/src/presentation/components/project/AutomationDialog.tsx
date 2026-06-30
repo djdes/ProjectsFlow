@@ -1089,9 +1089,12 @@ export function AutomationDialog({
                     {members.length === 0 ? (
                       <p className="text-xs text-muted-foreground">Нет участников проекта.</p>
                     ) : (
-                      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
                         {members.map((m) => (
-                          <label key={m.id} className="flex items-center gap-2 text-sm">
+                          <label
+                            key={m.id}
+                            className="flex min-w-0 cursor-pointer items-center gap-2 text-sm"
+                          >
                             <Checkbox
                               checked={digest.recipientUserIds.includes(m.id)}
                               onCheckedChange={() =>
@@ -1107,14 +1110,17 @@ export function AutomationDialog({
 
                   <div className="space-y-1.5">
                     <FieldGroupLabel>Куда</FieldGroupLabel>
-                    <div className="flex flex-wrap gap-3">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
                       {DIGEST_CHANNEL_OPTIONS.map((c) => (
-                        <label key={c.key} className="flex items-center gap-2 text-sm">
+                        <label
+                          key={c.key}
+                          className="flex min-w-0 cursor-pointer items-center gap-2 text-sm"
+                        >
                           <Checkbox
                             checked={digest.channels.includes(c.key)}
                             onCheckedChange={() => updateDigest({ channels: toggle(digest.channels, c.key) })}
                           />
-                          <span>{c.label}</span>
+                          <span className="truncate">{c.label}</span>
                         </label>
                       ))}
                     </div>
@@ -1142,14 +1148,17 @@ export function AutomationDialog({
 
                   <div className="space-y-1.5">
                     <FieldGroupLabel>Какие колонки</FieldGroupLabel>
-                    <div className="flex flex-wrap gap-3">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
                       {DIGEST_STATUS_OPTIONS.map((s) => (
-                        <label key={s.status} className="flex items-center gap-2 text-sm">
+                        <label
+                          key={s.status}
+                          className="flex min-w-0 cursor-pointer items-center gap-2 text-sm"
+                        >
                           <Checkbox
                             checked={digest.statuses.includes(s.status)}
                             onCheckedChange={() => updateDigest({ statuses: toggle(digest.statuses, s.status) })}
                           />
-                          <span>{s.label}</span>
+                          <span className="truncate">{s.label}</span>
                         </label>
                       ))}
                     </div>
