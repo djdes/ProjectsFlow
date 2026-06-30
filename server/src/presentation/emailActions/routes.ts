@@ -68,12 +68,16 @@ export function emailActionsRouter(deps: Deps): Router {
             .type('html')
             .send(shell('Уже завершено', `<p style="font-size:15px;margin:0 0 4px;">Задача ${name} уже завершена ✓</p>`));
         }
+        // Мгновенно по клику: страница САМА шлёт POST через JS (реальный браузер завершает сразу).
+        // Почтовые сканеры/префетч обычно без JS → POST не уходит → случайного завершения нет.
+        // <noscript> — ручная кнопка для людей с выключенным JS (сканеры её не нажимают).
         const inner =
-          `<p style="font-size:15px;margin:0 0 20px;color:#334155;">Завершить задачу ${name}?</p>` +
-          `<form method="post" action="/api/email-actions/${escapeHtml(token)}">` +
-          `<button type="submit" style="cursor:pointer;border:0;background:${OK};color:#fff;font-weight:700;` +
-          `font-size:15px;padding:12px 22px;border-radius:10px;">✓ Завершить</button></form>`;
-        return void res.type('html').send(shell('Завершить задачу', inner));
+          `<p style="font-size:15px;margin:0 0 16px;color:#334155;">Завершаем задачу ${name}…</p>` +
+          `<form id="f" method="post" action="/api/email-actions/${escapeHtml(token)}">` +
+          `<noscript><button type="submit" style="cursor:pointer;border:0;background:${OK};color:#fff;` +
+          `font-weight:700;font-size:15px;padding:12px 22px;border-radius:10px;">✓ Завершить</button></noscript>` +
+          `</form><script>document.getElementById('f').submit()</script>`;
+        return void res.type('html').send(shell('Завершаем…', inner));
       }
 
       // comment
@@ -103,9 +107,13 @@ export function emailActionsRouter(deps: Deps): Router {
         const r = await deps.service.complete(token);
         if (r.kind === 'done') {
           const back = linkBtn(appLink(deps.appUrl, `/projects/${r.projectId}`), 'Открыть доску', BRAND);
-          return void res
-            .type('html')
-            .send(shell('Готово', `<p style="font-size:16px;font-weight:600;margin:0 0 18px;color:${OK};">✓ Задача завершена</p>${back}`));
+          const inner =
+            `<p style="font-size:18px;font-weight:700;margin:0 0 6px;color:${OK};">✓ Задача завершена</p>` +
+            `<p style="font-size:13px;color:#64748b;margin:0 0 18px;">Можно закрыть эту вкладку.</p>` +
+            back +
+            // Попытка автозакрытия (срабатывает не во всех браузерах — это нормально).
+            `<script>setTimeout(function(){try{window.close()}catch(e){}},700)</script>`;
+          return void res.type('html').send(shell('Готово', inner));
         }
         if (r.kind === 'used') {
           return void res.type('html').send(shell('Уже завершено', '<p style="font-size:15px;margin:0;">Задача уже была завершена ✓</p>'));
