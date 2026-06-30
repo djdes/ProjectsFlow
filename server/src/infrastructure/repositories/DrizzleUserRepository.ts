@@ -12,6 +12,8 @@ import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNotificationPrefs.js';
 import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
 import type { UiPrefs } from '../../domain/user/UiPrefs.js';
+import type { Subscription } from '../../domain/usage/Subscription.js';
+import type { PlanId } from '../../domain/usage/Plan.js';
 import { parseJsonCol } from './jsonCol.js';
 
 function toUser(row: UserRow): User {
@@ -260,5 +262,32 @@ export class DrizzleUserRepository implements UserRepository {
     const current = await this.getUiPrefs(userId);
     const merged = { ...(current ?? {}), ...prefs };
     await this.db.update(users).set({ uiPrefs: merged }).where(eq(users.id, userId));
+  }
+
+  async getSubscription(userId: string): Promise<Subscription | null> {
+    const rows = await this.db
+      .select({
+        plan: users.plan,
+        startedAt: users.subscriptionStartedAt,
+        expiresAt: users.subscriptionExpiresAt,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const r = rows[0];
+    if (!r) return null;
+    return { plan: r.plan, startedAt: r.startedAt ?? null, expiresAt: r.expiresAt ?? null };
+  }
+
+  async setPlan(
+    userId: string,
+    plan: PlanId,
+    startedAt: Date | null,
+    expiresAt: Date | null,
+  ): Promise<void> {
+    await this.db
+      .update(users)
+      .set({ plan, subscriptionStartedAt: startedAt, subscriptionExpiresAt: expiresAt })
+      .where(eq(users.id, userId));
   }
 }

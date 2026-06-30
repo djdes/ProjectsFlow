@@ -8,6 +8,8 @@ import type { LiveSession, LiveSessionFinalStatus } from '../../domain/live/Live
 import type { LiveEvent, LiveEventInput } from '../../domain/live/LiveEvent.js';
 import type { LiveFileDiff, LiveFileChange } from '../../domain/live/LiveFileDiff.js';
 import { LiveSessionNotFoundError } from '../../domain/live/errors.js';
+import type { RecordUsage } from '../usage/RecordUsage.js';
+import { assertBudgetAllowed, type CheckBudget } from '../usage/CheckBudget.js';
 
 export type LiveServiceDeps = {
   readonly repo: LiveRepository;
@@ -21,6 +23,10 @@ export type LiveServiceDeps = {
   // Firehose live-событий для открытых SSE-вкладок (task-scoped, не per-user bus).
   readonly liveEventHub: LiveEventHub;
   readonly idGen: () => string;
+  // Метеринг расхода ИИ: списываем с подписки диспетчера. Best-effort, не валит завершение.
+  readonly recordUsage?: RecordUsage;
+  // Гейт лимитов: подписка диспетчера исчерпала окно → старт сессии запрещён.
+  readonly checkBudget?: CheckBudget;
   // TTL retention сессии (lazy-GC по expires_at). default 30 дней.
   readonly sessionTtlSeconds?: number;
 };
@@ -79,6 +85,7 @@ export class LiveService {
     input: StartSessionInput,
   ): Promise<{ sessionId: string; baseSeq: number }> {
     await this.authDispatcher(projectId, userId);
+    await assertBudgetAllowed(this.deps.checkBudget, userId);
     const sessionId = this.deps.idGen();
     const baseSeq = (await this.deps.repo.maxSeqForTask(taskId)) + 1;
     await this.deps.repo.insertSession({
@@ -215,6 +222,20 @@ export class LiveService {
       tokensIn: input.tokensIn,
       tokensOut: input.tokensOut,
     });
+    // Метеринг: реальный cost_usd прогона списываем с подписки диспетчера (userId).
+    // Best-effort + идемпотентно (UNIQUE source+ref в ledger) — не должно валить завершение.
+    void this.deps.recordUsage
+      ?.execute({
+        source: 'live',
+        refId: sessionId,
+        dispatcherUserId: userId,
+        projectId,
+        model: session.model,
+        tokensIn: input.tokensIn,
+        tokensOut: input.tokensOut,
+        costUsd: input.costUsd,
+      })
+      .catch(() => {});
     this.deps.liveEventHub.publishEnd(taskId, input.status);
     this.broadcastChanged(projectId, taskId, sessionId, input.status);
     return { ok: true };

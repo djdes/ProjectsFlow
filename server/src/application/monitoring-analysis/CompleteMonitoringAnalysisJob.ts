@@ -4,12 +4,15 @@ import {
   NotDispatcherForMonitoringAnalysisJobError,
 } from '../../domain/monitoring-analysis/errors.js';
 import type { MonitoringAnalysisJobRepository } from './MonitoringAnalysisJobRepository.js';
+import type { RecordUsage } from '../usage/RecordUsage.js';
 
 const MAX_RESULT = 300_000;
 const MAX_ERROR = 500;
 
 type Deps = {
   readonly monitoringAnalysisJobs: MonitoringAnalysisJobRepository;
+  // Метеринг расхода ИИ (best-effort) — списываем с подписки диспетчера.
+  readonly recordUsage?: RecordUsage;
 };
 
 export type CompleteMonitoringAnalysisJobInput = {
@@ -61,5 +64,19 @@ export class CompleteMonitoringAnalysisJob {
         tokensOut: input.tokensOut ?? null,
       });
     }
+
+    // Метеринг: списываем с подписки диспетчера (best-effort, идемпотентно по source+ref).
+    void this.deps.recordUsage
+      ?.execute({
+        source: 'monitoring',
+        refId: input.jobId,
+        dispatcherUserId: job.dispatcherUserId,
+        projectId: job.projectId,
+        model: null,
+        tokensIn: input.tokensIn ?? null,
+        tokensOut: input.tokensOut ?? null,
+        costUsd: input.costUsd ?? null,
+      })
+      .catch(() => {});
   }
 }

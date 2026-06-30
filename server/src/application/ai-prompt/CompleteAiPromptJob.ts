@@ -4,6 +4,7 @@ import {
   NotDispatcherForAiPromptJobError,
 } from '../../domain/ai-prompt/errors.js';
 import type { AiPromptJobRepository } from './AiPromptJobRepository.js';
+import type { RecordUsage } from '../usage/RecordUsage.js';
 
 // 600000: compose-результат — большая JSON-строка (2 варианта + сегменты). improve кладёт
 // plain-текст (обычно ≤2000). Колонка improved_text — MEDIUMTEXT (db/060), вмещает с запасом.
@@ -12,6 +13,8 @@ const MAX_ERROR = 500;
 
 type Deps = {
   readonly aiPromptJobs: AiPromptJobRepository;
+  // Метеринг расхода ИИ (best-effort) — списываем с подписки диспетчера.
+  readonly recordUsage?: RecordUsage;
 };
 
 export type CompleteAiPromptJobInput = {
@@ -20,6 +23,10 @@ export type CompleteAiPromptJobInput = {
   readonly ok: boolean;
   readonly improvedText: string | null;
   readonly error: string | null;
+  // Стоимость прогона от раннера (db/083). Опциональны для обратной совместимости.
+  readonly costUsd?: number | null;
+  readonly tokensIn?: number | null;
+  readonly tokensOut?: number | null;
 };
 
 export class CompleteAiPromptJob {
@@ -46,6 +53,9 @@ export class CompleteAiPromptJob {
         status: 'succeeded',
         improvedText: truncated,
         error: null,
+        costUsd: input.costUsd ?? null,
+        tokensIn: input.tokensIn ?? null,
+        tokensOut: input.tokensOut ?? null,
       });
     } else {
       const err = (input.error ?? '').trim();
@@ -55,7 +65,24 @@ export class CompleteAiPromptJob {
         status: 'failed',
         improvedText: null,
         error: err.slice(0, MAX_ERROR),
+        costUsd: input.costUsd ?? null,
+        tokensIn: input.tokensIn ?? null,
+        tokensOut: input.tokensOut ?? null,
       });
     }
+
+    // Метеринг: списываем с подписки диспетчера (best-effort, идемпотентно по source+ref).
+    void this.deps.recordUsage
+      ?.execute({
+        source: 'ai_prompt',
+        refId: input.jobId,
+        dispatcherUserId: job.dispatcherUserId,
+        projectId: job.projectId,
+        model: null,
+        tokensIn: input.tokensIn ?? null,
+        tokensOut: input.tokensOut ?? null,
+        costUsd: input.costUsd ?? null,
+      })
+      .catch(() => {});
   }
 }

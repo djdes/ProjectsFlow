@@ -4,6 +4,8 @@ import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNo
 import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
 import type { KanbanDefaultColors } from '../../domain/kanban/KanbanSettings.js';
 import type { UiPrefs } from '../../domain/user/UiPrefs.js';
+import type { Subscription } from '../../domain/usage/Subscription.js';
+import type { PlanId } from '../../domain/usage/Plan.js';
 
 // Поля, приходящие из Login Widget — сохраняются как есть. tg_chat_id/tg_started_at
 // заполняются позже из webhook'а /start.
@@ -73,4 +75,14 @@ export interface UserRepository {
   // Обобщённый bag клиентских UI-настроек (NULL = дефолты). setUiPrefs мержит частично.
   getUiPrefs(userId: string): Promise<UiPrefs | null>;
   setUiPrefs(userId: string, prefs: UiPrefs): Promise<void>;
+
+  // Подписочный план (db/084). getSubscription возвращает план + сроки (null для несуществующего
+  // юзера). setPlan флипает план и метки старта/окончания (free → даты в null).
+  getSubscription(userId: string): Promise<Subscription | null>;
+  setPlan(
+    userId: string,
+    plan: PlanId,
+    startedAt: Date | null,
+    expiresAt: Date | null,
+  ): Promise<void>;
 }

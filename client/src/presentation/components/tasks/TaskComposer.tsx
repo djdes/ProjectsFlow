@@ -22,6 +22,7 @@ import { PrioritySelect } from './PrioritySelect';
 import { DeadlinePicker } from './DeadlinePicker';
 import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
 import { SendTargetButton } from '@/presentation/components/tasks/SendTargetButton';
+import { useAiBlocked } from '@/presentation/usage/useAiBlocked';
 import {
   extractClipboardFiles,
   isImageMime,
@@ -203,9 +204,17 @@ export function TaskComposer({
     }
   };
 
+  // Лимит исчерпан → блокируем ТОЛЬКО путь «Воркеру» (todo); «Черновик» (backlog) разрешён.
+  const { blocked: aiBlocked, reason: aiBlockedReason } = useAiBlocked();
+  const workerBlocked = aiBlocked && (forcedStatus ?? quickStatus) === 'todo';
+
   const submit = async (): Promise<void> => {
     const trimmed = text.trim();
     if (trimmed.length === 0 || submitting) return;
+    if (workerBlocked) {
+      toast.error(aiBlockedReason ?? 'Лимит использования исчерпан');
+      return;
+    }
     setSubmitting(true);
     try {
       const task = await onCreate({
@@ -276,7 +285,7 @@ export function TaskComposer({
   }, []);
 
   const hasText = text.trim().length > 0;
-  const canSubmit = hasText && !submitting;
+  const canSubmit = hasText && !submitting && !workerBlocked;
   // Развёрнут, если: inline-композер (всегда), есть фокус, набран текст или есть вложения.
   const expanded = isInline || focused || hasText || pending.length > 0;
   const placeholder = isInline

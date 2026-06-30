@@ -13,6 +13,8 @@ import type { Login } from '../application/auth/Login.js';
 import type { Logout } from '../application/auth/Logout.js';
 import type { UpdateProfile } from '../application/user/UpdateProfile.js';
 import type { UploadUserAvatar } from '../application/user/UploadUserAvatar.js';
+import type { GetUserUsage } from '../application/usage/GetUserUsage.js';
+import type { BuyPlan } from '../application/usage/BuyPlan.js';
 import type { ListProjects } from '../application/project/ListProjects.js';
 import type { GetProject } from '../application/project/GetProject.js';
 import type { CreateProject } from '../application/project/CreateProject.js';
@@ -228,6 +230,8 @@ type AppDeps = {
   readonly user: {
     readonly updateProfile: UpdateProfile;
     readonly uploadAvatar: UploadUserAvatar;
+    readonly getUserUsage: GetUserUsage;
+    readonly buyPlan: BuyPlan;
   };
   readonly fileSync: {
     readonly service: FileSyncService;
@@ -538,6 +542,8 @@ export function createApp(deps: AppDeps): CreatedApp {
       logout: deps.auth.logout,
       updateProfile: deps.user.updateProfile,
       uploadAvatar: deps.user.uploadAvatar,
+      getUserUsage: deps.user.getUserUsage,
+      buyPlan: deps.user.buyPlan,
       // Шарим тот же агентский лимитер: процесс single-PM2, ключи изолированы префиксом.
       rateLimiter: deps.agent.rateLimiter,
     }),

@@ -26,6 +26,7 @@ import { DeadlinePicker } from '@/presentation/components/tasks/DeadlinePicker';
 import { useContainer } from '@/infrastructure/di/container';
 import { useProjects } from '@/presentation/hooks/useProjects';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { useAiBlocked } from '@/presentation/usage/useAiBlocked';
 import {
   ComposeTasksError,
   type ComposeAdvanceSegment,
@@ -239,8 +240,10 @@ export function AiComposeDialog({
     return () => clearInterval(t);
   }, [phase]);
 
+  // Лимит подписки исчерпан → блокируем перефразировку (бэкенд всё равно вернёт 402).
+  const { blocked: aiBlocked, reason: aiBlockedReason } = useAiBlocked();
   const isBusy = phase === 'loading' || phase === 'creating';
-  const isDisabled = disabled || isBusy || trimmed.length === 0;
+  const isDisabled = disabled || isBusy || trimmed.length === 0 || aiBlocked;
 
   const canDistribute =
     !!result && (result.segments.length >= 2 || result.segments.some((s) => s.projectId !== null));
@@ -493,7 +496,7 @@ export function AiComposeDialog({
           type="button"
           onClick={() => void start()}
           disabled={isDisabled}
-          title="Переработать текст с помощью AI"
+          title={aiBlocked ? (aiBlockedReason ?? 'Лимит исчерпан') : 'Переработать текст с помощью AI'}
           className={cn(
             'grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-40',
             className,
@@ -512,7 +515,7 @@ export function AiComposeDialog({
           size="sm"
           onClick={() => void start()}
           disabled={isDisabled}
-          title="Переработать текст с помощью AI"
+          title={aiBlocked ? (aiBlockedReason ?? 'Лимит исчерпан') : 'Переработать текст с помощью AI'}
           className={cn('gap-1.5', compact ? 'h-8 px-2.5 text-xs' : 'h-8')}
         >
           {phase === 'loading' ? (

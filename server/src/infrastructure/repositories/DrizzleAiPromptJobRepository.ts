@@ -96,6 +96,9 @@ export class DrizzleAiPromptJobRepository implements AiPromptJobRepository {
     status: Extract<AiPromptJobStatus, 'succeeded' | 'failed' | 'cancelled'>;
     improvedText: string | null;
     error: string | null;
+    costUsd?: number | null;
+    tokensIn?: number | null;
+    tokensOut?: number | null;
   }): Promise<void> {
     await this.db
       .update(aiPromptJobs)
@@ -103,6 +106,10 @@ export class DrizzleAiPromptJobRepository implements AiPromptJobRepository {
         status: input.status,
         improvedText: input.improvedText,
         error: input.error,
+        // DECIMAL принимает строку; null остаётся null.
+        costUsd: input.costUsd == null ? null : String(input.costUsd),
+        tokensIn: input.tokensIn ?? null,
+        tokensOut: input.tokensOut ?? null,
         finishedAt: sql`CURRENT_TIMESTAMP`,
       })
       .where(eq(aiPromptJobs.id, input.id));

@@ -54,6 +54,10 @@ export type AiPromptJobRepository = {
     readonly status: Extract<AiPromptJobStatus, 'succeeded' | 'failed' | 'cancelled'>;
     readonly improvedText: string | null;
     readonly error: string | null;
+    // Стоимость прогона (db/083) — для метеринга. Опциональны (раннер может не прислать).
+    readonly costUsd?: number | null;
+    readonly tokensIn?: number | null;
+    readonly tokensOut?: number | null;
   }): Promise<void>;
   /**
    * Cleanup: queued/running старше olderThan (TIMESTAMP) → cancelled с reason.

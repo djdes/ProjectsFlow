@@ -8,9 +8,15 @@ import type { UploadUserAvatar } from '../../application/user/UploadUserAvatar.j
 import type { User } from '../../domain/user/User.js';
 import type { Session } from '../../domain/session/Session.js';
 import type { InMemoryRateLimiter } from '../../infrastructure/ratelimit/InMemoryRateLimiter.js';
+import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { config, isProd, sessionTtlMs } from '../config.js';
 import { loginSchema, registerSchema, updateProfileSchema } from './schemas.js';
+import type { GetUserUsage } from '../../application/usage/GetUserUsage.js';
+import type { BuyPlan } from '../../application/usage/BuyPlan.js';
+import type { UsageSummary } from '../../domain/usage/UsageSummary.js';
+import type { UsageWindow } from '../../domain/usage/UsageWindow.js';
+import { RUB_PER_USD } from '../../domain/usage/pricing.js';
 
 // Лимит размера аватара (5 МБ) — картинки профиля заведомо меньше аттачей (25 МБ).
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
@@ -21,6 +27,9 @@ type Deps = {
   readonly logout: Logout;
   readonly updateProfile: UpdateProfile;
   readonly uploadAvatar: UploadUserAvatar;
+  // Usage/тарифы (db/082+084): чтение лимитов и self-serve смена плана.
+  readonly getUserUsage: GetUserUsage;
+  readonly buyPlan: BuyPlan;
   // Опционально: rate-limiter для anti-brute-force на /login и /register.
   // Если не передан — лимита нет (для тестов).
   readonly rateLimiter?: InMemoryRateLimiter;
@@ -56,6 +65,39 @@ function clearSessionCookie(res: Response): void {
 
 function publicUser(user: User): Omit<User, 'createdAt'> & { createdAt: string } {
   return { ...user, createdAt: user.createdAt.toISOString() };
+}
+
+// Тело смены плана (self-serve «покупка», реального биллинга пока нет).
+const changePlanSchema = z.object({ plan: z.enum(['free', 'prime', 'vip']) });
+
+// Сериализация usage: суммы в USD (бюджет в долларах), rubPerUsd — для витрины «≈ ₽».
+function serializeWindow(w: UsageWindow) {
+  return {
+    label: w.label,
+    spentUsd: w.spentUsd,
+    capUsd: w.capUsd,
+    remainingUsd: w.remainingUsd,
+    isOver: w.isOver,
+    resetsAt: w.resetsAt ? w.resetsAt.toISOString() : null,
+  };
+}
+
+function serializeUsage(s: UsageSummary) {
+  return {
+    plan: s.plan,
+    subscription: {
+      plan: s.subscription.plan,
+      startedAt: s.subscription.startedAt ? s.subscription.startedAt.toISOString() : null,
+      expiresAt: s.subscription.expiresAt ? s.subscription.expiresAt.toISOString() : null,
+    },
+    windows: {
+      fiveHour: serializeWindow(s.fiveHour),
+      sevenDay: serializeWindow(s.sevenDay),
+    },
+    isBlocked: s.isBlocked,
+    blockedWindow: s.blockedWindow,
+    rubPerUsd: RUB_PER_USD,
+  };
 }
 
 export function authRouter(deps: Deps): Router {
@@ -107,6 +149,29 @@ export function authRouter(deps: Deps): Router {
 
   router.get('/me', requireAuth, (req: Request, res: Response) => {
     res.json({ user: publicUser(req.user!) });
+  });
+
+  // Usage (лимиты + расход) текущего юзера: два скользящих окна 5ч/7д. Клиент опрашивает
+  // периодически + по событиям воркера. См. план gleaming-munching-locket (M2).
+  router.get('/me/usage', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const summary = await deps.getUserUsage.execute(req.user!.id);
+      res.json(serializeUsage(summary));
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Self-serve смена тарифа («покупка» без реального биллинга) → возвращаем свежий usage.
+  router.post('/me/plan', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = changePlanSchema.parse(req.body);
+      await deps.buyPlan.execute(req.user!.id, body.plan);
+      const summary = await deps.getUserUsage.execute(req.user!.id);
+      res.json(serializeUsage(summary));
+    } catch (e) {
+      next(e);
+    }
   });
 
   router.patch('/me', requireAuth, async (req: Request, res: Response, next: NextFunction) => {

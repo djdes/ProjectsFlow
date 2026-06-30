@@ -23,6 +23,10 @@ import { AddTaskDialogProvider } from '@/presentation/components/forms/AddTaskDi
 import { GlobalSearchProvider } from '@/presentation/components/search/GlobalSearchProvider';
 import { ProjectsProvider } from '@/presentation/hooks/ProjectsProvider';
 import { WorkspacesProvider } from '@/presentation/hooks/WorkspacesProvider';
+import { UsageProvider } from '@/presentation/usage/UsageProvider';
+import { UsageDialogProvider } from '@/presentation/usage/UsageDialogProvider';
+import { UpgradeDialogProvider } from '@/presentation/usage/UpgradeDialogProvider';
+import { UsageBanner } from '@/presentation/usage/UsageBanner';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { PageTransition } from '@/presentation/components/motion/PageTransition';
 import { WorkspaceIcon } from './WorkspaceIcon';
@@ -125,9 +129,12 @@ export function AppShell(): React.ReactElement {
   return (
     <WorkspacesProvider>
     <ProjectsProvider>
+    <UsageProvider>
       <GithubConnectionProvider>
         <NewProjectDialogProvider>
         <AddTaskDialogProvider>
+        <UpgradeDialogProvider>
+        <UsageDialogProvider>
         <GlobalSearchProvider>
         {isDesktop ? (
           <div
@@ -209,10 +216,15 @@ export function AppShell(): React.ReactElement {
         )}
         {/* Плавающий виджет помощи/поддержки — снизу справа, портал в body, над таб-баром. */}
         <HelpWidget />
+        {/* Висящий баннер при низком/исчерпанном лимите — снизу по центру, клик → окно usage. */}
+        <UsageBanner />
         </GlobalSearchProvider>
+        </UsageDialogProvider>
+        </UpgradeDialogProvider>
         </AddTaskDialogProvider>
         </NewProjectDialogProvider>
       </GithubConnectionProvider>
+    </UsageProvider>
     </ProjectsProvider>
     </WorkspacesProvider>
   );

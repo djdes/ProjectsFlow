@@ -8,9 +8,16 @@ import { cn } from '@/lib/utils';
 interface ProgressProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Прогресс в процентах (0..100). Значения вне диапазона зажимаются. */
   value: number;
+  /** Класс заполняющей полоски — для смены цвета (напр. amber/destructive при низком остатке). */
+  indicatorClassName?: string;
 }
 
-export function Progress({ value, className, ...props }: ProgressProps): React.ReactElement {
+export function Progress({
+  value,
+  className,
+  indicatorClassName,
+  ...props
+}: ProgressProps): React.ReactElement {
   const clamped = Math.min(100, Math.max(0, Number.isFinite(value) ? value : 0));
   return (
     <div
@@ -22,7 +29,7 @@ export function Progress({ value, className, ...props }: ProgressProps): React.R
       {...props}
     >
       <div
-        className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
+        className={cn('h-full rounded-full bg-primary transition-[width] duration-200 ease-out', indicatorClassName)}
         style={{ width: `${clamped}%` }}
       />
     </div>

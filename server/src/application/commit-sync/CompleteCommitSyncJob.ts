@@ -1,4 +1,4 @@
-import type { CommitSyncMatch } from '../../domain/commit-sync/CommitSyncJob.js';
+import type { CommitSyncJob, CommitSyncMatch } from '../../domain/commit-sync/CommitSyncJob.js';
 import {
   CommitSyncJobNotFoundError,
   CommitSyncJobNotInRunningStateError,
@@ -8,6 +8,7 @@ import type { Task } from '../../domain/task/Task.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { LinkCommit } from '../task/LinkCommit.js';
 import type { CommitSyncJobRepository } from './CommitSyncJobRepository.js';
+import type { RecordUsage } from '../usage/RecordUsage.js';
 
 const MAX_ERROR = 500;
 const MAX_MATCHES = 500;
@@ -17,6 +18,8 @@ type Deps = {
   readonly tasks: TaskRepository;
   // Опционально: привязать совпавший коммит к карточке (видимая ссылка). Сбой не валит move.
   readonly linkCommit?: LinkCommit;
+  // Метеринг расхода ИИ (best-effort) — списываем с подписки диспетчера.
+  readonly recordUsage?: RecordUsage;
 };
 
 export type CompleteCommitSyncJobInput = {
@@ -63,6 +66,7 @@ export class CompleteCommitSyncJob {
         tokensIn: input.tokensIn ?? null,
         tokensOut: input.tokensOut ?? null,
       });
+      this.meterUsage(job, input);
       return;
     }
 
@@ -130,6 +134,23 @@ export class CompleteCommitSyncJob {
       tokensIn: input.tokensIn ?? null,
       tokensOut: input.tokensOut ?? null,
     });
+    this.meterUsage(job, input);
+  }
+
+  // Метеринг: списываем с подписки диспетчера (best-effort, идемпотентно по source+ref).
+  private meterUsage(job: CommitSyncJob, input: CompleteCommitSyncJobInput): void {
+    void this.deps.recordUsage
+      ?.execute({
+        source: 'commit_sync',
+        refId: input.jobId,
+        dispatcherUserId: job.dispatcherUserId,
+        projectId: job.projectId,
+        model: null,
+        tokensIn: input.tokensIn ?? null,
+        tokensOut: input.tokensOut ?? null,
+        costUsd: input.costUsd ?? null,
+      })
+      .catch(() => {});
   }
 
   private async tryLinkCommit(

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronsUpDown, CircleArrowUp, Copy, Home, LogOut, Plus, Settings, UserPlus } from 'lucide-react';
+import { Check, ChevronsUpDown, CircleArrowUp, Copy, Gauge, Home, LogOut, Plus, Settings, UserPlus } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +19,8 @@ import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { useSwitchWorkspace } from '@/presentation/hooks/useSwitchWorkspace';
 import { NewWorkspaceDialog } from '@/presentation/components/forms/NewWorkspaceDialog';
 import { WorkspaceIcon } from './WorkspaceIcon';
+import { useUsageDialog } from '@/presentation/usage/UsageDialogProvider';
+import { useUpgradeDialog } from '@/presentation/usage/UpgradeDialogProvider';
 
 // compact — режим icon-rail (свёрнутая панель): триггер только иконка пространства.
 export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {}): React.ReactElement {
@@ -28,6 +30,8 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
   const { data: workspaces } = useWorkspaces();
   const { workspace: current, loading: wsLoading } = useCurrentWorkspace();
   const { switchTo } = useSwitchWorkspace();
+  const usageDialog = useUsageDialog();
+  const upgrade = useUpgradeDialog();
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -132,9 +136,24 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
 
           {/* Действия */}
           <div className="p-1">
-            <DropdownMenuItem onClick={() => navigate('/profile')} className="text-primary focus:text-primary">
+            <DropdownMenuItem
+              onClick={() => {
+                setOpen(false);
+                upgrade.open();
+              }}
+              className="text-primary focus:text-primary"
+            >
               <CircleArrowUp />
               Улучшить план
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                setOpen(false);
+                usageDialog.open();
+              }}
+            >
+              <Gauge />
+              Использование
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate('/profile')}>
               <Settings />

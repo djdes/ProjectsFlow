@@ -124,6 +124,11 @@ import { DelegateExistingTask } from './application/task/DelegateExistingTask.js
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
 import { DrizzleAiPromptJobRepository } from './infrastructure/repositories/DrizzleAiPromptJobRepository.js';
+import { DrizzleUsageLedgerRepository } from './infrastructure/repositories/DrizzleUsageLedgerRepository.js';
+import { RecordUsage } from './application/usage/RecordUsage.js';
+import { GetUserUsage } from './application/usage/GetUserUsage.js';
+import { BuyPlan } from './application/usage/BuyPlan.js';
+import { CheckBudget } from './application/usage/CheckBudget.js';
 import { EnqueueAiPromptJob } from './application/ai-prompt/EnqueueAiPromptJob.js';
 import { WaitForAiPromptJob } from './application/ai-prompt/WaitForAiPromptJob.js';
 import { ListPendingAiPromptJobs } from './application/ai-prompt/ListPendingAiPromptJobs.js';
@@ -427,6 +432,13 @@ const taskDelegationRepo = new DrizzleTaskDelegationRepository(db);
 const digestSettingsRepo = new DrizzleDigestSettingsRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const aiPromptJobRepo = new DrizzleAiPromptJobRepository(db);
+// Метеринг расхода ИИ (db/082): единый ledger + хаб RecordUsage, который зовут все
+// completion-пути (live / ai_prompt / monitoring / commit_sync). См. план gleaming-munching-locket.
+const usageLedgerRepo = new DrizzleUsageLedgerRepository(db);
+const recordUsage = new RecordUsage({ ledger: usageLedgerRepo, idGen: idGenerator });
+const getUserUsage = new GetUserUsage({ ledger: usageLedgerRepo, users: userRepo, now });
+const buyPlan = new BuyPlan({ users: userRepo, now });
+const checkBudget = new CheckBudget({ getUserUsage });
 const automationRepo = new DrizzleAutomationRepository(db);
 const taskSearchRepo = new DrizzleTaskSearchRepository(db);
 const projectJoinRequestRepo = new DrizzleProjectJoinRequestRepository(db);
@@ -826,6 +838,8 @@ const liveService = new LiveService({
   broadcaster: projectEventBroadcaster,
   liveEventHub,
   idGen: idGenerator,
+  recordUsage,
+  checkBudget,
 });
 // Startup-sweep: зависшие running-сессии (процесс упал, finish не доехал) → timeout.
 // Best-effort: ошибка не должна мешать старту сервера.
@@ -984,9 +998,11 @@ const listPendingMonitoringAnalysisJobs = new ListPendingMonitoringAnalysisJobs(
 });
 const claimMonitoringAnalysisJob = new ClaimMonitoringAnalysisJob({
   monitoringAnalysisJobs: monitoringAnalysisJobRepo,
+  checkBudget,
 });
 const completeMonitoringAnalysisJob = new CompleteMonitoringAnalysisJob({
   monitoringAnalysisJobs: monitoringAnalysisJobRepo,
+  recordUsage,
 });
 // Housekeeping каждые 60 сек (зеркало ai-prompt cleanup).
 const monitoringAnalysisJobCleanup = new MonitoringAnalysisJobCleanup({
@@ -1021,10 +1037,11 @@ const enqueueCommitSyncJob = new EnqueueCommitSyncJob({
 const listPendingCommitSyncJobs = new ListPendingCommitSyncJobs({
   commitSyncJobs: commitSyncJobRepo,
 });
-const claimCommitSyncJob = new ClaimCommitSyncJob({ commitSyncJobs: commitSyncJobRepo });
+const claimCommitSyncJob = new ClaimCommitSyncJob({ commitSyncJobs: commitSyncJobRepo, checkBudget });
 const completeCommitSyncJob = new CompleteCommitSyncJob({
   commitSyncJobs: commitSyncJobRepo,
   tasks: taskRepo,
+  recordUsage,
   // Привязка совпавшего коммита к карточке (best-effort, сбой не валит move).
   linkCommit: new LinkCommit({
     projects: projectRepo,
@@ -1169,6 +1186,8 @@ const { app, devProxyUpgrade } = createApp({
   user: {
     updateProfile: new UpdateProfile(userRepo),
     uploadAvatar: new UploadUserAvatar({ users: userRepo, storage: attachmentStorage }),
+    getUserUsage,
+    buyPlan,
   },
   fileSync: {
     service: fileSyncService,
@@ -1855,8 +1874,8 @@ const { app, devProxyUpgrade } = createApp({
     enqueueAiPromptJob,
     waitForAiPromptJob,
     listPendingAiPromptJobs: new ListPendingAiPromptJobs({ aiPromptJobs: aiPromptJobRepo }),
-    claimAiPromptJob: new ClaimAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
-    completeAiPromptJob: new CompleteAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
+    claimAiPromptJob: new ClaimAiPromptJob({ aiPromptJobs: aiPromptJobRepo, checkBudget }),
+    completeAiPromptJob: new CompleteAiPromptJob({ aiPromptJobs: aiPromptJobRepo, recordUsage }),
     listPendingMonitoringAnalysisJobs,
     claimMonitoringAnalysisJob,
     completeMonitoringAnalysisJob,

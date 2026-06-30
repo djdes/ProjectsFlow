@@ -5,9 +5,12 @@ import {
   NotDispatcherForAiPromptJobError,
 } from '../../domain/ai-prompt/errors.js';
 import type { AiPromptJobRepository } from './AiPromptJobRepository.js';
+import { assertBudgetAllowed, type CheckBudget } from '../usage/CheckBudget.js';
 
 type Deps = {
   readonly aiPromptJobs: AiPromptJobRepository;
+  // Гейт лимитов: подписка диспетчера исчерпала окно → claim запрещён (work не стартует).
+  readonly checkBudget?: CheckBudget;
 };
 
 export class ClaimAiPromptJob {
@@ -19,6 +22,7 @@ export class ClaimAiPromptJob {
     if (job.dispatcherUserId !== input.userId) {
       throw new NotDispatcherForAiPromptJobError(input.jobId);
     }
+    await assertBudgetAllowed(this.deps.checkBudget, job.dispatcherUserId);
     const claimed = await this.deps.aiPromptJobs.claimById(input.jobId);
     if (!claimed) throw new AiPromptJobAlreadyClaimedError(input.jobId);
     return claimed;

@@ -29,6 +29,7 @@ import { TelegramSection } from '@/presentation/components/profile/TelegramSecti
 import { ProjectsShareCard } from '@/presentation/components/profile/ProjectsShareCard';
 import { NotificationDefaultsCard } from '@/presentation/components/profile/NotificationDefaultsCard';
 import { KanbanColorsCard } from '@/presentation/components/profile/KanbanColorsCard';
+import { PlanAndUsageCard } from '@/presentation/components/profile/PlanAndUsageCard';
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
 
 function PersonalDataCard(): React.ReactElement {
@@ -324,6 +325,7 @@ export function ProfilePage(): React.ReactElement {
       <h1 className="text-xl font-semibold tracking-tight">Настройки</h1>
 
       <PersonalDataCard />
+      <PlanAndUsageCard />
       <ProjectsShareCard />
       <EmployeesCard />
       <NotificationDefaultsCard />

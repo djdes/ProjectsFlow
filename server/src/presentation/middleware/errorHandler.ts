@@ -105,6 +105,7 @@ import {
   LiveSessionNotFoundError,
   LiveSessionGoneError,
 } from '../../domain/live/errors.js';
+import { UsageBlockedError } from '../../domain/usage/errors.js';
 import {
   WorkspaceNotFoundError,
   NotWorkspaceMemberError,
@@ -599,6 +600,19 @@ export function errorHandler(
   }
   if (err instanceof LiveSessionGoneError) {
     res.status(410).json({ error: 'live_session_gone', message: err.message });
+    return;
+  }
+
+  // --- Лимиты подписки (usage). 402: окно исчерпано — раннер трактует как «пропусти, повтори». ---
+  if (err instanceof UsageBlockedError) {
+    res.status(402).json({
+      error: 'budget_exceeded',
+      message: 'Лимит использования исчерпан — подождите сброса окна или повысьте тариф',
+      details: {
+        window: err.window,
+        resetsAt: err.resetsAt ? err.resetsAt.toISOString() : null,
+      },
+    });
     return;
   }
 

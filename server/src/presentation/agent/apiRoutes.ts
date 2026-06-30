@@ -344,6 +344,10 @@ const completeAiPromptJobBodySchema = z
     // improve кладёт plain-текст (обычно ≤2000). Колонка improved_text — MEDIUMTEXT (db/060).
     improvedText: z.string().max(600000).nullable().optional(),
     error: z.string().max(500).nullable().optional(),
+    // Стоимость прогона от раннера (db/083) — для метеринга расхода. Опциональны.
+    costUsd: z.number().nonnegative().nullable().optional(),
+    tokensIn: z.number().int().nonnegative().nullable().optional(),
+    tokensOut: z.number().int().nonnegative().nullable().optional(),
   })
   .refine(
     (b) => (b.ok ? Boolean(b.improvedText && b.improvedText.trim().length > 0) : true),
@@ -1143,6 +1147,9 @@ export function agentApiRouter(deps: Deps): Router {
           ok: body.ok,
           improvedText: body.improvedText ?? null,
           error: body.error ?? null,
+          costUsd: body.costUsd ?? null,
+          tokensIn: body.tokensIn ?? null,
+          tokensOut: body.tokensOut ?? null,
         });
         res.status(204).end();
       } catch (e) {

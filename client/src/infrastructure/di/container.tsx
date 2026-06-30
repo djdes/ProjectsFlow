@@ -72,6 +72,10 @@ import type { ChatRepository } from '@/application/chat/ChatRepository';
 import type { UserRepository } from '@/application/user/UserRepository';
 import type { WorkspaceRepository } from '@/application/workspace/WorkspaceRepository';
 import type { ActivityRepository } from '@/application/activity/ActivityRepository';
+import { HttpUsageRepository } from '@/infrastructure/http/HttpUsageRepository';
+import { GetUsage } from '@/application/usage/GetUsage';
+import { ChangePlan } from '@/application/usage/ChangePlan';
+import type { UsageRepository } from '@/application/usage/UsageRepository';
 
 type Container = {
   listProjects: ListProjects;
@@ -118,6 +122,9 @@ type Container = {
   listRecentTaskViews: ListRecentTaskViews;
   helpRepository: HelpRepository;
   submitSupport: SubmitSupport;
+  usageRepository: UsageRepository;
+  getUsage: GetUsage;
+  changePlan: ChangePlan;
 };
 
 function buildContainer(): Container {
@@ -148,6 +155,7 @@ function buildContainer(): Container {
   const activityRepo = new HttpActivityRepository();
   const recentTaskViewRepo = new HttpRecentTaskViewRepository();
   const helpRepo = new HttpHelpRepository();
+  const usageRepo = new HttpUsageRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -193,6 +201,9 @@ function buildContainer(): Container {
     listRecentTaskViews: new ListRecentTaskViews(recentTaskViewRepo),
     helpRepository: helpRepo,
     submitSupport: new SubmitSupport(helpRepo),
+    usageRepository: usageRepo,
+    getUsage: new GetUsage(usageRepo),
+    changePlan: new ChangePlan(usageRepo),
   };
 }
 

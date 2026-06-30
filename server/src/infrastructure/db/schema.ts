@@ -79,6 +79,11 @@ export const users = mysqlTable(
     uiPrefs: json('ui_prefs').$type<UiPrefs | null>(),
     // Активное пространство юзера — единый источник правды для скоупинга проектов. См. db/073.
     currentWorkspaceId: char('current_workspace_id', { length: 36 }),
+    // Подписочный план (db/084). free — метеринг без лимитов; prime/vip — лимиты по двум
+    // скользящим окнам (5ч / 7д). Истёкший prime/vip лениво трактуется как free на чтении.
+    plan: mysqlEnum('plan', ['free', 'prime', 'vip']).notNull().default('free'),
+    subscriptionStartedAt: timestamp('subscription_started_at'),
+    subscriptionExpiresAt: timestamp('subscription_expires_at'),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -898,6 +903,11 @@ export const aiPromptJobs = mysqlTable(
     // cap на уровне приложения = 600000 символов. improve кладёт plain-текст ≤600000.
     improvedText: mediumtext('improved_text'),
     error: varchar('error', { length: 500 }),
+    // db/083: стоимость прогона «перефразировки» — раннер репортит при complete (как в live_sessions).
+    // DECIMAL/BIGINT приходят из mysql2 строкой → Number() в репозитории.
+    costUsd: decimal('cost_usd', { precision: 10, scale: 4 }),
+    tokensIn: bigint('tokens_in', { mode: 'number' }),
+    tokensOut: bigint('tokens_out', { mode: 'number' }),
     claimedAt: timestamp('claimed_at'),
     finishedAt: timestamp('finished_at'),
     createdAt: createdAtCol(),
@@ -995,6 +1005,38 @@ export const commitSyncJobs = mysqlTable(
 
 export type CommitSyncJobRow = typeof commitSyncJobs.$inferSelect;
 export type NewCommitSyncJobRow = typeof commitSyncJobs.$inferInsert;
+
+// ============================================================================
+// ai_usage_ledger — миграция db/082. Append-only журнал расхода ИИ в USD. user_id =
+// dispatcher_user_id прогона (профиль, чей диспетчер выполнял работу) — один юзер = один
+// бюджет на все источники. cost_usd авторитетен (репортит раннер). Скользящие окна
+// (5ч / 7д) считаются на чтении: SUM(cost_usd) по occurred_at — шедулер не нужен.
+// Идемпотентность RecordUsage — UNIQUE(source, ref_id). См. план gleaming-munching-locket.
+// ============================================================================
+export const aiUsageLedger = mysqlTable(
+  'ai_usage_ledger',
+  {
+    id: id(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    source: mysqlEnum('source', ['live', 'ai_prompt', 'monitoring', 'commit_sync']).notNull(),
+    refId: char('ref_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }),
+    model: varchar('model', { length: 64 }),
+    // DECIMAL/BIGINT возвращаются из mysql2 строкой → Number() в репозитории.
+    tokensIn: bigint('tokens_in', { mode: 'number' }),
+    tokensOut: bigint('tokens_out', { mode: 'number' }),
+    costUsd: decimal('cost_usd', { precision: 10, scale: 4 }).notNull().default('0.0000'),
+    occurredAt: timestamp('occurred_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_usage_source_ref').on(t.source, t.refId),
+    index('idx_usage_user_occurred').on(t.userId, t.occurredAt),
+  ],
+);
+
+export type AiUsageLedgerRow = typeof aiUsageLedger.$inferSelect;
+export type NewAiUsageLedgerRow = typeof aiUsageLedger.$inferInsert;
 
 // ============================================================================
 // project_automation — миграция db/045. Автоматизация: если у проекта нет открытых
