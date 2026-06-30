@@ -49,7 +49,7 @@ export type AutomationForDispatcher = {
   gitAuthorEmail: string | null;
   ignoreClaudeMd: boolean;
   ultracodeReviewEnabled: boolean;
-  deployMethod: 'github_auto' | 'ssh_manual' | 'none';
+  deployMethod: 'github_auto' | 'ssh_manual' | 'none' | 'auto';
   deployCommand: string | null;
   nextCriterion: AutomationDispatcherCriterion | null;
 };

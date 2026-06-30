@@ -10,9 +10,10 @@ export type AutomationRunStatus = 'idle' | 'running' | 'completed' | 'stopped';
 // заданные вручную имя+email.
 export type GitAuthorMode = 'bot' | 'owner' | 'custom';
 
-// Как деплоить после успешной задачи: рассчитываем на автодеплой GitHub (по push),
-// своя ssh-команда (build+deploy вручную), либо не деплоить вовсе.
-export type DeployMethod = 'github_auto' | 'ssh_manual' | 'none';
+// Как деплоить после успешной задачи: автодеплой GitHub (по push), своя ssh-команда
+// (build+deploy вручную), не деплоить вовсе, либо 'auto' — воркер деплоит сам по
+// инструкции из CLAUDE.md проекта (без явной команды).
+export type DeployMethod = 'github_auto' | 'ssh_manual' | 'none' | 'auto';
 
 // Один критерий генерации задач. key — из фиксированного набора AUTOMATION_CRITERIA.
 export type AutomationCriterion = {

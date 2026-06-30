@@ -4,7 +4,6 @@ import {
   CalendarClock,
   GitCommitHorizontal,
   History,
-  Layers3,
   Loader2,
   RefreshCw,
   Rocket,
@@ -249,19 +248,31 @@ function NestedSwitchRow({
   description,
   checked,
   onCheckedChange,
+  busy = false,
+  disabled = false,
 }: {
   title: string;
   description: string;
   checked: boolean;
   onCheckedChange: (v: boolean) => void;
+  busy?: boolean;
+  disabled?: boolean;
 }): React.ReactElement {
   return (
     <div className="flex items-center justify-between gap-3 rounded-md bg-muted/40 px-3 py-2.5">
       <div className="min-w-0">
-        <Label className="text-sm font-medium">{title}</Label>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-sm font-medium">{title}</Label>
+          {busy && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
+        </div>
         <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{description}</p>
       </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label={title} />
+      <Switch
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        disabled={disabled}
+        aria-label={title}
+      />
     </div>
   );
 }
@@ -771,22 +782,22 @@ export function AutomationDialog({
                     <span className="text-muted-foreground">мин</span>
                   </div>
                 </div>
+
+                {/* Параллельность — режим работы диспетчера, а не отдельная автоматизация,
+                    поэтому живёт внутри этого блока. Сохраняется сразу (отдельный PATCH). */}
+                <div className="space-y-2">
+                  <FieldGroupLabel>Параллельность</FieldGroupLabel>
+                  <NestedSwitchRow
+                    title="Мультизадачный воркер"
+                    description="Диспетчер ведёт до 3 задач проекта параллельно (а не строго по одной)."
+                    checked={multiTaskWorker}
+                    onCheckedChange={(v) => void toggleMultiTaskWorker(v)}
+                    busy={mtwSaving}
+                    disabled={mtwSaving}
+                  />
+                </div>
               </div>
             </AutomationCard>
-
-            {/* МУЛЬТИЗАДАЧНЫЙ ВОРКЕР — отдельный PATCH сразу. */}
-            <AutomationCard
-              icon={Layers3}
-              title="Мультизадачный воркер"
-              description="Диспетчер ведёт до 3 задач проекта параллельно."
-              toggle={{
-                checked: multiTaskWorker,
-                onCheckedChange: (v) => void toggleMultiTaskWorker(v),
-                busy: mtwSaving,
-                disabled: mtwSaving,
-                ariaLabel: 'Мультизадачный воркер',
-              }}
-            />
 
             {/* ПУБЛИКАЦИЯ И ДЕПЛОЙ — как воркер коммитит и катит изменения (не агрегируется мастером). */}
             <AutomationCard
@@ -889,6 +900,12 @@ export function AutomationDialog({
                       </Label>
                     </div>
                     <div className="flex items-center gap-2">
+                      <RadioGroupItem value="auto" id="deploy-auto" />
+                      <Label htmlFor="deploy-auto" className="text-sm font-normal">
+                        Авто — как указано в CLAUDE.md проекта
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <RadioGroupItem value="ssh_manual" id="deploy-ssh" />
                       <Label htmlFor="deploy-ssh" className="text-sm font-normal">
                         Своя команда (build + ssh-деплой)
@@ -914,6 +931,12 @@ export function AutomationDialog({
                         className="h-8 font-mono text-xs"
                       />
                     </div>
+                  )}
+                  {draft.deployMethod === 'auto' && (
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      Воркер сам найдёт и выполнит деплой по инструкции из CLAUDE.md проекта —
+                      команду указывать не нужно.
+                    </p>
                   )}
                 </div>
               </div>

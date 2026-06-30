@@ -1019,8 +1019,9 @@ export const projectAutomation = mysqlTable('project_automation', {
   ignoreClaudeMd: boolean('ignore_claude_md').notNull().default(false),
   // Блокирующая UltraCode-проверка совместимости перед push в прод.
   ultracodeReviewEnabled: boolean('ultracode_review_enabled').notNull().default(false),
-  // Как деплоить после успешной задачи: автодеплой GitHub / своя ssh-команда / никак.
-  deployMethod: mysqlEnum('deploy_method', ['github_auto', 'ssh_manual', 'none'])
+  // Как деплоить после успешной задачи: автодеплой GitHub / своя ssh-команда / никак /
+  // авто (по инструкции из CLAUDE.md проекта).
+  deployMethod: mysqlEnum('deploy_method', ['github_auto', 'ssh_manual', 'none', 'auto'])
     .notNull()
     .default('github_auto'),
   deployCommand: varchar('deploy_command', { length: 500 }),

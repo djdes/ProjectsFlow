@@ -8,8 +8,9 @@ export type AutomationRunStatus = 'idle' | 'running' | 'completed' | 'stopped';
 // От чьего имени воркер коммитит автоправки: фикс. бот / владелец / заданные вручную.
 export type GitAuthorMode = 'bot' | 'owner' | 'custom';
 
-// Как деплоить после успешной задачи: автодеплой GitHub / своя ssh-команда / никак.
-export type DeployMethod = 'github_auto' | 'ssh_manual' | 'none';
+// Как деплоить после успешной задачи: автодеплой GitHub / своя ssh-команда / никак /
+// 'auto' — воркер деплоит сам по инструкции из CLAUDE.md проекта.
+export type DeployMethod = 'github_auto' | 'ssh_manual' | 'none' | 'auto';
 
 export type AutomationCriterion = {
   readonly key: string;

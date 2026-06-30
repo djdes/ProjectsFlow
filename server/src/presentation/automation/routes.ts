@@ -64,7 +64,7 @@ const saveBodySchema = z
       .transform((v) => (v && v.trim().length > 0 ? v : null)),
     ignoreClaudeMd: z.boolean().optional().default(false),
     ultracodeReviewEnabled: z.boolean().optional().default(false),
-    deployMethod: z.enum(['github_auto', 'ssh_manual', 'none']).optional().default('github_auto'),
+    deployMethod: z.enum(['github_auto', 'ssh_manual', 'none', 'auto']).optional().default('github_auto'),
     deployCommand: z
       .string()
       .trim()

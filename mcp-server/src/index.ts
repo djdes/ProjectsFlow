@@ -992,7 +992,9 @@ const TOOLS = [
       "resolved; 'bot' means use the fixed agent identity), ignoreClaudeMd (skip the project's " +
       'CLAUDE.md commit ritual / Co-Authored-By when true), ultracodeReviewEnabled (run a ' +
       'blocking compatibility review before push), and deployMethod/deployCommand (github_auto = ' +
-      'do nothing, ssh_manual = run deployCommand after each successful push, none = no deploy). ' +
+      'do nothing — push triggers GitHub auto-deploy, ssh_manual = run deployCommand after each ' +
+      "successful push, none = no deploy, auto = deploy by following the project's CLAUDE.md deploy " +
+      'instructions yourself, no command given). ' +
       "Only the project's assigned dispatcher may call this (403 otherwise).",
     inputSchema: {
       type: 'object',
