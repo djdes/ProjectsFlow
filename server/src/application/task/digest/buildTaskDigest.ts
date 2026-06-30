@@ -124,7 +124,23 @@ export function renderDigestMarkdown(m: DigestModel): string {
   return lines.join('\n');
 }
 
-// HTML — для письма.
+// Кнопка-плашка письма (bulletproof: <a> с inline-стилями, display:inline-block).
+// variant 'primary' — зелёная заливка (Завершить); 'ghost' — светло-синяя контурная
+// (Комментировать). Подписи/ссылки 1:1 с Telegram-футером (digestItemBlockTg).
+function emailButton(href: string, label: string, variant: 'primary' | 'ghost'): string {
+  const style =
+    variant === 'primary'
+      ? 'background:#16a34a;color:#ffffff;border:1px solid #16a34a;'
+      : 'background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;';
+  return (
+    `<a href="${escapeHtml(href)}" style="display:inline-block;text-decoration:none;` +
+    `font-size:13px;font-weight:600;line-height:1;padding:9px 14px;border-radius:8px;` +
+    `${style}">${escapeHtml(label)}</a>`
+  );
+}
+
+// HTML — для письма. Раскладка карточки зеркалит Telegram-блок (см. digestItemBlockTg):
+// жирный заголовок (не ссылка) → мета → тело → вложения → кнопки внизу.
 export function renderDigestHtml(m: DigestModel): string {
   const p: string[] = [
     '<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0f172a;line-height:1.5;">',
@@ -134,29 +150,34 @@ export function renderDigestHtml(m: DigestModel): string {
   ];
   for (const g of m.groups) {
     p.push(`<p style="font-size:13px;font-weight:600;margin:16px 0 8px;">${escapeHtml(g.heading)}</p>`);
-    g.items.forEach((it, i) => {
-      p.push('<div style="margin:0 0 16px;border-left:3px solid #e2e8f0;padding-left:10px;">');
+    for (const it of g.items) {
       p.push(
-        `<div style="font-weight:600;">${i + 1}. <a href="${escapeHtml(
-          it.openLink,
-        )}" style="color:#2563eb;text-decoration:none;">${escapeHtml(
-          it.name,
-        )}</a> · <a href="${escapeHtml(it.doneLink)}" style="color:#16a34a;text-decoration:none;">✓ Готово</a></div>`,
+        '<div style="margin:0 0 12px;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;">',
       );
+      p.push(`<div style="font-weight:600;font-size:15px;">${escapeHtml(it.name)}</div>`);
       const meta: string[] = [];
-      if (it.deadline) meta.push(`⏰ ${escapeHtml(it.deadline)}`);
       if (it.assignee) meta.push(`👤 ${escapeHtml(it.assignee)}`);
-      if (meta.length) p.push(`<div style="color:#64748b;font-size:12px;margin:2px 0;">${meta.join(' · ')}</div>`);
-      if (it.body) p.push(`<div style="font-size:13px;margin:4px 0;">${markdownToRich(it.body, 'email')}</div>`);
+      if (it.deadline) meta.push(`⏰ ${escapeHtml(it.deadline)}`);
+      if (meta.length) p.push(`<div style="color:#64748b;font-size:12px;margin:4px 0 0;">${meta.join(' · ')}</div>`);
+      if (it.body) p.push(`<div style="font-size:13px;margin:6px 0 0;">${markdownToRich(it.body, 'email')}</div>`);
       if (it.attachments.length) {
         p.push(
-          `<div style="font-size:12px;margin:4px 0;">${it.attachments
+          `<div style="font-size:12px;margin:6px 0 0;">${it.attachments
             .map((a) => `📎 <a href="${escapeHtml(a.url)}" style="color:#2563eb;">${escapeHtml(a.name)}</a>`)
             .join(' · ')}</div>`,
         );
       }
+      const commentLabel =
+        it.commentCount > 0 ? `💬 Комментировать (${it.commentCount})` : '💬 Комментировать';
+      p.push(
+        '<div style="margin:12px 0 0;">' +
+          emailButton(it.openLink, commentLabel, 'ghost') +
+          '&nbsp;&nbsp;' +
+          emailButton(it.doneLink, '✓ Завершить', 'primary') +
+          '</div>',
+      );
       p.push('</div>');
-    });
+    }
   }
   p.push('</div>');
   return p.join('');
