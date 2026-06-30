@@ -24,6 +24,7 @@ type UsageDto = {
   isBlocked: boolean;
   blockedWindow: WindowLabel | null;
   rubPerUsd: number;
+  primeTrialAvailable: boolean;
 };
 
 function windowFromDto(d: WindowDto): UsageWindow {
@@ -55,6 +56,7 @@ function fromDto(dto: UsageDto): UsageSummary {
     isBlocked: Boolean(dto.isBlocked),
     blockedWindow: dto.blockedWindow,
     rubPerUsd: Number(dto.rubPerUsd) || 0,
+    primeTrialAvailable: Boolean(dto.primeTrialAvailable),
   };
 }
 

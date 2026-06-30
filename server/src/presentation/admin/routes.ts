@@ -8,6 +8,7 @@ import type { SetUserProjectFavorite } from '../../application/admin/SetUserProj
 import type { AdminProjectView, AdminUserView } from '../../application/admin/AdminRepository.js';
 import type { ListAllSupportTickets } from '../../application/admin/ListAllSupportTickets.js';
 import type { SetSupportTicketStatus } from '../../application/admin/SetSupportTicketStatus.js';
+import type { SetUserPlanAsAdmin } from '../../application/admin/SetUserPlanAsAdmin.js';
 import type { SupportTicketWithSubmitter } from '../../application/help/SupportTicketRepository.js';
 import type { EmailSender } from '../../application/notifications/EmailSender.js';
 import {
@@ -27,6 +28,7 @@ type Deps = {
   readonly setUserProjectFavorite: SetUserProjectFavorite;
   readonly listAllSupportTickets: ListAllSupportTickets;
   readonly setSupportTicketStatus: SetSupportTicketStatus;
+  readonly setUserPlanAsAdmin: SetUserPlanAsAdmin;
   readonly emailSender: EmailSender;
 };
 
@@ -35,7 +37,11 @@ function projectToDto(p: AdminProjectView): Record<string, unknown> {
 }
 
 function userToDto(u: AdminUserView): Record<string, unknown> {
-  return { ...u, createdAt: u.createdAt.toISOString() };
+  return {
+    ...u,
+    createdAt: u.createdAt.toISOString(),
+    subscriptionExpiresAt: u.subscriptionExpiresAt ? u.subscriptionExpiresAt.toISOString() : null,
+  };
 }
 
 function ticketToDto(t: SupportTicketWithSubmitter): Record<string, unknown> {
@@ -140,6 +146,26 @@ export function adminRouter(deps: Deps): Router {
       if (typeof body.email === 'string') patch.email = body.email;
       if (typeof body.isAdmin === 'boolean') patch.isAdmin = body.isAdmin;
       await deps.updateUser.execute(id, patch);
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Админ-выдача тарифа юзеру (фикс +30 дней; free → сброс). ВИП подключается только так.
+  router.patch('/users/:id/plan', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params['id'];
+      if (typeof id !== 'string') {
+        res.status(404).json({ error: 'not_found' });
+        return;
+      }
+      const plan = (req.body ?? {}).plan;
+      if (plan !== 'free' && plan !== 'prime' && plan !== 'vip') {
+        res.status(400).json({ error: "plan must be 'free', 'prime' or 'vip'" });
+        return;
+      }
+      await deps.setUserPlanAsAdmin.execute(id, plan);
       res.status(204).end();
     } catch (e) {
       next(e);

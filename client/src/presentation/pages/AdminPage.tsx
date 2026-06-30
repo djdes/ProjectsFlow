@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Bot, Check, ChevronRight, ExternalLink, Eye, Github, LifeBuoy, Loader2, Mail, Pencil, Send, Shield, Star, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
+import { Bot, Check, ChevronRight, CreditCard, ExternalLink, Eye, Github, LifeBuoy, Loader2, Mail, Pencil, Send, Shield, Star, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,14 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { AdminProject, AdminSupportTicket, AdminUser, EmailTemplateMeta, EmailPreview } from '@/application/admin/AdminRepository';
 import { relativeTime } from '@/lib/relativeTime';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import type { PlanId } from '@/domain/usage/Usage';
+import { planNameRu } from '@/presentation/usage/usageFormat';
 import { useContainer } from '@/infrastructure/di/container';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { AdminUserDispatchersDialog } from '@/presentation/components/admin/AdminUserDispatchersDialog';
@@ -380,6 +388,22 @@ function UsersTab(): React.ReactElement {
     }
   };
 
+  // Админ-выдача тарифа (фикс 30 дней; free → сброс). Так подключается ВИП (не self-serve).
+  const changeUserPlan = async (u: AdminUser, plan: PlanId): Promise<void> => {
+    if (plan === u.plan) return;
+    try {
+      await adminRepository.setUserPlan(u.id, plan);
+      toast.success(
+        plan === 'free'
+          ? `Тариф снят у ${u.displayName}`
+          : `Тариф «${planNameRu(plan)}» выдан ${u.displayName} на 30 дней`,
+      );
+      reload();
+    } catch (e) {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+    }
+  };
+
   if (!users) return <ListSkeleton />;
 
   return (
@@ -397,6 +421,14 @@ function UsersTab(): React.ReactElement {
                   {u.isAdmin && (
                     <span className="rounded bg-primary/15 px-1.5 text-[10px] font-medium uppercase tracking-wide text-primary">
                       admin
+                    </span>
+                  )}
+                  {u.plan !== 'free' && (
+                    <span className="rounded bg-amber-500/15 px-1.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                      {planNameRu(u.plan)}
+                      {u.subscriptionExpiresAt
+                        ? ` до ${new Date(u.subscriptionExpiresAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`
+                        : ''}
                     </span>
                   )}
                 </p>
@@ -457,6 +489,26 @@ function UsersTab(): React.ReactElement {
               <Button size="sm" variant="outline" onClick={() => setEditing(u)}>
                 Изменить
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" title="Выдать/сменить тариф (фикс 30 дней)">
+                    <CreditCard className="size-4" />
+                    Тариф
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {(['free', 'prime', 'vip'] as PlanId[]).map((pl) => (
+                    <DropdownMenuItem
+                      key={pl}
+                      disabled={pl === u.plan}
+                      onClick={() => void changeUserPlan(u, pl)}
+                    >
+                      {planNameRu(pl)}
+                      {pl === u.plan && <Check className="ml-auto size-3.5" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button size="sm" variant="ghost" onClick={() => void toggleAdmin(u)}>
                 {u.isAdmin ? 'Снять админа' : 'Сделать админом'}
               </Button>

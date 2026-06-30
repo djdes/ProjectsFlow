@@ -105,7 +105,7 @@ import {
   LiveSessionNotFoundError,
   LiveSessionGoneError,
 } from '../../domain/live/errors.js';
-import { UsageBlockedError } from '../../domain/usage/errors.js';
+import { PrimeTrialUsedError, UsageBlockedError, VipNotSelfServeError } from '../../domain/usage/errors.js';
 import {
   WorkspaceNotFoundError,
   NotWorkspaceMemberError,
@@ -612,6 +612,20 @@ export function errorHandler(
         window: err.window,
         resetsAt: err.resetsAt ? err.resetsAt.toISOString() : null,
       },
+    });
+    return;
+  }
+  if (err instanceof PrimeTrialUsedError) {
+    res.status(409).json({
+      error: 'prime_trial_used',
+      message: 'Пробный Прайм уже был активирован. Подключить тариф можно по запросу.',
+    });
+    return;
+  }
+  if (err instanceof VipNotSelfServeError) {
+    res.status(403).json({
+      error: 'vip_not_self_serve',
+      message: 'Тариф ВИП подключается по запросу — обратитесь в поддержку.',
     });
     return;
   }

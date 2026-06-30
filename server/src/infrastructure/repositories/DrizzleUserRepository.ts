@@ -290,4 +290,17 @@ export class DrizzleUserRepository implements UserRepository {
       .set({ plan, subscriptionStartedAt: startedAt, subscriptionExpiresAt: expiresAt })
       .where(eq(users.id, userId));
   }
+
+  async getPrimeTrialUsedAt(userId: string): Promise<Date | null> {
+    const rows = await this.db
+      .select({ at: users.primeTrialUsedAt })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return rows[0]?.at ?? null;
+  }
+
+  async markPrimeTrialUsed(userId: string, at: Date): Promise<void> {
+    await this.db.update(users).set({ primeTrialUsedAt: at }).where(eq(users.id, userId));
+  }
 }

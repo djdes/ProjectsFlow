@@ -1,4 +1,5 @@
 import type { ProjectStatus } from '@/domain/project/Project';
+import type { PlanId } from '@/domain/usage/Usage';
 
 export type AdminProject = {
   readonly id: string;
@@ -25,6 +26,9 @@ export type AdminUser = {
   readonly delegationEnabledCount: number;
   // Подключён ли GitHub. Если нет — делегацию включать нельзя.
   readonly githubConnected: boolean;
+  // Тариф юзера + дата окончания подписки (ISO|null) — для бейджа/контрола в админке.
+  readonly plan: PlanId;
+  readonly subscriptionExpiresAt: string | null;
 };
 
 export type AdminUserPatch = {
@@ -100,4 +104,6 @@ export interface AdminRepository {
   // Обращения в поддержку (раздел «Администрирование» → вкладка «Поддержка»).
   listSupportTickets(): Promise<AdminSupportTicket[]>;
   setSupportTicketStatus(id: string, status: 'open' | 'closed'): Promise<void>;
+  // Админ-выдача тарифа юзеру (prime/vip → фикс +30 дней; free → сброс).
+  setUserPlan(id: string, plan: PlanId): Promise<void>;
 }

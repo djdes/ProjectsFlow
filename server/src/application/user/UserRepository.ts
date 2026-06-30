@@ -85,4 +85,8 @@ export interface UserRepository {
     startedAt: Date | null,
     expiresAt: Date | null,
   ): Promise<void>;
+
+  // Разовый пробный Прайм (db/085): метка использования. null = триал ещё не активировали.
+  getPrimeTrialUsedAt(userId: string): Promise<Date | null>;
+  markPrimeTrialUsed(userId: string, at: Date): Promise<void>;
 }

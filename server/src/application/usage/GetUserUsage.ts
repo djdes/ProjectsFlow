@@ -22,7 +22,11 @@ export class GetUserUsage {
 
   async execute(userId: string): Promise<UsageSummary> {
     const now = this.deps.now();
-    const sub: Subscription = (await this.deps.users.getSubscription(userId)) ?? {
+    const [sub0, primeTrialUsedAt] = await Promise.all([
+      this.deps.users.getSubscription(userId),
+      this.deps.users.getPrimeTrialUsedAt(userId),
+    ]);
+    const sub: Subscription = sub0 ?? {
       plan: 'free',
       startedAt: null,
       expiresAt: null,
@@ -57,6 +61,12 @@ export class GetUserUsage {
     });
 
     // summary.plan = эффективный (для кэпов/гейтов); subscription несёт реальный план + срок.
-    return buildUsageSummary({ plan, subscription: sub, fiveHour, sevenDay });
+    return buildUsageSummary({
+      plan,
+      subscription: sub,
+      fiveHour,
+      sevenDay,
+      primeTrialAvailable: primeTrialUsedAt == null,
+    });
   }
 }

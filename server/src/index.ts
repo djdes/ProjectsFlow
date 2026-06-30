@@ -34,6 +34,7 @@ import { DrizzleSupportTicketRepository } from './infrastructure/repositories/Dr
 import { SubmitSupportTicket } from './application/help/SubmitSupportTicket.js';
 import { ListAllSupportTickets } from './application/admin/ListAllSupportTickets.js';
 import { SetSupportTicketStatus } from './application/admin/SetSupportTicketStatus.js';
+import { SetUserPlanAsAdmin } from './application/admin/SetUserPlanAsAdmin.js';
 import { NotificationHub } from './infrastructure/notifications/NotificationHub.js';
 import { RealtimeHub } from './infrastructure/realtime/RealtimeHub.js';
 import { ProjectEventBroadcaster } from './application/realtime/ProjectEventBroadcaster.js';
@@ -1401,6 +1402,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
     listAllSupportTickets: new ListAllSupportTickets(supportTicketRepo),
     setSupportTicketStatus: new SetSupportTicketStatus(supportTicketRepo),
+    setUserPlanAsAdmin: new SetUserPlanAsAdmin({ users: userRepo, now }),
     emailSender,
   },
   finance: {

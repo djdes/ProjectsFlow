@@ -10,13 +10,15 @@ import { useUsage } from '@/presentation/usage/UsageProvider';
 import { useUsageDialog } from '@/presentation/usage/UsageDialogProvider';
 import { useUpgradeDialog } from '@/presentation/usage/UpgradeDialogProvider';
 import { UsageWindowBar } from '@/presentation/usage/UsageWindowBar';
-import { planNameRu } from '@/presentation/usage/usageFormat';
+import { planNameRu, subscriptionExpiryNote } from '@/presentation/usage/usageFormat';
 
-// Карточка профиля: тариф + два окна расхода + кнопки «Подробнее»/«Улучшить план».
+// Карточка профиля: тариф + срок + два окна расхода + кнопки «Подробнее»/«Улучшить план».
 export function PlanAndUsageCard(): React.ReactElement {
   const { usage, loading } = useUsage();
   const usageDialog = useUsageDialog();
   const upgrade = useUpgradeDialog();
+  // Эффективный план (истёкший prime/vip уже трактуется как free).
+  const expiryNote = usage ? subscriptionExpiryNote(usage.plan, usage.subscription.expiresAt) : null;
 
   return (
     <Card>
@@ -31,17 +33,18 @@ export function PlanAndUsageCard(): React.ReactElement {
           <>
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm text-muted-foreground">Тариф</span>
-              <span className="text-sm font-semibold">{planNameRu(usage.subscription.plan)}</span>
+              <span className="text-sm font-semibold">{planNameRu(usage.plan)}</span>
             </div>
+            {expiryNote && <p className="-mt-2 text-xs text-muted-foreground">{expiryNote}</p>}
             <UsageWindowBar window={usage.fiveHour} rubPerUsd={usage.rubPerUsd} />
             <UsageWindowBar window={usage.sevenDay} rubPerUsd={usage.rubPerUsd} />
             <div className="flex flex-wrap gap-2 pt-1">
               <Button variant="outline" size="sm" onClick={() => usageDialog.open()}>
                 Подробнее
               </Button>
-              {usage.subscription.plan !== 'vip' && (
+              {usage.plan !== 'vip' && (
                 <Button size="sm" onClick={() => upgrade.open()}>
-                  {usage.subscription.plan === 'free' ? 'Подключить план' : 'Улучшить план'}
+                  {usage.plan === 'free' ? 'Подключить план' : 'Улучшить план'}
                 </Button>
               )}
             </div>

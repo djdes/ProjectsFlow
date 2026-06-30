@@ -5,7 +5,7 @@ import { isFree } from '@/domain/usage/Usage';
 import { useUsage } from './UsageProvider';
 import { useUpgradeDialog } from './UpgradeDialogProvider';
 import { UsageWindowBar } from './UsageWindowBar';
-import { planNameRu } from './usageFormat';
+import { planNameRu, subscriptionExpiryNote } from './usageFormat';
 
 // Окно «Использование»: два скользящих окна 5ч/неделя + текущий план + CTA «Улучшить».
 export function UsageDialog({
@@ -17,6 +17,7 @@ export function UsageDialog({
 }): React.ReactElement {
   const { usage, loading } = useUsage();
   const upgrade = useUpgradeDialog();
+  const expiryNote = usage ? subscriptionExpiryNote(usage.plan, usage.subscription.expiresAt) : null;
 
   // Закрываем это окно ПЕРЕД открытием апгрейда — иначе два focus-trap Radix стекаются.
   const openUpgrade = (): void => {
@@ -36,9 +37,10 @@ export function UsageDialog({
           <div className="space-y-5">
             <div className="flex items-center justify-between gap-2 text-sm">
               <span className="text-muted-foreground">Ваш план</span>
-              <span className="font-semibold">{planNameRu(usage.subscription.plan)}</span>
+              <span className="font-semibold">{planNameRu(usage.plan)}</span>
             </div>
-            {isFree(usage.subscription.plan) && (
+            {expiryNote && <p className="-mt-3 text-xs text-muted-foreground">{expiryNote}</p>}
+            {isFree(usage.plan) && (
               <p className="text-sm text-muted-foreground">
                 На бесплатном тарифе расход метрится, но лимиты платформы не применяются —
                 диспетчер работает на вашей подписке Claude.
@@ -53,7 +55,7 @@ export function UsageDialog({
                 Лимит исчерпан — новые AI-задачи приостановлены до сброса окна.
               </div>
             )}
-            {usage.subscription.plan !== 'vip' && (
+            {usage.plan !== 'vip' && (
               <Button className="w-full" onClick={openUpgrade}>
                 <ArrowUpCircle className="size-4" /> Улучшить план
               </Button>

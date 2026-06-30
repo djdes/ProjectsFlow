@@ -9,6 +9,7 @@ import type {
   EmailPreview,
   AdminSupportTicket,
 } from '@/application/admin/AdminRepository';
+import type { PlanId } from '@/domain/usage/Usage';
 import { httpClient } from './httpClient';
 
 export class HttpAdminRepository implements AdminRepository {
@@ -74,5 +75,9 @@ export class HttpAdminRepository implements AdminRepository {
 
   async setSupportTicketStatus(id: string, status: 'open' | 'closed'): Promise<void> {
     await httpClient.patch<unknown>(`/admin/support-tickets/${id}`, { status });
+  }
+
+  async setUserPlan(id: string, plan: PlanId): Promise<void> {
+    await httpClient.patch<unknown>(`/admin/users/${id}/plan`, { plan });
   }
 }

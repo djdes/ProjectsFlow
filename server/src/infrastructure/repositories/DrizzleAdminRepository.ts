@@ -56,6 +56,8 @@ export class DrizzleAdminRepository implements AdminRepository {
         avatarUrl: users.avatarUrl,
         isAdmin: users.isAdmin,
         createdAt: users.createdAt,
+        plan: users.plan,
+        subscriptionExpiresAt: users.subscriptionExpiresAt,
         projectCount: sql<number>`(SELECT COUNT(*) FROM project_members pm WHERE pm.user_id = ${users.id})`,
         // Сколько проектов где юзер OWNER (для знаменателя «X/Y» делегации).
         // Исключаем inbox — он персональный, делегация для него не имеет смысла.
@@ -91,6 +93,8 @@ export class DrizzleAdminRepository implements AdminRepository {
       ownedProjectCount: Number(r.ownedProjectCount),
       delegationEnabledCount: Number(r.delegationEnabledCount),
       githubConnected: Number(r.githubConnected) > 0,
+      plan: r.plan,
+      subscriptionExpiresAt: r.subscriptionExpiresAt ?? null,
       createdAt: r.createdAt,
     }));
   }

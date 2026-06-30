@@ -84,6 +84,8 @@ export const users = mysqlTable(
     plan: mysqlEnum('plan', ['free', 'prime', 'vip']).notNull().default('free'),
     subscriptionStartedAt: timestamp('subscription_started_at'),
     subscriptionExpiresAt: timestamp('subscription_expires_at'),
+    // Разовый пробный Прайм (db/085): метка активации триала (null = не использован).
+    primeTrialUsedAt: timestamp('prime_trial_used_at'),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },

@@ -67,8 +67,9 @@ function publicUser(user: User): Omit<User, 'createdAt'> & { createdAt: string }
   return { ...user, createdAt: user.createdAt.toISOString() };
 }
 
-// Тело смены плана (self-serve «покупка», реального биллинга пока нет).
-const changePlanSchema = z.object({ plan: z.enum(['free', 'prime', 'vip']) });
+// Тело смены плана (self-serve). ВИП недоступен self-serve (только админ-выдача) — отсекаем
+// на входе; Прайм = разовый пробный час (логика в BuyPlan).
+const changePlanSchema = z.object({ plan: z.enum(['free', 'prime']) });
 
 // Сериализация usage: суммы в USD (бюджет в долларах), rubPerUsd — для витрины «≈ ₽».
 function serializeWindow(w: UsageWindow) {
@@ -97,6 +98,7 @@ function serializeUsage(s: UsageSummary) {
     isBlocked: s.isBlocked,
     blockedWindow: s.blockedWindow,
     rubPerUsd: RUB_PER_USD,
+    primeTrialAvailable: s.primeTrialAvailable,
   };
 }
 

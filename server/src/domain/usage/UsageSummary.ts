@@ -9,6 +9,8 @@ export type UsageSummary = {
   readonly sevenDay: UsageWindow;
   readonly isBlocked: boolean;
   readonly blockedWindow: WindowLabel | null;
+  // Доступен ли разовый пробный Прайм (1 час) — для лейбла кнопки в UI.
+  readonly primeTrialAvailable: boolean;
 };
 
 export function buildUsageSummary(input: {
@@ -16,8 +18,9 @@ export function buildUsageSummary(input: {
   readonly subscription: Subscription;
   readonly fiveHour: UsageWindow;
   readonly sevenDay: UsageWindow;
+  readonly primeTrialAvailable: boolean;
 }): UsageSummary {
-  const { plan, subscription, fiveHour, sevenDay } = input;
+  const { plan, subscription, fiveHour, sevenDay, primeTrialAvailable } = input;
   // 5ч приоритетнее в сообщении (короче ждать сброса), но блок = любое из окон.
   const blockedWindow: WindowLabel | null = fiveHour.isOver ? '5h' : sevenDay.isOver ? '7d' : null;
   return {
@@ -27,5 +30,6 @@ export function buildUsageSummary(input: {
     sevenDay,
     isBlocked: blockedWindow !== null,
     blockedWindow,
+    primeTrialAvailable,
   };
 }

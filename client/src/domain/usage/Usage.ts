@@ -27,6 +27,8 @@ export type UsageSummary = {
   readonly isBlocked: boolean;
   readonly blockedWindow: WindowLabel | null;
   readonly rubPerUsd: number;
+  // Доступен ли разовый пробный Прайм (1 час) — для лейбла кнопки в витрине.
+  readonly primeTrialAvailable: boolean;
 };
 
 export function isFree(plan: PlanId): boolean {

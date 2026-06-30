@@ -167,6 +167,7 @@ import type { EmailSender } from '../application/notifications/EmailSender.js';
 import { adminRouter } from './admin/routes.js';
 import type { ListAllSupportTickets } from '../application/admin/ListAllSupportTickets.js';
 import type { SetSupportTicketStatus } from '../application/admin/SetSupportTicketStatus.js';
+import type { SetUserPlanAsAdmin } from '../application/admin/SetUserPlanAsAdmin.js';
 import { employeesRouter } from './finance/employeeRoutes.js';
 import { financeRouter } from './finance/routes.js';
 import { attachmentBinaryRouter } from './tasks/attachmentBinaryRoutes.js';
@@ -318,6 +319,7 @@ type AppDeps = {
     readonly setUserProjectFavorite: SetUserProjectFavorite;
     readonly listAllSupportTickets: ListAllSupportTickets;
     readonly setSupportTicketStatus: SetSupportTicketStatus;
+    readonly setUserPlanAsAdmin: SetUserPlanAsAdmin;
     readonly emailSender: EmailSender;
   };
   readonly finance: {

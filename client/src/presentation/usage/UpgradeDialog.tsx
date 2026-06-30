@@ -11,8 +11,9 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
+import { HttpError } from '@/lib/HttpError';
 import { PLAN_CATALOG } from '@/domain/usage/PlanCatalog';
-import { PLAN_ORDER, type PlanId } from '@/domain/usage/Usage';
+import type { PlanId } from '@/domain/usage/Usage';
 import { useUsage } from './UsageProvider';
 import { planNameRu } from './usageFormat';
 
@@ -27,7 +28,8 @@ export function UpgradeDialog({
 }): React.ReactElement {
   const { changePlan } = useContainer();
   const { usage, applyUsage } = useUsage();
-  const currentPlan: PlanId = usage?.subscription.plan ?? 'free';
+  // Эффективный план (истёкший prime/vip уже трактуется как free).
+  const currentPlan: PlanId = usage?.plan ?? 'free';
   const [pending, setPending] = useState<PlanId | null>(null);
 
   const choose = async (plan: PlanId): Promise<void> => {
@@ -36,10 +38,17 @@ export function UpgradeDialog({
     try {
       const next = await changePlan.execute(plan);
       applyUsage(next);
-      toast.success(plan === 'free' ? 'Подписка отменена' : `Тариф изменён: ${planNameRu(plan)}`);
+      toast.success(
+        plan === 'free'
+          ? 'Переключено на Бесплатный'
+          : plan === 'prime'
+            ? 'Прайм активирован на 1 час'
+            : `Тариф изменён: ${planNameRu(plan)}`,
+      );
       onOpenChange(false);
-    } catch {
-      toast.error('Не удалось сменить тариф');
+    } catch (e) {
+      // 409 (триал использован) / 403 (ВИП по запросу) — показываем серверное сообщение.
+      toast.error(e instanceof HttpError ? (e.body.message ?? 'Не удалось сменить тариф') : 'Не удалось сменить тариф');
     } finally {
       setPending(null);
     }
@@ -55,7 +64,18 @@ export function UpgradeDialog({
         <div className="grid gap-3 sm:grid-cols-3">
           {PLAN_CATALOG.map((p) => {
             const isCurrent = p.id === currentPlan;
-            const isUpgrade = PLAN_ORDER[p.id] > PLAN_ORDER[currentPlan];
+            const trialAvailable = usage?.primeTrialAvailable ?? false;
+            // ВИП — только по запросу (не self-serve); Прайм — разовый пробный час.
+            const locked = !isCurrent && (p.id === 'vip' || (p.id === 'prime' && !trialAvailable));
+            const label = isCurrent
+              ? 'Текущий план'
+              : p.id === 'vip'
+                ? 'По запросу'
+                : p.id === 'prime'
+                  ? trialAvailable
+                    ? 'Попробовать 1 час'
+                    : 'Триал использован'
+                  : 'Перейти на бесплатный';
             return (
               <div
                 key={p.id}
@@ -93,12 +113,15 @@ export function UpgradeDialog({
                 </ul>
                 <Button
                   className="mt-4 w-full"
-                  variant={isCurrent ? 'outline' : isUpgrade ? 'default' : 'secondary'}
-                  disabled={isCurrent || pending !== null}
+                  variant={!isCurrent && p.id === 'prime' && trialAvailable ? 'default' : 'outline'}
+                  disabled={isCurrent || locked || pending !== null}
                   onClick={() => void choose(p.id)}
+                  title={
+                    p.id === 'vip' && !isCurrent ? 'Подключается по запросу через поддержку' : undefined
+                  }
                 >
                   {pending === p.id && <Loader2 className="size-4 animate-spin" />}
-                  {isCurrent ? 'Текущий план' : isUpgrade ? 'Выбрать' : 'Перейти'}
+                  {label}
                 </Button>
               </div>
             );

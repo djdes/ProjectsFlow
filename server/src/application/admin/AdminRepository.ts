@@ -1,4 +1,5 @@
 import type { ProjectStatus } from '../../domain/project/Project.js';
+import type { PlanId } from '../../domain/usage/Plan.js';
 
 // Read-model для admin-раздела. Проект — один раз (без дублей по members), с владельцем
 // и счётчиками. Группировку по владельцу делает клиент (по ownerId).
@@ -31,6 +32,9 @@ export type AdminUserView = {
   // Подключён ли GitHub. Если нет — делегацию включать нельзя в принципе;
   // UI рисует это как hint.
   readonly githubConnected: boolean;
+  // Тариф юзера + дата окончания подписки (для бейджа/контрола в admin Users-tab).
+  readonly plan: PlanId;
+  readonly subscriptionExpiresAt: Date | null;
   readonly createdAt: Date;
 };
 

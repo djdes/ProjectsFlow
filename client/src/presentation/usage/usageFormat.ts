@@ -16,6 +16,23 @@ export function formatRub(usd: number, rubPerUsd: number): string {
   return `≈ ${rub.toLocaleString('ru-RU')} ₽`;
 }
 
+// «до 30 июня, 14:05» — дата/время окончания подписки (локаль ru).
+export function formatExpiry(d: Date): string {
+  return d.toLocaleString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+// Строка срока подписки для профиля/диалога: «активен до 30 июня, 14:05 · затем Бесплатный».
+// null для бесплатного/бессрочного (нечего показывать). plan — ЭФФЕКТИВНЫЙ план.
+export function subscriptionExpiryNote(plan: PlanId, expiresAt: Date | null): string | null {
+  if (plan === 'free' || !expiresAt) return null;
+  return `активен до ${formatExpiry(expiresAt)} · затем Бесплатный`;
+}
+
 export function planNameRu(plan: PlanId): string {
   switch (plan) {
     case 'prime':
