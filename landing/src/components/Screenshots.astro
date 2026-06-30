@@ -10,6 +10,16 @@ const previews = [
   { id: 'automation', label: 'Автопилот', caption: 'Платформа сама ведёт задачи к твоей цели, пока ты занят другим.' },
   { id: 'finance', label: 'Расходы по проекту', caption: 'Видно, во что обходится — в рублях, помесячно.' },
 ];
+
+// Примеры использования — реальные типы задач, которые бросают простым текстом.
+const examples = [
+  'Собери лендинг для запуска',
+  'Добавь экран оплаты',
+  'Сделай тёмную тему',
+  'Подключи Telegram-бота',
+  'Почини баг и выкати',
+  'Автоматизируй рутину проекта',
+];
 ---
 
 <section id="product" class="pf-section shots">
@@ -110,6 +120,24 @@ const previews = [
           </figure>
         ))
       }
+    </div>
+
+    <!-- Примеры использования: что можно поручить простым текстом. -->
+    <div class="shots__examples" data-reveal>
+      <div class="pf-stag shots__examples-tag">Примеры: что можно поручить</div>
+      <div class="shots__examples-grid">
+        {
+          examples.map((e) => (
+            <div class="shots__example">
+              <span class="shots__example-q">«{e}»</span>
+              <span class="shots__example-go">→ берём в работу</span>
+            </div>
+          ))
+        }
+      </div>
+      <p class="shots__examples-note">
+        Просто опиши задачу словами — остальное платформа берёт на себя.
+      </p>
     </div>
   </div>
 </section>
@@ -307,6 +335,43 @@ const previews = [
     opacity: 0.8;
   }
   .mini__bars span:last-child { opacity: 1; box-shadow: 0 0 16px -4px var(--accent); }
+
+  /* --- Примеры использования --- */
+  .shots__examples { margin-top: var(--sp-16); text-align: center; }
+  .shots__examples-tag { display: block; }
+  .shots__examples-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-3);
+    margin-top: var(--sp-6);
+  }
+  @media (min-width: 640px) {
+    .shots__examples-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (min-width: 1024px) {
+    .shots__examples-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  .shots__example {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    padding: var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+    text-align: left;
+    transition: border-color var(--dur) var(--ease);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .shots__example:hover { border-color: var(--accent-line); }
+  }
+  .shots__example-q { font-size: var(--fs-base); font-weight: 600; color: var(--text); }
+  .shots__example-go { font-size: var(--fs-xs); color: var(--accent); }
+  .shots__examples-note {
+    margin-top: var(--sp-6);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+  }
 
   /* Узкие экраны: доска прокручивается горизонтально, не ломая сетку. */
   @media (max-width: 560px) {
