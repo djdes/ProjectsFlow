@@ -264,31 +264,37 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
             </ContextMenu>
           </div>
 
-          {/* Ряд пилюль-кнопок под полем ввода. Все в одну строку (flex-wrap fallback
-              на узких экранах). RalphMode сюда не входит — он в footer-е слева от Cancel. */}
+          {/* Ряд минималистичных icon-кнопок под полем ввода — в один стиль с нижним
+              композером канбана (size-9 ghost, живые иконки). RalphMode — в footer-е. */}
           <div className="flex flex-wrap items-center gap-1.5">
-            <PrioritySelect value={priority} onChange={setPriority} disabled={saving} compact />
-            <DeadlinePicker value={deadline} onChange={setDeadline} disabled={saving} />
+            <PrioritySelect value={priority} onChange={setPriority} disabled={saving} iconOnly className="size-9" />
+            <DeadlinePicker
+              value={deadline}
+              onChange={setDeadline}
+              disabled={saving}
+              iconOnly
+              className={cn('h-9', deadline === null ? 'w-9 px-0' : 'px-2')}
+            />
             {(projectId === null || (realProjects.find((p) => p.id === projectId)?.memberCount ?? 0) > 1) && (
               <DelegateSelect
                 value={delegateUserId}
                 onChange={setDelegateUserId}
                 disabled={saving}
                 projectId={projectId ?? undefined}
-                className="h-7 w-7"
+                className="size-9"
               />
             )}
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+              size="icon"
+              className="group/at size-9 shrink-0 text-muted-foreground hover:text-foreground"
               onClick={() => fileInputRef.current?.click()}
               disabled={saving}
+              aria-label="Вложение"
               title="Вложение (или перетащи файл / Ctrl+V)"
             >
-              <Paperclip className="size-3.5" />
-              Вложение
+              <Paperclip className="size-4 transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110" />
             </Button>
             <input
               ref={fileInputRef}

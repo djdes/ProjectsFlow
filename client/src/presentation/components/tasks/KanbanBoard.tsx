@@ -41,6 +41,7 @@ import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useContainer } from '@/infrastructure/di/container';
 import { ConfettiBurst } from './ConfettiBurst';
+import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { useBulkTaskActions } from '@/presentation/hooks/useBulkTaskActions';
 import { useDoneSortOrder, type DoneSortOrder } from '@/presentation/hooks/useDoneSortOrder';
@@ -267,6 +268,9 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
       /* ignore */
     }
   }, [dialog, drawerStoreKey]);
+  // Цель удаления для стильного диалога подтверждения (вместо window.confirm).
+  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   // Deep-link: ?task=<id> открывает диалог задачи. Используется email-кнопками И блоком
   // «Недавнее» в сайдбаре. Трекаем последний обработанный taskId (а не one-shot-флаг):
@@ -646,16 +650,22 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     }
   };
 
-  const handleDelete = async (task: Task): Promise<void> => {
-    // Превью первой строки описания — чтобы было понятно что именно удаляешь.
-    const preview = (task.description ?? '').split('\n')[0]?.slice(0, 60) ?? '';
-    const label = preview.length > 0 ? `"${preview}${preview.length === 60 ? '…' : ''}"` : 'задачу';
-    if (!window.confirm(`Удалить ${label}?`)) return;
+  // Удаление через стильный диалог (не нативный confirm): handleDelete лишь открывает
+  // окно, реальное удаление — в confirmDelete по кнопке «Удалить».
+  const handleDelete = (task: Task): void => {
+    setDeleteTarget(task);
+  };
+  const confirmDelete = async (): Promise<void> => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
     try {
-      await remove(task.id);
+      await remove(deleteTarget.id);
       toast.success('Задача удалена');
+      setDeleteTarget(null);
     } catch (err) {
       toast.error(`Не удалось удалить: ${(err as Error).message}`);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -928,6 +938,18 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
             return { mode: 'edit', task: { ...prev.task, status: targetStatus } };
           });
         }}
+      />
+
+      <ConfirmDeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        taskLabel={
+          deleteTarget
+            ? (deleteTarget.description ?? '').split('\n')[0]?.slice(0, 60).trim() || null
+            : null
+        }
+        onConfirm={() => void confirmDelete()}
+        busy={deleting}
       />
 
       {/* Floating quick-add (position: fixed). DOM-позиция значения не имеет —

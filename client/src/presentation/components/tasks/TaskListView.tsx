@@ -18,6 +18,7 @@ import { RalphModeBadge } from './RalphMode';
 import { InboxCheckbox } from './InboxCheckbox';
 import { DelegationBadge } from './DelegationBadge';
 import { DeadlineBadge } from './DeadlineBadge';
+import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 
@@ -91,6 +92,8 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
       /* ignore */
     }
   }, [dialog, drawerStoreKey]);
+  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Deep-link `?task=<id>` — открывает drawer задачи один раз после загрузки.
   // Симметрично с KanbanBoard, чтобы переброс из notification работал и в list-view.
@@ -157,15 +160,21 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
     }
   };
 
-  const handleDelete = async (task: Task): Promise<void> => {
-    const preview = (task.description ?? '').split('\n')[0]?.slice(0, 60) ?? '';
-    const label = preview.length > 0 ? `"${preview}${preview.length === 60 ? '…' : ''}"` : 'задачу';
-    if (!window.confirm(`Удалить ${label}?`)) return;
+  // Удаление через стильный диалог (см. ConfirmDeleteDialog), не window.confirm.
+  const handleDelete = (task: Task): void => {
+    setDeleteTarget(task);
+  };
+  const confirmDelete = async (): Promise<void> => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
     try {
-      await remove(task.id);
+      await remove(deleteTarget.id);
       toast.success('Задача удалена');
+      setDeleteTarget(null);
     } catch (err) {
       toast.error(`Не удалось удалить: ${(err as Error).message}`);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -223,6 +232,18 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
         todoTail={todoTail}
         isInbox={!showCommits}
         aiProjectId={showCommits ? projectId : null}
+      />
+
+      <ConfirmDeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        taskLabel={
+          deleteTarget
+            ? (deleteTarget.description ?? '').split('\n')[0]?.slice(0, 60).trim() || null
+            : null
+        }
+        onConfirm={() => void confirmDelete()}
+        busy={deleting}
       />
     </div>
   );

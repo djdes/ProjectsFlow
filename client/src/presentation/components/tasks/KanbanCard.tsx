@@ -173,13 +173,52 @@ export function KanbanCard({
           isDragging && !preview && 'cursor-grabbing opacity-30',
         )}
       >
-        {/* 🔴 LIVE-индикатор: воркер прямо сейчас работает над задачей (есть running-сессия). */}
+        {/* 🔴 LIVE-индикатор: воркер прямо сейчас работает над задачей (есть running-сессия).
+            На hover прячем — там всплывают кнопки действий в том же углу. */}
         {liveRunning && !preview && (
           <span
             aria-label="Воркер работает над задачей"
             title="Воркер работает над задачей"
-            className="absolute right-1.5 top-1.5 z-10 size-2 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.7)]"
+            className="absolute right-1.5 top-1.5 z-10 size-2 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.7)] transition-opacity group-hover:opacity-0 group-focus-within:opacity-0"
           />
+        )}
+
+        {/* Действия — в ПРАВОМ ВЕРХНЕМ углу карточки (на hover/тач). Вынесены из нижней
+            мета-строки, чтобы кнопки и мета не конкурировали за место (дедлайн больше не
+            сжимается). Сплошной bg-card маскирует текст под кнопками. */}
+        {!selecting && !preview && (
+          <div
+            className="pointer-events-none absolute right-1 top-1 z-20 flex items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:opacity-100 dark:ring-white/[0.08]"
+            {...stopDragProps}
+          >
+            {onQuickPromote && promoteNext && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="group/promote size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-hover hover:text-foreground sm:size-6"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQuickPromote(task);
+                }}
+                aria-label={`Передать в «${STATUS_LABEL[promoteNext]}»`}
+                title={`Передать в «${STATUS_LABEL[promoteNext]}»`}
+              >
+                <ArrowRight className="size-3 transition-transform duration-150 group-hover/promote:translate-x-0.5" />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive sm:size-6"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(task);
+              }}
+              aria-label="Удалить"
+            >
+              <Trash2 className="size-3" />
+            </Button>
+          </div>
         )}
         {selecting ? (
           <span
@@ -244,14 +283,14 @@ export function KanbanCard({
                 : 'from-card via-card/90',
             )}
           >
-            <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
+            <span className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden">
               {task.delegation && currentUserId && (
                 <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
               )}
               {checklist && (
                 <span
                   className={cn(
-                    'flex items-center gap-1 tabular-nums',
+                    'flex shrink-0 items-center gap-1 whitespace-nowrap tabular-nums',
                     checklist.done === checklist.total && 'text-emerald-600 dark:text-emerald-400',
                   )}
                   title="Чеклист в описании"
@@ -261,13 +300,13 @@ export function KanbanCard({
                 </span>
               )}
               {(task.commentCount ?? 0) > 0 && (
-                <span className="flex items-center gap-1">
+                <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
                   <MessageSquare className="size-3" />
                   {task.commentCount}
                 </span>
               )}
               {(task.attachmentCount ?? 0) > 0 && (
-                <span className="flex items-center gap-1">
+                <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
                   <ImageIcon className="size-3" />
                   {task.attachmentCount}
                 </span>
@@ -287,41 +326,6 @@ export function KanbanCard({
                 </span>
               )}
             </span>
-            {/* Действия — кликабельны только когда оверлей виден (hover/focus/тач). До этого
-                pointer-events-none, чтобы невидимые кнопки не перехватывали клик/drag по карточке.
-                Компактные size-4 — занимают минимум места в hover-ряду. */}
-            <div
-              className="pointer-events-none ml-auto flex shrink-0 items-center gap-0.5 group-focus-within:pointer-events-auto group-hover:pointer-events-auto max-sm:pointer-events-auto"
-              {...stopDragProps}
-            >
-              {onQuickPromote && promoteNext && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="group/promote size-6 shrink-0 cursor-pointer rounded sm:size-6 text-muted-foreground hover:bg-hover hover:text-foreground"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onQuickPromote(task);
-                  }}
-                  aria-label={`Передать в «${STATUS_LABEL[promoteNext]}»`}
-                  title={`Передать в «${STATUS_LABEL[promoteNext]}»`}
-                >
-                  <ArrowRight className="size-3 transition-transform duration-150 group-hover/promote:translate-x-0.5" />
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-6 shrink-0 cursor-pointer rounded sm:size-6 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(task);
-                }}
-                aria-label="Удалить"
-              >
-                <Trash2 className="size-3" />
-              </Button>
-            </div>
           </div>
         )}
       </div>
