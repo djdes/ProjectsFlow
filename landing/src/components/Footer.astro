@@ -11,17 +11,17 @@ const year = new Date().getFullYear();
     <div class="footer__brand">
       <Logo />
       <p class="footer__tagline">
-        Доска задач для вайб-кодеров: бросаешь задачу — воркер пишет код.
+        Для тех, кто строит с AI: опиши идею — получи готовый продукт.
       </p>
     </div>
 
     <nav class="footer__nav" aria-label="Подвал">
-      <span class="pf-mono footer__col-title">// продукт</span>
+      <span class="footer__col-title">Продукт</span>
       {NAV_LINKS.map((l) => <a href={l.href} class="footer__link">{l.label}</a>)}
     </nav>
 
     <nav class="footer__nav" aria-label="Аккаунт">
-      <span class="pf-mono footer__col-title">// аккаунт</span>
+      <span class="footer__col-title">Аккаунт</span>
       <a href={`${appBase}/register`} data-auth-anon class="footer__link">Создать аккаунт</a>
       <a href={`${appBase}/login`} data-auth-anon class="footer__link">Войти</a>
       <a href={`${appBase}/`} data-auth-authed class="footer__link">Открыть приложение</a>
@@ -29,8 +29,8 @@ const year = new Date().getFullYear();
   </div>
 
   <div class="pf-container footer__bottom">
-    <p class="pf-mono footer__copy">© {year} ProjectsFlow · сделано вручную</p>
-    <p class="pf-mono footer__status"><span class="pf-dot"></span> early access</p>
+    <p class="footer__copy">© {year} ProjectsFlow · сделано с любовью</p>
+    <p class="footer__status"><span class="pf-dot"></span> ранний доступ</p>
   </div>
 </footer>
 

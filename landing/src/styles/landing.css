@@ -34,18 +34,19 @@ section[id] {
   font-feature-settings: 'ss01', 'ss02';
 }
 
-/* --- Eyebrow: моно-пилюля с циан-текстом и зелёной точкой-статусом ---------- */
+/* --- Eyebrow: пилюля с циан-текстом и зелёной точкой-статусом (sans, не «код») -- */
 .pf-eyebrow {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
   padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--line);
+  border: 1px solid var(--accent-line);
   border-radius: var(--r-full);
   background: var(--accent-soft);
-  font-family: var(--font-mono);
   font-size: var(--fs-xs);
+  font-weight: 600;
   letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
   color: var(--accent);
 }
 .pf-dot {
@@ -65,12 +66,12 @@ section[id] {
   }
 }
 
-/* --- Заголовок секции: моно-метка «// label» + h2 + lead ------------------- */
+/* --- Заголовок секции: чистая метка-капс (sans, без код-стиля) + h2 + lead -- */
 .pf-stag {
-  font-family: var(--font-mono);
   font-size: var(--fs-xs);
+  font-weight: 600;
   color: var(--accent);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 .pf-h2 {

@@ -6,42 +6,42 @@
 //   Использовать loading="lazy", задавать width/height (без CLS) и srcset при возможности.
 
 const previews = [
-  { id: 'task', label: 'Окно задачи', caption: 'Лог воркера, дифф и привязанные коммиты прямо в карточке.' },
-  { id: 'automation', label: 'Автоматизация', caption: 'Диспетчер генерит и выполняет задачи по критериям — до лимита.' },
-  { id: 'finance', label: 'Финансы проекта', caption: 'Расход на AI и API по проекту, в рублях, помесячно.' },
+  { id: 'task', label: 'Задача в работе', caption: 'Видишь, что делается прямо сейчас, и прогресс — без погружения в детали.' },
+  { id: 'automation', label: 'Автопилот', caption: 'Платформа сама ведёт задачи к твоей цели, пока ты занят другим.' },
+  { id: 'finance', label: 'Расходы по проекту', caption: 'Видно, во что обходится — в рублях, помесячно.' },
 ];
 ---
 
 <section id="product" class="pf-section shots">
   <div class="pf-container">
     <div class="shots__head" data-reveal>
-      <div class="pf-stag">// внутри продукта</div>
+      <div class="pf-stag">Внутри продукта</div>
       <h2 class="pf-h2">Как это выглядит в&nbsp;работе</h2>
       <p class="pf-lead">
-        Доска с колонкой worker, живой лог задачи, автоматизация и финучёт — в одном окне.
+        Доска идей, прогресс в реальном времени, автопилот и расходы — всё в одном окне.
       </p>
     </div>
 
-    <!-- Главное превью: канбан-доска с колонкой worker. -->
+    <!-- Главное превью: доска проекта с колонкой «AI делает». -->
     <figure class="shot shot--feature" data-reveal>
       <div class="shot__frame">
         <div class="shot__chrome">
           <span class="shot__dot shot__dot--r"></span>
           <span class="shot__dot shot__dot--y"></span>
           <span class="shot__dot shot__dot--g"></span>
-          <span class="pf-mono shot__url">app.projectsflow.ru / board</span>
+          <span class="shot__url">Мой проект · доска</span>
         </div>
-        <div class="shot__canvas board" role="img" aria-label="Превью канбан-доски с колонкой worker">
+        <div class="shot__canvas board" role="img" aria-label="Превью доски проекта">
           {
             [
-              { name: 'Backlog', cards: 3, worker: false },
+              { name: 'Идеи', cards: 3, worker: false },
               { name: 'В работе', cards: 2, worker: false },
-              { name: 'worker', cards: 2, worker: true },
+              { name: 'AI делает', cards: 2, worker: true },
               { name: 'Готово', cards: 3, worker: false },
             ].map((col) => (
               <div class:list={['board__col', col.worker && 'board__col--worker']}>
                 <div class="board__col-head">
-                  <span class:list={['pf-mono', 'board__col-name', col.worker && 'board__col-name--worker']}>
+                  <span class:list={['board__col-name', col.worker && 'board__col-name--worker']}>
                     {col.name}
                   </span>
                   <span class="board__count">{col.cards}</span>
@@ -50,7 +50,7 @@ const previews = [
                   <div class:list={['board__card', col.worker && k === 0 && 'board__card--active']}>
                     <span class="board__bar board__bar--lg"></span>
                     <span class="board__bar board__bar--sm"></span>
-                    {col.worker && k === 0 && <span class="board__working">● воркер пишет код…</span>}
+                    {col.worker && k === 0 && <span class="board__working">● AI делает…</span>}
                   </div>
                 ))}
               </div>
@@ -58,7 +58,7 @@ const previews = [
           }
         </div>
       </div>
-      <figcaption class="shot__cap">Канбан-доска: бросаешь задачу в колонку worker — AI берёт её в работу.</figcaption>
+      <figcaption class="shot__cap">Доска проекта: бросаешь идею — AI берёт её в работу и доводит до готового.</figcaption>
     </figure>
 
     <!-- Три превью поменьше. -->
@@ -78,16 +78,15 @@ const previews = [
                     <span class="mini__line mini__line--title"></span>
                     <span class="mini__line"></span>
                     <span class="mini__line mini__line--short"></span>
-                    <div class="mini__code">
-                      <span class="mini__code-row"></span>
-                      <span class="mini__code-row mini__code-row--w"></span>
-                      <span class="mini__code-row"></span>
-                    </div>
+                    <div class="mini__progress"><span style="width:72%"></span></div>
+                    <span class="mini__status">
+                      <span class="mini__status-dot"></span> AI делает — 72%
+                    </span>
                   </div>
                 )}
                 {p.id === 'automation' && (
                   <div class="mini__auto">
-                    <span class="mini__pill mini__pill--on">auto-dispatch on</span>
+                    <span class="mini__pill mini__pill--on">Автопилот включён</span>
                     <span class="mini__line"></span>
                     <span class="mini__line mini__line--short"></span>
                     <div class="mini__gauge"><span></span></div>
@@ -95,7 +94,7 @@ const previews = [
                 )}
                 {p.id === 'finance' && (
                   <div class="mini__fin">
-                    <span class="pf-mono mini__amount">1 240 ₽</span>
+                    <span class="mini__amount">1 240 ₽</span>
                     <div class="mini__bars">
                       {[40, 70, 55, 90, 65, 80].map((h) => (
                         <span style={`height:${h}%`}></span>
@@ -239,24 +238,39 @@ const previews = [
   .mini__line--title { width: 60%; height: 9px; background: rgba(255, 255, 255, 0.16); }
   .mini__line--short { width: 40%; }
   .mini__stack { display: flex; flex-direction: column; }
-  .mini__code {
-    margin-top: 6px;
-    border-radius: 6px;
-    border: 1px solid var(--line);
-    background: rgba(0, 0, 0, 0.3);
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+  .mini__progress {
+    margin-top: 8px;
+    height: 6px;
+    border-radius: var(--r-full);
+    background: rgba(255, 255, 255, 0.06);
+    overflow: hidden;
   }
-  .mini__code-row { height: 5px; width: 80%; border-radius: 3px; background: rgba(34, 224, 255, 0.25); }
-  .mini__code-row--w { width: 95%; background: rgba(74, 222, 128, 0.3); }
+  .mini__progress span {
+    display: block;
+    height: 100%;
+    background: var(--grad-accent);
+  }
+  .mini__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--accent);
+  }
+  .mini__status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
 
   .mini__auto { display: flex; flex-direction: column; gap: 8px; }
   .mini__pill {
     align-self: flex-start;
-    font-family: var(--font-mono);
     font-size: 10px;
+    font-weight: 600;
     padding: 3px 9px;
     border-radius: var(--r-full);
     border: 1px solid var(--accent-line);

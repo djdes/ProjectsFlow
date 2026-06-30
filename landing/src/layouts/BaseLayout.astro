@@ -13,10 +13,10 @@ interface Props {
 
 const SITE = 'https://projectsflow.ru/';
 const {
-  title = 'ProjectsFlow — доска задач для вайб-кодеров: воркер пишет код',
+  title = 'ProjectsFlow — опиши идею, получи готовый продукт',
   description =
-    'Доска задач для твоих проектов со встроенным AI-воркером, автоматизацией и финучётом. ' +
-    'Бросаешь задачу в колонку worker — она выполняется по нашей подписке. Без своих ключей и лок-ина.',
+    'Платформа для тех, кто строит с AI: ты описываешь идею — она доводит проект до готового ' +
+    'результата сама. Без настройки и технической возни. Прозрачные расходы, старт бесплатно.',
 } = Astro.props;
 const ogImage = new URL('/og.png', SITE).href;
 ---
@@ -42,7 +42,7 @@ const ogImage = new URL('/og.png', SITE).href;
     <meta property="og:image" content={ogImage} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="ProjectsFlow — доска задач для вайб-кодеров" />
+    <meta property="og:image:alt" content="ProjectsFlow — опиши идею, получи готовый продукт" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />

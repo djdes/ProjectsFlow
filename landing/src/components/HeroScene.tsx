@@ -68,11 +68,11 @@ type Tier = {
 // Разнообразие форм: octagon, decagon, круг разных размеров. Surround-rings — ядра
 // которые "не касаются" слоя (offset 0.2-0.35), на разной высоте от плоскости.
 const TIERS: readonly Tier[] = [
-  { y: -1.95, radius: 1.5,  segments: 8,  label: 'STORAGE',   style: 'dense',      seed: 23, phase: 0.0,  surroundCount: 24, surroundOffset: 0.28, surroundY: 0.18 },
-  { y: -0.9,  radius: 1.95, segments: 64, label: 'PROJECTS',  style: 'asymmetric', seed: 37, phase: 0.18, surroundCount: 32, surroundOffset: 0.32, surroundY: 0.05 },
-  { y: 0.25,  radius: 1.45, segments: 10, label: 'TECHNICAL', style: 'sparse',     seed: 51, phase: 0.36, surroundCount: 22, surroundOffset: 0.25, surroundY: -0.12 },
-  { y: 1.35,  radius: 1.05, segments: 64, label: 'IDEAS',     style: 'dense',      seed: 67, phase: 0.55, surroundCount: 18, surroundOffset: 0.3,  surroundY: 0.15 },
-  { y: 2.3,   radius: 0.6,  segments: 6,  label: 'CORE',      style: 'sparse',     seed: 79, phase: 0.75, surroundCount: 14, surroundOffset: 0.28, surroundY: 0.0  },
+  { y: -1.95, radius: 1.5,  segments: 8,  label: 'IDEAS',   style: 'dense',      seed: 23, phase: 0.0,  surroundCount: 24, surroundOffset: 0.28, surroundY: 0.18 },
+  { y: -0.9,  radius: 1.95, segments: 64, label: 'BUILD',   style: 'asymmetric', seed: 37, phase: 0.18, surroundCount: 32, surroundOffset: 0.32, surroundY: 0.05 },
+  { y: 0.25,  radius: 1.45, segments: 10, label: 'LAUNCH',  style: 'sparse',     seed: 51, phase: 0.36, surroundCount: 22, surroundOffset: 0.25, surroundY: -0.12 },
+  { y: 1.35,  radius: 1.05, segments: 64, label: 'GROWTH',  style: 'dense',      seed: 67, phase: 0.55, surroundCount: 18, surroundOffset: 0.3,  surroundY: 0.15 },
+  { y: 2.3,   radius: 0.6,  segments: 6,  label: 'PRODUCT', style: 'sparse',     seed: 79, phase: 0.75, surroundCount: 14, surroundOffset: 0.28, surroundY: 0.0  },
 ];
 
 // (scatter dots, satellites и линии между ними удалены — выглядели визуально шумно)
@@ -88,14 +88,14 @@ type Plaque = {
 };
 
 const PLAQUES: readonly Plaque[] = [
-  { text: 'RESOURCES',   anchorTier: 0, angle: -Math.PI * 0.25, distance: 3.0, yOffset: 0.05,  flickers: true  },
-  { text: 'CREDENTIALS', anchorTier: 0, angle: Math.PI * 0.6,   distance: 2.8, yOffset: -0.1,  flickers: false },
-  { text: 'VAULT',       anchorTier: 1, angle: -Math.PI * 0.8,  distance: 3.3, yOffset: 0.2,   flickers: true  },
-  { text: 'PROJECTS',    anchorTier: 1, angle: Math.PI * 0.15,  distance: 3.4, yOffset: -0.05, flickers: false },
-  { text: 'COMMITS',     anchorTier: 2, angle: Math.PI * 0.85,  distance: 2.7, yOffset: 0.15,  flickers: true  },
-  { text: 'KNOWLEDGE',   anchorTier: 2, angle: -Math.PI * 0.5,  distance: 2.6, yOffset: -0.15, flickers: false },
-  { text: 'IDEAS',       anchorTier: 3, angle: Math.PI * 0.4,   distance: 2.3, yOffset: 0.1,   flickers: true  },
-  { text: 'CORE',        anchorTier: 4, angle: -Math.PI * 0.15, distance: 1.6, yOffset: 0.15,  flickers: false },
+  { text: 'IDEAS',    anchorTier: 0, angle: -Math.PI * 0.25, distance: 3.0, yOffset: 0.05,  flickers: true  },
+  { text: 'FLOW',     anchorTier: 0, angle: Math.PI * 0.6,   distance: 2.8, yOffset: -0.1,  flickers: false },
+  { text: 'FOCUS',    anchorTier: 1, angle: -Math.PI * 0.8,  distance: 3.3, yOffset: 0.2,   flickers: true  },
+  { text: 'BUILD',    anchorTier: 1, angle: Math.PI * 0.15,  distance: 3.4, yOffset: -0.05, flickers: false },
+  { text: 'SHIP',     anchorTier: 2, angle: Math.PI * 0.85,  distance: 2.7, yOffset: 0.15,  flickers: true  },
+  { text: 'GROWTH',   anchorTier: 2, angle: -Math.PI * 0.5,  distance: 2.6, yOffset: -0.15, flickers: false },
+  { text: 'SPARK',    anchorTier: 3, angle: Math.PI * 0.4,   distance: 2.3, yOffset: 0.1,   flickers: true  },
+  { text: 'DRIVE',    anchorTier: 4, angle: -Math.PI * 0.15, distance: 1.6, yOffset: 0.15,  flickers: false },
 ];
 
 function NeonPlaques(): React.ReactElement {

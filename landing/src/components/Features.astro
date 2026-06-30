@@ -3,16 +3,15 @@ import { FEATURES, EXTRA_FEATURES } from '@/data/features';
 
 // Line-иконки (24×24) под ключи из features.ts. Циан-плитка задаётся в стилях.
 const ICONS: Record<string, string> = {
-  // канбан-доска с колонками
-  board: 'M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v6h-4z',
-  // бесконечность/автоматизация
-  automation:
+  // идея / лампочка
+  idea: 'M9 18h6M10 21h4M12 3a6 6 0 00-3.8 10.6c.7.6 1.3 1.2 1.3 2.4h5c0-1.2.6-1.8 1.3-2.4A6 6 0 0012 3z',
+  // автопилот / бесконечность
+  autopilot:
     'M7 8.5a3.5 3.5 0 100 7c1.7 0 2.8-1.2 4-2.5l1-1.1c1.2-1.3 2.3-2.4 4-2.4a3.5 3.5 0 110 7c-1.7 0-2.8-1.2-4-2.4l-1-1.2c-1.2-1.3-2.3-2.5-4-2.5z',
-  // рубль / финансы
-  finance: 'M9 5h4.5a3.5 3.5 0 010 7H9m0 0V5m0 7v7m0-7H7m2 4H7',
-  // подписка / ключ-карта
-  subscription:
-    'M4 7a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1H5a1 1 0 01-1-1V7zM4 10h16M8 14h4',
+  // рубль / стоимость
+  cost: 'M9 5h4.5a3.5 3.5 0 010 7H9m0 0V5m0 7v7m0-7H7m2 4H7',
+  // «всё в одной коробке» — куб
+  allin: 'M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zM12 3v18M4 7.5l8 4.5 8-4.5',
 };
 ---
 
@@ -21,10 +20,11 @@ const ICONS: Record<string, string> = {
 
   <div class="pf-container">
     <div class="features__head" data-reveal>
-      <div class="pf-stag">// возможности</div>
-      <h2 class="pf-h2">Всё по проекту — в&nbsp;одном месте</h2>
+      <div class="pf-stag">Возможности</div>
+      <h2 class="pf-h2">Меньше рутины — больше готового</h2>
       <p class="pf-lead">
-        Доска, воркер, автоматизация и деньги. Не разбросано по чатам, гистам и десятку вкладок.
+        Идеи, работа над ними и деньги — в одном месте. Ты задаёшь направление, платформа
+        доводит до результата. Без разброса по чатам и десятку вкладок.
       </p>
     </div>
 
@@ -43,7 +43,6 @@ const ICONS: Record<string, string> = {
             </div>
             <h3 class="features__title">{f.title}</h3>
             <p class="features__body">{f.body}</p>
-            {f.tag && <span class="pf-mono features__tag">{f.tag}</span>}
             <span class="pf-underline" aria-hidden="true"></span>
           </article>
         ))

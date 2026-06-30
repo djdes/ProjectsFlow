@@ -3,11 +3,19 @@ import HeroSceneGate from './HeroSceneGate.tsx';
 
 // Лендинг и SPA — один Express в prod, пути относительные.
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
+
+// Превью «проекта» в Hero — человеческие задачи и их статусы (без кода/терминала).
+const previewTasks = [
+  { label: 'Экран входа', state: 'done' as const, tag: 'Готово' },
+  { label: 'Подключить оплату', state: 'done' as const, tag: 'Готово' },
+  { label: 'Тёмная тема', state: 'doing' as const, tag: 'AI делает…' },
+  { label: 'Рассылка к запуску', state: 'idea' as const, tag: 'Идея' },
+];
 ---
 
 <section class="hero" aria-labelledby="hero-title">
-  <!-- Ambient-слой = статичный «постер» в стиле сцены: координатная сетка + цианово-зелёные
-       свечения. Виден всегда; на мобиле/при reduced-motion заменяет 3D-сцену. -->
+  <!-- Ambient-слой = статичный «постер»: координатная сетка + цианово-зелёные свечения.
+       Виден всегда; на мобиле/при reduced-motion заменяет 3D-сцену. -->
   <div class="hero__bg" aria-hidden="true">
     <div class="hero__grid grid-bg"></div>
     <div class="mesh-blob mesh-blob--magnetic hero__glow-cyan" data-magnetic-blob></div>
@@ -15,8 +23,7 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
     <div class="hero__vignette"></div>
   </div>
 
-  <!-- 3D data-tower: грузится только на десктопе с motion и поддержкой WebGL.
-       client:media гарантирует, что на узких экранах chunk three.js не скачивается. -->
+  <!-- 3D-сцена: грузится только на десктопе с motion и WebGL (chunk не качается на мобиле). -->
   <div class="hero__scene" aria-hidden="true">
     <HeroSceneGate client:media="(min-width: 1024px)" />
   </div>
@@ -25,18 +32,17 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
     <div class="hero__col">
       <span class="pf-eyebrow">
         <span class="pf-dot"></span>
-        <span class="pf-mono">for vibe-coders</span>
+        Для тех, кто строит с AI
       </span>
 
       <h1 id="hero-title" class="hero__title">
-        Бросай задачи — <span class="pf-grad">воркер пишет код</span>.<br />
-        Ты на драйве.
+        Опиши идею — получи <span class="pf-grad">готовый продукт</span>.
       </h1>
 
       <p class="hero__sub">
-        Доска задач для твоих проектов со встроенным AI-воркером, автоматизацией и
-        финучётом. Кидаешь задачу в колонку <span class="pf-mono hero__accent">worker</span> —
-        она выполняется по нашей подписке. Без возни с инфрой и чужими лимитами.
+        ProjectsFlow ведёт твой проект от задумки до запуска: ты говоришь, что хочешь, —
+        платформа делает и доводит до результата. Без настройки и технической возни.
+        Ты&nbsp;— на драйве идей.
       </p>
 
       <div class="hero__cta">
@@ -57,20 +63,37 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
         </a>
       </div>
 
-      <!-- Псевдо-терминал — фирменный визуал dev-cool. -->
-      <div class="pf-term hero__term" data-reveal style="--reveal-delay: 200ms">
-        <div class="pf-term__bar">
-          <i class="pf-term__light pf-term__light--r"></i>
-          <i class="pf-term__light pf-term__light--y"></i>
-          <i class="pf-term__light pf-term__light--g"></i>
-          <span class="pf-term__title">~/projects/my-saas — projectsflow</span>
-        </div>
-        <div class="pf-term__body"><span class="pf-term__c"># кидаешь задачу воркеру</span>
-<span class="pf-term__p">pf</span> <span class="pf-term__v">task add</span> <span class="pf-term__w">"добавь dark mode на дашборд"</span> --col worker
-<span class="pf-term__c">→ воркер взял в работу · Claude Opus · автодеплой on</span>
+      <p class="hero__reassure">Бесплатно и без карты · проект остаётся твоим</p>
 
-<span class="pf-term__p">pf</span> <span class="pf-term__v">finance</span> --project my-saas
-<span class="pf-term__c">→ расход за месяц: 1 240 ₽ · по подписке Прайм</span></div>
+      <!-- Превью проекта — задумки превращаются в готовое. Без кода/терминала. -->
+      <div class="hero__panel" data-reveal style="--reveal-delay: 200ms">
+        <div class="hero__panel-head">
+          <span class="hero__panel-title">Мой проект</span>
+          <span class="hero__panel-live">
+            <span class="pf-dot"></span> AI на связи
+          </span>
+        </div>
+        <ul class="hero__tasks">
+          {
+            previewTasks.map((t) => (
+              <li class={`hero__task hero__task--${t.state}`}>
+                <span class="hero__task-mark" aria-hidden="true">
+                  {t.state === 'done' ? (
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+                      <path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  ) : t.state === 'doing' ? (
+                    <span class="hero__spin"></span>
+                  ) : (
+                    <span class="hero__ring"></span>
+                  )}
+                </span>
+                <span class="hero__task-label">{t.label}</span>
+                <span class="hero__task-tag">{t.tag}</span>
+              </li>
+            ))
+          }
+        </ul>
       </div>
     </div>
   </div>
@@ -87,60 +110,31 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
   }
 
   /* --- Ambient «постер» --- */
-  .hero__bg {
-    position: absolute;
-    inset: 0;
-    z-index: -20;
-    pointer-events: none;
-  }
-  .hero__grid {
-    position: absolute;
-    inset: 0;
-  }
+  .hero__bg { position: absolute; inset: 0; z-index: -20; pointer-events: none; }
+  .hero__grid { position: absolute; inset: 0; }
   .hero__glow-cyan {
-    width: 560px;
-    height: 560px;
-    background: var(--accent-deep);
-    top: -180px;
-    left: 50%;
-    margin-left: -280px;
-    opacity: 0.4;
+    width: 560px; height: 560px; background: var(--accent-deep);
+    top: -180px; left: 50%; margin-left: -280px; opacity: 0.4;
   }
   .hero__glow-green {
-    width: 380px;
-    height: 380px;
-    background: #0e7a4d;
-    top: 360px;
-    right: -120px;
-    opacity: 0.26;
+    width: 380px; height: 380px; background: #0e7a4d;
+    top: 360px; right: -120px; opacity: 0.26;
   }
   .hero__vignette {
-    position: absolute;
-    inset-inline: 0;
-    bottom: 0;
-    height: 12rem;
+    position: absolute; inset-inline: 0; bottom: 0; height: 12rem;
     background: linear-gradient(to bottom, transparent, var(--bg));
   }
 
   /* --- 3D-сцена --- */
   .hero__scene {
-    position: absolute;
-    inset: 0;
-    z-index: -10;
-    pointer-events: none;
+    position: absolute; inset: 0; z-index: -10; pointer-events: none;
     -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%);
     mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%);
   }
 
   /* --- Контент --- */
-  .hero__inner {
-    position: relative;
-    padding-block: clamp(2.5rem, 6vw, 4.5rem);
-  }
-  .hero__col {
-    width: 100%;
-    max-width: 640px;
-  }
+  .hero__inner { position: relative; padding-block: clamp(2.5rem, 6vw, 4.5rem); }
+  .hero__col { width: 100%; max-width: 640px; }
   .hero__title {
     margin-top: var(--sp-6);
     font-size: var(--fs-display);
@@ -157,32 +151,98 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
     font-size: var(--fs-lg);
     line-height: var(--lh-normal);
   }
-  .hero__accent { color: var(--accent); }
-  .hero__cta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--sp-3);
-    margin-top: var(--sp-8);
-  }
+  .hero__cta { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-8); }
   .hero__authed { display: none; }
   .hero__arrow { width: 16px; height: 16px; }
-  .hero__term {
-    margin-top: var(--sp-12);
-    max-width: 600px;
+  .hero__reassure {
+    margin-top: var(--sp-4);
+    font-size: var(--fs-sm);
+    color: var(--dim);
   }
 
-  /* На десктопе текст занимает ~58% ширины — справа дышит 3D-башня. */
+  /* --- Превью проекта --- */
+  .hero__panel {
+    margin-top: var(--sp-12);
+    max-width: 460px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    background: linear-gradient(180deg, var(--surface), #080b11);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+  .hero__panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--sp-3) var(--sp-4);
+    border-bottom: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .hero__panel-title { font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
+  .hero__panel-live {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    font-size: var(--fs-xs);
+    color: var(--signal);
+  }
+  .hero__tasks { list-style: none; margin: 0; padding: var(--sp-2); display: flex; flex-direction: column; gap: 2px; }
+  .hero__task {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-3);
+    border-radius: var(--r-sm);
+    transition: background-color var(--dur) var(--ease);
+  }
+  .hero__task--doing {
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 1px var(--accent-line);
+  }
+  .hero__task-mark {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+  }
+  .hero__task--done .hero__task-mark { color: var(--signal); }
+  .hero__task--done .hero__task-mark svg { width: 16px; height: 16px; }
+  .hero__ring {
+    width: 13px; height: 13px; border-radius: 50%;
+    border: 1.6px solid var(--dim);
+  }
+  .hero__spin {
+    width: 15px; height: 15px; border-radius: 50%;
+    border: 2px solid var(--accent-line);
+    border-top-color: var(--accent);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero__spin { animation: hero-spin 0.9s linear infinite; }
+    @keyframes hero-spin { to { transform: rotate(360deg); } }
+  }
+  .hero__task-label { flex: 1; min-width: 0; font-size: var(--fs-sm); color: var(--text); }
+  .hero__task--idea .hero__task-label { color: var(--muted); }
+  .hero__task-tag {
+    flex: none;
+    font-size: var(--fs-xs);
+    color: var(--dim);
+  }
+  .hero__task--doing .hero__task-tag { color: var(--accent); }
+  .hero__task--done .hero__task-tag { color: var(--signal); }
+
+  /* На десктопе текст занимает ~58% ширины — справа дышит 3D-сцена. */
   @media (min-width: 1024px) {
     .hero__col { max-width: 58%; }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .hero__term { opacity: 1; }
+    .hero__panel { opacity: 1; }
   }
 </style>
 
 <script>
-  // Лёгкий параллакс cyan-свечения за курсором (как было на main). Уважает reduced-motion.
+  // Лёгкий параллакс cyan-свечения за курсором. Уважает reduced-motion.
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (!reduceMotion) {
     const blob = document.querySelector<HTMLElement>('[data-magnetic-blob]');
@@ -193,7 +253,6 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
         (e: PointerEvent) => {
           const nx = (e.clientX / window.innerWidth) * 2 - 1;
           const ny = (e.clientY / window.innerHeight) * 2 - 1;
-          // .mesh-blob--magnetic анимирует transform через эти переменные (soft 1.2s easing).
           blob.style.setProperty('--blob-x', `${nx * MAX}px`);
           blob.style.setProperty('--blob-y', `${ny * MAX}px`);
         },

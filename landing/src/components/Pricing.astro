@@ -9,7 +9,7 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 
   <div class="pf-container">
     <div class="pricing__head" data-reveal>
-      <div class="pf-stag">// тарифы</div>
+      <div class="pf-stag">Тарифы</div>
       <h2 class="pf-h2">Простые тарифы — начни бесплатно</h2>
       <p class="pf-lead pf-lead--center">
         Без карты на старте. Прайм можно попробовать час перед оплатой. Не зашло — вернём деньги.
@@ -24,9 +24,9 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
             data-reveal
             style={`--reveal-delay: ${i * 90}ms`}
           >
-            {plan.badge && <span class="pf-mono pricing__badge">{plan.badge}</span>}
+            {plan.badge && <span class="pricing__badge">{plan.badge}</span>}
 
-            <div class="pf-mono pricing__name">{plan.name}</div>
+            <div class="pricing__name">{plan.name}</div>
             <p class="pricing__tagline">{plan.tagline}</p>
 
             <div class="pricing__price">

@@ -15,12 +15,12 @@ const risks = [
   {
     icon: 'lock',
     title: 'Никакого лок-ина',
-    body: 'Код — в твоём GitHub, база знаний — тоже. Уходишь — забираешь всё с собой.',
+    body: 'Всё, что создаёшь, — твоё. Уходишь — забираешь с собой. Ничего не запираем.',
   },
   {
     icon: 'eye',
     title: 'Прозрачные списания',
-    body: 'Видишь расход на AI по каждому проекту в рублях. Ни одного скрытого рубля.',
+    body: 'Видишь расход по каждому проекту в рублях. Ни одного скрытого рубля.',
   },
   {
     icon: 'rocket',
@@ -38,23 +38,23 @@ const iconPaths: Record<string, string> = {
 
 // Value-stack — что внутри платного тарифа (укрепляет разрыв ценность/цена).
 const stack = [
-  'Доска задач + колонка worker',
-  'AI-воркер: код, коммиты, автодеплой',
-  'Автоматизация — задачи генерятся и выполняются сами',
-  'Финучёт по каждому проекту',
-  'Встроенная AI-подписка — без своих ключей',
-  'GitHub-привязка, KB и хранилище секретов',
+  'Идеи превращаются в готовый результат',
+  'Проект на автопилоте — задачи делаются сами',
+  'Прозрачные расходы по каждому проекту',
+  'Всё включено — без ключей и настройки',
+  'Всё в одном месте, без разброса по вкладкам',
+  'Результат всегда остаётся твоим',
 ];
 ---
 
 <section id="guarantee" class="pf-section guarantee">
   <div class="pf-container">
     <div class="guarantee__head" data-reveal>
-      <div class="pf-stag">// почему не страшно начать</div>
+      <div class="pf-stag">Почему не страшно начать</div>
       <h2 class="pf-h2">Предложение, от которого глупо&nbsp;отказаться</h2>
       <p class="pf-lead pf-lead--center">
         Мы убрали риск со своей стороны: начинаешь бесплатно, платишь — только если зашло,
-        а код и данные всегда остаются твоими.
+        а результат всегда остаётся твоим.
       </p>
     </div>
 
@@ -67,7 +67,7 @@ const stack = [
             <path d="M8.5 12l2.3 2.3L16 9" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </div>
-        <div class="pf-mono guarantee__seal-tag">guarantee</div>
+        <div class="guarantee__seal-tag">Гарантия</div>
         <h3 class="guarantee__seal-title">«Не&nbsp;зашло&nbsp;— вернём»</h3>
         <p class="guarantee__seal-body">
           Если платный тариф не оправдал ожиданий — напиши нам, и мы вернём деньги.
@@ -78,7 +78,7 @@ const stack = [
 
       <!-- Value-stack. -->
       <div class="guarantee__stack" data-reveal>
-        <div class="pf-mono guarantee__stack-tag">// что внутри платного тарифа</div>
+        <div class="guarantee__stack-tag">Что внутри платного тарифа</div>
         <ul class="guarantee__stack-list">
           {
             stack.map((s) => (
