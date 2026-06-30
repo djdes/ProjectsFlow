@@ -8,6 +8,9 @@ export type TelegramStatus = {
   readonly prefs: TelegramPrefs;
   readonly botUsername: string | null;
   readonly botDeepLink: string | null;
+  // Числовой id бота (часть токена до «:»). Нужен для кастомной login-кнопки через
+  // window.Telegram.Login.auth({ bot_id }) — вместо встраиваемого iframe-виджета.
+  readonly botId: string | null;
 };
 
 export type TelegramPrefs = {

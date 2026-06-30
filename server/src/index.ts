@@ -558,6 +558,8 @@ const connectTelegramAccount = new ConnectTelegramAccount({
 const getTelegramStatus = new GetTelegramStatus({
   users: userRepo,
   botUsername: telegramBotUsername,
+  // bot_id = часть токена до «:» (публичная). Нужен фронту для кастомной login-кнопки.
+  botId: telegramBotToken ? (telegramBotToken.split(':')[0] ?? null) : null,
 });
 // Маппинг agent-kind → user pref-toggle. Неизвестные kinds шлются без pref-чека.
 // v2: добавлены ralph_answer_accepted/comment_on_my_task/task_blocked + task_done
