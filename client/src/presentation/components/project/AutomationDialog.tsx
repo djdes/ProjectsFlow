@@ -965,7 +965,7 @@ export function AutomationDialog({
                       <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
                         chat_id
                       </Label>
-                    <div className="flex gap-1.5">
+                    <div className="flex items-center gap-1.5">
                       <Input
                         value={digest?.groupChatId ?? ''}
                         placeholder="-1003920622527"
@@ -980,7 +980,7 @@ export function AutomationDialog({
                               type="button"
                               variant="outline"
                               size="icon"
-                              className="size-8 shrink-0"
+                              className="size-8 shrink-0 sm:size-8"
                               title="Ранее введённые группы"
                               aria-label="Ранее введённые группы"
                             >
@@ -1020,7 +1020,7 @@ export function AutomationDialog({
                     <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
                       Название (опц.)
                     </Label>
-                    <div className="flex gap-1.5">
+                    <div className="flex items-center gap-1.5">
                       <Input
                         value={digest?.groupTitle ?? ''}
                         placeholder="Команда проекта"
@@ -1032,7 +1032,7 @@ export function AutomationDialog({
                         type="button"
                         variant="outline"
                         size="icon"
-                        className="size-8 shrink-0"
+                        className="size-8 shrink-0 sm:size-8"
                         disabled={resolvingTitle || !chatIdValid}
                         onClick={() => void handleResolveTitle()}
                         title="Получить название группы из Telegram"
