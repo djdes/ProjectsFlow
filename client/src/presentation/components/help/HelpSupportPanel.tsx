@@ -39,20 +39,18 @@ export function HelpSupportPanel({
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // Префилл из AI-вкладки («Написать в поддержку») — подставляем и фокусируем.
+  // Префилл из AI-вкладки («Написать в поддержку») — подставляем, фокус, курсор в конец.
   useEffect(() => {
-    if (initialMessage) {
-      setMessage(initialMessage);
-      setStatus('idle');
-      // Курсор в конец, фокус — чтобы можно было сразу дополнить и отправить.
-      requestAnimationFrame(() => {
-        const el = textareaRef.current;
-        if (el) {
-          el.focus();
-          el.setSelectionRange(el.value.length, el.value.length);
-        }
-      });
-    }
+    if (!initialMessage) return;
+    setMessage(initialMessage);
+    setStatus('idle');
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      }
+    });
   }, [initialMessage]);
 
   const trimmed = message.trim();
@@ -89,14 +87,14 @@ export function HelpSupportPanel({
           initial={animations ? { scale: 0.6, opacity: 0 } : false}
           animate={{ scale: 1, opacity: 1 }}
           transition={animations ? { type: 'spring', stiffness: 420, damping: 22 } : { duration: 0 }}
-          className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary"
+          className="grid size-14 place-items-center rounded-full bg-success/10 text-success"
         >
-          <Check className="size-6" />
+          <Check className="size-7" />
         </motion.span>
         <div className="space-y-1">
           <p className="text-sm font-semibold text-foreground">Обращение отправлено</p>
-          <p className="text-xs text-muted-foreground">
-            Спасибо! Команда ProjectsFlow ответит вам в Telegram.
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Спасибо! Команда ProjectsFlow ответит вам в&nbsp;Telegram.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => setStatus('idle')}>
@@ -108,14 +106,15 @@ export function HelpSupportPanel({
 
   return (
     <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        Опишите проблему или вопрос — команда ProjectsFlow ответит вам в Telegram.
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        Опишите проблему или вопрос — команда ProjectsFlow ответит вам в&nbsp;Telegram.
       </p>
 
       <div
         className={cn(
-          'rounded-xl border bg-card p-2 transition-colors focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-ring/30',
-          overLimit && 'border-destructive/60 focus-within:border-destructive focus-within:ring-destructive/30',
+          'rounded-2xl border bg-card p-2.5 shadow-sm transition-colors focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-ring/25',
+          overLimit &&
+            'border-destructive/60 focus-within:border-destructive focus-within:ring-destructive/25',
         )}
       >
         <AutoGrowTextarea
@@ -126,13 +125,13 @@ export function HelpSupportPanel({
             if (status === 'error') setStatus('idle');
           }}
           onKeyDown={onKeyDown}
-          minRows={3}
+          minRows={4}
           maxRows={10}
           placeholder="Опишите проблему или вопрос…"
           aria-label="Сообщение в поддержку"
-          className="w-full bg-transparent px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+          className="w-full bg-transparent px-1.5 py-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
-        <div className="mt-1 flex items-center justify-between px-1">
+        <div className="mt-1.5 flex items-center justify-between gap-2 px-1">
           <span
             className={cn(
               'text-[11px] tabular-nums',
@@ -163,6 +162,10 @@ export function HelpSupportPanel({
           {error}
         </p>
       )}
+
+      <p className="mt-auto text-[11px] leading-relaxed text-muted-foreground/80">
+        Обычно отвечаем в течение рабочего дня.
+      </p>
     </div>
   );
 }
