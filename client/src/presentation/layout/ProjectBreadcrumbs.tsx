@@ -99,6 +99,11 @@ const segmentClass = (current?: boolean): string =>
       : 'text-muted-foreground hover:bg-hover hover:text-foreground',
   );
 
+// Подсветка ТЕКУЩЕГО пункта в выпадающих списках крошек — мягкая заливка (как в Notion),
+// а не просто жирный шрифт. data-[highlighted] (hover/keyboard) перекрывает её focus-bg'ом.
+const CURRENT_DROPDOWN_ITEM_CLASS =
+  'bg-foreground/[0.06] font-medium text-foreground dark:bg-white/[0.08]';
+
 // Четвёртый сегмент крошек на ОТДЕЛЬНОЙ странице задачи: название текущей задачи +
 // hover-дропдаун с недавно редактированными задачами того же проекта для быстрого
 // перехода. На обычных страницах проекта не передаётся.
@@ -161,7 +166,7 @@ export function ProjectBreadcrumbs({
             <DropdownMenuItem
               key={p.id}
               onSelect={() => navigate(`/projects/${p.id}`)}
-              className={cn(p.id === projectId && 'font-medium')}
+              className={cn(p.id === projectId && CURRENT_DROPDOWN_ITEM_CLASS)}
             >
               <ProjectChip name={p.name} icon={p.icon} />
               <span className="truncate">{p.name}</span>
@@ -196,7 +201,7 @@ export function ProjectBreadcrumbs({
             <DropdownMenuItem
               key={key}
               onSelect={() => navigate(path(projectId))}
-              className={cn(key === view && 'font-medium text-foreground')}
+              className={cn(key === view && CURRENT_DROPDOWN_ITEM_CLASS)}
             >
               <Icon />
               {label}
@@ -234,7 +239,7 @@ export function ProjectBreadcrumbs({
                   <DropdownMenuItem
                     key={t.id}
                     onSelect={() => navigate(`/projects/${projectId}/tasks/${t.id}`)}
-                    className={cn('min-w-0', t.id === task.taskId && 'font-medium text-foreground')}
+                    className={cn('min-w-0', t.id === task.taskId && CURRENT_DROPDOWN_ITEM_CLASS)}
                   >
                     <span className="truncate">{t.title}</span>
                   </DropdownMenuItem>

@@ -159,7 +159,8 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
                 key={ws.id}
                 className={cn(
                   'group/row flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent',
-                  ws.isCurrent && 'font-medium',
+                  // Текущее пространство — мягкая подсветка (как в Notion), не только жирный.
+                  ws.isCurrent && 'bg-foreground/[0.06] font-medium dark:bg-white/[0.08]',
                 )}
               >
                 <button
