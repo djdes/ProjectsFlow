@@ -625,7 +625,7 @@ export function errorHandler(
   if (err instanceof VipNotSelfServeError) {
     res.status(403).json({
       error: 'vip_not_self_serve',
-      message: 'Тариф ВИП подключается по запросу — обратитесь в поддержку.',
+      message: 'Тариф VIP подключается по запросу — обратитесь в поддержку.',
     });
     return;
   }

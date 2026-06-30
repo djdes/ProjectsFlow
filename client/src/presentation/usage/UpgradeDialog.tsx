@@ -65,8 +65,16 @@ export function UpgradeDialog({
           {PLAN_CATALOG.map((p) => {
             const isCurrent = p.id === currentPlan;
             const trialAvailable = usage?.primeTrialAvailable ?? false;
-            // ВИП — только по запросу (не self-serve); Прайм — разовый пробный час.
-            const locked = !isCurrent && (p.id === 'vip' || (p.id === 'prime' && !trialAvailable));
+            // Платный план активен (Прайм/ВИП) — на Бесплатный система перейдёт САМА по
+            // истечении срока. Ручной даунгрейд блокируем, чтобы не потерять оплаченное/триал.
+            const paidActive = currentPlan !== 'free';
+            // VIP — только по запросу (не self-serve); Прайм — разовый пробный час;
+            // Бесплатный — заблокирован, пока активен платный план.
+            const locked =
+              !isCurrent &&
+              (p.id === 'vip' ||
+                (p.id === 'prime' && !trialAvailable) ||
+                (p.id === 'free' && paidActive));
             const label = isCurrent
               ? 'Текущий план'
               : p.id === 'vip'
@@ -75,7 +83,9 @@ export function UpgradeDialog({
                   ? trialAvailable
                     ? 'Попробовать 1 час'
                     : 'Триал использован'
-                  : 'Перейти на бесплатный';
+                  : paidActive
+                    ? `${planNameRu(currentPlan)} активен`
+                    : 'Перейти на бесплатный';
             return (
               <div
                 key={p.id}
@@ -117,7 +127,11 @@ export function UpgradeDialog({
                   disabled={isCurrent || locked || pending !== null}
                   onClick={() => void choose(p.id)}
                   title={
-                    p.id === 'vip' && !isCurrent ? 'Подключается по запросу через поддержку' : undefined
+                    p.id === 'vip' && !isCurrent
+                      ? 'Подключается по запросу через поддержку'
+                      : p.id === 'free' && paidActive
+                        ? `${planNameRu(currentPlan)} активен — на Бесплатный переключится автоматически по истечении срока`
+                        : undefined
                   }
                 >
                   {pending === p.id && <Loader2 className="size-4 animate-spin" />}

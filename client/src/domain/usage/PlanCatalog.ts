@@ -1,7 +1,7 @@
 import type { PlanId } from './Usage';
 
 // Витрина тарифов (RU-копирайт + цена). Цена — ₽/мес, она же бюджет AI-расхода
-// (Прайм 5000 ₽, ВИП 10000 ₽). null = бесплатно. Единственное место копирайта тарифов.
+// (Прайм 5000 ₽, VIP 10000 ₽). null = бесплатно. Единственное место копирайта тарифов.
 export type PlanMeta = {
   readonly id: PlanId;
   readonly nameRu: string;
@@ -36,7 +36,7 @@ export const PLAN_CATALOG: readonly PlanMeta[] = [
   },
   {
     id: 'vip',
-    nameRu: 'ВИП',
+    nameRu: 'VIP',
     priceRub: 10000,
     tagline: 'Расширенный AI-бюджет для команд',
     features: [

@@ -38,7 +38,7 @@ export function planNameRu(plan: PlanId): string {
     case 'prime':
       return 'Прайм';
     case 'vip':
-      return 'ВИП';
+      return 'VIP';
     default:
       return 'Бесплатный';
   }

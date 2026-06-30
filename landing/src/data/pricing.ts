@@ -1,6 +1,6 @@
 // Витрина тарифов ProjectsFlow (P1-лендинг). Это ТОЛЬКО витрина — без реальной логики
 // подписки (она в backend, P2/P3). Если нужно поправить цены/формулировки — менять ТОЛЬКО здесь.
-// Имена согласованы: Бесплатный / Прайм / ВИП (задачи 0c770033 + 903d484f).
+// Имена согласованы: Бесплатный / Прайм / VIP (задачи 0c770033 + 903d484f).
 
 export interface Plan {
   readonly id: 'free' | 'prime' | 'vip';
@@ -31,7 +31,7 @@ export interface Plan {
 }
 
 // Цены и состав соответствуют реальной витрине тарифов продукта
-// (client/src/domain/usage/PlanCatalog.ts): Прайм 5000 ₽, ВИП 10000 ₽; цена = AI-бюджет.
+// (client/src/domain/usage/PlanCatalog.ts): Прайм 5000 ₽, VIP 10000 ₽; цена = AI-бюджет.
 export const PLANS: readonly Plan[] = [
   {
     id: 'free',
@@ -69,7 +69,7 @@ export const PLANS: readonly Plan[] = [
   },
   {
     id: 'vip',
-    name: 'ВИП',
+    name: 'VIP',
     priceRub: 10000,
     priceNote: 'в месяц',
     tagline: 'Расширенный бюджет — для команд',
