@@ -5,45 +5,50 @@
 
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 
-// 4 снятия риска (risk-reversal).
+// 4 снятия риска (risk-reversal) — все реальные.
 const risks = [
+  {
+    icon: 'trial',
+    title: 'Первый час — бесплатно',
+    body: 'Прайм можно попробовать час без карты. Первый результат увидишь уже в первый час.',
+  },
   {
     icon: 'refund',
     title: 'Вернём деньги',
     body: 'Платный тариф не подошёл — оформим возврат. Без допросов и мелкого шрифта.',
   },
   {
+    icon: 'help',
+    title: 'Не получилось — поможем',
+    body: 'Застрял или что-то не вышло — поможем бесплатно. Не бросаем наедине с проблемой.',
+  },
+  {
     icon: 'lock',
     title: 'Никакого лок-ина',
     body: 'Всё, что создаёшь, — твоё. Уходишь — забираешь с собой. Ничего не запираем.',
   },
-  {
-    icon: 'eye',
-    title: 'Прозрачные списания',
-    body: 'Видишь расход по каждому проекту в рублях. Ни одного скрытого рубля.',
-  },
-  {
-    icon: 'rocket',
-    title: 'Старт без карты',
-    body: 'Бесплатный тариф — без карты. Прайм — можно попробовать час перед оплатой.',
-  },
 ];
 
 const iconPaths: Record<string, string> = {
+  trial: 'M12 7v5l3 2M12 3a9 9 0 100 18 9 9 0 000-18z',
   refund: 'M4 9a8 8 0 0114-5.3M20 4v4h-4M20 15a8 8 0 01-14 5.3M4 20v-4h4',
+  help: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 8.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7zM5 5l4 4M15 15l4 4M19 5l-4 4M9 15l-4 4',
   lock: 'M7 11V8a5 5 0 0110 0v3M5 11h14v9H5z',
-  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z M12 9a3 3 0 100 6 3 3 0 000-6z',
-  rocket: 'M5 15c-1.5 1.5-2 5-2 5s3.5-.5 5-2M9 11a9 9 0 016-6c3 0 4 1 4 4a9 9 0 01-6 6l-3 1-2-2 1-3z',
 };
 
-// Value-stack — что внутри платного тарифа (укрепляет разрыв ценность/цена).
-const stack = [
+// Что получаешь (ядро ценности).
+const coreStack = [
   'Идеи превращаются в готовый результат',
   'Проект на автопилоте — задачи делаются сами',
-  'Прозрачные расходы по каждому проекту',
-  'Всё включено — без ключей и настройки',
-  'Всё в одном месте, без разброса по вкладкам',
-  'Результат всегда остаётся твоим',
+  'Claude онлайн — ключи и настройка не нужны',
+  'Всё по проекту в одном месте',
+];
+
+// Бонусы — реальные, входят бесплатно (Hormozi: бонусы > скидка).
+const bonuses = [
+  'Поможем запустить первый проект — проведём за руку',
+  'Готовые шаблоны и стартеры, чтобы начать быстрее',
+  'Приоритетная поддержка в Telegram',
 ];
 ---
 
@@ -70,19 +75,34 @@ const stack = [
         <div class="guarantee__seal-tag">Гарантия</div>
         <h3 class="guarantee__seal-title">«Не&nbsp;зашло&nbsp;— вернём»</h3>
         <p class="guarantee__seal-body">
-          Если платный тариф не оправдал ожиданий — напиши нам, и мы вернём деньги.
-          Риск проверить ProjectsFlow — нулевой.
+          Начни бесплатно, без карты. Первый час Прайма — бесплатный: первый результат увидишь
+          сразу. Не зашло — вернём деньги. Риск проверить ProjectsFlow — нулевой.
         </p>
         <a href={`${appBase}/register`} class="pf-btn pf-btn--primary pf-btn--block">Начать бесплатно</a>
+        <p class="guarantee__seal-note">Первый час Прайма — бесплатно · без карты</p>
       </aside>
 
-      <!-- Value-stack. -->
+      <!-- Value-stack: ядро + бонусы. -->
       <div class="guarantee__stack" data-reveal>
-        <div class="guarantee__stack-tag">Что внутри платного тарифа</div>
+        <div class="guarantee__stack-tag">Что получаешь</div>
         <ul class="guarantee__stack-list">
           {
-            stack.map((s) => (
+            coreStack.map((s) => (
               <li class="guarantee__stack-item">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                  <path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span>{s}</span>
+              </li>
+            ))
+          }
+        </ul>
+
+        <div class="guarantee__bonus-tag">🎁 Бонусы — бесплатно</div>
+        <ul class="guarantee__stack-list">
+          {
+            bonuses.map((s) => (
+              <li class="guarantee__stack-item guarantee__stack-item--bonus">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
                   <path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
@@ -175,6 +195,11 @@ const stack = [
     color: var(--muted);
   }
   .guarantee__seal .pf-btn { margin-top: auto; }
+  .guarantee__seal-note {
+    margin-top: var(--sp-3);
+    font-size: var(--fs-xs);
+    color: var(--accent);
+  }
 
   /* Value-stack. */
   .guarantee__stack {
@@ -209,6 +234,15 @@ const stack = [
     height: 18px;
     margin-top: 3px;
     color: var(--signal);
+  }
+  .guarantee__stack-item--bonus svg { color: var(--accent); }
+  .guarantee__bonus-tag {
+    margin-top: var(--sp-6);
+    padding-top: var(--sp-4);
+    border-top: 1px dashed var(--accent-line);
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    color: var(--accent);
   }
 
   /* 4 снятия риска. */

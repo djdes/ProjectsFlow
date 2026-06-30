@@ -28,6 +28,10 @@ const previewTasks = [
     <HeroSceneGate client:media="(min-width: 1024px)" />
   </div>
 
+  <!-- Синие частицы, «притягивающиеся» от курсора к кнопке «Начать бесплатно».
+       Только в Hero; плавно гаснут при скролле ниже. Не мешают кликам (pointer-events:none). -->
+  <canvas class="hero__particles" data-particles aria-hidden="true"></canvas>
+
   <div class="pf-container hero__inner">
     <div class="hero__col">
       <span class="pf-eyebrow">
@@ -44,6 +48,14 @@ const previewTasks = [
         платформа делает и доводит до результата. Без настройки и технической возни.
         Ты&nbsp;— на драйве идей.
       </p>
+
+      <!-- Главный оффер: бесплатный час Прайма — ярко выделен. -->
+      <div class="hero__offer" data-reveal>
+        <span class="hero__offer-badge">1 час бесплатно</span>
+        <span class="hero__offer-text">
+          Первый час на <b>Прайме</b> — без карты. <b>Первый результат увидишь в первый час.</b>
+        </span>
+      </div>
 
       <div class="hero__cta">
         {/* Anonymous (по умолчанию). Скрипт в BaseLayout заменит на «Открыть приложение». */}
@@ -63,7 +75,7 @@ const previewTasks = [
         </a>
       </div>
 
-      <p class="hero__reassure">Бесплатно и без карты · проект остаётся твоим</p>
+      <p class="hero__reassure">Старт бесплатно и без карты · не зашло — вернём деньги · проект остаётся твоим</p>
 
       <!-- Превью проекта — задумки превращаются в готовое. Без кода/терминала. -->
       <div class="hero__panel" data-reveal style="--reveal-delay: 200ms">
@@ -132,6 +144,19 @@ const previewTasks = [
     mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%);
   }
 
+  /* --- Частицы (поверх сцены, под контентом; не ловят клики) --- */
+  .hero__particles {
+    position: absolute;
+    inset: 0;
+    z-index: -5;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 600ms var(--ease);
+  }
+  .hero__particles[data-active] { opacity: 1; }
+
   /* --- Контент --- */
   .hero__inner { position: relative; padding-block: clamp(2.5rem, 6vw, 4.5rem); }
   .hero__col { width: 100%; max-width: 640px; }
@@ -151,7 +176,36 @@ const previewTasks = [
     font-size: var(--fs-lg);
     line-height: var(--lh-normal);
   }
-  .hero__cta { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-8); }
+  /* --- Оффер «1 час бесплатно» — яркий акцент --- */
+  .hero__offer {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    margin-top: var(--sp-6);
+    max-width: 34rem;
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px solid var(--accent-line);
+    border-radius: var(--r);
+    background:
+      radial-gradient(120% 160% at 0% 50%, var(--accent-soft), transparent 70%),
+      rgba(255, 255, 255, 0.02);
+    box-shadow: 0 0 0 1px var(--accent-line), var(--glow);
+  }
+  .hero__offer-badge {
+    flex: none;
+    padding: var(--sp-1) var(--sp-3);
+    border-radius: var(--r-full);
+    background: var(--grad-accent);
+    color: var(--accent-ink);
+    font-size: var(--fs-xs);
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .hero__offer-text { font-size: var(--fs-sm); color: var(--text); line-height: var(--lh-snug); }
+  .hero__offer-text b { color: var(--accent); font-weight: 700; }
+
+  .hero__cta { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-6); }
   .hero__authed { display: none; }
   .hero__arrow { width: 16px; height: 16px; }
   .hero__reassure {
@@ -260,4 +314,134 @@ const previewTasks = [
       );
     }
   }
+</script>
+
+<script>
+  // Синие частицы, «притягивающиеся» от курсора к кнопке «Начать бесплатно».
+  // Только в Hero; гаснут при скролле ниже (IntersectionObserver + CSS-fade канваса).
+  // Отключено при reduced-motion и на тач-устройствах (нет курсора).
+  (() => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    if (reduce || coarse) return;
+
+    const hero = document.querySelector<HTMLElement>('.hero');
+    const canvas = document.querySelector<HTMLCanvasElement>('[data-particles]');
+    const target = hero?.querySelector<HTMLElement>('a.pf-btn--primary[data-auth-anon]');
+    if (!hero || !canvas || !target) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    type P = { x: number; y: number; vx: number; vy: number; life: number; r: number };
+    const parts: P[] = [];
+    const MAX = 140;
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let W = 0;
+    let H = 0;
+    let tx = 0; // цель — центр кнопки, в координатах канваса
+    let ty = 0;
+    let active = false;
+    let raf = 0;
+
+    const measure = (): void => {
+      const hr = hero.getBoundingClientRect();
+      W = hr.width;
+      H = hr.height;
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const tr = target.getBoundingClientRect();
+      tx = tr.left - hr.left + tr.width / 2;
+      ty = tr.top - hr.top + tr.height / 2;
+    };
+    measure();
+    window.addEventListener('resize', measure, { passive: true });
+
+    const spawn = (cx: number, cy: number): void => {
+      if (parts.length > MAX) return;
+      const n = 2;
+      for (let i = 0; i < n; i++) {
+        parts.push({
+          x: cx + (Math.random() - 0.5) * 8,
+          y: cy + (Math.random() - 0.5) * 8,
+          vx: (Math.random() - 0.5) * 0.6,
+          vy: (Math.random() - 0.5) * 0.6,
+          life: 1,
+          r: 1.2 + Math.random() * 1.8,
+        });
+      }
+    };
+
+    window.addEventListener(
+      'pointermove',
+      (e: PointerEvent) => {
+        if (!active) return;
+        const hr = hero.getBoundingClientRect();
+        const x = e.clientX - hr.left;
+        const y = e.clientY - hr.top;
+        if (x < 0 || y < 0 || x > W || y > H) return; // только в пределах Hero
+        spawn(x, y);
+      },
+      { passive: true },
+    );
+
+    const step = (): void => {
+      ctx.clearRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const p = parts[i]!;
+        // Притяжение к кнопке: ускорение по направлению к цели + лёгкое затухание.
+        const dx = tx - p.x;
+        const dy = ty - p.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const accel = 0.22;
+        p.vx += (dx / dist) * accel;
+        p.vy += (dy / dist) * accel;
+        p.vx *= 0.92;
+        p.vy *= 0.92;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.012;
+        // Долетел до кнопки — гаснет.
+        if (dist < 14) p.life -= 0.08;
+        if (p.life <= 0) {
+          parts.splice(i, 1);
+          continue;
+        }
+        const a = Math.max(0, Math.min(1, p.life));
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(34, 224, 255, ${0.9 * a})`;
+        ctx.shadowColor = 'rgba(34, 224, 255, 0.9)';
+        ctx.shadowBlur = 10;
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.shadowBlur = 0;
+      ctx.globalCompositeOperation = 'source-over';
+      if (active || parts.length > 0) {
+        raf = requestAnimationFrame(step);
+      } else {
+        raf = 0;
+      }
+    };
+
+    // Активность по видимости Hero: появляется/гаснет плавно (CSS-opacity на канвасе).
+    const io = new IntersectionObserver(
+      (entries) => {
+        const e = entries[0];
+        if (!e) return;
+        active = e.isIntersecting;
+        if (active) {
+          canvas.setAttribute('data-active', '');
+          measure();
+          if (!raf) raf = requestAnimationFrame(step);
+        } else {
+          canvas.removeAttribute('data-active'); // CSS плавно гасит, частицы дотухают
+        }
+      },
+      { threshold: 0.05 },
+    );
+    io.observe(hero);
+  })();
 </script>

@@ -60,7 +60,7 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
               {plan.cta}
             </a>
 
-            {plan.note && <p class="pricing__plan-note">{plan.note}</p>}
+            {plan.note && <p class="pricing__plan-note pricing__plan-note--offer">{plan.note}</p>}
             {plan.requestOnly && <p class="pricing__plan-note">подключаем вручную, не самостоятельно</p>}
           </article>
         ))
@@ -185,6 +185,19 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
     text-align: center;
     font-size: var(--fs-xs);
     color: var(--dim);
+  }
+  /* Оффер «первый час бесплатно» — заметная акцентная плашка. */
+  .pricing__plan-note--offer {
+    margin-inline: auto;
+    margin-top: var(--sp-4);
+    display: inline-block;
+    width: 100%;
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--r-sm);
+    border: 1px solid var(--accent-line);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
   }
 
   .pricing__guarantee {

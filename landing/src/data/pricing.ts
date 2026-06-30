@@ -64,7 +64,7 @@ export const PLANS: readonly Plan[] = [
     cta: 'Перейти на Прайм',
     highlight: true,
     badge: 'Популярный',
-    note: 'можно попробовать 1 час',
+    note: '🎁 Первый час — бесплатно, без карты',
     href: '/register?plan=prime',
   },
   {
