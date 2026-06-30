@@ -1658,6 +1658,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       settings: digestSettingsRepo,
+      telegram: telegramClient,
     }),
     sendNow: new TriggerDailyDigestNow({
       projects: projectRepo,

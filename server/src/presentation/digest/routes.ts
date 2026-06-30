@@ -14,6 +14,11 @@ const taskStatusSchema = z.enum([
   'manual',
 ]);
 
+const resolveGroupSchema = z.object({
+  // chat_id групп отрицательный — просто int, без min.
+  chatId: z.number().int(),
+});
+
 const saveSchema = z.object({
   // chat_id групп отрицательный — поэтому просто int, без min.
   telegramGroupChatId: z.number().int().nullable(),
@@ -68,6 +73,30 @@ export function digestRouter(deps: Deps): Router {
   router.post('/:projectId/digest-settings/send-now', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await deps.sendNow.execute(req.params['projectId'] as string, req.user!.id);
+      res.json(result);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // История ранее введённых Telegram-групп юзера (для combobox-подсказок в окне
+  // автоматизации). Гейтится доступом к проекту, из которого открыто окно; выдача — по
+  // всем проектам юзера. Путь project-scoped (как digest-settings) — без коллизий маршрутов.
+  router.get('/:projectId/telegram-group-history', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const groups = await deps.get.listUserGroups(req.params['projectId'] as string, req.user!.id);
+      res.json({ groups });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Резолв названия Telegram-группы по chat_id через бота (getChat). Мягкий фоллбэк:
+  // { title: null } если бот не в группе / нет прав. Не сохраняет — клиент подставит в форму.
+  router.post('/:projectId/telegram-group/resolve', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { chatId } = resolveGroupSchema.parse(req.body);
+      const result = await deps.save.resolveGroupTitle(req.params['projectId'] as string, req.user!.id, chatId);
       res.json(result);
     } catch (e) {
       next(e);

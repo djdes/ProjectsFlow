@@ -1,4 +1,5 @@
 import type {
+  DigestGroupHistory,
   DigestSettings,
   DigestSettingsRepository,
   SaveDigestSettingsInput,
@@ -25,6 +26,20 @@ export class HttpDigestSettingsRepository implements DigestSettingsRepository {
     return httpClient.post<{ taskCount: number }>(
       `/projects/${projectId}/digest-settings/send-now`,
       {},
+    );
+  }
+
+  async listGroups(projectId: string): Promise<DigestGroupHistory[]> {
+    const { groups } = await httpClient.get<{ groups: DigestGroupHistory[] }>(
+      `/projects/${projectId}/telegram-group-history`,
+    );
+    return groups;
+  }
+
+  async resolveGroupTitle(projectId: string, chatId: number): Promise<{ title: string | null }> {
+    return httpClient.post<{ title: string | null }>(
+      `/projects/${projectId}/telegram-group/resolve`,
+      { chatId },
     );
   }
 }

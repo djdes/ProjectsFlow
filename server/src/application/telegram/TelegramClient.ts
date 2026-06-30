@@ -97,6 +97,15 @@ export type SendMessageResult =
   | SendMessageRateLimited
   | SendMessageError;
 
+// Минимальный slice ответа getChat — нам нужны только id/тип/название группы для
+// резолва имени Telegram-группы в окне автоматизации. См. https://core.telegram.org/bots/api#getchat
+export type TelegramChatInfo = {
+  readonly id: number;
+  // title есть у групп/супергрупп/каналов; у привата — нет (тогда null).
+  readonly title: string | null;
+  readonly type: string; // 'group' | 'supergroup' | 'channel' | 'private'
+};
+
 // Минимальный slice Telegram Update — то что polling/webhook читают. Совпадает с
 // типом в HandleTelegramWebhook (см. там полное описание). Тут — для возврата getUpdates.
 // callback_query (нажатия inline-кнопок) и inline_query (Phase D) парсятся в handler'е.
@@ -133,6 +142,10 @@ export interface TelegramClient {
   // offset = последний update_id + 1 (server-side ack того что прочитали).
   // Используется когда webhook недоступен (inbound к нам заблокирован хостингом).
   getUpdates(offset: number, timeoutSeconds: number): Promise<TelegramUpdate[]>;
+  // Метаданные чата (getChat) — для резолва названия Telegram-группы. Опционально:
+  // тестовые фейки могут не реализовывать. null — бот не в чате / нет прав / ошибка
+  // (мягкий фоллбэк, не кидаем — резолв имени не должен ронять сохранение настроек).
+  getChat?(chatId: number): Promise<TelegramChatInfo | null>;
 }
 
 // Набор update-типов, которые мы реально обрабатываем. Используется в allowed_updates

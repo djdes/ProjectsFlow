@@ -9,6 +9,7 @@ import {
   type SendMessageInput,
   type SendMessageResult,
   type TelegramBotCommand,
+  type TelegramChatInfo,
   type TelegramClient,
   type TelegramUpdate,
 } from '../../application/telegram/TelegramClient.js';
@@ -184,6 +185,32 @@ export class HttpTelegramClient implements TelegramClient {
 
   async deleteWebhook(): Promise<void> {
     await this.tgFetch('/deleteWebhook', { method: 'POST' }).catch(() => {});
+  }
+
+  // getChat — метаданные чата (название группы). Best-effort: при любой ошибке/отказе
+  // (бот не в группе, нет прав, сеть) возвращаем null, чтобы резолв имени не ронял UI.
+  async getChat(chatId: number): Promise<TelegramChatInfo | null> {
+    let res: Awaited<ReturnType<typeof this.tgFetch>>;
+    try {
+      res = await this.tgFetch('/getChat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId }),
+      });
+    } catch {
+      return null;
+    }
+    const body = (await res.json().catch(() => null)) as TgResponse<{
+      id: number;
+      title?: string;
+      type: string;
+    }> | null;
+    if (!res.ok || !body?.ok || !body.result) return null;
+    return {
+      id: body.result.id,
+      title: body.result.title ?? null,
+      type: body.result.type,
+    };
   }
 
   async getUpdates(offset: number, timeoutSeconds: number): Promise<TelegramUpdate[]> {

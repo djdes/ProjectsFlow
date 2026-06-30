@@ -27,9 +27,19 @@ export type SaveDigestSettingsInput = {
   readonly daily: DailyDigestConfig;
 };
 
+// Ранее введённая Telegram-группа (подсказка истории для поля chat_id).
+export type DigestGroupHistory = {
+  readonly chatId: number;
+  readonly title: string | null;
+};
+
 export interface DigestSettingsRepository {
   get(projectId: string): Promise<DigestSettings>;
   save(projectId: string, input: SaveDigestSettingsInput): Promise<DigestSettings>;
   // Отправить сводку немедленно (по текущим сохранённым настройкам). Возвращает число задач.
   sendNow(projectId: string): Promise<{ taskCount: number }>;
+  // История ранее введённых Telegram-групп юзера (для combobox-подсказок).
+  listGroups(projectId: string): Promise<DigestGroupHistory[]>;
+  // Резолв названия группы по chat_id через бота. null — бот не в группе / нет прав.
+  resolveGroupTitle(projectId: string, chatId: number): Promise<{ title: string | null }>;
 }
