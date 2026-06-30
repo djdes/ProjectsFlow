@@ -1,5 +1,6 @@
 import {
-  useCallback,
+  lazy,
+  Suspense,
   useEffect,
   useRef,
   useState,
@@ -8,7 +9,7 @@ import {
   type FormEvent,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, FileText, Inbox, Paperclip, X } from 'lucide-react';
+import { ChevronDown, FileText, Inbox, Plus, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -22,14 +23,11 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useProjects } from '@/presentation/hooks/useProjects';
-import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
-import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
 import {
   extractClipboardFiles,
   isImageMime,
@@ -39,7 +37,15 @@ import { DelegateSelect } from '@/presentation/components/tasks/DelegateSelect';
 import { DeadlinePicker } from '@/presentation/components/tasks/DeadlinePicker';
 import { PrioritySelect } from '@/presentation/components/tasks/PrioritySelect';
 import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
+import type { RichTextEditorHandle } from '@/presentation/components/editor/RichTextEditor';
 import type { RalphMode, TaskPriority } from '@/domain/task/Task';
+
+// Tiptap-редактор грузим лениво (тяжёлый chunk) — как в композере/окне задачи.
+const RichTextEditor = lazy(() =>
+  import('@/presentation/components/editor/RichTextEditor').then((m) => ({
+    default: m.RichTextEditor,
+  })),
+);
 
 type Props = {
   open: boolean;
@@ -51,10 +57,11 @@ type PendingFile = { id: string; file: File; previewUrl: string };
 // Sentinel для пункта «Без проекта» в radio-группе (radix требует строковое value).
 const INBOX_VALUE = '__inbox__';
 
-// Компактный Todoist-style диалог: textarea сверху, ряд пилюль-кнопок снизу
-// (Приоритет, Дедлайн, Делегировать, RalphMode, Вложение), внизу — проект-чип
-// + Cancel/Submit. Файлы — chips НАД textarea (как в QuickAddTodo). Drag&drop
-// и Ctrl+V работают на самом текстовом поле.
+// Глобальное окно создания задачи (кнопка «Создать задачу» в левой панели). Как окно
+// создания по проекту: Tiptap rich-редактор (форматирование по выделению, WYSIWYG,
+// вставка картинок), плюсики «+ Подзадача»/«+ Файл», ряд icon-контролов (Приоритет,
+// Дедлайн, Делегат), внизу — выбор проекта (Входящие/проект) + RalphMode + AI + Submit.
+// Файлы — chips над редактором; drag&drop и Ctrl+V на форме кладут их в аттачи.
 export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement {
   const navigate = useNavigate();
   const { taskRepository, projectRepository } = useContainer();
@@ -71,17 +78,13 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // autoFocus только на desktop — на мобильных клавиатура сразу перекрывает диалог.
-  // descRef — callback-ref (автофокус на десктопе). Параллельно держим объектный ref для
-  // меню форматирования (хук работает через .current).
-  const descNodeRef = useRef<HTMLTextAreaElement | null>(null);
-  const descRef = useCallback((el: HTMLTextAreaElement | null) => {
-    descNodeRef.current = el;
-    if (el && !window.matchMedia('(pointer: coarse)').matches) el.focus();
-  }, []);
-  const fmt = useTextFieldFormatting(descNodeRef);
-  // Авто-рост поля описания до 12 строк (site-wide правило), дальше внутренний скролл.
-  useAutoGrowTextarea(descNodeRef, description, { minRows: 3 });
+  // Tiptap-редактор: ref для «+ Подзадача» (вставка чек-пункта + фокус). Форма — для
+  // программного submit по Ctrl/Cmd+Enter из редактора.
+  const editorRef = useRef<RichTextEditorHandle>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  // autoFocus редактора — только на desktop (на мобильных клавиатура перекрывает диалог).
+  const isCoarsePointer =
+    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
 
   useEffect(() => {
     if (!open) {
@@ -202,6 +205,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
           <DialogTitle>Новая задача</DialogTitle>
         </DialogHeader>
         <form
+          ref={formRef}
           onSubmit={handleSubmit}
           onPaste={handlePaste}
           onDragOver={handleDragOver}
@@ -246,22 +250,46 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
               </div>
             )}
 
-            <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
-              <ContextMenuTrigger asChild>
-                <textarea
-                  id="task-desc"
-                  ref={descRef}
-                  rows={3}
-                  maxLength={50000}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  onKeyDown={fmt.keyDownHandler}
-                  placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
-                  className="block w-full resize-none bg-transparent text-sm leading-snug placeholder:text-muted-foreground/70 focus:outline-none"
-                />
-              </ContextMenuTrigger>
-              {fmt.menuContent}
-            </ContextMenu>
+            {/* Tiptap-редактор как в окне задачи: форматирование по выделению, WYSIWYG,
+                вставка картинок. Ctrl/Cmd+Enter — submit формы. */}
+            <Suspense fallback={<div className="min-h-[6rem]" />}>
+              <RichTextEditor
+                ref={editorRef}
+                variant="description"
+                value={description}
+                onChange={setDescription}
+                onSubmit={() => {
+                  if (!disabled) formRef.current?.requestSubmit();
+                }}
+                onPasteFiles={addFiles}
+                disabled={saving}
+                autoFocus={!isCoarsePointer}
+                placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
+                className="min-h-[6rem] text-sm leading-snug"
+              />
+            </Suspense>
+          </div>
+
+          {/* Плюсики: + Подзадача / + Файл — как в окне создания задачи по проекту. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => editorRef.current?.appendChecklistItem()}
+              className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+            >
+              <Plus className="size-4 shrink-0" />
+              Подзадача
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+            >
+              <Plus className="size-4 shrink-0" />
+              Файл
+            </button>
           </div>
 
           {/* Ряд минималистичных icon-кнопок под полем ввода — в один стиль с нижним
@@ -284,18 +312,6 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 className="size-9"
               />
             )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="group/at size-9 shrink-0 text-muted-foreground hover:text-foreground"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={saving}
-              aria-label="Вложение"
-              title="Вложение (или перетащи файл / Ctrl+V)"
-            >
-              <Paperclip className="size-4 transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110" />
-            </Button>
             <input
               ref={fileInputRef}
               type="file"
