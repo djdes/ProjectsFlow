@@ -6,6 +6,9 @@ import type { ListUserProjectsWithDispatcher } from '../../application/admin/Lis
 import type { ListUserProjectsWithFavorites } from '../../application/admin/ListUserProjectsWithFavorites.js';
 import type { SetUserProjectFavorite } from '../../application/admin/SetUserProjectFavorite.js';
 import type { AdminProjectView, AdminUserView } from '../../application/admin/AdminRepository.js';
+import type { ListAllSupportTickets } from '../../application/admin/ListAllSupportTickets.js';
+import type { SetSupportTicketStatus } from '../../application/admin/SetSupportTicketStatus.js';
+import type { SupportTicketWithSubmitter } from '../../application/help/SupportTicketRepository.js';
 import type { EmailSender } from '../../application/notifications/EmailSender.js';
 import {
   EMAIL_TEMPLATES,
@@ -22,6 +25,8 @@ type Deps = {
   readonly listUserProjectsWithDispatcher: ListUserProjectsWithDispatcher;
   readonly listUserProjectsWithFavorites: ListUserProjectsWithFavorites;
   readonly setUserProjectFavorite: SetUserProjectFavorite;
+  readonly listAllSupportTickets: ListAllSupportTickets;
+  readonly setSupportTicketStatus: SetSupportTicketStatus;
   readonly emailSender: EmailSender;
 };
 
@@ -31,6 +36,10 @@ function projectToDto(p: AdminProjectView): Record<string, unknown> {
 
 function userToDto(u: AdminUserView): Record<string, unknown> {
   return { ...u, createdAt: u.createdAt.toISOString() };
+}
+
+function ticketToDto(t: SupportTicketWithSubmitter): Record<string, unknown> {
+  return { ...t, createdAt: t.createdAt.toISOString() };
 }
 
 export function adminRouter(deps: Deps): Router {
@@ -131,6 +140,37 @@ export function adminRouter(deps: Deps): Router {
       if (typeof body.email === 'string') patch.email = body.email;
       if (typeof body.isAdmin === 'boolean') patch.isAdmin = body.isAdmin;
       await deps.updateUser.execute(id, patch);
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // --- Обращения в поддержку (рут видит в разделе «Администрирование») ---
+
+  router.get('/support-tickets', async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const list = await deps.listAllSupportTickets.execute();
+      res.json({ tickets: list.map(ticketToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Сменить статус обращения. body: { status: 'open' | 'closed' }.
+  router.patch('/support-tickets/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params['id'];
+      if (typeof id !== 'string') {
+        res.status(404).json({ error: 'not_found' });
+        return;
+      }
+      const status = (req.body ?? {}).status;
+      if (status !== 'open' && status !== 'closed') {
+        res.status(400).json({ error: "status must be 'open' or 'closed'" });
+        return;
+      }
+      await deps.setSupportTicketStatus.execute(id, status);
       res.status(204).end();
     } catch (e) {
       next(e);

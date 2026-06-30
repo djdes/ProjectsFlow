@@ -71,6 +71,18 @@ export type EmailPreview = {
   readonly text: string;
 };
 
+// Обращение в поддержку для админ-раздела. submitter* = null для анонимных (с лендинга).
+export type AdminSupportTicket = {
+  readonly id: string;
+  readonly userId: string | null;
+  readonly message: string;
+  readonly source: 'app' | 'landing';
+  readonly status: 'open' | 'closed';
+  readonly createdAt: string; // ISO
+  readonly submitterDisplayName: string | null;
+  readonly submitterEmail: string | null;
+};
+
 export interface AdminRepository {
   listProjects(): Promise<AdminProject[]>;
   listUsers(): Promise<AdminUser[]>;
@@ -85,4 +97,7 @@ export interface AdminRepository {
   listEmailTemplates(): Promise<EmailTemplateMeta[]>;
   previewEmail(templateKey: string): Promise<EmailPreview>;
   sendTestEmail(templateKey: string, recipientEmail: string): Promise<void>;
+  // Обращения в поддержку (раздел «Администрирование» → вкладка «Поддержка»).
+  listSupportTickets(): Promise<AdminSupportTicket[]>;
+  setSupportTicketStatus(id: string, status: 'open' | 'closed'): Promise<void>;
 }

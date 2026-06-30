@@ -60,6 +60,7 @@ export function useNotificationActions(opts?: {
       else if (p.type === 'task_assigned_to_project') navigate(`/projects/${p.projectId}`);
       else if (p.type === 'server_alert') navigate(`/projects/${p.projectId}/monitoring`);
       else if (p.type === 'daily_digest') navigate(`/projects/${p.projectId}`);
+      else if (p.type === 'support_ticket') navigate('/admin?tab=support');
       // project_invite: переход — по кнопке «Принять».
     })();
   };

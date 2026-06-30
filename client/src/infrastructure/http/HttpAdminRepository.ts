@@ -7,6 +7,7 @@ import type {
   AdminUserProjectFavorite,
   EmailTemplateMeta,
   EmailPreview,
+  AdminSupportTicket,
 } from '@/application/admin/AdminRepository';
 import { httpClient } from './httpClient';
 
@@ -62,5 +63,16 @@ export class HttpAdminRepository implements AdminRepository {
 
   async sendTestEmail(templateKey: string, recipientEmail: string): Promise<void> {
     await httpClient.post<unknown>('/admin/email/send', { templateKey, recipientEmail });
+  }
+
+  async listSupportTickets(): Promise<AdminSupportTicket[]> {
+    const { tickets } = await httpClient.get<{ tickets: AdminSupportTicket[] }>(
+      '/admin/support-tickets',
+    );
+    return tickets;
+  }
+
+  async setSupportTicketStatus(id: string, status: 'open' | 'closed'): Promise<void> {
+    await httpClient.patch<unknown>(`/admin/support-tickets/${id}`, { status });
   }
 }

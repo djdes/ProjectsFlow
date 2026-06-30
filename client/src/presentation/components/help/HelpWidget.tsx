@@ -107,7 +107,7 @@ export function HelpWidget({
                   {isAssistant ? 'AI-помощник' : 'Связаться с поддержкой'}
                 </p>
                 <p className="truncate text-xs text-primary-foreground/75">
-                  {isAssistant ? 'Подскажу, как пользоваться ProjectsFlow' : 'Ответим вам в Telegram'}
+                  {isAssistant ? 'Подскажу, как пользоваться ProjectsFlow' : 'Ответим как можно скорее'}
                 </p>
               </div>
               {showClear && (

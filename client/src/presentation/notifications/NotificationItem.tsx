@@ -43,7 +43,9 @@ export function NotificationItem({
               ? payload.serverName
               : payload.type === 'daily_digest'
                 ? payload.projectName
-                : payload.actorDisplayName,
+                : payload.type === 'support_ticket'
+                  ? (payload.submitterDisplayName ?? 'Поддержка')
+                  : payload.actorDisplayName,
           )}
         </AvatarFallback>
       </Avatar>
@@ -184,6 +186,30 @@ export function NotificationItem({
             {' · '}
             {payload.taskCount} задач
           </p>
+        )}
+
+        {payload.type === 'support_ticket' && (
+          <>
+            <p className="text-sm leading-tight">
+              🆘 Новое обращение в поддержку
+              {payload.submitterDisplayName ? (
+                <>
+                  {' от '}
+                  <span className="font-medium">{payload.submitterDisplayName}</span>
+                </>
+              ) : (
+                ' (аноним)'
+              )}
+              {payload.source === 'landing' && (
+                <span className="text-muted-foreground"> · с лендинга</span>
+              )}
+            </p>
+            {payload.messageExcerpt && (
+              <p className="line-clamp-2 text-xs italic text-muted-foreground">
+                «{payload.messageExcerpt}»
+              </p>
+            )}
+          </>
         )}
 
         {payload.type === 'join_request' && (

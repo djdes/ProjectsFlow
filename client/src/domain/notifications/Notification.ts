@@ -100,6 +100,16 @@ export type DailyDigestPayload = {
   readonly taskCount: number;
 };
 
+// Новое обращение в поддержку. Прилетает админам/руту; клиент ведёт в /admin (вкладка «Поддержка»).
+export type SupportTicketPayload = {
+  readonly type: 'support_ticket';
+  readonly ticketId: string;
+  readonly source: 'app' | 'landing';
+  readonly messageExcerpt: string;
+  readonly submitterUserId: string | null;
+  readonly submitterDisplayName: string | null;
+};
+
 export type NotificationPayload =
   | CommentMentionPayload
   | ProjectInvitePayload
@@ -108,7 +118,8 @@ export type NotificationPayload =
   | TaskDelegationResolvedPayload
   | TaskAssignedToProjectPayload
   | ServerAlertPayload
-  | DailyDigestPayload;
+  | DailyDigestPayload
+  | SupportTicketPayload;
 
 export type Notification = {
   readonly id: string;

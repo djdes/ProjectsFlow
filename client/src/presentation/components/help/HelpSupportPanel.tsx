@@ -94,7 +94,7 @@ export function HelpSupportPanel({
         <div className="space-y-1">
           <p className="text-sm font-semibold text-foreground">Обращение отправлено</p>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Спасибо! Команда ProjectsFlow ответит вам в&nbsp;Telegram.
+            Спасибо! Обращение принято — команда ProjectsFlow свяжется с вами.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => setStatus('idle')}>
@@ -107,7 +107,7 @@ export function HelpSupportPanel({
   return (
     <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
       <p className="text-sm leading-relaxed text-muted-foreground">
-        Опишите проблему или вопрос — команда ProjectsFlow ответит вам в&nbsp;Telegram.
+        Опишите проблему или вопрос — команда ProjectsFlow свяжется с вами.
       </p>
 
       <div

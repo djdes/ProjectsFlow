@@ -125,6 +125,18 @@ export type ChatMentionPayload = {
   readonly actorDisplayName: string;
 };
 
+// Новое обращение в поддержку. Прилетает всем админам (рут видит в разделе «Администрирование»).
+// Клиент ведёт в /admin на вкладку «Поддержка».
+export type SupportTicketPayload = {
+  readonly type: 'support_ticket';
+  readonly ticketId: string;
+  readonly source: 'app' | 'landing';
+  readonly messageExcerpt: string;
+  readonly submitterUserId: string | null;
+  // null — анонимная отправка с лендинга.
+  readonly submitterDisplayName: string | null;
+};
+
 export type NotificationPayload =
   | CommentMentionPayload
   | ProjectInvitePayload
@@ -134,7 +146,8 @@ export type NotificationPayload =
   | TaskAssignedToProjectPayload
   | ServerAlertPayload
   | DailyDigestPayload
-  | ChatMentionPayload;
+  | ChatMentionPayload
+  | SupportTicketPayload;
 
 export type Notification = {
   readonly id: string;

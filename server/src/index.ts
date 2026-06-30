@@ -32,6 +32,8 @@ import { RecordTaskView } from './application/task/RecordTaskView.js';
 import { ListRecentTaskViews } from './application/task/ListRecentTaskViews.js';
 import { DrizzleSupportTicketRepository } from './infrastructure/repositories/DrizzleSupportTicketRepository.js';
 import { SubmitSupportTicket } from './application/help/SubmitSupportTicket.js';
+import { ListAllSupportTickets } from './application/admin/ListAllSupportTickets.js';
+import { SetSupportTicketStatus } from './application/admin/SetSupportTicketStatus.js';
 import { NotificationHub } from './infrastructure/notifications/NotificationHub.js';
 import { RealtimeHub } from './infrastructure/realtime/RealtimeHub.js';
 import { ProjectEventBroadcaster } from './application/realtime/ProjectEventBroadcaster.js';
@@ -601,19 +603,15 @@ const sendAgentTelegramNotification = new SendAgentTelegramNotification({
 });
 
 // --- Чат-виджет: поддержка ---
-// SUPPORT_TELEGRAM_CHAT_ID — chat_id Telegram-чата поддержки (число; для групп
-// отрицательное). Пусто/невалидно → fallback: уведомление админам через их личную
-// TG-привязку (см. SubmitSupportTicket). Тикет в БД сохраняется в любом случае.
-const supportChatIdRaw = process.env['SUPPORT_TELEGRAM_CHAT_ID'];
-const supportChatIdParsed = supportChatIdRaw ? Number(supportChatIdRaw) : NaN;
-const supportTelegramChatId = Number.isFinite(supportChatIdParsed) ? supportChatIdParsed : null;
+// Обращения сохраняются в support_tickets и доставляются админам/руту in-app уведомлением
+// (раздел «Администрирование» → вкладка «Поддержка»; бейдж у рута через SSE). Telegram-доставка
+// отключена — UI поддержки больше не обещает ответ в Telegram.
 const supportTicketRepo = new DrizzleSupportTicketRepository(db);
 const submitSupportTicket = new SubmitSupportTicket({
   tickets: supportTicketRepo,
   users: userRepo,
-  client: telegramClient,
-  sendNotification: sendAgentTelegramNotification,
-  supportChatId: supportTelegramChatId,
+  notifications: notificationRepo,
+  idGen: idGenerator,
 });
 // CreateTaskComment + MaybeReopenForClarification используются и в HTTP-роутерах (см. ниже),
 // и в HandleTelegramWebhook (reply→ralph-answer ветка). Один экземпляр на оба чтобы не
@@ -1401,6 +1399,8 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
     }),
+    listAllSupportTickets: new ListAllSupportTickets(supportTicketRepo),
+    setSupportTicketStatus: new SetSupportTicketStatus(supportTicketRepo),
     emailSender,
   },
   finance: {

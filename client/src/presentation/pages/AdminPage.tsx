@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Bot, Check, ChevronRight, ExternalLink, Eye, Github, Loader2, Mail, Pencil, Send, Shield, Star, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Bot, Check, ChevronRight, ExternalLink, Eye, Github, LifeBuoy, Loader2, Mail, Pencil, Send, Shield, Star, FolderGit2, GitCommitHorizontal, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,16 +14,24 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
-import type { AdminProject, AdminUser, EmailTemplateMeta, EmailPreview } from '@/application/admin/AdminRepository';
+import type { AdminProject, AdminSupportTicket, AdminUser, EmailTemplateMeta, EmailPreview } from '@/application/admin/AdminRepository';
+import { relativeTime } from '@/lib/relativeTime';
 import { useContainer } from '@/infrastructure/di/container';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { AdminUserDispatchersDialog } from '@/presentation/components/admin/AdminUserDispatchersDialog';
 import { AdminUserFavoritesDialog } from '@/presentation/components/admin/AdminUserFavoritesDialog';
 
-type Tab = 'projects' | 'users' | 'email';
+type Tab = 'projects' | 'users' | 'support' | 'email';
+
+const TABS: readonly Tab[] = ['projects', 'users', 'support', 'email'];
 
 export function AdminPage(): React.ReactElement {
-  const [tab, setTab] = useState<Tab>('projects');
+  const [searchParams] = useSearchParams();
+  // Дип-линк из уведомления о новом обращении: /admin?tab=support.
+  const initialTab = searchParams.get('tab');
+  const [tab, setTab] = useState<Tab>(
+    TABS.includes(initialTab as Tab) ? (initialTab as Tab) : 'projects',
+  );
 
   return (
     <div className="flex h-full flex-col gap-5 p-4 pt-3.5 sm:p-6 sm:pt-4">
@@ -39,6 +47,9 @@ export function AdminPage(): React.ReactElement {
         <TabButton active={tab === 'users'} onClick={() => setTab('users')}>
           <Users className="size-4" /> Пользователи
         </TabButton>
+        <TabButton active={tab === 'support'} onClick={() => setTab('support')}>
+          <LifeBuoy className="size-4" /> Поддержка
+        </TabButton>
         <TabButton active={tab === 'email'} onClick={() => setTab('email')}>
           <Mail className="size-4" /> Email
         </TabButton>
@@ -46,6 +57,7 @@ export function AdminPage(): React.ReactElement {
 
       {tab === 'projects' && <ProjectsTab />}
       {tab === 'users' && <UsersTab />}
+      {tab === 'support' && <SupportTab />}
       {tab === 'email' && <EmailTab />}
     </div>
   );
@@ -73,6 +85,79 @@ function TabButton({
     >
       {children}
     </button>
+  );
+}
+
+function SupportTab(): React.ReactElement {
+  const { adminRepository } = useContainer();
+  const [tickets, setTickets] = useState<AdminSupportTicket[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const reload = (): void => {
+    adminRepository
+      .listSupportTickets()
+      .then(setTickets)
+      .catch((e: unknown) => toast.error(`Не удалось загрузить: ${(e as Error).message}`));
+  };
+  useEffect(reload, [adminRepository]);
+
+  const toggleStatus = async (t: AdminSupportTicket): Promise<void> => {
+    const next = t.status === 'open' ? 'closed' : 'open';
+    setBusy(t.id);
+    try {
+      await adminRepository.setSupportTicketStatus(t.id, next);
+      reload();
+    } catch (e) {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!tickets) return <ListSkeleton />;
+  if (tickets.length === 0) {
+    return (
+      <p className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+        Обращений пока нет.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+      {tickets.map((t) => (
+        <li key={t.id} className={cn('space-y-1.5 px-4 py-3', t.status === 'closed' && 'opacity-60')}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 space-y-1">
+              <p className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-medium">{t.submitterDisplayName ?? 'Аноним'}</span>
+                {t.submitterEmail && (
+                  <span className="truncate text-xs text-muted-foreground">{t.submitterEmail}</span>
+                )}
+                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {t.source === 'landing' ? 'лендинг' : 'приложение'}
+                </span>
+                {t.status === 'closed' && (
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    закрыто
+                  </span>
+                )}
+              </p>
+              <p className="whitespace-pre-wrap break-words text-sm text-foreground/90">{t.message}</p>
+              <p className="text-xs text-muted-foreground">{relativeTime(new Date(t.createdAt))}</p>
+            </div>
+            <Button
+              size="sm"
+              variant={t.status === 'open' ? 'outline' : 'ghost'}
+              disabled={busy === t.id}
+              onClick={() => void toggleStatus(t)}
+            >
+              {t.status === 'open' ? 'Закрыть' : 'Открыть'}
+            </Button>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
