@@ -187,6 +187,9 @@ import { DrizzleTaskSearchRepository } from './infrastructure/repositories/Drizz
 import { CreateTask } from './application/task/CreateTask.js';
 import { UpdateTask } from './application/task/UpdateTask.js';
 import { MoveTask } from './application/task/MoveTask.js';
+import { DrizzleEmailActionTokenRepository } from './infrastructure/repositories/DrizzleEmailActionTokenRepository.js';
+import { CreateEmailActionToken } from './application/email-action/CreateEmailActionToken.js';
+import { EmailActionService } from './application/email-action/EmailActionService.js';
 import { DeleteTask } from './application/task/DeleteTask.js';
 import { LinkCommit } from './application/task/LinkCommit.js';
 import { UnlinkCommit } from './application/task/UnlinkCommit.js';
@@ -1160,6 +1163,28 @@ const authDeps = {
 
 // Ежедневная сводка (db/064): один общий SendDailyDigest для планировщика и кнопки
 // «Отправить сейчас». Полностью серверная рассылка (почта / личный TG / группа / in-app).
+// One-click действия из писем-сводок (db/086): токены + публичный сервис.
+const emailActionTokenRepo = new DrizzleEmailActionTokenRepository(db);
+const createEmailActionToken = new CreateEmailActionToken({
+  tokens: emailActionTokenRepo,
+  idGen: idGenerator,
+  now,
+  ttlMs: 7 * 24 * 60 * 60 * 1000, // 7 дней на клик
+});
+const emailActionService = new EmailActionService({
+  tokens: emailActionTokenRepo,
+  tasks: taskRepo,
+  moveTask: new MoveTask({
+    projects: projectRepo,
+    members: projectMemberRepo,
+    tasks: taskRepo,
+    delegations: taskDelegationRepo,
+    activityRecorder,
+  }),
+  createTaskComment: createTaskCommentUseCase,
+  now,
+});
+
 const sendDailyDigest = new SendDailyDigest({
   tasks: taskRepo,
   delegations: taskDelegationRepo,
@@ -1173,9 +1198,11 @@ const sendDailyDigest = new SendDailyDigest({
   settings: digestSettingsRepo,
   appUrl: appBaseUrl,
   idGen: idGenerator,
+  createEmailActionToken,
 });
 
 const { app, devProxyUpgrade } = createApp({
+  emailActions: { service: emailActionService, appUrl: appBaseUrl },
   auth: {
     register: new Register(authDeps),
     login: new Login(authDeps),

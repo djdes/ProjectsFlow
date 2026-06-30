@@ -13,6 +13,7 @@ import {
 export type DigestAttachment = { readonly name: string; readonly url: string };
 
 export type DigestItem = {
+  readonly taskId: string; // id задачи — ключ для токен-ссылок действий в письме
   readonly name: string; // первая строка описания — текст анкора
   readonly body: string; // остальное описание (markdown, сохраняем вёрстку)
   readonly deadline: string | null;
@@ -65,6 +66,7 @@ export function buildDigestModel(
     const { name, body } = splitDescription(t.description);
     const linkBase = `${base}/${opts.isInbox ? 'inbox' : `projects/${t.projectId}`}?task=${t.id}`;
     return {
+      taskId: t.id,
       name,
       body,
       deadline: t.deadline ? formatDeadlineRu(t.deadline, opts.now) : null,
@@ -125,41 +127,60 @@ export function renderDigestMarkdown(m: DigestModel): string {
 }
 
 // Кнопка-плашка письма (bulletproof: <a> с inline-стилями, display:inline-block).
-// variant 'primary' — зелёная заливка (Завершить); 'ghost' — светло-синяя контурная
-// (Комментировать). Подписи/ссылки 1:1 с Telegram-футером (digestItemBlockTg).
+// variant 'primary' — зелёная заливка (Завершить); 'ghost' — синяя контурная (Комментировать).
 function emailButton(href: string, label: string, variant: 'primary' | 'ghost'): string {
   const style =
     variant === 'primary'
       ? 'background:#16a34a;color:#ffffff;border:1px solid #16a34a;'
-      : 'background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;';
+      : 'background:#ffffff;color:#2563eb;border:1px solid #bfdbfe;';
   return (
     `<a href="${escapeHtml(href)}" style="display:inline-block;text-decoration:none;` +
-    `font-size:13px;font-weight:600;line-height:1;padding:9px 14px;border-radius:8px;` +
-    `${style}">${escapeHtml(label)}</a>`
+    `font-size:13px;font-weight:700;line-height:1;padding:10px 16px;border-radius:8px;${style}">` +
+    `${escapeHtml(label)}</a>`
   );
 }
 
-// HTML — для письма. Раскладка карточки зеркалит Telegram-блок (см. digestItemBlockTg):
-// жирный заголовок (не ссылка) → мета → тело → вложения → кнопки внизу.
-export function renderDigestHtml(m: DigestModel): string {
+// Токен-ссылки one-click действий письма (по taskId). Если переданы — кнопки ведут на
+// /api/email-actions/…; иначе fallback на deep-links в приложение (как у Telegram).
+export type DigestEmailUrls = ReadonlyMap<string, { completeUrl: string; commentUrl: string }>;
+
+// HTML письма-сводки — фирменный стиль (градиентная шапка, карточки), кнопки «Комментировать» +
+// «Завершить» внизу каждой задачи. Стиль письма богаче TG (TG остаётся на deep-links).
+export function renderDigestHtml(
+  m: DigestModel,
+  opts: { actionUrls?: DigestEmailUrls } = {},
+): string {
   const p: string[] = [
-    '<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0f172a;line-height:1.5;">',
-    `<p style="font-size:15px;font-weight:700;margin:0 0 12px;">Задачи — ${m.count} · Проект «${escapeHtml(
+    '<div style="background:#f1f5f9;padding:24px 0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;">',
+    '<div style="max-width:560px;margin:0 auto;padding:0 16px;">',
+    '<div style="background:#2563eb;background:linear-gradient(135deg,#2563eb,#1d4ed8);border-radius:16px 16px 0 0;padding:18px 20px;color:#ffffff;">',
+    '<div style="font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.85;">ProjectsFlow · Ежедневная сводка</div>',
+    `<div style="font-weight:800;font-size:20px;letter-spacing:-.02em;margin:4px 0 0;">${escapeHtml(
       m.projectName,
-    )}»</p>`,
+    )}</div>`,
+    `<div style="font-size:13px;opacity:.9;margin:2px 0 0;">Задач: ${m.count}</div>`,
+    '</div>',
+    '<div style="background:#ffffff;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 16px 16px;padding:8px 16px 16px;color:#0f172a;line-height:1.5;">',
   ];
   for (const g of m.groups) {
-    p.push(`<p style="font-size:13px;font-weight:600;margin:16px 0 8px;">${escapeHtml(g.heading)}</p>`);
+    p.push(
+      `<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#64748b;margin:14px 0 8px;">${escapeHtml(
+        g.heading,
+      )}</div>`,
+    );
     for (const it of g.items) {
+      const urls = opts.actionUrls?.get(it.taskId);
+      const completeHref = urls?.completeUrl ?? it.doneLink;
+      const commentHref = urls?.commentUrl ?? it.openLink;
       p.push(
-        '<div style="margin:0 0 12px;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;">',
+        '<div style="margin:0 0 10px;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;background:#ffffff;">',
       );
-      p.push(`<div style="font-weight:600;font-size:15px;">${escapeHtml(it.name)}</div>`);
+      p.push(`<div style="font-weight:700;font-size:15px;">${escapeHtml(it.name)}</div>`);
       const meta: string[] = [];
       if (it.assignee) meta.push(`👤 ${escapeHtml(it.assignee)}`);
       if (it.deadline) meta.push(`⏰ ${escapeHtml(it.deadline)}`);
       if (meta.length) p.push(`<div style="color:#64748b;font-size:12px;margin:4px 0 0;">${meta.join(' · ')}</div>`);
-      if (it.body) p.push(`<div style="font-size:13px;margin:6px 0 0;">${markdownToRich(it.body, 'email')}</div>`);
+      if (it.body) p.push(`<div style="font-size:13px;color:#334155;margin:6px 0 0;">${markdownToRich(it.body, 'email')}</div>`);
       if (it.attachments.length) {
         p.push(
           `<div style="font-size:12px;margin:6px 0 0;">${it.attachments
@@ -170,16 +191,16 @@ export function renderDigestHtml(m: DigestModel): string {
       const commentLabel =
         it.commentCount > 0 ? `💬 Комментировать (${it.commentCount})` : '💬 Комментировать';
       p.push(
-        '<div style="margin:12px 0 0;">' +
-          emailButton(it.openLink, commentLabel, 'ghost') +
+        '<div style="margin:12px 0 2px;">' +
+          emailButton(commentHref, commentLabel, 'ghost') +
           '&nbsp;&nbsp;' +
-          emailButton(it.doneLink, '✓ Завершить', 'primary') +
+          emailButton(completeHref, '✓ Завершить', 'primary') +
           '</div>',
       );
       p.push('</div>');
     }
   }
-  p.push('</div>');
+  p.push('</div></div></div>');
   return p.join('');
 }
 

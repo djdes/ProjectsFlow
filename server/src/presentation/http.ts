@@ -151,6 +151,8 @@ import type { ProjectMemberRepository } from '../application/project/ProjectMemb
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './auth/routes.js';
+import { emailActionsRouter } from './emailActions/routes.js';
+import type { EmailActionService } from '../application/email-action/EmailActionService.js';
 import { avatarRouter } from './users/avatarRoutes.js';
 import { projectsRouter } from './projects/routes.js';
 import { workspacesRouter } from './workspaces/routes.js';
@@ -224,6 +226,10 @@ import type { CompleteCommitSyncJob } from '../application/commit-sync/CompleteC
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
+  readonly emailActions: {
+    readonly service: EmailActionService;
+    readonly appUrl: string;
+  };
   readonly auth: {
     readonly register: Register;
     readonly login: Login;
@@ -539,6 +545,9 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true });
   });
+
+  // Публичные one-click страницы действий из писем-сводок (авторизация по opaque-токену).
+  app.use('/api/email-actions', emailActionsRouter(deps.emailActions));
 
   app.use(
     '/api/auth',

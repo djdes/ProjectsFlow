@@ -1494,3 +1494,30 @@ export const supportTickets = mysqlTable(
 
 export type SupportTicketRow = typeof supportTickets.$inferSelect;
 export type NewSupportTicketRow = typeof supportTickets.$inferInsert;
+
+// ============================================================================
+// email_action_tokens — db/086. One-click действия из писем-сводок: «Завершить»/«Комментировать».
+// token — случайный opaque, валидируется по БД (как инвайты). user_id = получатель сводки (актор).
+// complete — одноразовый (used_at); comment — до истечения. Эндпоинты /api/email-actions/:token.
+// ============================================================================
+export const emailActionTokens = mysqlTable(
+  'email_action_tokens',
+  {
+    id: id(),
+    token: varchar('token', { length: 64 }).notNull(),
+    action: mysqlEnum('action', ['complete', 'comment']).notNull(),
+    taskId: char('task_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    usedAt: timestamp('used_at'),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_email_action_token').on(t.token),
+    index('idx_email_action_expires').on(t.expiresAt),
+  ],
+);
+
+export type EmailActionTokenRow = typeof emailActionTokens.$inferSelect;
+export type NewEmailActionTokenRow = typeof emailActionTokens.$inferInsert;

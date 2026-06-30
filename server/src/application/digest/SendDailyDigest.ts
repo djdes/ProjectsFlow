@@ -9,6 +9,7 @@ import type { NotificationRepository } from '../notifications/NotificationReposi
 import type { SendAgentTelegramNotification } from '../telegram/SendAgentTelegramNotification.js';
 import type { TelegramClient } from '../telegram/TelegramClient.js';
 import type { DigestSettingsRepository } from './DigestSettingsRepository.js';
+import type { CreateEmailActionToken } from '../email-action/CreateEmailActionToken.js';
 import {
   buildDigestModel,
   renderDigestHtml,
@@ -31,6 +32,8 @@ type Deps = {
   readonly settings: DigestSettingsRepository;
   readonly appUrl: string;
   readonly idGen: () => string;
+  // Токен-ссылки one-click действий в письме (своя на каждого получателя × задачу).
+  readonly createEmailActionToken: CreateEmailActionToken;
 };
 
 // Отправка ежедневной сводки по проекту (вызывается планировщиком). Полностью
@@ -79,7 +82,7 @@ export class SendDailyDigest {
     });
 
     const subject = `Ежедневная сводка · ${project.name}`;
-    const html = renderDigestHtml(model);
+    const base = this.deps.appUrl.replace(/\/+$/, '');
     const text = renderDigestMarkdown(model);
     // Telegram: массив сообщений (длинная сводка разбивается, все задачи целиком).
     const tgChunks = renderDigestTelegram(model);
@@ -91,6 +94,19 @@ export class SendDailyDigest {
     for (const userId of recipients) {
       const member = memberById.get(userId)!;
       if (cfg.channels.includes('email') && member.user.email) {
+        // One-click токен-ссылки действий — свои на каждого получателя × задачу.
+        const actionUrls = new Map<string, { completeUrl: string; commentUrl: string }>();
+        for (const t of selected) {
+          const [completeToken, commentToken] = await Promise.all([
+            this.deps.createEmailActionToken.execute({ action: 'complete', taskId: t.id, projectId, userId }),
+            this.deps.createEmailActionToken.execute({ action: 'comment', taskId: t.id, projectId, userId }),
+          ]);
+          actionUrls.set(t.id, {
+            completeUrl: `${base}/api/email-actions/${completeToken}`,
+            commentUrl: `${base}/api/email-actions/${commentToken}`,
+          });
+        }
+        const html = renderDigestHtml(model, { actionUrls });
         await this.deps.email
           .send({ to: member.user.email, subject, html, text })
           .catch((e) => console.warn('[daily-digest] email failed', userId, e));
