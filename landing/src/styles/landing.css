@@ -152,6 +152,36 @@ section[id] {
 .pf-btn--lg { height: 50px; padding-inline: var(--sp-8); font-size: var(--fs-base); }
 .pf-btn--block { width: 100%; }
 
+/* «Приглашающая» primary-кнопка: мягкое дыхание свечения + редкий блик + отклик на hover.
+   Плавно и ненавязчиво (без постоянного масштабирования — чтобы не укачивало). */
+.pf-btn--invite { position: relative; overflow: hidden; }
+.pf-btn--invite svg { transition: transform var(--dur) var(--ease); }
+.pf-btn--invite:hover svg { transform: translateX(3px); }
+@media (prefers-reduced-motion: no-preference) {
+  .pf-btn--invite { animation: pf-invite-glow 3.4s var(--ease) infinite; }
+  /* Блик-проблеск: быстро проходит ~раз в 5s, остальное время ждёт за краем. */
+  .pf-btn--invite::after {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 55%;
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    transform: translateX(-200%) skewX(-18deg);
+    animation: pf-invite-sheen 5s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .pf-btn--invite:hover { transform: translateY(-1px); }
+  @keyframes pf-invite-glow {
+    0%, 100% { box-shadow: 0 0 0 1px var(--accent-line), 0 10px 32px -12px rgba(34, 224, 255, 0.5); }
+    50% { box-shadow: 0 0 0 1px var(--accent-line), 0 16px 44px -8px rgba(34, 224, 255, 0.9); }
+  }
+  @keyframes pf-invite-sheen {
+    0% { transform: translateX(-200%) skewX(-18deg); }
+    16% { transform: translateX(240%) skewX(-18deg); }
+    100% { transform: translateX(240%) skewX(-18deg); }
+  }
+}
+
 /* --- Карточка (поверхность + линия + hover) -------------------------------- */
 .pf-card {
   position: relative;

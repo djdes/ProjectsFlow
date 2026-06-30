@@ -59,7 +59,7 @@ const previewTasks = [
 
       <div class="hero__cta">
         {/* Anonymous (по умолчанию). Скрипт в BaseLayout заменит на «Открыть приложение». */}
-        <a href={`${appBase}/register`} data-auth-anon class="pf-btn pf-btn--primary pf-btn--lg">
+        <a href={`${appBase}/register`} data-auth-anon class="pf-btn pf-btn--primary pf-btn--lg pf-btn--invite">
           Начать бесплатно
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="hero__arrow" aria-hidden="true">
             <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
@@ -67,7 +67,7 @@ const previewTasks = [
         </a>
         <a href={`${appBase}/login`} data-auth-anon class="pf-btn pf-btn--ghost pf-btn--lg">Войти</a>
         {/* Authed (скрыто изначально). */}
-        <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary pf-btn--lg hero__authed">
+        <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary pf-btn--lg pf-btn--invite hero__authed">
           Открыть приложение
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="hero__arrow" aria-hidden="true">
             <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
