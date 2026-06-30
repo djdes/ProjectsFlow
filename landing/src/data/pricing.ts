@@ -64,6 +64,7 @@ export const PLANS: readonly Plan[] = [
     cta: 'Перейти на Прайм',
     highlight: true,
     badge: 'Популярный',
+    note: 'можно попробовать 1 час',
     href: '/register?plan=prime',
   },
   {
@@ -78,8 +79,9 @@ export const PLANS: readonly Plan[] = [
       'всё из Прайма, удвоенный лимит',
       'максимальный приоритет',
     ],
-    cta: 'Перейти на ВИП',
+    cta: 'По запросу',
     highlight: false,
+    requestOnly: true,
     href: '/register?plan=vip',
   },
 ] as const;
