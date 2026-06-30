@@ -10,15 +10,19 @@ type Props = {
     deadline?: string | null;
     priority?: TaskPriority | null;
   }) => Promise<Task>;
+  // Проект, к которому привязан черновик floating-композера — чтобы он не «протекал» между
+  // проектами (у каждого проекта свой ключ sessionStorage, а не один глобальный).
+  projectId: string;
   isInbox?: boolean;
   isShared?: boolean;
   aiProjectId?: string | null;
 };
 
-// Глобальный floating quick-add (fixed снизу страницы). Тонкая обёртка над TaskComposer —
+// Floating quick-add (fixed снизу страницы). Тонкая обёртка над TaskComposer —
 // вся логика (textarea, файлы, Ralph-режим, делегирование, AI-improve) живёт в нём.
 export function QuickAddTodo({
   onCreate,
+  projectId,
   isInbox = false,
   isShared = false,
   aiProjectId = null,
@@ -30,6 +34,7 @@ export function QuickAddTodo({
       isInbox={isInbox}
       isShared={isShared}
       aiProjectId={aiProjectId}
+      storageKey={`pf:quick-add:${projectId}:floating`}
     />
   );
 }

@@ -1008,6 +1008,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
           чтобы не конкурировать с панелью массовых действий. */}
       {selectionStatus === null && (
         <QuickAddTodo
+          projectId={projectId}
           isInbox={isInbox}
           isShared={isShared}
           aiProjectId={isInbox ? null : projectId}

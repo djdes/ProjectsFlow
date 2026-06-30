@@ -179,7 +179,12 @@ export function TasksPage(): React.ReactElement {
         </TooltipProvider>
       </div>
 
+      {/* key={data.id} — при переключении проекта доска полностью пересоздаётся. Иначе
+          состояние inline-композера (composingStatus + открытый композер) переживало бы смену
+          проекта и «протекало» бы черновиком в storage нового проекта (кнопка «Восстановить»
+          вылезала в чужом проекте). Inbox-доска уже монтируется с key (см. InboxPage). */}
       <KanbanBoard
+        key={data.id}
         projectId={data.id}
         projectName={data.name}
         memberCount={data.memberCount}
