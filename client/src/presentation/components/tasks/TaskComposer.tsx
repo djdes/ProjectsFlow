@@ -414,24 +414,8 @@ export function TaskComposer({
         >
           <Paperclip className="size-4 transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110" />
         </Button>
-        {/* Второстепенные контролы (режим/приоритет/дедлайн/делегат) — проявляются при
-            наведении/фокусе композера. Скрепка, AI, крестик и отправка видны всегда.
-            Скрыто через opacity (место зарезервировано — без скачков), на тач (max-sm)
-            всегда видно при раскрытом тулбаре. */}
-        <span
-          className={cn(
-            'flex items-center gap-1.5 transition-opacity duration-150',
-            // Когда уже что-то набрано — контролы всегда видны (не мигают при выборе
-            // дедлайна/приоритета через портальный дропдаун). Иначе — по hover/фокусу.
-            hasText
-              ? 'opacity-100'
-              : cn(
-                  'opacity-0 pointer-events-none max-sm:opacity-100 max-sm:pointer-events-auto',
-                  'group-hover/composer:opacity-100 group-hover/composer:pointer-events-auto',
-                  'group-focus-within/composer:opacity-100 group-focus-within/composer:pointer-events-auto',
-                ),
-          )}
-        >
+        {/* Контролы режим/приоритет/дедлайн/делегат — всегда видны (так не «пусто»). */}
+        <span className="flex items-center gap-1.5">
           {(isInbox || isShared) && (
             <DelegateSelect
               value={delegateUserId}

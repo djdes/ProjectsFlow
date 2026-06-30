@@ -298,16 +298,16 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
             </button>
           </div>
 
-          {/* Ряд минималистичных icon-кнопок под полем ввода — в один стиль с нижним
-              композером канбана (size-9 ghost, живые иконки). RalphMode — в footer-е. */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <PrioritySelect value={priority} onChange={setPriority} disabled={saving} iconOnly className="size-9" />
+          {/* Ряд минималистичных icon-кнопок под полем ввода — мелкие size-8 ghost,
+              как кластер действий в окне редактирования задачи. */}
+          <div className="flex flex-wrap items-center gap-1">
+            <PrioritySelect value={priority} onChange={setPriority} disabled={saving} iconOnly className="size-8" />
             <DeadlinePicker
               value={deadline}
               onChange={setDeadline}
               disabled={saving}
               iconOnly
-              className={cn('h-9', deadline === null ? 'w-9 px-0' : 'px-2')}
+              className={cn('h-8', deadline === null ? 'w-8 px-0' : 'px-2')}
             />
             {(projectId === null || (realProjects.find((p) => p.id === projectId)?.memberCount ?? 0) > 1) && (
               <DelegateSelect
@@ -315,7 +315,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 onChange={setDelegateUserId}
                 disabled={saving}
                 projectId={projectId ?? undefined}
-                className="size-9"
+                className="size-8"
               />
             )}
             <input
@@ -378,7 +378,9 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 value={ralphMode}
                 onChange={setRalphMode}
                 disabled={saving}
-                className="!h-7 min-w-[100px] !px-2 text-xs sm:!h-8 sm:min-w-[140px]"
+                variant="ghost"
+                iconOnly
+                className="!size-8 shrink-0 !p-0"
               />
               <AiComposeDialog
                 text={description}
@@ -387,21 +389,22 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 onDistributed={() => onOpenChange(false)}
                 ralphMode={ralphMode}
                 disabled={saving}
+                iconOnly
               />
             </div>
 
-            {/* Нижняя строка footer: Cancel + Submit */}
-            <div className="flex items-center justify-end gap-2">
+            {/* Нижняя строка footer: Cancel + Submit — компактные, как в окне задачи. */}
+            <div className="flex items-center justify-end gap-1.5">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-8 max-sm:hidden"
+                className="h-8 px-2.5 text-xs max-sm:hidden"
                 onClick={() => onOpenChange(false)}
               >
                 Отмена
               </Button>
-              <Button type="submit" size="sm" className="h-8" disabled={disabled}>
+              <Button type="submit" size="sm" className="h-8 px-3 text-xs" disabled={disabled}>
                 {saving ? 'Добавляем…' : 'Добавить'}
               </Button>
             </div>
