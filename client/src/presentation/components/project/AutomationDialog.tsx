@@ -960,93 +960,97 @@ export function AutomationDialog({
                 {/* Telegram-группа: chat_id + история + название. Видна всегда. */}
                 <div className="space-y-2">
                   <FieldGroupLabel>Telegram-группа проекта</FieldGroupLabel>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {/* Поля стопкой во всю ширину — обе иконочные кнопки выравниваются по
+                      правому краю в одну колонку, ровно под высоту полей (h-8 = size-8). */}
+                  <div className="space-y-2">
+                    {/* chat_id + история ранее введённых групп */}
                     <div className="space-y-1">
                       <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
                         chat_id
                       </Label>
-                    <div className="flex items-center gap-1.5">
-                      <Input
-                        value={digest?.groupChatId ?? ''}
-                        placeholder="-1003920622527"
-                        inputMode="numeric"
-                        onChange={(e) => updateDigest({ groupChatId: e.target.value })}
-                        className="h-8 flex-1 font-mono text-xs"
-                      />
-                      {groupHistory.length > 0 && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="size-8 shrink-0 sm:size-8"
-                              title="Ранее введённые группы"
-                              aria-label="Ранее введённые группы"
-                            >
-                              <History className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="max-h-64 w-64 overflow-auto">
-                            <DropdownMenuLabel>Ранее введённые группы</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            {groupHistory.map((g) => (
-                              <DropdownMenuItem
-                                key={g.chatId}
-                                onSelect={() =>
-                                  updateDigest({
-                                    groupChatId: String(g.chatId),
-                                    // Подставляем известное название, если оно есть.
-                                    ...(g.title ? { groupTitle: g.title } : {}),
-                                  })
-                                }
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          value={digest?.groupChatId ?? ''}
+                          placeholder="-1003920622527"
+                          inputMode="numeric"
+                          onChange={(e) => updateDigest({ groupChatId: e.target.value })}
+                          className="h-8 flex-1 font-mono text-xs"
+                        />
+                        {groupHistory.length > 0 && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="size-8 shrink-0 sm:size-8"
+                                title="Ранее введённые группы"
+                                aria-label="Ранее введённые группы"
                               >
-                                <div className="flex min-w-0 flex-col">
-                                  <span className="truncate text-sm">
-                                    {g.title || 'Без названия'}
-                                  </span>
-                                  <span className="font-mono text-[11px] text-muted-foreground">
-                                    {g.chatId}
-                                  </span>
-                                </div>
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                      Название (опц.)
-                    </Label>
-                    <div className="flex items-center gap-1.5">
-                      <Input
-                        value={digest?.groupTitle ?? ''}
-                        placeholder="Команда проекта"
-                        maxLength={255}
-                        onChange={(e) => updateDigest({ groupTitle: e.target.value })}
-                        className="h-8 flex-1"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="size-8 shrink-0 sm:size-8"
-                        disabled={resolvingTitle || !chatIdValid}
-                        onClick={() => void handleResolveTitle()}
-                        title="Получить название группы из Telegram"
-                        aria-label="Получить название группы из Telegram"
-                      >
-                        {resolvingTitle ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="size-4" />
+                                <History className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="max-h-64 w-64 overflow-auto">
+                              <DropdownMenuLabel>Ранее введённые группы</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              {groupHistory.map((g) => (
+                                <DropdownMenuItem
+                                  key={g.chatId}
+                                  onSelect={() =>
+                                    updateDigest({
+                                      groupChatId: String(g.chatId),
+                                      // Подставляем известное название, если оно есть.
+                                      ...(g.title ? { groupTitle: g.title } : {}),
+                                    })
+                                  }
+                                >
+                                  <div className="flex min-w-0 flex-col">
+                                    <span className="truncate text-sm">
+                                      {g.title || 'Без названия'}
+                                    </span>
+                                    <span className="font-mono text-[11px] text-muted-foreground">
+                                      {g.chatId}
+                                    </span>
+                                  </div>
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
-                      </Button>
+                      </div>
+                    </div>
+                    {/* Название + резолв названия через бота */}
+                    <div className="space-y-1">
+                      <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        Название (опц.)
+                      </Label>
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          value={digest?.groupTitle ?? ''}
+                          placeholder="Команда проекта"
+                          maxLength={255}
+                          onChange={(e) => updateDigest({ groupTitle: e.target.value })}
+                          className="h-8 flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="size-8 shrink-0 sm:size-8"
+                          disabled={resolvingTitle || !chatIdValid}
+                          onClick={() => void handleResolveTitle()}
+                          title="Получить название группы из Telegram"
+                          aria-label="Получить название группы из Telegram"
+                        >
+                          {resolvingTitle ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="size-4" />
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
                 <p className="text-[11px] leading-snug text-muted-foreground">
                   chat_id групп отрицательный (супергруппа начинается с −100). Кнопка
                   <RefreshCw className="mx-1 inline size-3 align-text-bottom" />
