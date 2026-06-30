@@ -28,7 +28,7 @@ const previewTasks = [
     <HeroSceneGate client:media="(min-width: 1024px)" />
   </div>
 
-  <!-- Синие частицы, «притягивающиеся» от курсора к кнопке «Начать бесплатно».
+  <!-- Фоновые синие частицы, постоянно притягивающиеся к кнопке «Начать бесплатно».
        Только в Hero; плавно гаснут при скролле ниже. Не мешают кликам (pointer-events:none). -->
   <canvas class="hero__particles" data-particles aria-hidden="true"></canvas>
 
@@ -317,13 +317,12 @@ const previewTasks = [
 </script>
 
 <script>
-  // Синие частицы, «притягивающиеся» от курсора к кнопке «Начать бесплатно».
-  // Только в Hero; гаснут при скролле ниже (IntersectionObserver + CSS-fade канваса).
-  // Отключено при reduced-motion и на тач-устройствах (нет курсора).
+  // Синие светящиеся частицы, постоянно «притягивающиеся» к кнопке «Начать бесплатно».
+  // Фоновые (НЕ зависят от курсора), быстрые — создают эффект непрерывного притяжения к
+  // кнопке. Только в Hero; плавно гаснут при скролле ниже. Отключены при reduced-motion.
   (() => {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const coarse = window.matchMedia('(pointer: coarse)').matches;
-    if (reduce || coarse) return;
+    if (reduce) return;
 
     const hero = document.querySelector<HTMLElement>('.hero');
     const canvas = document.querySelector<HTMLCanvasElement>('[data-particles]');
@@ -334,8 +333,7 @@ const previewTasks = [
 
     type P = { x: number; y: number; vx: number; vy: number; life: number; r: number };
     const parts: P[] = [];
-    const MAX = 140;
-    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const TARGET = 64; // фоновая плотность частиц
     let W = 0;
     let H = 0;
     let tx = 0; // цель — центр кнопки, в координатах канваса
@@ -347,7 +345,7 @@ const previewTasks = [
       const hr = hero.getBoundingClientRect();
       W = hr.width;
       H = hr.height;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.round(W * dpr);
       canvas.height = Math.round(H * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -358,60 +356,58 @@ const previewTasks = [
     measure();
     window.addEventListener('resize', measure, { passive: true });
 
-    const spawn = (cx: number, cy: number): void => {
-      if (parts.length > MAX) return;
-      const n = 2;
-      for (let i = 0; i < n; i++) {
-        parts.push({
-          x: cx + (Math.random() - 0.5) * 8,
-          y: cy + (Math.random() - 0.5) * 8,
-          vx: (Math.random() - 0.5) * 0.6,
-          vy: (Math.random() - 0.5) * 0.6,
-          life: 1,
-          r: 1.2 + Math.random() * 1.8,
-        });
-      }
+    // Фоновый спавн: частица появляется в случайной точке Hero и летит к кнопке.
+    const spawnOne = (): void => {
+      parts.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.8,
+        vy: (Math.random() - 0.5) * 0.8,
+        life: 0.6 + Math.random() * 0.6,
+        r: 1 + Math.random() * 2,
+      });
     };
 
-    window.addEventListener(
-      'pointermove',
-      (e: PointerEvent) => {
-        if (!active) return;
-        const hr = hero.getBoundingClientRect();
-        const x = e.clientX - hr.left;
-        const y = e.clientY - hr.top;
-        if (x < 0 || y < 0 || x > W || y > H) return; // только в пределах Hero
-        spawn(x, y);
-      },
-      { passive: true },
-    );
+    const ACCEL = 0.5; // сильное притяжение → быстрое движение к кнопке
+    const DRAG = 0.9;
+    const MAXV = 8;
 
     const step = (): void => {
       ctx.clearRect(0, 0, W, H);
       ctx.globalCompositeOperation = 'lighter';
+      // Поддерживаем фоновую плотность плавным дозированным спавном.
+      if (active) {
+        let add = 0;
+        while (parts.length < TARGET && add < 3) {
+          spawnOne();
+          add++;
+        }
+      }
       for (let i = parts.length - 1; i >= 0; i--) {
         const p = parts[i]!;
-        // Притяжение к кнопке: ускорение по направлению к цели + лёгкое затухание.
         const dx = tx - p.x;
         const dy = ty - p.y;
         const dist = Math.hypot(dx, dy) || 1;
-        const accel = 0.22;
-        p.vx += (dx / dist) * accel;
-        p.vy += (dy / dist) * accel;
-        p.vx *= 0.92;
-        p.vy *= 0.92;
+        p.vx += (dx / dist) * ACCEL;
+        p.vy += (dy / dist) * ACCEL;
+        p.vx *= DRAG;
+        p.vy *= DRAG;
+        const sp = Math.hypot(p.vx, p.vy);
+        if (sp > MAXV) {
+          p.vx = (p.vx / sp) * MAXV;
+          p.vy = (p.vy / sp) * MAXV;
+        }
         p.x += p.vx;
         p.y += p.vy;
-        p.life -= 0.012;
-        // Долетел до кнопки — гаснет.
-        if (dist < 14) p.life -= 0.08;
+        p.life -= 0.006;
+        if (dist < 18) p.life -= 0.16; // у кнопки гаснет и переродится в другом месте
         if (p.life <= 0) {
           parts.splice(i, 1);
           continue;
         }
         const a = Math.max(0, Math.min(1, p.life));
         ctx.beginPath();
-        ctx.fillStyle = `rgba(34, 224, 255, ${0.9 * a})`;
+        ctx.fillStyle = `rgba(34, 224, 255, ${0.85 * a})`;
         ctx.shadowColor = 'rgba(34, 224, 255, 0.9)';
         ctx.shadowBlur = 10;
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
