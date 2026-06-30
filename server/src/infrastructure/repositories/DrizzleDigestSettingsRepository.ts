@@ -3,6 +3,7 @@ import type { Database } from '../db/index.js';
 import {
   projectDigestSettings,
   projectMembers,
+  projects,
   type ProjectDigestSettingsRow,
 } from '../db/schema.js';
 import type {
@@ -84,14 +85,21 @@ export class DrizzleDigestSettingsRepository implements DigestSettingsRepository
       .where(eq(projectDigestSettings.projectId, projectId));
   }
 
-  async listGroupsForUser(userId: string): Promise<DigestGroupHistory[]> {
-    // Группы из всех проектов, где юзер — участник, с непустым chat_id. JOIN на
-    // project_members гейтит выдачу его проектами (не светим чужие группы).
-    const rows = await this.db
-      .select({
-        chatId: projectDigestSettings.telegramGroupChatId,
-        title: projectDigestSettings.telegramGroupTitle,
-      })
+  async listGroupsForUser(userId: string, projectId: string): Promise<DigestGroupHistory[]> {
+    // Подсказки «ранее введённые группы» = объединение двух выборок (обе с непустым chat_id):
+    //  (A) группы из всех проектов, где юзер — участник (любое пространство) — JOIN на
+    //      project_members гейтит выдачу его проектами;
+    //  (B) группы из всех проектов ПРОСТРАНСТВА текущего проекта — т.е. то, что вводили
+    //      другие участники пространства. Доступ к проекту = участник пространства, поэтому
+    //      светить группы в пределах одного пространства безопасно.
+    const selectCols = {
+      chatId: projectDigestSettings.telegramGroupChatId,
+      title: projectDigestSettings.telegramGroupTitle,
+    } as const;
+
+    // (A) — мои проекты.
+    const mine = await this.db
+      .select(selectCols)
       .from(projectDigestSettings)
       .innerJoin(projectMembers, eq(projectMembers.projectId, projectDigestSettings.projectId))
       .where(
@@ -101,10 +109,29 @@ export class DrizzleDigestSettingsRepository implements DigestSettingsRepository
         ),
       );
 
-    // Один и тот же chat_id может встречаться в нескольких проектах — дедуплицируем,
-    // предпочитая запись с непустым названием.
+    // (B) — все проекты пространства текущего проекта. workspace_id резолвим по projectId.
+    const [cur] = await this.db
+      .select({ workspaceId: projects.workspaceId })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+    const workspace = cur
+      ? await this.db
+          .select(selectCols)
+          .from(projectDigestSettings)
+          .innerJoin(projects, eq(projects.id, projectDigestSettings.projectId))
+          .where(
+            and(
+              eq(projects.workspaceId, cur.workspaceId),
+              isNotNull(projectDigestSettings.telegramGroupChatId),
+            ),
+          )
+      : [];
+
+    // Один и тот же chat_id может встречаться в нескольких проектах/обеих выборках —
+    // дедуплицируем, предпочитая запись с непустым названием.
     const byId = new Map<number, DigestGroupHistory>();
-    for (const r of rows) {
+    for (const r of [...mine, ...workspace]) {
       if (r.chatId === null) continue;
       const title = r.title ?? null;
       const existing = byId.get(r.chatId);

@@ -919,18 +919,29 @@ export function AutomationDialog({
               </div>
             </AutomationCard>
 
-            {/* TELEGRAM-ГРУППА — chat_id с историей подсказок + резолв названия через бота. */}
+            {/* ЕЖЕДНЕВНАЯ СВОДКА ПО ЗАДАЧАМ — Telegram-группа проекта + расписание сводки в
+                одном блоке (агрегируется мастером). Поля группы (chat_id/название) видны
+                всегда — они нужны и для отправки «в группу», и для экспорта задач; расписание,
+                получатели и колонки появляются, когда сводка включена. */}
             <AutomationCard
-              icon={Send}
-              title="Telegram-группа проекта"
-              description="Куда отправлять сводку «в группу» и экспорт задач. Бот ProjectsFlow_Bot должен быть в группе."
+              icon={CalendarClock}
+              title="Ежедневная сводка по задачам"
+              description="Сводка по выбранным колонкам — в Telegram (группа/личка), на почту или в уведомления. Бот ProjectsFlow_Bot должен быть в группе."
+              toggle={{
+                checked: digest?.enabled ?? false,
+                onCheckedChange: (v) => updateDigest({ enabled: v }),
+                ariaLabel: 'Ежедневная сводка по задачам',
+              }}
             >
-              <div className="space-y-2">
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                      chat_id
-                    </Label>
+              <div className="space-y-4">
+                {/* Telegram-группа: chat_id + история + название. Видна всегда. */}
+                <div className="space-y-2">
+                  <FieldGroupLabel>Telegram-группа проекта</FieldGroupLabel>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        chat_id
+                      </Label>
                     <div className="flex gap-1.5">
                       <Input
                         value={digest?.groupChatId ?? ''}
@@ -1021,21 +1032,10 @@ export function AutomationDialog({
                   показывает ранее введённые ID.
                 </p>
               </div>
-            </AutomationCard>
 
-            {/* ЕЖЕДНЕВНАЯ СВОДКА — агрегируется мастером. */}
-            <AutomationCard
-              icon={CalendarClock}
-              title="Ежедневная сводка по задачам"
-              description="Каждый день в заданное время — сводка по выбранным колонкам выбранным получателям."
-              toggle={{
-                checked: digest?.enabled ?? false,
-                onCheckedChange: (v) => updateDigest({ enabled: v }),
-                ariaLabel: 'Ежедневная сводка по задачам',
-              }}
-            >
-              {digest?.enabled ? (
-                <div className="space-y-3">
+                {/* Параметры сводки — появляются, когда сводка включена. */}
+                {digest?.enabled ? (
+                  <div className="space-y-3 border-t pt-3">
                   <div className="flex items-center gap-2 text-sm">
                     <span className="text-muted-foreground">Время (МSK)</span>
                     <Input
@@ -1151,8 +1151,13 @@ export function AutomationDialog({
                       сохранит настройки и отправит сводку сразу
                     </span>
                   </div>
-                </div>
-              ) : undefined}
+                  </div>
+                ) : (
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    Включите сводку, чтобы задать время, получателей и колонки.
+                  </p>
+                )}
+              </div>
             </AutomationCard>
 
             {/* АВТО-ОБРАБОТКА ПО КОММИТАМ (db/072) — агрегируется мастером. */}

@@ -21,7 +21,9 @@ export interface DigestSettingsRepository {
   listDailyEnabled(): Promise<DigestSettings[]>;
   // Отметить, что сводка отправлена в указанную МSK-дату ('YYYY-MM-DD').
   markDailySent(projectId: string, dateMsk: string): Promise<void>;
-  // Distinct Telegram-группы (chat_id + последнее известное название) из всех проектов,
-  // где userId — участник. Источник подсказок «ранее введённые ID групп».
-  listGroupsForUser(userId: string): Promise<DigestGroupHistory[]>;
+  // Distinct Telegram-группы (chat_id + последнее известное название) — подсказки
+  // «ранее введённые ID групп». Объединение: (A) все проекты, где userId — участник
+  // (любое пространство), + (B) все проекты ПРОСТРАНСТВА проекта projectId, из которого
+  // открыто окно (т.е. группы, что вводили другие участники этого пространства).
+  listGroupsForUser(userId: string, projectId: string): Promise<DigestGroupHistory[]>;
 }
