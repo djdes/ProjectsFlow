@@ -103,6 +103,12 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     }
   }, [open]);
 
+  // При открытии этого окна закрываем inline-композер на доске (единая поверхность
+  // создания — см. KanbanBoard). Слушатель — в KanbanBoard.
+  useEffect(() => {
+    if (open) window.dispatchEvent(new CustomEvent('pf:close-inline-composer'));
+  }, [open]);
+
   // При смене проекта на «не-inbox» сбрасываем делегата — он применим только к inbox.
   useEffect(() => {
     if (projectId !== null) setDelegateUserId(null);

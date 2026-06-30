@@ -73,6 +73,10 @@ type Props = {
   aiProjectId?: string | null;
   // Уникальный ключ черновика для inline-композера этой колонки.
   composerStorageKey?: string;
+  // Открыт ли inline-композер этой колонки (состояние поднято в доску — единый
+  // открытый композер на все колонки; открытие в другой колонке закрывает прошлый).
+  composing?: boolean;
+  onComposingChange?: (open: boolean) => void;
   // === Режим мультивыделения (включается из меню колонки) ===
   // Активен ли режим выделения для ЭТОЙ колонки.
   selectionMode?: boolean;
@@ -126,6 +130,8 @@ export function KanbanColumn({
   isShared = false,
   aiProjectId = null,
   composerStorageKey,
+  composing = false,
+  onComposingChange,
   selectionMode = false,
   selectedIds,
   onSelectToggle,
@@ -140,7 +146,6 @@ export function KanbanColumn({
     id: `column-${status}`,
     data: { type: 'column', status },
   });
-  const [composing, setComposing] = useState(false);
   // «Готово» распухает (десятки карточек) — по умолчанию показываем хвост из
   // DONE_PREVIEW_COUNT, остальное за кнопкой «Показать все». Прочие колонки — целиком.
   const [showAllDone, setShowAllDone] = useState(false);
@@ -328,7 +333,7 @@ export function KanbanColumn({
               variant="inline"
               forcedStatus={status}
               autoFocus
-              onClose={() => setComposing(false)}
+              onClose={() => onComposingChange?.(false)}
               onCreate={onInlineCreate}
               isInbox={isInbox}
               isShared={isShared}
@@ -338,7 +343,7 @@ export function KanbanColumn({
           ) : (
             <button
               type="button"
-              onClick={() => setComposing(true)}
+              onClick={() => onComposingChange?.(true)}
               className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <Plus className="size-4" />

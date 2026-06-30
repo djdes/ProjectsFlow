@@ -6,7 +6,7 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from 'react';
-import { FileText, Inbox, NotebookPen, Paperclip, X } from 'lucide-react';
+import { FileText, Inbox, NotebookPen, Paperclip, RotateCcw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
@@ -26,6 +26,14 @@ import {
   extractClipboardFiles,
   isImageMime,
 } from '@/presentation/components/attachments/files';
+import {
+  EMPTY_COMPOSER_DRAFT,
+  clearComposerDraft,
+  readComposerDraft,
+  stashKeyFor,
+  writeComposerDraft,
+  type ComposerDraft,
+} from './composerDraft';
 
 // Цели быстрого добавления: воркеру (todo) или в черновик (backlog). Питают каретку SendTargetButton.
 const QUICK_STATUS_OPTIONS = [
@@ -86,18 +94,34 @@ export function TaskComposer({
   const isInline = variant === 'inline';
   // Persist text across orientation changes on mobile (браузер может пересоздать layout).
   const STORAGE_KEY = storageKey ?? 'pf:quick-add-text';
-  const [text, setText] = useState(() => {
-    try { return sessionStorage.getItem(STORAGE_KEY) ?? ''; } catch { return ''; }
-  });
-  useEffect(() => {
-    try { if (text) sessionStorage.setItem(STORAGE_KEY, text); else sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
-  }, [text, STORAGE_KEY]);
-  const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
+  const STASH_KEY = stashKeyFor(STORAGE_KEY);
+  // Живой черновик (JSON: текст + режим + приоритет + дедлайн + делегат) — переживает
+  // перезагрузку. Файлы не сохраняются. На create/restore чистим явно.
+  const [initialDraft] = useState<ComposerDraft>(() => readComposerDraft(STORAGE_KEY) ?? EMPTY_COMPOSER_DRAFT);
+  const [text, setText] = useState(initialDraft.text);
+  const [ralphMode, setRalphMode] = useState<RalphMode>(initialDraft.ralphMode);
   // По умолчанию — черновик (backlog): быстрое добавление кидает в бэклог, а не сразу воркеру.
   const [quickStatus, setQuickStatus] = useState<'todo' | 'backlog'>('backlog');
-  const [delegateUserId, setDelegateUserId] = useState<string | null>(null);
-  const [priority, setPriority] = useState<TaskPriority | null>(null);
-  const [deadline, setDeadline] = useState<string | null>(null);
+  const [delegateUserId, setDelegateUserId] = useState<string | null>(initialDraft.delegateUserId);
+  const [priority, setPriority] = useState<TaskPriority | null>(initialDraft.priority);
+  const [deadline, setDeadline] = useState<string | null>(initialDraft.deadline);
+  // Есть ли отложенный черновик «восстановить» (создаётся доской при закрытии без создания).
+  // Только для inline-композера колонки. Стартовое значение — читаем stash при монтировании.
+  const [hasStash, setHasStash] = useState(() => isInline && readComposerDraft(STASH_KEY) !== null);
+  useEffect(() => {
+    writeComposerDraft(STORAGE_KEY, { text, ralphMode, priority, deadline, delegateUserId });
+  }, [STORAGE_KEY, text, ralphMode, priority, deadline, delegateUserId]);
+  const restoreDraft = (): void => {
+    const d = readComposerDraft(STASH_KEY);
+    setHasStash(false);
+    if (!d) return;
+    setText(d.text);
+    setRalphMode(d.ralphMode);
+    setPriority(d.priority);
+    setDeadline(d.deadline);
+    setDelegateUserId(d.delegateUserId);
+    clearComposerDraft(STASH_KEY);
+  };
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [previewFile, setPreviewFile] = useState<PendingFile | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -204,7 +228,10 @@ export function TaskComposer({
       pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
       setPending([]);
       setText('');
-      try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+      // Задача создана — чистим и живой черновик, и stash (восстанавливать нечего).
+      clearComposerDraft(STORAGE_KEY);
+      clearComposerDraft(STASH_KEY);
+      setHasStash(false);
       setRalphMode('normal');
       setQuickStatus('backlog');
       setDelegateUserId(null);
@@ -266,6 +293,19 @@ export function TaskComposer({
         dragActive ? 'border-primary bg-primary/5' : '',
       )}
     >
+      {/* «Восстановить» — когда композер открыт пустым, но остался отложенный черновик
+          (закрыли крестиком/окно само закрылось без создания). Клик возвращает прошлое. */}
+      {isInline && hasStash && !hasText && (
+        <button
+          type="button"
+          onClick={restoreDraft}
+          className="flex w-full items-center gap-1.5 border-b px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+          title="Вернуть прошлый незавершённый черновик"
+        >
+          <RotateCcw className="size-3.5 shrink-0" />
+          Восстановить
+        </button>
+      )}
       {pending.length > 0 && (
         <div className="flex flex-wrap gap-1.5 border-b bg-muted/30 px-2.5 py-1.5">
           {pending.map((pf) => (
@@ -411,9 +451,11 @@ export function TaskComposer({
             projectId={aiProjectId}
             onImproved={setText}
             onDistributed={() => {
-              // Задачи распределены и созданы напрямую — очищаем композер.
+              // Задачи распределены и созданы напрямую — очищаем композер и stash.
               setText('');
-              try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+              clearComposerDraft(STORAGE_KEY);
+              clearComposerDraft(STASH_KEY);
+              setHasStash(false);
             }}
             ralphMode={ralphMode}
             disabled={submitting}

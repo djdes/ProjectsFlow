@@ -42,6 +42,7 @@ import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useContainer } from '@/infrastructure/di/container';
 import { ConfettiBurst } from './ConfettiBurst';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
+import { stashComposerDraft } from './composerDraft';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { useBulkTaskActions } from '@/presentation/hooks/useBulkTaskActions';
 import { useDoneSortOrder, type DoneSortOrder } from '@/presentation/hooks/useDoneSortOrder';
@@ -271,6 +272,54 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   // Цель удаления для стильного диалога подтверждения (вместо window.confirm).
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Единый открытый inline-композер на все колонки (состояние поднято из колонки):
+  // открыть в другой колонке → прошлый закрывается (со stash). Переживает перезагрузку
+  // (sessionStorage пер-проект). Закрывается при открытии окна задачи/создания.
+  const composerKey = useCallback((s: TaskStatus) => `pf:quick-add:${projectId}:${s}`, [projectId]);
+  const composingStoreKey = `pf:composing:${projectId}`;
+  const [composingStatus, setComposingStatus] = useState<TaskStatus | null>(() => {
+    try {
+      const v = sessionStorage.getItem(composingStoreKey);
+      return v && (TASK_STATUSES as readonly string[]).includes(v) ? (v as TaskStatus) : null;
+    } catch {
+      return null;
+    }
+  });
+  useEffect(() => {
+    try {
+      if (composingStatus) sessionStorage.setItem(composingStoreKey, composingStatus);
+      else sessionStorage.removeItem(composingStoreKey);
+    } catch {
+      /* ignore */
+    }
+  }, [composingStatus, composingStoreKey]);
+  const openComposer = useCallback(
+    (s: TaskStatus) => {
+      setComposingStatus((prev) => {
+        if (prev && prev !== s) stashComposerDraft(composerKey(prev));
+        return s;
+      });
+    },
+    [composerKey],
+  );
+  const closeComposer = useCallback(() => {
+    setComposingStatus((prev) => {
+      if (prev) stashComposerDraft(composerKey(prev));
+      return null;
+    });
+  }, [composerKey]);
+  // Открытие окна задачи/создания (drawer) закрывает inline-композер.
+  useEffect(() => {
+    if (dialog) closeComposer();
+  }, [dialog, closeComposer]);
+  // Открытие глобального «Добавить задачу» (левая панель) шлёт событие — тоже закрываем.
+  useEffect(() => {
+    const onClose = (): void => closeComposer();
+    window.addEventListener('pf:close-inline-composer', onClose);
+    return () => window.removeEventListener('pf:close-inline-composer', onClose);
+  }, [closeComposer]);
+
   const [searchParams, setSearchParams] = useSearchParams();
   // Deep-link: ?task=<id> открывает диалог задачи. Используется email-кнопками И блоком
   // «Недавнее» в сайдбаре. Трекаем последний обработанный taskId (а не one-shot-флаг):
@@ -838,7 +887,9 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
                 isInbox={isInbox}
                 isShared={isShared}
                 aiProjectId={isInbox ? null : projectId}
-                composerStorageKey={`pf:quick-add:${projectId}:${status}`}
+                composerStorageKey={composerKey(status)}
+                composing={composingStatus === status}
+                onComposingChange={(open) => (open ? openComposer(status) : closeComposer())}
                 selectionMode={selectionStatus === status}
                 selectedIds={selectionStatus === status ? selectedIds : undefined}
                 onSelectToggle={handleSelectToggle}
