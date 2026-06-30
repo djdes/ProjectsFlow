@@ -1,5 +1,5 @@
 ---
-import { FEATURES, EXTRA_FEATURES } from '@/data/features';
+import { FEATURES, SECONDARY_FEATURES } from '@/data/features';
 
 // Line-иконки (24×24) под ключи из features.ts. Циан-плитка задаётся в стилях.
 const ICONS: Record<string, string> = {
@@ -10,8 +10,20 @@ const ICONS: Record<string, string> = {
     'M7 8.5a3.5 3.5 0 100 7c1.7 0 2.8-1.2 4-2.5l1-1.1c1.2-1.3 2.3-2.4 4-2.4a3.5 3.5 0 110 7c-1.7 0-2.8-1.2-4-2.4l-1-1.2c-1.2-1.3-2.3-2.5-4-2.5z',
   // рубль / стоимость
   cost: 'M9 5h4.5a3.5 3.5 0 010 7H9m0 0V5m0 7v7m0-7H7m2 4H7',
-  // «всё в одной коробке» — куб
-  allin: 'M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zM12 3v18M4 7.5l8 4.5 8-4.5',
+  // искра / Claude
+  claude: 'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z',
+  // команда
+  team: 'M16 20v-1a4 4 0 00-4-4H7a4 4 0 00-4 4v1M9.5 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM21 20v-1a4 4 0 00-3-3.9M16 4.1a4 4 0 010 7.8',
+  // telegram (бумажный самолётик)
+  telegram: 'M21 4L3 11l6 2.5L11 20l3-4 4 3z',
+  // мониторинг (пульс)
+  monitoring: 'M3 12h4l2 6 4-12 2 6h6',
+  // финансы (кошелёк)
+  finance: 'M3 7h15a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1h12M16 12h3',
+  // хаб / всё в одном
+  hub: 'M12 8a2 2 0 100-4 2 2 0 000 4zM5 20a2 2 0 100-4 2 2 0 000 4zM19 20a2 2 0 100-4 2 2 0 000 4zM12 6v4M12 10l-5 6M12 10l5 6',
+  // живой прогресс
+  live: 'M12 8v4l3 2M12 3a9 9 0 100 18 9 9 0 000-18z',
 };
 ---
 
@@ -49,16 +61,26 @@ const ICONS: Record<string, string> = {
       }
     </div>
 
-    <ul class="features__extra" data-reveal aria-label="Дополнительные возможности">
-      {
-        EXTRA_FEATURES.map((x) => (
-          <li class="features__chip">
-            <span class="features__chip-dot" aria-hidden="true"></span>
-            {x}
-          </li>
-        ))
-      }
-    </ul>
+    <div class="features__more" data-reveal>
+      <div class="pf-stag features__more-tag">И это ещё не всё</div>
+      <div class="features__more-grid">
+        {
+          SECONDARY_FEATURES.map((f, i) => (
+            <article class="features__more-card" data-reveal style={`--reveal-delay: ${i * 60}ms`}>
+              <span class="features__more-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                  <path d={ICONS[f.icon]} stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </span>
+              <div class="min-w-0">
+                <h3 class="features__more-title">{f.title}</h3>
+                <p class="features__more-body">{f.body}</p>
+              </div>
+            </article>
+          ))
+        }
+      </div>
+    </div>
   </div>
 </section>
 
@@ -115,37 +137,51 @@ const ICONS: Record<string, string> = {
     line-height: var(--lh-normal);
     color: var(--muted);
   }
-  .features__tag {
-    display: inline-block;
-    margin-top: var(--sp-4);
-    font-size: var(--fs-xs);
-    color: var(--dim);
-    padding: 2px 8px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
+  /* --- Вторая сетка: дополнительный функционал --- */
+  .features__more { margin-top: var(--sp-16); }
+  .features__more-tag { text-align: center; display: block; }
+  .features__more-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-4);
+    margin-top: var(--sp-6);
   }
-
-  .features__extra {
-    list-style: none;
+  @media (min-width: 640px) {
+    .features__more-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (min-width: 1024px) {
+    .features__more-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  .features__more-card {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--sp-2) var(--sp-6);
-    justify-content: center;
-    margin-top: var(--sp-12);
-    padding: 0;
+    align-items: flex-start;
+    gap: var(--sp-3);
+    padding: var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
   }
-  .features__chip {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--sp-2);
+  .features__more-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--r-sm);
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+  }
+  .features__more-icon svg { width: 18px; height: 18px; }
+  .features__more-title {
+    font-size: var(--fs-base);
+    font-weight: 600;
+    color: var(--text);
+  }
+  .features__more-body {
+    margin-top: 2px;
     font-size: var(--fs-sm);
+    line-height: var(--lh-snug);
     color: var(--muted);
-  }
-  .features__chip-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--accent);
-    opacity: 0.7;
   }
 </style>
