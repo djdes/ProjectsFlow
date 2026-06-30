@@ -53,6 +53,8 @@ type Props = {
   readonly compact?: boolean;
   /** Триггер — только иконка (квадратная), в стиле кластера действий окна задачи. */
   readonly iconOnly?: boolean;
+  /** Доп. классы на icon-only триггер (например, размер size-7). */
+  readonly className?: string;
   /**
    * Контекст правки существующей задачи. Если задан — режим «По проектам» обновляет
    * ЭТУ задачу для сегмента её проекта (без дубля), остальные проекты → новые задачи;
@@ -170,6 +172,7 @@ export function AiComposeDialog({
   disabled,
   compact,
   iconOnly,
+  className,
   editTask,
 }: Props): React.ReactElement {
   const { composeTasks, taskRepository, projectRepository } = useContainer();
@@ -491,7 +494,10 @@ export function AiComposeDialog({
           onClick={() => void start()}
           disabled={isDisabled}
           title="Переработать текст с помощью AI"
-          className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-40"
+          className={cn(
+            'grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-40',
+            className,
+          )}
         >
           {phase === 'loading' ? (
             <Loader2 className="size-4 animate-spin" />

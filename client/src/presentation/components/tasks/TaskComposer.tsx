@@ -47,12 +47,14 @@ type PendingFile = {
   readonly previewUrl: string;
 };
 
-// Единый минималистичный icon-кнопка (size-8 ghost) — как кластер действий в окне задачи.
+// Единый минималистичный icon-кнопка (size-7 ghost) — мелкие, одного размера, чтобы
+// всё умещалось в один ряд. Иконки внутри — size-3.5 (см. ICON_GLYPH).
 const ICON_BTN =
-  'grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-40';
+  'grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-40';
+const ICON_GLYPH = 'size-3.5';
 // Живая иконка: лёгкий scale при наведении на кнопку (для пикеров-компонентов).
-const ICON_BTN_ANIM = '[&_svg]:transition-transform hover:[&_svg]:scale-110';
-const ICON_BTN_PICKER = 'size-8 [&_svg]:transition-transform hover:[&_svg]:scale-110';
+const ICON_BTN_ANIM = '[&_svg]:size-3.5 [&_svg]:transition-transform hover:[&_svg]:scale-110';
+const ICON_BTN_PICKER = 'size-7 [&_svg]:size-3.5 [&_svg]:transition-transform hover:[&_svg]:scale-110';
 
 type Props = {
   // Колбэк создания задачи. Передаёт выбранный/форсированный status.
@@ -256,7 +258,9 @@ export function TaskComposer({
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       void submit();
-    } else if (e.key === 'Escape' && isInline && onClose && text.trim().length === 0) {
+    } else if (e.key === 'Escape' && isInline && onClose) {
+      // Esc закрывает композер всегда (черновик уйдёт в stash → можно «Восстановить»),
+      // а не только пустой. fmt.keyDownHandler уже выше перехватил бы Esc меню форматирования.
       e.preventDefault();
       onClose();
     }
@@ -280,6 +284,44 @@ export function TaskComposer({
     : quickStatus === 'backlog'
       ? 'В черновик…'
       : 'Воркеру…';
+
+  // AI-переработка — одна кнопка, размещается по-разному: в inline рядом с отправкой
+  // (сверху справа), в floating — в нижнем ряду. Рендерится только в одной ветке.
+  const aiButton = (
+    <AiComposeDialog
+      text={text}
+      projectId={aiProjectId}
+      onImproved={setText}
+      onDistributed={() => {
+        // Задачи распределены и созданы напрямую — очищаем композер и stash.
+        setText('');
+        clearComposerDraft(STORAGE_KEY);
+        clearComposerDraft(STASH_KEY);
+        setHasStash(false);
+      }}
+      ralphMode={ralphMode}
+      disabled={submitting}
+      iconOnly
+      className="size-7"
+    />
+  );
+  // Маленькая accent-кнопка отправки (inline) — size-7, в одном ряду с AI справа от поля.
+  const sendButton = (
+    <button
+      type="button"
+      onClick={() => void submit()}
+      disabled={!canSubmit}
+      title="Отправить (Ctrl+Enter)"
+      aria-label="Отправить"
+      className="group/send grid size-7 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground/50"
+    >
+      {submitting ? (
+        <Loader2 className={cn(ICON_GLYPH, 'animate-spin')} />
+      ) : (
+        <Send className={cn(ICON_GLYPH, 'transition-transform duration-150 group-hover/send:-translate-y-0.5 group-hover/send:translate-x-0.5')} />
+      )}
+    </button>
+  );
 
   const card = (
     <div
@@ -389,8 +431,14 @@ export function TaskComposer({
           </ContextMenuTrigger>
           {fmt.menuContent}
         </ContextMenu>
-        {!isInline && (
-          <div className="flex shrink-0 items-center pb-1.5">
+        {/* Справа от поля: AI (слева) + отправка (справа). В floating — SendTargetButton. */}
+        <div className="flex shrink-0 items-center gap-0.5 pb-1.5">
+          {isInline ? (
+            <>
+              {aiButton}
+              {sendButton}
+            </>
+          ) : (
             <SendTargetButton
               size="sm"
               options={forcedStatus ? undefined : QUICK_STATUS_OPTIONS}
@@ -401,8 +449,8 @@ export function TaskComposer({
               disabled={!canSubmit}
               showLabel={false}
             />
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Ряд доп-действий. На телефоне в свёрнутом состоянии скрыт, выезжает по фокусу; на sm+ виден всегда. */}
@@ -421,9 +469,9 @@ export function TaskComposer({
           aria-label="Прикрепить файл"
           title="Прикрепить файл (или Ctrl+V / перетащи)"
         >
-          <Paperclip className="size-4 transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110" />
+          <Paperclip className={cn(ICON_GLYPH, 'transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110')} />
         </button>
-        {/* Контролы режим/приоритет/дедлайн/делегат — все size-8, в один ряд. */}
+        {/* Контролы режим/приоритет/дедлайн/делегат — все size-7, в один ряд. */}
         {(isInbox || isShared) && (
           <DelegateSelect
             value={delegateUserId}
@@ -439,7 +487,7 @@ export function TaskComposer({
           disabled={submitting}
           variant="ghost"
           iconOnly
-          className={cn('!size-8 shrink-0 !p-0', ICON_BTN_ANIM)}
+          className={cn('!size-7 shrink-0 !p-0', ICON_BTN_ANIM)}
         />
         <PrioritySelect
           value={priority}
@@ -453,40 +501,11 @@ export function TaskComposer({
           onChange={setDeadline}
           disabled={submitting}
           iconOnly
-          className={cn('h-8', ICON_BTN_ANIM, deadline === null ? 'w-8 px-0' : 'px-2')}
+          className={cn('h-7', ICON_BTN_ANIM, deadline === null ? 'w-7 px-0' : 'px-2')}
         />
         <div className="ml-auto flex items-center gap-0.5">
-          <AiComposeDialog
-            text={text}
-            projectId={aiProjectId}
-            onImproved={setText}
-            onDistributed={() => {
-              // Задачи распределены и созданы напрямую — очищаем композер и stash.
-              setText('');
-              clearComposerDraft(STORAGE_KEY);
-              clearComposerDraft(STASH_KEY);
-              setHasStash(false);
-            }}
-            ralphMode={ralphMode}
-            disabled={submitting}
-            iconOnly
-          />
-          {isInline && (
-            <button
-              type="button"
-              onClick={() => void submit()}
-              disabled={!canSubmit}
-              title="Отправить (Ctrl+Enter)"
-              aria-label="Отправить"
-              className="group/send grid size-8 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground/50"
-            >
-              {submitting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Send className="size-4 transition-transform duration-150 group-hover/send:-translate-y-0.5 group-hover/send:translate-x-0.5" />
-              )}
-            </button>
-          )}
+          {/* В floating AI живёт здесь (в inline — рядом с отправкой сверху). */}
+          {!isInline && aiButton}
           {isInline && onClose && (
             <button
               type="button"
@@ -496,7 +515,7 @@ export function TaskComposer({
               aria-label="Закрыть"
               title="Закрыть (Esc)"
             >
-              <X className="size-4 transition-transform duration-150 group-hover/x:rotate-90" />
+              <X className={cn(ICON_GLYPH, 'transition-transform duration-150 group-hover/x:rotate-90')} />
             </button>
           )}
         </div>
