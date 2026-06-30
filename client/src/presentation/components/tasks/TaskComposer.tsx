@@ -6,7 +6,7 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from 'react';
-import { FileText, Inbox, NotebookPen, Paperclip, RotateCcw, X } from 'lucide-react';
+import { FileText, Inbox, Loader2, NotebookPen, Paperclip, RotateCcw, Send, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
@@ -46,6 +46,13 @@ type PendingFile = {
   readonly file: File;
   readonly previewUrl: string;
 };
+
+// Единый минималистичный icon-кнопка (size-8 ghost) — как кластер действий в окне задачи.
+const ICON_BTN =
+  'grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-40';
+// Живая иконка: лёгкий scale при наведении на кнопку (для пикеров-компонентов).
+const ICON_BTN_ANIM = '[&_svg]:transition-transform hover:[&_svg]:scale-110';
+const ICON_BTN_PICKER = 'size-8 [&_svg]:transition-transform hover:[&_svg]:scale-110';
 
 type Props = {
   // Колбэк создания задачи. Передаёт выбранный/форсированный status.
@@ -359,7 +366,9 @@ export function TaskComposer({
         </Dialog>
       )}
 
-      {/* Верхний ряд: поле ввода + отправка. Всегда виден — на телефоне это и есть «одна строка». */}
+      {/* Поле ввода. В inline — на всю ширину (отправка переехала в нижний ряд кнопок,
+          чтобы все контролы были одного размера в одну ровную строку). В floating —
+          справа SendTargetButton с выбором цели (Воркеру/Черновик). */}
       <div className="flex items-end gap-1 pr-1.5">
         <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
           <ContextMenuTrigger asChild>
@@ -380,75 +389,73 @@ export function TaskComposer({
           </ContextMenuTrigger>
           {fmt.menuContent}
         </ContextMenu>
-        <div className="flex shrink-0 items-center pb-1.5">
-          <SendTargetButton
-            size="sm"
-            options={forcedStatus ? undefined : QUICK_STATUS_OPTIONS}
-            value={quickStatus}
-            onChange={setQuickStatus}
-            onSend={() => void submit()}
-            submitting={submitting}
-            disabled={!canSubmit}
-            showLabel={false}
-          />
-        </div>
+        {!isInline && (
+          <div className="flex shrink-0 items-center pb-1.5">
+            <SendTargetButton
+              size="sm"
+              options={forcedStatus ? undefined : QUICK_STATUS_OPTIONS}
+              value={quickStatus}
+              onChange={setQuickStatus}
+              onSend={() => void submit()}
+              submitting={submitting}
+              disabled={!canSubmit}
+              showLabel={false}
+            />
+          </div>
+        )}
       </div>
 
       {/* Ряд доп-действий. На телефоне в свёрнутом состоянии скрыт, выезжает по фокусу; на sm+ виден всегда. */}
       <div
         className={cn(
-          'flex items-center gap-1.5 px-1.5 pb-2',
+          'flex items-center gap-0.5 px-1.5 pb-2',
           isInline && 'flex-wrap',
           !expanded && 'hidden sm:flex',
         )}
       >
-        <Button
+        <button
           type="button"
-          variant="ghost"
-          size="icon"
-          className="group/at size-9 shrink-0 text-muted-foreground hover:text-foreground"
+          className={cn(ICON_BTN, 'group/at')}
           onClick={() => fileInputRef.current?.click()}
           disabled={submitting}
           aria-label="Прикрепить файл"
           title="Прикрепить файл (или Ctrl+V / перетащи)"
         >
           <Paperclip className="size-4 transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110" />
-        </Button>
-        {/* Контролы режим/приоритет/дедлайн/делегат — всегда видны (так не «пусто»). */}
-        <span className="flex items-center gap-1.5">
-          {(isInbox || isShared) && (
-            <DelegateSelect
-              value={delegateUserId}
-              onChange={setDelegateUserId}
-              disabled={submitting}
-              projectId={isShared && aiProjectId ? aiProjectId : undefined}
-              className="size-9"
-            />
-          )}
-          <RalphModeSelect
-            value={ralphMode}
-            onChange={setRalphMode}
+        </button>
+        {/* Контролы режим/приоритет/дедлайн/делегат — все size-8, в один ряд. */}
+        {(isInbox || isShared) && (
+          <DelegateSelect
+            value={delegateUserId}
+            onChange={setDelegateUserId}
             disabled={submitting}
-            variant="ghost"
-            iconOnly
-            className="!size-9 shrink-0 !p-0"
+            projectId={isShared && aiProjectId ? aiProjectId : undefined}
+            className={ICON_BTN_PICKER}
           />
-          <PrioritySelect
-            value={priority}
-            onChange={setPriority}
-            disabled={submitting}
-            iconOnly
-            className="size-9"
-          />
-          <DeadlinePicker
-            value={deadline}
-            onChange={setDeadline}
-            disabled={submitting}
-            iconOnly
-            className={cn('h-9', deadline === null ? 'w-9 px-0' : 'px-2')}
-          />
-        </span>
-        <div className="ml-auto flex items-center gap-1.5">
+        )}
+        <RalphModeSelect
+          value={ralphMode}
+          onChange={setRalphMode}
+          disabled={submitting}
+          variant="ghost"
+          iconOnly
+          className={cn('!size-8 shrink-0 !p-0', ICON_BTN_ANIM)}
+        />
+        <PrioritySelect
+          value={priority}
+          onChange={setPriority}
+          disabled={submitting}
+          iconOnly
+          className={ICON_BTN_PICKER}
+        />
+        <DeadlinePicker
+          value={deadline}
+          onChange={setDeadline}
+          disabled={submitting}
+          iconOnly
+          className={cn('h-8', ICON_BTN_ANIM, deadline === null ? 'w-8 px-0' : 'px-2')}
+        />
+        <div className="ml-auto flex items-center gap-0.5">
           <AiComposeDialog
             text={text}
             projectId={aiProjectId}
@@ -462,21 +469,35 @@ export function TaskComposer({
             }}
             ralphMode={ralphMode}
             disabled={submitting}
-            compact
+            iconOnly
           />
-          {isInline && onClose && (
-            <Button
+          {isInline && (
+            <button
               type="button"
-              variant="ghost"
-              size="icon"
-              className="size-9 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={() => void submit()}
+              disabled={!canSubmit}
+              title="Отправить (Ctrl+Enter)"
+              aria-label="Отправить"
+              className="group/send grid size-8 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground/50"
+            >
+              {submitting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Send className="size-4 transition-transform duration-150 group-hover/send:-translate-y-0.5 group-hover/send:translate-x-0.5" />
+              )}
+            </button>
+          )}
+          {isInline && onClose && (
+            <button
+              type="button"
+              className={cn(ICON_BTN, 'group/x')}
               onClick={onClose}
               disabled={submitting}
               aria-label="Закрыть"
               title="Закрыть (Esc)"
             >
-              <X className="size-4" />
-            </Button>
+              <X className="size-4 transition-transform duration-150 group-hover/x:rotate-90" />
+            </button>
           )}
         </div>
       </div>
