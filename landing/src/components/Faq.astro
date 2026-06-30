@@ -1,0 +1,89 @@
+---
+import { FAQ } from '@/data/faq';
+---
+
+<section id="faq" class="pf-section">
+  <div class="pf-container faq__container">
+    <div class="faq__head" data-reveal>
+      <div class="pf-stag">// вопросы</div>
+      <h2 class="pf-h2">Частые вопросы</h2>
+      <p class="pf-lead">Коротко и честно — без мелкого шрифта.</p>
+    </div>
+
+    <div class="faq__list" data-reveal>
+      {
+        FAQ.map((item) => (
+          <details class="faq__item">
+            <summary class="faq__q">
+              <span>{item.q}</span>
+              <svg class="faq__chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M5 8l5 5 5-5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </summary>
+            <div class="faq__a">{item.a}</div>
+          </details>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<style>
+  .faq__container { max-width: 760px; }
+  .faq__list {
+    margin-top: var(--sp-8);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+  }
+  .faq__item {
+    border-bottom: 1px solid var(--line);
+  }
+  .faq__item:last-child { border-bottom: none; }
+
+  .faq__q {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    padding: var(--sp-4) var(--sp-6);
+    cursor: pointer;
+    list-style: none;
+    font-size: var(--fs-lg);
+    font-weight: 600;
+    color: var(--text);
+    transition: color var(--dur-fast) var(--ease);
+  }
+  .faq__q::-webkit-details-marker { display: none; }
+  .faq__q:hover { color: var(--accent); }
+  .faq__item:focus-within .faq__q { color: var(--accent); }
+
+  .faq__chev {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    color: var(--muted);
+    transition: transform var(--dur) var(--ease);
+  }
+  .faq__item[open] .faq__chev { transform: rotate(180deg); }
+
+  .faq__a {
+    padding: 0 var(--sp-6) var(--sp-6);
+    font-size: var(--fs-base);
+    line-height: var(--lh-normal);
+    color: var(--muted);
+    max-width: 60ch;
+  }
+
+  /* Мягкое появление содержимого (где поддерживается). Уважает reduced-motion. */
+  @media (prefers-reduced-motion: no-preference) {
+    .faq__item[open] .faq__a {
+      animation: faq-reveal var(--dur) var(--ease);
+    }
+    @keyframes faq-reveal {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  }
+</style>

@@ -1,0 +1,201 @@
+---
+import { PLANS, formatRub } from '@/data/pricing';
+
+const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
+---
+
+<section id="pricing" class="pf-section pricing">
+  <div class="pricing__blob mesh-blob" aria-hidden="true"></div>
+
+  <div class="pf-container">
+    <div class="pricing__head" data-reveal>
+      <div class="pf-stag">// тарифы</div>
+      <h2 class="pf-h2">Простые тарифы — начни бесплатно</h2>
+      <p class="pf-lead pf-lead--center">
+        Без карты на старте. Прайм можно попробовать час перед оплатой. Не зашло — вернём деньги.
+      </p>
+    </div>
+
+    <div class="pricing__grid">
+      {
+        PLANS.map((plan, i) => (
+          <article
+            class:list={['pf-card', 'pricing__plan', plan.highlight && 'pricing__plan--pop']}
+            data-reveal
+            style={`--reveal-delay: ${i * 90}ms`}
+          >
+            {plan.badge && <span class="pf-mono pricing__badge">{plan.badge}</span>}
+
+            <div class="pf-mono pricing__name">{plan.name}</div>
+            <p class="pricing__tagline">{plan.tagline}</p>
+
+            <div class="pricing__price">
+              <span class="pricing__amount">{formatRub(plan.priceRub)}&nbsp;₽</span>
+              <span class="pricing__note">
+                / {plan.priceNote}
+                {plan.priceUsd && <span class="pricing__usd"> · ${plan.priceUsd}</span>}
+              </span>
+            </div>
+
+            <ul class="pricing__features">
+              {plan.features.map((f) => (
+                <li class="pricing__feature">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                    <path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+
+            <a
+              href={`${appBase}${plan.href}`}
+              class:list={[
+                'pf-btn',
+                'pf-btn--block',
+                plan.highlight ? 'pf-btn--primary' : 'pf-btn--ghost',
+              ]}
+            >
+              {plan.cta}
+            </a>
+
+            {plan.note && <p class="pricing__plan-note">{plan.note}</p>}
+            {plan.requestOnly && <p class="pricing__plan-note">подключаем вручную, не самостоятельно</p>}
+          </article>
+        ))
+      }
+    </div>
+
+    <p class="pricing__guarantee" data-reveal>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+        <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      Гарантия возврата на платных тарифах — <strong>не подошло, вернём деньги</strong>.
+    </p>
+  </div>
+</section>
+
+<style>
+  .pricing { overflow: hidden; }
+  .pricing__blob {
+    width: 600px;
+    height: 600px;
+    background: var(--accent-deep);
+    bottom: -30%;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0.12;
+  }
+  .pricing__head {
+    max-width: 40rem;
+    margin-inline: auto;
+    text-align: center;
+  }
+
+  .pricing__grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-4);
+    margin-top: var(--sp-12);
+    align-items: start;
+  }
+  @media (min-width: 880px) {
+    .pricing__grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .pricing__plan {
+    padding: var(--sp-6);
+    background: var(--surface);
+  }
+  .pricing__plan--pop {
+    border-color: var(--accent-line);
+    box-shadow: 0 0 0 1px var(--accent-line), 0 30px 80px -34px rgba(34, 224, 255, 0.4);
+  }
+  /* Выделенный тариф чуть приподнят на десктопе. */
+  @media (min-width: 880px) {
+    .pricing__plan--pop { transform: translateY(-10px); }
+  }
+
+  .pricing__badge {
+    position: absolute;
+    top: -11px;
+    right: var(--sp-4);
+    background: var(--grad-accent);
+    color: var(--accent-ink);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    padding: 4px 10px;
+    border-radius: var(--r-full);
+  }
+  .pricing__name {
+    font-size: var(--fs-sm);
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .pricing__tagline {
+    margin-top: var(--sp-2);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    min-height: 2.6em;
+  }
+  .pricing__price {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-2);
+    margin: var(--sp-4) 0 var(--sp-6);
+  }
+  .pricing__amount {
+    font-size: var(--fs-3xl);
+    font-weight: 800;
+    letter-spacing: var(--tracking-tight);
+    color: var(--text);
+  }
+  .pricing__note { font-size: var(--fs-sm); color: var(--muted); }
+  .pricing__usd { color: var(--dim); }
+
+  .pricing__features {
+    list-style: none;
+    margin: 0 0 var(--sp-6);
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .pricing__feature {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-2);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    line-height: var(--lh-snug);
+  }
+  .pricing__feature svg {
+    flex: none;
+    width: 17px;
+    height: 17px;
+    margin-top: 1px;
+    color: var(--signal);
+  }
+  .pricing__plan-note {
+    margin-top: var(--sp-3);
+    text-align: center;
+    font-size: var(--fs-xs);
+    color: var(--dim);
+  }
+
+  .pricing__guarantee {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-2);
+    margin-top: var(--sp-8);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    text-align: center;
+  }
+  .pricing__guarantee strong { color: var(--text); font-weight: 600; }
+  .pricing__guarantee svg { flex: none; width: 18px; height: 18px; color: var(--signal); }
+</style>

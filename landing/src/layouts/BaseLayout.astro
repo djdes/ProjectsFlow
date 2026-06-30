@@ -1,16 +1,24 @@
 ---
 import '@fontsource-variable/inter';
+// Моно-шрифт для dev-cool акцентов (eyebrow, терминал, метки). Разрешён в DESIGN.md (P0).
+import '@fontsource-variable/jetbrains-mono';
 import '@/styles/globals.css';
+// Общие классы секций лендинга (P1, на токенах P0 — globals.css не трогаем).
+import '@/styles/landing.css';
 
 interface Props {
   title?: string;
   description?: string;
 }
 
+const SITE = 'https://projectsflow.ru/';
 const {
-  title = 'ProjectsFlow — живое досье на твои сайты и ПО',
-  description = 'Документация, секреты, задачи и история коммитов — привязаны к проекту, а не разбросаны по чатам.',
+  title = 'ProjectsFlow — доска задач для вайб-кодеров: воркер пишет код',
+  description =
+    'Доска задач для твоих проектов со встроенным AI-воркером, автоматизацией и финучётом. ' +
+    'Бросаешь задачу в колонку worker — она выполняется по нашей подписке. Без своих ключей и лок-ина.',
 } = Astro.props;
+const ogImage = new URL('/og.png', SITE).href;
 ---
 
 <!doctype html>
@@ -19,49 +27,63 @@ const {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#0a0b10" />
+    <meta name="theme-color" content="#06080d" />
+    <meta name="color-scheme" content="dark" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="canonical" href="https://projectsflow.ru/" />
+    <link rel="canonical" href={SITE} />
 
+    <!-- Open Graph -->
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ProjectsFlow" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:locale" content="ru_RU" />
-    <meta property="og:url" content="https://projectsflow.ru/" />
+    <meta property="og:url" content={SITE} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="ProjectsFlow — доска задач для вайб-кодеров" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <!-- Анти-FOUC: тёмная тема выставляется до рендера React/island'ов. -->
+    <script is:inline>
+      document.documentElement.style.background = '#06080d';
+    </script>
 
     <title>{title}</title>
   </head>
-  <body class="min-h-dvh bg-ink-900 text-ink-50">
+  <body>
     <slot />
 
+    {/* ===== Чат-виджет помощи (P2) =====================================
+        Остров создаёт P2 (HelpWidget*). Когда он появится в main — раскомментировать
+        строку ниже (один импорт + монтаж снизу справа), island грузится отложенно.
+        До готовности P2 — плейсхолдер, не блокируемся (см. план §3, §H п.12).
+        TODO(P2): <HelpWidget client:idle /> + import в frontmatter. */}
+
     <script>
-      // Auth-aware UI: чекаем /api/auth/me — если 200, тоглим anonymous/authed элементы.
-      // На лендинге это нужно чтобы залогиненный юзер видел "Открыть приложение" вместо
-      // "Войти / Создать аккаунт". На несоответствующем status'е (401) скрипт ничего не
-      // делает — defaults уже anonymous.
+      // Auth-aware UI: чекаем /api/auth/me. 200 → выставляем html[data-auth="authed"],
+      // CSS в landing.css переключает видимость [data-auth-anon]/[data-auth-authed].
+      // На 401/ошибке ничего не делаем — дефолт уже anonymous.
       (async () => {
         try {
           const res = await fetch('/api/auth/me', { credentials: 'include' });
           if (!res.ok) return;
-          // Авторизован → скрываем anonymous-элементы, показываем authed.
-          document.querySelectorAll<HTMLElement>('[data-auth-anon]').forEach((el) => {
-            el.classList.add('hidden');
-          });
-          document.querySelectorAll<HTMLElement>('[data-auth-authed]').forEach((el) => {
-            el.classList.remove('hidden');
-            // У AuthCta используется flex/inline-flex — снимаем display:none через класс,
-            // но добавляем явно inline-flex чтобы кнопка не упала на новую строку.
-            if (el.tagName === 'A') el.classList.add('inline-flex');
-          });
+          document.documentElement.dataset.auth = 'authed';
         } catch {
-          // Сеть недоступна или /api/auth/me не отдаёт — оставляем anonymous-defaults.
+          // Сеть недоступна или эндпоинт не отвечает — оставляем anonymous-дефолты.
         }
       })();
     </script>
 
     <script>
       // Глобальный scroll-reveal: вешает `.is-visible` когда элемент с `[data-reveal]`
-      // попадает в viewport. Один раз, без переключений обратно (не отвлекает при скролле наверх).
+      // попадает во вьюпорт. Один раз, без обратных переключений. Уважает reduced-motion.
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (!reduceMotion && 'IntersectionObserver' in window) {
         const io = new IntersectionObserver(
@@ -77,7 +99,6 @@ const {
         );
         document.querySelectorAll('[data-reveal]').forEach((el) => io.observe(el));
       } else {
-        // reduced motion / нет IntersectionObserver — сразу показываем всё.
         document.querySelectorAll('[data-reveal]').forEach((el) => el.classList.add('is-visible'));
       }
     </script>

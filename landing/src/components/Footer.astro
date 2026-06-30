@@ -1,11 +1,97 @@
 ---
 import Logo from './Logo.astro';
+import { NAV_LINKS } from '@/data/nav';
+
+const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 const year = new Date().getFullYear();
 ---
 
-<footer class="border-t border-white/5 py-10">
-  <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 sm:flex-row">
-    <Logo />
-    <p class="text-xs text-ink-400">© {year} ProjectsFlow. Сделано вручную.</p>
+<footer class="footer">
+  <div class="pf-container footer__inner">
+    <div class="footer__brand">
+      <Logo />
+      <p class="footer__tagline">
+        Доска задач для вайб-кодеров: бросаешь задачу — воркер пишет код.
+      </p>
+    </div>
+
+    <nav class="footer__nav" aria-label="Подвал">
+      <span class="pf-mono footer__col-title">// продукт</span>
+      {NAV_LINKS.map((l) => <a href={l.href} class="footer__link">{l.label}</a>)}
+    </nav>
+
+    <nav class="footer__nav" aria-label="Аккаунт">
+      <span class="pf-mono footer__col-title">// аккаунт</span>
+      <a href={`${appBase}/register`} data-auth-anon class="footer__link">Создать аккаунт</a>
+      <a href={`${appBase}/login`} data-auth-anon class="footer__link">Войти</a>
+      <a href={`${appBase}/`} data-auth-authed class="footer__link">Открыть приложение</a>
+    </nav>
+  </div>
+
+  <div class="pf-container footer__bottom">
+    <p class="pf-mono footer__copy">© {year} ProjectsFlow · сделано вручную</p>
+    <p class="pf-mono footer__status"><span class="pf-dot"></span> early access</p>
   </div>
 </footer>
+
+<style>
+  .footer {
+    border-top: 1px solid var(--line);
+    padding-block: var(--sp-12) var(--sp-8);
+    position: relative;
+    z-index: 1;
+  }
+  .footer__inner {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-8);
+  }
+  @media (min-width: 768px) {
+    .footer__inner { grid-template-columns: 1.6fr 1fr 1fr; }
+  }
+  .footer__brand { max-width: 22rem; }
+  .footer__tagline {
+    margin-top: var(--sp-4);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-normal);
+    color: var(--muted);
+  }
+  .footer__nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .footer__col-title {
+    font-size: var(--fs-xs);
+    color: var(--accent);
+    letter-spacing: 0.08em;
+  }
+  .footer__link {
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    transition: color var(--dur-fast) var(--ease);
+    width: fit-content;
+  }
+  .footer__link:hover { color: var(--text); }
+
+  .footer__bottom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    margin-top: var(--sp-12);
+    padding-top: var(--sp-6);
+    border-top: 1px solid var(--line);
+  }
+  .footer__copy,
+  .footer__status {
+    font-size: var(--fs-xs);
+    color: var(--dim);
+  }
+  .footer__status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+</style>

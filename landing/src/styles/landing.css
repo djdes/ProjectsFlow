@@ -1,0 +1,237 @@
+/* =============================================================================
+   ProjectsFlow — лендинг · ОБЩИЕ КЛАССЫ СЕКЦИЙ (P1)
+   Направление «A · Dev-cool». Всё построено на токенах из tokens.css (P0) —
+   тут НЕ объявляем новых цветов/размеров, только переиспользуемые паттерны.
+   Этот файл создаёт P1 (не трогая globals.css/tokens.css/tailwind.config — владелец P0).
+   Подключается из BaseLayout.astro.
+   ============================================================================= */
+
+/* --- Контейнер -------------------------------------------------------------- */
+.pf-container {
+  width: 100%;
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 1.5rem);
+}
+
+/* --- Вертикальный ритм секций ---------------------------------------------- */
+.pf-section {
+  position: relative;
+  padding-block: var(--section-y);
+  /* Декоративные blob'ы/частицы не должны давать горизонтальный скролл на узких
+     экранах. clip (не hidden) — не создаёт scroll-контейнер и не ломает sticky. */
+  overflow-x: clip;
+}
+
+/* Якорные переходы не должны прятать заголовок под sticky-навбар (60px + воздух). */
+section[id] {
+  scroll-margin-top: 76px;
+}
+
+/* --- Моно-утилита ----------------------------------------------------------- */
+.pf-mono {
+  font-family: var(--font-mono);
+  font-feature-settings: 'ss01', 'ss02';
+}
+
+/* --- Eyebrow: моно-пилюля с циан-текстом и зелёной точкой-статусом ---------- */
+.pf-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tracking-wide);
+  color: var(--accent);
+}
+.pf-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 8px var(--signal);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pf-dot {
+    animation: pf-dot-pulse 2.4s var(--ease) infinite;
+  }
+  @keyframes pf-dot-pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--signal); }
+    50% { opacity: 0.55; box-shadow: 0 0 3px var(--signal); }
+  }
+}
+
+/* --- Заголовок секции: моно-метка «// label» + h2 + lead ------------------- */
+.pf-stag {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--accent);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.pf-h2 {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-3xl);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  font-weight: 700;
+  color: var(--text);
+  text-wrap: balance;
+}
+@media (min-width: 768px) {
+  .pf-h2 { font-size: clamp(1.9rem, 3.4vw, 2.6rem); }
+}
+.pf-lead {
+  margin-top: var(--sp-3);
+  max-width: 38rem;
+  color: var(--muted);
+  font-size: var(--fs-lg);
+  line-height: var(--lh-normal);
+  text-wrap: pretty;
+}
+.pf-lead--center { margin-inline: auto; }
+
+/* Градиентный акцентный фрагмент заголовка. */
+.pf-grad {
+  background: var(--grad-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* --- Кнопки ----------------------------------------------------------------- */
+.pf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  height: 44px;
+  padding-inline: var(--sp-6);
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    filter var(--dur-fast) var(--ease);
+}
+.pf-btn:active { transform: scale(0.98); }
+.pf-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pf-btn--primary {
+  background: var(--grad-accent);
+  color: var(--accent-ink);
+  box-shadow: 0 0 0 1px var(--accent-line), 0 10px 32px -10px rgba(34, 224, 255, 0.55);
+}
+.pf-btn--primary:hover { filter: brightness(1.08); }
+
+.pf-btn--ghost {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--muted);
+}
+.pf-btn--ghost:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.pf-btn--lg { height: 50px; padding-inline: var(--sp-8); font-size: var(--fs-base); }
+.pf-btn--block { width: 100%; }
+
+/* --- Карточка (поверхность + линия + hover) -------------------------------- */
+.pf-card {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.006));
+  transition:
+    transform var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pf-card--hover:hover {
+    transform: translateY(-3px);
+    border-color: var(--accent-line);
+    box-shadow: var(--shadow);
+  }
+}
+
+/* --- Псевдо-терминал (используется в Hero) --------------------------------- */
+.pf-term {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: linear-gradient(180deg, var(--surface), #080b11);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+.pf-term__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 38px;
+  padding-inline: var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+}
+.pf-term__light { width: 11px; height: 11px; border-radius: 50%; }
+.pf-term__light--r { background: var(--danger); }
+.pf-term__light--y { background: var(--warn); }
+.pf-term__light--g { background: #28c840; }
+.pf-term__title {
+  margin-left: var(--sp-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--dim);
+}
+.pf-term__body {
+  padding: var(--sp-4);
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.pf-term__c { color: var(--dim); }   /* комментарий */
+.pf-term__p { color: var(--signal); } /* prompt / бинарь */
+.pf-term__v { color: var(--accent); } /* команда / значение */
+.pf-term__w { color: var(--warn); }   /* строковый аргумент */
+
+/* --- Тонкая нижняя линия-акцент при hover (для карточек фич) --------------- */
+.pf-underline {
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-line), transparent);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+.pf-card--hover:hover .pf-underline { opacity: 1; }
+
+/* --- Разделитель «// section» с координатной риской ------------------------ */
+.pf-rule {
+  height: 1px;
+  background: var(--line);
+}
+
+/* --- Auth-aware видимость --------------------------------------------------- */
+/* По умолчанию: показываем anon-кнопки, прячем authed. BaseLayout выставляет
+   html[data-auth="authed"] после успешного ответа /api/auth/me — тогда переключаем.
+   Через атрибутный селектор + !important, чтобы не конфликтовать со scoped-стилями. */
+[data-auth-authed] { display: none !important; }
+html[data-auth='authed'] [data-auth-anon] { display: none !important; }
+html[data-auth='authed'] [data-auth-authed] { display: inline-flex !important; }

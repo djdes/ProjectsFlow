@@ -2,24 +2,67 @@
 import AuthCta from './AuthCta.astro';
 ---
 
-<section class="relative overflow-hidden py-28">
-  <div
-    class="mesh-blob"
-    style="width: 700px; height: 700px; background: #1d4ed8; bottom: -50%; left: 50%; transform: translateX(-50%); opacity: 0.22;"
-  >
-  </div>
+<section class="pf-section cta">
+  <div class="cta__blob mesh-blob" aria-hidden="true"></div>
 
-  <div class="mx-auto max-w-2xl px-6 text-center" data-reveal>
-    <span class="eyebrow">Готов попробовать?</span>
-    <h2 class="mt-5 text-balance text-3xl font-semibold tracking-tight text-ink-50 sm:text-4xl">
-      Собери всю работу по проекту в&nbsp;одном месте
+  <div class="pf-container cta__inner" data-reveal>
+    <span class="pf-eyebrow">
+      <span class="pf-dot"></span>
+      <span class="pf-mono">ready when you are</span>
+    </span>
+    <h2 class="cta__title">
+      Брось первую задачу воркеру <span class="pf-grad">уже сегодня</span>
     </h2>
-    <p class="mx-auto mt-4 max-w-md text-balance text-sm leading-relaxed text-ink-200">
-      Создай аккаунт — займёт минуту. Дальше: подключи git-репо, заведи доску задач,
-      храни секреты в&nbsp;vault. Всё локально, всё под твоим контролем.
+    <p class="cta__sub">
+      Заведи проект, подключи GitHub и кидай задачи в колонку worker. Бесплатно, без карты —
+      дальше переходишь на Прайм, только если зашло.
     </p>
-    <div class="mx-auto mt-8 max-w-lg" data-reveal style="--reveal-delay: 200ms">
-      <AuthCta size="md" />
+    <div class="cta__actions">
+      <AuthCta size="lg" />
     </div>
+    <p class="pf-mono cta__fineprint">никаких ключей · код в твоём GitHub · возврат, если не подошло</p>
   </div>
 </section>
+
+<style>
+  .cta { overflow: hidden; }
+  .cta__blob {
+    width: 700px;
+    height: 700px;
+    background: var(--accent-deep);
+    bottom: -55%;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0.18;
+  }
+  .cta__inner {
+    max-width: 44rem;
+    margin-inline: auto;
+    text-align: center;
+  }
+  .cta__title {
+    margin-top: var(--sp-6);
+    font-size: var(--fs-3xl);
+    line-height: var(--lh-tight);
+    letter-spacing: var(--tracking-tight);
+    font-weight: 800;
+    color: var(--text);
+    text-wrap: balance;
+  }
+  @media (min-width: 768px) {
+    .cta__title { font-size: clamp(2rem, 4vw, 2.8rem); }
+  }
+  .cta__sub {
+    margin: var(--sp-4) auto 0;
+    max-width: 34rem;
+    font-size: var(--fs-lg);
+    line-height: var(--lh-normal);
+    color: var(--muted);
+  }
+  .cta__actions { margin-top: var(--sp-8); }
+  .cta__fineprint {
+    margin-top: var(--sp-4);
+    font-size: var(--fs-xs);
+    color: var(--dim);
+  }
+</style>

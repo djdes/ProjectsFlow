@@ -1,0 +1,305 @@
+---
+// Витрина продукта. ВНИМАНИЕ: ниже — стилизованные CSS-превью интерфейса (честная
+// иллюстрация, без выдуманных данных), а НЕ реальные скриншоты.
+// TODO(скриншоты): заменить блоки .shot__canvas на реальные <img> с продуктовыми
+//   скринами (доска, окно задачи, автоматизация, финансы), когда пользователь их пришлёт.
+//   Использовать loading="lazy", задавать width/height (без CLS) и srcset при возможности.
+
+const previews = [
+  { id: 'task', label: 'Окно задачи', caption: 'Лог воркера, дифф и привязанные коммиты прямо в карточке.' },
+  { id: 'automation', label: 'Автоматизация', caption: 'Диспетчер генерит и выполняет задачи по критериям — до лимита.' },
+  { id: 'finance', label: 'Финансы проекта', caption: 'Расход на AI и API по проекту, в рублях, помесячно.' },
+];
+---
+
+<section id="product" class="pf-section shots">
+  <div class="pf-container">
+    <div class="shots__head" data-reveal>
+      <div class="pf-stag">// внутри продукта</div>
+      <h2 class="pf-h2">Как это выглядит в&nbsp;работе</h2>
+      <p class="pf-lead">
+        Доска с колонкой worker, живой лог задачи, автоматизация и финучёт — в одном окне.
+      </p>
+    </div>
+
+    <!-- Главное превью: канбан-доска с колонкой worker. -->
+    <figure class="shot shot--feature" data-reveal>
+      <div class="shot__frame">
+        <div class="shot__chrome">
+          <span class="shot__dot shot__dot--r"></span>
+          <span class="shot__dot shot__dot--y"></span>
+          <span class="shot__dot shot__dot--g"></span>
+          <span class="pf-mono shot__url">app.projectsflow.ru / board</span>
+        </div>
+        <div class="shot__canvas board" role="img" aria-label="Превью канбан-доски с колонкой worker">
+          {
+            [
+              { name: 'Backlog', cards: 3, worker: false },
+              { name: 'В работе', cards: 2, worker: false },
+              { name: 'worker', cards: 2, worker: true },
+              { name: 'Готово', cards: 3, worker: false },
+            ].map((col) => (
+              <div class:list={['board__col', col.worker && 'board__col--worker']}>
+                <div class="board__col-head">
+                  <span class:list={['pf-mono', 'board__col-name', col.worker && 'board__col-name--worker']}>
+                    {col.name}
+                  </span>
+                  <span class="board__count">{col.cards}</span>
+                </div>
+                {Array.from({ length: col.cards }).map((_, k) => (
+                  <div class:list={['board__card', col.worker && k === 0 && 'board__card--active']}>
+                    <span class="board__bar board__bar--lg"></span>
+                    <span class="board__bar board__bar--sm"></span>
+                    {col.worker && k === 0 && <span class="board__working">● воркер пишет код…</span>}
+                  </div>
+                ))}
+              </div>
+            ))
+          }
+        </div>
+      </div>
+      <figcaption class="shot__cap">Канбан-доска: бросаешь задачу в колонку worker — AI берёт её в работу.</figcaption>
+    </figure>
+
+    <!-- Три превью поменьше. -->
+    <div class="shots__row">
+      {
+        previews.map((p) => (
+          <figure class="shot" data-reveal>
+            <div class="shot__frame">
+              <div class="shot__chrome shot__chrome--sm">
+                <span class="shot__dot shot__dot--r"></span>
+                <span class="shot__dot shot__dot--y"></span>
+                <span class="shot__dot shot__dot--g"></span>
+              </div>
+              <div class={`shot__canvas mini mini--${p.id}`} role="img" aria-label={`Превью: ${p.label}`}>
+                {p.id === 'task' && (
+                  <div class="mini__stack">
+                    <span class="mini__line mini__line--title"></span>
+                    <span class="mini__line"></span>
+                    <span class="mini__line mini__line--short"></span>
+                    <div class="mini__code">
+                      <span class="mini__code-row"></span>
+                      <span class="mini__code-row mini__code-row--w"></span>
+                      <span class="mini__code-row"></span>
+                    </div>
+                  </div>
+                )}
+                {p.id === 'automation' && (
+                  <div class="mini__auto">
+                    <span class="mini__pill mini__pill--on">auto-dispatch on</span>
+                    <span class="mini__line"></span>
+                    <span class="mini__line mini__line--short"></span>
+                    <div class="mini__gauge"><span></span></div>
+                  </div>
+                )}
+                {p.id === 'finance' && (
+                  <div class="mini__fin">
+                    <span class="pf-mono mini__amount">1 240 ₽</span>
+                    <div class="mini__bars">
+                      {[40, 70, 55, 90, 65, 80].map((h) => (
+                        <span style={`height:${h}%`}></span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <figcaption class="shot__cap">
+              <span class="shot__cap-label">{p.label}.</span> {p.caption}
+            </figcaption>
+          </figure>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<style>
+  .shots__head { max-width: 40rem; }
+
+  /* --- Общая рамка-браузер --- */
+  .shot { margin: 0; }
+  .shot--feature { margin-top: var(--sp-12); }
+  .shot__frame {
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background: linear-gradient(180deg, var(--surface), #080b11);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .shot__chrome {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    height: 36px;
+    padding-inline: var(--sp-4);
+    border-bottom: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .shot__dot { width: 10px; height: 10px; border-radius: 50%; }
+  .shot__dot--r { background: var(--danger); }
+  .shot__dot--y { background: var(--warn); }
+  .shot__dot--g { background: #28c840; }
+  .shot__url {
+    margin-left: var(--sp-2);
+    font-size: var(--fs-xs);
+    color: var(--dim);
+  }
+  .shot__cap {
+    margin-top: var(--sp-3);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    line-height: var(--lh-snug);
+  }
+  .shot__cap-label { color: var(--text); font-weight: 600; }
+  .shot__canvas { padding: var(--sp-4); }
+
+  /* --- Доска (главное превью) --- */
+  .board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--sp-3);
+    min-height: 260px;
+  }
+  .board__col {
+    background: rgba(255, 255, 255, 0.015);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: var(--sp-2);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+  .board__col--worker {
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 30px -16px var(--accent);
+  }
+  .board__col-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 4px 6px;
+  }
+  .board__col-name { font-size: 10px; color: var(--dim); letter-spacing: 0.06em; }
+  .board__col-name--worker { color: var(--accent); }
+  .board__count {
+    font-size: 10px;
+    color: var(--dim);
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: var(--r-full);
+    padding: 0 6px;
+  }
+  .board__card {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: var(--sp-2);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .board__card--active {
+    border-color: var(--accent-line);
+    box-shadow: 0 0 0 1px var(--accent-line);
+  }
+  .board__bar { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); }
+  .board__bar--lg { width: 90%; }
+  .board__bar--sm { width: 55%; }
+  .board__working {
+    margin-top: 2px;
+    font-size: 9px;
+    color: var(--accent);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .board__working { animation: pf-dot-pulse 1.8s var(--ease) infinite; }
+  }
+
+  /* --- Мини-превью --- */
+  .shots__row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-4);
+    margin-top: var(--sp-6);
+  }
+  @media (min-width: 768px) {
+    .shots__row { grid-template-columns: repeat(3, 1fr); }
+  }
+  .shot__chrome--sm { height: 30px; }
+  .mini { min-height: 150px; }
+  .mini__line {
+    display: block;
+    height: 7px;
+    width: 100%;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    margin-bottom: 8px;
+  }
+  .mini__line--title { width: 60%; height: 9px; background: rgba(255, 255, 255, 0.16); }
+  .mini__line--short { width: 40%; }
+  .mini__stack { display: flex; flex-direction: column; }
+  .mini__code {
+    margin-top: 6px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .mini__code-row { height: 5px; width: 80%; border-radius: 3px; background: rgba(34, 224, 255, 0.25); }
+  .mini__code-row--w { width: 95%; background: rgba(74, 222, 128, 0.3); }
+
+  .mini__auto { display: flex; flex-direction: column; gap: 8px; }
+  .mini__pill {
+    align-self: flex-start;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 3px 9px;
+    border-radius: var(--r-full);
+    border: 1px solid var(--accent-line);
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .mini__gauge {
+    margin-top: 4px;
+    height: 6px;
+    border-radius: var(--r-full);
+    background: rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+  }
+  .mini__gauge span {
+    display: block;
+    height: 100%;
+    width: 68%;
+    background: var(--grad-accent);
+  }
+
+  .mini--finance { display: flex; }
+  .mini__fin { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+  .mini__amount { font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
+  .mini__bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    height: 80px;
+  }
+  .mini__bars span {
+    flex: 1;
+    border-radius: 3px 3px 0 0;
+    background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+    opacity: 0.8;
+  }
+  .mini__bars span:last-child { opacity: 1; box-shadow: 0 0 16px -4px var(--accent); }
+
+  /* Узкие экраны: доска прокручивается горизонтально, не ломая сетку. */
+  @media (max-width: 560px) {
+    .board {
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+</style>

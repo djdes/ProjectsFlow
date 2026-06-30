@@ -1,175 +1,204 @@
 ---
-import HeroScene from './HeroScene.tsx';
-// Кнопки auth здесь инлайн — нужны разные размеры/стили чем у AuthCta в CTASection.
+import HeroSceneGate from './HeroSceneGate.tsx';
+
+// Лендинг и SPA — один Express в prod, пути относительные.
+const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 ---
 
-<section class="relative isolate overflow-hidden min-h-[calc(100vh-1rem)]">
-  <!-- ambient layer: grid-bg + блобы. Самый дальний z. -->
-  <div class="pointer-events-none absolute inset-0 -z-20">
-    <div class="absolute inset-0 grid-bg"></div>
-
-    <div
-      class="mesh-blob mesh-blob--magnetic"
-      data-magnetic-blob
-      style="width: 520px; height: 520px; background: #1e3a8a; top: 10%; left: 50%; margin-left: -260px; opacity: 0.45;"
-    >
-    </div>
-    <div
-      class="mesh-blob"
-      style="width: 380px; height: 380px; background: #312e81; bottom: -5%; right: -5%; opacity: 0.3;"
-    >
-    </div>
-    <div
-      class="mesh-blob"
-      style="width: 320px; height: 320px; background: #1d4ed8; top: 50%; left: -10%; opacity: 0.22;"
-    >
-    </div>
-
-    <!-- vignette снизу для перехода в Features -->
-    <div class="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-b from-transparent to-ink-900"></div>
+<section class="hero" aria-labelledby="hero-title">
+  <!-- Ambient-слой = статичный «постер» в стиле сцены: координатная сетка + цианово-зелёные
+       свечения. Виден всегда; на мобиле/при reduced-motion заменяет 3D-сцену. -->
+  <div class="hero__bg" aria-hidden="true">
+    <div class="hero__grid grid-bg"></div>
+    <div class="mesh-blob mesh-blob--magnetic hero__glow-cyan" data-magnetic-blob></div>
+    <div class="mesh-blob hero__glow-green"></div>
+    <div class="hero__vignette"></div>
   </div>
 
-  <!-- 3D-сцена на всю секцию. pointer-events-none чтобы не блокировать клики по тексту.
-       mask-image: канвас плавно затухает к нижнему краю, чтобы базовая платформа башни
-       не упиралась в жёсткий горизонтальный обрез где начинается следующая секция. -->
-  <div
-    class="pointer-events-none absolute inset-0 -z-10 hero-canvas-mask"
-  >
-    <HeroScene client:idle />
+  <!-- 3D data-tower: грузится только на десктопе с motion и поддержкой WebGL.
+       client:media гарантирует, что на узких экранах chunk three.js не скачивается. -->
+  <div class="hero__scene" aria-hidden="true">
+    <HeroSceneGate client:media="(min-width: 1024px)" />
   </div>
 
-  <!-- Soft left vignette — лёгкая тёмная маска, не "коробка". -->
-  <div
-    class="pointer-events-none absolute inset-y-0 left-0 -z-[5] hidden w-[60%] bg-gradient-to-r from-ink-900 via-ink-900/40 to-transparent lg:block"
-    aria-hidden="true"
-  ></div>
-
-  <!-- Контент-overlay. На lg текст шире (60% колонки), h1 в 2 строки. -->
-  <div class="relative mx-auto flex min-h-[inherit] max-w-7xl items-center px-6 py-20 sm:py-24">
-    <div class="relative w-full max-w-2xl lg:max-w-[60%]">
-      <span class="eyebrow animate-fade-up">
-        <span class="size-1.5 animate-pulse-soft rounded-full bg-accent-400"></span>
-        В разработке — early access
+  <div class="pf-container hero__inner">
+    <div class="hero__col">
+      <span class="pf-eyebrow">
+        <span class="pf-dot"></span>
+        <span class="pf-mono">for vibe-coders</span>
       </span>
 
-      <!-- h1: две строки на lg+, font 4.5rem/5rem (вместо 5.5/6 — слишком ломалось по словам).
-           tracking-tight + leading-[0.95] для плотной композиции.
-           mix-blend-mode: screen — буквы поверх ярких бликов 3D осветляются, не "съедают" их. -->
-      <h1
-        class="mt-7 text-balance text-5xl font-semibold leading-[0.95] tracking-tight text-gradient sm:text-6xl lg:text-[4.5rem] xl:text-[5rem] animate-fade-up-delay-1"
-        style="mix-blend-mode: screen;"
-      >
-        Один источник правды
-        <br />
-        для каждого проекта
+      <h1 id="hero-title" class="hero__title">
+        Бросай задачи — <span class="pf-grad">воркер пишет код</span>.<br />
+        Ты на драйве.
       </h1>
 
-      <p
-        class="mt-7 max-w-md text-balance text-base leading-relaxed text-ink-200 sm:text-lg animate-fade-up-delay-2"
-      >
-        Документация, секреты, задачи и история коммитов — привязаны к проекту,
-        а не разбросаны по чатам и Notion-вкладкам.
+      <p class="hero__sub">
+        Доска задач для твоих проектов со встроенным AI-воркером, автоматизацией и
+        финучётом. Кидаешь задачу в колонку <span class="pf-mono hero__accent">worker</span> —
+        она выполняется по нашей подписке. Без возни с инфрой и чужими лимитами.
       </p>
 
-      <div class="mt-10 animate-fade-up-delay-3">
-        {/* Anonymous buttons (по умолчанию). Скрипт в BaseLayout заменит на "Открыть приложение"
-            если юзер уже залогинен. */}
-        <div data-auth-anon class="flex flex-wrap items-center gap-3">
-          <a
-            href="/register"
-            class="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-accent px-6 text-base font-semibold text-white shadow-glow transition-all hover:bg-accent-600 active:scale-[0.98]"
-          >
-            Создать аккаунт
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="size-4">
-              <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
-            </svg>
-          </a>
-          <a
-            href="/login"
-            class="inline-flex h-12 items-center justify-center rounded-lg px-5 text-base font-medium text-ink-200 transition-colors hover:text-ink-50"
-          >
-            Войти
-            <span class="ml-1 opacity-50">→</span>
-          </a>
-        </div>
-        {/* Authed CTA (скрыто изначально). */}
-        <div data-auth-authed class="hidden">
-          <a
-            href="/"
-            class="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-accent px-6 text-base font-semibold text-white shadow-glow transition-all hover:bg-accent-600 active:scale-[0.98]"
-          >
-            Открыть приложение
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="size-4">
-              <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
-            </svg>
-          </a>
-        </div>
+      <div class="hero__cta">
+        {/* Anonymous (по умолчанию). Скрипт в BaseLayout заменит на «Открыть приложение». */}
+        <a href={`${appBase}/register`} data-auth-anon class="pf-btn pf-btn--primary pf-btn--lg">
+          Начать бесплатно
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="hero__arrow" aria-hidden="true">
+            <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+        </a>
+        <a href={`${appBase}/login`} data-auth-anon class="pf-btn pf-btn--ghost pf-btn--lg">Войти</a>
+        {/* Authed (скрыто изначально). */}
+        <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary pf-btn--lg hero__authed">
+          Открыть приложение
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="hero__arrow" aria-hidden="true">
+            <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+        </a>
       </div>
 
-      <ul class="mt-10 grid max-w-md gap-2 text-[13px] text-ink-300 animate-fade-up-delay-3">
-        {
-          [
-            'KB в твоём GitHub-репозитории',
-            'Секреты AES-256, не в гитах',
-            'Канбан с привязкой к коммитам',
-            'Без подписок и облака',
-          ].map((item) => (
-            <li class="flex items-center gap-2">
-              <span class="size-1 rounded-full bg-accent-400/70" aria-hidden="true" />
-              <span>{item}</span>
-            </li>
-          ))
-        }
-      </ul>
-    </div>
-  </div>
+      <!-- Псевдо-терминал — фирменный визуал dev-cool. -->
+      <div class="pf-term hero__term" data-reveal style="--reveal-delay: 200ms">
+        <div class="pf-term__bar">
+          <i class="pf-term__light pf-term__light--r"></i>
+          <i class="pf-term__light pf-term__light--y"></i>
+          <i class="pf-term__light pf-term__light--g"></i>
+          <span class="pf-term__title">~/projects/my-saas — projectsflow</span>
+        </div>
+        <div class="pf-term__body"><span class="pf-term__c"># кидаешь задачу воркеру</span>
+<span class="pf-term__p">pf</span> <span class="pf-term__v">task add</span> <span class="pf-term__w">"добавь dark mode на дашборд"</span> --col worker
+<span class="pf-term__c">→ воркер взял в работу · Claude Opus · автодеплой on</span>
 
-  <!-- scroll-cue в нижней части секции -->
-  <div class="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center animate-fade-up-delay-3">
-    <div class="relative size-9 rounded-full border border-white/10 bg-white/[0.02] backdrop-blur-md">
-      <span class="absolute inset-0 grid place-items-center text-ink-300">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4 animate-bounce-slow">
-          <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"></path>
-        </svg>
-      </span>
+<span class="pf-term__p">pf</span> <span class="pf-term__v">finance</span> --project my-saas
+<span class="pf-term__c">→ расход за месяц: 1 240 ₽ · по подписке Прайм</span></div>
+      </div>
     </div>
   </div>
 </section>
 
+<style>
+  .hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    min-height: calc(100dvh - 60px);
+    display: flex;
+    align-items: center;
+  }
+
+  /* --- Ambient «постер» --- */
+  .hero__bg {
+    position: absolute;
+    inset: 0;
+    z-index: -20;
+    pointer-events: none;
+  }
+  .hero__grid {
+    position: absolute;
+    inset: 0;
+  }
+  .hero__glow-cyan {
+    width: 560px;
+    height: 560px;
+    background: var(--accent-deep);
+    top: -180px;
+    left: 50%;
+    margin-left: -280px;
+    opacity: 0.4;
+  }
+  .hero__glow-green {
+    width: 380px;
+    height: 380px;
+    background: #0e7a4d;
+    top: 360px;
+    right: -120px;
+    opacity: 0.26;
+  }
+  .hero__vignette {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    height: 12rem;
+    background: linear-gradient(to bottom, transparent, var(--bg));
+  }
+
+  /* --- 3D-сцена --- */
+  .hero__scene {
+    position: absolute;
+    inset: 0;
+    z-index: -10;
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%);
+  }
+
+  /* --- Контент --- */
+  .hero__inner {
+    position: relative;
+    padding-block: clamp(2.5rem, 6vw, 4.5rem);
+  }
+  .hero__col {
+    width: 100%;
+    max-width: 640px;
+  }
+  .hero__title {
+    margin-top: var(--sp-6);
+    font-size: var(--fs-display);
+    line-height: var(--lh-tight);
+    letter-spacing: var(--tracking-tight);
+    font-weight: 800;
+    color: var(--text);
+    text-wrap: balance;
+  }
+  .hero__sub {
+    margin-top: var(--sp-6);
+    max-width: 34rem;
+    color: var(--muted);
+    font-size: var(--fs-lg);
+    line-height: var(--lh-normal);
+  }
+  .hero__accent { color: var(--accent); }
+  .hero__cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-3);
+    margin-top: var(--sp-8);
+  }
+  .hero__authed { display: none; }
+  .hero__arrow { width: 16px; height: 16px; }
+  .hero__term {
+    margin-top: var(--sp-12);
+    max-width: 600px;
+  }
+
+  /* На десктопе текст занимает ~58% ширины — справа дышит 3D-башня. */
+  @media (min-width: 1024px) {
+    .hero__col { max-width: 58%; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero__term { opacity: 1; }
+  }
+</style>
+
 <script>
+  // Лёгкий параллакс cyan-свечения за курсором (как было на main). Уважает reduced-motion.
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (!reduceMotion) {
     const blob = document.querySelector<HTMLElement>('[data-magnetic-blob]');
     if (blob) {
-      const MAX_OFFSET = 80;
-      const update = (e: PointerEvent): void => {
-        const { innerWidth: w, innerHeight: h } = window;
-        const nx = (e.clientX / w) * 2 - 1;
-        const ny = (e.clientY / h) * 2 - 1;
-        blob.style.setProperty('--blob-x', `${nx * MAX_OFFSET}px`);
-        blob.style.setProperty('--blob-y', `${ny * MAX_OFFSET}px`);
-      };
-      window.addEventListener('pointermove', update, { passive: true });
+      const MAX = 70;
+      window.addEventListener(
+        'pointermove',
+        (e: PointerEvent) => {
+          const nx = (e.clientX / window.innerWidth) * 2 - 1;
+          const ny = (e.clientY / window.innerHeight) * 2 - 1;
+          // .mesh-blob--magnetic анимирует transform через эти переменные (soft 1.2s easing).
+          blob.style.setProperty('--blob-x', `${nx * MAX}px`);
+          blob.style.setProperty('--blob-y', `${ny * MAX}px`);
+        },
+        { passive: true },
+      );
     }
   }
 </script>
-
-<style>
-  /* Канвас 3D-сцены: плавное затухание opacity по нижнему краю через mask-image.
-     От 0..70% — полная видимость, 70..100% — fade to transparent. Так базовая
-     платформа башни мягко сливается с темнотой следующей секции, без обреза. */
-  .hero-canvas-mask {
-    -webkit-mask-image: linear-gradient(
-      to bottom,
-      black 0%,
-      black 72%,
-      transparent 100%
-    );
-    mask-image: linear-gradient(
-      to bottom,
-      black 0%,
-      black 72%,
-      transparent 100%
-    );
-  }
-</style>

@@ -1,109 +1,152 @@
 ---
-const features = [
-  {
-    title: 'База знаний',
-    body:
-      'Markdown-доки в твоём GitHub-репозитории. Frontmatter валидируется, ссылки на секреты не ломаются. Чужой репозиторий — твоя структура.',
-    iconPath:
-      'M4 6.5a2.5 2.5 0 012.5-2.5H17a1 1 0 011 1v13a1 1 0 01-1 1H6.5A2.5 2.5 0 014 16.5v-10zM7 8h7M7 12h5',
-  },
-  {
-    title: 'Хранилище секретов',
-    body:
-      'AES-256-GCM на сервере. Ключи API, пароли БД, токены — без leak в gist и без копипасты в Telegram.',
-    iconPath:
-      'M12 11v2.5M7 11V7a5 5 0 0110 0v4M5 11h14a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1v-7a1 1 0 011-1z',
-  },
-  {
-    title: 'GitHub-интеграция',
-    body:
-      'Device Flow без OAuth-приключений. Видишь коммиты по проекту в одном месте, привязываешь их к задачам.',
-    iconPath:
-      'M12 2a10 10 0 00-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.12-1.47-1.12-1.47-.92-.62.07-.61.07-.61 1.01.07 1.55 1.04 1.55 1.04.9 1.54 2.36 1.1 2.94.84.09-.65.35-1.1.64-1.35-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.26-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.6 9.6 0 015 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.39.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0012 2z',
-  },
-  {
-    title: 'Доска задач',
-    body:
-      'Лёгкий канбан с привязкой задач к коммитам. Без Jira-обвеса и без полей, в которые никто не пишет.',
-    iconPath:
-      'M5 5h4v14H5zM10 5h4v9h-4zM15 5h4v6h-4z',
-  },
-];
+import { FEATURES, EXTRA_FEATURES } from '@/data/features';
+
+// Line-иконки (24×24) под ключи из features.ts. Циан-плитка задаётся в стилях.
+const ICONS: Record<string, string> = {
+  // канбан-доска с колонками
+  board: 'M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v6h-4z',
+  // бесконечность/автоматизация
+  automation:
+    'M7 8.5a3.5 3.5 0 100 7c1.7 0 2.8-1.2 4-2.5l1-1.1c1.2-1.3 2.3-2.4 4-2.4a3.5 3.5 0 110 7c-1.7 0-2.8-1.2-4-2.4l-1-1.2c-1.2-1.3-2.3-2.5-4-2.5z',
+  // рубль / финансы
+  finance: 'M9 5h4.5a3.5 3.5 0 010 7H9m0 0V5m0 7v7m0-7H7m2 4H7',
+  // подписка / ключ-карта
+  subscription:
+    'M4 7a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1H5a1 1 0 01-1-1V7zM4 10h16M8 14h4',
+};
 ---
 
-<section id="features" class="relative py-28">
-  <div
-    class="mesh-blob"
-    style="width: 600px; height: 600px; background: #1e3a8a; top: 10%; right: -15%; opacity: 0.18;"
-  >
-  </div>
+<section id="features" class="pf-section features">
+  <div class="features__blob mesh-blob" aria-hidden="true"></div>
 
-  <div class="mx-auto max-w-6xl px-6">
-    <div class="mx-auto max-w-2xl text-center" data-reveal>
-      <span class="eyebrow">Возможности</span>
-      <h2 class="mt-5 text-balance text-3xl font-semibold tracking-tight text-ink-50 sm:text-5xl">
-        Всё, что нужно знать о&nbsp;проекте — в&nbsp;одном месте
-      </h2>
-      <p class="mx-auto mt-4 max-w-xl text-balance text-base leading-relaxed text-ink-200">
-        Не таск-трекер. Не DevOps-панель. Живое досье, в которое возвращаешься через полгода
-        и сразу понимаешь, что и как работает.
+  <div class="pf-container">
+    <div class="features__head" data-reveal>
+      <div class="pf-stag">// возможности</div>
+      <h2 class="pf-h2">Всё по проекту — в&nbsp;одном месте</h2>
+      <p class="pf-lead">
+        Доска, воркер, автоматизация и деньги. Не разбросано по чатам, гистам и десятку вкладок.
       </p>
     </div>
 
-    <div class="mt-16 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="features__grid">
       {
-        features.map((f, i) => (
+        FEATURES.map((f, i) => (
           <article
-            class="glass magnetic-card group relative overflow-hidden rounded-2xl p-6"
+            class="pf-card pf-card--hover features__card"
             data-reveal
             style={`--reveal-delay: ${i * 80}ms`}
-            data-tilt
           >
-            <div
-              class="grid size-11 place-items-center rounded-xl bg-gradient-to-br from-accent-400/20 to-accent-600/10 text-accent-400 ring-1 ring-inset ring-accent-400/15"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="size-5">
-                <path d={f.iconPath} stroke-linecap="round" stroke-linejoin="round" />
+            <div class="features__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                <path d={ICONS[f.icon]} stroke-linecap="round" stroke-linejoin="round" />
               </svg>
             </div>
-            <h3 class="mt-5 text-lg font-semibold tracking-tight text-ink-50">{f.title}</h3>
-            <p class="mt-2 text-sm leading-relaxed text-ink-200">{f.body}</p>
-
-            <div
-              class="pointer-events-none absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-accent-400/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100"
-            />
+            <h3 class="features__title">{f.title}</h3>
+            <p class="features__body">{f.body}</p>
+            {f.tag && <span class="pf-mono features__tag">{f.tag}</span>}
+            <span class="pf-underline" aria-hidden="true"></span>
           </article>
         ))
       }
     </div>
+
+    <ul class="features__extra" data-reveal aria-label="Дополнительные возможности">
+      {
+        EXTRA_FEATURES.map((x) => (
+          <li class="features__chip">
+            <span class="features__chip-dot" aria-hidden="true"></span>
+            {x}
+          </li>
+        ))
+      }
+    </ul>
   </div>
 </section>
 
-<script>
-  // Magnetic glow + 3D tilt для каждой карточки с [data-tilt].
-  // На mousemove обновляем CSS-переменные: --mx/--my для radial-gradient'а,
-  // --tilt-x/--tilt-y для perspective-наклона.
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!reduceMotion) {
-    const MAX_TILT = 4; // градусы
-    document.querySelectorAll<HTMLElement>('[data-tilt]').forEach((card) => {
-      card.addEventListener('pointermove', (e: PointerEvent) => {
-        const rect = card.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        const px = (x / rect.width) * 100;
-        const py = (y / rect.height) * 100;
-        const tiltY = ((x / rect.width) - 0.5) * MAX_TILT * 2;
-        const tiltX = -((y / rect.height) - 0.5) * MAX_TILT * 2;
-        card.style.setProperty('--mx', `${px}%`);
-        card.style.setProperty('--my', `${py}%`);
-        card.style.setProperty('--tilt-x', `${tiltX}deg`);
-        card.style.setProperty('--tilt-y', `${tiltY}deg`);
-      });
-      card.addEventListener('pointerleave', () => {
-        card.style.setProperty('--tilt-x', '0deg');
-        card.style.setProperty('--tilt-y', '0deg');
-      });
-    });
+<style>
+  .features { overflow: hidden; }
+  .features__blob {
+    width: 560px;
+    height: 560px;
+    background: var(--accent-deep);
+    top: -10%;
+    right: -18%;
+    opacity: 0.14;
   }
-</script>
+  .features__head { max-width: 40rem; }
+
+  .features__grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-4);
+    margin-top: var(--sp-12);
+  }
+  @media (min-width: 640px) {
+    .features__grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (min-width: 1024px) {
+    .features__grid { grid-template-columns: repeat(4, 1fr); }
+  }
+
+  .features__card {
+    overflow: hidden;
+    padding: var(--sp-6);
+  }
+  .features__icon {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--r-sm);
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+  }
+  .features__icon svg { width: 22px; height: 22px; }
+  .features__title {
+    margin-top: var(--sp-4);
+    font-size: var(--fs-lg);
+    font-weight: 700;
+    letter-spacing: var(--tracking-tight);
+    color: var(--text);
+  }
+  .features__body {
+    margin-top: var(--sp-2);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-normal);
+    color: var(--muted);
+  }
+  .features__tag {
+    display: inline-block;
+    margin-top: var(--sp-4);
+    font-size: var(--fs-xs);
+    color: var(--dim);
+    padding: 2px 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+  }
+
+  .features__extra {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-6);
+    justify-content: center;
+    margin-top: var(--sp-12);
+    padding: 0;
+  }
+  .features__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+  }
+  .features__chip-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0.7;
+  }
+</style>

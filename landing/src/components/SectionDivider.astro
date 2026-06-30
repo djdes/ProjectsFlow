@@ -29,9 +29,8 @@
     position: relative;
     height: 120px;
     overflow: hidden;
-    /* Сверху — цвет body (Hero section bg #0a0b10 = ink-900), снизу — он же.
-       Это убирает любой видимый шов между Hero и divider, и между divider и Features. */
-    background: rgb(10 11 16);
+    /* Цвет фона страницы (--bg) — убирает любой видимый шов между секциями. */
+    background: var(--bg);
   }
 
   .divider-line {
@@ -41,9 +40,9 @@
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(56, 189, 248, 0.0) 5%,
-      rgba(56, 189, 248, 0.8) 50%,
-      rgba(56, 189, 248, 0.0) 95%,
+      rgba(34, 224, 255, 0.0) 5%,
+      rgba(34, 224, 255, 0.8) 50%,
+      rgba(34, 224, 255, 0.0) 95%,
       transparent 100%
     );
     transform: translateY(-0.5px);
@@ -56,8 +55,8 @@
     transform: translateY(-30px);
     background: radial-gradient(
       ellipse 60% 100% at 50% 50%,
-      rgba(56, 189, 248, 0.2) 0%,
-      rgba(56, 189, 248, 0.06) 35%,
+      rgba(34, 224, 255, 0.2) 0%,
+      rgba(34, 224, 255, 0.06) 35%,
       transparent 70%
     );
     filter: blur(4px);
@@ -72,10 +71,10 @@
     height: 6px;
     margin-top: -3px;
     border-radius: 50%;
-    background: #bae6fd;
+    background: #b6f5ff;
     box-shadow:
       0 0 12px 2px rgba(186, 230, 253, 0.95),
-      0 0 32px 6px rgba(56, 189, 248, 0.55);
+      0 0 32px 6px rgba(34, 224, 255, 0.55);
     animation: packet-travel var(--duration) linear infinite;
     animation-delay: var(--delay);
   }
@@ -106,8 +105,8 @@
     height: 60%;
     background: linear-gradient(
       to bottom,
-      rgba(56, 189, 248, 0.6) 0%,
-      rgba(56, 189, 248, 0) 100%
+      rgba(34, 224, 255, 0.6) 0%,
+      rgba(34, 224, 255, 0) 100%
     );
     opacity: 0;
     transform: translateY(0);

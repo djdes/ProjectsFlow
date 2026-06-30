@@ -1,16 +1,46 @@
 ---
+// Логотип ProjectsFlow — циан-моно марка «PF» (направление Dev-cool).
 interface Props {
   class?: string;
+  size?: 'sm' | 'md';
 }
-const { class: className = '' } = Astro.props;
+const { class: className = '', size = 'md' } = Astro.props as Props;
+const markSize = size === 'sm' ? 22 : 26;
+const markFont = size === 'sm' ? 12 : 14;
 ---
 
-<a href="/" class={`inline-flex items-center gap-2 ${className}`}>
+<a href="/" class={`pf-logo ${className}`} aria-label="ProjectsFlow — на главную">
   <span
-    class="grid size-7 place-items-center rounded-md bg-gradient-to-br from-accent-400 to-accent-600 text-[11px] font-bold text-white shadow-[0_4px_20px_-4px_rgba(59,130,246,0.6)]"
+    class="pf-logo__mark pf-mono"
+    style={`width:${markSize}px;height:${markSize}px;font-size:${markFont}px`}
     aria-hidden="true"
   >
     PF
   </span>
-  <span class="text-sm font-semibold tracking-tight text-ink-50">ProjectsFlow</span>
+  <span class="pf-logo__word">ProjectsFlow</span>
 </a>
+
+<style>
+  .pf-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  .pf-logo__mark {
+    display: grid;
+    place-items: center;
+    border-radius: 7px;
+    background: var(--grad-accent);
+    color: var(--accent-ink);
+    font-weight: 800;
+    box-shadow: 0 4px 20px -4px rgba(34, 224, 255, 0.6);
+  }
+  .pf-logo__word {
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    letter-spacing: var(--tracking-tight);
+  }
+</style>

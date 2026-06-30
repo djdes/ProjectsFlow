@@ -1,7 +1,5 @@
 ---
-// CTA-блок на лендинге: пара кнопок «Создать аккаунт» + «Войти».
-// Раньше тут был EmailForm с magic-link, но magic-link auth остался на отдельной ветке —
-// на main используется password-based register/login (см. SPA в `client/`).
+// CTA-блок: пара кнопок «Создать аккаунт» + «Войти», auth-aware.
 // URL'ы относительные — лендинг и SPA отдаются одним Express'ом (см. server/src/presentation/http.ts).
 // Для dev'а (Astro :4321 ≠ Vite :5173) можно задать `PUBLIC_APP_URL` в .env лендинга.
 
@@ -11,49 +9,41 @@ interface Props {
   size?: 'lg' | 'md';
 }
 const { size = 'lg' } = Astro.props as Props;
-const primaryCls =
-  size === 'lg' ? 'h-12 px-6 text-base' : 'h-11 px-5 text-sm';
-const secondaryCls =
-  size === 'lg' ? 'h-12 px-5 text-base' : 'h-11 px-4 text-sm';
+const sizeCls = size === 'lg' ? 'pf-btn--lg' : '';
 ---
 
-<div class="flex flex-wrap items-center justify-center gap-3">
+<div class="authcta">
   {/* Anonymous (default) */}
-  <a
-    href={`${appBase}/register`}
-    data-auth-anon
-    class:list={[
-      primaryCls,
-      'inline-flex items-center justify-center gap-2 rounded-xl bg-accent font-semibold text-white shadow-glow transition-all hover:bg-accent-600 active:scale-[0.98]',
-    ]}
-  >
+  <a href={`${appBase}/register`} data-auth-anon class:list={['pf-btn', 'pf-btn--primary', sizeCls]}>
     Создать аккаунт
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="size-4">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="authcta__arrow" aria-hidden="true">
       <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
     </svg>
   </a>
-  <a
-    href={`${appBase}/login`}
-    data-auth-anon
-    class:list={[
-      secondaryCls,
-      'inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 font-medium text-ink-50 transition-colors hover:bg-white/10',
-    ]}
-  >
+  <a href={`${appBase}/login`} data-auth-anon class:list={['pf-btn', 'pf-btn--ghost', sizeCls]}>
     Войти
   </a>
   {/* Authed (toggled by BaseLayout script) */}
   <a
     href={`${appBase}/`}
     data-auth-authed
-    class:list={[
-      primaryCls,
-      'hidden items-center justify-center gap-2 rounded-xl bg-accent font-semibold text-white shadow-glow transition-all hover:bg-accent-600 active:scale-[0.98]',
-    ]}
+    class:list={['pf-btn', 'pf-btn--primary', sizeCls, 'authcta__authed']}
   >
     Открыть приложение
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="size-4">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="authcta__arrow" aria-hidden="true">
       <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
     </svg>
   </a>
 </div>
+
+<style>
+  .authcta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-3);
+  }
+  .authcta__arrow { width: 16px; height: 16px; }
+  .authcta__authed { display: none; }
+</style>

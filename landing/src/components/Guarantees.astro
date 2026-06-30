@@ -1,0 +1,251 @@
+---
+// Grand Offer (по Хормози): сильная безусловная гарантия + снятие рисков + value-stack.
+// Только реальные обещания (контент-контракт §4): возврат денег, нет лок-ина, прозрачность,
+// старт без карты. Никаких выдуманных цифр результата.
+
+const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
+
+// 4 снятия риска (risk-reversal).
+const risks = [
+  {
+    icon: 'refund',
+    title: 'Вернём деньги',
+    body: 'Платный тариф не подошёл — оформим возврат. Без допросов и мелкого шрифта.',
+  },
+  {
+    icon: 'lock',
+    title: 'Никакого лок-ина',
+    body: 'Код — в твоём GitHub, база знаний — тоже. Уходишь — забираешь всё с собой.',
+  },
+  {
+    icon: 'eye',
+    title: 'Прозрачные списания',
+    body: 'Видишь расход на AI по каждому проекту в рублях. Ни одного скрытого рубля.',
+  },
+  {
+    icon: 'rocket',
+    title: 'Старт без карты',
+    body: 'Бесплатный тариф — без карты. Прайм — можно попробовать час перед оплатой.',
+  },
+];
+
+const iconPaths: Record<string, string> = {
+  refund: 'M4 9a8 8 0 0114-5.3M20 4v4h-4M20 15a8 8 0 01-14 5.3M4 20v-4h4',
+  lock: 'M7 11V8a5 5 0 0110 0v3M5 11h14v9H5z',
+  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z M12 9a3 3 0 100 6 3 3 0 000-6z',
+  rocket: 'M5 15c-1.5 1.5-2 5-2 5s3.5-.5 5-2M9 11a9 9 0 016-6c3 0 4 1 4 4a9 9 0 01-6 6l-3 1-2-2 1-3z',
+};
+
+// Value-stack — что внутри платного тарифа (укрепляет разрыв ценность/цена).
+const stack = [
+  'Доска задач + колонка worker',
+  'AI-воркер: код, коммиты, автодеплой',
+  'Автоматизация — задачи генерятся и выполняются сами',
+  'Финучёт по каждому проекту',
+  'Встроенная AI-подписка — без своих ключей',
+  'GitHub-привязка, KB и хранилище секретов',
+];
+---
+
+<section id="guarantee" class="pf-section guarantee">
+  <div class="pf-container">
+    <div class="guarantee__head" data-reveal>
+      <div class="pf-stag">// почему не страшно начать</div>
+      <h2 class="pf-h2">Предложение, от которого глупо&nbsp;отказаться</h2>
+      <p class="pf-lead pf-lead--center">
+        Мы убрали риск со своей стороны: начинаешь бесплатно, платишь — только если зашло,
+        а код и данные всегда остаются твоими.
+      </p>
+    </div>
+
+    <div class="guarantee__layout">
+      <!-- Печать-гарантия — фирменный акцент секции. -->
+      <aside class="guarantee__seal pf-card" data-reveal>
+        <div class="guarantee__seal-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 2.5l7 3v5.5c0 5-3.2 8.6-7 10.5-3.8-1.9-7-5.5-7-10.5V5.5l7-3z" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M8.5 12l2.3 2.3L16 9" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+        <div class="pf-mono guarantee__seal-tag">guarantee</div>
+        <h3 class="guarantee__seal-title">«Не&nbsp;зашло&nbsp;— вернём»</h3>
+        <p class="guarantee__seal-body">
+          Если платный тариф не оправдал ожиданий — напиши нам, и мы вернём деньги.
+          Риск проверить ProjectsFlow — нулевой.
+        </p>
+        <a href={`${appBase}/register`} class="pf-btn pf-btn--primary pf-btn--block">Начать бесплатно</a>
+      </aside>
+
+      <!-- Value-stack. -->
+      <div class="guarantee__stack" data-reveal>
+        <div class="pf-mono guarantee__stack-tag">// что внутри платного тарифа</div>
+        <ul class="guarantee__stack-list">
+          {
+            stack.map((s) => (
+              <li class="guarantee__stack-item">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                  <path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span>{s}</span>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </div>
+
+    <!-- 4 снятия риска. -->
+    <div class="guarantee__risks">
+      {
+        risks.map((r, i) => (
+          <article class="pf-card pf-card--hover guarantee__risk" data-reveal style={`--reveal-delay: ${i * 70}ms`}>
+            <div class="guarantee__risk-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                <path d={iconPaths[r.icon]} stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <h3 class="guarantee__risk-title">{r.title}</h3>
+            <p class="guarantee__risk-body">{r.body}</p>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<style>
+  .guarantee__head {
+    max-width: 42rem;
+    margin-inline: auto;
+    text-align: center;
+  }
+
+  .guarantee__layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-4);
+    margin-top: var(--sp-12);
+  }
+  @media (min-width: 880px) {
+    .guarantee__layout { grid-template-columns: 0.9fr 1.1fr; align-items: stretch; }
+  }
+
+  /* Печать-гарантия. */
+  .guarantee__seal {
+    padding: var(--sp-8);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-color: var(--accent-line);
+    background:
+      radial-gradient(120% 80% at 50% 0%, var(--accent-soft), transparent 70%),
+      var(--surface);
+  }
+  .guarantee__seal-badge {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    border-radius: var(--r-full);
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+    box-shadow: var(--glow);
+  }
+  .guarantee__seal-badge svg { width: 32px; height: 32px; }
+  .guarantee__seal-tag {
+    margin-top: var(--sp-4);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.14em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  .guarantee__seal-title {
+    margin-top: var(--sp-2);
+    font-size: var(--fs-2xl);
+    font-weight: 800;
+    letter-spacing: var(--tracking-tight);
+    color: var(--text);
+  }
+  .guarantee__seal-body {
+    margin: var(--sp-3) 0 var(--sp-6);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-normal);
+    color: var(--muted);
+  }
+  .guarantee__seal .pf-btn { margin-top: auto; }
+
+  /* Value-stack. */
+  .guarantee__stack {
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+    padding: var(--sp-8);
+  }
+  .guarantee__stack-tag {
+    font-size: var(--fs-xs);
+    color: var(--accent);
+    letter-spacing: 0.08em;
+  }
+  .guarantee__stack-list {
+    list-style: none;
+    margin: var(--sp-4) 0 0;
+    padding: 0;
+    display: grid;
+    gap: var(--sp-3);
+  }
+  .guarantee__stack-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-3);
+    font-size: var(--fs-base);
+    color: var(--text);
+    line-height: var(--lh-snug);
+  }
+  .guarantee__stack-item svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin-top: 3px;
+    color: var(--signal);
+  }
+
+  /* 4 снятия риска. */
+  .guarantee__risks {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-4);
+    margin-top: var(--sp-4);
+  }
+  @media (min-width: 560px) {
+    .guarantee__risks { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (min-width: 1024px) {
+    .guarantee__risks { grid-template-columns: repeat(4, 1fr); }
+  }
+  .guarantee__risk { padding: var(--sp-6); }
+  .guarantee__risk-icon {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--r-sm);
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+  }
+  .guarantee__risk-icon svg { width: 20px; height: 20px; }
+  .guarantee__risk-title {
+    margin-top: var(--sp-4);
+    font-size: var(--fs-base);
+    font-weight: 700;
+    color: var(--text);
+  }
+  .guarantee__risk-body {
+    margin-top: var(--sp-2);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-normal);
+    color: var(--muted);
+  }
+</style>
