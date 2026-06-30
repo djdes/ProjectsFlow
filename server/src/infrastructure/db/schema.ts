@@ -1424,3 +1424,28 @@ export const recentTaskViews = mysqlTable(
 
 export type RecentTaskViewRow = typeof recentTaskViews.$inferSelect;
 export type NewRecentTaskViewRow = typeof recentTaskViews.$inferInsert;
+
+// ============================================================================
+// support_tickets — миграция db/081. Обращения из чат-виджета (вкладка «Поддержка»).
+// user_id NULL — анонимная отправка с лендинга. Доставка в Telegram-чат поддержки
+// (или fallback на уведомление админам) — best-effort на уровне приложения; тикет
+// сохраняется всегда. См. docs/superpowers/specs/2026-06-30-backlog-epic-p2-chat-widget.md.
+// ============================================================================
+export const supportTickets = mysqlTable(
+  'support_tickets',
+  {
+    id: id(),
+    userId: char('user_id', { length: 36 }),
+    message: text('message').notNull(),
+    source: mysqlEnum('source', ['app', 'landing']).notNull().default('app'),
+    status: mysqlEnum('status', ['open', 'closed']).notNull().default('open'),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    index('idx_support_tickets_status_created').on(t.status, t.createdAt),
+    index('idx_support_tickets_user').on(t.userId),
+  ],
+);
+
+export type SupportTicketRow = typeof supportTickets.$inferSelect;
+export type NewSupportTicketRow = typeof supportTickets.$inferInsert;

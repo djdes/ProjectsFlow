@@ -25,6 +25,9 @@ import { HttpChatRepository } from '@/infrastructure/http/HttpChatRepository';
 import { HttpWorkspaceRepository } from '@/infrastructure/http/HttpWorkspaceRepository';
 import { HttpActivityRepository } from '@/infrastructure/http/HttpActivityRepository';
 import { HttpRecentTaskViewRepository } from '@/infrastructure/http/HttpRecentTaskViewRepository';
+import { HttpHelpRepository } from '@/infrastructure/http/HttpHelpRepository';
+import { SubmitSupport } from '@/application/help/SubmitSupport';
+import type { HelpRepository } from '@/application/help/HelpRepository';
 import { RecordTaskView } from '@/application/recent/RecordTaskView';
 import { ListRecentTaskViews } from '@/application/recent/ListRecentTaskViews';
 import { ImproveTaskDescription } from '@/application/ai/ImproveTaskDescription';
@@ -113,6 +116,8 @@ type Container = {
   activityRepository: ActivityRepository;
   recordTaskView: RecordTaskView;
   listRecentTaskViews: ListRecentTaskViews;
+  helpRepository: HelpRepository;
+  submitSupport: SubmitSupport;
 };
 
 function buildContainer(): Container {
@@ -142,6 +147,7 @@ function buildContainer(): Container {
   const workspaceRepo = new HttpWorkspaceRepository();
   const activityRepo = new HttpActivityRepository();
   const recentTaskViewRepo = new HttpRecentTaskViewRepository();
+  const helpRepo = new HttpHelpRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -185,6 +191,8 @@ function buildContainer(): Container {
     activityRepository: activityRepo,
     recordTaskView: new RecordTaskView(recentTaskViewRepo),
     listRecentTaskViews: new ListRecentTaskViews(recentTaskViewRepo),
+    helpRepository: helpRepo,
+    submitSupport: new SubmitSupport(helpRepo),
   };
 }
 

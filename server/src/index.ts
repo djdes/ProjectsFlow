@@ -30,6 +30,8 @@ import { DrizzleNotificationRepository } from './infrastructure/repositories/Dri
 import { DrizzleRecentTaskViewRepository } from './infrastructure/repositories/DrizzleRecentTaskViewRepository.js';
 import { RecordTaskView } from './application/task/RecordTaskView.js';
 import { ListRecentTaskViews } from './application/task/ListRecentTaskViews.js';
+import { DrizzleSupportTicketRepository } from './infrastructure/repositories/DrizzleSupportTicketRepository.js';
+import { SubmitSupportTicket } from './application/help/SubmitSupportTicket.js';
 import { NotificationHub } from './infrastructure/notifications/NotificationHub.js';
 import { RealtimeHub } from './infrastructure/realtime/RealtimeHub.js';
 import { ProjectEventBroadcaster } from './application/realtime/ProjectEventBroadcaster.js';
@@ -584,6 +586,22 @@ const sendAgentTelegramNotification = new SendAgentTelegramNotification({
   ralphQuestionMessages: telegramRalphQuestionRepo,
   idGen: idGenerator,
   kindToPref: TG_KIND_TO_PREF,
+});
+
+// --- Чат-виджет: поддержка ---
+// SUPPORT_TELEGRAM_CHAT_ID — chat_id Telegram-чата поддержки (число; для групп
+// отрицательное). Пусто/невалидно → fallback: уведомление админам через их личную
+// TG-привязку (см. SubmitSupportTicket). Тикет в БД сохраняется в любом случае.
+const supportChatIdRaw = process.env['SUPPORT_TELEGRAM_CHAT_ID'];
+const supportChatIdParsed = supportChatIdRaw ? Number(supportChatIdRaw) : NaN;
+const supportTelegramChatId = Number.isFinite(supportChatIdParsed) ? supportChatIdParsed : null;
+const supportTicketRepo = new DrizzleSupportTicketRepository(db);
+const submitSupportTicket = new SubmitSupportTicket({
+  tickets: supportTicketRepo,
+  users: userRepo,
+  client: telegramClient,
+  sendNotification: sendAgentTelegramNotification,
+  supportChatId: supportTelegramChatId,
 });
 // CreateTaskComment + MaybeReopenForClarification используются и в HTTP-роутерах (см. ниже),
 // и в HandleTelegramWebhook (reply→ralph-answer ветка). Один экземпляр на оба чтобы не
@@ -1317,6 +1335,10 @@ const { app, devProxyUpgrade } = createApp({
   recentTaskViews: {
     list: new ListRecentTaskViews({ repo: recentTaskViewRepo }),
     record: new RecordTaskView({ repo: recentTaskViewRepo }),
+  },
+  help: {
+    submit: submitSupportTicket,
+    rateLimiter: agentRateLimiter,
   },
   invites: {
     getByToken: new GetInviteByToken({

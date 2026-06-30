@@ -178,6 +178,8 @@ import { delegationsRouter } from './delegations/routes.js';
 import { notificationsRouter } from './notifications/routes.js';
 import { recentTaskViewsRouter } from './recent-task-views/routes.js';
 import type { ListRecentTaskViews } from '../application/task/ListRecentTaskViews.js';
+import { buildHelpRouter } from './help/routes.js';
+import type { SubmitSupportTicket } from '../application/help/SubmitSupportTicket.js';
 import type { RecordTaskView } from '../application/task/RecordTaskView.js';
 import { agentTokensRouter } from './agent/tokensRoutes.js';
 import { agentApiRouter } from './agent/apiRoutes.js';
@@ -330,6 +332,10 @@ type AppDeps = {
   readonly recentTaskViews: {
     readonly list: ListRecentTaskViews;
     readonly record: RecordTaskView;
+  };
+  readonly help: {
+    readonly submit: SubmitSupportTicket;
+    readonly rateLimiter: InMemoryRateLimiter;
   };
   readonly github: {
     readonly startDeviceFlow: StartDeviceFlow;
@@ -652,6 +658,9 @@ export function createApp(deps: AppDeps): CreatedApp {
   }));
   app.use('/api/notifications', notificationsRouter(deps.notifications));
   app.use('/api/recent-task-views', recentTaskViewsRouter(deps.recentTaskViews));
+  // Чат-виджет: обращения в поддержку (POST /api/help/contact-support). Без requireAuth —
+  // форма доступна и анонимам с лендинга (см. help/routes.ts).
+  app.use('/api', buildHelpRouter(deps.help));
 
   // Agent tokens management (session-auth)
   app.use(

@@ -31,6 +31,7 @@ import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useNotificationStream } from '@/presentation/hooks/useNotificationStream';
 import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
+import { HelpWidget } from '@/presentation/components/help/HelpWidget';
 import { Sidebar } from './Sidebar';
 
 const COLLAPSE_KEY = 'pf_sidebar_collapsed';
@@ -206,6 +207,8 @@ export function AppShell(): React.ReactElement {
             </Sheet>
           </div>
         )}
+        {/* Плавающий виджет помощи/поддержки — снизу справа, портал в body, над таб-баром. */}
+        <HelpWidget />
         </GlobalSearchProvider>
         </AddTaskDialogProvider>
         </NewProjectDialogProvider>
