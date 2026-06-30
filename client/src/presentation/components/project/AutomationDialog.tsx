@@ -728,7 +728,7 @@ export function AutomationDialog({
                           onChange={(e) =>
                             update({ limitCount: Math.max(1, Number(e.target.value) || 1) })
                           }
-                          className="ml-auto h-8 w-24"
+                          className="h-8 w-20"
                         />
                       )}
                     </div>
@@ -746,7 +746,7 @@ export function AutomationDialog({
                           onChange={(e) =>
                             update({ limitMinutes: Math.max(1, Number(e.target.value) || 1) })
                           }
-                          className="ml-auto h-8 w-24"
+                          className="h-8 w-20"
                         />
                       )}
                     </div>

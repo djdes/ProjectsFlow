@@ -128,7 +128,13 @@ export function TasksPage(): React.ReactElement {
         <TooltipProvider delayDuration={300}>
           <div className="flex items-center gap-0.5">
             {/* Аватар-стек участников: наведение/клик → панель участников с зумом аватара. */}
-            {members.length > 1 && <MemberAvatarStack members={members} />}
+            {members.length > 1 && (
+              <MemberAvatarStack
+                members={members}
+                projectId={data.id}
+                canInvite={data.role === 'owner' || data.role === 'editor'}
+              />
+            )}
             {financeVisible && (
               <PageActionButton label="Финансы" to={`/projects/${data.id}/finance`}>
                 <Wallet className="size-4" />

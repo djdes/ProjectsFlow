@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
 import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import { Collapse } from '@/presentation/components/motion/Collapse';
+import { MembersInviteForm } from './MembersInviteForm';
 
 // Сколько участников показываем сразу; остальные — под кнопкой «Показать всех».
 const VISIBLE = 6;
@@ -18,7 +19,17 @@ const ROLE_LABEL: Record<ProjectRole, string> = {
 // Панель участников проекта (раскрывается при наведении на аватар-стек, см. MemberAvatarStack).
 // Показывает часть участников (аватар + ник + email + роль); ниже — «Показать всех» с плавным
 // раскрытием остальных. Клик по аватару — увеличение в маленьком модальном окне.
-export function MembersHoverPanel({ members }: { members: ProjectMember[] }): React.ReactElement {
+export function MembersHoverPanel({
+  members,
+  projectId,
+  canInvite = false,
+}: {
+  members: ProjectMember[];
+  // Проект + право приглашать (editor+). Если заданы — в подвале панели рисуем форму
+  // приглашения (email + «Из знакомых» + роль + отправка).
+  projectId?: string;
+  canInvite?: boolean;
+}): React.ReactElement {
   const [showAll, setShowAll] = React.useState(false);
   const [zoom, setZoom] = React.useState<ProjectMember | null>(null);
 
@@ -52,6 +63,8 @@ export function MembersHoverPanel({ members }: { members: ProjectMember[] }): Re
           Показать всех (+{rest.length})
         </button>
       )}
+
+      {canInvite && projectId && <MembersInviteForm projectId={projectId} />}
 
       <AvatarZoom member={zoom} onClose={() => setZoom(null)} />
     </div>

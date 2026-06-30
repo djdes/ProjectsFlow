@@ -15,12 +15,21 @@ const STACK = 4;
 // выровнена по правому краю стека, клампится по вьюпорту (Radix Popover).
 export function MemberAvatarStack({
   members,
+  projectId,
+  canInvite = false,
 }: {
   members: ProjectMember[];
+  // Проброс в панель: проект + право приглашать (editor+) включают форму приглашения.
+  projectId?: string;
+  canInvite?: boolean;
 }): React.ReactElement | null {
   const [open, setOpen] = React.useState(false);
   const openTimer = React.useRef<number | undefined>(undefined);
   const closeTimer = React.useRef<number | undefined>(undefined);
+  // «Закреплено»: пока внутри панели есть фокус (ввод email / открыт дропдаун «Из
+  // знакомых»), hover-закрытие не срабатывает — иначе форма приглашения закрывалась бы
+  // при уводе курсора. Снимается при закрытии поповера (outside-click / Esc).
+  const pinnedRef = React.useRef(false);
 
   React.useEffect(
     () => () => {
@@ -29,6 +38,10 @@ export function MemberAvatarStack({
     },
     [],
   );
+
+  React.useEffect(() => {
+    if (!open) pinnedRef.current = false;
+  }, [open]);
 
   if (members.length === 0) return null;
 
@@ -41,6 +54,8 @@ export function MemberAvatarStack({
   const scheduleClose = (): void => {
     window.clearTimeout(openTimer.current);
     window.clearTimeout(closeTimer.current);
+    // Не закрываем по hover, пока юзер работает с формой приглашения (фокус внутри).
+    if (pinnedRef.current) return;
     closeTimer.current = window.setTimeout(() => setOpen(false), 180);
   };
 
@@ -84,9 +99,13 @@ export function MemberAvatarStack({
         onOpenAutoFocus={(e) => e.preventDefault()}
         onMouseEnter={cancelClose}
         onMouseLeave={scheduleClose}
-        className="w-72 p-0"
+        onFocusCapture={() => {
+          pinnedRef.current = true;
+          cancelClose();
+        }}
+        className="w-80 p-0"
       >
-        <MembersHoverPanel members={members} />
+        <MembersHoverPanel members={members} projectId={projectId} canInvite={canInvite} />
       </PopoverContent>
     </Popover>
   );
