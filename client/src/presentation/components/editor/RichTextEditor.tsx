@@ -464,7 +464,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       {/* Ручка-«6 точек» слева при наведении на блок (абзац/картинка) → drag-reorder.
           Только в описании (не в комментариях), в редактируемом режиме. */}
       {editor && variant === 'description' && !disabled ? (
-        <DragHandle editor={editor} nested>
+        <DragHandle editor={editor} computePositionConfig={{ placement: 'left-start' }}>
           <button
             type="button"
             aria-label="Переместить блок"

@@ -36,7 +36,7 @@ export function FigureImageView({ node, deleteNode }: NodeViewProps): React.Reac
             alt=""
             draggable={false}
             onClick={() => setLightbox(true)}
-            className="max-h-[70vh] max-w-full cursor-zoom-in rounded-xl border border-border object-contain"
+            className="my-0 block max-h-[70vh] max-w-full cursor-zoom-in rounded-xl border border-border object-contain"
           />
           <button
             type="button"
