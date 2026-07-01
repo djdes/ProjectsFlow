@@ -31,11 +31,34 @@ const related = [
 ]
   .slice(0, 3)
   .map((p) => ({ slug: p.id, minutes: readingMinutes(p.body ?? ''), ...p.data }));
+
+// Разметка для поисковиков (rich results).
+const canonical = `https://projectsflow.ru/blog/${post.id}/`;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BlogPosting',
+  headline: post.data.title,
+  description: post.data.description,
+  datePublished: post.data.date.toISOString(),
+  dateModified: post.data.date.toISOString(),
+  author: { '@type': 'Organization', name: post.data.author },
+  publisher: {
+    '@type': 'Organization',
+    name: 'ProjectsFlow',
+    url: 'https://projectsflow.ru',
+    logo: { '@type': 'ImageObject', url: 'https://projectsflow.ru/og.png' },
+  },
+  mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+  image: 'https://projectsflow.ru/og.png',
+  inLanguage: 'ru-RU',
+};
 ---
 
 <BaseLayout title={`${post.data.title} — Блог ProjectsFlow`} description={post.data.description}>
   <!-- Прогресс чтения: тонкая полоса сверху, заполняется по мере скролла статьи. -->
   <div class="read-progress" aria-hidden="true"><span data-read-bar></span></div>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} is:inline />
+
 
   <Nav />
   <main id="main" class="post">
@@ -292,6 +315,81 @@ const related = [
     background: var(--surface-2);
     color: var(--accent-deep);
   }
+  .post__content :global(pre) {
+    margin-block: var(--sp-5);
+    padding: var(--sp-4);
+    border-radius: var(--r);
+    background: var(--dark-surface);
+    color: var(--dark-text);
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.7;
+  }
+  .post__content :global(pre code) { background: none; color: inherit; padding: 0; font-size: inherit; }
+  .post__content :global(hr) {
+    margin-block: var(--sp-8);
+    border: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
+  }
+  .post__content :global(img) {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-block: var(--sp-6);
+    border-radius: var(--r-md);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+  }
+
+  /* Таблицы сравнений — скрипт оборачивает <table> в .post__table (скролл на узких). */
+  .post__content :global(.post__table) {
+    margin-block: var(--sp-6);
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-sm);
+    -webkit-overflow-scrolling: touch;
+  }
+  .post__content :global(table) {
+    width: 100%;
+    min-width: 460px;
+    border-collapse: collapse;
+    font-size: var(--fs-sm);
+    background: var(--surface);
+  }
+  .post__content :global(thead th) {
+    background: var(--surface-2);
+    color: var(--text);
+    font-weight: 700;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .post__content :global(th),
+  .post__content :global(td) {
+    padding: 11px var(--sp-4);
+    border-bottom: 1px solid var(--line);
+    line-height: var(--lh-snug);
+    color: var(--muted);
+    vertical-align: top;
+    text-align: left;
+  }
+  .post__content :global(tbody td:first-child) { color: var(--text); font-weight: 600; }
+  .post__content :global(tbody tr:nth-child(even)) {
+    background: color-mix(in srgb, var(--surface-2) 45%, var(--surface));
+  }
+  .post__content :global(tbody tr:last-child td) { border-bottom: 0; }
+
+  /* Мягкое появление ключевых блоков при скролле (reveal), уважая reduced-motion. */
+  @media (prefers-reduced-motion: no-preference) {
+    .post__content :global(.post__reveal) {
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+      will-change: opacity, transform;
+    }
+    .post__content :global(.post__reveal.is-in) { opacity: 1; transform: none; }
+  }
 
   /* Оглавление */
   .post__aside { display: none; }
@@ -448,5 +546,37 @@ const related = [
 
     // Стартовое состояние — первый заголовок.
     if (heads[0]) setActive(heads[0].id);
+  }
+
+  // 3) Таблицы сравнений — оборачиваем в скролл-контейнер (широкие таблицы на мобиле).
+  //    + мягкое появление ключевых блоков (h2/h3/таблицы/цитаты/код) при скролле.
+  if (article) {
+    article.querySelectorAll('table').forEach((t) => {
+      if (t.parentElement?.classList.contains('post__table')) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'post__table';
+      t.before(wrap);
+      wrap.appendChild(t);
+    });
+
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduce && 'IntersectionObserver' in window) {
+      const blocks = article.querySelectorAll(
+        ':scope > h2, :scope > h3, :scope > .post__table, :scope > blockquote, :scope > pre, :scope > figure',
+      );
+      blocks.forEach((b) => b.classList.add('post__reveal'));
+      const rio = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (e.isIntersecting) {
+              e.target.classList.add('is-in');
+              rio.unobserve(e.target);
+            }
+          }
+        },
+        { threshold: 0.1, rootMargin: '0px 0px -6% 0px' },
+      );
+      blocks.forEach((b) => rio.observe(b));
+    }
   }
 </script>
