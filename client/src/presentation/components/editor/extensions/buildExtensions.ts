@@ -12,6 +12,7 @@ import {
 import type { Extensions, JSONContent } from '@tiptap/core';
 
 import { HighlightMark } from './HighlightMark';
+import { FigureImage } from './FigureImage';
 import { createMentionSuggestion, type MentionMember } from './mentionSuggestion';
 
 export type { MentionMember };
@@ -49,6 +50,8 @@ export function buildExtensions({ placeholder, members }: BuildExtensionsOptions
     TaskList,
     TaskItem.configure({ nested: true }),
     HighlightMark,
+    // Блок-картинка с подписью (inline-скрины в описании). См. FigureImage.ts.
+    FigureImage,
     // Цвет текста/фона через textStyle-mark. Color/BackgroundColor добавляют
     // глобальные атрибуты color/backgroundColor к textStyle и команды
     // setColor/setBackgroundColor (см. меню форматирования).

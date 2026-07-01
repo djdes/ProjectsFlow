@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import { TextSelection } from '@tiptap/pm/state';
+import { DragHandle } from '@tiptap/extension-drag-handle-react';
+import { GripVertical } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { buildExtensions, type MentionMember } from './extensions/buildExtensions';
@@ -57,6 +59,43 @@ function selectWordAt(editor: Editor, clientX: number, clientY: number): boolean
   return true;
 }
 
+// --- Асинхронная загрузка вставленной картинки (плейсхолдер → картинка) ---------------
+// Плейсхолдер-нода figureImage адресуется по uploadId: находим её позицию в актуальном
+// doc и меняем attrs (progress/src) или удаляем при ошибке. Позиция ищется каждый раз
+// заново — документ мог измениться, пока шла загрузка.
+let uploadCounter = 0;
+
+function findFigurePos(editor: Editor, uploadId: string): number | null {
+  let found: number | null = null;
+  editor.state.doc.descendants((node, pos) => {
+    if (found !== null) return false;
+    if (node.type.name === 'figureImage' && node.attrs.uploadId === uploadId) {
+      found = pos;
+      return false;
+    }
+    return true;
+  });
+  return found;
+}
+
+function updateFigure(editor: Editor, uploadId: string, attrs: Record<string, unknown>): void {
+  if (editor.isDestroyed) return;
+  const pos = findFigurePos(editor, uploadId);
+  if (pos === null) return;
+  const node = editor.state.doc.nodeAt(pos);
+  if (!node) return;
+  editor.view.dispatch(editor.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...attrs }));
+}
+
+function removeFigure(editor: Editor, uploadId: string): void {
+  if (editor.isDestroyed) return;
+  const pos = findFigurePos(editor, uploadId);
+  if (pos === null) return;
+  const node = editor.state.doc.nodeAt(pos);
+  if (!node) return;
+  editor.view.dispatch(editor.state.tr.delete(pos, pos + node.nodeSize));
+}
+
 // Императивный handle редактора — для действий извне (напр. кнопка «+ Подзадача»
 // в TaskDrawer добавляет чек-лист-пункт и сразу ставит в него курсор).
 export interface RichTextEditorHandle {
@@ -85,8 +124,14 @@ export interface RichTextEditorProps {
   variant?: 'description' | 'comment';
   /** Передать участников проекта, чтобы включить @-упоминания. */
   members?: MentionMember[];
-  /** Вставка файлов из буфера (изображения и т.п.). */
+  /** Вставка НЕ-картинок из буфера (файлы-вложения). Картинки идут через onUploadImage. */
   onPasteFiles?: (files: File[]) => void;
+  /**
+   * Загрузка вставленной картинки как блок в позицию курсора. Возвращает URL вложения
+   * (или null при ошибке). onProgress(pct) двигает прогресс-бар плейсхолдера. Если проп
+   * не задан — картинки идут прежним путём через onPasteFiles.
+   */
+  onUploadImage?: (file: File, onProgress: (pct: number) => void) => Promise<string | null>;
 }
 
 // Notion-style WYSIWYG: форматирование видно при наборе (без сырых `**`/`#`),
@@ -111,6 +156,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       variant = 'description',
       members,
       onPasteFiles,
+      onUploadImage,
     },
     ref,
   ): React.ReactElement {
@@ -119,11 +165,13 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
   const onSubmitRef = React.useRef(onSubmit);
   const onBlurRef = React.useRef(onBlur);
   const onPasteFilesRef = React.useRef(onPasteFiles);
+  const onUploadImageRef = React.useRef(onUploadImage);
   React.useEffect(() => {
     onChangeRef.current = onChange;
     onSubmitRef.current = onSubmit;
     onBlurRef.current = onBlur;
     onPasteFilesRef.current = onPasteFiles;
+    onUploadImageRef.current = onUploadImage;
   });
 
   // Плавающее меню форматирования (по выделению И по правому клику). Якорь в
@@ -139,6 +187,31 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
   // editor нужен внутри handleDOMEvents, который создаётся до объявления editor —
   // читаем через ref, чтобы не пересоздавать конфигурацию.
   const editorRef = React.useRef<Editor | null>(null);
+
+  // Вставка картинок: на каждую — плейсхолдер-блок в позицию курсора, затем загрузка
+  // с прогрессом; по завершении блок превращается в картинку, при ошибке — убирается.
+  const handleImagePaste = React.useCallback((images: File[]): void => {
+    const editor = editorRef.current;
+    const upload = onUploadImageRef.current;
+    if (!editor || editor.isDestroyed || !upload) return;
+    for (const file of images) {
+      const uploadId = `up-${(uploadCounter += 1)}`;
+      editor
+        .chain()
+        .focus()
+        .insertContent({ type: 'figureImage', attrs: { uploading: true, progress: 0, uploadId, src: null } })
+        .run();
+      void (async () => {
+        try {
+          const url = await upload(file, (pct) => updateFigure(editor, uploadId, { progress: pct }));
+          if (url) updateFigure(editor, uploadId, { uploading: false, progress: 100, src: url });
+          else removeFigure(editor, uploadId);
+        } catch {
+          removeFigure(editor, uploadId);
+        }
+      })();
+    }
+  }, []);
 
   const selectionKey = (e: Editor): string => `${e.state.selection.from}-${e.state.selection.to}`;
   const closeMenu = React.useCallback(() => {
@@ -193,15 +266,19 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       },
       handlePaste: (_view, event) => {
         const files = Array.from(event.clipboardData?.files ?? []);
-        if (files.length > 0 && onPasteFilesRef.current) {
-          event.preventDefault();
-          // stopPropagation — иначе native-событие всплывёт до form-level onPaste
-          // (TaskDrawer) и файл прикрепится дважды.
-          event.stopPropagation();
-          onPasteFilesRef.current(files);
-          return true;
-        }
-        return false;
+        if (files.length === 0) return false;
+        // Картинки → inline-блок в позицию (если задан onUploadImage); остальное → вложения.
+        const upload = onUploadImageRef.current;
+        const images = upload ? files.filter((f) => f.type.startsWith('image/')) : [];
+        const others = files.filter((f) => !images.includes(f));
+        if (images.length === 0 && !onPasteFilesRef.current) return false;
+        event.preventDefault();
+        // stopPropagation — иначе native-событие всплывёт до form-level onPaste
+        // (TaskDrawer) и файл прикрепится дважды.
+        event.stopPropagation();
+        if (images.length > 0) handleImagePaste(images);
+        if (others.length > 0) onPasteFilesRef.current?.(others);
+        return true;
       },
     },
     onUpdate: ({ editor: e }) => {
@@ -376,6 +453,19 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
           onClose={closeMenu}
           getRange={() => savedRangeRef.current}
         />
+      ) : null}
+      {/* Ручка-«6 точек» слева при наведении на блок (абзац/картинка) → drag-reorder.
+          Только в описании (не в комментариях), в редактируемом режиме. */}
+      {editor && variant === 'description' && !disabled ? (
+        <DragHandle editor={editor} nested>
+          <button
+            type="button"
+            aria-label="Переместить блок"
+            className="flex h-6 w-4 cursor-grab items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground active:cursor-grabbing"
+          >
+            <GripVertical className="size-4" />
+          </button>
+        </DragHandle>
       ) : null}
       <EditorContent editor={editor} />
     </div>

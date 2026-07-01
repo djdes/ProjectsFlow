@@ -1079,6 +1079,36 @@ export function TaskDrawer({
     refetchHeaderAttachments();
   };
 
+  // Инлайн-картинки (Ctrl+V скрин → блок в позицию). В edit-режиме грузим сразу в задачу и
+  // возвращаем URL вложения. В create-режиме задачи ещё нет — отдаём временный blob:-URL для
+  // мгновенного превью и запоминаем файл; реальная загрузка + замена blob→URL произойдёт на
+  // submit (см. handleSubmit). Ключ карты — blob:-URL, он же стоит в markdown-описании.
+  const inlineImagesRef = useRef<Map<string, File>>(new Map());
+  const uploadImageInline = async (
+    file: File,
+    onProgress: (pct: number) => void,
+  ): Promise<string | null> => {
+    if (state?.mode === 'edit') {
+      const { projectId, id } = state.task;
+      try {
+        const att = await taskRepository.uploadAttachment(projectId, id, file, (loaded, total) => {
+          onProgress(total > 0 ? Math.round((loaded / total) * 100) : 0);
+        });
+        notifyChanged();
+        refetchHeaderAttachments();
+        return att.url;
+      } catch (err) {
+        toast.error(`Не удалось загрузить ${file.name}: ${(err as Error).message}`);
+        return null;
+      }
+    }
+    // create: превью через blob:-URL, реальная загрузка отложена до создания задачи.
+    const blobUrl = URL.createObjectURL(file);
+    inlineImagesRef.current.set(blobUrl, file);
+    onProgress(100);
+    return blobUrl;
+  };
+
   // Удаление вложения (edit-mode) — кнопка «×» на чипе файла в ряду свойств.
   const deleteAttachmentDirectly = (att: TaskAttachment): void => {
     if (state?.mode !== 'edit') return;
@@ -1225,6 +1255,33 @@ export function TaskDrawer({
               : `Прикреплено ${ok} из ${pendingFiles.length}`,
           );
           notifyChanged();
+        }
+      }
+      // Инлайн-картинки (create): грузим отложенные blob-скрины в новую задачу и заменяем
+      // временные blob:-URL на реальные URL вложений прямо в тексте описания.
+      if (state?.mode === 'create' && inlineImagesRef.current.size > 0) {
+        let desc = description.trim();
+        let changed = false;
+        for (const [blobUrl, file] of inlineImagesRef.current) {
+          if (desc.includes(blobUrl)) {
+            try {
+              const att = await taskRepository.uploadAttachment(task.projectId, task.id, file);
+              desc = desc.split(blobUrl).join(att.url);
+              changed = true;
+            } catch (err) {
+              toast.error(`Не удалось загрузить картинку: ${(err as Error).message}`);
+            }
+          }
+          URL.revokeObjectURL(blobUrl);
+        }
+        inlineImagesRef.current.clear();
+        if (changed) {
+          try {
+            await taskRepository.update(task.projectId, task.id, { description: desc });
+            notifyChanged();
+          } catch (err) {
+            toast.error(`Не удалось сохранить картинки в описании: ${(err as Error).message}`);
+          }
         }
       }
       // Задача создана — черновик больше не нужен.
@@ -1504,6 +1561,7 @@ export function TaskDrawer({
                 <TaskBodyEditor
                   key={`desc-${task.id}`}
                   editorRef={bodyEditorRef}
+                  onUploadImage={uploadImageInline}
                   body={editDescription}
                   onBodyChange={handleDescriptionChange}
                   onCommit={() => void commitDescription(editDescription)}
@@ -1873,6 +1931,7 @@ export function TaskDrawer({
                       placeholder="Название и описание…"
                       autoFocus={!isCoarsePointer}
                       onPasteFiles={addPendingFiles}
+                      onUploadImage={uploadImageInline}
                       className="min-h-[6rem] text-sm leading-snug"
                     />
                   </Suspense>
