@@ -27,7 +27,19 @@ export function UsageWindowBar({
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between gap-2 text-sm">
         <span className="font-medium">{LABELS[w.label]}</span>
-        {countdown && <span className="text-xs text-muted-foreground">{countdown}</span>}
+        <span className="flex items-baseline gap-2 text-xs">
+          {!free && (
+            <span
+              className={cn(
+                'font-semibold tabular-nums',
+                w.isOver ? 'text-destructive' : low ? 'text-amber-600 dark:text-amber-500' : 'text-foreground',
+              )}
+            >
+              {Math.round(pct)}%
+            </span>
+          )}
+          {countdown && <span className="text-muted-foreground">{countdown}</span>}
+        </span>
       </div>
       {free ? (
         <>
