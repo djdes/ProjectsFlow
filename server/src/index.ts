@@ -132,6 +132,7 @@ import { RecordUsage } from './application/usage/RecordUsage.js';
 import { GetUserUsage } from './application/usage/GetUserUsage.js';
 import { BuyPlan } from './application/usage/BuyPlan.js';
 import { CheckBudget } from './application/usage/CheckBudget.js';
+import { CheckDispatchAllowed } from './application/usage/CheckDispatchAllowed.js';
 import type { PlanMonthlyOverride } from './domain/usage/Plan.js';
 import { EnqueueAiPromptJob } from './application/ai-prompt/EnqueueAiPromptJob.js';
 import { WaitForAiPromptJob } from './application/ai-prompt/WaitForAiPromptJob.js';
@@ -1937,6 +1938,7 @@ const { app, devProxyUpgrade } = createApp({
     listPendingCommitSyncJobs,
     claimCommitSyncJob,
     completeCommitSyncJob,
+    dispatchAllowed: new CheckDispatchAllowed({ taskDelegations: taskDelegationRepo, checkBudget }),
     getAiPromptKbBundle: new GetAiPromptKbBundle({
       aiPromptJobs: aiPromptJobRepo,
       projects: projectRepo,

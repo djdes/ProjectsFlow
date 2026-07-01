@@ -223,6 +223,7 @@ import type { CompleteMonitoringAnalysisJob } from '../application/monitoring-an
 import type { ListPendingCommitSyncJobs } from '../application/commit-sync/ListPendingCommitSyncJobs.js';
 import type { ClaimCommitSyncJob } from '../application/commit-sync/ClaimCommitSyncJob.js';
 import type { CompleteCommitSyncJob } from '../application/commit-sync/CompleteCommitSyncJob.js';
+import type { CheckDispatchAllowed } from '../application/usage/CheckDispatchAllowed.js';
 import './types.js'; // глобальное расширение Express.Request
 
 type AppDeps = {
@@ -487,6 +488,7 @@ type AppDeps = {
     readonly listPendingCommitSyncJobs: ListPendingCommitSyncJobs;
     readonly claimCommitSyncJob: ClaimCommitSyncJob;
     readonly completeCommitSyncJob: CompleteCommitSyncJob;
+    readonly dispatchAllowed: CheckDispatchAllowed;
     readonly ackRalphCancel: AckRalphCancel;
     readonly checkRepoUsage: CheckRepoUsage;
     readonly requestRepoAccess: RequestRepoAccess;
@@ -744,6 +746,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       listPendingCommitSyncJobs: deps.agent.listPendingCommitSyncJobs,
       claimCommitSyncJob: deps.agent.claimCommitSyncJob,
       completeCommitSyncJob: deps.agent.completeCommitSyncJob,
+      dispatchAllowed: deps.agent.dispatchAllowed,
       uploadTaskAttachment: deps.tasks.uploadAttachment,
       maxAttachmentBytes: deps.tasks.maxAttachmentBytes,
       ackRalphCancel: deps.agent.ackRalphCancel,

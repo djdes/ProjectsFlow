@@ -39,6 +39,7 @@ import type { PendingMonitoringAnalysisJob } from '../../application/monitoring-
 import type { ListPendingCommitSyncJobs } from '../../application/commit-sync/ListPendingCommitSyncJobs.js';
 import type { ClaimCommitSyncJob } from '../../application/commit-sync/ClaimCommitSyncJob.js';
 import type { CompleteCommitSyncJob } from '../../application/commit-sync/CompleteCommitSyncJob.js';
+import type { CheckDispatchAllowed } from '../../application/usage/CheckDispatchAllowed.js';
 import type { CommitSyncJob } from '../../domain/commit-sync/CommitSyncJob.js';
 import type { PendingCommitSyncJob } from '../../application/commit-sync/CommitSyncJobRepository.js';
 import {
@@ -155,6 +156,8 @@ type Deps = {
   readonly listPendingCommitSyncJobs: ListPendingCommitSyncJobs;
   readonly claimCommitSyncJob: ClaimCommitSyncJob;
   readonly completeCommitSyncJob: CompleteCommitSyncJob;
+  // Гейт воркера: можно ли запускать claude -p по задаче (тариф/бюджет инициатора).
+  readonly dispatchAllowed: CheckDispatchAllowed;
   readonly uploadTaskAttachment: UploadTaskAttachment;
   readonly maxAttachmentBytes: number;
   readonly ackRalphCancel: AckRalphCancel;
@@ -694,6 +697,20 @@ function financeToDto(f: ProjectFinance): FinanceDto {
 export function agentApiRouter(deps: Deps): Router {
   const router = Router();
   router.use(requireAgentToken(deps.authenticate));
+
+  // Гейт воркера: можно ли диспетчеру запускать claude -p по задаче. Резолвит инициатора
+  // (делегатора) и смотрит его тариф/бюджет. Диспетчер зовёт ПЕРЕД запуском и пропускает
+  // задачу, если allowed=false (over-limit/free). НЕ бросает 402 — отдаёт статус, чтобы
+  // диспетчер чисто пропустил задачу без ретрай-шторма. См. CheckDispatchAllowed.
+  router.get('/dispatch-allowed/:taskId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const taskId = req.params['taskId'] as string;
+      const result = await deps.dispatchAllowed.execute(taskId);
+      res.json(result);
+    } catch (e) {
+      next(e);
+    }
+  });
 
   // Список проектов юзера, к которому привязан токен. Возвращаем минимум meta:
   // id, name, hasKb, gitRepoUrl — этого достаточно агенту чтоб выбрать.
