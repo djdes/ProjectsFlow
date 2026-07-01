@@ -64,6 +64,9 @@ export class DrizzleTaskRepository implements TaskRepository {
       .select({
         id: tasks.id,
         projectId: tasks.projectId,
+        // ВАЖНО: без этой строки row.createdBy = undefined → toTask даёт null → воркер метерит
+        // на диспетчера, а не на создателя задачи (баг: `as TaskRowJoined` прятал это от tsc).
+        createdBy: tasks.createdBy,
         description: tasks.description,
         status: tasks.status,
         statusBeforeDone: tasks.statusBeforeDone,
