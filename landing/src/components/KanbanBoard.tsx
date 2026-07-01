@@ -7,6 +7,7 @@
  * (тач/клавиатура). Авто-демо, пока доску не трогают. Уважает prefers-reduced-motion.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   DndContext,
   DragOverlay,
@@ -205,6 +206,9 @@ export default function KanbanBoard(): React.ReactElement {
   const [board, setBoard] = useState<Board>(INITIAL);
   const [runId, setRunId] = useState<string | null>('c4');
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Портал DragOverlay в body доступен только после маунта (на сервере document нет).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -332,13 +336,19 @@ export default function KanbanBoard(): React.ReactElement {
             <Column key={col.id} col={col} cards={board[col.id]} runId={runId} onAdvance={advance} />
           ))}
         </div>
-        <DragOverlay dropAnimation={null}>
-          {activeCard && activeCol ? (
-            <div className={cardClass(activeCard, activeCol, ' kb2__card--overlay')}>
-              <CardInner card={activeCard} running={false} />
-            </div>
-          ) : null}
-        </DragOverlay>
+        {/* Портал в body: карточка «отрывается» от доски и свободно летит за курсором по
+            всей странице — .kb2 overflow:hidden и transform-предки героя больше не обрезают. */}
+        {mounted &&
+          createPortal(
+            <DragOverlay dropAnimation={null} zIndex={9999}>
+              {activeCard && activeCol ? (
+                <div className={cardClass(activeCard, activeCol, ' kb2__card--overlay')}>
+                  <CardInner card={activeCard} running={false} />
+                </div>
+              ) : null}
+            </DragOverlay>,
+            document.body,
+          )}
       </DndContext>
     </div>
   );
