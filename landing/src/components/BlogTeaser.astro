@@ -1,0 +1,131 @@
+---
+// Тизер блога на главной: последние 3 статьи + ссылка на весь блог.
+// Блог и статьи — статические публичные страницы (без регистрации).
+import { getCollection } from 'astro:content';
+import { readingMinutes, topicStyle, formatDate } from '@/lib/blog';
+
+const posts = (await getCollection('blog', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
+  .slice(0, 3)
+  .map((p) => ({ slug: p.id, minutes: readingMinutes(p.body ?? ''), ...p.data }));
+---
+
+<section id="blog" class="pf-section blog-teaser">
+  <div class="pf-container">
+    <div class="blog-teaser__head" data-reveal>
+      <div>
+        <div class="pf-stag">Блог</div>
+        <h2 class="pf-h2">Идеи и практика для тех, кто строит</h2>
+      </div>
+      <a href="/blog" class="blog-teaser__all">Все статьи →</a>
+    </div>
+
+    <ul class="blog-teaser__grid">
+      {
+        posts.map((p, i) => {
+          const st = topicStyle(p.topic);
+          return (
+            <li data-reveal style={`--reveal-delay: ${i * 80}ms`}>
+              <a href={`/blog/${p.slug}`} class="blog-teaser__card pf-card pf-card--hover">
+                <div class="blog-teaser__cover" style={`background: ${st.gradient}`}>
+                  <span class="blog-teaser__word" style={`color: ${st.ink}`} aria-hidden="true">
+                    {p.title.split(' ')[0]}
+                  </span>
+                  <span class="blog-teaser__topic" style={`color: ${st.ink}`}>{p.topic}</span>
+                </div>
+                <div class="blog-teaser__body">
+                  <h3 class="blog-teaser__title">{p.title}</h3>
+                  <p class="blog-teaser__desc">{p.description}</p>
+                  <div class="blog-teaser__meta">
+                    <span>{formatDate(p.date)}</span>
+                    <span aria-hidden="true">·</span>
+                    <span class="pf-mono">{p.minutes} мин</span>
+                  </div>
+                </div>
+              </a>
+            </li>
+          );
+        })
+      }
+    </ul>
+  </div>
+</section>
+
+<style>
+  .blog-teaser__head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    flex-wrap: wrap;
+    margin-bottom: var(--sp-8);
+  }
+  .blog-teaser__all {
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--accent-deep);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color var(--dur-fast) var(--ease);
+  }
+  .blog-teaser__all:hover { color: var(--accent); }
+
+  .blog-teaser__grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-6);
+  }
+  @media (min-width: 640px) { .blog-teaser__grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 960px) { .blog-teaser__grid { grid-template-columns: repeat(3, 1fr); } }
+
+  .blog-teaser__card { display: flex; flex-direction: column; overflow: hidden; height: 100%; text-decoration: none; }
+  .blog-teaser__cover {
+    position: relative;
+    aspect-ratio: 16 / 8;
+    display: flex;
+    align-items: flex-end;
+    padding: var(--sp-3) var(--sp-4);
+    overflow: hidden;
+  }
+  .blog-teaser__word {
+    position: absolute;
+    right: -0.05em;
+    top: -0.14em;
+    font-size: clamp(2.6rem, 6vw, 3.6rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    opacity: 0.15;
+    line-height: 1;
+    text-wrap: nowrap;
+  }
+  .blog-teaser__topic {
+    position: relative;
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+  }
+  .blog-teaser__body { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4) var(--sp-4) var(--sp-6); flex: 1; }
+  .blog-teaser__title {
+    font-size: var(--fs-lg);
+    font-weight: 700;
+    line-height: var(--lh-snug);
+    letter-spacing: var(--tracking-tight);
+    color: var(--text);
+    text-wrap: balance;
+  }
+  .blog-teaser__desc {
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    line-height: var(--lh-normal);
+    flex: 1;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .blog-teaser__meta { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--dim); }
+</style>

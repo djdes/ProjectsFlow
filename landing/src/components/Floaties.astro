@@ -1,0 +1,78 @@
+---
+// Летающие смайлики на фоне (в духе Notion): мягко дрейфуют и покачиваются.
+// Плотность/набор задаются пропсами. Полностью декоративно, за контентом, уважает
+// prefers-reduced-motion (тогда — статичный редкий разброс без движения).
+interface Props {
+  /** Сколько эмодзи высыпать. */
+  count?: number;
+  /** Базовая прозрачность (0..1). На тёмных секциях можно поднять. */
+  opacity?: number;
+  /** Набор эмодзи. */
+  set?: string[];
+}
+const {
+  count = 14,
+  opacity = 0.4,
+  set = ['🚀', '💡', '⚡', '📦', '✅', '🤖', '💰', '📊', '🎯', '✨', '🧩', '📈', '🛠️', '💬', '🔥'],
+} = Astro.props as Props;
+
+// Позиции/тайминги считаем на билде (детерминированность не важна — чистый декор).
+const items = Array.from({ length: count }).map((_, i) => ({
+  emoji: set[i % set.length],
+  left: Math.round(3 + Math.random() * 94),
+  top: Math.round(4 + Math.random() * 88),
+  size: +(1.05 + Math.random() * 1.7).toFixed(2),
+  delay: +(-24 * Math.random()).toFixed(1),
+  dur: +(15 + Math.random() * 13).toFixed(1),
+  drift: Math.round(-34 + Math.random() * 68),
+  rot: Math.round(-8 + Math.random() * 16),
+}));
+---
+
+<div class="floaties" aria-hidden="true" style={`--floaty-op:${opacity}`}>
+  {
+    items.map((it) => (
+      <span
+        class="floaty"
+        style={`left:${it.left}%; top:${it.top}%; font-size:${it.size}rem; animation-delay:${it.delay}s; animation-duration:${it.dur}s; --drift:${it.drift}px; --rot:${it.rot}deg;`}
+      >
+        {it.emoji}
+      </span>
+    ))
+  }
+</div>
+
+<style>
+  .floaties {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .floaty {
+    position: absolute;
+    opacity: var(--floaty-op, 0.4);
+    filter: saturate(1.05) drop-shadow(0 6px 14px rgba(11, 18, 32, 0.12));
+    will-change: transform;
+    user-select: none;
+    line-height: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .floaty {
+      animation-name: floaty-bob;
+      animation-timing-function: ease-in-out;
+      animation-iteration-count: infinite;
+    }
+    @keyframes floaty-bob {
+      0% { transform: translate3d(0, 0, 0) rotate(0deg); }
+      50% { transform: translate3d(var(--drift), -26px, 0) rotate(var(--rot)); }
+      100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+    }
+  }
+  /* Без движения — оставляем тихий разброс, ещё деликатнее. */
+  @media (prefers-reduced-motion: reduce) {
+    .floaty { opacity: calc(var(--floaty-op, 0.4) * 0.6); }
+  }
+</style>

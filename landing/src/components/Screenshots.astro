@@ -5,36 +5,37 @@
 // TODO(скриншоты): при желании заменить блоки .mock__body на реальные <img> с
 //   продуктовыми скринами — loading="lazy", явные width/height (без CLS), srcset.
 
-// Доска задач (мокап 1). Реальные типы карточек с ID, тегами и статусами.
-type BoardCard = { id: string; title: string; tag: string; working?: boolean; done?: boolean };
-type BoardCol = { name: string; accent: boolean; cards: BoardCard[] };
+// Доска задач (мокап 1) — колонки и вид карточек как в приложении: Черновики / Вручную /
+// Воркер (Claude Opus) / Готово. Без ID/тегов (в проде их на карточке нет): текст + приоритет.
+type BoardColor = 'gray' | 'yellow' | 'blue' | 'green';
+type BoardCard = { text: string; priority?: 'high' | 'medium' | 'low'; working?: boolean; done?: boolean };
+type BoardCol = { name: string; color: BoardColor; sub?: string; cards: BoardCard[] };
 const board: BoardCol[] = [
   {
-    name: 'Идеи',
-    accent: false,
+    name: 'Черновики',
+    color: 'gray',
     cards: [
-      { id: 'PF-228', title: 'Экран истории платежей', tag: 'UI' },
-      { id: 'PF-231', title: 'Пуш-уведомления о задачах', tag: 'Моб.' },
+      { text: 'Экран истории платежей', priority: 'low' },
+      { text: 'Пуш-уведомления о задачах' },
     ],
   },
   {
-    name: 'В работе',
-    accent: false,
-    cards: [{ id: 'PF-214', title: 'Подключить оплату СБП', tag: 'Backend' }],
+    name: 'Вручную',
+    color: 'yellow',
+    cards: [{ text: 'Текст для страницы оплаты', priority: 'medium' }],
   },
   {
-    name: 'AI делает',
-    accent: true,
-    cards: [
-      { id: 'PF-219', title: 'Собрать лендинг для запуска', tag: 'Frontend', working: true },
-    ],
+    name: 'Воркер',
+    color: 'blue',
+    sub: 'Claude Opus',
+    cards: [{ text: 'Подключить оплату СБП', priority: 'high', working: true }],
   },
   {
     name: 'Готово',
-    accent: false,
+    color: 'green',
     cards: [
-      { id: 'PF-207', title: 'Тёмная тема', tag: 'UI', done: true },
-      { id: 'PF-202', title: 'Telegram-бот', tag: 'Интеграция', done: true },
+      { text: 'Тёмная тема для дашборда', done: true },
+      { text: 'Telegram-бот для уведомлений', done: true },
     ],
   },
 ];
@@ -74,7 +75,7 @@ const examples = [
       <div class="pf-stag">Внутри продукта</div>
       <h2 class="pf-h2">Как это выглядит в&nbsp;работе</h2>
       <p class="pf-lead">
-        Доска задач, живой прогресс воркера, финансы простым языком и автопроверки перед
+        Доска задач, живой прогресс воркера, прибыль с тратами и автопроверки перед
         выкаткой — настоящий интерфейс, а не картинки-заглушки.
       </p>
     </div>
@@ -95,33 +96,35 @@ const examples = [
             <span class="mock__side-item">Воркеры</span>
             <span class="mock__side-item">Настройки</span>
           </aside>
-          <div class="mock__body board" role="img" aria-label="Доска задач: колонки Идеи, В работе, AI делает, Готово">
+          <div class="mock__body board" role="img" aria-label="Доска задач: колонки Черновики, Вручную, Воркер, Готово">
             {
               board.map((col) => (
-                <div class:list={['board__col', col.accent && 'board__col--worker']}>
+                <div class:list={['board__col', `board__col--${col.color}`]}>
                   <div class="board__col-head">
-                    <span class:list={['board__col-name', col.accent && 'board__col-name--worker']}>
+                    <span class="board__col-dot" data-color={col.color} />
+                    <span class="board__col-name">
                       {col.name}
+                      {col.sub && <span class="board__col-sub">{col.sub}</span>}
                     </span>
                     <span class="board__count">{col.cards.length}</span>
                   </div>
                   {col.cards.map((card) => (
-                    <article class:list={['board__card', card.working && 'board__card--active']}>
-                      <header class="board__card-top">
-                        <span class="board__id">{card.id}</span>
-                        <span class="board__tag">{card.tag}</span>
-                      </header>
-                      <p class="board__title">{card.title}</p>
+                    <article
+                      class:list={[
+                        'board__card',
+                        card.priority && `board__card--p-${card.priority}`,
+                        card.working && 'board__card--active',
+                        card.done && 'board__card--done',
+                      ]}
+                    >
+                      {card.working && <span class="board__live" aria-hidden="true" />}
+                      <p class="board__title">{card.text}</p>
                       {card.working && (
-                        <div class="board__worker">
-                          <span class="board__avatar" aria-hidden="true">AI</span>
-                          <div class="board__worker-body">
-                            <div class="board__progress"><span style="width:72%"></span></div>
-                            <span class="board__working">Пишу код… 72%</span>
-                          </div>
-                        </div>
+                        <span class="board__wip">
+                          <span class="board__wip-dot" aria-hidden="true" />
+                          В работе
+                        </span>
                       )}
-                      {card.done && <span class="board__done">Готово</span>}
                     </article>
                   ))}
                 </div>
@@ -140,7 +143,7 @@ const examples = [
     <div class="shots__split" data-reveal>
       <div class="shots__copy">
         <div class="pf-eyebrow">Деньги</div>
-        <h3 class="shots__h3">Финансы — человеческим языком</h3>
+        <h3 class="shots__h3">Прибыль и траты — с одного взгляда</h3>
         <p class="shots__text">
           Никаких таблиц-простыней. Одна честная строка: сколько заработал, сколько
           потратил и в плюсе ли ты по проекту.
@@ -349,135 +352,79 @@ const examples = [
     font-weight: 600;
   }
 
-  /* --- Доска (главный мокап) --------------------------------------------- */
+  /* --- Доска (главный мокап) — 1:1 с доской приложения -------------------- */
   .board {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: var(--sp-3);
+    gap: var(--sp-2);
     min-height: 300px;
   }
   .board__col {
-    background: var(--surface-2);
-    border: 1px solid var(--line);
     border-radius: var(--r-sm);
-    padding: var(--sp-2);
+    padding: 6px;
     display: flex;
     flex-direction: column;
-    gap: var(--sp-2);
+    gap: 6px;
   }
-  .board__col--worker {
-    border-color: var(--accent-line);
-    background: var(--accent-soft);
-    box-shadow: inset 0 0 40px -20px var(--accent);
-  }
-  .board__col-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 2px 4px 6px;
-  }
+  .board__col--gray { background: rgba(120, 113, 108, 0.06); }
+  .board__col--yellow { background: rgba(234, 179, 8, 0.08); }
+  .board__col--blue { background: rgba(59, 130, 246, 0.07); }
+  .board__col--green { background: rgba(34, 197, 94, 0.07); }
+  .board__col-head { display: flex; align-items: center; gap: 6px; padding: 3px 4px 6px; }
+  .board__col-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .board__col-dot[data-color='gray'] { background: #a8a29e; }
+  .board__col-dot[data-color='yellow'] { background: #eab308; }
+  .board__col-dot[data-color='blue'] { background: #3b82f6; }
+  .board__col-dot[data-color='green'] { background: #22c55e; }
   .board__col-name {
-    font-size: var(--fs-xs);
-    color: var(--dim);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
     font-weight: 600;
+    color: var(--muted);
+    line-height: 1.15;
   }
-  .board__col-name--worker { color: var(--accent); }
-  .board__count {
-    font-size: 11px;
-    color: var(--dim);
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--r-full);
-    padding: 0 7px;
-    line-height: 1.5;
-  }
+  .board__col-sub { font-family: var(--font-mono); font-size: 9.5px; font-weight: 500; color: var(--dim); }
+  .board__count { margin-left: auto; font-size: 11px; color: var(--dim); padding: 0 5px; }
   .board__card {
+    position: relative;
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--r-sm);
-    padding: var(--sp-3);
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-2);
+    padding: 7px 9px;
     box-shadow: var(--shadow-sm);
   }
-  .board__card--active {
-    border-color: var(--accent-line);
-    box-shadow: 0 0 0 1px var(--accent-line), var(--shadow-sm);
+  .board__card--p-high { border-left: 2px solid #f43f5e; }
+  .board__card--p-medium { border-left: 2px solid #f97316; }
+  .board__card--p-low { border-left: 2px solid #3b82f6; }
+  .board__card--active { box-shadow: var(--shadow-sm), 0 0 0 1px rgba(251, 191, 36, 0.45); }
+  .board__card--done { border-color: rgba(34, 197, 94, 0.24); background: rgba(34, 197, 94, 0.06); }
+  .board__title { margin: 0; font-size: 12.5px; color: var(--text); line-height: 1.35; }
+  .board__live {
+    position: absolute;
+    right: 7px;
+    top: 7px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #f43f5e;
+    box-shadow: 0 0 6px rgba(244, 63, 94, 0.7);
   }
-  .board__card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--sp-2);
-  }
-  .board__id {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--accent);
-    font-weight: 600;
-  }
-  .board__tag {
-    font-size: 10px;
-    color: var(--muted);
-    background: var(--surface-2);
-    border: 1px solid var(--line);
-    border-radius: var(--r-full);
-    padding: 1px 8px;
-  }
-  .board__title {
-    margin: 0;
-    font-size: var(--fs-sm);
-    color: var(--text);
-    line-height: var(--lh-snug);
-  }
-  .board__worker {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-2);
-    margin-top: 2px;
-  }
-  .board__avatar {
-    flex: none;
-    width: 22px;
-    height: 22px;
-    border-radius: var(--r-full);
-    display: grid;
-    place-items: center;
-    font-size: 9px;
-    font-weight: 700;
-    color: var(--accent-ink);
-    background: var(--grad-accent);
-  }
-  .board__worker-body { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-  .board__progress {
-    height: 5px;
-    border-radius: var(--r-full);
-    background: var(--surface-2);
-    overflow: hidden;
-  }
-  .board__progress span { display: block; height: 100%; background: var(--grad-accent); }
-  .board__working { font-size: 10px; color: var(--accent); font-weight: 600; }
   @media (prefers-reduced-motion: no-preference) {
-    .board__working { animation: pf-dot-pulse 1.8s var(--ease) infinite; }
+    .board__live { animation: pf-dot-pulse 1.4s var(--ease) infinite; }
   }
-  .board__done {
-    align-self: flex-start;
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--signal);
+  .board__wip {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #059669;
   }
-  .board__done::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--signal);
+  .board__wip-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; }
+  @media (prefers-reduced-motion: no-preference) {
+    .board__wip-dot { animation: pf-dot-pulse 1.8s var(--ease) infinite; }
   }
 
   /* --- Editorial-раскладка: текст + мокап ------------------------------- */

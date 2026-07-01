@@ -231,12 +231,14 @@ section[id] {
 
 /* =============================================================================
    Канбан-доска (герой) — интерактивный React-остров KanbanBoard.tsx.
-   Всё на токенах → доска темнеет внутри [data-theme="dark"]-секции автоматически.
+   Визуально 1:1 с доской приложения: колонки Черновики/Вручную/Воркер/Готово,
+   маркер-точка у заголовка, мягкая тонировка тела колонки, компактные карточки
+   с цветным левым кантом приоритета, 🔴 live + бейдж «В работе», зелёные done.
    ============================================================================= */
-.kb {
+.kb2 {
   position: relative;
   width: 100%;
-  max-width: 600px;
+  max-width: 620px;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--surface);
@@ -244,111 +246,103 @@ section[id] {
   overflow: hidden;
   user-select: none;
 }
-.kb__head {
+.kb2__head {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-3) var(--sp-4);
+  padding: 10px var(--sp-4);
   border-bottom: 1px solid var(--line);
   background: var(--surface-2);
 }
-.kb__dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-.kb__dot--r { background: var(--danger); }
-.kb__dot--y { background: var(--warn); }
-.kb__dot--g { background: var(--signal); }
-.kb__title {
-  margin-left: var(--sp-2);
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--muted);
-}
-.kb__live {
+.kb2__tl { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.kb2__tl--r { background: #f6685e; }
+.kb2__tl--y { background: #f9bd2e; }
+.kb2__tl--g { background: #34c749; }
+.kb2__title { margin-left: var(--sp-2); font-size: var(--fs-xs); font-weight: 600; color: var(--muted); }
+.kb2__branch {
   margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--signal);
-}
-.kb__pulse {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--signal); box-shadow: 0 0 8px var(--signal);
-}
-@media (prefers-reduced-motion: no-preference) {
-  .kb__pulse { animation: pf-dot-pulse 2.4s var(--ease) infinite; }
+  padding: 1px 8px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--dim);
 }
 
-.kb__cols {
+.kb2__cols {
   display: grid;
-  grid-template-columns: repeat(4, minmax(118px, 1fr));
+  grid-template-columns: repeat(4, minmax(122px, 1fr));
   gap: var(--sp-2);
   padding: var(--sp-3);
   overflow-x: auto;
   scrollbar-width: thin;
 }
-/* Самые узкие телефоны (≤380px): ужимаем колонки, чтобы 4 влезли без скролла. */
 @media (max-width: 380px) {
-  .kb__cols { grid-template-columns: repeat(4, minmax(104px, 1fr)); gap: 6px; padding: var(--sp-2); }
-}
-.kb__col {
-  display: flex;
-  flex-direction: column;
-  min-height: 232px;
-  padding: var(--sp-2);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--surface-2);
-  transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
-}
-.kb__col--worker {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-}
-.kb__col.is-over {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent), var(--shadow-accent);
-}
-.kb__colh {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 2px 4px 8px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--dim);
-}
-.kb__col--worker .kb__colh { color: var(--accent); }
-.kb__count {
-  min-width: 18px;
-  padding: 1px 5px;
-  border-radius: var(--r-full);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  font-size: 10px;
-  text-align: center;
-  color: var(--muted);
-}
-.kb__list { display: flex; flex-direction: column; gap: var(--sp-2); flex: 1; }
-.kb__drop {
-  display: grid;
-  place-items: center;
-  padding: var(--sp-4) var(--sp-2);
-  border: 1px dashed var(--accent-line);
-  border-radius: var(--r-sm);
-  font-size: 11px;
-  color: var(--accent);
-  text-align: center;
-  line-height: 1.4;
+  .kb2__cols { grid-template-columns: repeat(4, minmax(106px, 1fr)); gap: 6px; padding: var(--sp-2); }
 }
 
-.kb__card {
+.kb2__col {
   display: flex;
   flex-direction: column;
+  min-height: 250px;
+  padding: 6px;
+  border-radius: var(--r);
+  transition: box-shadow var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+/* Мягкая тонировка тела колонки по цвету (как /25 в app). */
+.kb2__col[data-color='gray'] { background: rgba(120, 113, 108, 0.06); }
+.kb2__col[data-color='yellow'] { background: rgba(234, 179, 8, 0.08); }
+.kb2__col[data-color='blue'] { background: rgba(59, 130, 246, 0.07); }
+.kb2__col[data-color='green'] { background: rgba(34, 197, 94, 0.07); }
+.kb2__col.is-over { box-shadow: inset 0 0 0 1.5px var(--accent); background: var(--accent-soft); }
+
+.kb2__colh {
+  display: flex;
+  align-items: center;
   gap: 6px;
-  padding: var(--sp-2) 10px;
+  padding: 3px 4px 8px;
+}
+.kb2__coldot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.kb2__coldot[data-color='gray'] { background: #a8a29e; }
+.kb2__coldot[data-color='yellow'] { background: #eab308; }
+.kb2__coldot[data-color='blue'] { background: #3b82f6; }
+.kb2__coldot[data-color='green'] { background: #22c55e; }
+.kb2__colname {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  line-height: 1.15;
+}
+.kb2__colsub { font-family: var(--font-mono); font-size: 9.5px; font-weight: 500; color: var(--dim); letter-spacing: 0; }
+.kb2__count {
+  margin-left: auto;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  font-size: 10px;
+  text-align: center;
+  color: var(--dim);
+}
+.kb2__list { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.kb2__drop {
+  display: grid;
+  place-items: center;
+  padding: var(--sp-4) 8px;
+  border: 1px dashed rgba(59, 130, 246, 0.4);
+  border-radius: var(--r-sm);
+  font-size: 10.5px;
+  color: #2563eb;
+  text-align: center;
+  line-height: 1.35;
+}
+
+/* Карточка — компактная, как в app: border black/6%, bg card, shadow-sm. */
+.kb2__card {
+  position: relative;
+  padding: 7px 9px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: var(--surface);
@@ -357,110 +351,88 @@ section[id] {
   touch-action: none;
   transition:
     transform var(--dur) var(--ease),
-    border-color var(--dur) var(--ease),
     box-shadow var(--dur) var(--ease),
     opacity var(--dur) var(--ease);
 }
-.kb__card:active { cursor: grabbing; }
-.kb__card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.kb2__card:active { cursor: grabbing; }
+.kb2__card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: no-preference) {
-  .kb__card:hover { transform: translateY(-2px); border-color: var(--accent-line); box-shadow: var(--shadow); }
+  .kb2__card:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
 }
-.kb__card.is-dragging { opacity: 0.32; }
-.kb__card--running { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-line), var(--shadow-accent); }
-.kb__card--done { opacity: 0.86; }
+.kb2__card.is-dragging { opacity: 0.3; }
+/* Левый кант приоритета (2px), как в app (rose/orange/blue). */
+.kb2__card--p-high { border-left: 2px solid #f43f5e; }
+.kb2__card--p-medium { border-left: 2px solid #f97316; }
+.kb2__card--p-low { border-left: 2px solid #3b82f6; }
+/* Карточка в «Воркере» — тонкий янтарный ring «ждёт воркера». */
+.kb2__card--todo { box-shadow: var(--shadow-sm), 0 0 0 1px rgba(251, 191, 36, 0.45); }
+/* Готово — мягкая зелёная заливка + зелёная граница. */
+.kb2__card--done {
+  border-color: rgba(34, 197, 94, 0.24);
+  background: rgba(34, 197, 94, 0.06);
+}
 
-.kb__card-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.kb__id { font-family: var(--font-mono); font-size: 10.5px; color: var(--dim); letter-spacing: 0.02em; white-space: nowrap; }
-.kb__tag {
-  padding: 1px 6px;
-  border-radius: var(--r-full);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.kb__card-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.kb2__text {
+  margin: 0;
   font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.35;
   color: var(--text);
-  text-wrap: pretty;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.kb__check { flex: none; width: 14px; height: 14px; color: var(--signal); }
-
-/* Воркер за работой */
-.kb__work { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
-.kb__worker { display: flex; align-items: center; gap: 6px; }
-.kb__avatar {
-  position: relative;
-  flex: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
+.kb2__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--dim);
+  empty: hidden;
 }
-.kb__avatar::before {
-  content: '';
+.kb2__meta:empty { display: none; }
+.kb2__m { display: inline-flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; }
+.kb2__m svg { width: 13px; height: 13px; }
+.kb2__wip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: #059669;
+}
+.kb2__wip-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; }
+@media (prefers-reduced-motion: no-preference) {
+  .kb2__wip-dot { animation: pf-dot-pulse 1.8s var(--ease) infinite; }
+}
+/* 🔴 LIVE — воркер сейчас работает над задачей. */
+.kb2__live {
   position: absolute;
-  inset: -3px;
+  right: 7px;
+  top: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  border: 1.5px solid var(--accent-line);
-  border-top-color: var(--accent);
-}
-.kb__avatar-core {
-  width: 12px; height: 12px; border-radius: 50%;
-  background: var(--grad-accent);
-  box-shadow: 0 0 10px -1px var(--accent);
+  background: #f43f5e;
+  box-shadow: 0 0 6px rgba(244, 63, 94, 0.7);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .kb__avatar::before { animation: hero-spin 0.9s linear infinite; }
-  .kb__avatar-core { animation: kb-breathe 1.6s var(--ease) infinite; }
-  @keyframes hero-spin { to { transform: rotate(360deg); } }
-  @keyframes kb-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(0.82); opacity: 0.85; } }
+  .kb2__live { animation: pf-dot-pulse 1.4s var(--ease) infinite; }
 }
-.kb__worker-log { font-family: var(--font-mono); font-size: 10.5px; color: var(--accent-deep); }
-.kb__bar { height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
-.kb__bar span { display: block; height: 100%; background: var(--grad-accent); transition: width 80ms linear; }
 
-.kb__accept {
-  align-self: flex-start;
-  margin-top: 2px;
-  padding: 3px 10px;
-  border-radius: var(--r-full);
-  border: 1px solid var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
-}
-.kb__accept:hover { background: var(--accent); color: var(--accent-ink); }
-.kb__accept:active { transform: scale(0.96); }
-
-/* Плавающий «призрак» перетаскиваемой карточки */
-.kb__ghost {
+/* Плавающий «призрак» при перетаскивании — с лёгким наклоном (как DragOverlay в app). */
+.kb2__ghost {
   position: fixed;
   z-index: 60;
-  width: 148px;
-  padding: var(--sp-2) 10px;
-  border: 1px solid var(--accent);
+  width: 168px;
+  padding: 7px 9px;
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
   background: var(--surface);
   box-shadow: var(--shadow-lg);
   pointer-events: none;
-  transform: rotate(-2deg) scale(1.04);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  transform: rotate(2deg) scale(1.04);
 }
 
 /* --- Auth-aware видимость --------------------------------------------------- */

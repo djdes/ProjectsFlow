@@ -1,5 +1,6 @@
 ---
 import KanbanBoard from './KanbanBoard.tsx';
+import Floaties from './Floaties.astro';
 
 // Лендинг и SPA — один Express в prod, пути относительные.
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
@@ -29,6 +30,7 @@ const points = [
   <div class="hero__bg" aria-hidden="true">
     <div class="hero__grid grid-bg"></div>
     <div class="mesh-blob mesh-blob--magnetic hero__glow" data-magnetic-blob></div>
+    <Floaties count={13} opacity={0.42} />
   </div>
 
   <div class="hero__wide hero__inner">
