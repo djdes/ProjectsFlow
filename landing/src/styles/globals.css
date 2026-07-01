@@ -16,7 +16,9 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
-    overflow-x: hidden;
+    /* clip, а не hidden: убирает горизонтальный скролл, НО не делает body скролл-контейнером
+       (иначе ломается position: sticky у оглавления статьи). */
+    overflow-x: clip;
   }
 
   ::selection {

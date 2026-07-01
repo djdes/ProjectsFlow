@@ -47,7 +47,10 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
       </header>
 
       <div class="post__cover" style={`background: ${st.gradient}`} aria-hidden="true">
-        <span class="post__cover-word" style={`color: ${st.ink}`}>{post.data.title.split(' ')[0]}</span>
+        <span class="post__cover-topic" style={`color: ${st.ink}`}>{post.data.topic}</span>
+        <svg class="post__cover-icon" style={`color: ${st.ink}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d={st.icon} stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
       </div>
 
       <div class="post__layout">
@@ -159,22 +162,30 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
   .post__cover {
     position: relative;
     margin-top: var(--sp-8);
-    height: clamp(180px, 30vw, 300px);
+    height: clamp(160px, 26vw, 260px);
     border-radius: var(--r-lg);
     overflow: hidden;
     display: flex;
-    align-items: center;
-    justify-content: flex-end;
+    align-items: flex-end;
+    padding: var(--sp-6);
     box-shadow: var(--shadow-lg);
   }
-  .post__cover-word {
-    font-size: clamp(4rem, 14vw, 9rem);
-    font-weight: 800;
-    letter-spacing: -0.05em;
+  .post__cover-topic {
+    position: relative;
+    z-index: 1;
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+  }
+  .post__cover-icon {
+    position: absolute;
+    right: -20px;
+    bottom: -30px;
+    width: clamp(160px, 26vw, 240px);
+    height: clamp(160px, 26vw, 240px);
     opacity: 0.16;
-    padding-right: 0.15em;
-    user-select: none;
-    text-wrap: nowrap;
+    transform: rotate(-8deg);
   }
 
   /* Раскладка: контент + правое sticky-оглавление */
@@ -244,8 +255,12 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
 
   /* Оглавление */
   .post__aside { display: none; }
-  @media (min-width: 1040px) { .post__aside { display: block; } }
-  .post__toc { position: sticky; top: 90px; }
+  /* Sticky вешаем на сам aside (его grid-ячейка — во всю высоту строки), а не на .post__toc
+     внутри короткого блока — иначе прилипать негде. */
+  @media (min-width: 1040px) {
+    .post__aside { display: block; position: sticky; top: 90px; align-self: start; }
+  }
+  .post__toc {}
   .post__toc-title {
     font-size: var(--fs-xs);
     font-weight: 700;

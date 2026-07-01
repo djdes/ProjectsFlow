@@ -72,11 +72,12 @@ const bonuses = [
             <path d="M8.5 12l2.3 2.3L16 9" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </div>
-        <div class="guarantee__seal-tag">Гарантия</div>
-        <h3 class="guarantee__seal-title">«Не&nbsp;зашло&nbsp;— вернём»</h3>
+        <div class="guarantee__seal-tag">Гарантия · нулевой риск</div>
+        <h3 class="guarantee__seal-title">«Не&nbsp;зашло&nbsp;— вернём деньги»</h3>
         <p class="guarantee__seal-body">
-          Начни бесплатно, без карты. Первый час Прайма — бесплатный: первый результат увидишь
-          сразу. Не зашло — вернём деньги. Риск проверить ProjectsFlow — нулевой.
+          Начни бесплатно, без карты — первый результат увидишь в первый час. Не зашло —
+          <b class="guarantee__hl">вернём деньги, без вопросов и мелкого шрифта</b>. Проверить
+          ProjectsFlow не стоит ничего.
         </p>
         <a href={`${appBase}/register`} class="pf-btn pf-btn--primary pf-btn--block">Начать бесплатно</a>
         <p class="guarantee__seal-note">Первый час Прайма — бесплатно · без карты</p>
@@ -195,6 +196,7 @@ const bonuses = [
     line-height: var(--lh-normal);
     color: var(--muted);
   }
+  .guarantee__hl { color: var(--accent); font-weight: 700; }
   .guarantee__seal .pf-btn { margin-top: auto; }
   .guarantee__seal-note {
     margin-top: var(--sp-3);

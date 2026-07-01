@@ -20,7 +20,26 @@ import {
   closestCorners,
   type DragEndEvent,
   type DragStartEvent,
+  type Modifier,
 } from '@dnd-kit/core';
+import { getEventCoordinates } from '@dnd-kit/utilities';
+
+// Центр поднятой карточки жёстко привязываем к курсору — чтобы она всегда была ПОД
+// курсором, без смещений от transform-предков/скролл-контейнеров (как в приложении).
+const snapCenterToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transform }) => {
+  if (draggingNodeRect && activatorEvent) {
+    const coords = getEventCoordinates(activatorEvent);
+    if (!coords) return transform;
+    const offsetX = coords.x - draggingNodeRect.left;
+    const offsetY = coords.y - draggingNodeRect.top;
+    return {
+      ...transform,
+      x: transform.x + offsetX - draggingNodeRect.width / 2,
+      y: transform.y + offsetY - draggingNodeRect.height / 2,
+    };
+  }
+  return transform;
+};
 
 type ColId = 'backlog' | 'manual' | 'todo' | 'done';
 
@@ -340,7 +359,7 @@ export default function KanbanBoard(): React.ReactElement {
             всей странице — .kb2 overflow:hidden и transform-предки героя больше не обрезают. */}
         {mounted &&
           createPortal(
-            <DragOverlay dropAnimation={null} zIndex={9999}>
+            <DragOverlay dropAnimation={null} zIndex={9999} modifiers={[snapCenterToCursor]}>
               {activeCard && activeCol ? (
                 <div className={cardClass(activeCard, activeCol, ' kb2__card--overlay')}>
                   <CardInner card={activeCard} running={false} />

@@ -58,12 +58,10 @@ const topics = ['Все', ...Array.from(new Set(cards.map((c) => c.topic)))];
               <li class="blog__item" data-topic={c.topic} data-reveal style={`--reveal-delay: ${i * 70}ms`}>
                 <a href={`/blog/${c.slug}`} class="blog__card pf-card pf-card--hover">
                   <div class="blog__cover" style={`background: ${st.gradient}`}>
-                    <span class="blog__cover-topic" style={`color: ${st.ink}`}>
-                      {c.topic}
-                    </span>
-                    <span class="blog__cover-word" style={`color: ${st.ink}`} aria-hidden="true">
-                      {c.title.split(' ')[0]}
-                    </span>
+                    <svg class="blog__cover-icon" style={`color: ${st.ink}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                      <path d={st.icon} stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <span class="blog__cover-topic" style={`color: ${st.ink}`}>{c.topic}</span>
                   </div>
                   <div class="blog__body">
                     <span class="blog__badge" style={`color: ${st.ink}; background: ${st.gradient}`}>
@@ -162,18 +160,16 @@ const topics = ['Все', ...Array.from(new Set(cards.map((c) => c.topic)))];
     letter-spacing: var(--tracking-wide);
     text-transform: uppercase;
   }
-  .blog__cover-word {
+  .blog__cover-icon {
     position: absolute;
-    right: -0.1em;
-    top: -0.12em;
-    font-size: clamp(3.5rem, 9vw, 5.5rem);
-    font-weight: 800;
-    letter-spacing: -0.04em;
-    opacity: 0.16;
-    line-height: 1;
-    user-select: none;
-    text-wrap: nowrap;
+    right: -14px;
+    bottom: -18px;
+    width: 130px;
+    height: 130px;
+    opacity: 0.18;
+    transform: rotate(-8deg);
   }
+  .blog__card:hover .blog__cover-icon { opacity: 0.24; }
   .blog__body { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4) var(--sp-4) var(--sp-6); flex: 1; }
   .blog__badge {
     align-self: flex-start;

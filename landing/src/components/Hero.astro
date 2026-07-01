@@ -77,7 +77,7 @@ const points = [
       <div class="hero__start" data-reveal style="--reveal-delay: 120ms">
         <p class="hero__offer">
           <span class="hero__offer-badge">1 час бесплатно</span>
-          Первый час на <b>Прайме</b> — без карты. Первый результат увидишь сразу.
+          <span class="hero__offer-text">Первый час на <b>Прайме</b> — без карты. Первый результат — в первый час.</span>
         </p>
 
         <form class="hero__form" data-auth-anon data-hero-start data-app-base={appBase}>
@@ -110,7 +110,20 @@ const points = [
           </svg>
         </a>
 
-        <p class="hero__reassure">Старт без карты · не зашло — вернём деньги · проект остаётся твоим</p>
+        <div class="hero__promises" data-reveal style="--reveal-delay: 200ms">
+          <span class="hero__promise">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            Старт без карты
+          </span>
+          <span class="hero__promise hero__promise--key">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 2.5l7 3v5.5c0 5-3.2 8.6-7 10.5-3.8-1.9-7-5.5-7-10.5V5.5l7-3z" stroke-linecap="round" stroke-linejoin="round" /><path d="M9 12l2 2 4-4.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            Не&nbsp;зашло — вернём деньги
+          </span>
+          <span class="hero__promise">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            Проект остаётся твоим
+          </span>
+        </div>
       </div>
     </div>
 
@@ -212,6 +225,7 @@ const points = [
     line-height: var(--lh-snug);
   }
   .hero__offer b { color: var(--accent-deep); font-weight: 700; }
+  .hero__offer-text { flex: 1 1 12rem; min-width: 0; }
   .hero__offer-badge {
     flex: none;
     padding: var(--sp-1) var(--sp-3);
@@ -260,7 +274,32 @@ const points = [
     transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
   }
   .hero__login:hover { color: var(--accent); border-color: var(--accent-line); }
-  .hero__reassure { margin-top: var(--sp-4); font-size: var(--fs-sm); color: var(--dim); }
+  /* Снятие риска у самой кнопки (Хормози): три обещания, гарантия возврата — выделена. */
+  .hero__promises {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    margin-top: var(--sp-4);
+  }
+  .hero__promise {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: var(--r-full);
+    border: 1px solid var(--line);
+    background: var(--surface);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+  }
+  .hero__promise svg { width: 14px; height: 14px; flex: none; color: var(--signal); }
+  .hero__promise--key {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+    font-weight: 700;
+  }
+  .hero__promise--key svg { color: var(--accent-deep); }
 
   /* --- Правая колонка --- */
   .hero__showcase { width: 100%; display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); }

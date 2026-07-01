@@ -28,9 +28,9 @@ const posts = (await getCollection('blog', ({ data }) => !data.draft))
             <li data-reveal style={`--reveal-delay: ${i * 80}ms`}>
               <a href={`/blog/${p.slug}`} class="blog-teaser__card pf-card pf-card--hover">
                 <div class="blog-teaser__cover" style={`background: ${st.gradient}`}>
-                  <span class="blog-teaser__word" style={`color: ${st.ink}`} aria-hidden="true">
-                    {p.title.split(' ')[0]}
-                  </span>
+                  <svg class="blog-teaser__icon" style={`color: ${st.ink}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <path d={st.icon} stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
                   <span class="blog-teaser__topic" style={`color: ${st.ink}`}>{p.topic}</span>
                 </div>
                 <div class="blog-teaser__body">
@@ -90,16 +90,14 @@ const posts = (await getCollection('blog', ({ data }) => !data.draft))
     padding: var(--sp-3) var(--sp-4);
     overflow: hidden;
   }
-  .blog-teaser__word {
+  .blog-teaser__icon {
     position: absolute;
-    right: -0.05em;
-    top: -0.14em;
-    font-size: clamp(2.6rem, 6vw, 3.6rem);
-    font-weight: 800;
-    letter-spacing: -0.04em;
-    opacity: 0.15;
-    line-height: 1;
-    text-wrap: nowrap;
+    right: -10px;
+    bottom: -16px;
+    width: 96px;
+    height: 96px;
+    opacity: 0.18;
+    transform: rotate(-8deg);
   }
   .blog-teaser__topic {
     position: relative;
