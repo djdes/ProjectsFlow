@@ -526,6 +526,8 @@ export const tasks = mysqlTable(
   {
     id: id(),
     projectId: char('project_id', { length: 36 }).notNull(),
+    // Кто создал задачу («кто отдал воркеру») — для пер-юзерной атрибуции расхода (db/088).
+    createdBy: char('created_by', { length: 36 }),
     description: text('description'),
     status: mysqlEnum('status', [
       'backlog',

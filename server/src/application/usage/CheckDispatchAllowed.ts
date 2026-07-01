@@ -1,5 +1,6 @@
 import type { CheckBudget } from './CheckBudget.js';
 import type { TaskDelegationRepository } from '../task/TaskDelegationRepository.js';
+import type { TaskRepository } from '../task/TaskRepository.js';
 
 export type DispatchAllowedReason = 'ok' | 'plan_required' | 'budget_exceeded';
 
@@ -11,6 +12,7 @@ export type DispatchAllowedResult = {
 };
 
 type Deps = {
+  readonly tasks: TaskRepository;
   readonly taskDelegations: TaskDelegationRepository;
   readonly checkBudget?: CheckBudget;
 };
@@ -25,8 +27,9 @@ export class CheckDispatchAllowed {
   constructor(private readonly deps: Deps) {}
 
   async execute(taskId: string): Promise<DispatchAllowedResult> {
+    const task = await this.deps.tasks.getById(taskId);
     const delegation = await this.deps.taskDelegations.findActiveForTask(taskId);
-    const billedUserId = delegation?.creatorUserId ?? null;
+    const billedUserId = task?.createdBy ?? delegation?.creatorUserId ?? null;
     if (!billedUserId || !this.deps.checkBudget) {
       return { allowed: true, reason: 'ok', billedUserId };
     }

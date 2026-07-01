@@ -42,6 +42,9 @@ export const TASK_PRIORITIES: readonly TaskPriority[] = [1, 2, 3, 4];
 export type Task = {
   readonly id: string;
   readonly projectId: string;
+  // Кто создал задачу («кто отдал воркеру») — инициатор для метеринга/гейта расхода. null для
+  // старых задач без делегации (db/088). Заполняется на create; репозиторий читает колонку.
+  readonly createdBy: string | null;
   readonly description: string | null;
   readonly status: TaskStatus;
   // Статус задачи до перехода в 'done'. Снимок ставится при move→done, очищается при

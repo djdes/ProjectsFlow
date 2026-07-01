@@ -71,6 +71,7 @@ export class CreateTask {
     const task = await this.deps.tasks.create({
       id: this.deps.idGen(),
       projectId: input.projectId,
+      createdBy: input.ownerUserId,
       description,
       status: input.status,
       position,

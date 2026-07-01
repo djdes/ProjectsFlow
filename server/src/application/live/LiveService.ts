@@ -11,6 +11,7 @@ import { LiveSessionNotFoundError } from '../../domain/live/errors.js';
 import type { RecordUsage } from '../usage/RecordUsage.js';
 import { assertDispatcherAllowed, type CheckBudget } from '../usage/CheckBudget.js';
 import type { TaskDelegationRepository } from '../task/TaskDelegationRepository.js';
+import type { TaskRepository } from '../task/TaskRepository.js';
 
 export type LiveServiceDeps = {
   readonly repo: LiveRepository;
@@ -28,8 +29,10 @@ export type LiveServiceDeps = {
   readonly recordUsage?: RecordUsage;
   // Гейт лимитов: если у инициатора (делегатора) free-тариф или исчерпано окно → старт запрещён.
   readonly checkBudget?: CheckBudget;
-  // Для резолва инициатора прогона: активная делегация задачи → delegator_user_id.
+  // Для резолва инициатора прогона: создатель задачи (tasks.created_by) — primary; делегатор
+  // (task_delegations) — fallback для задач, явно поручённых кому-то.
   readonly taskDelegations: TaskDelegationRepository;
+  readonly tasks: TaskRepository;
   // TTL retention сессии (lazy-GC по expires_at). default 30 дней.
   readonly sessionTtlSeconds?: number;
 };
@@ -88,13 +91,13 @@ export class LiveService {
     input: StartSessionInput,
   ): Promise<{ sessionId: string; baseSeq: number }> {
     await this.authDispatcher(projectId, userId);
-    // Инициатор прогона = делегатор задачи (кто отдал воркеру). Гейтим и метерим ЕГО, а не
-    // единого диспетчера. Если делегатора нет (legacy/inbox без делегации) → fallback: не
+    // Инициатор прогона = «кто отдал воркеру». Primary — создатель задачи (tasks.created_by,
+    // db/088); fallback — делегатор (для явно поручённых задач). Гейтим/метерим ЕГО, а не
+    // единого диспетчера. Нет ни того ни другого (старая задача) → billedUserId=null → не
     // гейтим и позже спишем на диспетчера (userId). См. спек 2026-07-01-per-user-dispatcher-limits.
+    const task = await this.deps.tasks.getById(taskId);
     const delegation = await this.deps.taskDelegations.findActiveForTask(taskId);
-    // creatorUserId = делегатор (кто отдал воркеру); для legacy-NULL строк репозиторий
-    // фолбэчит на владельца проекта через COALESCE. Это и есть «инициатор».
-    const billedUserId = delegation?.creatorUserId ?? null;
+    const billedUserId = task?.createdBy ?? delegation?.creatorUserId ?? null;
     if (billedUserId) {
       await assertDispatcherAllowed(this.deps.checkBudget, billedUserId);
     }

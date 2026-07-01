@@ -29,6 +29,7 @@ function toTask(row: TaskRowJoined): Task {
   return {
     id: row.id,
     projectId: row.projectId,
+    createdBy: row.createdBy ?? null,
     description: row.description ?? null,
     status: row.status as TaskStatus,
     statusBeforeDone: asTaskStatus(row.statusBeforeDone),
@@ -120,6 +121,7 @@ export class DrizzleTaskRepository implements TaskRepository {
     await this.db.insert(tasks).values({
       id: input.id,
       projectId: input.projectId,
+      createdBy: input.createdBy,
       description: input.description,
       status: input.status,
       position: input.position,

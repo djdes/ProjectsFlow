@@ -3,6 +3,8 @@ import type { RalphMode, Task, TaskPriority, TaskStatus } from '../../domain/tas
 export type CreateTaskInput = {
   readonly id: string;
   readonly projectId: string;
+  // Кто создал («кто отдал воркеру») — инициатор для метеринга/гейта расхода (db/088).
+  readonly createdBy: string | null;
   readonly description: string;
   readonly status: TaskStatus;
   readonly position: number;

@@ -869,6 +869,7 @@ const liveService = new LiveService({
   recordUsage,
   checkBudget,
   taskDelegations: taskDelegationRepo,
+  tasks: taskRepo,
 });
 // Startup-sweep: зависшие running-сессии (процесс упал, finish не доехал) → timeout.
 // Best-effort: ошибка не должна мешать старту сервера.
@@ -1938,7 +1939,7 @@ const { app, devProxyUpgrade } = createApp({
     listPendingCommitSyncJobs,
     claimCommitSyncJob,
     completeCommitSyncJob,
-    dispatchAllowed: new CheckDispatchAllowed({ taskDelegations: taskDelegationRepo, checkBudget }),
+    dispatchAllowed: new CheckDispatchAllowed({ tasks: taskRepo, taskDelegations: taskDelegationRepo, checkBudget }),
     getAiPromptKbBundle: new GetAiPromptKbBundle({
       aiPromptJobs: aiPromptJobRepo,
       projects: projectRepo,
