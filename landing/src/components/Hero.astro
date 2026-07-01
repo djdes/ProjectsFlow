@@ -3,14 +3,6 @@ import HeroSceneGate from './HeroSceneGate.tsx';
 
 // Лендинг и SPA — один Express в prod, пути относительные.
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
-
-// Превью «проекта» в Hero — человеческие задачи и их статусы (без кода/терминала).
-const previewTasks = [
-  { label: 'Экран входа', state: 'done' as const, tag: 'Готово' },
-  { label: 'Подключить оплату', state: 'done' as const, tag: 'Готово' },
-  { label: 'Тёмная тема', state: 'doing' as const, tag: 'AI делает…' },
-  { label: 'Рассылка к запуску', state: 'idea' as const, tag: 'Идея' },
-];
 ---
 
 <section class="hero" aria-labelledby="hero-title">
@@ -76,36 +68,52 @@ const previewTasks = [
       </div>
 
       <p class="hero__reassure">Старт бесплатно и без карты · не зашло — вернём деньги · проект остаётся твоим</p>
+    </div>
 
-      <!-- Превью проекта — задумки превращаются в готовое. Без кода/терминала. -->
-      <div class="hero__panel" data-reveal style="--reveal-delay: 200ms">
-        <div class="hero__panel-head">
-          <span class="hero__panel-title">Мой проект</span>
-          <span class="hero__panel-live">
-            <span class="pf-dot"></span> AI на связи
-          </span>
+    <!-- Правая колонка / запасной визуал: интерактивное превью «кабинета».
+         Показывается всегда, КРОМЕ случая, когда работает 3D-сцена (.hero[data-scene="on"]). -->
+    <div class="hero__showcase" data-reveal style="--reveal-delay: 150ms">
+      <div class="hero__cabinet" data-cabinet>
+        <div class="hero__cab-head">
+          <span class="hero__cab-dot hero__cab-dot--r"></span>
+          <span class="hero__cab-dot hero__cab-dot--y"></span>
+          <span class="hero__cab-dot hero__cab-dot--g"></span>
+          <span class="hero__cab-title">ProjectsFlow · Мой проект</span>
+          <span class="hero__cab-live"><span class="pf-dot"></span> AI на связи</span>
         </div>
-        <ul class="hero__tasks">
-          {
-            previewTasks.map((t) => (
-              <li class={`hero__task hero__task--${t.state}`}>
-                <span class="hero__task-mark" aria-hidden="true">
-                  {t.state === 'done' ? (
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
-                      <path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
-                  ) : t.state === 'doing' ? (
-                    <span class="hero__spin"></span>
-                  ) : (
-                    <span class="hero__ring"></span>
-                  )}
-                </span>
-                <span class="hero__task-label">{t.label}</span>
-                <span class="hero__task-tag">{t.tag}</span>
-              </li>
-            ))
-          }
-        </ul>
+
+        <div class="hero__cab-board">
+          <div class="hero__cab-col">
+            <div class="hero__cab-colh">Идеи</div>
+            <div class="hero__cab-card"><span class="hero__cab-bar hero__cab-bar--lg"></span><span class="hero__cab-bar hero__cab-bar--sm"></span></div>
+            <div class="hero__cab-card"><span class="hero__cab-bar hero__cab-bar--md"></span></div>
+          </div>
+          <div class="hero__cab-col hero__cab-col--accent">
+            <div class="hero__cab-colh hero__cab-colh--accent">AI делает</div>
+            <div class="hero__cab-card hero__cab-card--active">
+              <span class="hero__cab-clabel" data-active-label>Тёмная тема</span>
+              <div class="hero__cab-prog"><span data-active-bar></span></div>
+            </div>
+          </div>
+          <div class="hero__cab-col">
+            <div class="hero__cab-colh">Готово</div>
+            <div class="hero__cab-card hero__cab-card--done" data-done-slot>
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" class="hero__cab-check"><path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" /></svg>
+              <span class="hero__cab-bar hero__cab-bar--md"></span>
+            </div>
+            <div class="hero__cab-card hero__cab-card--done">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" class="hero__cab-check"><path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" /></svg>
+              <span class="hero__cab-bar hero__cab-bar--sm"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero__cab-chips">
+          <span class="hero__cab-hint">Выбери идею →</span>
+          <button type="button" class="hero__cab-chip" data-idea>Тёмная тема</button>
+          <button type="button" class="hero__cab-chip" data-idea>Экран оплаты</button>
+          <button type="button" class="hero__cab-chip" data-idea>Telegram-бот</button>
+        </div>
       </div>
     </div>
   </div>
@@ -158,7 +166,13 @@ const previewTasks = [
   .hero__particles[data-active] { opacity: 1; }
 
   /* --- Контент --- */
-  .hero__inner { position: relative; padding-block: clamp(2.5rem, 6vw, 4.5rem); }
+  .hero__inner {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-12);
+    padding-block: clamp(2.5rem, 6vw, 4.5rem);
+  }
   .hero__col { width: 100%; max-width: 640px; }
   .hero__title {
     margin-top: var(--sp-6);
@@ -285,13 +299,132 @@ const previewTasks = [
   .hero__task--doing .hero__task-tag { color: var(--accent); }
   .hero__task--done .hero__task-tag { color: var(--signal); }
 
-  /* На десктопе текст занимает ~58% ширины — справа дышит 3D-сцена. */
+  /* --- Правая колонка / «кабинет» — запасной визуал, когда 3D выключено --- */
+  .hero__showcase { width: 100%; }
+  /* Когда работает 3D — кабинет скрыт (виден 3D-tower), но в сетке место сохраняется. */
+  .hero[data-scene='on'] .hero__showcase { display: none; }
+
+  .hero__cabinet {
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    background: linear-gradient(180deg, var(--surface), #080b11);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    max-width: 560px;
+  }
+  .hero__cab-head {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-3) var(--sp-4);
+    border-bottom: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .hero__cab-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .hero__cab-dot--r { background: var(--danger); }
+  .hero__cab-dot--y { background: var(--warn); }
+  .hero__cab-dot--g { background: #28c840; }
+  .hero__cab-title { margin-left: var(--sp-2); font-size: var(--fs-xs); color: var(--dim); }
+  .hero__cab-live {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    font-size: var(--fs-xs);
+    color: var(--signal);
+  }
+
+  .hero__cab-board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--sp-3);
+    padding: var(--sp-4);
+  }
+  .hero__cab-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    min-height: 150px;
+    padding: var(--sp-2);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: rgba(255, 255, 255, 0.015);
+  }
+  .hero__cab-col--accent { border-color: var(--accent-line); background: var(--accent-soft); }
+  .hero__cab-colh { padding: 2px 4px 4px; font-size: 11px; color: var(--dim); }
+  .hero__cab-colh--accent { color: var(--accent); }
+  .hero__cab-card {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: var(--sp-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface-2);
+    transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  }
+  .hero__cab-card--active { border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-line); }
+  .hero__cab-card--done { flex-direction: row; align-items: center; gap: var(--sp-2); }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero__cab-card:hover { transform: translateY(-2px); border-color: var(--accent-line); }
+  }
+  .hero__cab-bar { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); }
+  .hero__cab-bar--lg { width: 90%; }
+  .hero__cab-bar--md { width: 70%; }
+  .hero__cab-bar--sm { width: 50%; }
+  .hero__cab-check { flex: none; width: 14px; height: 14px; color: var(--signal); }
+  .hero__cab-clabel { font-size: 12px; color: var(--text); }
+  .hero__cab-prog {
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+  }
+  .hero__cab-prog span { display: block; height: 100%; width: 35%; background: var(--grad-accent); }
+
+  .hero__cab-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: 0 var(--sp-4) var(--sp-4);
+  }
+  .hero__cab-hint { font-size: var(--fs-xs); color: var(--muted); }
+  .hero__cab-chip {
+    padding: var(--sp-1) var(--sp-3);
+    border-radius: var(--r-full);
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text);
+    font-size: var(--fs-xs);
+    cursor: pointer;
+    transition:
+      border-color var(--dur-fast) var(--ease),
+      background-color var(--dur-fast) var(--ease),
+      color var(--dur-fast) var(--ease);
+  }
+  .hero__cab-chip:hover,
+  .hero__cab-chip[aria-pressed='true'] {
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  /* Десктоп: две колонки — текст + кабинет. Когда 3D работает, кабинет скрыт (display:none),
+     но explicit-треки сетки сохраняются: текст остаётся слева, справа дышит 3D-tower. */
   @media (min-width: 1024px) {
-    .hero__col { max-width: 58%; }
+    .hero__inner {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+      gap: var(--sp-8);
+      align-items: center;
+    }
+    .hero__col { max-width: 620px; }
+    .hero__showcase { justify-self: end; }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .hero__panel { opacity: 1; }
+    .hero__cabinet, .hero__showcase { opacity: 1; }
   }
 </style>
 
@@ -484,5 +617,62 @@ const previewTasks = [
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) start();
     });
+  })();
+</script>
+
+<script>
+  // Интерактивное превью «кабинета»: кликаешь идею — она уходит в «AI делает» с прогрессом
+  // → «Готово». Если не трогать, идеи проигрываются сами по очереди. Дёшево (DOM + CSS).
+  (() => {
+    const cab = document.querySelector<HTMLElement>('[data-cabinet]');
+    if (!cab) return;
+    const label = cab.querySelector<HTMLElement>('[data-active-label]');
+    const bar = cab.querySelector<HTMLElement>('[data-active-bar]');
+    const chips = Array.from(cab.querySelectorAll<HTMLButtonElement>('[data-idea]'));
+    if (!label || !bar || chips.length === 0) return;
+
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let autoTimer = 0;
+    let idx = 0;
+
+    const setPressed = (text: string): void => {
+      chips.forEach((c) => c.setAttribute('aria-pressed', String((c.textContent ?? '').trim() === text)));
+    };
+
+    const run = (text: string): void => {
+      label.textContent = text;
+      setPressed(text);
+      if (reduce) {
+        bar.style.width = '100%';
+        return;
+      }
+      // Рестарт прогресс-бара: сбрасываем без анимации, затем плавно 0 → 100%.
+      bar.style.transition = 'none';
+      bar.style.width = '0%';
+      void bar.offsetWidth; // reflow
+      bar.style.transition = 'width 2.2s linear';
+      bar.style.width = '100%';
+    };
+
+    const scheduleAuto = (delay: number): void => {
+      window.clearTimeout(autoTimer);
+      if (reduce) return;
+      autoTimer = window.setTimeout(() => {
+        const c = chips[idx % chips.length];
+        idx++;
+        if (c) run((c.textContent ?? '').trim());
+        scheduleAuto(3800);
+      }, delay);
+    };
+
+    chips.forEach((c) =>
+      c.addEventListener('click', () => {
+        run((c.textContent ?? '').trim());
+        scheduleAuto(6500); // после клика — пауза, потом снова авто
+      }),
+    );
+
+    if (reduce) bar.style.width = '60%';
+    else scheduleAuto(2200);
   })();
 </script>
