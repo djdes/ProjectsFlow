@@ -30,8 +30,7 @@ export interface Plan {
   readonly href: string;
 }
 
-// Цены и состав соответствуют реальной витрине тарифов продукта
-// (client/src/domain/usage/PlanCatalog.ts): Прайм 5000 ₽, VIP 10000 ₽; цена = AI-бюджет.
+// Витринные цены тарифов на лендинге: Прайм 1900 ₽, VIP 3900 ₽ (по запросу владельца).
 export const PLANS: readonly Plan[] = [
   {
     id: 'free',
@@ -52,12 +51,12 @@ export const PLANS: readonly Plan[] = [
   {
     id: 'prime',
     name: 'Прайм',
-    priceRub: 5000,
+    priceRub: 1900,
     priceNote: 'в месяц',
     tagline: 'Claude онлайн от нас — ключи не нужны',
     features: [
       'встроенная онлайн-подписка Claude',
-      'AI-бюджет ≈ 5000 ₽/мес',
+      'щедрый AI-бюджет — без своих ключей',
       'проект на автопилоте, перефразировки',
       'приоритетная очередь задач',
     ],
@@ -70,12 +69,12 @@ export const PLANS: readonly Plan[] = [
   {
     id: 'vip',
     name: 'VIP',
-    priceRub: 10000,
+    priceRub: 3900,
     priceNote: 'в месяц',
     tagline: 'Расширенный бюджет — для команд',
     features: [
       'встроенная онлайн-подписка Claude',
-      'AI-бюджет ≈ 10000 ₽/мес',
+      'увеличенный AI-бюджет',
       'всё из Прайма, удвоенный лимит',
       'максимальный приоритет',
     ],
