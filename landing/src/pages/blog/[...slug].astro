@@ -20,6 +20,17 @@ const minutes = readingMinutes(post.body ?? '');
 const st = topicStyle(post.data.topic);
 // Оглавление: h2 как разделы, h3 — вложенные подпункты.
 const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
+
+// «Читайте также»: сначала статьи той же темы, потом остальные — 3 штуки (перелинковка + SEO).
+const all = (await getCollection('blog', ({ data }) => !data.draft))
+  .filter((p) => p.id !== post.id)
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+const related = [
+  ...all.filter((p) => p.data.topic === post.data.topic),
+  ...all.filter((p) => p.data.topic !== post.data.topic),
+]
+  .slice(0, 3)
+  .map((p) => ({ slug: p.id, minutes: readingMinutes(p.body ?? ''), ...p.data }));
 ---
 
 <BaseLayout title={`${post.data.title} — Блог ProjectsFlow`} description={post.data.description}>
@@ -77,6 +88,35 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
           )
         }
       </div>
+
+      {
+        related.length > 0 && (
+          <section class="post__related" data-reveal aria-label="Другие статьи">
+            <h2 class="post__related-title">Читайте также</h2>
+            <ul class="post__related-grid">
+              {related.map((r) => {
+                const rst = topicStyle(r.topic);
+                return (
+                  <li>
+                    <a href={`/blog/${r.slug}`} class="post__related-card pf-card pf-card--hover">
+                      <div class="post__related-cover" style={`background: ${rst.gradient}`}>
+                        <svg class="post__related-icon" style={`color: ${rst.ink}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                          <path d={rst.icon} stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <span class="post__related-topic" style={`color: ${rst.ink}`}>{r.topic}</span>
+                      </div>
+                      <div class="post__related-body">
+                        <h3 class="post__related-h">{r.title}</h3>
+                        <span class="post__related-meta pf-mono">{r.minutes} мин чтения</span>
+                      </div>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )
+      }
 
       <div class="post__cta" data-reveal>
         <h2 class="post__cta-title">Хватит читать — попробуй сам</h2>
@@ -302,6 +342,60 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
   }
   .post__cta-title { font-size: var(--fs-xl); font-weight: 700; color: var(--text); letter-spacing: var(--tracking-tight); }
   .post__cta-text { margin-top: var(--sp-2); margin-bottom: var(--sp-6); color: var(--muted); }
+
+  /* «Читайте также» — перелинковка + SEO. */
+  .post__related { margin-top: var(--sp-16); }
+  .post__related-title {
+    font-size: var(--fs-xl);
+    font-weight: 700;
+    letter-spacing: var(--tracking-tight);
+    color: var(--text);
+    margin-bottom: var(--sp-6);
+  }
+  .post__related-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-4);
+  }
+  @media (min-width: 720px) { .post__related-grid { grid-template-columns: repeat(3, 1fr); } }
+  .post__related-card { display: flex; flex-direction: column; overflow: hidden; height: 100%; text-decoration: none; }
+  .post__related-cover {
+    position: relative;
+    aspect-ratio: 16 / 7;
+    display: flex;
+    align-items: flex-end;
+    padding: var(--sp-3);
+    overflow: hidden;
+  }
+  .post__related-icon {
+    position: absolute;
+    right: -8px;
+    bottom: -12px;
+    width: 84px;
+    height: 84px;
+    opacity: 0.18;
+    transform: rotate(-8deg);
+  }
+  .post__related-topic {
+    position: relative;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+  }
+  .post__related-body { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4); flex: 1; }
+  .post__related-h {
+    font-size: var(--fs-base);
+    font-weight: 650;
+    line-height: var(--lh-snug);
+    letter-spacing: var(--tracking-tight);
+    color: var(--text);
+    text-wrap: balance;
+  }
+  .post__related-meta { font-size: var(--fs-xs); color: var(--dim); margin-top: auto; }
 </style>
 
 <script>
