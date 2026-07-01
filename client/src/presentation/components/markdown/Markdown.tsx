@@ -22,11 +22,14 @@ const SAFE_COLOR_STYLE =
 
 const SANITIZE_SCHEMA = {
   ...defaultSchema,
-  tagNames: [...(defaultSchema.tagNames ?? []), 'u', 'mark', 'span'],
+  // figure/figcaption — блок-картинка с подписью (inline-скрины в описании, см.
+  // FigureImage.ts → renderMarkdown пишет <figure><img><figcaption>). img уже в дефолте.
+  tagNames: [...(defaultSchema.tagNames ?? []), 'u', 'mark', 'span', 'figure', 'figcaption'],
   attributes: {
     ...defaultSchema.attributes,
     span: [...(defaultSchema.attributes?.span ?? []), ['style', SAFE_COLOR_STYLE]],
     mark: [...(defaultSchema.attributes?.mark ?? []), ['style', SAFE_COLOR_STYLE]],
+    figure: [...(defaultSchema.attributes?.figure ?? []), 'dataFigureImage'],
   },
 };
 
