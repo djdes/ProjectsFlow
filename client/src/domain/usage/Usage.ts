@@ -29,6 +29,8 @@ export type UsageSummary = {
   readonly rubPerUsd: number;
   // Доступен ли разовый пробный Прайм (1 час) — для лейбла кнопки в витрине.
   readonly primeTrialAvailable: boolean;
+  // Админ/владелец — безлимитный доступ к диспетчеру (кнопки не гейтятся, баннер не давит).
+  readonly isAdmin: boolean;
 };
 
 export function isFree(plan: PlanId): boolean {

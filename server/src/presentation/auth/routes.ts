@@ -99,6 +99,8 @@ function serializeUsage(s: UsageSummary) {
     blockedWindow: s.blockedWindow,
     rubPerUsd: RUB_PER_USD,
     primeTrialAvailable: s.primeTrialAvailable,
+    // Админ/владелец — безлимитный доступ к диспетчеру (клиент не гейтит его кнопки).
+    isAdmin: s.isAdmin,
   };
 }
 
