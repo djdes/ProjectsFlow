@@ -2,6 +2,8 @@ import type { CommitSyncJob, CommitSyncStatus } from '../../domain/commit-sync/C
 
 export type NewCommitSyncJobInput = {
   readonly projectId: string;
+  // Инициатор (владелец проекта) — на его тариф метерим/гейтим (db/089).
+  readonly createdBy: string | null;
   readonly dispatcherUserId: string;
   readonly thresholdHours: number;
   readonly context: string | null;

@@ -143,7 +143,8 @@ export class CompleteCommitSyncJob {
       ?.execute({
         source: 'commit_sync',
         refId: input.jobId,
-        dispatcherUserId: job.dispatcherUserId,
+        // Списываем на инициатора (владельца проекта), не на диспетчера-админа.
+        dispatcherUserId: job.createdBy ?? job.dispatcherUserId,
         projectId: job.projectId,
         model: null,
         tokensIn: input.tokensIn ?? null,

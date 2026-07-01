@@ -33,10 +33,18 @@ export class CheckDispatchAllowed {
     if (!billedUserId || !this.deps.checkBudget) {
       return { allowed: true, reason: 'ok', billedUserId };
     }
-    const { allowed, summary } = await this.deps.checkBudget.execute(billedUserId);
-    if (summary.isAdmin) return { allowed: true, reason: 'ok', billedUserId };
-    if (summary.plan === 'free') return { allowed: false, reason: 'plan_required', billedUserId };
-    if (!allowed) return { allowed: false, reason: 'budget_exceeded', billedUserId };
-    return { allowed: true, reason: 'ok', billedUserId };
+    return this.forUser(billedUserId);
+  }
+
+  // Проверка по КОНКРЕТНОМУ пользователю (без задачи) — для гейта спенда, у которого ещё нет
+  // taskId: генерация задач автоматизации диспетчером (claude -p до создания задачи). Диспетчер
+  // зовёт с владельцем проекта и пропускает генерацию, если !allowed.
+  async forUser(userId: string): Promise<DispatchAllowedResult> {
+    if (!this.deps.checkBudget) return { allowed: true, reason: 'ok', billedUserId: userId };
+    const { allowed, summary } = await this.deps.checkBudget.execute(userId);
+    if (summary.isAdmin) return { allowed: true, reason: 'ok', billedUserId: userId };
+    if (summary.plan === 'free') return { allowed: false, reason: 'plan_required', billedUserId: userId };
+    if (!allowed) return { allowed: false, reason: 'budget_exceeded', billedUserId: userId };
+    return { allowed: true, reason: 'ok', billedUserId: userId };
   }
 }

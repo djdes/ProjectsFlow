@@ -64,6 +64,9 @@ export class EnqueueCommitSyncJob {
 
     return this.deps.commitSyncJobs.create({
       projectId,
+      // Инициатор = владелец проекта (включивший автоматизацию): на его тариф метерим/гейтим,
+      // чтобы commit-sync не был бесплатным расходом подписки.
+      createdBy: project.ownerId,
       dispatcherUserId,
       thresholdHours: config.commitSyncThresholdHours,
       context,

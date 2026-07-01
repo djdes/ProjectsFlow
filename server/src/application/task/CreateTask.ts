@@ -50,6 +50,11 @@ export type CreateTaskCommand = {
   readonly deadline?: string | null;
   // Приоритет 1..4. null/undefined — без приоритета.
   readonly priority?: TaskPriority | null;
+  // true — атрибутировать создателя (created_by) НЕ на actor'а (ownerUserId), а на владельца
+  // проекта. Для автоматизации (агент создаёт задачу от имени диспетчера-админа): расход
+  // воркера по такой задаче должен списываться на владельца проекта, а не на безлимитного
+  // админа — иначе автоматизация = бесплатный расход подписки.
+  readonly attributeToOwner?: boolean;
 };
 
 const POSITION_STEP = 1024;
@@ -61,7 +66,14 @@ export class CreateTask {
     const description = input.description.trim();
     if (description.length === 0) throw new TaskDescriptionEmptyError();
 
-    await requireProjectAccess(this.deps, input.projectId, input.ownerUserId, 'create_task');
+    const { project } = await requireProjectAccess(
+      this.deps,
+      input.projectId,
+      input.ownerUserId,
+      'create_task',
+    );
+    // Создатель для метеринга: обычно actor; для автоматизации — владелец проекта.
+    const createdBy = input.attributeToOwner ? project.ownerId : input.ownerUserId;
 
     // Кладём в самый верх колонки: position = min - STEP. Это даёт «свежее наверху»
     // в обоих UI-режимах (kanban и list — оба сортируют по position по возрастанию).
@@ -71,7 +83,7 @@ export class CreateTask {
     const task = await this.deps.tasks.create({
       id: this.deps.idGen(),
       projectId: input.projectId,
-      createdBy: input.ownerUserId,
+      createdBy,
       description,
       status: input.status,
       position,

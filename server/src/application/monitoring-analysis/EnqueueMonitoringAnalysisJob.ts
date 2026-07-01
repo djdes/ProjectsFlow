@@ -100,7 +100,9 @@ export class EnqueueMonitoringAnalysisJob {
       analysisType: 'alert',
     });
     return this.deps.monitoringAnalysisJobs.create({
-      createdBy: project.dispatcherUserId,
+      // Авто-анализ = «инициатор» это владелец проекта (чей сервер мониторится): на его
+      // тариф метерим и по нему гейтим, чтобы это не был бесплатный расход подписки.
+      createdBy: project.ownerId,
       projectId: input.projectId,
       serverId: input.serverId,
       dispatcherUserId: project.dispatcherUserId,

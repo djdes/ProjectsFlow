@@ -23,6 +23,9 @@ export type CommitSyncMatch = {
 export type CommitSyncJob = {
   readonly id: string;
   readonly projectId: string;
+  // Инициатор (владелец проекта, включивший автоматизацию) — на его тариф метерим/гейтим.
+  // null для старых job'ов (db/089) → fallback на dispatcherUserId.
+  readonly createdBy: string | null;
   readonly dispatcherUserId: string;
   readonly status: CommitSyncStatus;
   // Снапшот порога (часы) на момент enqueue — авторитетен при применении.

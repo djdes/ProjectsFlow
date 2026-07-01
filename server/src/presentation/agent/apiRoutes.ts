@@ -712,6 +712,18 @@ export function agentApiRouter(deps: Deps): Router {
     }
   });
 
+  // Тот же гейт, но по userId (без задачи) — для спенда, у которого ещё нет taskId: генерация
+  // задач автоматизации диспетчером. Диспетчер зовёт с владельцем проекта, пропускает если !allowed.
+  router.get('/dispatch-allowed-user/:userId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.params['userId'] as string;
+      const result = await deps.dispatchAllowed.forUser(userId);
+      res.json(result);
+    } catch (e) {
+      next(e);
+    }
+  });
+
   // Список проектов юзера, к которому привязан токен. Возвращаем минимум meta:
   // id, name, hasKb, gitRepoUrl — этого достаточно агенту чтоб выбрать.
   router.get('/projects', async (req: Request, res: Response, next: NextFunction) => {
@@ -865,6 +877,10 @@ export function agentApiRouter(deps: Deps): Router {
         const task = await deps.createTask.execute({
           projectId,
           ownerUserId: req.user!.id,
+          // Агент создаёт задачу от имени диспетчера-админа (автоматизация). Создателя для
+          // метеринга/гейта атрибутируем на владельца проекта, а не на безлимитного админа —
+          // иначе автоматизация была бы бесплатным расходом подписки.
+          attributeToOwner: true,
           description: body.description,
           status: body.status ?? 'todo',
           ralphMode: body.ralphMode,

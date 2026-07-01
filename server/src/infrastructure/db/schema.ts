@@ -982,6 +982,8 @@ export const commitSyncJobs = mysqlTable(
   {
     id: id(),
     projectId: char('project_id', { length: 36 }).notNull(),
+    // Инициатор (владелец проекта, включивший автоматизацию) — на его тариф метерим/гейтим (db/089).
+    createdBy: char('created_by', { length: 36 }),
     dispatcherUserId: char('dispatcher_user_id', { length: 36 }).notNull(),
     status: mysqlEnum('status', ['queued', 'running', 'succeeded', 'failed', 'cancelled'])
       .notNull()

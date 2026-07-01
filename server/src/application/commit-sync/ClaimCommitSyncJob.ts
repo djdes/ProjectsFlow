@@ -5,11 +5,11 @@ import {
   NotDispatcherForCommitSyncJobError,
 } from '../../domain/commit-sync/errors.js';
 import type { CommitSyncJobRepository } from './CommitSyncJobRepository.js';
-import { assertBudgetAllowed, type CheckBudget } from '../usage/CheckBudget.js';
+import { assertDispatcherAllowed, type CheckBudget } from '../usage/CheckBudget.js';
 
 type Deps = {
   readonly commitSyncJobs: CommitSyncJobRepository;
-  // Гейт лимитов: подписка диспетчера исчерпала окно → claim запрещён.
+  // Гейт лимитов ИНИЦИАТОРА (владельца проекта): free → нет доступа, исчерпал окно → claim запрещён.
   readonly checkBudget?: CheckBudget;
 };
 
@@ -22,7 +22,8 @@ export class ClaimCommitSyncJob {
     if (job.dispatcherUserId !== input.userId) {
       throw new NotDispatcherForCommitSyncJobError(input.jobId);
     }
-    await assertBudgetAllowed(this.deps.checkBudget, job.dispatcherUserId);
+    // Гейтим ИНИЦИАТОРА (владельца проекта, включившего автоматизацию), а не диспетчера-админа.
+    await assertDispatcherAllowed(this.deps.checkBudget, job.createdBy ?? job.dispatcherUserId);
     const claimed = await this.deps.commitSyncJobs.claimById(input.jobId);
     if (!claimed) throw new CommitSyncJobAlreadyClaimedError(input.jobId);
     return claimed;

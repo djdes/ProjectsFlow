@@ -17,6 +17,7 @@ export class DrizzleCommitSyncJobRepository implements CommitSyncJobRepository {
     await this.db.insert(commitSyncJobs).values({
       id,
       projectId: input.projectId,
+      createdBy: input.createdBy,
       dispatcherUserId: input.dispatcherUserId,
       status: 'queued',
       thresholdHours: input.thresholdHours,
@@ -148,6 +149,7 @@ function rowToJob(row: CommitSyncJobRow): CommitSyncJob {
   return {
     id: row.id,
     projectId: row.projectId,
+    createdBy: row.createdBy ?? null,
     dispatcherUserId: row.dispatcherUserId,
     status: row.status,
     thresholdHours: row.thresholdHours,
