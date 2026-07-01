@@ -1,44 +1,7 @@
 ---
-// Главная витрина продукта. Крупные высокодетальные превью интерфейса в «оконной
-// рамке» — честная иллюстрация реального UI ProjectsFlow (русские подписи, ID задач
-// PF-###, суммы в ₽, статусы). Это CSS-превью, а НЕ реальные скриншоты.
-// TODO(скриншоты): при желании заменить блоки .mock__body на реальные <img> с
-//   продуктовыми скринами — loading="lazy", явные width/height (без CLS), srcset.
-
-// Доска задач (мокап 1) — колонки и вид карточек как в приложении: Черновики / Вручную /
-// Воркер (Claude Opus) / Готово. Без ID/тегов (в проде их на карточке нет): текст + приоритет.
-type BoardColor = 'gray' | 'yellow' | 'blue' | 'green';
-type BoardCard = { text: string; priority?: 'high' | 'medium' | 'low'; working?: boolean; done?: boolean };
-type BoardCol = { name: string; color: BoardColor; sub?: string; cards: BoardCard[] };
-const board: BoardCol[] = [
-  {
-    name: 'Черновики',
-    color: 'gray',
-    cards: [
-      { text: 'Экран истории платежей', priority: 'low' },
-      { text: 'Пуш-уведомления о задачах' },
-    ],
-  },
-  {
-    name: 'Вручную',
-    color: 'yellow',
-    cards: [{ text: 'Текст для страницы оплаты', priority: 'medium' }],
-  },
-  {
-    name: 'Воркер',
-    color: 'blue',
-    sub: 'Claude Opus',
-    cards: [{ text: 'Подключить оплату СБП', priority: 'high', working: true }],
-  },
-  {
-    name: 'Готово',
-    color: 'green',
-    cards: [
-      { text: 'Тёмная тема для дашборда', done: true },
-      { text: 'Telegram-бот для уведомлений', done: true },
-    ],
-  },
-];
+// Главная витрина продукта. Доска и финансы — РЕАЛЬНЫЕ скриншоты прод-приложения
+// (снятые Playwright'ом с изолированного демо-проекта), лежат в /public/shots/.
+// Живой воркер и автопроверки — CSS-иллюстрации фич (это не отдельные экраны).
 
 // Живой воркер (мокап 3). Строки лога терминала.
 const workerLog = [
@@ -80,58 +43,17 @@ const examples = [
       </p>
     </div>
 
-    <!-- Мокап 1 · Доска задач с AI-воркером (крупное окно во всю ширину). -->
+    <!-- Мокап 1 · Реальный скриншот доски задач (снят с прод-приложения). -->
     <figure class="shots__hero" data-reveal>
-      <div class="mock mock--float">
-        <div class="mock__chrome">
-          <span class="mock__dot mock__dot--r"></span>
-          <span class="mock__dot mock__dot--y"></span>
-          <span class="mock__dot mock__dot--g"></span>
-          <span class="mock__crumb">Мой проект · Доска</span>
-        </div>
-        <div class="mock__shell">
-          <aside class="mock__side" aria-hidden="true">
-            <span class="mock__side-item mock__side-item--on">Доска</span>
-            <span class="mock__side-item">Финансы</span>
-            <span class="mock__side-item">Воркеры</span>
-            <span class="mock__side-item">Настройки</span>
-          </aside>
-          <div class="mock__body board" role="img" aria-label="Доска задач: колонки Черновики, Вручную, Воркер, Готово">
-            {
-              board.map((col) => (
-                <div class:list={['board__col', `board__col--${col.color}`]}>
-                  <div class="board__col-head">
-                    <span class="board__col-dot" data-color={col.color} />
-                    <span class="board__col-name">
-                      {col.name}
-                      {col.sub && <span class="board__col-sub">{col.sub}</span>}
-                    </span>
-                    <span class="board__count">{col.cards.length}</span>
-                  </div>
-                  {col.cards.map((card) => (
-                    <article
-                      class:list={[
-                        'board__card',
-                        card.priority && `board__card--p-${card.priority}`,
-                        card.working && 'board__card--active',
-                        card.done && 'board__card--done',
-                      ]}
-                    >
-                      {card.working && <span class="board__live" aria-hidden="true" />}
-                      <p class="board__title">{card.text}</p>
-                      {card.working && (
-                        <span class="board__wip">
-                          <span class="board__wip-dot" aria-hidden="true" />
-                          В работе
-                        </span>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              ))
-            }
-          </div>
-        </div>
+      <div class="shots__frame">
+        <img
+          src="/shots/app-board.png"
+          alt="Скриншот доски задач ProjectsFlow: колонки Черновики, Вручную, Воркер (Claude Opus), Готово"
+          width="1680"
+          height="950"
+          loading="lazy"
+          decoding="async"
+        />
       </div>
       <figcaption class="shots__cap">
         <span class="shots__cap-label">Доска проекта.</span> Бросаешь идею — AI берёт её
@@ -150,33 +72,15 @@ const examples = [
         </p>
       </div>
       <figure class="shots__fig">
-        <div class="mock mock--lift">
-          <div class="mock__chrome">
-            <span class="mock__dot mock__dot--r"></span>
-            <span class="mock__dot mock__dot--y"></span>
-            <span class="mock__dot mock__dot--g"></span>
-            <span class="mock__crumb">Мой проект · Финансы</span>
-          </div>
-          <div class="mock__body fin" role="img" aria-label="Финансы проекта: прибыль, доход и расход">
-            <span class="fin__label">В плюсе за июнь</span>
-            <span class="fin__amount">+128 400&nbsp;₽</span>
-            <div class="fin__split">
-              <div class="fin__stat fin__stat--in">
-                <span class="fin__stat-k">Заработал</span>
-                <span class="fin__stat-v">214 000&nbsp;₽</span>
-              </div>
-              <div class="fin__stat">
-                <span class="fin__stat-k">Потратил</span>
-                <span class="fin__stat-v">85 600&nbsp;₽</span>
-              </div>
-            </div>
-            <div class="fin__chart" aria-hidden="true">
-              {[46, 62, 54, 78, 70, 96].map((h, i) => (
-                <span class:list={['fin__bar', i === 5 && 'fin__bar--peak']} style={`height:${h}%`}></span>
-              ))}
-            </div>
-            <p class="fin__note">Заработал 214 000&nbsp;₽ · потратил 85 600&nbsp;₽ · в плюсе на 128 400&nbsp;₽</p>
-          </div>
+        <div class="shots__frame">
+          <img
+            src="/shots/app-finance.png"
+            alt="Скриншот финансов проекта: доход 214 000 ₽, расход 85 600 ₽, прибыль 128 400 ₽"
+            width="1680"
+            height="950"
+            loading="lazy"
+            decoding="async"
+          />
         </div>
       </figure>
     </div>
@@ -329,103 +233,15 @@ const examples = [
     --surface-2: var(--dark-bg);
   }
 
-  /* --- Оболочка с сайдбаром (главный мокап) ------------------------------ */
-  .mock__shell { display: grid; grid-template-columns: 132px 1fr; }
-  .mock__side {
-    display: none;
-    flex-direction: column;
-    gap: 2px;
-    padding: var(--sp-4) var(--sp-3);
-    border-right: 1px solid var(--line);
-    background: var(--surface-2);
-  }
-  @media (min-width: 768px) { .mock__side { display: flex; } }
-  .mock__side-item {
-    font-size: var(--fs-sm);
-    color: var(--muted);
-    padding: var(--sp-2) var(--sp-3);
-    border-radius: var(--r-sm);
-  }
-  .mock__side-item--on {
-    color: var(--accent);
-    background: var(--accent-soft);
-    font-weight: 600;
-  }
-
-  /* --- Доска (главный мокап) — 1:1 с доской приложения -------------------- */
-  .board {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: var(--sp-2);
-    min-height: 300px;
-  }
-  .board__col {
-    border-radius: var(--r-sm);
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .board__col--gray { background: rgba(120, 113, 108, 0.06); }
-  .board__col--yellow { background: rgba(234, 179, 8, 0.08); }
-  .board__col--blue { background: rgba(59, 130, 246, 0.07); }
-  .board__col--green { background: rgba(34, 197, 94, 0.07); }
-  .board__col-head { display: flex; align-items: center; gap: 6px; padding: 3px 4px 6px; }
-  .board__col-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-  .board__col-dot[data-color='gray'] { background: #a8a29e; }
-  .board__col-dot[data-color='yellow'] { background: #eab308; }
-  .board__col-dot[data-color='blue'] { background: #3b82f6; }
-  .board__col-dot[data-color='green'] { background: #22c55e; }
-  .board__col-name {
-    display: flex;
-    flex-direction: column;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--muted);
-    line-height: 1.15;
-  }
-  .board__col-sub { font-family: var(--font-mono); font-size: 9.5px; font-weight: 500; color: var(--dim); }
-  .board__count { margin-left: auto; font-size: 11px; color: var(--dim); padding: 0 5px; }
-  .board__card {
-    position: relative;
-    background: var(--surface);
+  /* --- Рамка реального скриншота (доска, финансы) ------------------------ */
+  .shots__frame {
     border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    padding: 7px 9px;
-    box-shadow: var(--shadow-sm);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    background: var(--surface);
+    box-shadow: var(--shadow-float);
   }
-  .board__card--p-high { border-left: 2px solid #f43f5e; }
-  .board__card--p-medium { border-left: 2px solid #f97316; }
-  .board__card--p-low { border-left: 2px solid #3b82f6; }
-  .board__card--active { box-shadow: var(--shadow-sm), 0 0 0 1px rgba(251, 191, 36, 0.45); }
-  .board__card--done { border-color: rgba(34, 197, 94, 0.24); background: rgba(34, 197, 94, 0.06); }
-  .board__title { margin: 0; font-size: 12.5px; color: var(--text); line-height: 1.35; }
-  .board__live {
-    position: absolute;
-    right: 7px;
-    top: 7px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #f43f5e;
-    box-shadow: 0 0 6px rgba(244, 63, 94, 0.7);
-  }
-  @media (prefers-reduced-motion: no-preference) {
-    .board__live { animation: pf-dot-pulse 1.4s var(--ease) infinite; }
-  }
-  .board__wip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    margin-top: 6px;
-    font-size: 11px;
-    font-weight: 600;
-    color: #059669;
-  }
-  .board__wip-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; }
-  @media (prefers-reduced-motion: no-preference) {
-    .board__wip-dot { animation: pf-dot-pulse 1.8s var(--ease) infinite; }
-  }
+  .shots__frame img { display: block; width: 100%; height: auto; }
 
   /* --- Editorial-раскладка: текст + мокап ------------------------------- */
   .shots__hero { margin: var(--sp-12) 0 0; }
@@ -467,59 +283,6 @@ const examples = [
   }
   .shots__fig { margin: 0; }
 
-  /* --- Финансы (мокап 2) ------------------------------------------------- */
-  .fin { display: flex; flex-direction: column; }
-  .fin__label { font-size: var(--fs-sm); color: var(--dim); }
-  .fin__amount {
-    margin-top: 2px;
-    font-size: clamp(2rem, 4vw, 2.75rem);
-    font-weight: 800;
-    letter-spacing: var(--tracking-tight);
-    color: var(--profit);
-    line-height: 1.05;
-  }
-  .fin__split { display: flex; gap: var(--sp-3); margin-top: var(--sp-4); }
-  .fin__stat {
-    flex: 1;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: var(--surface-2);
-    padding: var(--sp-3);
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .fin__stat-k { font-size: var(--fs-xs); color: var(--dim); }
-  .fin__stat-v {
-    font-family: var(--font-mono);
-    font-size: var(--fs-base);
-    font-weight: 700;
-    color: var(--spend);
-  }
-  .fin__stat--in .fin__stat-v { color: var(--profit); }
-  .fin__chart {
-    display: flex;
-    align-items: flex-end;
-    gap: var(--sp-2);
-    height: 88px;
-    margin-top: var(--sp-5, 1.25rem);
-  }
-  .fin__bar {
-    flex: 1;
-    border-radius: 4px 4px 0 0;
-    background: var(--surface-2);
-    border: 1px solid var(--line);
-  }
-  .fin__bar--peak {
-    background: var(--amber);
-    border-color: var(--amber);
-  }
-  .fin__note {
-    margin: var(--sp-4) 0 0;
-    font-size: var(--fs-sm);
-    color: var(--muted);
-    line-height: var(--lh-snug);
-  }
 
   /* --- Живой воркер: терминал (мокап 3, локально тёмный) ----------------- */
   .term { display: flex; flex-direction: column; gap: var(--sp-4); }
@@ -691,14 +454,4 @@ const examples = [
     color: var(--muted);
   }
 
-  /* Планшет/узкие: сбрасываем 132px-трек сайдбара (он скрыт до 768px) и даём доске
-     горизонтальный скролл — иначе в 620–767px колонки давятся. Совпадает с точкой сайдбара. */
-  @media (max-width: 767px) {
-    .mock__shell { grid-template-columns: 1fr; }
-    .board {
-      grid-template-columns: repeat(4, minmax(150px, 1fr));
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-  }
 </style>
