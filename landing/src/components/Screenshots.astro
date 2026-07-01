@@ -1,14 +1,60 @@
 ---
-// Витрина продукта. ВНИМАНИЕ: ниже — стилизованные CSS-превью интерфейса (честная
-// иллюстрация, без выдуманных данных), а НЕ реальные скриншоты.
-// TODO(скриншоты): заменить блоки .shot__canvas на реальные <img> с продуктовыми
-//   скринами (доска, окно задачи, автоматизация, финансы), когда пользователь их пришлёт.
-//   Использовать loading="lazy", задавать width/height (без CLS) и srcset при возможности.
+// Главная витрина продукта. Крупные высокодетальные превью интерфейса в «оконной
+// рамке» — честная иллюстрация реального UI ProjectsFlow (русские подписи, ID задач
+// PF-###, суммы в ₽, статусы). Это CSS-превью, а НЕ реальные скриншоты.
+// TODO(скриншоты): при желании заменить блоки .mock__body на реальные <img> с
+//   продуктовыми скринами — loading="lazy", явные width/height (без CLS), srcset.
 
-const previews = [
-  { id: 'task', label: 'Задача в работе', caption: 'Видишь, что делается прямо сейчас, и прогресс — без погружения в детали.' },
-  { id: 'automation', label: 'Автопилот', caption: 'Платформа сама ведёт задачи к твоей цели, пока ты занят другим.' },
-  { id: 'finance', label: 'Расходы по проекту', caption: 'Видно, во что обходится — в рублях, помесячно.' },
+// Доска задач (мокап 1). Реальные типы карточек с ID, тегами и статусами.
+type BoardCard = { id: string; title: string; tag: string; working?: boolean; done?: boolean };
+type BoardCol = { name: string; accent: boolean; cards: BoardCard[] };
+const board: BoardCol[] = [
+  {
+    name: 'Идеи',
+    accent: false,
+    cards: [
+      { id: 'PF-228', title: 'Экран истории платежей', tag: 'UI' },
+      { id: 'PF-231', title: 'Пуш-уведомления о задачах', tag: 'Моб.' },
+    ],
+  },
+  {
+    name: 'В работе',
+    accent: false,
+    cards: [{ id: 'PF-214', title: 'Подключить оплату СБП', tag: 'Backend' }],
+  },
+  {
+    name: 'AI делает',
+    accent: true,
+    cards: [
+      { id: 'PF-219', title: 'Собрать лендинг для запуска', tag: 'Frontend', working: true },
+    ],
+  },
+  {
+    name: 'Готово',
+    accent: false,
+    cards: [
+      { id: 'PF-207', title: 'Тёмная тема', tag: 'UI', done: true },
+      { id: 'PF-202', title: 'Telegram-бот', tag: 'Интеграция', done: true },
+    ],
+  },
+];
+
+// Живой воркер (мокап 3). Строки лога терминала.
+const workerLog = [
+  { k: 'c', text: '// PF-219 · Собрать лендинг для запуска' },
+  { k: 'p', text: '$ читаю ТЗ и структуру проекта' },
+  { k: 'v', text: '→ создаю Hero, Features, Pricing' },
+  { k: 'p', text: '$ пишу код компонентов' },
+  { k: 'v', text: '→ верстаю адаптив, подключаю токены' },
+  { k: 'p', text: '$ прогоняю сборку и линтер' },
+];
+
+// Автоулучшения (мокап 4). Чек-лист проверок перед выкаткой.
+const checks = [
+  { label: 'Сборка проходит без ошибок', done: true },
+  { label: 'Линтер и типы — чисто', done: true },
+  { label: 'Секреты не попали в код', done: true },
+  { label: 'Адаптив на телефоне', done: true },
 ];
 
 // Примеры использования — реальные типы задач, которые бросают простым текстом.
@@ -28,98 +74,195 @@ const examples = [
       <div class="pf-stag">Внутри продукта</div>
       <h2 class="pf-h2">Как это выглядит в&nbsp;работе</h2>
       <p class="pf-lead">
-        Доска идей, прогресс в реальном времени, автопилот и расходы — всё в одном окне.
+        Доска задач, живой прогресс воркера, финансы простым языком и автопроверки перед
+        выкаткой — настоящий интерфейс, а не картинки-заглушки.
       </p>
     </div>
 
-    <!-- Главное превью: доска проекта с колонкой «AI делает». -->
-    <figure class="shot shot--feature" data-reveal>
-      <div class="shot__frame">
-        <div class="shot__chrome">
-          <span class="shot__dot shot__dot--r"></span>
-          <span class="shot__dot shot__dot--y"></span>
-          <span class="shot__dot shot__dot--g"></span>
-          <span class="shot__url">Мой проект · доска</span>
+    <!-- Мокап 1 · Доска задач с AI-воркером (крупное окно во всю ширину). -->
+    <figure class="shots__hero" data-reveal>
+      <div class="mock mock--float">
+        <div class="mock__chrome">
+          <span class="mock__dot mock__dot--r"></span>
+          <span class="mock__dot mock__dot--y"></span>
+          <span class="mock__dot mock__dot--g"></span>
+          <span class="mock__crumb">Мой проект · Доска</span>
         </div>
-        <div class="shot__canvas board" role="img" aria-label="Превью доски проекта">
-          {
-            [
-              { name: 'Идеи', cards: 3, worker: false },
-              { name: 'В работе', cards: 2, worker: false },
-              { name: 'AI делает', cards: 2, worker: true },
-              { name: 'Готово', cards: 3, worker: false },
-            ].map((col) => (
-              <div class:list={['board__col', col.worker && 'board__col--worker']}>
-                <div class="board__col-head">
-                  <span class:list={['board__col-name', col.worker && 'board__col-name--worker']}>
-                    {col.name}
-                  </span>
-                  <span class="board__count">{col.cards}</span>
-                </div>
-                {Array.from({ length: col.cards }).map((_, k) => (
-                  <div class:list={['board__card', col.worker && k === 0 && 'board__card--active']}>
-                    <span class="board__bar board__bar--lg"></span>
-                    <span class="board__bar board__bar--sm"></span>
-                    {col.worker && k === 0 && <span class="board__working">● AI делает…</span>}
+        <div class="mock__shell">
+          <aside class="mock__side" aria-hidden="true">
+            <span class="mock__side-item mock__side-item--on">Доска</span>
+            <span class="mock__side-item">Финансы</span>
+            <span class="mock__side-item">Воркеры</span>
+            <span class="mock__side-item">Настройки</span>
+          </aside>
+          <div class="mock__body board" role="img" aria-label="Доска задач: колонки Идеи, В работе, AI делает, Готово">
+            {
+              board.map((col) => (
+                <div class:list={['board__col', col.accent && 'board__col--worker']}>
+                  <div class="board__col-head">
+                    <span class:list={['board__col-name', col.accent && 'board__col-name--worker']}>
+                      {col.name}
+                    </span>
+                    <span class="board__count">{col.cards.length}</span>
                   </div>
-                ))}
-              </div>
-            ))
-          }
+                  {col.cards.map((card) => (
+                    <article class:list={['board__card', card.working && 'board__card--active']}>
+                      <header class="board__card-top">
+                        <span class="board__id">{card.id}</span>
+                        <span class="board__tag">{card.tag}</span>
+                      </header>
+                      <p class="board__title">{card.title}</p>
+                      {card.working && (
+                        <div class="board__worker">
+                          <span class="board__avatar" aria-hidden="true">AI</span>
+                          <div class="board__worker-body">
+                            <div class="board__progress"><span style="width:72%"></span></div>
+                            <span class="board__working">Пишу код… 72%</span>
+                          </div>
+                        </div>
+                      )}
+                      {card.done && <span class="board__done">Готово</span>}
+                    </article>
+                  ))}
+                </div>
+              ))
+            }
+          </div>
         </div>
       </div>
-      <figcaption class="shot__cap">Доска проекта: бросаешь идею — AI берёт её в работу и доводит до готового.</figcaption>
+      <figcaption class="shots__cap">
+        <span class="shots__cap-label">Доска проекта.</span> Бросаешь идею — AI берёт её
+        в работу и на глазах доводит до «Готово».
+      </figcaption>
     </figure>
 
-    <!-- Три превью поменьше. -->
-    <div class="shots__row">
-      {
-        previews.map((p) => (
-          <figure class="shot" data-reveal>
-            <div class="shot__frame">
-              <div class="shot__chrome shot__chrome--sm">
-                <span class="shot__dot shot__dot--r"></span>
-                <span class="shot__dot shot__dot--y"></span>
-                <span class="shot__dot shot__dot--g"></span>
+    <!-- Мокап 2 · Финансы простым языком (текст слева, окно справа). -->
+    <div class="shots__split" data-reveal>
+      <div class="shots__copy">
+        <div class="pf-eyebrow">Деньги</div>
+        <h3 class="shots__h3">Финансы — человеческим языком</h3>
+        <p class="shots__text">
+          Никаких таблиц-простыней. Одна честная строка: сколько заработал, сколько
+          потратил и в плюсе ли ты по проекту.
+        </p>
+      </div>
+      <figure class="shots__fig">
+        <div class="mock mock--lift">
+          <div class="mock__chrome">
+            <span class="mock__dot mock__dot--r"></span>
+            <span class="mock__dot mock__dot--y"></span>
+            <span class="mock__dot mock__dot--g"></span>
+            <span class="mock__crumb">Мой проект · Финансы</span>
+          </div>
+          <div class="mock__body fin" role="img" aria-label="Финансы проекта: прибыль, доход и расход">
+            <span class="fin__label">В плюсе за июнь</span>
+            <span class="fin__amount">+128 400&nbsp;₽</span>
+            <div class="fin__split">
+              <div class="fin__stat fin__stat--in">
+                <span class="fin__stat-k">Заработал</span>
+                <span class="fin__stat-v">214 000&nbsp;₽</span>
               </div>
-              <div class={`shot__canvas mini mini--${p.id}`} role="img" aria-label={`Превью: ${p.label}`}>
-                {p.id === 'task' && (
-                  <div class="mini__stack">
-                    <span class="mini__line mini__line--title"></span>
-                    <span class="mini__line"></span>
-                    <span class="mini__line mini__line--short"></span>
-                    <div class="mini__progress"><span style="width:72%"></span></div>
-                    <span class="mini__status">
-                      <span class="mini__status-dot"></span> AI делает — 72%
-                    </span>
-                  </div>
-                )}
-                {p.id === 'automation' && (
-                  <div class="mini__auto">
-                    <span class="mini__pill mini__pill--on">Автопилот включён</span>
-                    <span class="mini__line"></span>
-                    <span class="mini__line mini__line--short"></span>
-                    <div class="mini__gauge"><span></span></div>
-                  </div>
-                )}
-                {p.id === 'finance' && (
-                  <div class="mini__fin">
-                    <span class="mini__amount">1 240 ₽</span>
-                    <div class="mini__bars">
-                      {[40, 70, 55, 90, 65, 80].map((h) => (
-                        <span style={`height:${h}%`}></span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+              <div class="fin__stat">
+                <span class="fin__stat-k">Потратил</span>
+                <span class="fin__stat-v">85 600&nbsp;₽</span>
               </div>
             </div>
-            <figcaption class="shot__cap">
-              <span class="shot__cap-label">{p.label}.</span> {p.caption}
-            </figcaption>
-          </figure>
-        ))
-      }
+            <div class="fin__chart" aria-hidden="true">
+              {[46, 62, 54, 78, 70, 96].map((h, i) => (
+                <span class:list={['fin__bar', i === 5 && 'fin__bar--peak']} style={`height:${h}%`}></span>
+              ))}
+            </div>
+            <p class="fin__note">Заработал 214 000&nbsp;₽ · потратил 85 600&nbsp;₽ · в плюсе на 128 400&nbsp;₽</p>
+          </div>
+        </div>
+      </figure>
+    </div>
+
+    <!-- Мокап 3 · Живой воркер (окно слева, текст справа) — локально тёмное окно. -->
+    <div class="shots__split shots__split--rev" data-reveal>
+      <figure class="shots__fig">
+        <div class="mock mock--lift" data-theme="dark">
+          <div class="mock__chrome">
+            <span class="mock__dot mock__dot--r"></span>
+            <span class="mock__dot mock__dot--y"></span>
+            <span class="mock__dot mock__dot--g"></span>
+            <span class="mock__crumb mock__crumb--mono">worker · PF-219</span>
+          </div>
+          <div class="mock__body term" role="img" aria-label="Живой лог AI-воркера">
+            <div class="term__log">
+              {
+                workerLog.map((line) => (
+                  <span class:list={['term__line', `term__line--${line.k}`]}>{line.text}</span>
+                ))
+              }
+              <span class="term__line term__line--live">
+                <span class="term__caret" aria-hidden="true"></span> собираю production-бандл…
+              </span>
+            </div>
+            <div class="term__foot">
+              <div class="term__progress"><span style="width:84%"></span></div>
+              <div class="term__meta">
+                <span class="term__cost">84% · 3.20&nbsp;₽</span>
+                <span class="term__status">В работе</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+      <div class="shots__copy">
+        <div class="pf-eyebrow">Прозрачность</div>
+        <h3 class="shots__h3">Видно каждый шаг воркера</h3>
+        <p class="shots__text">
+          Живой лог: что AI делает прямо сейчас, на сколько процентов готово и во что
+          обошлось — до копейки. Никакого чёрного ящика.
+        </p>
+      </div>
+    </div>
+
+    <!-- Мокап 4 · Автопроверки перед выкаткой (текст слева, окно справа). -->
+    <div class="shots__split" data-reveal>
+      <div class="shots__copy">
+        <div class="pf-eyebrow">Безопасно</div>
+        <h3 class="shots__h3">Проверки перед выкаткой</h3>
+        <p class="shots__text">
+          Прежде чем что-то попадёт в прод, платформа сама прогоняет сборку, линтер и
+          проверку секретов. Зелёные галочки — значит можно катить.
+        </p>
+      </div>
+      <figure class="shots__fig">
+        <div class="mock mock--lift">
+          <div class="mock__chrome">
+            <span class="mock__dot mock__dot--r"></span>
+            <span class="mock__dot mock__dot--y"></span>
+            <span class="mock__dot mock__dot--g"></span>
+            <span class="mock__crumb">PF-219 · Перед выкаткой</span>
+          </div>
+          <div class="mock__body checks" role="img" aria-label="Чек-лист автопроверок перед выкаткой">
+            <div class="checks__head">
+              <span class="checks__title">Автопроверки</span>
+              <span class="checks__badge">4 из 4</span>
+            </div>
+            <ul class="checks__list">
+              {
+                checks.map((c) => (
+                  <li class="checks__item">
+                    <span class="checks__mark" aria-hidden="true">
+                      <svg viewBox="0 0 16 16" width="14" height="14" fill="none">
+                        <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                      </svg>
+                    </span>
+                    <span class="checks__label">{c.label}</span>
+                    <span class="checks__ok">ОК</span>
+                  </li>
+                ))
+              }
+            </ul>
+            <div class="checks__foot">
+              <span class="checks__ready">Готово к выкатке</span>
+            </div>
+          </div>
+        </div>
+      </figure>
     </div>
 
     <!-- Примеры использования: что можно поручить простым текстом. -->
@@ -143,54 +286,78 @@ const examples = [
 </section>
 
 <style>
-  .shots__head { max-width: 40rem; }
+  .shots__head { max-width: 42rem; }
 
-  /* --- Общая рамка-браузер --- */
-  .shot { margin: 0; }
-  .shot--feature { margin-top: var(--sp-12); }
-  .shot__frame {
+  /* --- Оконная рамка (браузер/аппка) ------------------------------------- */
+  .mock {
     border: 1px solid var(--line);
-    border-radius: var(--r);
-    background: linear-gradient(180deg, var(--surface), #080b11);
+    border-radius: var(--r-md);
+    background: var(--surface);
     overflow: hidden;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-lg);
   }
-  .shot__chrome {
+  .mock--float { box-shadow: var(--shadow-float); }
+  .mock--lift { box-shadow: var(--shadow-lg); }
+  .mock__chrome {
     display: flex;
     align-items: center;
     gap: var(--sp-2);
-    height: 36px;
+    height: 40px;
     padding-inline: var(--sp-4);
     border-bottom: 1px solid var(--line);
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--surface-2);
   }
-  .shot__dot { width: 10px; height: 10px; border-radius: 50%; }
-  .shot__dot--r { background: var(--danger); }
-  .shot__dot--y { background: var(--warn); }
-  .shot__dot--g { background: #28c840; }
-  .shot__url {
-    margin-left: var(--sp-2);
+  .mock__dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+  .mock__dot--r { background: var(--danger); }
+  .mock__dot--y { background: var(--warn); }
+  .mock__dot--g { background: var(--signal); }
+  .mock__crumb {
+    margin-left: var(--sp-3);
     font-size: var(--fs-xs);
     color: var(--dim);
   }
-  .shot__cap {
-    margin-top: var(--sp-3);
+  .mock__crumb--mono { font-family: var(--font-mono); }
+  .mock__body { padding: var(--sp-5, 1.25rem); }
+
+  /* Тёмное окно (только мокап живого воркера): все токены поверхностей/текста/линий
+     флипаются глобальным правилом [data-theme='dark'] в tokens.css. Здесь — лишь мелкая
+     подстройка глубины: инсеты (--surface-2) чуть темнее карточки для терминального дна. */
+  .mock[data-theme='dark'] {
+    --surface-2: var(--dark-bg);
+  }
+
+  /* --- Оболочка с сайдбаром (главный мокап) ------------------------------ */
+  .mock__shell { display: grid; grid-template-columns: 132px 1fr; }
+  .mock__side {
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--sp-4) var(--sp-3);
+    border-right: 1px solid var(--line);
+    background: var(--surface-2);
+  }
+  @media (min-width: 768px) { .mock__side { display: flex; } }
+  .mock__side-item {
     font-size: var(--fs-sm);
     color: var(--muted);
-    line-height: var(--lh-snug);
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--r-sm);
   }
-  .shot__cap-label { color: var(--text); font-weight: 600; }
-  .shot__canvas { padding: var(--sp-4); }
+  .mock__side-item--on {
+    color: var(--accent);
+    background: var(--accent-soft);
+    font-weight: 600;
+  }
 
-  /* --- Доска (главное превью) --- */
+  /* --- Доска (главный мокап) --------------------------------------------- */
   .board {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: var(--sp-3);
-    min-height: 260px;
+    min-height: 300px;
   }
   .board__col {
-    background: rgba(255, 255, 255, 0.015);
+    background: var(--surface-2);
     border: 1px solid var(--line);
     border-radius: var(--r-sm);
     padding: var(--sp-2);
@@ -201,7 +368,7 @@ const examples = [
   .board__col--worker {
     border-color: var(--accent-line);
     background: var(--accent-soft);
-    box-shadow: inset 0 0 30px -16px var(--accent);
+    box-shadow: inset 0 0 40px -20px var(--accent);
   }
   .board__col-head {
     display: flex;
@@ -209,135 +376,338 @@ const examples = [
     justify-content: space-between;
     padding: 2px 4px 6px;
   }
-  .board__col-name { font-size: 10px; color: var(--dim); letter-spacing: 0.06em; }
+  .board__col-name {
+    font-size: var(--fs-xs);
+    color: var(--dim);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
   .board__col-name--worker { color: var(--accent); }
   .board__count {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--dim);
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--surface);
+    border: 1px solid var(--line);
     border-radius: var(--r-full);
-    padding: 0 6px;
+    padding: 0 7px;
+    line-height: 1.5;
   }
   .board__card {
-    background: var(--surface-2);
+    background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: var(--sp-2);
+    border-radius: var(--r-sm);
+    padding: var(--sp-3);
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: var(--sp-2);
+    box-shadow: var(--shadow-sm);
   }
   .board__card--active {
     border-color: var(--accent-line);
-    box-shadow: 0 0 0 1px var(--accent-line);
+    box-shadow: 0 0 0 1px var(--accent-line), var(--shadow-sm);
   }
-  .board__bar { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); }
-  .board__bar--lg { width: 90%; }
-  .board__bar--sm { width: 55%; }
-  .board__working {
-    margin-top: 2px;
-    font-size: 9px;
+  .board__card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+  }
+  .board__id {
+    font-family: var(--font-mono);
+    font-size: 11px;
     color: var(--accent);
+    font-weight: 600;
   }
+  .board__tag {
+    font-size: 10px;
+    color: var(--muted);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--r-full);
+    padding: 1px 8px;
+  }
+  .board__title {
+    margin: 0;
+    font-size: var(--fs-sm);
+    color: var(--text);
+    line-height: var(--lh-snug);
+  }
+  .board__worker {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-top: 2px;
+  }
+  .board__avatar {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--r-full);
+    display: grid;
+    place-items: center;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--accent-ink);
+    background: var(--grad-accent);
+  }
+  .board__worker-body { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .board__progress {
+    height: 5px;
+    border-radius: var(--r-full);
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+  .board__progress span { display: block; height: 100%; background: var(--grad-accent); }
+  .board__working { font-size: 10px; color: var(--accent); font-weight: 600; }
   @media (prefers-reduced-motion: no-preference) {
     .board__working { animation: pf-dot-pulse 1.8s var(--ease) infinite; }
   }
-
-  /* --- Мини-превью --- */
-  .shots__row {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--sp-4);
-    margin-top: var(--sp-6);
-  }
-  @media (min-width: 768px) {
-    .shots__row { grid-template-columns: repeat(3, 1fr); }
-  }
-  .shot__chrome--sm { height: 30px; }
-  .mini { min-height: 150px; }
-  .mini__line {
-    display: block;
-    height: 7px;
-    width: 100%;
-    border-radius: 3px;
-    background: rgba(255, 255, 255, 0.08);
-    margin-bottom: 8px;
-  }
-  .mini__line--title { width: 60%; height: 9px; background: rgba(255, 255, 255, 0.16); }
-  .mini__line--short { width: 40%; }
-  .mini__stack { display: flex; flex-direction: column; }
-  .mini__progress {
-    margin-top: 8px;
-    height: 6px;
-    border-radius: var(--r-full);
-    background: rgba(255, 255, 255, 0.06);
-    overflow: hidden;
-  }
-  .mini__progress span {
-    display: block;
-    height: 100%;
-    background: var(--grad-accent);
-  }
-  .mini__status {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 10px;
-    font-size: 11px;
-    color: var(--accent);
-  }
-  .mini__status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 8px var(--accent);
-  }
-
-  .mini__auto { display: flex; flex-direction: column; gap: 8px; }
-  .mini__pill {
+  .board__done {
     align-self: flex-start;
     font-size: 10px;
     font-weight: 600;
-    padding: 3px 9px;
-    border-radius: var(--r-full);
-    border: 1px solid var(--accent-line);
-    color: var(--accent);
-    background: var(--accent-soft);
+    color: var(--signal);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
   }
-  .mini__gauge {
-    margin-top: 4px;
+  .board__done::before {
+    content: '';
+    width: 6px;
     height: 6px;
-    border-radius: var(--r-full);
-    background: rgba(255, 255, 255, 0.06);
-    overflow: hidden;
-  }
-  .mini__gauge span {
-    display: block;
-    height: 100%;
-    width: 68%;
-    background: var(--grad-accent);
+    border-radius: 50%;
+    background: var(--signal);
   }
 
-  .mini--finance { display: flex; }
-  .mini__fin { display: flex; flex-direction: column; gap: 12px; width: 100%; }
-  .mini__amount { font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
-  .mini__bars {
+  /* --- Editorial-раскладка: текст + мокап ------------------------------- */
+  .shots__hero { margin: var(--sp-12) 0 0; }
+  .shots__cap {
+    margin-top: var(--sp-3);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    line-height: var(--lh-snug);
+    max-width: 44rem;
+  }
+  .shots__cap-label { color: var(--text); font-weight: 600; }
+
+  .shots__split {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-6);
+    align-items: center;
+    margin-top: var(--sp-16);
+  }
+  @media (min-width: 900px) {
+    .shots__split { grid-template-columns: 0.85fr 1.15fr; gap: var(--sp-12); }
+    .shots__split--rev .shots__copy { order: 2; }
+    .shots__split--rev .shots__fig { order: 1; }
+  }
+  .shots__copy { max-width: 30rem; }
+  .shots__h3 {
+    margin: var(--sp-3) 0 0;
+    font-size: var(--fs-2xl);
+    font-weight: 700;
+    letter-spacing: var(--tracking-tight);
+    color: var(--text);
+    line-height: var(--lh-tight);
+  }
+  .shots__text {
+    margin: var(--sp-4) 0 0;
+    font-size: var(--fs-base);
+    color: var(--muted);
+    line-height: var(--lh-normal);
+  }
+  .shots__fig { margin: 0; }
+
+  /* --- Финансы (мокап 2) ------------------------------------------------- */
+  .fin { display: flex; flex-direction: column; }
+  .fin__label { font-size: var(--fs-sm); color: var(--dim); }
+  .fin__amount {
+    margin-top: 2px;
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 800;
+    letter-spacing: var(--tracking-tight);
+    color: var(--profit);
+    line-height: 1.05;
+  }
+  .fin__split { display: flex; gap: var(--sp-3); margin-top: var(--sp-4); }
+  .fin__stat {
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+    padding: var(--sp-3);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .fin__stat-k { font-size: var(--fs-xs); color: var(--dim); }
+  .fin__stat-v {
+    font-family: var(--font-mono);
+    font-size: var(--fs-base);
+    font-weight: 700;
+    color: var(--spend);
+  }
+  .fin__stat--in .fin__stat-v { color: var(--profit); }
+  .fin__chart {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
-    height: 80px;
+    gap: var(--sp-2);
+    height: 88px;
+    margin-top: var(--sp-5, 1.25rem);
   }
-  .mini__bars span {
+  .fin__bar {
     flex: 1;
-    border-radius: 3px 3px 0 0;
-    background: linear-gradient(180deg, var(--accent), var(--accent-deep));
-    opacity: 0.8;
+    border-radius: 4px 4px 0 0;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
   }
-  .mini__bars span:last-child { opacity: 1; box-shadow: 0 0 16px -4px var(--accent); }
+  .fin__bar--peak {
+    background: var(--amber);
+    border-color: var(--amber);
+  }
+  .fin__note {
+    margin: var(--sp-4) 0 0;
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    line-height: var(--lh-snug);
+  }
 
-  /* --- Примеры использования --- */
-  .shots__examples { margin-top: var(--sp-16); text-align: center; }
+  /* --- Живой воркер: терминал (мокап 3, локально тёмный) ----------------- */
+  .term { display: flex; flex-direction: column; gap: var(--sp-4); }
+  .term__log {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+  }
+  .term__line { color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+  .term__line--c { color: var(--dim); }
+  .term__line--p { color: var(--signal); }
+  .term__line--v { color: var(--accent-bright); }
+  .term__line--live {
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .term__caret {
+    width: 7px;
+    height: 13px;
+    border-radius: 1px;
+    background: var(--accent-bright);
+    box-shadow: 0 0 10px var(--accent-bright);
+    flex: none;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .term__caret { animation: pf-caret-blink 1.1s steps(1) infinite; }
+  }
+  @keyframes pf-caret-blink {
+    0%, 50% { opacity: 1; }
+    50.01%, 100% { opacity: 0.15; }
+  }
+  .term__foot { display: flex; flex-direction: column; gap: var(--sp-2); }
+  .term__progress {
+    height: 6px;
+    border-radius: var(--r-full);
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+  .term__progress span { display: block; height: 100%; background: var(--grad-accent); }
+  .term__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+  }
+  .term__cost { color: var(--accent-bright); font-weight: 600; }
+  .term__status {
+    color: var(--warn);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .term__status::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--warn);
+  }
+
+  /* --- Автопроверки (мокап 4) -------------------------------------------- */
+  .checks { display: flex; flex-direction: column; gap: var(--sp-3); }
+  .checks__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .checks__title { font-size: var(--fs-base); font-weight: 700; color: var(--text); }
+  .checks__badge {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--signal);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--r-full);
+    padding: 2px 10px;
+  }
+  .checks__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+  .checks__item {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-3);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+  }
+  .checks__mark {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--r-full);
+    display: grid;
+    place-items: center;
+    color: var(--surface);
+    background: var(--signal);
+  }
+  .checks__label { flex: 1; font-size: var(--fs-sm); color: var(--text); }
+  .checks__ok {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--signal);
+  }
+  .checks__foot {
+    display: flex;
+    align-items: center;
+    padding-top: var(--sp-1);
+  }
+  .checks__ready {
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--signal);
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .checks__ready::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--signal);
+    box-shadow: 0 0 8px var(--signal);
+  }
+
+  /* --- Примеры использования --------------------------------------------- */
+  .shots__examples { margin-top: var(--sp-24); text-align: center; }
   .shots__examples-tag { display: block; }
   .shots__examples-grid {
     display: grid;
@@ -358,12 +728,13 @@ const examples = [
     padding: var(--sp-4);
     border: 1px solid var(--line);
     border-radius: var(--r);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
     text-align: left;
-    transition: border-color var(--dur) var(--ease);
+    transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
   }
   @media (prefers-reduced-motion: no-preference) {
-    .shots__example:hover { border-color: var(--accent-line); }
+    .shots__example:hover { border-color: var(--accent-line); box-shadow: var(--shadow); }
   }
   .shots__example-q { font-size: var(--fs-base); font-weight: 600; color: var(--text); }
   .shots__example-go { font-size: var(--fs-xs); color: var(--accent); }
@@ -373,10 +744,12 @@ const examples = [
     color: var(--muted);
   }
 
-  /* Узкие экраны: доска прокручивается горизонтально, не ломая сетку. */
-  @media (max-width: 560px) {
+  /* Планшет/узкие: сбрасываем 132px-трек сайдбара (он скрыт до 768px) и даём доске
+     горизонтальный скролл — иначе в 620–767px колонки давятся. Совпадает с точкой сайдбара. */
+  @media (max-width: 767px) {
+    .mock__shell { grid-template-columns: 1fr; }
     .board {
-      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
     }

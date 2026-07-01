@@ -36,6 +36,7 @@ const year = new Date().getFullYear();
 
 <style>
   .footer {
+    background: var(--bg-alt);
     border-top: 1px solid var(--line);
     padding-block: var(--sp-12) var(--sp-8);
     position: relative;
@@ -63,8 +64,10 @@ const year = new Date().getFullYear();
   }
   .footer__col-title {
     font-size: var(--fs-xs);
-    color: var(--accent);
-    letter-spacing: 0.08em;
+    color: var(--dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: var(--sp-1);
   }
   .footer__link {
     font-size: var(--fs-sm);
@@ -72,7 +75,7 @@ const year = new Date().getFullYear();
     transition: color var(--dur-fast) var(--ease);
     width: fit-content;
   }
-  .footer__link:hover { color: var(--text); }
+  .footer__link:hover { color: var(--accent); }
 
   .footer__bottom {
     display: flex;

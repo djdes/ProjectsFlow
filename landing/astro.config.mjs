@@ -13,10 +13,4 @@ export default defineConfig({
     port: 4321,
     host: true,
   },
-  vite: {
-    ssr: {
-      // three.js пакет ESM/CJS бывает капризным, прокидываем через ssr.noExternal.
-      noExternal: ['three', '@react-three/fiber', '@react-three/drei'],
-    },
-  },
 });

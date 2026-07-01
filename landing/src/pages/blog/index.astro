@@ -1,0 +1,223 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import Nav from '@/components/Nav.astro';
+import Footer from '@/components/Footer.astro';
+import { readingMinutes, topicStyle, formatDate } from '@/lib/blog';
+
+const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
+);
+
+const cards = posts.map((post) => ({
+  slug: post.id,
+  minutes: readingMinutes(post.body ?? ''),
+  ...post.data,
+}));
+
+// Уникальные темы для фильтра (в порядке появления).
+const topics = ['Все', ...Array.from(new Set(cards.map((c) => c.topic)))];
+---
+
+<BaseLayout
+  title="Блог ProjectsFlow — как строить продукты с AI"
+  description="Практика, продукт, деньги и автоматизация для тех, кто строит с AI. Короткие полезные статьи от команды ProjectsFlow."
+>
+  <Nav />
+  <main id="main" class="blog">
+    <header class="blog__head pf-container" data-reveal>
+      <div class="pf-stag">Блог</div>
+      <h1 class="blog__title">Как строить продукты с&nbsp;AI</h1>
+      <p class="pf-lead">
+        Короткие полезные заметки о практике, продукте, деньгах и автоматизации.
+        Без воды — то, что пригодится, когда строишь своё.
+      </p>
+    </header>
+
+    <div class="pf-container">
+      <div class="blog__filters" role="group" aria-label="Фильтр по темам">
+        {
+          topics.map((t, i) => (
+            <button
+              type="button"
+              class="blog__filter"
+              data-topic-filter={t}
+              aria-pressed={i === 0 ? 'true' : 'false'}
+            >
+              {t}
+            </button>
+          ))
+        }
+      </div>
+
+      <ul class="blog__grid">
+        {
+          cards.map((c, i) => {
+            const st = topicStyle(c.topic);
+            return (
+              <li class="blog__item" data-topic={c.topic} data-reveal style={`--reveal-delay: ${i * 70}ms`}>
+                <a href={`/blog/${c.slug}`} class="blog__card pf-card pf-card--hover">
+                  <div class="blog__cover" style={`background: ${st.gradient}`}>
+                    <span class="blog__cover-topic" style={`color: ${st.ink}`}>
+                      {c.topic}
+                    </span>
+                    <span class="blog__cover-word" style={`color: ${st.ink}`} aria-hidden="true">
+                      {c.title.split(' ')[0]}
+                    </span>
+                  </div>
+                  <div class="blog__body">
+                    <span class="blog__badge" style={`color: ${st.ink}; background: ${st.gradient}`}>
+                      {c.topic}
+                    </span>
+                    <h2 class="blog__card-title">{c.title}</h2>
+                    <p class="blog__desc">{c.description}</p>
+                    <div class="blog__meta">
+                      <span>{formatDate(c.date)}</span>
+                      <span class="blog__dot" aria-hidden="true">·</span>
+                      <span class="pf-mono">{c.minutes} мин чтения</span>
+                    </div>
+                  </div>
+                </a>
+              </li>
+            );
+          })
+        }
+      </ul>
+
+      <p class="blog__empty" data-blog-empty hidden>По этой теме пока нет статей.</p>
+    </div>
+  </main>
+  <Footer />
+</BaseLayout>
+
+<style>
+  .blog { padding-top: var(--sp-16); padding-bottom: var(--section-y); }
+  .blog__head { max-width: 42rem; margin-bottom: var(--sp-12); }
+  .blog__title {
+    margin-top: var(--sp-2);
+    font-size: var(--fs-3xl);
+    font-weight: 720;
+    line-height: var(--lh-tight);
+    letter-spacing: var(--tracking-tight);
+    color: var(--text);
+    text-wrap: balance;
+  }
+
+  /* Фильтр по темам */
+  .blog__filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-8);
+  }
+  .blog__filter {
+    padding: var(--sp-2) var(--sp-4);
+    border-radius: var(--r-full);
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      border-color var(--dur-fast) var(--ease),
+      background-color var(--dur-fast) var(--ease),
+      color var(--dur-fast) var(--ease);
+  }
+  .blog__filter:hover { border-color: var(--line-strong); color: var(--text); }
+  .blog__filter[aria-pressed='true'] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+  }
+  .blog__filter:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Сетка карточек */
+  .blog__grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-6);
+  }
+  @media (min-width: 640px) { .blog__grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1024px) { .blog__grid { grid-template-columns: repeat(3, 1fr); } }
+  .blog__item[hidden] { display: none; }
+
+  .blog__card { display: flex; flex-direction: column; overflow: hidden; height: 100%; text-decoration: none; }
+  .blog__cover {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    display: flex;
+    align-items: flex-end;
+    padding: var(--sp-4);
+    overflow: hidden;
+  }
+  .blog__cover-topic {
+    position: relative;
+    z-index: 1;
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+  }
+  .blog__cover-word {
+    position: absolute;
+    right: -0.1em;
+    top: -0.12em;
+    font-size: clamp(3.5rem, 9vw, 5.5rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    opacity: 0.16;
+    line-height: 1;
+    user-select: none;
+    text-wrap: nowrap;
+  }
+  .blog__body { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4) var(--sp-4) var(--sp-6); flex: 1; }
+  .blog__badge {
+    align-self: flex-start;
+    padding: 2px 10px;
+    border-radius: var(--r-full);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .blog__card-title {
+    font-size: var(--fs-lg);
+    font-weight: 700;
+    line-height: var(--lh-snug);
+    letter-spacing: var(--tracking-tight);
+    color: var(--text);
+    text-wrap: balance;
+  }
+  .blog__desc { font-size: var(--fs-sm); color: var(--muted); line-height: var(--lh-normal); flex: 1; }
+  .blog__meta { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--dim); }
+  .blog__dot { opacity: 0.6; }
+  .blog__empty { margin-top: var(--sp-8); color: var(--muted); }
+</style>
+
+<script>
+  // Клиентский фильтр по темам: переключает видимость карточек по data-topic.
+  const filters = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-topic-filter]'));
+  const items = Array.from(document.querySelectorAll<HTMLElement>('.blog__item'));
+  const empty = document.querySelector<HTMLElement>('[data-blog-empty]');
+
+  const apply = (topic: string): void => {
+    let shown = 0;
+    for (const el of items) {
+      const match = topic === 'Все' || el.dataset.topic === topic;
+      el.hidden = !match;
+      if (match) shown++;
+    }
+    if (empty) empty.hidden = shown > 0;
+  };
+
+  for (const btn of filters) {
+    btn.addEventListener('click', () => {
+      filters.forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      apply(btn.dataset.topicFilter ?? 'Все');
+    });
+  }
+</script>

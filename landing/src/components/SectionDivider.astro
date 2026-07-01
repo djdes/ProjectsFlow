@@ -1,138 +1,34 @@
 ---
-// Переход между секциями: "data horizon" — тонкая светящаяся горизонталь
-// + бегущие точки-пакеты + опускающиеся данные-стримеры.
-// Визуально продолжает энергию башни в следующую секцию.
+// Тихий шов между секциями: тонкая линия, растворяющаяся к краям, с едва заметной
+// точкой-акцентом по центру. Никакого неона/бесконечных анимаций — в духе editorial paper.
 ---
 
 <div class="section-divider" aria-hidden="true">
-  {/* Центральная горизонтальная линия — основа "горизонта". */}
-  <div class="divider-line"></div>
-  {/* Soft halo вокруг линии — широкий blur, даёт ощущение свечения. */}
-  <div class="divider-halo"></div>
-
-  {/* 3 бегущих data-packet, каждый со своей скоростью и задержкой. */}
-  <div class="data-packet" style="--delay: 0s; --duration: 8s; --top: 50%;"></div>
-  <div class="data-packet" style="--delay: 2.5s; --duration: 11s; --top: 48%;"></div>
-  <div class="data-packet" style="--delay: 5.2s; --duration: 9s; --top: 52%;"></div>
-
-  {/* Вертикальные streamers — тонкие пунктирные линии, "стекают" вниз. */}
-  {Array.from({ length: 6 }).map((_, i) => (
-    <span
-      class="data-streamer"
-      style={`--x: ${10 + (i / 5) * 80}%; --delay: ${i * 0.7}s; --duration: ${3.5 + (i % 3) * 0.8}s;`}
-    ></span>
-  ))}
+  <span class="section-divider__line"></span>
+  <span class="section-divider__tick"></span>
 </div>
 
 <style>
   .section-divider {
     position: relative;
-    height: 120px;
-    overflow: hidden;
-    /* Цвет фона страницы (--bg) — убирает любой видимый шов между секциями. */
+    height: clamp(2.5rem, 6vw, 4.5rem);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: var(--bg);
   }
-
-  .divider-line {
+  .section-divider__line {
     position: absolute;
-    inset: 50% 0 auto 0;
+    inset-inline: 12%;
     height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(34, 224, 255, 0.0) 5%,
-      rgba(34, 224, 255, 0.8) 50%,
-      rgba(34, 224, 255, 0.0) 95%,
-      transparent 100%
-    );
-    transform: translateY(-0.5px);
+    background: linear-gradient(90deg, transparent, var(--line), transparent);
   }
-
-  .divider-halo {
-    position: absolute;
-    inset: 50% 5% auto 5%;
-    height: 60px;
-    transform: translateY(-30px);
-    background: radial-gradient(
-      ellipse 60% 100% at 50% 50%,
-      rgba(34, 224, 255, 0.2) 0%,
-      rgba(34, 224, 255, 0.06) 35%,
-      transparent 70%
-    );
-    filter: blur(4px);
-  }
-
-  /* Бегущая точка-пакет вдоль горизонтали. */
-  .data-packet {
-    position: absolute;
-    top: var(--top);
-    left: -10px;
-    width: 6px;
-    height: 6px;
-    margin-top: -3px;
+  .section-divider__tick {
+    position: relative;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
-    background: #b6f5ff;
-    box-shadow:
-      0 0 12px 2px rgba(186, 230, 253, 0.95),
-      0 0 32px 6px rgba(34, 224, 255, 0.55);
-    animation: packet-travel var(--duration) linear infinite;
-    animation-delay: var(--delay);
-  }
-
-  @keyframes packet-travel {
-    0% {
-      left: -12px;
-      opacity: 0;
-    }
-    8% {
-      opacity: 1;
-    }
-    92% {
-      opacity: 1;
-    }
-    100% {
-      left: calc(100% + 12px);
-      opacity: 0;
-    }
-  }
-
-  /* Вертикальные тонкие streamers, "стекающие" вниз — продолжение энергии в следующую секцию. */
-  .data-streamer {
-    position: absolute;
-    top: 50%;
-    left: var(--x);
-    width: 1px;
-    height: 60%;
-    background: linear-gradient(
-      to bottom,
-      rgba(34, 224, 255, 0.6) 0%,
-      rgba(34, 224, 255, 0) 100%
-    );
-    opacity: 0;
-    transform: translateY(0);
-    animation: streamer-fall var(--duration) ease-in infinite;
-    animation-delay: var(--delay);
-  }
-
-  @keyframes streamer-fall {
-    0% {
-      opacity: 0;
-      transform: translateY(-20px) scaleY(0.4);
-    }
-    20% {
-      opacity: 0.7;
-    }
-    100% {
-      opacity: 0;
-      transform: translateY(20px) scaleY(1);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .data-packet,
-    .data-streamer {
-      animation: none;
-      opacity: 0.4;
-    }
+    background: var(--accent);
+    opacity: 0.5;
   }
 </style>

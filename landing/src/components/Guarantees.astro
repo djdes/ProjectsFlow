@@ -52,7 +52,7 @@ const bonuses = [
 ];
 ---
 
-<section id="guarantee" class="pf-section guarantee">
+<section id="guarantee" class="pf-section guarantee" data-theme="dark">
   <div class="pf-container">
     <div class="guarantee__head" data-reveal>
       <div class="pf-stag">Почему не страшно начать</div>
@@ -98,7 +98,7 @@ const bonuses = [
           }
         </ul>
 
-        <div class="guarantee__bonus-tag">🎁 Бонусы — бесплатно</div>
+        <div class="guarantee__bonus-tag">Бонусы — бесплатно</div>
         <ul class="guarantee__stack-list">
           {
             bonuses.map((s) => (
@@ -161,6 +161,7 @@ const bonuses = [
     background:
       radial-gradient(120% 80% at 50% 0%, var(--accent-soft), transparent 70%),
       var(--surface);
+    box-shadow: var(--shadow-accent);
   }
   .guarantee__seal-badge {
     display: grid;
@@ -204,8 +205,8 @@ const bonuses = [
   /* Value-stack. */
   .guarantee__stack {
     border: 1px solid var(--line);
-    border-radius: var(--r);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+    border-radius: var(--r-md);
+    background: var(--surface-2);
     padding: var(--sp-8);
   }
   .guarantee__stack-tag {

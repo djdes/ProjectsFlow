@@ -24,7 +24,7 @@ const steps = [
 ];
 ---
 
-<section id="how" class="pf-section">
+<section id="how" class="pf-section how">
   <div class="pf-container">
     <div class="how__head" data-reveal>
       <div class="pf-stag">Как это работает</div>
@@ -51,6 +51,9 @@ const steps = [
 </section>
 
 <style>
+  /* Контрастная глава — тёплый бумажный фон чередования. */
+  .how { background: var(--bg-alt); }
+
   .how__head { max-width: 40rem; }
   .how__grid {
     position: relative;
@@ -68,7 +71,8 @@ const steps = [
     .how__grid { grid-template-columns: repeat(4, 1fr); }
   }
 
-  /* Анимированный коннектор — только на десктопе (4 в ряд). */
+  /* Анимированный коннектор — только на десктопе (4 в ряд).
+     Едва заметная холодная линия вместо яркого циана из тёмной эпохи. */
   .how__connector {
     display: none;
   }
@@ -79,6 +83,12 @@ const steps = [
       left: 8%;
       right: 8%;
       height: 1px;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        var(--accent-line) 50%,
+        transparent
+      );
     }
   }
 
@@ -86,8 +96,16 @@ const steps = [
     position: relative;
     padding: var(--sp-6);
     border: 1px solid var(--line);
-    border-radius: var(--r);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .how__step:hover {
+      border-color: var(--line-strong);
+      box-shadow: var(--shadow);
+    }
   }
   .how__num {
     font-size: var(--fs-sm);

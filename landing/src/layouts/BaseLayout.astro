@@ -19,6 +19,8 @@ const {
     'результата сама. Без настройки и технической возни. Прозрачные расходы, старт бесплатно.',
 } = Astro.props;
 const ogImage = new URL('/og.png', SITE).href;
+// Канонический URL/og:url — по текущему пути (иначе статьи блога самоканонятся в корень).
+const canonical = new URL(Astro.url.pathname, SITE).href;
 ---
 
 <!doctype html>
@@ -27,10 +29,10 @@ const ogImage = new URL('/og.png', SITE).href;
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#06080d" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#fbfbf9" />
+    <meta name="color-scheme" content="light" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="canonical" href={SITE} />
+    <link rel="canonical" href={canonical} />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
@@ -38,7 +40,7 @@ const ogImage = new URL('/og.png', SITE).href;
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:locale" content="ru_RU" />
-    <meta property="og:url" content={SITE} />
+    <meta property="og:url" content={canonical} />
     <meta property="og:image" content={ogImage} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
@@ -50,14 +52,15 @@ const ogImage = new URL('/og.png', SITE).href;
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
 
-    <!-- Анти-FOUC: тёмная тема выставляется до рендера React/island'ов. -->
+    <!-- Анти-FOUC: цвет холста выставляется до рендера React/island'ов. -->
     <script is:inline>
-      document.documentElement.style.background = '#06080d';
+      document.documentElement.style.background = '#fbfbf9';
     </script>
 
     <title>{title}</title>
   </head>
   <body>
+    <a href="#main" class="skip-link">К содержимому</a>
     <slot />
 
     {/* ===== Чат-виджет помощи (P2) =====================================

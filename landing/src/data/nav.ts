@@ -5,9 +5,11 @@ export interface NavLink {
   readonly label: string;
 }
 
+// Ссылки root-относительные (/#...), чтобы работать и со страниц блога, а не только с главной.
 export const NAV_LINKS: readonly NavLink[] = [
-  { href: '#features', label: 'Возможности' },
-  { href: '#how', label: 'Как это работает' },
-  { href: '#pricing', label: 'Тарифы' },
-  { href: '#faq', label: 'Вопросы' },
+  { href: '/#features', label: 'Возможности' },
+  { href: '/#how', label: 'Как это работает' },
+  { href: '/#pricing', label: 'Тарифы' },
+  { href: '/blog', label: 'Блог' },
+  { href: '/#faq', label: 'Вопросы' },
 ] as const;

@@ -1,120 +1,124 @@
 ---
-import HeroSceneGate from './HeroSceneGate.tsx';
+import KanbanBoard from './KanbanBoard.tsx';
 
 // Лендинг и SPA — один Express в prod, пути относительные.
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
+
+// Три ключевых пункта вместо описательного абзаца (по брифу владельца).
+const points = [
+  {
+    key: 'llm',
+    title: 'Подписка на Claude — уже внутри',
+    text: 'Онлайн-доступ к ведущим LLM. Без VPN и без своих API-ключей — просто работаешь.',
+  },
+  {
+    key: 'money',
+    title: 'Прибыль и траты — понятным языком',
+    text: 'Видно, сколько проект заработал и сколько потратил. Без таблиц и лишних терминов.',
+  },
+  {
+    key: 'auto',
+    title: 'Автоматизации из коробки',
+    text: 'Автоулучшения, проверки безопасности и доска, где задачи выполняет AI-воркер.',
+  },
+];
 ---
 
 <section class="hero" aria-labelledby="hero-title">
-  <!-- Ambient-слой = статичный «постер»: координатная сетка + цианово-зелёные свечения.
-       Виден всегда; на мобиле/при reduced-motion заменяет 3D-сцену. -->
+  <!-- Тихий ambient-слой: лёгкая координатная сетка + один мягкий цианный свет. -->
   <div class="hero__bg" aria-hidden="true">
     <div class="hero__grid grid-bg"></div>
-    <div class="mesh-blob mesh-blob--magnetic hero__glow-cyan" data-magnetic-blob></div>
-    <div class="mesh-blob hero__glow-green"></div>
-    <div class="hero__vignette"></div>
+    <div class="mesh-blob mesh-blob--magnetic hero__glow" data-magnetic-blob></div>
   </div>
 
-  <!-- 3D-сцена: грузится только на десктопе с motion и WebGL (chunk не качается на мобиле). -->
-  <div class="hero__scene" aria-hidden="true">
-    <HeroSceneGate client:media="(min-width: 1024px)" />
-  </div>
-
-  <!-- Фоновые синие частицы, постоянно притягивающиеся к кнопке «Начать бесплатно».
-       Только в Hero; плавно гаснут при скролле ниже. Не мешают кликам (pointer-events:none). -->
-  <canvas class="hero__particles" data-particles aria-hidden="true"></canvas>
-
-  <div class="pf-container hero__inner">
+  <div class="hero__wide hero__inner">
     <div class="hero__col">
-      <span class="pf-eyebrow">
-        <span class="pf-dot"></span>
-        Для тех, кто строит с AI
-      </span>
-
       <h1 id="hero-title" class="hero__title">
         Опиши идею — получи <span class="pf-grad">готовый продукт</span>.
       </h1>
 
-      <p class="hero__sub">
-        ProjectsFlow ведёт твой проект от задумки до запуска: ты говоришь, что хочешь, —
-        платформа делает и доводит до результата. Без настройки и технической возни.
-        Ты&nbsp;— на драйве идей.
-      </p>
+      <ul class="hero__points">
+        {
+          points.map((p) => (
+            <li class="hero__point" data-reveal>
+              <span class="hero__point-ic" aria-hidden="true">
+                {p.key === 'llm' && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <path d="M13 3 4 14h7l-1 7 9-11h-7l1-7Z" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                )}
+                {p.key === 'money' && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <path d="M4 19V9m5 10V5m5 14v-6m5 6V8" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                )}
+                {p.key === 'auto' && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <circle cx="12" cy="12" r="3.2" />
+                    <path
+                      d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                )}
+              </span>
+              <span class="hero__point-body">
+                <span class="hero__point-title">{p.title}</span>
+                <span class="hero__point-text">{p.text}</span>
+              </span>
+            </li>
+          ))
+        }
+      </ul>
 
-      <!-- Главный оффер: бесплатный час Прайма — ярко выделен. -->
-      <div class="hero__offer" data-reveal>
-        <span class="hero__offer-badge">1 час бесплатно</span>
-        <span class="hero__offer-text">
-          Первый час на <b>Прайме</b> — без карты. <b>Первый результат увидишь в первый час.</b>
-        </span>
-      </div>
+      <!-- Оффер + быстрый старт (email → регистрация). Анимированная приглашающая кнопка. -->
+      <div class="hero__start" data-reveal style="--reveal-delay: 120ms">
+        <p class="hero__offer">
+          <span class="hero__offer-badge">1 час бесплатно</span>
+          Первый час на <b>Прайме</b> — без карты. Первый результат увидишь сразу.
+        </p>
 
-      <div class="hero__cta">
-        {/* Anonymous (по умолчанию). Скрипт в BaseLayout заменит на «Открыть приложение». */}
-        <a href={`${appBase}/register`} data-auth-anon class="pf-btn pf-btn--primary pf-btn--lg pf-btn--invite">
-          Начать бесплатно
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="hero__arrow" aria-hidden="true">
-            <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
-          </svg>
-        </a>
-        <a href={`${appBase}/login`} data-auth-anon class="pf-btn pf-btn--ghost pf-btn--lg">Войти</a>
-        {/* Authed (скрыто изначально). */}
-        <a href={`${appBase}/`} data-auth-authed class="pf-btn pf-btn--primary pf-btn--lg pf-btn--invite hero__authed">
+        <form class="hero__form" data-auth-anon data-hero-start data-app-base={appBase}>
+          <input
+            type="email"
+            name="email"
+            class="hero__email"
+            placeholder="Твой e-mail"
+            autocomplete="email"
+            aria-label="E-mail для старта"
+          />
+          <button type="submit" class="pf-btn pf-btn--primary pf-btn--lg pf-btn--invite">
+            Начать бесплатно
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="hero__arrow" aria-hidden="true">
+              <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+          </button>
+        </form>
+        <a href={`${appBase}/login`} data-auth-anon class="hero__login">Уже есть аккаунт? Войти</a>
+
+        <!-- Authed (скрыто изначально; BaseLayout выставит data-auth="authed"). -->
+        <a
+          href={`${appBase}/`}
+          data-auth-authed
+          class="pf-btn pf-btn--primary pf-btn--lg pf-btn--invite hero__authed"
+        >
           Открыть приложение
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="hero__arrow" aria-hidden="true">
             <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
           </svg>
         </a>
-      </div>
 
-      <p class="hero__reassure">Старт бесплатно и без карты · не зашло — вернём деньги · проект остаётся твоим</p>
+        <p class="hero__reassure">Старт без карты · не зашло — вернём деньги · проект остаётся твоим</p>
+      </div>
     </div>
 
-    <!-- Правая колонка / запасной визуал: интерактивное превью «кабинета».
-         Показывается всегда, КРОМЕ случая, когда работает 3D-сцена (.hero[data-scene="on"]). -->
-    <div class="hero__showcase" data-reveal style="--reveal-delay: 150ms">
-      <div class="hero__cabinet" data-cabinet>
-        <div class="hero__cab-head">
-          <span class="hero__cab-dot hero__cab-dot--r"></span>
-          <span class="hero__cab-dot hero__cab-dot--y"></span>
-          <span class="hero__cab-dot hero__cab-dot--g"></span>
-          <span class="hero__cab-title">ProjectsFlow · Мой проект</span>
-          <span class="hero__cab-live"><span class="pf-dot"></span> AI на связи</span>
-        </div>
-
-        <div class="hero__cab-board">
-          <div class="hero__cab-col">
-            <div class="hero__cab-colh">Идеи</div>
-            <div class="hero__cab-card"><span class="hero__cab-bar hero__cab-bar--lg"></span><span class="hero__cab-bar hero__cab-bar--sm"></span></div>
-            <div class="hero__cab-card"><span class="hero__cab-bar hero__cab-bar--md"></span></div>
-          </div>
-          <div class="hero__cab-col hero__cab-col--accent">
-            <div class="hero__cab-colh hero__cab-colh--accent">AI делает</div>
-            <div class="hero__cab-card hero__cab-card--active">
-              <span class="hero__cab-clabel" data-active-label>Тёмная тема</span>
-              <div class="hero__cab-prog"><span data-active-bar></span></div>
-            </div>
-          </div>
-          <div class="hero__cab-col">
-            <div class="hero__cab-colh">Готово</div>
-            <div class="hero__cab-card hero__cab-card--done" data-done-slot>
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" class="hero__cab-check"><path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" /></svg>
-              <span class="hero__cab-bar hero__cab-bar--md"></span>
-            </div>
-            <div class="hero__cab-card hero__cab-card--done">
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" class="hero__cab-check"><path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" /></svg>
-              <span class="hero__cab-bar hero__cab-bar--sm"></span>
-            </div>
-          </div>
-        </div>
-
-        <div class="hero__cab-chips">
-          <span class="hero__cab-hint">Выбери идею →</span>
-          <button type="button" class="hero__cab-chip" data-idea>Тёмная тема</button>
-          <button type="button" class="hero__cab-chip" data-idea>Экран оплаты</button>
-          <button type="button" class="hero__cab-chip" data-idea>Telegram-бот</button>
-        </div>
-      </div>
+    <!-- Правая колонка: ЕДИНСТВЕННАЯ на лендинге интерактивная доска. Перетащи задачу на
+         «Воркер» — AI берёт её в работу. Остальные доски со страницы убраны. -->
+    <div class="hero__showcase" data-reveal style="--reveal-delay: 200ms">
+      <KanbanBoard client:visible />
+      <p class="hero__showcase-cap">
+        Перетащи задачу на <b>«Воркер»</b> — или просто нажми. AI возьмёт её в работу.
+      </p>
     </div>
   </div>
 </section>
@@ -124,87 +128,88 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
     position: relative;
     isolation: isolate;
     overflow: hidden;
-    min-height: calc(100dvh - 60px);
     display: flex;
     align-items: center;
+    padding-block: clamp(3rem, 7vw, 6rem);
   }
 
-  /* --- Ambient «постер» --- */
+  /* --- Тихий ambient --- */
   .hero__bg { position: absolute; inset: 0; z-index: -20; pointer-events: none; }
   .hero__grid { position: absolute; inset: 0; }
-  .hero__glow-cyan {
-    width: 560px; height: 560px; background: var(--accent-deep);
-    top: -180px; left: 50%; margin-left: -280px; opacity: 0.4;
-  }
-  .hero__glow-green {
-    width: 380px; height: 380px; background: #0e7a4d;
-    top: 360px; right: -120px; opacity: 0.26;
-  }
-  .hero__vignette {
-    position: absolute; inset-inline: 0; bottom: 0; height: 12rem;
-    background: linear-gradient(to bottom, transparent, var(--bg));
+  .hero__glow {
+    width: 620px; height: 620px;
+    background: var(--accent);
+    top: -260px; right: -120px;
+    opacity: 0.12;
   }
 
-  /* --- 3D-сцена --- */
-  .hero__scene {
-    position: absolute; inset: 0; z-index: -10; pointer-events: none;
-    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%);
-    mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%);
-  }
-
-  /* --- Частицы (поверх сцены, под контентом; не ловят клики) --- */
-  .hero__particles {
-    position: absolute;
-    inset: 0;
-    z-index: -5;
+  /* --- Раскладка --- */
+  .hero__wide {
     width: 100%;
-    height: 100%;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 600ms var(--ease);
+    max-width: var(--container-wide);
+    margin-inline: auto;
+    padding-inline: clamp(1rem, 4vw, 2rem);
   }
-  .hero__particles[data-active] { opacity: 1; }
-
-  /* --- Контент --- */
   .hero__inner {
     position: relative;
     display: flex;
     flex-direction: column;
     gap: var(--sp-12);
-    padding-block: clamp(2.5rem, 6vw, 4.5rem);
   }
-  .hero__col { width: 100%; max-width: 640px; }
+  .hero__col { width: 100%; max-width: 620px; }
+
   .hero__title {
-    margin-top: var(--sp-6);
     font-size: var(--fs-display);
     line-height: var(--lh-tight);
     letter-spacing: var(--tracking-tight);
-    font-weight: 800;
+    font-weight: 720;
     color: var(--text);
     text-wrap: balance;
   }
-  .hero__sub {
-    margin-top: var(--sp-6);
+
+  /* --- 3 ключевых пункта --- */
+  .hero__points {
+    list-style: none;
+    margin: var(--sp-8) 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
     max-width: 34rem;
-    color: var(--muted);
-    font-size: var(--fs-lg);
-    line-height: var(--lh-normal);
   }
-  /* --- Оффер «1 час бесплатно» — яркий акцент --- */
+  .hero__point { display: flex; gap: var(--sp-3); align-items: flex-start; }
+  .hero__point-ic {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--accent-line);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .hero__point-ic svg { width: 20px; height: 20px; }
+  .hero__point-body { display: flex; flex-direction: column; gap: 2px; }
+  .hero__point-title { font-size: var(--fs-base); font-weight: 650; color: var(--text); }
+  .hero__point-text { font-size: var(--fs-sm); color: var(--muted); line-height: var(--lh-snug); }
+
+  /* --- Оффер + старт --- */
+  .hero__start { margin-top: var(--sp-8); max-width: 34rem; }
   .hero__offer {
     display: flex;
     align-items: center;
-    gap: var(--sp-3);
-    margin-top: var(--sp-6);
-    max-width: 34rem;
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-3);
     padding: var(--sp-3) var(--sp-4);
     border: 1px solid var(--accent-line);
     border-radius: var(--r);
-    background:
-      radial-gradient(120% 160% at 0% 50%, var(--accent-soft), transparent 70%),
-      rgba(255, 255, 255, 0.02);
-    box-shadow: 0 0 0 1px var(--accent-line), var(--glow);
+    background: var(--accent-soft);
+    font-size: var(--fs-sm);
+    color: var(--text);
+    line-height: var(--lh-snug);
   }
+  .hero__offer b { color: var(--accent-deep); font-weight: 700; }
   .hero__offer-badge {
     flex: none;
     padding: var(--sp-1) var(--sp-3);
@@ -213,228 +218,73 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
     color: var(--accent-ink);
     font-size: var(--fs-xs);
     font-weight: 800;
-    letter-spacing: 0.02em;
     white-space: nowrap;
   }
-  .hero__offer-text { font-size: var(--fs-sm); color: var(--text); line-height: var(--lh-snug); }
-  .hero__offer-text b { color: var(--accent); font-weight: 700; }
 
-  .hero__cta { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-6); }
-  .hero__authed { display: none; }
-  .hero__arrow { width: 16px; height: 16px; }
-  .hero__reassure {
-    margin-top: var(--sp-4);
-    font-size: var(--fs-sm);
-    color: var(--dim);
-  }
-
-  /* --- Превью проекта --- */
-  .hero__panel {
-    margin-top: var(--sp-12);
-    max-width: 460px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-lg);
-    background: linear-gradient(180deg, var(--surface), #080b11);
-    box-shadow: var(--shadow-lg);
-    overflow: hidden;
-  }
-  .hero__panel-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--sp-3) var(--sp-4);
-    border-bottom: 1px solid var(--line);
-    background: rgba(255, 255, 255, 0.02);
-  }
-  .hero__panel-title { font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
-  .hero__panel-live {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--sp-2);
-    font-size: var(--fs-xs);
-    color: var(--signal);
-  }
-  .hero__tasks { list-style: none; margin: 0; padding: var(--sp-2); display: flex; flex-direction: column; gap: 2px; }
-  .hero__task {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-3);
-    padding: var(--sp-3);
-    border-radius: var(--r-sm);
-    transition: background-color var(--dur) var(--ease);
-  }
-  .hero__task--doing {
-    background: var(--accent-soft);
-    box-shadow: inset 0 0 0 1px var(--accent-line);
-  }
-  .hero__task-mark {
-    flex: none;
-    display: grid;
-    place-items: center;
-    width: 22px;
-    height: 22px;
-  }
-  .hero__task--done .hero__task-mark { color: var(--signal); }
-  .hero__task--done .hero__task-mark svg { width: 16px; height: 16px; }
-  .hero__ring {
-    width: 13px; height: 13px; border-radius: 50%;
-    border: 1.6px solid var(--dim);
-  }
-  .hero__spin {
-    width: 15px; height: 15px; border-radius: 50%;
-    border: 2px solid var(--accent-line);
-    border-top-color: var(--accent);
-  }
-  @media (prefers-reduced-motion: no-preference) {
-    .hero__spin { animation: hero-spin 0.9s linear infinite; }
-    @keyframes hero-spin { to { transform: rotate(360deg); } }
-  }
-  .hero__task-label { flex: 1; min-width: 0; font-size: var(--fs-sm); color: var(--text); }
-  .hero__task--idea .hero__task-label { color: var(--muted); }
-  .hero__task-tag {
-    flex: none;
-    font-size: var(--fs-xs);
-    color: var(--dim);
-  }
-  .hero__task--doing .hero__task-tag { color: var(--accent); }
-  .hero__task--done .hero__task-tag { color: var(--signal); }
-
-  /* --- Правая колонка / «кабинет» — запасной визуал, когда 3D выключено --- */
-  .hero__showcase { width: 100%; }
-  /* Когда работает 3D — кабинет скрыт (виден 3D-tower), но в сетке место сохраняется. */
-  .hero[data-scene='on'] .hero__showcase { display: none; }
-
-  .hero__cabinet {
-    border: 1px solid var(--line);
-    border-radius: var(--r-lg);
-    background: linear-gradient(180deg, var(--surface), #080b11);
-    box-shadow: var(--shadow-lg);
-    overflow: hidden;
-    max-width: 560px;
-  }
-  .hero__cab-head {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-2);
-    padding: var(--sp-3) var(--sp-4);
-    border-bottom: 1px solid var(--line);
-    background: rgba(255, 255, 255, 0.02);
-  }
-  .hero__cab-dot { width: 10px; height: 10px; border-radius: 50%; }
-  .hero__cab-dot--r { background: var(--danger); }
-  .hero__cab-dot--y { background: var(--warn); }
-  .hero__cab-dot--g { background: #28c840; }
-  .hero__cab-title { margin-left: var(--sp-2); font-size: var(--fs-xs); color: var(--dim); }
-  .hero__cab-live {
-    margin-left: auto;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--sp-2);
-    font-size: var(--fs-xs);
-    color: var(--signal);
-  }
-
-  .hero__cab-board {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--sp-3);
-    padding: var(--sp-4);
-  }
-  .hero__cab-col {
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-2);
-    min-height: 150px;
-    padding: var(--sp-2);
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: rgba(255, 255, 255, 0.015);
-  }
-  .hero__cab-col--accent { border-color: var(--accent-line); background: var(--accent-soft); }
-  .hero__cab-colh { padding: 2px 4px 4px; font-size: 11px; color: var(--dim); }
-  .hero__cab-colh--accent { color: var(--accent); }
-  .hero__cab-card {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    padding: var(--sp-2);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--surface-2);
-    transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease);
-  }
-  .hero__cab-card--active { border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-line); }
-  .hero__cab-card--done { flex-direction: row; align-items: center; gap: var(--sp-2); }
-  @media (prefers-reduced-motion: no-preference) {
-    .hero__cab-card:hover { transform: translateY(-2px); border-color: var(--accent-line); }
-  }
-  .hero__cab-bar { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); }
-  .hero__cab-bar--lg { width: 90%; }
-  .hero__cab-bar--md { width: 70%; }
-  .hero__cab-bar--sm { width: 50%; }
-  .hero__cab-check { flex: none; width: 14px; height: 14px; color: var(--signal); }
-  .hero__cab-clabel { font-size: 12px; color: var(--text); }
-  .hero__cab-prog {
-    height: 5px;
-    border-radius: 3px;
-    background: rgba(255, 255, 255, 0.08);
-    overflow: hidden;
-  }
-  .hero__cab-prog span { display: block; height: 100%; width: 35%; background: var(--grad-accent); }
-
-  .hero__cab-chips {
+  .hero__form {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
     gap: var(--sp-2);
-    padding: 0 var(--sp-4) var(--sp-4);
+    margin-top: var(--sp-4);
   }
-  .hero__cab-hint { font-size: var(--fs-xs); color: var(--muted); }
-  .hero__cab-chip {
-    padding: var(--sp-1) var(--sp-3);
-    border-radius: var(--r-full);
-    border: 1px solid var(--line);
-    background: rgba(255, 255, 255, 0.02);
+  .hero__email {
+    flex: 1 1 200px;
+    min-width: 0;
+    height: 50px;
+    padding-inline: var(--sp-4);
+    border-radius: var(--r-sm);
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
     color: var(--text);
-    font-size: var(--fs-xs);
-    cursor: pointer;
-    transition:
-      border-color var(--dur-fast) var(--ease),
-      background-color var(--dur-fast) var(--ease),
-      color var(--dur-fast) var(--ease);
+    font-size: var(--fs-base);
+    font-family: inherit;
+    transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
   }
-  .hero__cab-chip:hover,
-  .hero__cab-chip[aria-pressed='true'] {
-    border-color: var(--accent-line);
-    background: var(--accent-soft);
-    color: var(--accent);
+  .hero__email::placeholder { color: var(--dim); }
+  .hero__email:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
   }
+  .hero__authed { display: none; margin-top: var(--sp-4); }
+  .hero__arrow { width: 16px; height: 16px; }
+  .hero__login {
+    display: inline-block;
+    margin-top: var(--sp-3);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+  }
+  .hero__login:hover { color: var(--accent); border-color: var(--accent-line); }
+  .hero__reassure { margin-top: var(--sp-4); font-size: var(--fs-sm); color: var(--dim); }
 
-  /* Десктоп: две колонки — текст + кабинет. Когда 3D работает, кабинет скрыт (display:none),
-     но explicit-треки сетки сохраняются: текст остаётся слева, справа дышит 3D-tower. */
-  @media (min-width: 1024px) {
+  /* --- Правая колонка --- */
+  .hero__showcase { width: 100%; display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); }
+  .hero__showcase-cap { font-size: var(--fs-sm); color: var(--muted); text-align: center; max-width: 30rem; }
+  .hero__showcase-cap b { color: var(--accent); font-weight: 700; }
+
+  /* Десктоп: две колонки — текст + доска (пошире). */
+  @media (min-width: 1040px) {
     .hero__inner {
       display: grid;
-      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-      gap: var(--sp-8);
+      grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+      gap: var(--sp-12);
       align-items: center;
     }
-    .hero__col { max-width: 620px; }
+    .hero__col { max-width: 600px; }
     .hero__showcase { justify-self: end; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .hero__cabinet, .hero__showcase { opacity: 1; }
   }
 </style>
 
 <script>
-  // Лёгкий параллакс cyan-свечения за курсором. Уважает reduced-motion.
+  // Лёгкий параллакс мягкого cyan-света за курсором. Уважает reduced-motion.
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (!reduceMotion) {
     const blob = document.querySelector<HTMLElement>('[data-magnetic-blob]');
     if (blob) {
-      const MAX = 70;
+      const MAX = 50;
       window.addEventListener(
         'pointermove',
         (e: PointerEvent) => {
@@ -450,229 +300,15 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 </script>
 
 <script>
-  // Фоновые синие частицы, «притягивающиеся» к кнопке «Начать бесплатно».
-  // Оптимизировано под слабое железо:
-  //   • свечение через КЭШИРОВАННЫЙ спрайт (drawImage), а не shadowBlur каждый кадр;
-  //   • DPR ограничен 1.5; частиц немного;
-  //   • авто-снижение числа/полное отключение при низком FPS;
-  //   • пауза, когда вкладка не видна или Hero проскроллен.
-  // Отключено при reduced-motion.
-  (() => {
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) return;
-
-    const hero = document.querySelector<HTMLElement>('.hero');
-    const canvas = document.querySelector<HTMLCanvasElement>('[data-particles]');
-    const target = hero?.querySelector<HTMLElement>('a.pf-btn--primary[data-auth-anon]');
-    if (!hero || !canvas || !target) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Кэш-спрайт свечения: рисуем радиальный градиент один раз, дальше только drawImage.
-    const SPR = 32;
-    const sprite = document.createElement('canvas');
-    sprite.width = SPR;
-    sprite.height = SPR;
-    const sctx = sprite.getContext('2d');
-    if (!sctx) return;
-    const g = sctx.createRadialGradient(SPR / 2, SPR / 2, 0, SPR / 2, SPR / 2, SPR / 2);
-    g.addColorStop(0, 'rgba(34, 224, 255, 0.95)');
-    g.addColorStop(0.4, 'rgba(34, 224, 255, 0.5)');
-    g.addColorStop(1, 'rgba(34, 224, 255, 0)');
-    sctx.fillStyle = g;
-    sctx.fillRect(0, 0, SPR, SPR);
-
-    type P = { x: number; y: number; vx: number; vy: number; life: number; r: number };
-    const parts: P[] = [];
-    // Адаптивная плотность: снижается при низком FPS, вплоть до полного выключения.
-    const TIERS = [34, 18, 0];
-    let tier = 0;
-    let W = 0;
-    let H = 0;
-    let tx = 0;
-    let ty = 0;
-    let active = false;
-    let raf = 0;
-
-    const measure = (): void => {
-      const hr = hero.getBoundingClientRect();
-      W = hr.width;
-      H = hr.height;
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5); // ограничиваем fill-rate
-      canvas.width = Math.round(W * dpr);
-      canvas.height = Math.round(H * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const tr = target.getBoundingClientRect();
-      tx = tr.left - hr.left + tr.width / 2;
-      ty = tr.top - hr.top + tr.height / 2;
-    };
-    measure();
-    window.addEventListener('resize', measure, { passive: true });
-
-    const spawnOne = (): void => {
-      parts.push({
-        x: Math.random() * W,
-        y: Math.random() * H,
-        vx: (Math.random() - 0.5) * 0.8,
-        vy: (Math.random() - 0.5) * 0.8,
-        life: 0.6 + Math.random() * 0.6,
-        r: 1.5 + Math.random() * 2,
-      });
-    };
-
-    const ACCEL = 0.5;
-    const DRAG = 0.9;
-    const MAXV = 8;
-
-    // Замер FPS: копим кадры за ~1с, при низком FPS роняем tier (монотонно, без раскачки).
-    let fpsFrames = 0;
-    let fpsStart = 0;
-
-    const step = (now: number): void => {
-      if (!fpsStart) fpsStart = now;
-      fpsFrames++;
-      if (now - fpsStart >= 1000) {
-        const fps = (fpsFrames * 1000) / (now - fpsStart);
-        if (fps < 32 && tier < 2) tier = 2;
-        else if (fps < 48 && tier < 1) tier = 1;
-        fpsFrames = 0;
-        fpsStart = now;
-      }
-      const cap = TIERS[tier]!;
-
-      ctx.clearRect(0, 0, W, H);
-      ctx.globalCompositeOperation = 'lighter';
-      if (active && cap > 0) {
-        let add = 0;
-        while (parts.length < cap && add < 2) {
-          spawnOne();
-          add++;
-        }
-      }
-      for (let i = parts.length - 1; i >= 0; i--) {
-        const p = parts[i]!;
-        const dx = tx - p.x;
-        const dy = ty - p.y;
-        const dist = Math.hypot(dx, dy) || 1;
-        p.vx += (dx / dist) * ACCEL;
-        p.vy += (dy / dist) * ACCEL;
-        p.vx *= DRAG;
-        p.vy *= DRAG;
-        const sp = Math.hypot(p.vx, p.vy);
-        if (sp > MAXV) {
-          p.vx = (p.vx / sp) * MAXV;
-          p.vy = (p.vy / sp) * MAXV;
-        }
-        p.x += p.vx;
-        p.y += p.vy;
-        p.life -= 0.006;
-        if (dist < 18) p.life -= 0.16;
-        if (p.life <= 0) {
-          parts.splice(i, 1);
-          continue;
-        }
-        const a = Math.max(0, Math.min(1, p.life));
-        const size = p.r * 8;
-        ctx.globalAlpha = 0.9 * a;
-        ctx.drawImage(sprite, p.x - size / 2, p.y - size / 2, size, size);
-      }
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
-      // Если полностью отключились (tier 2) и частиц не осталось — гасим и стоп.
-      if (tier >= 2 && parts.length === 0) {
-        canvas.removeAttribute('data-active');
-        raf = 0;
-        return;
-      }
-      if ((active || parts.length > 0) && !document.hidden) {
-        raf = requestAnimationFrame(step);
-      } else {
-        raf = 0;
-      }
-    };
-
-    const start = (): void => {
-      if (!raf && active && !document.hidden && tier < 2) {
-        canvas.setAttribute('data-active', '');
-        measure();
-        fpsStart = 0;
-        raf = requestAnimationFrame(step);
-      }
-    };
-
-    // Видимость Hero: появляется/гаснет плавно (CSS-opacity на канвасе).
-    const io = new IntersectionObserver(
-      (entries) => {
-        const e = entries[0];
-        if (!e) return;
-        active = e.isIntersecting;
-        if (active) start();
-        else canvas.removeAttribute('data-active');
-      },
-      { threshold: 0.05 },
-    );
-    io.observe(hero);
-
-    // Пауза, когда вкладка неактивна (не жрём CPU/GPU в фоне).
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) start();
+  // Быстрый старт: e-mail из героя → на регистрацию с предзаполнением. Без e-mail — просто регистрация.
+  const form = document.querySelector<HTMLFormElement>('[data-hero-start]');
+  if (form) {
+    const base = (form.getAttribute('data-app-base') ?? '').replace(/\/+$/, '');
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const email = new FormData(form).get('email');
+      const q = typeof email === 'string' && email.includes('@') ? `?email=${encodeURIComponent(email)}` : '';
+      window.location.href = `${base}/register${q}`;
     });
-  })();
-</script>
-
-<script>
-  // Интерактивное превью «кабинета»: кликаешь идею — она уходит в «AI делает» с прогрессом
-  // → «Готово». Если не трогать, идеи проигрываются сами по очереди. Дёшево (DOM + CSS).
-  (() => {
-    const cab = document.querySelector<HTMLElement>('[data-cabinet]');
-    if (!cab) return;
-    const label = cab.querySelector<HTMLElement>('[data-active-label]');
-    const bar = cab.querySelector<HTMLElement>('[data-active-bar]');
-    const chips = Array.from(cab.querySelectorAll<HTMLButtonElement>('[data-idea]'));
-    if (!label || !bar || chips.length === 0) return;
-
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let autoTimer = 0;
-    let idx = 0;
-
-    const setPressed = (text: string): void => {
-      chips.forEach((c) => c.setAttribute('aria-pressed', String((c.textContent ?? '').trim() === text)));
-    };
-
-    const run = (text: string): void => {
-      label.textContent = text;
-      setPressed(text);
-      if (reduce) {
-        bar.style.width = '100%';
-        return;
-      }
-      // Рестарт прогресс-бара: сбрасываем без анимации, затем плавно 0 → 100%.
-      bar.style.transition = 'none';
-      bar.style.width = '0%';
-      void bar.offsetWidth; // reflow
-      bar.style.transition = 'width 2.2s linear';
-      bar.style.width = '100%';
-    };
-
-    const scheduleAuto = (delay: number): void => {
-      window.clearTimeout(autoTimer);
-      if (reduce) return;
-      autoTimer = window.setTimeout(() => {
-        const c = chips[idx % chips.length];
-        idx++;
-        if (c) run((c.textContent ?? '').trim());
-        scheduleAuto(3800);
-      }, delay);
-    };
-
-    chips.forEach((c) =>
-      c.addEventListener('click', () => {
-        run((c.textContent ?? '').trim());
-        scheduleAuto(6500); // после клика — пауза, потом снова авто
-      }),
-    );
-
-    if (reduce) bar.style.width = '60%';
-    else scheduleAuto(2200);
-  })();
+  }
 </script>

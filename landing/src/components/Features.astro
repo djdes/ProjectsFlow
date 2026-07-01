@@ -25,6 +25,11 @@ const ICONS: Record<string, string> = {
   // живой прогресс
   live: 'M12 8v4l3 2M12 3a9 9 0 100 18 9 9 0 000-18z',
 };
+
+// Мини-мокапы реального продуктового UI под смысл каждой фичи (ключ = f.icon).
+// Не абстрактные полоски — настоящие подписи, ID задач PF-###, суммы в ₽, статусы.
+type MockKind = 'idea' | 'autopilot' | 'cost' | 'claude';
+const MOCK_KINDS = new Set<MockKind>(['idea', 'autopilot', 'cost', 'claude']);
 ---
 
 <section id="features" class="pf-section features">
@@ -48,13 +53,105 @@ const ICONS: Record<string, string> = {
             data-reveal
             style={`--reveal-delay: ${i * 80}ms`}
           >
-            <div class="features__icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                <path d={ICONS[f.icon]} stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
+            <div class="features__card-top">
+              <div class="features__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                  <path d={ICONS[f.icon]} stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </div>
+              <h3 class="features__title">{f.title}</h3>
+              <p class="features__body">{f.body}</p>
             </div>
-            <h3 class="features__title">{f.title}</h3>
-            <p class="features__body">{f.body}</p>
+
+            {MOCK_KINDS.has(f.icon as MockKind) && (
+              <div class="features__mock" aria-hidden="true">
+                {f.icon === 'idea' && (
+                  <div class="mock mock--task">
+                    <div class="mock__row">
+                      <span class="mock__id">PF-214</span>
+                      <span class="mock__status mock__status--done">Готово</span>
+                    </div>
+                    <p class="mock__task-title">Собрать лендинг для запуска</p>
+                    <div class="mock__row mock__row--foot">
+                      <span class="mock__meta">Описал словами</span>
+                      <span class="mock__check">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+                          <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {f.icon === 'autopilot' && (
+                  <div class="mock mock--pilot">
+                    <div class="mock__row">
+                      <span class="mock__pilot-label">
+                        <span class="mock__dot" />
+                        Автопилот
+                      </span>
+                      <span class="mock__status mock__status--run">В работе</span>
+                    </div>
+                    <ul class="mock__steps">
+                      <li class="mock__step mock__step--done">
+                        <span class="mock__step-id">PF-118</span>Настроил CI
+                      </li>
+                      <li class="mock__step mock__step--done">
+                        <span class="mock__step-id">PF-121</span>Починил формы
+                      </li>
+                      <li class="mock__step mock__step--now">
+                        <span class="mock__step-id">PF-124</span>Пишет тесты…
+                      </li>
+                    </ul>
+                  </div>
+                )}
+
+                {f.icon === 'cost' && (
+                  <div class="mock mock--cost">
+                    <div class="mock__cost-head">
+                      <span class="mock__meta">Расход за проект</span>
+                      <span class="mock__amount mock__amount--spend">1 240&nbsp;₽</span>
+                    </div>
+                    <div class="mock__bars">
+                      <span class="mock__bar" style="--h: 42%" />
+                      <span class="mock__bar" style="--h: 66%" />
+                      <span class="mock__bar" style="--h: 51%" />
+                      <span class="mock__bar" style="--h: 78%" />
+                      <span class="mock__bar" style="--h: 60%" />
+                      <span class="mock__bar mock__bar--live" style="--h: 88%" />
+                    </div>
+                    <div class="mock__row mock__row--foot">
+                      <span class="mock__meta">За задачу</span>
+                      <span class="mock__amount-sm">≈ 38&nbsp;₽</span>
+                    </div>
+                  </div>
+                )}
+
+                {f.icon === 'claude' && (
+                  <div class="mock mock--claude">
+                    <div class="mock__row">
+                      <span class="mock__claude-label">
+                        <span class="mock__spark" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d={ICONS.claude} />
+                          </svg>
+                        </span>
+                        Claude
+                      </span>
+                      <span class="mock__status mock__status--online">
+                        <span class="mock__dot mock__dot--online" />
+                        Онлайн
+                      </span>
+                    </div>
+                    <div class="mock__plan">
+                      <span class="mock__plan-tag">Прайм</span>
+                      <span class="mock__meta">Ключи не нужны</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <span class="pf-underline" aria-hidden="true"></span>
           </article>
         ))
@@ -92,14 +189,14 @@ const ICONS: Record<string, string> = {
     background: var(--accent-deep);
     top: -10%;
     right: -18%;
-    opacity: 0.14;
+    opacity: 0.1;
   }
   .features__head { max-width: 40rem; }
 
   .features__grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: var(--sp-4);
+    gap: var(--sp-5);
     margin-top: var(--sp-12);
   }
   @media (min-width: 640px) {
@@ -110,9 +207,12 @@ const ICONS: Record<string, string> = {
   }
 
   .features__card {
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     padding: var(--sp-6);
   }
+  .features__card-top { flex: 1; }
   .features__icon {
     display: grid;
     place-items: center;
@@ -137,6 +237,186 @@ const ICONS: Record<string, string> = {
     line-height: var(--lh-normal);
     color: var(--muted);
   }
+
+  /* --- Мини-мокап реального UI внутри карточки --- */
+  .features__mock { margin-top: var(--sp-5); }
+  .mock {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    padding: var(--sp-4);
+    border-radius: var(--r);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+  }
+  .mock__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+  }
+  .mock__row--foot { margin-top: auto; }
+  .mock__id,
+  .mock__step-id {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--accent-deep);
+  }
+  .mock__meta {
+    font-size: var(--fs-xs);
+    color: var(--dim);
+  }
+
+  /* Статус-чипы */
+  .mock__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: var(--r-full);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .mock__status--done {
+    color: var(--profit);
+    background: color-mix(in srgb, var(--profit) 12%, transparent);
+  }
+  .mock__status--run {
+    color: var(--warn);
+    background: color-mix(in srgb, var(--warn) 14%, transparent);
+  }
+  .mock__status--online {
+    color: var(--signal);
+    background: color-mix(in srgb, var(--signal) 12%, transparent);
+  }
+
+  .mock__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: var(--r-full);
+    background: currentColor;
+  }
+  .mock__dot--online { background: var(--signal); }
+
+  /* Карточка «задача» (idea) */
+  .mock__task-title {
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    line-height: var(--lh-snug);
+    color: var(--text);
+  }
+  .mock__check {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--r-full);
+    color: var(--accent-ink);
+    background: var(--profit);
+  }
+  .mock__check svg { width: 12px; height: 12px; }
+
+  /* Автопилот — список шагов */
+  .mock__pilot-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--text);
+  }
+  .mock__pilot-label .mock__dot { color: var(--accent); }
+  .mock__steps {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .mock__step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-xs);
+    color: var(--muted);
+  }
+  .mock__step--done { color: var(--dim); }
+  .mock__step--done .mock__step-id { color: var(--profit); }
+  .mock__step--now { color: var(--text); font-weight: 600; }
+  .mock__step--now .mock__step-id { color: var(--accent); }
+
+  /* Стоимость — столбики расхода */
+  .mock__cost-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-2);
+  }
+  .mock__amount {
+    font-family: var(--font-mono);
+    font-size: var(--fs-lg);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .mock__amount--spend { color: var(--spend); }
+  .mock__amount-sm {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .mock__bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 40px;
+  }
+  .mock__bar {
+    flex: 1;
+    height: var(--h);
+    border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--spend) 24%, var(--surface));
+  }
+  .mock__bar--live { background: var(--accent); }
+
+  /* Claude — статус подписки */
+  .mock__claude-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--text);
+  }
+  .mock__spark {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--r-sm);
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .mock__spark svg { width: 14px; height: 14px; }
+  .mock__plan {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mock__plan-tag {
+    padding: 3px 10px;
+    border-radius: var(--r-full);
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    color: var(--accent-ink);
+    background: var(--grad-accent);
+  }
+
   /* --- Вторая сетка: дополнительный функционал --- */
   .features__more { margin-top: var(--sp-16); }
   .features__more-tag { text-align: center; display: block; }
@@ -159,7 +439,15 @@ const ICONS: Record<string, string> = {
     padding: var(--sp-4);
     border: 1px solid var(--line);
     border-radius: var(--r);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .features__more-card:hover {
+      border-color: var(--accent-line);
+      box-shadow: var(--shadow);
+    }
   }
   .features__more-icon {
     flex: none;

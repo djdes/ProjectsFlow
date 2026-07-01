@@ -33,14 +33,17 @@ import { FAQ } from '@/data/faq';
   .faq__list {
     margin-top: var(--sp-8);
     border: 1px solid var(--line);
-    border-radius: var(--r);
+    border-radius: var(--r-md);
     overflow: hidden;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
   }
   .faq__item {
     border-bottom: 1px solid var(--line);
+    transition: background var(--dur-fast) var(--ease);
   }
   .faq__item:last-child { border-bottom: none; }
+  .faq__item[open] { background: var(--surface-2); }
 
   .faq__q {
     display: flex;
@@ -66,7 +69,10 @@ import { FAQ } from '@/data/faq';
     color: var(--muted);
     transition: transform var(--dur) var(--ease);
   }
-  .faq__item[open] .faq__chev { transform: rotate(180deg); }
+  .faq__item[open] .faq__chev {
+    transform: rotate(180deg);
+    color: var(--accent);
+  }
 
   .faq__a {
     padding: 0 var(--sp-6) var(--sp-6);

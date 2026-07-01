@@ -1,42 +1,78 @@
 ---
-import AuthCta from './AuthCta.astro';
+// Финальный CTA — вторая тёмная full-bleed секция (data-theme="dark" флипает токены).
+// Одна сильная приглашающая кнопка + auth-aware вариант «Открыть приложение».
+// Пути относительные — лендинг и SPA отдаются одним Express'ом; PUBLIC_APP_URL — только для dev.
+const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 ---
 
-<section class="pf-section cta">
-  <div class="cta__blob mesh-blob" aria-hidden="true"></div>
+<section class="pf-section cta" data-theme="dark">
+  <!-- Тонкий цианный glow: на тёмном фоне «дышит» ярко. На токенах. -->
+  <div class="cta__glow mesh-blob" aria-hidden="true"></div>
 
   <div class="pf-container cta__inner" data-reveal>
     <span class="pf-eyebrow">
       <span class="pf-dot"></span>
       Готов, когда ты готов
     </span>
+
     <h2 class="cta__title">
       Преврати идею в продукт <span class="pf-grad">уже сегодня</span>
     </h2>
+
     <p class="cta__sub">
       Опиши, что хочешь получить, — остальное платформа берёт на себя. Бесплатно и без карты,
       а на Прайм переходишь, только если зашло.
     </p>
+
     <div class="cta__actions">
-      <AuthCta size="lg" />
+      <!-- Anonymous (по умолчанию). data-auth-anon скрипт скроет, если юзер авторизован. -->
+      <a
+        href={`${appBase}/register`}
+        data-auth-anon
+        class="pf-btn pf-btn--primary pf-btn--lg pf-btn--invite"
+      >
+        Начать бесплатно
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="cta__arrow" aria-hidden="true">
+          <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </a>
+
+      <!-- Authed (скрыто изначально; BaseLayout выставит data-auth="authed"). -->
+      <a
+        href={`${appBase}/`}
+        data-auth-authed
+        class="pf-btn pf-btn--primary pf-btn--lg pf-btn--invite cta__authed"
+      >
+        Открыть приложение
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" class="cta__arrow" aria-hidden="true">
+          <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </a>
     </div>
-    <p class="cta__fineprint">без настройки · проект остаётся твоим · вернём, если не подошло</p>
+
+    <p class="cta__fineprint">без карты · не зашло — вернём деньги · проект остаётся твоим</p>
   </div>
 </section>
 
 <style>
-  .cta { overflow: hidden; }
-  .cta__blob {
-    width: 700px;
-    height: 700px;
-    background: var(--accent-deep);
-    bottom: -55%;
+  .cta {
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  /* Мягкий цианный свет из-под контента — точечный акцент, не заливка. */
+  .cta__glow {
+    width: 720px;
+    height: 720px;
+    bottom: -50%;
     left: 50%;
     transform: translateX(-50%);
-    opacity: 0.18;
+    background: var(--accent-bright);
+    opacity: 0.14;
   }
   .cta__inner {
-    max-width: 44rem;
+    position: relative;
+    max-width: 46rem;
     margin-inline: auto;
     text-align: center;
   }
@@ -50,7 +86,9 @@ import AuthCta from './AuthCta.astro';
     text-wrap: balance;
   }
   @media (min-width: 768px) {
-    .cta__title { font-size: clamp(2rem, 4vw, 2.8rem); }
+    .cta__title {
+      font-size: clamp(2rem, 4vw, 2.8rem);
+    }
   }
   .cta__sub {
     margin: var(--sp-4) auto 0;
@@ -59,7 +97,22 @@ import AuthCta from './AuthCta.astro';
     line-height: var(--lh-normal);
     color: var(--muted);
   }
-  .cta__actions { margin-top: var(--sp-8); }
+  .cta__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-3);
+    margin-top: var(--sp-8);
+  }
+  .cta__arrow {
+    width: 16px;
+    height: 16px;
+  }
+  /* Authed-вариант скрыт до тех пор, пока BaseLayout не выставит data-auth="authed". */
+  .cta__authed {
+    display: none;
+  }
   .cta__fineprint {
     margin-top: var(--sp-4);
     font-size: var(--fs-xs);
