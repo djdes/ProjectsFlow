@@ -22,10 +22,12 @@ export class GetUserUsage {
 
   async execute(userId: string): Promise<UsageSummary> {
     const now = this.deps.now();
-    const [sub0, primeTrialUsedAt] = await Promise.all([
+    const [sub0, primeTrialUsedAt, user] = await Promise.all([
       this.deps.users.getSubscription(userId),
       this.deps.users.getPrimeTrialUsedAt(userId),
+      this.deps.users.getById(userId),
     ]);
+    const isAdmin = user?.isAdmin ?? false;
     const sub: Subscription = sub0 ?? {
       plan: 'free',
       startedAt: null,
@@ -67,6 +69,7 @@ export class GetUserUsage {
       fiveHour,
       sevenDay,
       primeTrialAvailable: primeTrialUsedAt == null,
+      isAdmin,
     });
   }
 }

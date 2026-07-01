@@ -105,7 +105,7 @@ import {
   LiveSessionNotFoundError,
   LiveSessionGoneError,
 } from '../../domain/live/errors.js';
-import { PrimeTrialUsedError, UsageBlockedError, VipNotSelfServeError } from '../../domain/usage/errors.js';
+import { PlanRequiredError, PrimeTrialUsedError, UsageBlockedError, VipNotSelfServeError } from '../../domain/usage/errors.js';
 import {
   WorkspaceNotFoundError,
   NotWorkspaceMemberError,
@@ -612,6 +612,14 @@ export function errorHandler(
         window: err.window,
         resetsAt: err.resetsAt ? err.resetsAt.toISOString() : null,
       },
+    });
+    return;
+  }
+  // free-инициатор пытается запустить работу на диспетчере — нет доступа (нужен Prime/VIP).
+  if (err instanceof PlanRequiredError) {
+    res.status(402).json({
+      error: 'plan_required',
+      message: 'Диспетчер доступен на тарифах Прайм и ВИП — оформите подписку',
     });
     return;
   }

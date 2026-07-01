@@ -9,7 +9,8 @@ import type { LiveEvent, LiveEventInput } from '../../domain/live/LiveEvent.js';
 import type { LiveFileDiff, LiveFileChange } from '../../domain/live/LiveFileDiff.js';
 import { LiveSessionNotFoundError } from '../../domain/live/errors.js';
 import type { RecordUsage } from '../usage/RecordUsage.js';
-import { assertBudgetAllowed, type CheckBudget } from '../usage/CheckBudget.js';
+import { assertDispatcherAllowed, type CheckBudget } from '../usage/CheckBudget.js';
+import type { TaskDelegationRepository } from '../task/TaskDelegationRepository.js';
 
 export type LiveServiceDeps = {
   readonly repo: LiveRepository;
@@ -23,10 +24,12 @@ export type LiveServiceDeps = {
   // Firehose live-событий для открытых SSE-вкладок (task-scoped, не per-user bus).
   readonly liveEventHub: LiveEventHub;
   readonly idGen: () => string;
-  // Метеринг расхода ИИ: списываем с подписки диспетчера. Best-effort, не валит завершение.
+  // Метеринг расхода ИИ: списываем с профиля ИНИЦИАТОРА (делегатора задачи). Best-effort.
   readonly recordUsage?: RecordUsage;
-  // Гейт лимитов: подписка диспетчера исчерпала окно → старт сессии запрещён.
+  // Гейт лимитов: если у инициатора (делегатора) free-тариф или исчерпано окно → старт запрещён.
   readonly checkBudget?: CheckBudget;
+  // Для резолва инициатора прогона: активная делегация задачи → delegator_user_id.
+  readonly taskDelegations: TaskDelegationRepository;
   // TTL retention сессии (lazy-GC по expires_at). default 30 дней.
   readonly sessionTtlSeconds?: number;
 };
@@ -85,7 +88,16 @@ export class LiveService {
     input: StartSessionInput,
   ): Promise<{ sessionId: string; baseSeq: number }> {
     await this.authDispatcher(projectId, userId);
-    await assertBudgetAllowed(this.deps.checkBudget, userId);
+    // Инициатор прогона = делегатор задачи (кто отдал воркеру). Гейтим и метерим ЕГО, а не
+    // единого диспетчера. Если делегатора нет (legacy/inbox без делегации) → fallback: не
+    // гейтим и позже спишем на диспетчера (userId). См. спек 2026-07-01-per-user-dispatcher-limits.
+    const delegation = await this.deps.taskDelegations.findActiveForTask(taskId);
+    // creatorUserId = делегатор (кто отдал воркеру); для legacy-NULL строк репозиторий
+    // фолбэчит на владельца проекта через COALESCE. Это и есть «инициатор».
+    const billedUserId = delegation?.creatorUserId ?? null;
+    if (billedUserId) {
+      await assertDispatcherAllowed(this.deps.checkBudget, billedUserId);
+    }
     const sessionId = this.deps.idGen();
     const baseSeq = (await this.deps.repo.maxSeqForTask(taskId)) + 1;
     await this.deps.repo.insertSession({
@@ -95,6 +107,7 @@ export class LiveService {
       agentName: input.agentName,
       attempt: input.attempt ?? 1,
       model: input.model ?? null,
+      billedUserId,
       headBefore: input.headBefore ?? null,
       baseSeq,
       ttlSeconds: this.deps.sessionTtlSeconds ?? DEFAULT_TTL_SECONDS,
@@ -222,13 +235,14 @@ export class LiveService {
       tokensIn: input.tokensIn,
       tokensOut: input.tokensOut,
     });
-    // Метеринг: реальный cost_usd прогона списываем с подписки диспетчера (userId).
+    // Метеринг: реальный cost_usd прогона списываем с профиля ИНИЦИАТОРА (делегатора),
+    // зафиксированного на старте сессии. Fallback на диспетчера (userId), если инициатора нет.
     // Best-effort + идемпотентно (UNIQUE source+ref в ledger) — не должно валить завершение.
     void this.deps.recordUsage
       ?.execute({
         source: 'live',
         refId: sessionId,
-        dispatcherUserId: userId,
+        dispatcherUserId: session.billedUserId ?? userId,
         projectId,
         model: session.model,
         tokensIn: input.tokensIn,

@@ -19,6 +19,8 @@ export type LiveSession = {
   readonly attempt: number;
   readonly status: LiveSessionStatus;
   readonly model: string | null;
+  // «Инициатор» прогона (делегатор задачи) — чей профиль платит/гейтится. null — fallback.
+  readonly billedUserId: string | null;
   readonly headBefore: string | null;
   readonly headAfter: string | null;
   readonly costUsd: number | null;

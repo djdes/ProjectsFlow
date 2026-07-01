@@ -842,6 +842,7 @@ const liveService = new LiveService({
   idGen: idGenerator,
   recordUsage,
   checkBudget,
+  taskDelegations: taskDelegationRepo,
 });
 // Startup-sweep: зависшие running-сессии (процесс упал, finish не доехал) → timeout.
 // Best-effort: ошибка не должна мешать старту сервера.

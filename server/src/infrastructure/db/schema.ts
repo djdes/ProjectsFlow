@@ -1423,6 +1423,8 @@ export const liveSessions = mysqlTable(
       .notNull()
       .default('running'),
     model: varchar('model', { length: 64 }),
+    // «Инициатор» прогона (делегатор задачи) — чей профиль платит за воркер (db/087).
+    billedUserId: char('billed_user_id', { length: 36 }),
     headBefore: char('head_before', { length: 40 }),
     headAfter: char('head_after', { length: 40 }),
     // DECIMAL/BIGINT возвращаются из mysql2 строками → Number() в репозитории.
