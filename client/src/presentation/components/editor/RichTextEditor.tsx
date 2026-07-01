@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
-import { TextSelection } from '@tiptap/pm/state';
+import { TextSelection, NodeSelection } from '@tiptap/pm/state';
 import { DragHandle } from '@tiptap/extension-drag-handle-react';
 import { GripVertical } from 'lucide-react';
 
@@ -396,6 +396,13 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       if (editor.isDestroyed) return;
       const { state, view } = editor;
       const { from, to, empty } = state.selection;
+      // Блочное выделение (NodeSelection) создаёт drag-handle при захвате блока —
+      // меню форматирования тут не нужно (иначе всплывает при перетаскивании).
+      if (state.selection instanceof NodeSelection) {
+        dismissedKeyRef.current = null;
+        setMenuAnchor(null);
+        return;
+      }
       if (empty || !editor.isEditable) {
         // Выделение схлопнулось из-за клика по самому меню (фокус ушёл в портал) —
         // не закрываем, меню живёт по снимку диапазона. Иначе (клик/стрелки в

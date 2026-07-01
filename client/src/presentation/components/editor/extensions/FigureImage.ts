@@ -2,10 +2,10 @@ import { Node, mergeAttributes, type JSONContent } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 import { FigureImageView } from './FigureImageView';
 
-// Блок-картинка с подписью снизу (à la Notion): <figure><img><figcaption>подпись</figcaption></figure>.
+// Блок-картинка (à la Notion): <figure data-figure-image><img></figure> — без подписи.
 // Хранение — как inline-HTML в markdown-описании (симметрично TextStyle.renderMarkdown), чтобы
 // round-trip markdown↔doc не терял картинку и её ПОЗИЦИЮ. Воркер читает описание и видит, после
-// какого абзаца стоит скрин и какая у него подпись (alt/figcaption).
+// какого абзаца стоит скрин.
 //
 // Загрузка: пока грузится — attrs.uploading=true + progress(0..100) → NodeView рисует плейсхолдер
 // с прогресс-баром. uploadId — для адресного обновления ноды из paste-обработчика. uploading/
@@ -17,7 +17,7 @@ const esc = (s: string): string =>
 export const FigureImage = Node.create({
   name: 'figureImage',
   group: 'block',
-  content: 'inline*', // редактируемая подпись
+  atom: true, // цельный блок без редактируемого содержимого (подпись убрана)
   draggable: true,
   selectable: true,
   isolating: true,
@@ -34,8 +34,8 @@ export const FigureImage = Node.create({
   parseHTML() {
     return [
       {
+        // Старый формат мог иметь <figcaption> — игнорируем, парсим только src картинки.
         tag: 'figure[data-figure-image]',
-        contentElement: 'figcaption',
         getAttrs: (el) => ({
           src: (el as HTMLElement).querySelector('img')?.getAttribute('src') ?? null,
         }),
@@ -48,7 +48,6 @@ export const FigureImage = Node.create({
       'figure',
       mergeAttributes({ 'data-figure-image': '' }, HTMLAttributes),
       ['img', { src: (node.attrs.src as string) ?? '', alt: '' }],
-      ['figcaption', 0],
     ];
   },
 
@@ -57,10 +56,9 @@ export const FigureImage = Node.create({
   },
 
   // getMarkdown() — сериализуем ТОЛЬКО загруженные (src задан); плейсхолдеры загрузки не пишем.
-  renderMarkdown(node: JSONContent, helpers: { renderChildren: (n: JSONContent[]) => string }) {
+  renderMarkdown(node: JSONContent) {
     const src = (node.attrs?.src as string) ?? '';
     if (!src) return '';
-    const caption = helpers.renderChildren(node.content ?? []).replace(/\s+/g, ' ').trim();
-    return `\n<figure data-figure-image><img src="${esc(src)}" alt="${esc(caption)}" /><figcaption>${esc(caption)}</figcaption></figure>\n`;
+    return `\n<figure data-figure-image><img src="${esc(src)}" alt="" /></figure>\n`;
   },
 });

@@ -60,6 +60,8 @@ const BASE_PROSE = cn(
   'prose-p:my-1 prose-pre:my-2 prose-headings:mt-2 prose-headings:mb-1 prose-ul:my-1 prose-ol:my-1',
   // overflow-guard: код/таблицы скроллятся внутри себя, картинки не вылезают за ширину
   'prose-pre:max-w-full prose-pre:overflow-x-auto prose-img:max-w-full prose-img:h-auto',
+  // блок-картинка: небольшой симметричный отступ (prose по умолчанию даёт ~2em)
+  '[&_figure]:my-2 [&_figure]:flex [&_figure]:flex-col [&_figure]:items-center [&_figure_img]:my-0',
   '[&_table]:block [&_table]:w-fit [&_table]:max-w-full [&_table]:overflow-x-auto',
 );
 
