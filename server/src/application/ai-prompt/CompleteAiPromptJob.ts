@@ -71,12 +71,13 @@ export class CompleteAiPromptJob {
       });
     }
 
-    // Метеринг: списываем с подписки диспетчера (best-effort, идемпотентно по source+ref).
+    // Метеринг: списываем с профиля ИНИЦИАТОРА (createdBy — кто нажал AI), best-effort,
+    // идемпотентно по source+ref.
     void this.deps.recordUsage
       ?.execute({
         source: 'ai_prompt',
         refId: input.jobId,
-        dispatcherUserId: job.dispatcherUserId,
+        dispatcherUserId: job.createdBy,
         projectId: job.projectId,
         model: null,
         tokensIn: input.tokensIn ?? null,

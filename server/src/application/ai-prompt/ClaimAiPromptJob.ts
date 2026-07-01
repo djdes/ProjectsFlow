@@ -5,11 +5,11 @@ import {
   NotDispatcherForAiPromptJobError,
 } from '../../domain/ai-prompt/errors.js';
 import type { AiPromptJobRepository } from './AiPromptJobRepository.js';
-import { assertBudgetAllowed, type CheckBudget } from '../usage/CheckBudget.js';
+import { assertDispatcherAllowed, type CheckBudget } from '../usage/CheckBudget.js';
 
 type Deps = {
   readonly aiPromptJobs: AiPromptJobRepository;
-  // Гейт лимитов: подписка диспетчера исчерпала окно → claim запрещён (work не стартует).
+  // Гейт лимитов ИНИЦИАТОРА (createdBy): free → нет доступа, исчерпал окно → claim запрещён.
   readonly checkBudget?: CheckBudget;
 };
 
@@ -22,7 +22,8 @@ export class ClaimAiPromptJob {
     if (job.dispatcherUserId !== input.userId) {
       throw new NotDispatcherForAiPromptJobError(input.jobId);
     }
-    await assertBudgetAllowed(this.deps.checkBudget, job.dispatcherUserId);
+    // Гейтим ИНИЦИАТОРА (createdBy — кто нажал AI), не единого диспетчера.
+    await assertDispatcherAllowed(this.deps.checkBudget, job.createdBy);
     const claimed = await this.deps.aiPromptJobs.claimById(input.jobId);
     if (!claimed) throw new AiPromptJobAlreadyClaimedError(input.jobId);
     return claimed;

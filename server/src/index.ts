@@ -675,6 +675,7 @@ const enqueueAiPromptJob = new EnqueueAiPromptJob({
   getKbDocument: new GetKbDocument({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
   rateLimiter: agentRateLimiter,
   resolveDefaultDispatcherUserId: resolveDefaultAiDispatcherUserId,
+  checkBudget,
 });
 const waitForAiPromptJob = new WaitForAiPromptJob({
   aiPromptJobs: aiPromptJobRepo,
