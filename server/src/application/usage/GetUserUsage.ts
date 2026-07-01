@@ -1,4 +1,4 @@
-import { planWindowCaps, type PlanCapsOverride } from '../../domain/usage/Plan.js';
+import { planWindowCaps, type PlanMonthlyOverride } from '../../domain/usage/Plan.js';
 import { effectivePlan, type Subscription } from '../../domain/usage/Subscription.js';
 import {
   buildUsageWindow,
@@ -13,8 +13,8 @@ type Deps = {
   readonly ledger: UsageLedgerRepository;
   readonly users: UserRepository;
   readonly now: () => Date;
-  // Env-оверрайд кэпов окон (для тестов/тюнинга). undefined → выведенные из PLAN_MONTHLY_USD.
-  readonly capsOverride?: PlanCapsOverride;
+  // Env-оверрайд месячного лимита плана (для тестов/тюнинга). undefined → PLAN_MONTHLY_USD.
+  readonly capsOverride?: PlanMonthlyOverride;
 };
 
 // Считает usage по двум скользящим окнам (5ч / 7д) из append-only ledger. Кэпы — из

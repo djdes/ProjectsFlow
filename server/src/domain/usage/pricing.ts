@@ -3,12 +3,14 @@
 // См. план gleaming-munching-locket.
 import type { PlanId } from './Plan.js';
 
-// Месячный USD-якорь плана. null = без лимита (free метрится, но не лимитируется).
-// Прайм ≈ $55, ВИП ≈ $110 (из витринных 5000 / 10000 ₽). Тюнятся здесь.
+// Месячный USD-якорь ЛИМИТА плана (не цена подписки — цена в клиентском PlanCatalog).
+// null = без лимита. Прайм $50, ВИП $100 — это 5000 / 10000 ₽ при RUB_PER_USD=100.
+// Недельный (7д) лимит = месяц / 4; 5-часовой = недельный × FIVE_HOUR_FRACTION.
+// Тюнится здесь ИЛИ через env (USAGE_{PRIME,VIP}_MONTHLY_USD, см. composition root).
 export const PLAN_MONTHLY_USD: Record<PlanId, number | null> = {
   free: null,
-  prime: 55,
-  vip: 110,
+  prime: 50,
+  vip: 100,
 };
 
 // Доля 5-часового окна от недельного (недельный = месяц / 4). 0.4 — «как у Opus».

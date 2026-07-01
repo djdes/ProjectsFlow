@@ -132,7 +132,7 @@ import { RecordUsage } from './application/usage/RecordUsage.js';
 import { GetUserUsage } from './application/usage/GetUserUsage.js';
 import { BuyPlan } from './application/usage/BuyPlan.js';
 import { CheckBudget } from './application/usage/CheckBudget.js';
-import type { PlanCapsOverride } from './domain/usage/Plan.js';
+import type { PlanMonthlyOverride } from './domain/usage/Plan.js';
 import { EnqueueAiPromptJob } from './application/ai-prompt/EnqueueAiPromptJob.js';
 import { WaitForAiPromptJob } from './application/ai-prompt/WaitForAiPromptJob.js';
 import { ListPendingAiPromptJobs } from './application/ai-prompt/ListPendingAiPromptJobs.js';
@@ -443,29 +443,23 @@ const aiPromptJobRepo = new DrizzleAiPromptJobRepository(db);
 // completion-пути (live / ai_prompt / monitoring / commit_sync). См. план gleaming-munching-locket.
 const usageLedgerRepo = new DrizzleUsageLedgerRepository(db);
 const recordUsage = new RecordUsage({ ledger: usageLedgerRepo, idGen: idGenerator });
-// Env-оверрайд кэпов окон (для тестов/тюнинга без деплоя). Пусто → выведенные из PLAN_MONTHLY_USD.
-// Напр. USAGE_PRIME_5H_USD=0.20 — мгновенно ловить блок Prime в тесте.
-const usageCapsOverride = ((): PlanCapsOverride | undefined => {
+// Env-оверрайд МЕСЯЧНОГО лимита плана в USD (для тестов/тюнинга без деплоя). Пусто →
+// PLAN_MONTHLY_USD ($50 Prime / $100 VIP). Недельный = месяц/4, 5ч = недельный×0.4.
+// Напр. USAGE_PRIME_MONTHLY_USD=2 → блок Prime ловится в тесте почти сразу.
+const usageCapsOverride = ((): PlanMonthlyOverride | undefined => {
   const num = (name: string): number | undefined => {
     const raw = process.env[name];
     if (!raw) return undefined;
     const v = Number(raw);
     return Number.isFinite(v) && v >= 0 ? v : undefined;
   };
-  const build = (plan: 'prime' | 'vip'): Partial<{ fiveHourUsd: number; sevenDayUsd: number }> | undefined => {
-    const p = plan.toUpperCase();
-    const fiveHourUsd = num(`USAGE_${p}_5H_USD`);
-    const sevenDayUsd = num(`USAGE_${p}_7D_USD`);
-    if (fiveHourUsd === undefined && sevenDayUsd === undefined) return undefined;
-    return {
-      ...(fiveHourUsd !== undefined ? { fiveHourUsd } : {}),
-      ...(sevenDayUsd !== undefined ? { sevenDayUsd } : {}),
-    };
+  const prime = num('USAGE_PRIME_MONTHLY_USD');
+  const vip = num('USAGE_VIP_MONTHLY_USD');
+  if (prime === undefined && vip === undefined) return undefined;
+  return {
+    ...(prime !== undefined ? { prime } : {}),
+    ...(vip !== undefined ? { vip } : {}),
   };
-  const prime = build('prime');
-  const vip = build('vip');
-  if (!prime && !vip) return undefined;
-  return { ...(prime ? { prime } : {}), ...(vip ? { vip } : {}) };
 })();
 const getUserUsage = new GetUserUsage({
   ledger: usageLedgerRepo,
