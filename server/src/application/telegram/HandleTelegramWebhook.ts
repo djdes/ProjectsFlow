@@ -5,7 +5,9 @@ import type { UserRepository } from '../user/UserRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { CreateTaskComment } from '../task/CreateTaskComment.js';
+import type { MoveTask } from '../task/MoveTask.js';
 import type { MaybeReopenForClarification } from '../task/MaybeReopenForClarification.js';
+import { taskActionKeyboard, taskCompletedKeyboard } from './taskActionKeyboard.js';
 import type { DispatchCommentNotifications } from '../notifications/DispatchCommentNotifications.js';
 import type {
   TelegramComposerService,
@@ -55,6 +57,8 @@ type Deps = {
   // Reply→обычный комментарий: маппинг task-сообщений бота → задача (db/049).
   readonly taskMessages: TelegramTaskMessageRepository;
   readonly createComment: CreateTaskComment;
+  // Инлайн «✅ Завершить» / «↩️ Отменить» на задачных уведомлениях (nd:/nu: callback).
+  readonly moveTask: MoveTask;
   // Рассылка email+TG участникам по комментарию (как HTTP-роут). Best-effort.
   readonly dispatchCommentNotifications: DispatchCommentNotifications;
   // Конструктор задач (+проект текст @делегат) + обработка кнопок конструктора/делегирования.
@@ -90,7 +94,12 @@ export class HandleTelegramWebhook {
     // tx/da/dd) — конструктор задач/делегирование.
     if (update.callback_query) {
       const cq = update.callback_query;
-      if ((cq.data ?? '').startsWith('bt:')) return this.handleBrowseCallback(cq);
+      const data = cq.data ?? '';
+      // Действия задачных уведомлений (nd/nc/nu) — до фолбэка на композер.
+      if (data.startsWith('nd:')) return this.handleTaskDone(cq, data.slice(3));
+      if (data.startsWith('nc:')) return this.handleTaskCommentPrompt(cq, data.slice(3));
+      if (data.startsWith('nu:')) return this.handleTaskUndo(cq, data.slice(3));
+      if (data.startsWith('bt:')) return this.handleBrowseCallback(cq);
       return this.deps.composer.handleCallback(cq);
     }
     // Inline-режим (Phase D).
@@ -246,6 +255,173 @@ export class HandleTelegramWebhook {
       chatId,
       `✅ Принято: <i>${escapeHtml(preview)}</i>\n\nЗадача возвращена в работу.`,
     );
+  }
+
+  // --- Инлайн-действия задачных уведомлений (nd/nc/nu) — email-аналог «Завершить/Комментировать»
+  //     прямо в чате, без авторизации и редиректа (TG-аккаунт уже привязан к юзеру). ---
+
+  private async answerNeedsLink(cqId: string): Promise<void> {
+    await this.deps.client.answerCallbackQuery(cqId, {
+      text: 'Сначала привяжи Telegram: в профиле на сайте нажми «Login with Telegram», затем /start.',
+      showAlert: true,
+    });
+  }
+
+  // Общий гейт callback'а: резолв юзера + задача + членство. null → уже ответили alert'ом.
+  private async resolveTaskAction(
+    cq: TelegramCallbackQuery,
+    taskId: string,
+  ): Promise<{ userId: string; task: NonNullable<Awaited<ReturnType<TaskRepository['getById']>>> } | null> {
+    const userId = await this.deps.users.findUserIdByTelegramUserId(cq.from.id);
+    if (!userId) {
+      await this.answerNeedsLink(cq.id);
+      return null;
+    }
+    const task = await this.deps.tasks.getById(taskId);
+    if (!task) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Задача удалена.', showAlert: true });
+      return null;
+    }
+    const membership = await this.deps.members.findForProject(task.projectId, userId);
+    if (!membership) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Нет доступа к задаче.', showAlert: true });
+      return null;
+    }
+    return { userId, task };
+  }
+
+  // Карточка задачи (после «Отменить» / для повторного показа действий).
+  private async renderTaskCard(chatId: number, messageId: number, task: { description: string | null }, taskId: string): Promise<void> {
+    await this.deps.client.editMessageText({
+      chatId,
+      messageId,
+      text: `📌 ${escapeHtml(excerptShort(task.description, 300))}`,
+      parseMode: 'HTML',
+      disableWebPagePreview: true,
+      replyMarkup: taskActionKeyboard(taskId),
+    });
+  }
+
+  // Карточка «завершено» с кнопкой отмены.
+  private async renderCompleted(
+    chatId: number,
+    messageId: number,
+    description: string | null,
+    name: string | null,
+    taskId: string,
+  ): Promise<void> {
+    const who = name ? ` · ${escapeHtml(name)}` : '';
+    await this.deps.client.editMessageText({
+      chatId,
+      messageId,
+      text: `✅ <b>Завершено</b>${who}\n${escapeHtml(excerptShort(description, 300))}`,
+      parseMode: 'HTML',
+      disableWebPagePreview: true,
+      replyMarkup: taskCompletedKeyboard(taskId),
+    });
+  }
+
+  // «✅ Завершить»: помечаем задачу done, перерисовываем сообщение + кнопку «Отменить».
+  private async handleTaskDone(cq: TelegramCallbackQuery, taskId: string): Promise<void> {
+    const chatId = cq.message?.chat.id ?? cq.from.id;
+    const messageId = cq.message?.message_id ?? null;
+    const ctx = await this.resolveTaskAction(cq, taskId);
+    if (!ctx) return;
+    const { userId, task } = ctx;
+    if (task.status === 'done') {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Уже завершена.' });
+      if (messageId !== null) await this.renderCompleted(chatId, messageId, task.description, null, taskId);
+      return;
+    }
+    try {
+      await this.deps.moveTask.execute({
+        projectId: task.projectId,
+        ownerUserId: userId,
+        taskId,
+        targetStatus: 'done',
+        beforeTaskId: null,
+        afterTaskId: null,
+      });
+    } catch (err) {
+      console.warn('[tg-webhook] task complete failed:', err);
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Не удалось завершить.', showAlert: true });
+      return;
+    }
+    await this.deps.client.answerCallbackQuery(cq.id, { text: '✅ Завершено' });
+    const name = (await this.deps.users.getById(userId).catch(() => null))?.displayName ?? null;
+    if (messageId !== null) await this.renderCompleted(chatId, messageId, task.description, name, taskId);
+    this.deps.notifyStatusChanged(task.projectId, taskId, task.status, 'done', userId);
+    this.deps.notifyTaskChanged(task.projectId);
+  }
+
+  // «↩️ Отменить»: возвращаем задачу из done в прежний статус (status_before_done).
+  private async handleTaskUndo(cq: TelegramCallbackQuery, taskId: string): Promise<void> {
+    const chatId = cq.message?.chat.id ?? cq.from.id;
+    const messageId = cq.message?.message_id ?? null;
+    const ctx = await this.resolveTaskAction(cq, taskId);
+    if (!ctx) return;
+    const { userId, task } = ctx;
+    if (task.status !== 'done') {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Уже в работе.' });
+      if (messageId !== null) await this.renderTaskCard(chatId, messageId, task, taskId);
+      return;
+    }
+    const target = task.statusBeforeDone ?? 'todo';
+    try {
+      await this.deps.moveTask.execute({
+        projectId: task.projectId,
+        ownerUserId: userId,
+        taskId,
+        targetStatus: target,
+        beforeTaskId: null,
+        afterTaskId: null,
+        restore: true,
+      });
+    } catch (err) {
+      console.warn('[tg-webhook] task undo failed:', err);
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Не удалось отменить.', showAlert: true });
+      return;
+    }
+    await this.deps.client.answerCallbackQuery(cq.id, { text: '↩️ Возвращено' });
+    if (messageId !== null) await this.renderTaskCard(chatId, messageId, task, taskId);
+    this.deps.notifyStatusChanged(task.projectId, taskId, 'done', target, userId);
+    this.deps.notifyTaskChanged(task.projectId);
+  }
+
+  // «💬 Комментировать»: шлём force-reply приглашение, привязанное к задаче. Ответ юзера
+  // ловит handleReply → handleTaskReplyComment (комментарий + рассылка участникам).
+  private async handleTaskCommentPrompt(cq: TelegramCallbackQuery, taskId: string): Promise<void> {
+    const chatId = cq.message?.chat.id ?? cq.from.id;
+    const ctx = await this.resolveTaskAction(cq, taskId);
+    if (!ctx) return;
+    const { userId, task } = ctx;
+    await this.deps.client.answerCallbackQuery(cq.id);
+    let res;
+    try {
+      res = await this.deps.client.sendMessage({
+        chatId,
+        text: `✍️ Комментарий к «${escapeHtml(excerptShort(task.description, 80))}» — ответьте на это сообщение:`,
+        parseMode: 'HTML',
+        disableWebPagePreview: true,
+        replyMarkup: { force_reply: true, input_field_placeholder: 'Ваш комментарий…' },
+      });
+    } catch (err) {
+      console.warn('[tg-webhook] comment prompt send failed:', err);
+      return;
+    }
+    if (res.kind === 'ok') {
+      try {
+        await this.deps.taskMessages.upsert({
+          tgChatId: chatId,
+          tgMessageId: res.messageId,
+          recipientUserId: userId,
+          taskId,
+          projectId: task.projectId,
+        });
+      } catch (err) {
+        console.warn('[tg-webhook] comment prompt taskMessage upsert failed:', err);
+      }
+    }
   }
 
   private async handleStart(

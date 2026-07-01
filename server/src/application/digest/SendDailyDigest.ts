@@ -126,11 +126,43 @@ export class SendDailyDigest {
           .catch((e) => console.warn('[daily-digest] notification failed', userId, e));
       }
       if (cfg.channels.includes('telegram') && cfg.tgTargets.includes('personal')) {
-        // Несколько сообщений по очереди (длинная сводка не обрезается).
-        for (const chunk of tgChunks) {
+        // Личный TG — как письмо-дайджест: заголовок + карточка на задачу с инлайн-кнопками
+        // «Завершить/Комментировать». Кнопки и reply→комментарий цепляет
+        // SendAgentTelegramNotification по kind='task_digest_item' (+ taskId/projectId).
+        const base = this.deps.appUrl.replace(/\/$/, '');
+        await this.deps.telegram
+          .execute({
+            userId,
+            text: `🗒 <b>Ежедневная сводка · ${escapeDigestHtml(project.name)}</b> — ${selected.length} задач`,
+            parseMode: 'HTML',
+            kind: 'task_digest',
+            skipDedupCheck: true,
+          })
+          .catch((e) => console.warn('[daily-digest] tg personal header failed', userId, e));
+        for (const t of selected.slice(0, TG_DIGEST_ACTION_LIMIT)) {
           await this.deps.telegram
-            .execute({ userId, text: chunk, parseMode: 'HTML', kind: 'task_digest', skipDedupCheck: true })
-            .catch((e) => console.warn('[daily-digest] tg personal failed', userId, e));
+            .execute({
+              userId,
+              text: `📌 ${escapeDigestHtml(digestExcerpt(t.description))}\n<i>${digestStatusLabel(t.status)}</i>`,
+              parseMode: 'HTML',
+              kind: 'task_digest_item',
+              taskId: t.id,
+              projectId,
+              skipDedupCheck: true,
+            })
+            .catch((e) => console.warn('[daily-digest] tg personal card failed', userId, e));
+        }
+        if (selected.length > TG_DIGEST_ACTION_LIMIT) {
+          const rest = selected.length - TG_DIGEST_ACTION_LIMIT;
+          await this.deps.telegram
+            .execute({
+              userId,
+              text: `… ещё ${rest}. <a href="${base}/projects/${projectId}">Открыть в приложении</a>`,
+              parseMode: 'HTML',
+              kind: 'task_digest',
+              skipDedupCheck: true,
+            })
+            .catch((e) => console.warn('[daily-digest] tg personal tail failed', userId, e));
         }
       }
     }
@@ -155,4 +187,45 @@ export class SendDailyDigest {
 
     return { taskCount: selected.length };
   }
+}
+
+// Личный TG-дайджест: сколько задач показать отдельными карточками-действиями (остальное —
+// ссылкой в приложение). Держим в разумных рамках, чтобы не спамить сообщениями.
+const TG_DIGEST_ACTION_LIMIT = 12;
+
+const VISIBLE_STATUS_LABEL: Record<string, string> = {
+  backlog: 'Черновик',
+  manual: 'Вручную',
+  todo: 'Воркер',
+  in_progress: 'В работе',
+  awaiting_clarification: 'На уточнении',
+  done: 'Готово',
+};
+
+function digestStatusLabel(status: TaskStatus): string {
+  const v = toVisibleStatus(status);
+  return VISIBLE_STATUS_LABEL[v] ?? v;
+}
+
+function digestExcerpt(description: string | null): string {
+  const s = (description ?? '').trim().replace(/\s+/g, ' ');
+  if (s.length === 0) return '(без описания)';
+  return s.length <= 300 ? s : s.slice(0, 299).trimEnd() + '…';
+}
+
+function escapeDigestHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => {
+    switch (c) {
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      default:
+        return '&#39;';
+    }
+  });
 }

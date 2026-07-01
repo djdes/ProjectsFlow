@@ -622,11 +622,15 @@ const TG_KIND_TO_PREF = {
   ralph_answer_accepted: 'ralphAnswer',
   server_alert: 'serverAlert',
 } as const;
+// Маппинг task-сообщений бота → задача (db/049). Общий экземпляр: сендеру нужен для
+// reply→комментарий на задачных уведомлениях, конструктору/вебхуку — для тех же reply'ев.
+const telegramTaskMessageRepo = new DrizzleTelegramTaskMessageRepository(db);
 const sendAgentTelegramNotification = new SendAgentTelegramNotification({
   users: userRepo,
   client: telegramClient,
   outbound: telegramOutboundRepo,
   ralphQuestionMessages: telegramRalphQuestionRepo,
+  taskMessages: telegramTaskMessageRepo,
   idGen: idGenerator,
   kindToPref: TG_KIND_TO_PREF,
 });
@@ -660,7 +664,6 @@ const maybeReopenForClarification = new MaybeReopenForClarification({ tasks: tas
 // --- Telegram-конструктор задач (+проект текст @делегат) ---
 // Свои репо для черновиков конструктора (db/048) и маппинга task-сообщений (db/049).
 const telegramTaskDraftRepo = new DrizzleTelegramTaskDraftRepository(db);
-const telegramTaskMessageRepo = new DrizzleTelegramTaskMessageRepository(db);
 // Конструктору нужны те же use-case'ы что и HTTP/agent-роутерам; они собираются инлайн
 // внутри createApp(), а здесь нам нужны собственные экземпляры (use-case'ы stateless —
 // дубль безопасен). Делим только репозитории.
@@ -774,6 +777,14 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   ralphQuestionMessages: telegramRalphQuestionRepo,
   taskMessages: telegramTaskMessageRepo,
   createComment: createTaskCommentUseCase,
+  // Инлайн «Завершить/Отменить» на задачных уведомлениях (nd:/nu: callback).
+  moveTask: new MoveTask({
+    projects: projectRepo,
+    members: projectMemberRepo,
+    tasks: taskRepo,
+    delegations: taskDelegationRepo,
+    activityRecorder,
+  }),
   dispatchCommentNotifications,
   composer: telegramComposer,
   maybeReopenForClarification,

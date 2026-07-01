@@ -80,6 +80,9 @@ export class BroadcastTelegramNotificationByTask {
         parseMode: cmd.parseMode,
         kind: cmd.kind,
         taskId: cmd.taskId,
+        // projectId задачи → авто-действия «Завершить/Комментировать» + reply-комментарий
+        // для задачных kinds (см. TASK_ACTION_KINDS в SendAgentTelegramNotification).
+        projectId: task.projectId,
         replyMarkup: cmd.replyMarkup,
         skipDedupCheck: cmd.skipDedupCheck,
         skipPrefsCheck: !cmd.respectPrefs,

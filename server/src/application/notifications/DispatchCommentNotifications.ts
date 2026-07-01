@@ -140,6 +140,8 @@ export class DispatchCommentNotifications {
           parseMode: 'HTML',
           kind: 'comment_on_my_task',
           taskId: comment.taskId,
+          // projectId → инлайн «Завершить/Комментировать» + reply-комментарий на уведомление.
+          projectId: input.projectId,
         });
         rows.push(this.tgRow(comment.id, m.userId, r));
       } catch (e) {

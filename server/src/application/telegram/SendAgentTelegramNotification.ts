@@ -1,7 +1,9 @@
 import type { TelegramClient } from './TelegramClient.js';
 import type { TelegramOutboundRepository } from './TelegramOutboundRepository.js';
 import type { TelegramRalphQuestionRepository } from './TelegramRalphQuestionRepository.js';
+import type { TelegramTaskMessageRepository } from './TelegramTaskMessageRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
+import { TASK_ACTION_KINDS, taskActionKeyboard } from './taskActionKeyboard.js';
 import {
   resolveTgPref,
   type TelegramNotifKind,
@@ -16,6 +18,9 @@ export type SendAgentNotificationCommand = {
   // не настраиваемый юзером); audit log сохранит как есть.
   readonly kind: string;
   readonly taskId?: string;
+  // Проект задачи — нужен для регистрации reply→комментарий (telegram_task_messages) и
+  // авто-клавиатуры «Завершить/Комментировать». Без него авто-действия не прицепляются.
+  readonly projectId?: string;
   readonly replyMarkup?: unknown;
   // Защита от лавины: если за prev 60с уже было успешное сообщение того же kind+task —
   // skip. Можно отключить если caller сам управляет дедупом.
@@ -50,6 +55,9 @@ type Deps = {
   // если caller не передаёт ralphQuestionId, никаких записей не будет. Тип nullable
   // вместо optional чтобы было ясно при wiring'е что фича есть.
   readonly ralphQuestionMessages: TelegramRalphQuestionRepository;
+  // Маппинг (chat,message)→(task,project) для reply→комментарий (db/049). Пишется при
+  // успешной отправке задачного уведомления (kind ∈ TASK_ACTION_KINDS + projectId).
+  readonly taskMessages: TelegramTaskMessageRepository;
   readonly idGen: () => string;
   // Знакомые kinds мапятся в pref-toggle; остальные шлются без pref-чека.
   readonly kindToPref: Partial<Record<string, TelegramNotifKind>>;
@@ -86,11 +94,20 @@ export class SendAgentTelegramNotification {
       }
     }
 
+    // Задачное уведомление (kind ∈ allowlist + есть task/project) → авто-действия
+    // «Завершить/Комментировать» + reply-комментирование. Явный replyMarkup от caller'а
+    // (например «Принять/Отказать» у делегирования) не перетираем.
+    const taskActions = Boolean(
+      cmd.taskId && cmd.projectId && TASK_ACTION_KINDS.has(cmd.kind),
+    );
+    const replyMarkup =
+      cmd.replyMarkup ?? (taskActions ? taskActionKeyboard(cmd.taskId!) : undefined);
+
     const send = await this.deps.client.sendMessage({
       chatId: link.tgChatId,
       text: cmd.text,
       parseMode: cmd.parseMode ?? 'HTML',
-      replyMarkup: cmd.replyMarkup,
+      replyMarkup,
       disableWebPagePreview: true,
     });
 
@@ -110,6 +127,21 @@ export class SendAgentTelegramNotification {
           });
         } catch (err) {
           console.warn('[tg-notif] ralphQuestionMessage upsert failed:', err);
+        }
+      }
+      // Reply→комментарий на задачное уведомление (db/049). Best-effort: сбой БД не должен
+      // ломать уже успешно отправленное сообщение.
+      if (taskActions && cmd.taskId && cmd.projectId) {
+        try {
+          await this.deps.taskMessages.upsert({
+            tgChatId: link.tgChatId,
+            tgMessageId: send.messageId,
+            recipientUserId: cmd.userId,
+            taskId: cmd.taskId,
+            projectId: cmd.projectId,
+          });
+        } catch (err) {
+          console.warn('[tg-notif] taskMessage upsert failed:', err);
         }
       }
       return { status: 'ok', messageId: send.messageId, chatId: link.tgChatId };
