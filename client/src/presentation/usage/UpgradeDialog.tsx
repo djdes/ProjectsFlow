@@ -13,12 +13,22 @@ import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { HttpError } from '@/lib/HttpError';
 import { PLAN_CATALOG } from '@/domain/usage/PlanCatalog';
-import type { PlanId } from '@/domain/usage/Usage';
+import { isPrimeTrial, type PlanId } from '@/domain/usage/Usage';
 import { useUsage } from './UsageProvider';
-import { planNameRu } from './usageFormat';
+import { planNameRu, subscriptionExpiryNote } from './usageFormat';
 
-// Сравнительная таблица тарифов (à la Notion). Текущий план выделен, кнопка disabled.
-// «Выбрать» → changePlan (реального биллинга пока нет) → applyUsage свежей сводкой.
+// Кумулятивная витрина: Прайм = «Всё из Бесплатного» +, VIP = «Всё из Прайма» +.
+const PREV_NAME: Partial<Record<PlanId, string>> = { prime: 'Бесплатного', vip: 'Прайма' };
+
+type Action = {
+  key: string;
+  label: string;
+  variant: 'default' | 'outline';
+  disabled: boolean;
+  onClick?: () => void;
+};
+
+// Окно «Улучшить план» (из меню аккаунта): текущий план + сравнение всех тарифов + умные кнопки.
 export function UpgradeDialog({
   open,
   onOpenChange,
@@ -28,77 +38,87 @@ export function UpgradeDialog({
 }): React.ReactElement {
   const { changePlan } = useContainer();
   const { usage, applyUsage } = useUsage();
-  // Эффективный план (истёкший prime/vip уже трактуется как free).
-  const currentPlan: PlanId = usage?.plan ?? 'free';
-  const [pending, setPending] = useState<PlanId | null>(null);
+  const [pending, setPending] = useState(false);
 
-  const choose = async (plan: PlanId): Promise<void> => {
-    if (plan === currentPlan || pending) return;
-    setPending(plan);
+  const currentPlan: PlanId = usage?.plan ?? 'free';
+  const trial = usage ? isPrimeTrial(usage) : false;
+  const trialAvailable = usage?.primeTrialAvailable ?? false;
+  const expiryNote = usage ? subscriptionExpiryNote(usage.plan, usage.subscription.expiresAt) : null;
+
+  // Пробный час Прайма — единственное self-serve действие.
+  const activateTrial = async (): Promise<void> => {
+    if (pending) return;
+    setPending(true);
     try {
-      const next = await changePlan.execute(plan);
-      applyUsage(next);
-      toast.success(
-        plan === 'free'
-          ? 'Переключено на Бесплатный'
-          : plan === 'prime'
-            ? 'Прайм активирован на 1 час'
-            : `Тариф изменён: ${planNameRu(plan)}`,
-      );
-      onOpenChange(false);
+      applyUsage(await changePlan.execute('prime'));
+      toast.success('Прайм активирован на 1 час');
     } catch (e) {
-      // 409 (триал использован) / 403 (ВИП по запросу) — показываем серверное сообщение.
-      toast.error(e instanceof HttpError ? (e.body.message ?? 'Не удалось сменить тариф') : 'Не удалось сменить тариф');
+      toast.error(e instanceof HttpError ? (e.body.message ?? 'Не удалось активировать') : 'Не удалось активировать');
     } finally {
-      setPending(null);
+      setPending(false);
     }
   };
 
+  // Полный тариф — по запросу (не self-serve): направляем в поддержку.
+  const requestUpgrade = (plan: PlanId): void => {
+    toast(`Тариф «${planNameRu(plan)}» подключается по запросу — напишите нам в поддержку (кнопка справа снизу).`);
+  };
+
+  function actionsFor(planId: PlanId): Action[] {
+    if (planId === 'free') return []; // у бесплатного кнопки нет вообще
+    if (planId === 'prime') {
+      if (currentPlan === 'vip') return []; // Прайм ниже ВИП — кнопки нет
+      if (currentPlan === 'prime') {
+        return trial
+          ? [
+              { key: 'up', label: 'Улучшить', variant: 'default', disabled: pending, onClick: () => requestUpgrade('prime') },
+              { key: 'trial', label: 'Уже улучшено на 1 час', variant: 'outline', disabled: true },
+            ]
+          : [{ key: 'cur', label: 'Уже улучшено', variant: 'outline', disabled: true }];
+      }
+      const acts: Action[] = [
+        { key: 'up', label: 'Улучшить', variant: 'default', disabled: pending, onClick: () => requestUpgrade('prime') },
+      ];
+      if (trialAvailable) {
+        acts.push({ key: 'trial', label: 'Попробовать 1 час', variant: 'outline', disabled: pending, onClick: () => void activateTrial() });
+      }
+      return acts;
+    }
+    if (currentPlan === 'vip') return [{ key: 'cur', label: 'Уже улучшено', variant: 'outline', disabled: true }];
+    return [{ key: 'up', label: 'Улучшить', variant: 'default', disabled: pending, onClick: () => requestUpgrade('vip') }];
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Выберите план</DialogTitle>
-          <DialogDescription>Оплата подключается позже — план переключится сразу.</DialogDescription>
+          <DialogTitle>Тарифы</DialogTitle>
+          <DialogDescription>
+            Ваш план:{' '}
+            <span className="font-medium text-foreground">{planNameRu(currentPlan)}</span>
+            {trial && ' (пробный час)'}
+            {expiryNote ? ` · ${expiryNote}` : ''}
+          </DialogDescription>
         </DialogHeader>
+
         <div className="grid gap-3 sm:grid-cols-3">
           {PLAN_CATALOG.map((p) => {
             const isCurrent = p.id === currentPlan;
-            const trialAvailable = usage?.primeTrialAvailable ?? false;
-            // Платный план активен (Прайм/ВИП) — на Бесплатный система перейдёт САМА по
-            // истечении срока. Ручной даунгрейд блокируем, чтобы не потерять оплаченное/триал.
-            const paidActive = currentPlan !== 'free';
-            // VIP — только по запросу (не self-serve); Прайм — разовый пробный час;
-            // Бесплатный — заблокирован, пока активен платный план.
-            const locked =
-              !isCurrent &&
-              (p.id === 'vip' ||
-                (p.id === 'prime' && !trialAvailable) ||
-                (p.id === 'free' && paidActive));
-            const label = isCurrent
-              ? 'Текущий план'
-              : p.id === 'vip'
-                ? 'По запросу'
-                : p.id === 'prime'
-                  ? trialAvailable
-                    ? 'Попробовать 1 час'
-                    : 'Триал использован'
-                  : paidActive
-                    ? `${planNameRu(currentPlan)} активен`
-                    : 'Перейти на бесплатный';
+            const actions = actionsFor(p.id);
+            const prev = PREV_NAME[p.id];
             return (
               <div
                 key={p.id}
                 className={cn(
-                  'flex flex-col rounded-lg border p-4',
-                  isCurrent ? 'border-primary ring-2 ring-primary/40' : 'border-border',
+                  'flex flex-col rounded-2xl border p-4 transition-colors',
+                  isCurrent ? 'border-primary bg-primary/[0.03] ring-1 ring-primary/30' : 'border-border bg-card',
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold">{p.nameRu}</span>
                   {isCurrent && (
                     <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-                      Текущий
+                      Ваш план
                     </span>
                   )}
                 </div>
@@ -112,31 +132,33 @@ export function UpgradeDialog({
                     </>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">{p.tagline}</p>
-                <ul className="mt-3 flex-1 space-y-1.5 text-sm">
-                  {p.features.map((f) => (
-                    <li key={f} className="flex gap-2">
+                <p className="mt-1 text-xs leading-snug text-muted-foreground">{p.tagline}</p>
+
+                <ul className="mt-3 flex-1 space-y-1.5 text-[13px]">
+                  {prev && (
+                    <li className="flex gap-2 font-medium text-foreground">
                       <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+                      <span>Всё из «{prev}»</span>
+                    </li>
+                  )}
+                  {p.features.map((f) => (
+                    <li key={f} className="flex gap-2 text-muted-foreground">
+                      <Check className="mt-0.5 size-4 shrink-0 text-primary/70" />
                       <span>{f}</span>
                     </li>
                   ))}
                 </ul>
-                <Button
-                  className="mt-4 w-full"
-                  variant={!isCurrent && p.id === 'prime' && trialAvailable ? 'default' : 'outline'}
-                  disabled={isCurrent || locked || pending !== null}
-                  onClick={() => void choose(p.id)}
-                  title={
-                    p.id === 'vip' && !isCurrent
-                      ? 'Подключается по запросу через поддержку'
-                      : p.id === 'free' && paidActive
-                        ? `${planNameRu(currentPlan)} активен — на Бесплатный переключится автоматически по истечении срока`
-                        : undefined
-                  }
-                >
-                  {pending === p.id && <Loader2 className="size-4 animate-spin" />}
-                  {label}
-                </Button>
+
+                {actions.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {actions.map((a) => (
+                      <Button key={a.key} className="w-full" variant={a.variant} disabled={a.disabled} onClick={a.onClick}>
+                        {pending && a.key === 'trial' && a.onClick && <Loader2 className="size-4 animate-spin" />}
+                        {a.label}
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}

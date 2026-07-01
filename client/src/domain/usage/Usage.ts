@@ -37,6 +37,15 @@ export function isFree(plan: PlanId): boolean {
   return plan === 'free';
 }
 
+// Прайм на пробном часе (1ч) vs полный (админ-грант, 30д). Различаем по длине окна подписки:
+// триал ≤ 2ч, полный — намного дольше. Для лейблов/кнопок в UI.
+const PRIME_TRIAL_MAX_MS = 2 * 60 * 60 * 1000;
+export function isPrimeTrial(u: UsageSummary): boolean {
+  const s = u.subscription;
+  if (u.plan !== 'prime' || !s.startedAt || !s.expiresAt) return false;
+  return s.expiresAt.getTime() - s.startedAt.getTime() <= PRIME_TRIAL_MAX_MS;
+}
+
 // % использования окна (0..100). cap null/0 → 0 (без лимита — без шкалы).
 export function windowPercentUsed(w: UsageWindow): number {
   if (w.capUsd == null || w.capUsd <= 0) return 0;
