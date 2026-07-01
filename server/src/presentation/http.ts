@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Express, type Request } from 'express';
 import cookieParser from 'cookie-parser';
@@ -926,6 +926,24 @@ export function createApp(deps: AppDeps): CreatedApp {
     else if (hasClient) res.sendFile(resolve(clientDist, 'index.html'));
     else res.status(503).send('Frontend not available');
   });
+
+  // Многостраничный лендинг (Astro): любой НЕ-`/` путь, у которого есть собранная
+  // статическая страница (Astro кладёт `<путь>/index.html`), отдаём как ПУБЛИЧНУЮ статику
+  // ДО SPA-fallback. Так /blog и /blog/:slug открываются без авторизации, а не улетают
+  // в SPA → ProtectedRoute → /login. (express.static с index:false не отдаёт index каталога.)
+  if (hasLanding) {
+    app.get('*', (req, res, next) => {
+      const rel = req.path.replace(/^\/+/, '').replace(/\/+$/, '');
+      if (!rel) return next();
+      const file = resolve(landingDist, rel, 'index.html');
+      // Защита от path-traversal: не выходим за пределы landingDist.
+      if (file.startsWith(landingDist + sep) && existsSync(file)) {
+        res.sendFile(file);
+        return;
+      }
+      next();
+    });
+  }
 
   app.get('*', (req, res, next) => {
     if (isDev && viteProxy) {

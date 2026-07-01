@@ -132,11 +132,16 @@ section[id] {
 }
 
 .pf-btn--primary {
-  background: var(--grad-accent);
-  color: var(--accent-ink);
-  box-shadow: 0 0 0 1px var(--accent-line), 0 10px 32px -10px var(--accent-glow);
+  /* Вертикальный градиент (светлее сверху → глубже снизу) + белый текст + внутренний
+     блик = аккуратная «объёмная» кнопка вместо тёмного текста на кислотном циане. */
+  background: linear-gradient(180deg, #1aacd0 0%, #0883a8 100%);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 1px 2px rgba(11, 18, 32, 0.12),
+    0 8px 22px -10px var(--accent-glow);
 }
-.pf-btn--primary:hover { filter: brightness(1.08); }
+.pf-btn--primary:hover { filter: brightness(1.05); }
 
 .pf-btn--ghost {
   background: transparent;
@@ -359,11 +364,12 @@ section[id] {
 @media (prefers-reduced-motion: no-preference) {
   .kb2__card:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
 }
-.kb2__card.is-dragging { opacity: 0.3; }
-/* Левый кант приоритета (2px), как в app (rose/orange/blue). */
-.kb2__card--p-high { border-left: 2px solid #f43f5e; }
-.kb2__card--p-medium { border-left: 2px solid #f97316; }
-.kb2__card--p-low { border-left: 2px solid #3b82f6; }
+.kb2__card.is-dragging { opacity: 0.4; }
+/* Левый кант приоритета (2px), как в app: 1 Срочно / 2 Высокий / 3 Средний / 4 Низкий. */
+.kb2__card--p1 { border-left: 2px solid #f43f5e; }
+.kb2__card--p2 { border-left: 2px solid #f97316; }
+.kb2__card--p3 { border-left: 2px solid #3b82f6; }
+.kb2__card--p4 { border-left: 2px solid #94a3b8; }
 /* Карточка в «Воркере» — тонкий янтарный ring «ждёт воркера». */
 .kb2__card--todo { box-shadow: var(--shadow-sm), 0 0 0 1px rgba(251, 191, 36, 0.45); }
 /* Готово — мягкая зелёная заливка + зелёная граница. */
@@ -421,18 +427,12 @@ section[id] {
   .kb2__live { animation: pf-dot-pulse 1.4s var(--ease) infinite; }
 }
 
-/* Плавающий «призрак» при перетаскивании — с лёгким наклоном (как DragOverlay в app). */
-.kb2__ghost {
-  position: fixed;
-  z-index: 60;
-  width: 168px;
-  padding: 7px 9px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  box-shadow: var(--shadow-lg);
-  pointer-events: none;
-  transform: rotate(2deg) scale(1.04);
+/* Карточка в @dnd-kit DragOverlay — «поднята»: наклон + масштаб + сильная тень (как в app). */
+.kb2__card--overlay {
+  cursor: grabbing;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-line), var(--shadow-lg);
+  transform: rotate(2deg) scale(1.03);
 }
 
 /* --- Auth-aware видимость --------------------------------------------------- */
