@@ -1,17 +1,21 @@
+import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
-import { ImageIcon } from 'lucide-react';
+import { ImageIcon, Trash2, X } from 'lucide-react';
 
-// NodeView блок-картинки (без подписи). Два состояния:
+// NodeView блок-картинки (без подписи). Состояния:
 //  • uploading → плейсхолдер: иконка картинки + горизонтальный прогресс-бар (progress 0..100).
-//  • загружено → сама картинка.
-// Отступ сверху/снизу симметричный и небольшой (my-2), в ритме абзацев.
-export function FigureImageView({ node }: NodeViewProps): React.ReactElement {
+//  • загружено → картинка. Клик по картинке → лайтбокс на весь экран; на hover — кнопка удаления.
+// Картинка выровнена по ЛЕВОМУ краю (items-start), чтобы drag-ручка «6 точек» слева
+// вставала ровно к её краю. Отступ сверху/снизу симметричный и небольшой (my-2).
+export function FigureImageView({ node, deleteNode }: NodeViewProps): React.ReactElement {
   const uploading = node.attrs.uploading as boolean;
   const progress = Math.min(100, Math.max(0, (node.attrs.progress as number) ?? 0));
   const src = (node.attrs.src as string) ?? '';
+  const [lightbox, setLightbox] = React.useState(false);
 
   return (
-    <NodeViewWrapper data-figure-image="" className="my-2 flex flex-col items-center">
+    <NodeViewWrapper data-figure-image="" className="my-2 flex flex-col items-start">
       {uploading ? (
         <div
           className="flex w-full flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-muted/30 px-6 py-10"
@@ -26,14 +30,55 @@ export function FigureImageView({ node }: NodeViewProps): React.ReactElement {
           </div>
         </div>
       ) : (
-        <img
-          src={src}
-          alt=""
-          draggable={false}
-          contentEditable={false}
-          className="max-h-[70vh] max-w-full rounded-xl border border-border object-contain"
-        />
+        <div className="group/img relative inline-block max-w-full" contentEditable={false}>
+          <img
+            src={src}
+            alt=""
+            draggable={false}
+            onClick={() => setLightbox(true)}
+            className="max-h-[70vh] max-w-full cursor-zoom-in rounded-xl border border-border object-contain"
+          />
+          <button
+            type="button"
+            aria-label="Удалить картинку"
+            title="Удалить"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              deleteNode();
+            }}
+            className="absolute right-2 top-2 hidden size-7 items-center justify-center rounded-md bg-background/85 text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur-sm transition-colors hover:bg-background hover:text-destructive group-hover/img:flex"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
       )}
+
+      {lightbox &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+            onClick={() => setLightbox(false)}
+            role="dialog"
+            aria-modal="true"
+          >
+            <img
+              src={src}
+              alt=""
+              className="max-h-[90vh] max-w-[92vw] object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              type="button"
+              aria-label="Закрыть"
+              onClick={() => setLightbox(false)}
+              className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+            >
+              <X className="size-5" />
+            </button>
+          </div>,
+          document.body,
+        )}
     </NodeViewWrapper>
   );
 }
