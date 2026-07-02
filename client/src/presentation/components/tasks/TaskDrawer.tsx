@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, Clock, CornerDownRight, Download, FileText, Flag, GripVertical, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Reply, Send, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, Clock, CornerDownRight, Download, FileText, Flag, GripVertical, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -678,6 +678,12 @@ export function TaskDrawer({
   // Срок и приоритет для create-mode (применимо к любому проекту).
   const [createDeadline, setCreateDeadline] = useState<string | null>(null);
   const [createPriority, setCreatePriority] = useState<TaskPriority | null>(null);
+  // Черновик create-формы для кнопки «Восстановить»: снимок прошлого закрытия/reload + флаг
+  // показа кнопки. restoreArmed — защита, чтобы только что открытая ПУСТАЯ форма не затёрла
+  // сохранённый черновик (сохранение идёт на каждое изменение полей).
+  const createStashRef = useRef<CreateDraft | null>(null);
+  const restoreArmedRef = useRef(false);
+  const [showRestore, setShowRestore] = useState(false);
   // Единый флаг перетаскивания файла из ОС на окно (create И edit). Большой оверлей
   // «Перетащите сюда файл» рендерится на уровне видимой коробки окна (см. DrawerShell),
   // поэтому покрывает ровно то, что юзер видит, при любом размере/скролле.
@@ -975,13 +981,17 @@ export function TaskDrawer({
       setCreateDeadline(null);
       setCreatePriority(null);
     } else {
-      // create: восстанавливаем черновик (переживает reload), иначе — пустая форма.
+      // create: НЕ авто-подставляем прошлый черновик — открываем ПУСТЫМ и предлагаем кнопку
+      // «Восстановить» (она появляется, только если черновик остался = задачу не создали).
       const draft = readCreateDraft(createDraftKey);
-      setDescription(draft?.description ?? '');
-      setCreateRalphMode(draft?.ralphMode ?? 'normal');
-      setCreateDelegateUserId(draft?.delegateUserId ?? null);
-      setCreateDeadline(draft?.deadline ?? null);
-      setCreatePriority(draft?.priority ?? null);
+      createStashRef.current = draft;
+      restoreArmedRef.current = draft !== null; // защита: пустая форма не затрёт черновик
+      setShowRestore(draft !== null);
+      setDescription('');
+      setCreateRalphMode('normal');
+      setCreateDelegateUserId(null);
+      setCreateDeadline(null);
+      setCreatePriority(null);
     }
     setError(null);
     // activeTab НЕ сбрасываем — он запоминается (localStorage), чтобы ре-рендер
@@ -1002,6 +1012,20 @@ export function TaskDrawer({
   // страницы введённое не пропало. На пустой форме черновик удаляется (см. writeCreateDraft).
   useEffect(() => {
     if (state?.mode !== 'create') return;
+    // Пока показываем «Восстановить» и форму ещё не трогали — НЕ перезаписываем сохранённый
+    // черновик пустыми полями. Как только пользователь начал печатать «с нуля» — снимаем
+    // защиту и прячем кнопку (новый ввод становится черновиком).
+    if (restoreArmedRef.current) {
+      const untouched =
+        description.trim() === '' &&
+        createDeadline === null &&
+        createPriority === null &&
+        createDelegateUserId === null &&
+        createRalphMode === 'normal';
+      if (untouched) return;
+      restoreArmedRef.current = false;
+      setShowRestore(false);
+    }
     writeCreateDraft(createDraftKey, {
       description,
       ralphMode: createRalphMode,
@@ -1019,10 +1043,25 @@ export function TaskDrawer({
     createDraftKey,
   ]);
 
+  // «Восстановить»: возвращаем прошлый черновик create-формы (текст, дедлайн, приоритет,
+  // режим, делегат). Файлы/inline-картинки в персистентный черновик не входят.
+  const handleRestoreCreateDraft = (): void => {
+    const d = createStashRef.current;
+    if (!d) return;
+    setDescription(d.description);
+    setCreateRalphMode(d.ralphMode);
+    setCreateDelegateUserId(d.delegateUserId);
+    setCreateDeadline(d.deadline);
+    setCreatePriority(d.priority);
+    restoreArmedRef.current = false;
+    setShowRestore(false);
+  };
+
   // Закрытие окна: в create-режиме явный «крестик»/клик-вне сбрасывает черновик
   // (перезагрузка — нет: она не вызывает onClose). Затем — обычное закрытие.
   const handleClose = useCallback((): void => {
-    if (state?.mode === 'create') clearCreateDraft(createDraftKey);
+    // create: черновик НЕ стираем на закрытии — он нужен для кнопки «Восстановить» при
+    // следующем открытии (чистится только на успешном создании задачи, см. handleSubmit).
     // Явное закрытие — сбрасываем сохранённый скролл, чтобы следующее открытие этой
     // задачи стартовало сверху (перезагрузка onClose не вызывает → скролл сохраняется).
     if (state?.mode === 'edit' && editTaskId) {
@@ -1033,7 +1072,7 @@ export function TaskDrawer({
       }
     }
     onClose();
-  }, [state?.mode, createDraftKey, editTaskId, onClose]);
+  }, [state?.mode, editTaskId, onClose]);
 
   const addPendingFiles = (raw: FileList | File[]): void => {
     const valid = Array.from(raw);
@@ -1928,6 +1967,22 @@ export function TaskDrawer({
                     {projectName ? `${projectName} · ` : ''}Новая задача
                   </span>
                 </div>
+
+                {/* «Восстановить» — если осталась незавершённая задача с прошлого закрытия
+                    (текст, дедлайн, приоритет, режим, ответственный). Пропадает после создания. */}
+                {showRestore && (
+                  <div className="px-4 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleRestoreCreateDraft}
+                      className="flex w-full items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+                      title="Вернуть прошлую незавершённую задачу со всеми параметрами"
+                    >
+                      <RotateCcw className="size-3.5 shrink-0" />
+                      Восстановить прошлую задачу
+                    </button>
+                  </div>
+                )}
 
                 {/* Заголовок и описание — ОДНИМ полем сверху (1-я строка = заголовок). */}
                 <div ref={createBodyContainerRef} className="px-4 pb-1 pt-0">
