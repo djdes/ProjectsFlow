@@ -132,9 +132,12 @@ export function AppShell(): React.ReactElement {
     <UsageProvider>
       <GithubConnectionProvider>
         <NewProjectDialogProvider>
-        <AddTaskDialogProvider>
         <UpgradeDialogProvider>
         <UsageDialogProvider>
+        {/* AddTaskDialogProvider ВНУТРИ Upgrade/UsageDialog: он монтирует <AddTaskDialog> с
+            композером, а тот через useAiBlocked зовёт useUsageDialog + useUpgradeDialog.
+            Снаружи этих провайдеров «Добавить задачу» падало «must be used inside …». */}
+        <AddTaskDialogProvider>
         <GlobalSearchProvider>
         {isDesktop ? (
           <div
@@ -219,9 +222,9 @@ export function AppShell(): React.ReactElement {
         {/* Висящий баннер при низком/исчерпанном лимите — снизу по центру, клик → окно usage. */}
         <UsageBanner />
         </GlobalSearchProvider>
+        </AddTaskDialogProvider>
         </UsageDialogProvider>
         </UpgradeDialogProvider>
-        </AddTaskDialogProvider>
         </NewProjectDialogProvider>
       </GithubConnectionProvider>
     </UsageProvider>
