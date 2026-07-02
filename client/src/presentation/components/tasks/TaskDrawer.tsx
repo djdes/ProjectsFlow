@@ -341,6 +341,12 @@ function DrawerShell({
         // фокусит контент → у левого (единственного видимого) края мелькает чёрный outline.
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
+        // Клик/фокус внутри лайтбокса картинки (портал в body) не закрывает дровер.
+        onInteractOutside={(e) => {
+          const orig = (e.detail as { originalEvent?: Event } | undefined)?.originalEvent;
+          const target = (orig?.target ?? null) as Element | null;
+          if (target?.closest?.('[data-figure-lightbox]')) e.preventDefault();
+        }}
         {...dragHandlers}
       >
         {dragOverlay}

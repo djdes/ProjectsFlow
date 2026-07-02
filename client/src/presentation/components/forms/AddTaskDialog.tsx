@@ -352,6 +352,14 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
           e.preventDefault();
           window.setTimeout(() => editorRef.current?.focusEnd(), 80);
         }}
+        // Клик/фокус/Escape внутри лайтбокса картинки (портал в body — формально «снаружи»
+        // диалога) НЕ должны закрывать окно создания задачи. Отменяем закрытие, если
+        // взаимодействие пришло из лайтбокса; сам лайтбокс закроется своим обработчиком.
+        onInteractOutside={(e) => {
+          const orig = (e.detail as { originalEvent?: Event } | undefined)?.originalEvent;
+          const target = (orig?.target ?? null) as Element | null;
+          if (target?.closest?.('[data-figure-lightbox]')) e.preventDefault();
+        }}
       >
         <DialogHeader>
           <DialogTitle>Новая задача</DialogTitle>
