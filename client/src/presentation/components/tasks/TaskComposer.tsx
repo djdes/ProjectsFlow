@@ -323,7 +323,7 @@ export function TaskComposer({
       disabled={!canSubmit}
       title="Отправить (Ctrl+Enter)"
       aria-label="Отправить"
-      className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 active:scale-[0.97] disabled:bg-muted disabled:text-muted-foreground/50 disabled:active:scale-100"
+      className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 active:scale-[0.97] disabled:bg-muted disabled:text-muted-foreground/50 disabled:shadow-none disabled:active:scale-100"
     >
       {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
     </button>
