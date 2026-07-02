@@ -114,31 +114,47 @@ export function useNotificationActions(opts?: {
   };
 
   const handleResolveJoin = (n: Notification, accept: boolean): void => {
-    if (n.payload.type !== 'join_request') return;
+    if (n.payload.type !== 'join_request' || delegationUi[n.id]) return;
     const { joinRequestId } = n.payload;
+    setDelegationUi((s) => ({ ...s, [n.id]: 'busy' }));
     void (async () => {
       try {
         await projectRepository.resolveJoinRequest(joinRequestId, accept);
+        setDelegationUi((s) => ({ ...s, [n.id]: accept ? 'accepted' : 'declined' }));
         await markRead(n);
         toast.success(accept ? 'Доступ предоставлен' : 'Запрос отклонён');
       } catch (e) {
+        setDelegationUi((s) => {
+          const next = { ...s };
+          delete next[n.id];
+          return next;
+        });
         toast.error(`Не удалось: ${(e as Error).message}`);
       }
     })();
   };
 
   const handleAcceptInvite = (n: Notification): void => {
-    if (n.payload.type !== 'project_invite') return;
+    if (n.payload.type !== 'project_invite' || delegationUi[n.id]) return;
     const { token, projectId, projectName } = n.payload;
+    setDelegationUi((s) => ({ ...s, [n.id]: 'busy' }));
     void (async () => {
       try {
         await inviteRepository.accept(token);
+        // Помечаем принятым сразу — кнопка «Принять» в строке сменяется на «✓ Принято»
+        // (иначе уведомление оставалось «как действие» даже после принятия).
+        setDelegationUi((s) => ({ ...s, [n.id]: 'accepted' }));
         await markRead(n);
         const project = await projectRepository.getById(projectId).catch(() => null);
         if (project) applyAppend(project);
         toast.success(`Вы присоединились к «${projectName}»`);
         navigate(`/projects/${projectId}`);
       } catch (e) {
+        setDelegationUi((s) => {
+          const next = { ...s };
+          delete next[n.id];
+          return next;
+        });
         toast.error(`Не удалось принять приглашение: ${(e as Error).message}`);
       }
     })();

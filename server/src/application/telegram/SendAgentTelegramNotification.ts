@@ -3,7 +3,8 @@ import type { TelegramOutboundRepository } from './TelegramOutboundRepository.js
 import type { TelegramRalphQuestionRepository } from './TelegramRalphQuestionRepository.js';
 import type { TelegramTaskMessageRepository } from './TelegramTaskMessageRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
-import { TASK_ACTION_KINDS, taskActionKeyboard } from './taskActionKeyboard.js';
+import type { TaskRepository } from '../task/TaskRepository.js';
+import { TASK_ACTION_KINDS, taskActionKeyboard, taskViewKeyboard } from './taskActionKeyboard.js';
 import {
   resolveTgPref,
   type TelegramNotifKind,
@@ -58,6 +59,8 @@ type Deps = {
   // Маппинг (chat,message)→(task,project) для reply→комментарий (db/049). Пишется при
   // успешной отправке задачного уведомления (kind ∈ TASK_ACTION_KINDS + projectId).
   readonly taskMessages: TelegramTaskMessageRepository;
+  // Для задачных уведомлений: если задача уже done — вместо «Завершить» показываем «Посмотреть».
+  readonly tasks: TaskRepository;
   readonly idGen: () => string;
   // Знакомые kinds мапятся в pref-toggle; остальные шлются без pref-чека.
   readonly kindToPref: Partial<Record<string, TelegramNotifKind>>;
@@ -100,8 +103,20 @@ export class SendAgentTelegramNotification {
     const taskActions = Boolean(
       cmd.taskId && cmd.projectId && TASK_ACTION_KINDS.has(cmd.kind),
     );
-    const replyMarkup =
-      cmd.replyMarkup ?? (taskActions ? taskActionKeyboard(cmd.taskId!) : undefined);
+    let autoKeyboard: unknown = undefined;
+    if (taskActions && !cmd.replyMarkup) {
+      // Уже завершённую задачу (напр. уведомление «статус → Готово») незачем «Завершать» —
+      // показываем «Посмотреть». Сбой чтения статуса не критичен → обычные действия.
+      let done = false;
+      try {
+        const t = await this.deps.tasks.getById(cmd.taskId!);
+        done = t?.status === 'done';
+      } catch {
+        done = false;
+      }
+      autoKeyboard = done ? taskViewKeyboard(cmd.taskId!) : taskActionKeyboard(cmd.taskId!);
+    }
+    const replyMarkup = cmd.replyMarkup ?? autoKeyboard;
 
     const send = await this.deps.client.sendMessage({
       chatId: link.tgChatId,

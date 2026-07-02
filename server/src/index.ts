@@ -631,6 +631,7 @@ const sendAgentTelegramNotification = new SendAgentTelegramNotification({
   outbound: telegramOutboundRepo,
   ralphQuestionMessages: telegramRalphQuestionRepo,
   taskMessages: telegramTaskMessageRepo,
+  tasks: taskRepo,
   idGen: idGenerator,
   kindToPref: TG_KIND_TO_PREF,
 });

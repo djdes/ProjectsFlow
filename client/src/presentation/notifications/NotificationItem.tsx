@@ -32,11 +32,10 @@ export function NotificationItem({
         isUnread ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/40',
       )}
     >
-      <span
-        className={cn('mt-1.5 size-1.5 shrink-0 rounded-full', isUnread ? 'bg-primary' : 'bg-transparent')}
-        aria-hidden
-      />
-      <Avatar className="size-6 shrink-0">
+      {/* Непрочитанное подсвечивается фоном строки (bg-primary/5) — отдельная точка убрана,
+          чтобы текст занимал максимум ширины (особенно в узком мобильном drawer). Аватар size-5,
+          как иконка у ActivityItem, — ряд выровнен и текст шире. */}
+      <Avatar className="mt-0.5 size-5 shrink-0">
         <AvatarFallback className="text-[10px]">
           {getInitials(
             payload.type === 'server_alert'
@@ -86,17 +85,22 @@ export function NotificationItem({
               <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> приглашает вас в{' '}
               <span className="font-medium">«{payload.projectName}»</span> как {roleLabel[payload.role]}
             </p>
-            <div className="pt-1">
-              <Button
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  actions.handleAcceptInvite(n);
-                }}
-              >
-                Принять
-              </Button>
-            </div>
+            {delegationUi === 'accepted' ? (
+              <p className="pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">✓ Принято</p>
+            ) : (
+              <div className="pt-1">
+                <Button
+                  size="sm"
+                  disabled={delegationUi === 'busy'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    actions.handleAcceptInvite(n);
+                  }}
+                >
+                  Принять
+                </Button>
+              </div>
+            )}
           </>
         )}
 
@@ -218,27 +222,35 @@ export function NotificationItem({
               <span className="font-medium">{payload.requesterDisplayName ?? 'Пользователь'}</span> просит доступ к
               проекту <span className="font-medium">«{payload.projectName}»</span>
             </p>
-            <div className="flex gap-2 pt-1">
-              <Button
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  actions.handleResolveJoin(n, true);
-                }}
-              >
-                Принять
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  actions.handleResolveJoin(n, false);
-                }}
-              >
-                Отклонить
-              </Button>
-            </div>
+            {delegationUi === 'accepted' ? (
+              <p className="pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">✓ Доступ предоставлен</p>
+            ) : delegationUi === 'declined' ? (
+              <p className="pt-1 text-xs text-muted-foreground">Запрос отклонён</p>
+            ) : (
+              <div className="flex gap-2 pt-1">
+                <Button
+                  size="sm"
+                  disabled={delegationUi === 'busy'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    actions.handleResolveJoin(n, true);
+                  }}
+                >
+                  Принять
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={delegationUi === 'busy'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    actions.handleResolveJoin(n, false);
+                  }}
+                >
+                  Отклонить
+                </Button>
+              </div>
+            )}
           </>
         )}
 

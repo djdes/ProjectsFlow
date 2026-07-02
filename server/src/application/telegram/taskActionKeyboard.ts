@@ -33,3 +33,17 @@ export function taskCompletedKeyboard(taskId: string): InlineKeyboardMarkup {
     inline_keyboard: [[{ text: '↩️ Отменить', callback_data: `nu:${taskId}` }]],
   };
 }
+
+// Клавиатура для задачи, которая УЖЕ завершена на момент уведомления (напр. статус сменился
+// на «Готово»): «Завершить» бессмысленно → показываем «Посмотреть» (bt:t: — тот же browse-роут,
+// что и в композере). «Комментировать» остаётся.
+export function taskViewKeyboard(taskId: string): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: '👁 Посмотреть', callback_data: `bt:t:${taskId}` },
+        { text: '💬 Комментировать', callback_data: `nc:${taskId}` },
+      ],
+    ],
+  };
+}

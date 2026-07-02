@@ -199,7 +199,7 @@ export function AppShell(): React.ReactElement {
             </main>
             <MobileBottomNav onOpenProjects={() => setDrawerOpen(true)} />
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-              <SheetContent side="left" showClose={false} className="w-72 p-0">
+              <SheetContent side="left" showClose={false} className="w-[88vw] max-w-sm p-0">
                 <div className="h-full">
                   <Sidebar />
                 </div>
