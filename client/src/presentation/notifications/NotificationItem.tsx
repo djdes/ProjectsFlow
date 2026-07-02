@@ -87,6 +87,8 @@ export function NotificationItem({
             </p>
             {delegationUi === 'accepted' ? (
               <p className="pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">✓ Принято</p>
+            ) : delegationUi === 'resolved' ? (
+              <p className="pt-1 text-xs text-muted-foreground">Уже обработано</p>
             ) : (
               <div className="pt-1">
                 <Button

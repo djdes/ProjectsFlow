@@ -150,6 +150,15 @@ export function useNotificationActions(opts?: {
         toast.success(`Вы присоединились к «${projectName}»`);
         navigate(`/projects/${projectId}`);
       } catch (e) {
+        // Инвайт уже использован/недействителен (410 invite_used / 409) → принимать нечего:
+        // гасим уведомление (mark read + «Уже обработано»), чтобы оно не висело неактивным
+        // действием и не раздувало счётчик. Прочие ошибки (сеть и т.п.) — оставляем кнопку.
+        if (e instanceof HttpError && (e.status === 410 || e.status === 409)) {
+          setDelegationUi((s) => ({ ...s, [n.id]: 'resolved' }));
+          await markRead(n);
+          toast.success('Приглашение уже использовано — убрал из действий');
+          return;
+        }
         setDelegationUi((s) => {
           const next = { ...s };
           delete next[n.id];
