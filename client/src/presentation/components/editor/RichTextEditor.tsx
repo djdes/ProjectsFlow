@@ -105,6 +105,18 @@ export interface RichTextEditorHandle {
   focusEnd: () => void;
 }
 
+// Собрать src всех загруженных inline-картинок (figureImage) в документе — для детекта
+// удаления ноды пользователем (сравнение прошлого/текущего набора в onUpdate).
+function collectImageSrcs(editor: Editor): Set<string> {
+  const srcs = new Set<string>();
+  editor.state.doc.descendants((node) => {
+    if (node.type.name === 'figureImage' && typeof node.attrs.src === 'string' && node.attrs.src) {
+      srcs.add(node.attrs.src);
+    }
+  });
+  return srcs;
+}
+
 export interface RichTextEditorProps {
   /** Markdown-строка (хранение неизменно — backend/mock получают markdown). */
   value: string;
@@ -137,6 +149,12 @@ export interface RichTextEditorProps {
    * не задан — картинки идут прежним путём через onPasteFiles.
    */
   onUploadImage?: (file: File, onProgress: (pct: number) => void) => Promise<string | null>;
+  /**
+   * Inline-картинку убрали из редактора (backspace/delete по figureImage-ноде) — приходит
+   * src убранной ноды. В edit-режиме картинка уже загружена как вложение, поэтому родитель
+   * может удалить соответствующий attachment по url.
+   */
+  onImageRemoved?: (src: string) => void;
 }
 
 // Notion-style WYSIWYG: форматирование видно при наборе (без сырых `**`/`#`),
@@ -163,6 +181,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       members,
       onPasteFiles,
       onUploadImage,
+      onImageRemoved,
     },
     ref,
   ): React.ReactElement {
@@ -172,12 +191,16 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
   const onBlurRef = React.useRef(onBlur);
   const onPasteFilesRef = React.useRef(onPasteFiles);
   const onUploadImageRef = React.useRef(onUploadImage);
+  const onImageRemovedRef = React.useRef(onImageRemoved);
+  // Набор src уже загруженных inline-картинок в документе — база для детекта удаления ноды.
+  const prevImageSrcsRef = React.useRef<Set<string>>(new Set());
   React.useEffect(() => {
     onChangeRef.current = onChange;
     onSubmitRef.current = onSubmit;
     onBlurRef.current = onBlur;
     onPasteFilesRef.current = onPasteFiles;
     onUploadImageRef.current = onUploadImage;
+    onImageRemovedRef.current = onImageRemoved;
   });
 
   // Плавающее меню форматирования (по выделению И по правому клику). Якорь в
@@ -296,6 +319,15 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
     },
     onUpdate: ({ editor: e }) => {
       if (e.isDestroyed) return;
+      // Детект удаления inline-картинки: src, которые были в документе и пропали → onImageRemoved
+      // (родитель уберёт вложение). База обновляется тут же и при внешней замене контента.
+      const cur = collectImageSrcs(e);
+      if (onImageRemovedRef.current) {
+        for (const src of prevImageSrcsRef.current) {
+          if (!cur.has(src)) onImageRemovedRef.current(src);
+        }
+      }
+      prevImageSrcsRef.current = cur;
       onChangeRef.current(e.getMarkdown());
     },
     onBlur: ({ editor: e }) => {
@@ -316,6 +348,8 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
   // Держим ref на editor актуальным для handleDOMEvents (создаётся раньше editor).
   React.useEffect(() => {
     editorRef.current = editor;
+    // База для детекта удаления картинок — по начальному содержимому редактора.
+    if (editor && !editor.isDestroyed) prevImageSrcsRef.current = collectImageSrcs(editor);
   }, [editor]);
 
   // Императивный API для родителя (кнопка «+ Подзадача» и т.п.). Читает editor через
@@ -391,6 +425,9 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
     if (!editor || editor.isDestroyed) return;
     if (value !== editor.getMarkdown()) {
       editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
+      // Внешняя замена контента (AI-переработка / сброс формы) — обновляем базу картинок БЕЗ
+      // onImageRemoved, чтобы переработка описания не удаляла вложения.
+      prevImageSrcsRef.current = collectImageSrcs(editor);
     }
   }, [value, editor]);
 

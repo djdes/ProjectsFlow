@@ -23,15 +23,24 @@ export function AttachmentLightbox({
             <X className="size-4" />
           </Button>
         </div>
-        <div className="grid place-items-center overflow-auto bg-muted/30 p-2 sm:p-4">
+        {/* Клик по тёмной области вокруг картинки закрывает превью (как крестик). Клик по самой
+            картинке/карточке файла — НЕ закрывает (stopPropagation), чтобы можно было рассмотреть. */}
+        <div
+          className="grid cursor-zoom-out place-items-center overflow-auto bg-muted/30 p-2 sm:p-4"
+          onClick={onClose}
+        >
           {attachment && image ? (
             <img
               src={attachment.url}
               alt={attachment.filename}
-              className="max-h-[75dvh] max-w-full object-contain"
+              className="max-h-[75dvh] max-w-full cursor-default object-contain"
+              onClick={(e) => e.stopPropagation()}
             />
           ) : attachment ? (
-            <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <div
+              className="flex cursor-default flex-col items-center gap-3 py-10 text-center"
+              onClick={(e) => e.stopPropagation()}
+            >
               <FileText className="size-12 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">{formatBytes(attachment.sizeBytes)}</p>
               <Button asChild variant="outline" size="sm">

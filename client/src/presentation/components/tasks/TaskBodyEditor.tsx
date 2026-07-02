@@ -34,6 +34,8 @@ type Props = {
   onPasteFiles?: (files: File[]) => void;
   // Загрузка вставленной картинки как inline-блок (вернуть URL вложения / null при ошибке).
   onUploadImage?: (file: File, onProgress: (pct: number) => void) => Promise<string | null>;
+  // Inline-картинку убрали из редактора → родитель уберёт соответствующее вложение (edit-режим).
+  onImageRemoved?: (src: string) => void;
   disabled?: boolean;
   // Плейсхолдер редактора (по умолчанию — для тела; для объединённого поля переопределяем).
   placeholder?: string;
@@ -50,6 +52,7 @@ export function TaskBodyEditor({
   onCommit,
   onPasteFiles,
   onUploadImage,
+  onImageRemoved,
   disabled = false,
   placeholder = 'Описание, детали, подзадачи…',
   editorRef,
@@ -80,6 +83,7 @@ export function TaskBodyEditor({
           disabled={disabled}
           onPasteFiles={onPasteFiles}
           onUploadImage={onUploadImage}
+          onImageRemoved={onImageRemoved}
           placeholder={placeholder}
           // БЕЗ собственного max-h/scroll: тело всегда раскрыто на полную высоту, чтобы
           // скролл был ОДИН (колонка в split / окно в narrow), а не «2 поля» внутри задачи.

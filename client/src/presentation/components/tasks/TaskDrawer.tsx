@@ -1130,6 +1130,15 @@ export function TaskDrawer({
       );
   };
 
+  // Inline-картинку убрали из тела (backspace/delete) → удаляем и её вложение. В edit-режиме
+  // картинка при вставке уже загружена как attachment (src ноды = att.url), иначе она бы
+  // «оставалась в прикреплённых» после удаления из текста. Ищем по url; не нашли — no-op.
+  const handleInlineImageRemoved = (src: string): void => {
+    if (state?.mode !== 'edit') return;
+    const att = headerAttachments.find((a) => a.url === src);
+    if (att) deleteAttachmentDirectly(att);
+  };
+
   // «+ подзадача» (edit-mode): вставляем пустой checklist-пункт через императивный
   // handle редактора и СРАЗУ ставим в него курсор — пользователь печатает без клика
   // мышью. onChange редактора обновит editDescription; запись — по blur/unmount-save.
@@ -1568,6 +1577,7 @@ export function TaskDrawer({
                   key={`desc-${task.id}`}
                   editorRef={bodyEditorRef}
                   onUploadImage={uploadImageInline}
+                  onImageRemoved={handleInlineImageRemoved}
                   body={editDescription}
                   onBodyChange={handleDescriptionChange}
                   onCommit={() => void commitDescription(editDescription)}
