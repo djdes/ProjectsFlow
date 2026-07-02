@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useContainer } from '@/infrastructure/di/container';
 import type { ChatMessage, ChatReactionAggregate } from '@/domain/chat/ChatMessage';
+import { CHAT_CHANGED_EVENT } from './useNotificationStream';
+
+// Локально сообщаем «чат изменился» → useChatRooms рефетчит непрочитанное и бейджи гаснут.
+// Realtime-хаб шлёт это же событие для чужих изменений; свои (прочтение/удаление) хаб нам
+// не возвращает, поэтому дёргаем сами.
+function notifyChatChanged(): void {
+  window.dispatchEvent(new Event(CHAT_CHANGED_EVENT));
+}
 
 const PAGE = 40;
 
@@ -175,6 +183,7 @@ export function useChat(workspaceId: string | null): UseChatResult {
           x.id === messageId ? { ...x, deleted: true, body: '', reactions: [], attachments: [] } : x,
         ),
       );
+      notifyChatChanged(); // удалённое исключается из непрочитанного — обновить бейджи
     },
     [workspaceId, chatRepository],
   );
@@ -191,6 +200,7 @@ export function useChat(workspaceId: string | null): UseChatResult {
           ids.has(x.id) ? { ...x, deleted: true, body: '', reactions: [], attachments: [] } : x,
         ),
       );
+      notifyChatChanged();
     },
     [workspaceId, chatRepository],
   );
@@ -204,11 +214,22 @@ export function useChat(workspaceId: string | null): UseChatResult {
     [workspaceId, chatRepository],
   );
 
+  // Наибольший seq, до которого уже отметили прочитанным — чтобы onReachedBottom (частый)
+  // не слал markRead + не дёргал бейджи на каждый скролл. Сбрасывается при смене комнаты.
+  const lastMarkedSeqRef = useRef(-1);
+  useEffect(() => {
+    lastMarkedSeqRef.current = -1;
+  }, [workspaceId]);
   const markReadToNewest = useCallback(() => {
     if (!workspaceId) return;
     const newest = messagesRef.current.at(-1)?.seq;
     if (newest === undefined) return;
-    void chatRepository.markRead(workspaceId, newest).catch(() => {});
+    if (newest <= lastMarkedSeqRef.current) return; // уже прочитано до этого seq
+    lastMarkedSeqRef.current = newest;
+    void chatRepository
+      .markRead(workspaceId, newest)
+      .then(notifyChatChanged) // прочли → обновить бейджи непрочитанного
+      .catch(() => {});
   }, [workspaceId, chatRepository]);
 
   return {

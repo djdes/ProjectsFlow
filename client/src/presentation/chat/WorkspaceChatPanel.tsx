@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { MessagesSquare, Trash2, X } from 'lucide-react';
 import { useChat } from '@/presentation/hooks/useChat';
-import { useChatRooms } from '@/presentation/hooks/useChatRooms';
+import { useChatRooms, resolveActiveChatRoom } from '@/presentation/hooks/useChatRooms';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import type { ChatMessage } from '@/domain/chat/ChatMessage';
@@ -23,12 +23,9 @@ export function WorkspaceChatPanel(): React.ReactElement {
   const { workspace } = useCurrentWorkspace();
   const { rooms, loading: roomsLoading } = useChatRooms();
 
-  const selectedId = useMemo<string | null>(() => {
-    if (workspace && rooms.some((r) => r.workspaceId === workspace.id)) return workspace.id;
-    return rooms[0]?.workspaceId ?? null;
-  }, [rooms, workspace]);
-
-  const selectedRoom = rooms.find((r) => r.workspaceId === selectedId) ?? null;
+  // Та же комната, что считает бейдж непрочитанного (useActiveChatUnread) — единый резолвер.
+  const selectedRoom = useMemo(() => resolveActiveChatRoom(rooms, workspace?.id), [rooms, workspace]);
+  const selectedId = selectedRoom?.workspaceId ?? null;
   const chat = useChat(selectedId);
 
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);

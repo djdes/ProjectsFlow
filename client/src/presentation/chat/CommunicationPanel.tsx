@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
-import { useChatRooms } from '@/presentation/hooks/useChatRooms';
+import { useActiveChatUnread } from '@/presentation/hooks/useChatRooms';
 import { useActivityFeed } from '@/presentation/hooks/useActivityFeed';
 import { NotificationItem } from '@/presentation/notifications/NotificationItem';
 import { useNotificationActions } from '@/presentation/notifications/useNotificationActions';
@@ -29,7 +29,7 @@ export function CommunicationPanel(): React.ReactElement {
   // Счётчики на вкладках = слагаемые бейджа на rail-иконке «Чат» (chatUnread + actionable),
   // чтобы «3» на иконке всегда сводилось к конкретной вкладке (иначе непонятно, где эти уведомления).
   const { count: actionable } = useActionableUnreadCount();
-  const { totalUnread: chatUnread } = useChatRooms();
+  const chatUnread = useActiveChatUnread();
 
   const select = (t: CommTab): void => {
     setTab(t);
