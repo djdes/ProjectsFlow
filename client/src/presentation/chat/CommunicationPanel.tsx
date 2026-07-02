@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
+import { useChatRooms } from '@/presentation/hooks/useChatRooms';
 import { useActivityFeed } from '@/presentation/hooks/useActivityFeed';
 import { NotificationItem } from '@/presentation/notifications/NotificationItem';
 import { useNotificationActions } from '@/presentation/notifications/useNotificationActions';
@@ -25,7 +26,10 @@ function readTab(): CommTab {
 // «Все» и «Требуется действие» — лента активности пространства; «Чат» — общий чат.
 export function CommunicationPanel(): React.ReactElement {
   const [tab, setTab] = useState<CommTab>(readTab);
+  // Счётчики на вкладках = слагаемые бейджа на rail-иконке «Чат» (chatUnread + actionable),
+  // чтобы «3» на иконке всегда сводилось к конкретной вкладке (иначе непонятно, где эти уведомления).
   const { count: actionable } = useActionableUnreadCount();
+  const { totalUnread: chatUnread } = useChatRooms();
 
   const select = (t: CommTab): void => {
     setTab(t);
@@ -45,7 +49,7 @@ export function CommunicationPanel(): React.ReactElement {
         <TabButton active={tab === 'action'} onClick={() => select('action')} badge={actionable}>
           Действие
         </TabButton>
-        <TabButton active={tab === 'chat'} onClick={() => select('chat')}>
+        <TabButton active={tab === 'chat'} onClick={() => select('chat')} badge={chatUnread}>
           Чат
         </TabButton>
       </div>
