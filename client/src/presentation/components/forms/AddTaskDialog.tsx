@@ -71,6 +71,43 @@ type DraftStash = {
 // Sentinel для пункта «Без проекта» в radio-группе (radix требует строковое value).
 const INBOX_VALUE = '__inbox__';
 
+// Персистентный черновик (localStorage) — переживает перезагрузку страницы, в отличие от
+// in-memory stashRef (тот держит ещё и файлы/inline-картинки, но живёт только до reload).
+// Сохраняем только сериализуемые поля; File-объекты/blob-превью не кладём.
+const DRAFT_KEY = 'pf_new_task_draft';
+type PersistedDraft = {
+  description: string;
+  projectId: string | null;
+  ralphMode: RalphMode;
+  delegateUserId: string | null;
+  deadline: string | null;
+  priority: TaskPriority | null;
+};
+function readDraft(): PersistedDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as PersistedDraft;
+    return typeof d?.description === 'string' ? d : null;
+  } catch {
+    return null;
+  }
+}
+function writeDraft(d: PersistedDraft): void {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+  } catch {
+    /* quota / приватный режим — просто не персистим */
+  }
+}
+function clearDraft(): void {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 // Глобальное окно создания задачи (кнопка «Создать задачу» в левой панели). Как окно
 // создания по проекту: Tiptap rich-редактор (форматирование по выделению, WYSIWYG,
 // вставка картинок), плюсики «+ Подзадача»/«+ Файл», ряд icon-контролов (Приоритет,
@@ -119,6 +156,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
 
   // Освободить blob-URL'ы снимка и забыть его.
   const discardStash = (): void => {
+    clearDraft(); // персистентный черновик тоже сбрасываем
     const s = stashRef.current;
     if (!s) return;
     s.pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
@@ -141,6 +179,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       pending: [...pending],
       inlineImages: [...inlineImagesRef.current.entries()],
     };
+    // Персистим сериализуемую часть — переживёт перезагрузку страницы (файлы/картинки — нет).
+    writeDraft({ description, projectId, ralphMode, delegateUserId, deadline, priority });
   };
 
   // Закрытие пользователем (Esc / клик вне / крестик / «Отмена»): сохраняем черновик.
@@ -152,22 +192,36 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   // «Восстановить»: возвращаем прошлый черновик со всеми параметрами и картинками.
   const handleRestore = (): void => {
     const s = stashRef.current;
-    if (!s) return;
-    setDescription(s.description);
-    setProjectId(s.projectId);
-    setRalphMode(s.ralphMode);
-    setDelegateUserId(s.delegateUserId);
-    setDeadline(s.deadline);
-    setPriority(s.priority);
-    setPending(s.pending);
-    inlineImagesRef.current = new Map(s.inlineImages);
-    stashRef.current = null; // blob'ы теперь снова «живые» в форме — не ревокаем
+    if (s) {
+      // In-session снимок: восстанавливаем ВСЁ, включая файлы и inline-картинки.
+      setDescription(s.description);
+      setProjectId(s.projectId);
+      setRalphMode(s.ralphMode);
+      setDelegateUserId(s.delegateUserId);
+      setDeadline(s.deadline);
+      setPriority(s.priority);
+      setPending(s.pending);
+      inlineImagesRef.current = new Map(s.inlineImages);
+      stashRef.current = null; // blob'ы теперь снова «живые» в форме — не ревокаем
+    } else {
+      // После перезагрузки остался только персистентный черновик (без файлов/картинок).
+      const d = readDraft();
+      if (!d) return;
+      setDescription(d.description);
+      setProjectId(d.projectId);
+      setRalphMode(d.ralphMode);
+      setDelegateUserId(d.delegateUserId);
+      setDeadline(d.deadline);
+      setPriority(d.priority);
+    }
+    clearDraft();
     setHasStash(false);
   };
 
   useEffect(() => {
     if (open) {
-      setHasStash(stashRef.current !== null);
+      // Черновик есть, если жив in-session снимок ИЛИ остался персистентный (после reload).
+      setHasStash(stashRef.current !== null || readDraft() !== null);
       return;
     }
     // Закрытие: чистим ЖИВЫЕ поля. blob'ы НЕ ревокаем — либо форма была пустой (нечего),
