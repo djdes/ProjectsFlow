@@ -28,28 +28,36 @@ export function NotificationItem({
     <li
       onClick={() => actions.handleClick(n)}
       className={cn(
-        'group flex cursor-pointer items-start gap-2 px-2.5 py-1.5 transition-colors',
+        // overflow-hidden = содержит float аватара; текст обтекает иконку (справа от неё и
+        // продолжается под ней на всю ширину блока) — так шире и читабельнее.
+        'group cursor-pointer overflow-hidden px-3 py-2 transition-colors',
         isUnread ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/40',
       )}
     >
-      {/* Непрочитанное подсвечивается фоном строки (bg-primary/5) — отдельная точка убрана,
-          чтобы текст занимал максимум ширины (особенно в узком мобильном drawer). Аватар size-5,
-          как иконка у ActivityItem, — ряд выровнен и текст шире. */}
-      <Avatar className="mt-0.5 size-5 shrink-0">
-        <AvatarFallback className="text-[10px]">
-          {getInitials(
-            payload.type === 'server_alert'
-              ? payload.serverName
-              : payload.type === 'daily_digest'
-                ? payload.projectName
-                : payload.type === 'support_ticket'
-                  ? (payload.submitterDisplayName ?? 'Поддержка')
-                  : payload.actorDisplayName,
-          )}
-        </AvatarFallback>
-      </Avatar>
+      <span className="relative float-left mr-2.5">
+        <Avatar className="size-7 ring-1 ring-border">
+          <AvatarFallback className="text-[11px]">
+            {getInitials(
+              payload.type === 'server_alert'
+                ? payload.serverName
+                : payload.type === 'daily_digest'
+                  ? payload.projectName
+                  : payload.type === 'support_ticket'
+                    ? (payload.submitterDisplayName ?? 'Поддержка')
+                    : payload.actorDisplayName,
+            )}
+          </AvatarFallback>
+        </Avatar>
+        {/* Непрочитанное — точка на углу аватара (выделяет иконку). */}
+        {isUnread && (
+          <span
+            className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-primary ring-2 ring-background"
+            aria-hidden
+          />
+        )}
+      </span>
       {/* Компактные action-кнопки внутри карточки: меньше высота/паддинги/шрифт. */}
-      <div className="min-w-0 flex-1 space-y-0.5 [&_button]:h-7 [&_button]:gap-1 [&_button]:px-2.5 [&_button]:text-xs">
+      <div className="space-y-0.5 [&_button]:h-7 [&_button]:gap-1 [&_button]:px-2.5 [&_button]:text-xs">
         {payload.type === 'comment_mention' && (
           <>
             <p className="text-sm leading-tight">
@@ -86,11 +94,13 @@ export function NotificationItem({
               <span className="font-medium">«{payload.projectName}»</span> как {roleLabel[payload.role]}
             </p>
             {delegationUi === 'accepted' ? (
-              <p className="pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">✓ Принято</p>
+              <p className="clear-left pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                ✓ Принято
+              </p>
             ) : delegationUi === 'resolved' ? (
-              <p className="pt-1 text-xs text-muted-foreground">Уже обработано</p>
+              <p className="clear-left pt-1 text-xs text-muted-foreground">Уже обработано</p>
             ) : (
-              <div className="pt-1">
+              <div className="clear-left pt-1">
                 <Button
                   size="sm"
                   disabled={delegationUi === 'busy'}
@@ -121,7 +131,7 @@ export function NotificationItem({
             ) : delegationUi === 'resolved' ? (
               <p className="pt-1 text-xs text-muted-foreground">Уже обработано</p>
             ) : (
-              <div className="flex gap-2 pt-1">
+              <div className="flex clear-left gap-2 pt-1">
                 <Button
                   size="sm"
                   className="bg-emerald-600 hover:bg-emerald-700"
@@ -225,11 +235,13 @@ export function NotificationItem({
               проекту <span className="font-medium">«{payload.projectName}»</span>
             </p>
             {delegationUi === 'accepted' ? (
-              <p className="pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">✓ Доступ предоставлен</p>
+              <p className="clear-left pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                ✓ Доступ предоставлен
+              </p>
             ) : delegationUi === 'declined' ? (
-              <p className="pt-1 text-xs text-muted-foreground">Запрос отклонён</p>
+              <p className="clear-left pt-1 text-xs text-muted-foreground">Запрос отклонён</p>
             ) : (
-              <div className="flex gap-2 pt-1">
+              <div className="flex clear-left gap-2 pt-1">
                 <Button
                   size="sm"
                   disabled={delegationUi === 'busy'}

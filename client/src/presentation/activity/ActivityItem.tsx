@@ -116,16 +116,16 @@ export function ActivityItem({ item }: { item: ActivityEventItem }): React.React
     <li
       onClick={() => navigate(targetUrl(item))}
       className={cn(
-        'group flex cursor-pointer items-start gap-2 px-2.5 py-1.5 transition-colors hover:bg-muted/40',
+        // overflow-hidden = содержит float иконки; текст обтекает иконку (начинается справа
+        // от неё и продолжается под ней на всю ширину блока) — так шире и читабельнее.
+        'group cursor-pointer overflow-hidden px-3 py-2 transition-colors hover:bg-muted/40',
       )}
     >
-      <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
-        <Icon className="size-3" />
+      <span className="float-left mr-2.5 grid size-7 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground ring-1 ring-border">
+        <Icon className="size-3.5" />
       </span>
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <p className="text-sm leading-tight">{renderText(item)}</p>
-        <p className="text-xs text-muted-foreground">{relativeTime(item.createdAt)}</p>
-      </div>
+      <p className="text-sm leading-snug">{renderText(item)}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{relativeTime(item.createdAt)}</p>
     </li>
   );
 }
