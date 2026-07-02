@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronsUpDown, CircleArrowUp, Copy, Gauge, Home, LogOut, Plus, Settings, UserPlus } from 'lucide-react';
+import { Check, ChevronRight, ChevronsUpDown, CircleArrowUp, Copy, Gauge, Home, LogOut, Plus, Settings, UserPlus } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +21,8 @@ import { NewWorkspaceDialog } from '@/presentation/components/forms/NewWorkspace
 import { WorkspaceIcon } from './WorkspaceIcon';
 import { useUsageDialog } from '@/presentation/usage/UsageDialogProvider';
 import { useUpgradeDialog } from '@/presentation/usage/UpgradeDialogProvider';
+import { useUsage } from '@/presentation/usage/UsageProvider';
+import { planNameRu, subscriptionExpiryNote } from '@/presentation/usage/usageFormat';
 
 // compact — режим icon-rail (свёрнутая панель): триггер только иконка пространства.
 export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {}): React.ReactElement {
@@ -32,6 +34,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
   const { switchTo } = useSwitchWorkspace();
   const usageDialog = useUsageDialog();
   const upgrade = useUpgradeDialog();
+  const { usage } = useUsage();
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -132,6 +135,28 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
             </button>
           </div>
 
+          {/* Подписка: тариф + срок, клик → окно тарифов (как «Free Plan» в Notion). */}
+          {usage && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                upgrade.open();
+              }}
+              className="group/plan flex w-full items-center gap-2 border-t border-border/60 px-3 py-2 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+            >
+              <Gauge className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">Тариф «{planNameRu(usage.plan)}»</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {subscriptionExpiryNote(usage.plan, usage.subscription.expiresAt) ??
+                    'Управление подпиской и лимитами'}
+                </span>
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/plan:opacity-100" />
+            </button>
+          )}
+
           <DropdownMenuSeparator className="my-0" />
 
           {/* Действия */}
@@ -153,7 +178,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
               }}
             >
               <Gauge />
-              Использование
+              Лимиты
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate('/profile')}>
               <Settings />

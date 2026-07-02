@@ -124,7 +124,7 @@ export function UpgradeDialog({
                 </div>
                 <div className="mt-1 text-2xl font-bold tabular-nums">
                   {p.priceRub == null ? (
-                    'Бесплатно'
+                    '0 рублей'
                   ) : (
                     <>
                       {p.priceRub.toLocaleString('ru-RU')} ₽

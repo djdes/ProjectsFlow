@@ -30,7 +30,7 @@ export function UsageDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Использование</DialogTitle>
+          <DialogTitle>Лимиты</DialogTitle>
         </DialogHeader>
         {loading || !usage ? (
           <div className="py-8 text-center text-sm text-muted-foreground">Загрузка…</div>
