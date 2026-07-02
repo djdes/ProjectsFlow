@@ -70,28 +70,28 @@ export function SidebarNavRail({
             className={cn(
               'group/nav relative flex flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px] font-medium leading-none',
               animations && 'transition-colors duration-200 ease-out',
+              // Акцентная «Задача» — без подписи, кружок центрируется по высоте ряда.
+              accent && 'justify-center',
               active
                 ? 'bg-foreground/[0.06] text-foreground ring-1 ring-black/[0.04] dark:bg-white/10 dark:ring-white/10'
-                : accent
-                  ? 'text-success hover:bg-success/10'
-                  : 'text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]',
+                : 'text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]',
             )}
           >
-            {/* Иконка. Акцентная («Задача») — в залитом кружке, чтобы выделяться по центру. */}
+            {/* Единый по высоте бокс иконки (подписи в один ряд). Акцентная «Задача» —
+                крупный залитый primary-кружок с белой иконкой (как «+» в YouTube), без подписи. */}
             <span
               className={cn(
-                'relative inline-flex items-center justify-center',
+                'relative grid size-7 place-items-center rounded-full',
+                accent && 'size-9 bg-primary text-primary-foreground shadow-sm',
                 accent &&
-                  cn(
-                    'size-7 rounded-full bg-success/15 ring-1 ring-success/25',
-                    animations && 'transition-transform duration-200 group-hover/nav:scale-105 group-active/nav:scale-95',
-                  ),
+                  animations &&
+                  'transition-transform duration-200 group-hover/nav:scale-105 group-active/nav:scale-95',
               )}
             >
               {renderIcon(item, idx, active)}
               {badge(item)}
             </span>
-            <span className="max-w-full truncate">{item.label}</span>
+            {!accent && <span className="max-w-full truncate">{item.label}</span>}
           </button>
         );
       })}
