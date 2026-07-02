@@ -244,4 +244,13 @@ export class MockProjectRepository implements ProjectRepository {
   listSharedMembers() {
     return Promise.resolve([]);
   }
+  recordProjectView(): Promise<void> {
+    return Promise.resolve();
+  }
+  getProjectAnalytics(): Promise<never> {
+    return Promise.reject(new Error('Mock.getProjectAnalytics: not implemented'));
+  }
+  getProjectActivity(): Promise<never> {
+    return Promise.reject(new Error('Mock.getProjectActivity: not implemented'));
+  }
 }

@@ -184,6 +184,10 @@ import { invitesRouter } from './invites/routes.js';
 import { delegationsRouter } from './delegations/routes.js';
 import { notificationsRouter } from './notifications/routes.js';
 import { recentTaskViewsRouter } from './recent-task-views/routes.js';
+import { projectAnalyticsRouter } from './project/analyticsRoutes.js';
+import type { RecordProjectView } from '../application/project/RecordProjectView.js';
+import type { GetProjectViewsAnalytics } from '../application/project/GetProjectViewsAnalytics.js';
+import type { GetProjectActivity } from '../application/project/GetProjectActivity.js';
 import type { ListRecentTaskViews } from '../application/task/ListRecentTaskViews.js';
 import { buildHelpRouter } from './help/routes.js';
 import type { SubmitSupportTicket } from '../application/help/SubmitSupportTicket.js';
@@ -349,6 +353,11 @@ type AppDeps = {
   readonly recentTaskViews: {
     readonly list: ListRecentTaskViews;
     readonly record: RecordTaskView;
+  };
+  readonly projectAnalytics: {
+    readonly record: RecordProjectView;
+    readonly getAnalytics: GetProjectViewsAnalytics;
+    readonly getActivity: GetProjectActivity;
   };
   readonly help: {
     readonly submit: SubmitSupportTicket;
@@ -681,6 +690,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   }));
   app.use('/api/notifications', notificationsRouter(deps.notifications));
   app.use('/api/recent-task-views', recentTaskViewsRouter(deps.recentTaskViews));
+  app.use('/api/projects', projectAnalyticsRouter(deps.projectAnalytics));
   // Чат-виджет: обращения в поддержку (POST /api/help/contact-support). Без requireAuth —
   // форма доступна и анонимам с лендинга (см. help/routes.ts).
   app.use('/api', buildHelpRouter(deps.help));

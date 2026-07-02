@@ -1,4 +1,5 @@
 import type { Project, ProjectStatus } from '@/domain/project/Project';
+import type { ProjectAnalytics, ProjectActivity } from '@/domain/project/ProjectAnalytics';
 import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
 import type { ProjectInvite, ProjectInviteRole } from '@/domain/project/ProjectInvite';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
@@ -166,6 +167,12 @@ export interface ProjectRepository {
   // Дедуплицированный список user'ов, с которыми caller состоит в общих проектах
   // (без caller'а самого). Используется UI-дропдауном «делегировать» во входящих.
   listSharedMembers(): Promise<SharedMember[]>;
+
+  // Аналитика/активность проекта (окно активности проекта в шапке).
+  // recordProjectView — fire-and-forget при открытии проекта (сервер троттлит).
+  recordProjectView(projectId: string): Promise<void>;
+  getProjectAnalytics(projectId: string, days: number): Promise<ProjectAnalytics>;
+  getProjectActivity(projectId: string, limit: number): Promise<ProjectActivity>;
 }
 
 export type SharedMember = {

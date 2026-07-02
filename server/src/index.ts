@@ -28,6 +28,10 @@ import { GetActivityFeed } from './application/activity/GetActivityFeed.js';
 import { DrizzleProjectInviteRepository } from './infrastructure/repositories/DrizzleProjectInviteRepository.js';
 import { DrizzleNotificationRepository } from './infrastructure/repositories/DrizzleNotificationRepository.js';
 import { DrizzleRecentTaskViewRepository } from './infrastructure/repositories/DrizzleRecentTaskViewRepository.js';
+import { DrizzleProjectViewRepository } from './infrastructure/repositories/DrizzleProjectViewRepository.js';
+import { RecordProjectView } from './application/project/RecordProjectView.js';
+import { GetProjectViewsAnalytics } from './application/project/GetProjectViewsAnalytics.js';
+import { GetProjectActivity } from './application/project/GetProjectActivity.js';
 import { RecordTaskView } from './application/task/RecordTaskView.js';
 import { ListRecentTaskViews } from './application/task/ListRecentTaskViews.js';
 import { DrizzleSupportTicketRepository } from './infrastructure/repositories/DrizzleSupportTicketRepository.js';
@@ -274,6 +278,7 @@ const projectRepo = new DrizzleProjectRepository(db);
 const projectMemberRepo = new DrizzleProjectMemberRepository(db);
 const projectInviteRepo = new DrizzleProjectInviteRepository(db);
 const recentTaskViewRepo = new DrizzleRecentTaskViewRepository(db);
+const projectViewRepo = new DrizzleProjectViewRepository(db);
 
 // === Пространства (workspaces) ===
 const workspaceRepo = new DrizzleWorkspaceRepository(db);
@@ -1419,6 +1424,24 @@ const { app, devProxyUpgrade } = createApp({
   recentTaskViews: {
     list: new ListRecentTaskViews({ repo: recentTaskViewRepo }),
     record: new RecordTaskView({ repo: recentTaskViewRepo }),
+  },
+  projectAnalytics: {
+    record: new RecordProjectView({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      views: projectViewRepo,
+    }),
+    getAnalytics: new GetProjectViewsAnalytics({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      views: projectViewRepo,
+    }),
+    getActivity: new GetProjectActivity({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      activity: activityRepo,
+      users: userRepo,
+    }),
   },
   help: {
     submit: submitSupportTicket,

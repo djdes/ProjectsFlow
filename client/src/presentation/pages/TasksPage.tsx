@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Activity, BookOpen, Bot, Settings, Wallet } from 'lucide-react';
+import { Activity, BookOpen, Bot, Settings, Share2, Wallet } from 'lucide-react';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,6 +17,8 @@ import { AutomationDialog } from '@/presentation/components/project/AutomationDi
 import { EditableProjectTitle } from '@/presentation/components/project/EditableProjectTitle';
 import { ProjectIconPicker } from '@/presentation/components/project/ProjectIconPicker';
 import { MemberAvatarStack } from '@/presentation/components/project/MemberAvatarStack';
+import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
+import { ProjectActivityButton } from '@/presentation/components/project/ProjectActivityButton';
 
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -58,6 +60,12 @@ export function TasksPage(): React.ReactElement {
       cancelled = true;
     };
   }, [projectId, data, projectRepository]);
+
+  // Трекинг просмотра проекта: fire-and-forget при открытии (сервер троттлит запись ~30 мин).
+  useEffect(() => {
+    if (!projectId) return;
+    void projectRepository.recordProjectView(projectId).catch(() => undefined);
+  }, [projectId, projectRepository]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -103,6 +111,8 @@ export function TasksPage(): React.ReactElement {
   // одну горизонталь со свитчером пространства в сайдбаре; тело — комфортные отступы ниже.
   return (
     <div className="flex h-full flex-col">
+      {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая). */}
+      <ProjectPublishedBanner projectId={data.id} />
       {/* Хлебные крошки прячем на мобиле: имя проекта дублируется в заголовке ниже,
           навигация — в нижнем таб-баре/drawer. Это возвращает вертикальное место канбану. */}
       <div className="hidden min-h-11 items-center px-2.5 pt-2 sm:flex">
@@ -127,6 +137,8 @@ export function TasksPage(): React.ReactElement {
             мультизадачного воркера переехал в диалог «Автоматизация». */}
         <TooltipProvider delayDuration={300}>
           <div className="flex items-center gap-0.5">
+            {/* Активность/аналитика проекта — слева от участников. */}
+            <ProjectActivityButton projectId={data.id} />
             {/* Аватар-стек участников: наведение/клик → панель участников с зумом аватара. */}
             {members.length > 1 && (
               <MemberAvatarStack
@@ -135,6 +147,20 @@ export function TasksPage(): React.ReactElement {
                 canInvite={data.role === 'owner' || data.role === 'editor'}
               />
             )}
+            {/* «Поделиться» справа от участников (пока заглушка — функционал позже). */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 text-muted-foreground hover:text-foreground"
+                  aria-label="Поделиться"
+                >
+                  <Share2 className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Поделиться</TooltipContent>
+            </Tooltip>
             {financeVisible && (
               <PageActionButton label="Финансы" to={`/projects/${data.id}/finance`}>
                 <Wallet className="size-4" />

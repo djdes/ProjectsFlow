@@ -54,6 +54,21 @@ export class DrizzleActivityRepository implements ActivityRepository {
     return rows.map((r) => toEvent(r.ae));
   }
 
+  async listForProject(
+    projectId: string,
+    opts: { before?: Date; limit: number },
+  ): Promise<ActivityEvent[]> {
+    const conds = [eq(activityEvents.projectId, projectId)];
+    if (opts.before) conds.push(lt(activityEvents.createdAt, opts.before));
+    const rows = await this.db
+      .select()
+      .from(activityEvents)
+      .where(and(...conds))
+      .orderBy(desc(activityEvents.createdAt))
+      .limit(opts.limit);
+    return rows.map((r) => toEvent(r));
+  }
+
   async deleteOlderThan(cutoff: Date): Promise<number> {
     const result = await this.db.delete(activityEvents).where(lt(activityEvents.createdAt, cutoff));
     // mysql2: первый элемент — ResultSetHeader с affectedRows.

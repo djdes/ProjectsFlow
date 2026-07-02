@@ -1477,6 +1477,28 @@ export type RecentTaskViewRow = typeof recentTaskViews.$inferSelect;
 export type NewRecentTaskViewRow = typeof recentTaskViews.$inferInsert;
 
 // ============================================================================
+// project_views — миграция db/090. Просмотры проекта (аналитика: график Views + Viewers).
+// Append-only: каждый заход = строка (клиент троттлит, репозиторий дедупит ~30 мин на
+// (user, project)). Доступ к чтению аналитики — участнику проекта (use-case). См. UI-batch S3.
+// ============================================================================
+export const projectViews = mysqlTable(
+  'project_views',
+  {
+    id: id(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    viewedAt: timestamp('viewed_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    index('idx_project_views_project_time').on(t.projectId, t.viewedAt),
+    index('idx_project_views_user_project_time').on(t.userId, t.projectId, t.viewedAt),
+  ],
+);
+
+export type ProjectViewRow = typeof projectViews.$inferSelect;
+export type NewProjectViewRow = typeof projectViews.$inferInsert;
+
+// ============================================================================
 // support_tickets — миграция db/081. Обращения из чат-виджета (вкладка «Поддержка»).
 // user_id NULL — анонимная отправка с лендинга. Доставка в Telegram-чат поддержки
 // (или fallback на уведомление админам) — best-effort на уровне приложения; тикет

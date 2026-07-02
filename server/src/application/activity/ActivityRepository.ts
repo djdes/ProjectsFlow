@@ -20,6 +20,11 @@ export interface ActivityRepository {
     workspaceId: string,
     opts: { before?: Date; limit: number },
   ): Promise<ActivityEvent[]>;
+  /** События КОНКРЕТНОГО проекта (для окна активности проекта). Доступ гейтит use-case. */
+  listForProject(
+    projectId: string,
+    opts: { before?: Date; limit: number },
+  ): Promise<ActivityEvent[]>;
   /** GC: удалить события старше cutoff. Возвращает число удалённых. */
   deleteOlderThan(cutoff: Date): Promise<number>;
 }

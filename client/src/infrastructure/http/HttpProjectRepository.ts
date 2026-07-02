@@ -15,6 +15,8 @@ import type {
 import type { UpdateProjectInput } from '@/application/project/ProjectRepository';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 import type { KanbanBoardSettings } from '@/domain/kanban/KanbanSettings';
+import type { ProjectAnalytics, ProjectActivity } from '@/domain/project/ProjectAnalytics';
+import type { ActivityKind, ActivityPayload } from '@/domain/activity/ActivityFeedItem';
 import { HttpError, httpClient } from './httpClient';
 
 // Нормализует значение JSON-колонки в plain-объект: парсит строку (MariaDB longtext),
@@ -343,5 +345,63 @@ export class HttpProjectRepository implements ProjectRepository {
       '/me/shared-members',
     );
     return members;
+  }
+
+  async recordProjectView(projectId: string): Promise<void> {
+    await httpClient.post(`/projects/${projectId}/views`, {});
+  }
+
+  async getProjectAnalytics(projectId: string, days: number): Promise<ProjectAnalytics> {
+    const { analytics } = await httpClient.get<{
+      analytics: {
+        totalViews: number;
+        windowDays: number;
+        perDay: { date: string; count: number }[];
+        viewers: {
+          userId: string;
+          displayName: string;
+          avatarUrl: string | null;
+          lastViewedAt: string;
+          viewCount: number;
+        }[];
+      };
+    }>(`/projects/${projectId}/analytics?days=${days}`);
+    return {
+      totalViews: analytics.totalViews,
+      windowDays: analytics.windowDays,
+      perDay: analytics.perDay,
+      viewers: analytics.viewers.map((v) => ({ ...v, lastViewedAt: new Date(v.lastViewedAt) })),
+    };
+  }
+
+  async getProjectActivity(projectId: string, limit: number): Promise<ProjectActivity> {
+    const res = await httpClient.get<{
+      summary: {
+        createdAt: string;
+        createdByName: string | null;
+        lastEditedAt: string | null;
+        lastEditedByName: string | null;
+      };
+      items: Array<{
+        id: string;
+        kind: ActivityKind;
+        projectId: string;
+        actorUserId: string | null;
+        actorDisplayName: string | null;
+        actorAvatarUrl: string | null;
+        targetDisplayName: string | null;
+        payload: ActivityPayload | null;
+        createdAt: string;
+      }>;
+    }>(`/projects/${projectId}/activity?limit=${limit}`);
+    return {
+      summary: {
+        createdAt: new Date(res.summary.createdAt),
+        createdByName: res.summary.createdByName,
+        lastEditedAt: res.summary.lastEditedAt ? new Date(res.summary.lastEditedAt) : null,
+        lastEditedByName: res.summary.lastEditedByName,
+      },
+      items: res.items.map((it) => ({ type: 'activity' as const, ...it, createdAt: new Date(it.createdAt) })),
+    };
   }
 }
