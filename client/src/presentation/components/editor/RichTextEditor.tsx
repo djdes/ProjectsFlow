@@ -202,10 +202,17 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
     if (!editor || editor.isDestroyed || !upload) return;
     for (const file of images) {
       const uploadId = `up-${(uploadCounter += 1)}`;
+      // Вставляем картинку + пустой абзац ПОСЛЕ неё и оставляем курсор в абзаце — чтобы
+      // можно было сразу продолжить печатать в следующем абзаце. Без абзаца выделение
+      // оставалось бы на самой картинке (NodeSelection), и первый же символ её заменял бы
+      // (картинка «пропадала»). См. FigureImage — это atom-блок.
       editor
         .chain()
         .focus()
-        .insertContent({ type: 'figureImage', attrs: { uploading: true, progress: 0, uploadId, src: null } })
+        .insertContent([
+          { type: 'figureImage', attrs: { uploading: true, progress: 0, uploadId, src: null } },
+          { type: 'paragraph' },
+        ])
         .run();
       void (async () => {
         try {

@@ -14,6 +14,22 @@ export function FigureImageView({ node, deleteNode }: NodeViewProps): React.Reac
   const src = (node.attrs.src as string) ?? '';
   const [lightbox, setLightbox] = React.useState(false);
 
+  // Лайтбокс — портал в body, т.е. ВНЕ Radix-диалога (напр. окна «Новая задача»). Без этого
+  // Escape/клик по лайтбоксу воспринимался диалогом как «нажатие снаружи» и закрывал его.
+  // Пока лайтбокс открыт — гасим Escape в capture-фазе (закрываем только лайтбокс).
+  React.useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setLightbox(false);
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [lightbox]);
+
   return (
     <NodeViewWrapper data-figure-image="" className="my-2 flex flex-col items-start">
       {uploading ? (
@@ -59,6 +75,10 @@ export function FigureImageView({ node, deleteNode }: NodeViewProps): React.Reac
           <div
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
             onClick={() => setLightbox(false)}
+            // Гасим pointerdown/mousedown, чтобы Radix-диалог не счёл это «кликом снаружи»
+            // и не закрылся вместе с лайтбоксом (портал живёт вне DialogContent).
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >

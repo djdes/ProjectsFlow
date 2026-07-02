@@ -9,7 +9,7 @@ import {
   type FormEvent,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, FileText, Inbox, Plus, X } from 'lucide-react';
+import { ChevronDown, FileText, Inbox, Plus, RotateCcw, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -54,6 +54,20 @@ type Props = {
 
 type PendingFile = { id: string; file: File; previewUrl: string };
 
+// Снимок незавершённого черновика для «Восстановить». Держим в памяти (окно смонтировано
+// постоянно провайдером), т.к. File-объекты/blob-превью картинок не сериализуются. Живёт
+// в рамках сессии страницы (до reload) — достаточно для «закрыл → снова открыл».
+type DraftStash = {
+  description: string;
+  projectId: string | null;
+  ralphMode: RalphMode;
+  delegateUserId: string | null;
+  deadline: string | null;
+  priority: TaskPriority | null;
+  pending: PendingFile[];
+  inlineImages: [string, File][];
+};
+
 // Sentinel для пункта «Без проекта» в radio-группе (radix требует строковое value).
 const INBOX_VALUE = '__inbox__';
 
@@ -85,27 +99,89 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   // Inline-скрины: blob-URL превью в редакторе → File. Реальная загрузка отложена до
   // создания задачи (в handleSubmit blob-URL'ы заменяются на URL вложений). Как в TaskDrawer.
   const inlineImagesRef = useRef<Map<string, File>>(new Map());
+  // Отложенный черновик прошлого закрытия (для кнопки «Восстановить»). Blob'ы этого снимка
+  // НЕ ревокаем на закрытии — они нужны для превью восстановленных картинок/файлов.
+  const stashRef = useRef<DraftStash | null>(null);
+  const [hasStash, setHasStash] = useState(false);
   // autoFocus редактора — только на desktop (на мобильных клавиатура перекрывает диалог).
   const isCoarsePointer =
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
 
+  // Есть ли что сохранять в черновик (для «Восстановить»). Inline-картинки не проверяем
+  // отдельно: их blob-URL всегда попадает в markdown описания → description непустой (и это
+  // render-safe — без чтения ref во время рендера).
+  const hasContent = (): boolean =>
+    description.trim() !== '' ||
+    pending.length > 0 ||
+    deadline !== null ||
+    priority !== null ||
+    delegateUserId !== null;
+
+  // Освободить blob-URL'ы снимка и забыть его.
+  const discardStash = (): void => {
+    const s = stashRef.current;
+    if (!s) return;
+    s.pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
+    s.inlineImages.forEach(([blobUrl]) => URL.revokeObjectURL(blobUrl));
+    stashRef.current = null;
+  };
+
+  // Снять снимок текущего черновика (при закрытии окна пользователем). blob'ы НЕ ревокаем —
+  // они переходят «во владение» снимка.
+  const snapshotToStash = (): void => {
+    discardStash(); // старый снимок больше не нужен
+    if (!hasContent()) return;
+    stashRef.current = {
+      description,
+      projectId,
+      ralphMode,
+      delegateUserId,
+      deadline,
+      priority,
+      pending: [...pending],
+      inlineImages: [...inlineImagesRef.current.entries()],
+    };
+  };
+
+  // Закрытие пользователем (Esc / клик вне / крестик / «Отмена»): сохраняем черновик.
+  const handleUserClose = (): void => {
+    snapshotToStash();
+    onOpenChange(false);
+  };
+
+  // «Восстановить»: возвращаем прошлый черновик со всеми параметрами и картинками.
+  const handleRestore = (): void => {
+    const s = stashRef.current;
+    if (!s) return;
+    setDescription(s.description);
+    setProjectId(s.projectId);
+    setRalphMode(s.ralphMode);
+    setDelegateUserId(s.delegateUserId);
+    setDeadline(s.deadline);
+    setPriority(s.priority);
+    setPending(s.pending);
+    inlineImagesRef.current = new Map(s.inlineImages);
+    stashRef.current = null; // blob'ы теперь снова «живые» в форме — не ревокаем
+    setHasStash(false);
+  };
+
   useEffect(() => {
-    if (!open) {
-      setDescription('');
-      setProjectId(null);
-      setRalphMode('normal');
-      setDelegateUserId(null);
-      setDeadline(null);
-      setPriority(null);
-      setError(null);
-      setDragActive(false);
-      setPending((prev) => {
-        prev.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
-        return [];
-      });
-      inlineImagesRef.current.forEach((_file, blobUrl) => URL.revokeObjectURL(blobUrl));
-      inlineImagesRef.current.clear();
+    if (open) {
+      setHasStash(stashRef.current !== null);
+      return;
     }
+    // Закрытие: чистим ЖИВЫЕ поля. blob'ы НЕ ревокаем — либо форма была пустой (нечего),
+    // либо они уже перешли в snapshot (revoke — за discardStash/submit).
+    setDescription('');
+    setProjectId(null);
+    setRalphMode('normal');
+    setDelegateUserId(null);
+    setDeadline(null);
+    setPriority(null);
+    setError(null);
+    setDragActive(false);
+    setPending([]);
+    inlineImagesRef.current = new Map();
   }, [open]);
 
   // При открытии этого окна закрываем inline-композер на доске (единая поверхность
@@ -159,15 +235,23 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     addFiles(files);
   };
 
+  // Реагируем ТОЛЬКО на перетаскивание файлов извне. Внутренний drag блока (ручка-«6 точек»
+  // в редакторе) тоже даёт dragover на форме — без этого гейта подсветка-рамка включалась и
+  // не гасла при перестановке абзацев. У файлового drag в dataTransfer.types есть 'Files'.
+  const isFileDrag = (e: DragEvent<HTMLFormElement>): boolean =>
+    Array.from(e.dataTransfer?.types ?? []).includes('Files');
   const handleDragOver = (e: DragEvent<HTMLFormElement>): void => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
     setDragActive(true);
   };
   const handleDragLeave = (e: DragEvent<HTMLFormElement>): void => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
     setDragActive(false);
   };
   const handleDrop = (e: DragEvent<HTMLFormElement>): void => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
     setDragActive(false);
     if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
@@ -234,6 +318,9 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
           toast.error(`Не удалось загрузить ${pf.file.name}: ${(err as Error).message}`);
         }
       }
+      // Задача создана — черновик восстанавливать незачем; чистим снимок и превью.
+      discardStash();
+      pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
       onOpenChange(false);
       toast.success(
         projectId === null ? 'Задача добавлена во «Входящие»' : 'Задача добавлена в проект',
@@ -247,8 +334,25 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-sm:flex max-sm:flex-col max-sm:overflow-y-hidden">
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        // Пользовательское закрытие (Esc/клик вне/крестик) → сохраняем черновик.
+        if (!o) handleUserClose();
+        else onOpenChange(o);
+      }}
+    >
+      <DialogContent
+        className="sm:max-w-2xl max-sm:flex max-sm:flex-col max-sm:overflow-y-hidden"
+        // Не отдаём фокус контенту диалога (иначе «чёрная рамка» и печатать нельзя, пока не
+        // тыкнешь в поле). Фокусим редактор: autoFocus:'end' сработает при его маунте, плюс
+        // одноразовая подстраховка на первый ленивый маунт.
+        onOpenAutoFocus={(e) => {
+          if (isCoarsePointer) return;
+          e.preventDefault();
+          window.setTimeout(() => editorRef.current?.focusEnd(), 80);
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Новая задача</DialogTitle>
         </DialogHeader>
@@ -264,6 +368,19 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
           {/* На мобильных: scrollable-обёртка для textarea + pills, footer — за пределами скролла.
               На десктопе: sm:contents делает обёртку прозрачной, дети участвуют в space-y-3 формы. */}
           <div className="space-y-3 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:contents">
+          {/* «Восстановить» — когда окно открыто пустым, но остался незавершённый черновик
+              прошлого закрытия (текст, абзацы, картинки, дедлайн, приоритет, ответственный). */}
+          {hasStash && !hasContent() && (
+            <button
+              type="button"
+              onClick={handleRestore}
+              className="flex w-full items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+              title="Вернуть прошлую незавершённую задачу со всеми параметрами"
+            >
+              <RotateCcw className="size-3.5 shrink-0" />
+              Восстановить прошлую задачу
+            </button>
+          )}
           {/* Drag overlay indicator. Не блокирует ввод — просто рамку подсветит. */}
           <div
             className={cn(
@@ -315,7 +432,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 disabled={saving}
                 autoFocus={!isCoarsePointer}
                 placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — скриншот вставится в текст."
-                className="min-h-[6rem] text-sm leading-snug"
+                // Левый жёлоб под ручку-«6 точек»: без него она вылезала за рамку поля.
+                className="min-h-[6rem] pl-6 text-sm leading-snug"
               />
             </Suspense>
           </div>
@@ -444,7 +562,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 variant="ghost"
                 size="sm"
                 className="h-8 px-2.5 text-xs max-sm:hidden"
-                onClick={() => onOpenChange(false)}
+                onClick={handleUserClose}
               >
                 Отмена
               </Button>
