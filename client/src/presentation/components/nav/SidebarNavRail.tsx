@@ -3,10 +3,11 @@ import { cn } from '@/lib/utils';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 
 // Тип кнопки рейла:
-// - 'tab' — вкладка-переключатель (Notion-style): активная разворачивается с подписью,
-//   остаётся «нажатой». Клик выбирает вкладку (Главная / Чат).
-// - 'action' — простая icon-кнопка действия (Входящие / Поиск): только иконка, без
-//   persistent-active. Клик выполняет действие и НЕ оставляет кнопку «нажатой».
+// - 'tab' — вкладка-переключатель (Главная / Чат): активная слегка подсвечена и остаётся
+//   «нажатой». Клик выбирает вкладку.
+// - 'action' — простая кнопка действия (Задача / Входящие / Поиск): без persistent-active,
+//   клик выполняет onAction.
+// Все кнопки — единый ряд, иконка + подпись СНИЗУ, подпись всегда видна (YouTube-style).
 export type RailItem = {
   readonly key: string;
   readonly label: string;
@@ -15,14 +16,13 @@ export type RailItem = {
   readonly variant?: 'tab' | 'action';
   // Только для variant: 'action' — обработчик клика-действия.
   readonly onAction?: () => void;
+  // Акцентная центральная кнопка («Задача»): иконка в залитом кружке, выделяется в ряду.
+  readonly accent?: boolean;
 };
 
-// Навигационный рейл в стиле Notion: слева вкладки-переключатели (активная — широкая,
-// иконка + текст), справа (прижаты к правому краю) — icon-кнопки действий без активного
-// состояния. Морф вкладок — на ЧИСТОМ CSS (кроссфейд фона + max-width у подписи), без
-// motion-layout/layoutId: это держит плавность (CSS-переходы идут по оптимизированному
-// пути, без forced reflow на каждый кадр). Иконки внутри (AnimatedXxx) сохраняют свои
-// микро-анимации через прокинутый active.
+// Навигационный рейл: один ровный ряд, у каждого элемента иконка сверху и подпись снизу
+// (всегда видима, не раскрывается). Активная вкладка (Главная/Чат) слегка подсвечена;
+// центральная «Задача» — акцентная. Иконки (AnimatedXxx) оживают на hover/active.
 export function SidebarNavRail({
   items,
   activeIndex,
@@ -34,8 +34,6 @@ export function SidebarNavRail({
   readonly onSelect: (index: number) => void;
 }): React.ReactElement {
   const { animations } = useMotion();
-  // Иконка «оживает» не только когда вкладка активна, но и при наведении — так весь рейл
-  // ощущается живым. Подсветка/морф кнопки при этом завязаны только на active (не на hover).
   const [hovered, setHovered] = useState<number | null>(null);
 
   const renderIcon = (item: RailItem, idx: number, forceActive: boolean): React.ReactNode => {
@@ -47,74 +45,53 @@ export function SidebarNavRail({
 
   const badge = (item: RailItem): React.ReactNode =>
     item.badge !== undefined && item.badge > 0 ? (
-      <span className="absolute -right-1.5 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
+      <span className="absolute -right-2 -top-1.5 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
         {item.badge > 99 ? '99+' : item.badge}
       </span>
     ) : null;
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-stretch justify-between gap-0.5">
       {items.map((item, idx) => {
-        if (item.variant === 'action') {
-          // Простая icon-кнопка действия: только иконка, без persistent-active. Первая
-          // action-кнопка прижимает группу действий к правому краю (ml-auto).
-          const firstAction = items.findIndex((it) => it.variant === 'action') === idx;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={item.onAction}
-              onMouseEnter={() => setHovered(idx)}
-              onMouseLeave={() => setHovered((h) => (h === idx ? null : h))}
-              aria-label={item.label}
-              title={item.label}
-              className={cn(
-                'relative grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-hover hover:text-foreground',
-                animations && 'transition-colors duration-200 ease-out',
-                firstAction && 'ml-auto',
-              )}
-            >
-              <span className="relative inline-flex shrink-0">
-                {renderIcon(item, idx, false)}
-                {badge(item)}
-              </span>
-            </button>
-          );
-        }
-
-        // variant 'tab' (по умолчанию): вкладка-переключатель.
-        const active = idx === activeIndex;
+        const isTab = item.variant !== 'action';
+        const active = isTab && idx === activeIndex;
+        const accent = Boolean(item.accent);
         return (
           <button
             key={item.key}
             type="button"
-            onClick={() => onSelect(idx)}
+            onClick={() => (isTab ? onSelect(idx) : item.onAction?.())}
             onMouseEnter={() => setHovered(idx)}
             onMouseLeave={() => setHovered((h) => (h === idx ? null : h))}
+            onFocus={() => setHovered(idx)}
+            onBlur={() => setHovered((h) => (h === idx ? null : h))}
             aria-label={item.label}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'relative flex items-center rounded-xl px-2 py-2 text-xs font-medium',
+              'group/nav relative flex flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px] font-medium leading-none',
               animations && 'transition-colors duration-200 ease-out',
               active
-                ? 'bg-foreground/[0.06] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] ring-1 ring-black/[0.04] dark:bg-white/10 dark:ring-white/10'
-                : 'text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]',
+                ? 'bg-foreground/[0.06] text-foreground ring-1 ring-black/[0.04] dark:bg-white/10 dark:ring-white/10'
+                : accent
+                  ? 'text-success hover:bg-success/10'
+                  : 'text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]',
             )}
           >
-            <span className="relative inline-flex shrink-0">
+            {/* Иконка. Акцентная («Задача») — в залитом кружке, чтобы выделяться по центру. */}
+            <span
+              className={cn(
+                'relative inline-flex items-center justify-center',
+                accent &&
+                  cn(
+                    'size-7 rounded-full bg-success/15 ring-1 ring-success/25',
+                    animations && 'transition-transform duration-200 group-hover/nav:scale-105 group-active/nav:scale-95',
+                  ),
+              )}
+            >
               {renderIcon(item, idx, active)}
               {badge(item)}
             </span>
-            {/* Подпись активной вкладки: разворачивается через max-width (CSS, без JS-анимации). */}
-            <span
-              className={cn(
-                'overflow-hidden whitespace-nowrap',
-                animations && 'transition-all duration-200 ease-out',
-                active ? 'ml-1.5 max-w-[120px] opacity-100' : 'ml-0 max-w-0 opacity-0',
-              )}
-            >
-              {item.label}
-            </span>
+            <span className="max-w-full truncate">{item.label}</span>
           </button>
         );
       })}

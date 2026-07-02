@@ -85,6 +85,15 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
     { key: 'home', label: 'Главная', icon: <AnimatedHome className="size-5" />, variant: 'tab' },
     { key: 'chat', label: 'Чат', icon: <AnimatedChat className="size-5" />, badge: chatUnread + actionable, variant: 'tab' },
     {
+      // Центральная акцентная кнопка «Задача» (как «+» в YouTube) — открывает AddTaskDialog.
+      key: 'add',
+      label: 'Задача',
+      icon: <Plus className="size-5" />,
+      variant: 'action',
+      accent: true,
+      onAction: openAddTask,
+    },
+    {
       key: 'inbox',
       label: 'Входящие',
       icon: <AnimatedInbox className="size-5" />,
@@ -161,13 +170,13 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
   }
 
   return (
-    <aside className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_auto_1fr_auto] gap-3 overflow-hidden bg-sidebar px-2.5 pb-3 pt-1">
+    <aside className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_1fr_auto] gap-2 overflow-hidden bg-sidebar px-2.5 pb-3 pt-0.5">
       {/* Шапка: переключатель пространства + тоггл панели. Высота строки = min-h-11 (44px)
           с вертикальным центрированием — ровно как верхняя строка крошек на страницах
           (Notion-style: свитчер пространства и топбар на одной горизонтали). Уведомления
           переехали в чат-ленту; колокольчика больше нет. На мобиле (drawer) правый отступ,
           чтобы контролы не лезли под крестик SheetContent. */}
-      <div className="flex min-h-11 items-center gap-1 max-md:pr-8">
+      <div className="flex min-h-9 items-center gap-1 max-md:pr-8">
         <WorkspaceSwitcher />
 
         {onToggleCollapse && (
@@ -198,16 +207,6 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
         activeIndex={RAIL_ORDER.indexOf(activeRail)}
         onSelect={onRailSelect}
       />
-
-      {/* Главное действие: быстрое добавление задачи. Зелёный акцент только на иконке. */}
-      <button
-        type="button"
-        onClick={openAddTask}
-        className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition hover:bg-hover active:scale-[0.985]"
-      >
-        <Plus className="size-4 shrink-0 text-success transition-transform duration-300 group-hover:rotate-90" />
-        <span className="flex-1 text-left">Добавить задачу</span>
-      </button>
 
       {/* Нижняя область: список проектов («Главная») ИЛИ общий чат пространства. Crossfade. */}
       {animations ? (

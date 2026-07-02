@@ -311,10 +311,11 @@ export function TaskComposer({
       ralphMode={ralphMode}
       disabled={submitting}
       iconOnly
-      className="size-7"
+      className="size-8"
     />
   );
-  // Маленькая accent-кнопка отправки (inline) — size-7, в одном ряду с AI справа от поля.
+  // Кнопка отправки (inline) — чистая accent-кнопка size-8, в одном ряду с AI справа от поля.
+  // Без «летающего» самолётика (раздражал) — только мягкий color/scale-фидбек.
   const sendButton = (
     <button
       type="button"
@@ -322,13 +323,9 @@ export function TaskComposer({
       disabled={!canSubmit}
       title="Отправить (Ctrl+Enter)"
       aria-label="Отправить"
-      className="group/send grid size-7 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground/50"
+      className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 active:scale-[0.97] disabled:bg-muted disabled:text-muted-foreground/50 disabled:active:scale-100"
     >
-      {submitting ? (
-        <Loader2 className={cn(ICON_GLYPH, 'animate-spin')} />
-      ) : (
-        <Send className={cn(ICON_GLYPH, 'transition-transform duration-150 group-hover/send:-translate-y-0.5 group-hover/send:translate-x-0.5')} />
-      )}
+      {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
     </button>
   );
 
@@ -420,7 +417,7 @@ export function TaskComposer({
       {/* Поле ввода. В inline — на всю ширину (отправка переехала в нижний ряд кнопок,
           чтобы все контролы были одного размера в одну ровную строку). В floating —
           справа SendTargetButton с выбором цели (Воркеру/Черновик). */}
-      <div className="flex items-end gap-1 pr-1.5">
+      <div className="flex items-end gap-1 pr-2">
         <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
           <ContextMenuTrigger asChild>
             <textarea
@@ -441,7 +438,7 @@ export function TaskComposer({
           {fmt.menuContent}
         </ContextMenu>
         {/* Справа от поля: AI (слева) + отправка (справа). В floating — SendTargetButton. */}
-        <div className="flex shrink-0 items-center gap-0.5 pb-1.5">
+        <div className="flex shrink-0 items-center gap-1 pb-2">
           {isInline ? (
             <>
               {aiButton}

@@ -103,6 +103,20 @@ export function KanbanCard({
   // Прогресс GFM-чеклиста из описания — бейдж «3/7» в мета-строке.
   const checklist = task.description ? checklistProgress(task.description) : null;
 
+  // Есть ли что показывать в нижнем мета-оверлее. Если нет (простая однострочная задача) —
+  // не затемняем текст и не рисуем пустую градиент-полосу на hover; кнопки действий
+  // (корзина/стрелка) сами маскируют свой угол сплошным фоном.
+  const hasMeta = Boolean(
+    (task.delegation && currentUserId) ||
+      checklist ||
+      (task.commentCount ?? 0) > 0 ||
+      (task.attachmentCount ?? 0) > 0 ||
+      (task.ralphMode && task.ralphMode !== 'normal') ||
+      task.deadline ||
+      task.status === 'in_progress' ||
+      task.status === 'awaiting_clarification',
+  );
+
   // Выполненная задача — для зелёного hover-затемнения и зелёного градиента оверлея
   // (иначе на зелёной карточке нижний градиент from-card давал нейтральную полосу).
   const doneCard = !preview && task.status === 'done';
@@ -248,7 +262,14 @@ export function KanbanCard({
         <div className="min-w-0 flex-1">
           {/* Текст карточки. На hover ЗАТЕМНЯЕТСЯ — чтобы наложенные снизу мета/корзина
               читались (внахлёст). Высоты под мету НЕ резервируем (нет «пустого промежутка»). */}
-          <div className="transition-opacity duration-150 group-hover:opacity-40 group-focus-within:opacity-40 max-sm:!opacity-100">
+          <div
+            className={cn(
+              'transition-opacity duration-150 max-sm:!opacity-100',
+              // Затемняем текст только если снизу реально всплывёт мета-оверлей — и мягче,
+              // чем раньше (было opacity-40). Без меты (простая карточка) текст не гаснет.
+              hasMeta && 'group-hover:opacity-60 group-focus-within:opacity-60',
+            )}
+          >
             {task.description?.trim() ? (
               <Markdown
                 className={cn(
@@ -270,8 +291,10 @@ export function KanbanCard({
             под иконками. Прячется в режиме выделения и drag-preview.
             pointer-events-none на контейнере: иначе невидимый (opacity-0) оверлей снизу
             перехватывал mousedown и не давал начать drag в нижней части карточки. Клики
-            ловят только кнопки (pointer-events-auto, и только когда оверлей реально виден). */}
-        {!selecting && !preview && (
+            ловят только кнопки (pointer-events-auto, и только когда оверлей реально виден).
+            Рисуем только если есть что показать (hasMeta) — иначе у простой однострочной
+            карточки не будет пустой градиент-полосы снизу. */}
+        {!selecting && !preview && hasMeta && (
           <div
             className={cn(
               'pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 rounded-b-lg bg-gradient-to-t to-transparent px-2 pb-1 pt-5 text-[11px] text-muted-foreground opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100',

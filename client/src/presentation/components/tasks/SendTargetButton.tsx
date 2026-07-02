@@ -67,7 +67,7 @@ export function SendTargetButton<V extends string>({
       {showLabel && current && (
         <span className="text-[11px] text-muted-foreground">{current.label}</span>
       )}
-      <div className="inline-flex items-stretch overflow-hidden rounded-lg">
+      <div className="inline-flex shrink-0 items-stretch overflow-hidden rounded-lg shadow-sm">
         {sendButton}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -78,7 +78,7 @@ export function SendTargetButton<V extends string>({
               title="Куда отправить"
               className={cn(
                 h,
-                'w-7 shrink-0 rounded-none rounded-r-lg border-l border-primary-foreground/30 p-0',
+                'w-6 shrink-0 rounded-none rounded-r-lg border-l border-primary-foreground/25 p-0',
               )}
             >
               <ChevronDown className="size-3.5" />
