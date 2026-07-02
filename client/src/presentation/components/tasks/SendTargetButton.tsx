@@ -1,5 +1,4 @@
 import { ChevronDown, Loader2, Send } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,9 +29,14 @@ type Props<V extends string> = {
   readonly showLabel?: boolean;
 };
 
-// Telegram-style кнопка отправки: иконка-самолётик (отправить в текущую цель) + слитная
-// каретка, открывающая выбор цели (Воркеру / Черновик). Используется и в композере задачи,
-// и в композере комментария дравера.
+// Telegram-style кнопка отправки: круглая иконка-самолётик (отправить в текущую цель) + тихая
+// каретка выбора цели (Воркеру / Черновик). Используется и в композере задачи, и в композере
+// комментария дравера.
+//
+// ВАЖНО: тут НЕ используем shadcn <Button> — у него дефолтный size-вариант тянет
+// `sm:px-4 sm:h-10`, а `size-9`/`p-0` в className беспрефиксные и не перебивают `sm:`-варианты →
+// на десктопе паддинг «раздувал» кнопку в эллипс. Обычный <button> с фиксированным `size-*`
+// (как в inline-композере) даёт ровный круг. См. память icon-button-size-vs-input-height.
 export function SendTargetButton<V extends string>({
   options = [],
   value,
@@ -46,20 +50,23 @@ export function SendTargetButton<V extends string>({
   const hasChoice = options.length >= 2 && value !== undefined && onChange !== undefined;
   const current = hasChoice ? (options.find((o) => o.value === value) ?? options[0]) : null;
   const dim = size === 'sm' ? 'size-8' : 'size-9';
-  const h = size === 'sm' ? 'h-8' : 'h-9';
+  // Каретка — той же высоты, что и кнопка, но уже по ширине (тихий вторичный контрол).
+  const caretDim = size === 'sm' ? 'h-8 w-6' : 'h-9 w-7';
 
-  // Чистая круглая solid-кнопка отправки (в тон акцентной «＋» в навбаре), а не «сплит».
   const sendButton = (
-    <Button
+    <button
       type="button"
       onClick={onSend}
       disabled={disabled || submitting}
       title="Отправить (Ctrl+Enter)"
       aria-label={current ? `Отправить — ${current.label}` : 'Отправить'}
-      className={cn(dim, 'shrink-0 rounded-full p-0 shadow-sm')}
+      className={cn(
+        dim,
+        'grid shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm ring-offset-background transition-all duration-150 hover:bg-primary/90 hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.97] disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground/50 disabled:shadow-none disabled:active:scale-100',
+      )}
     >
       {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-    </Button>
+    </button>
   );
 
   if (!hasChoice) return sendButton;
@@ -72,16 +79,18 @@ export function SendTargetButton<V extends string>({
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
+          <button
             type="button"
-            variant="ghost"
             disabled={submitting}
             aria-label="Куда отправить"
             title="Куда отправить"
-            className={cn(h, 'w-7 shrink-0 rounded-md p-0 text-muted-foreground')}
+            className={cn(
+              caretDim,
+              'grid shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+            )}
           >
             <ChevronDown className="size-4" />
-          </Button>
+          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" side="top" className="min-w-40">
           <DropdownMenuRadioGroup value={value} onValueChange={(v) => onChange?.(v as V)}>
