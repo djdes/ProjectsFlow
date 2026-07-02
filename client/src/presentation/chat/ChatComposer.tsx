@@ -84,6 +84,16 @@ export function ChatComposer({
     }
   };
 
+  // Ctrl+V картинки/файла из буфера → прикрепляем как вложение (тот же путь, что скрепка).
+  // Обычный текст (в буфере нет файлов) не трогаем — вставляется как есть.
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>): void => {
+    if (editing) return; // в режиме правки вложения не добавляем (скрепка тоже скрыта)
+    const pasted = Array.from(e.clipboardData?.files ?? []);
+    if (pasted.length === 0) return;
+    e.preventDefault();
+    setFiles((prev) => [...prev, ...pasted].slice(0, 10));
+  };
+
   return (
     <div className="shrink-0 border-t bg-sidebar px-2 py-2">
       {/* контекст: ответ / редактирование */}
@@ -108,24 +118,15 @@ export function ChatComposer({
         </div>
       )}
 
-      {/* выбранные файлы */}
+      {/* выбранные файлы: картинки — миниатюрой, остальное — 📎 имя */}
       {files.length > 0 && (
         <div className="mb-1 flex flex-wrap gap-1">
           {files.map((f, i) => (
-            <span
-              key={`${f.name}-${i}`}
-              className="inline-flex max-w-full items-center gap-1 rounded bg-foreground/[0.05] px-1.5 py-0.5 text-xs dark:bg-white/[0.06]"
-            >
-              <span className="truncate">📎 {f.name}</span>
-              <button
-                type="button"
-                aria-label="Убрать файл"
-                onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-3" />
-              </button>
-            </span>
+            <FilePreviewChip
+              key={`${f.name}-${f.size}-${i}`}
+              file={f}
+              onRemove={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
+            />
           ))}
         </div>
       )}
@@ -160,6 +161,7 @@ export function ChatComposer({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           rows={1}
           placeholder={editing ? 'Изменить сообщение…' : 'Сообщение…'}
           className="min-h-8 w-0 min-w-0 flex-1 resize-none rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -181,5 +183,40 @@ export function ChatComposer({
         </button>
       </div>
     </div>
+  );
+}
+
+// Чип выбранного вложения. Для картинок — миниатюра (blob-URL с корректным revoke на
+// размонтировании/смене файла, без утечек); для прочего — 📎 имя файла.
+function FilePreviewChip({ file, onRemove }: { file: File; onRemove: () => void }): React.ReactElement {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file.type.startsWith('image/')) return;
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+
+  return (
+    <span className="group/chip relative inline-flex max-w-full items-center gap-1 rounded bg-foreground/[0.05] text-xs dark:bg-white/[0.06]">
+      {url ? (
+        <img src={url} alt={file.name} className="size-9 rounded object-cover" />
+      ) : (
+        <span className="truncate px-1.5 py-0.5">📎 {file.name}</span>
+      )}
+      <button
+        type="button"
+        aria-label="Убрать файл"
+        onClick={onRemove}
+        className={cn(
+          'text-muted-foreground hover:text-foreground',
+          url
+            ? 'absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-background/90 shadow-sm ring-1 ring-border'
+            : 'pr-1.5',
+        )}
+      >
+        <X className="size-3" />
+      </button>
+    </span>
   );
 }
