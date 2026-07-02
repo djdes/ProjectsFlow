@@ -45,8 +45,10 @@ export function SendTargetButton<V extends string>({
 }: Props<V>): React.ReactElement {
   const hasChoice = options.length >= 2 && value !== undefined && onChange !== undefined;
   const current = hasChoice ? (options.find((o) => o.value === value) ?? options[0]) : null;
+  const dim = size === 'sm' ? 'size-8' : 'size-9';
   const h = size === 'sm' ? 'h-8' : 'h-9';
 
+  // Чистая круглая solid-кнопка отправки (в тон акцентной «＋» в навбаре), а не «сплит».
   const sendButton = (
     <Button
       type="button"
@@ -54,7 +56,7 @@ export function SendTargetButton<V extends string>({
       disabled={disabled || submitting}
       title="Отправить (Ctrl+Enter)"
       aria-label={current ? `Отправить — ${current.label}` : 'Отправить'}
-      className={cn(h, 'w-9 shrink-0 p-0', hasChoice ? 'rounded-none rounded-l-lg' : 'rounded-lg')}
+      className={cn(dim, 'shrink-0 rounded-full p-0 shadow-sm')}
     >
       {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
     </Button>
@@ -62,40 +64,37 @@ export function SendTargetButton<V extends string>({
 
   if (!hasChoice) return sendButton;
 
+  // Выбор цели (Воркеру/Черновик) — отдельная тихая ghost-каретка слева, не «приваренная» к кнопке.
   return (
-    <div className="inline-flex items-center gap-1.5">
+    <div className="inline-flex items-center gap-1">
       {showLabel && current && (
         <span className="text-[11px] text-muted-foreground">{current.label}</span>
       )}
-      <div className="inline-flex shrink-0 items-stretch overflow-hidden rounded-lg shadow-sm">
-        {sendButton}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              disabled={submitting}
-              aria-label="Куда отправить"
-              title="Куда отправить"
-              className={cn(
-                h,
-                'w-6 shrink-0 rounded-none rounded-r-lg border-l border-primary-foreground/25 p-0',
-              )}
-            >
-              <ChevronDown className="size-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="top" className="min-w-40">
-            <DropdownMenuRadioGroup value={value} onValueChange={(v) => onChange?.(v as V)}>
-              {options.map((o) => (
-                <DropdownMenuRadioItem key={o.value} value={o.value}>
-                  {o.icon ? <o.icon className="size-4" /> : null}
-                  {o.label}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={submitting}
+            aria-label="Куда отправить"
+            title="Куда отправить"
+            className={cn(h, 'w-7 shrink-0 rounded-md p-0 text-muted-foreground')}
+          >
+            <ChevronDown className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" side="top" className="min-w-40">
+          <DropdownMenuRadioGroup value={value} onValueChange={(v) => onChange?.(v as V)}>
+            {options.map((o) => (
+              <DropdownMenuRadioItem key={o.value} value={o.value}>
+                {o.icon ? <o.icon className="size-4" /> : null}
+                {o.label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {sendButton}
     </div>
   );
 }

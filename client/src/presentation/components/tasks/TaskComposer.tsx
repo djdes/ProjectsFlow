@@ -417,7 +417,7 @@ export function TaskComposer({
       {/* Поле ввода. В inline — на всю ширину (отправка переехала в нижний ряд кнопок,
           чтобы все контролы были одного размера в одну ровную строку). В floating —
           справа SendTargetButton с выбором цели (Воркеру/Черновик). */}
-      <div className="flex items-end gap-1 pr-2">
+      <div className="flex items-end gap-1 pr-2 pt-2">
         <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
           <ContextMenuTrigger asChild>
             <textarea
