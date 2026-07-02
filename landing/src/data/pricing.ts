@@ -26,6 +26,8 @@ export interface Plan {
   readonly requestOnly?: boolean;
   /** Доп-пометка под кнопкой (напр. «можно попробовать 1 час»). */
   readonly note?: string;
+  /** Текст второй CTA-кнопки-заглушки (триал). Если задан — под основной CTA рендерим вторую кнопку. */
+  readonly trialCta?: string;
   /** href для CTA (относительный — лендинг и SPA на одном Express). */
   readonly href: string;
 }
@@ -63,7 +65,7 @@ export const PLANS: readonly Plan[] = [
     cta: 'Перейти на Прайм',
     highlight: true,
     badge: 'Популярный',
-    note: '🎁 Первый час — бесплатно, без карты',
+    trialCta: 'Попробовать 1 час бесплатно',
     href: '/register?plan=prime',
   },
   {

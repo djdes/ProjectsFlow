@@ -58,6 +58,13 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
               {plan.cta}
             </a>
 
+            {/* Вторая кнопка-заглушка (триал) — без действия/href, рендерим только если задан trialCta. */}
+            {plan.trialCta && (
+              <button type="button" class="pf-btn pf-btn--block pf-btn--ghost pricing__trial">
+                {plan.trialCta}
+              </button>
+            )}
+
             {plan.note && <p class="pricing__plan-note pricing__plan-note--offer">{plan.note}</p>}
             {plan.requestOnly && <p class="pricing__plan-note">подключаем вручную, не самостоятельно</p>}
           </article>
@@ -170,6 +177,9 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
     margin-top: 1px;
     color: var(--accent);
   }
+  /* Вторая CTA-кнопка-заглушка (триал) — отступ от основной кнопки. */
+  .pricing__trial { margin-top: var(--sp-2); }
+
   .pricing__plan-note {
     margin-top: var(--sp-3);
     text-align: center;

@@ -48,7 +48,7 @@
   --grad-text: linear-gradient(120deg, #0aa2c7, #22c3e6);
 
   /* --- Шрифты ------------------------------------------------------------- */
-  --font-sans: 'Inter Variable', Inter, system-ui, -apple-system, sans-serif;
+  --font-sans: 'Segoe UI', -apple-system, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
 
   /* --- Типографическая шкала --------------------------------------------- */
