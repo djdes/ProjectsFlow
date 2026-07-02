@@ -82,6 +82,9 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
   // программного submit по Ctrl/Cmd+Enter из редактора.
   const editorRef = useRef<RichTextEditorHandle>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  // Inline-скрины: blob-URL превью в редакторе → File. Реальная загрузка отложена до
+  // создания задачи (в handleSubmit blob-URL'ы заменяются на URL вложений). Как в TaskDrawer.
+  const inlineImagesRef = useRef<Map<string, File>>(new Map());
   // autoFocus редактора — только на desktop (на мобильных клавиатура перекрывает диалог).
   const isCoarsePointer =
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
@@ -100,6 +103,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
         prev.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
         return [];
       });
+      inlineImagesRef.current.forEach((_file, blobUrl) => URL.revokeObjectURL(blobUrl));
+      inlineImagesRef.current.clear();
     }
   }, [open]);
 
@@ -125,6 +130,18 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
         previewUrl: isImageMime(file.type) ? URL.createObjectURL(file) : '',
       })),
     ]);
+  };
+
+  // Вставка картинки в текст (inline-блок): показываем сразу blob-превью, реальную загрузку
+  // откладываем до создания задачи (см. handleSubmit). Задача ещё не существует.
+  const uploadImageInline = async (
+    file: File,
+    onProgress: (pct: number) => void,
+  ): Promise<string | null> => {
+    const blobUrl = URL.createObjectURL(file);
+    inlineImagesRef.current.set(blobUrl, file);
+    onProgress(100);
+    return blobUrl;
   };
 
   const removeFile = (id: string): void => {
@@ -184,7 +201,32 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
         deadline,
         priority,
       });
-      // Загружаем вложения в созданную задачу (best-effort, ошибки — toast'ом).
+      // Inline-скрины: грузим отложенные картинки и заменяем blob-URL на URL вложений.
+      if (inlineImagesRef.current.size > 0) {
+        let desc = trimmed;
+        let changed = false;
+        for (const [blobUrl, file] of inlineImagesRef.current) {
+          if (desc.includes(blobUrl)) {
+            try {
+              const att = await taskRepository.uploadAttachment(targetId, task.id, file);
+              desc = desc.split(blobUrl).join(att.url);
+              changed = true;
+            } catch (err) {
+              toast.error(`Не удалось загрузить картинку: ${(err as Error).message}`);
+            }
+          }
+          URL.revokeObjectURL(blobUrl);
+        }
+        inlineImagesRef.current.clear();
+        if (changed) {
+          try {
+            await taskRepository.update(targetId, task.id, { description: desc });
+          } catch (err) {
+            toast.error(`Не удалось сохранить картинки в описании: ${(err as Error).message}`);
+          }
+        }
+      }
+      // Загружаем вложения (не-картинки + явно добавленные файлы) в созданную задачу.
       for (const pf of pending) {
         try {
           await taskRepository.uploadAttachment(targetId, task.id, pf.file);
@@ -262,15 +304,17 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
               <RichTextEditor
                 ref={editorRef}
                 variant="description"
+                selectionMenu={false}
                 value={description}
                 onChange={setDescription}
                 onSubmit={() => {
                   if (!disabled) formRef.current?.requestSubmit();
                 }}
                 onPasteFiles={addFiles}
+                onUploadImage={uploadImageInline}
                 disabled={saving}
                 autoFocus={!isCoarsePointer}
-                placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — картинка пойдёт в аттачи."
+                placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — скриншот вставится в текст."
                 className="min-h-[6rem] text-sm leading-snug"
               />
             </Suspense>

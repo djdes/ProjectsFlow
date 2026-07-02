@@ -1919,6 +1919,7 @@ export function TaskDrawer({
                     <RichTextEditor
                       ref={createEditorRef}
                       variant="description"
+                      selectionMenu={false}
                       value={description}
                       onChange={setDescription}
                       onSubmit={() => {

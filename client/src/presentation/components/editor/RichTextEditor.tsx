@@ -122,6 +122,11 @@ export interface RichTextEditorProps {
   disabled?: boolean;
   className?: string;
   variant?: 'description' | 'comment';
+  /**
+   * Показывать меню форматирования при ВЫДЕЛЕНИИ текста. По умолчанию `true`. При `false`
+   * меню открывается только по правой кнопке (contextmenu) — Notion-style для описаний задач.
+   */
+  selectionMenu?: boolean;
   /** Передать участников проекта, чтобы включить @-упоминания. */
   members?: MentionMember[];
   /** Вставка НЕ-картинок из буфера (файлы-вложения). Картинки идут через onUploadImage. */
@@ -154,6 +159,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       disabled = false,
       className,
       variant = 'description',
+      selectionMenu = true,
       members,
       onPasteFiles,
       onUploadImage,
@@ -412,6 +418,9 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
         setMenuAnchor(null);
         return;
       }
+      // Меню только по правой кнопке: выделение НЕ открывает его (ветки закрытия выше уже
+      // отработали, поэтому меню, открытое contextmenu, штатно закроется при клике/схлопывании).
+      if (!selectionMenu) return;
       const key = `${from}-${to}`;
       if (dismissedKeyRef.current === key) return; // уже закрыли это выделение
       savedRangeRef.current = { from, to };
@@ -449,7 +458,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       editor.off('selectionUpdate', onSel);
       document.removeEventListener('pointerdown', onPointerDown, true);
     };
-  }, [editor, closeMenu]);
+  }, [editor, closeMenu, selectionMenu]);
 
   return (
     <div className={cn('relative', className)}>

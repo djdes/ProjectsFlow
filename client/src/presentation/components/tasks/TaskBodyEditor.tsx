@@ -70,6 +70,8 @@ export function TaskBodyEditor({
         <RichTextEditor
           ref={editorRef}
           variant="description"
+          // Меню форматирования — только по правой кнопке (не по выделению).
+          selectionMenu={false}
           value={body}
           onChange={onBodyChange}
           // Ctrl/Cmd+Enter внутри тела → тоже сохранить полное описание.
