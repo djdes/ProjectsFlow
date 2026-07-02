@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FeedItem } from '@/domain/activity/ActivityFeedItem';
 import type { FeedTab } from '@/application/activity/ActivityRepository';
+import type { Notification } from '@/domain/notifications/Notification';
 import { useContainer } from '@/infrastructure/di/container';
 import {
   NOTIFICATIONS_CHANGED_EVENT,
@@ -22,6 +23,7 @@ export function useActivityFeed(
   hasMore: boolean;
   loadMore: () => void;
   refresh: () => void;
+  patchItem: (id: string, patch: Partial<Notification>) => void;
 } {
   const { getActivityFeed } = useContainer();
   const [items, setItems] = useState<FeedItem[]>([]);
@@ -29,7 +31,14 @@ export function useActivityFeed(
   const [loading, setLoading] = useState(true);
   const [nextBefore, setNextBefore] = useState<string | null>(null);
   const seq = useRef(0);
+  // Сколько строк уже загружено (с учётом «загрузить ещё») — чтобы live-рефетч перечитывал
+  // РОВНО это окно, а не только первую страницу (иначе терялась подгрузка и прыгал скролл).
+  const loadedCount = useRef(0);
+  useEffect(() => {
+    loadedCount.current = items.length;
+  }, [items]);
 
+  // Полный сброс к первой странице — начальная загрузка и смена вкладки.
   const refresh = useCallback(() => {
     if (!workspaceId) {
       setItems([]);
@@ -54,16 +63,49 @@ export function useActivityFeed(
       });
   }, [getActivityFeed, workspaceId, tab]);
 
+  // Live-рефетч по realtime-событиям: перечитываем РОВНО загруженное окно (не только PAGE) и
+  // заменяем тем же набором id → React переиспользует DOM, позиция скролла и «загрузить ещё»
+  // сохраняются; реально новые строки просто добавятся сверху. Без loading-мигания.
+  const syncWindow = useCallback(() => {
+    if (!workspaceId) return;
+    const s = (seq.current += 1);
+    const limit = Math.max(PAGE, loadedCount.current);
+    getActivityFeed
+      .execute(workspaceId, { tab, limit })
+      .then((page) => {
+        if (s !== seq.current) return;
+        setItems(page.items);
+        setNextBefore(page.nextBefore);
+        setError(null);
+      })
+      .catch(() => {
+        /* live-рефетч best-effort — не роняем ленту */
+      });
+  }, [getActivityFeed, workspaceId, tab]);
+
+  // Точечный in-place апдейт одного уведомления (readAt при клике/пометке) — БЕЗ рефетча,
+  // чтобы клик по строке не сбрасывал ленту к первой странице и не прыгал скролл вверх.
+  const patchItem = useCallback((id: string, patch: Partial<Notification>) => {
+    setItems((prev) =>
+      prev.map((it) =>
+        it.type !== 'activity' && it.notification.id === id
+          ? { ...it, notification: { ...it.notification, ...patch } }
+          : it,
+      ),
+    );
+  }, []);
+
   useEffect(() => {
     refresh();
   }, [refresh]);
 
   // Live-рефетч: события задач/проектов/уведомлений долетают по существующему SSE-бусу.
+  // Используем syncWindow (сохраняет окно/скролл), а НЕ refresh (тот сбрасывает к 1-й странице).
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const schedule = (): void => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(refresh, 400);
+      timer = setTimeout(syncWindow, 400);
     };
     window.addEventListener(TASK_CHANGED_EVENT, schedule);
     window.addEventListener(PROJECT_CHANGED_EVENT, schedule);
@@ -74,7 +116,7 @@ export function useActivityFeed(
       window.removeEventListener(PROJECT_CHANGED_EVENT, schedule);
       window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, schedule);
     };
-  }, [refresh]);
+  }, [syncWindow]);
 
   const loadMore = useCallback(() => {
     if (!workspaceId || !nextBefore) return;
@@ -97,5 +139,5 @@ export function useActivityFeed(
       });
   }, [getActivityFeed, workspaceId, tab, nextBefore]);
 
-  return { items, loading, error, hasMore: nextBefore !== null, loadMore, refresh };
+  return { items, loading, error, hasMore: nextBefore !== null, loadMore, refresh, patchItem };
 }

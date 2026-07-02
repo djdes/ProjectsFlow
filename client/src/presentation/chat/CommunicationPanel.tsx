@@ -96,8 +96,10 @@ function TabButton({
 function ActivityFeedList({ tab }: { tab: 'all' | 'action' }): React.ReactElement {
   const { workspace } = useCurrentWorkspace();
   const feed = useActivityFeed(workspace?.id ?? null, tab);
-  // Действия над уведомлениями (принять/отклонить и т.п.) → после изменения рефетчим ленту.
-  const actions = useNotificationActions({ onChanged: feed.refresh });
+  // Пометку прочитанным/действия применяем ТОЧЕЧНО в ленте (patchItem), без полного рефетча —
+  // иначе клик по строке сбрасывал «загрузить ещё» и скроллил ленту вверх. Реально новые
+  // строки подтянет live-рефетч (useActivityFeed слушает те же события, сохраняя окно/скролл).
+  const actions = useNotificationActions({ patchItem: feed.patchItem });
 
   if (feed.loading) {
     return (
