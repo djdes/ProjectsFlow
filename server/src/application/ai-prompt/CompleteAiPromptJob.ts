@@ -4,7 +4,6 @@ import {
   NotDispatcherForAiPromptJobError,
 } from '../../domain/ai-prompt/errors.js';
 import type { AiPromptJobRepository } from './AiPromptJobRepository.js';
-import type { RecordUsage } from '../usage/RecordUsage.js';
 
 // 600000: compose-результат — большая JSON-строка (2 варианта + сегменты). improve кладёт
 // plain-текст (обычно ≤2000). Колонка improved_text — MEDIUMTEXT (db/060), вмещает с запасом.
@@ -13,8 +12,6 @@ const MAX_ERROR = 500;
 
 type Deps = {
   readonly aiPromptJobs: AiPromptJobRepository;
-  // Метеринг расхода ИИ (best-effort) — списываем с подписки диспетчера.
-  readonly recordUsage?: RecordUsage;
 };
 
 export type CompleteAiPromptJobInput = {
@@ -71,19 +68,7 @@ export class CompleteAiPromptJob {
       });
     }
 
-    // Метеринг: списываем с профиля ИНИЦИАТОРА (createdBy — кто нажал AI), best-effort,
-    // идемпотентно по source+ref.
-    void this.deps.recordUsage
-      ?.execute({
-        source: 'ai_prompt',
-        refId: input.jobId,
-        dispatcherUserId: job.createdBy,
-        projectId: job.projectId,
-        model: null,
-        tokensIn: input.tokensIn ?? null,
-        tokensOut: input.tokensOut ?? null,
-        costUsd: input.costUsd ?? null,
-      })
-      .catch(() => {});
+    // Метеринга НЕТ: AI-переработка/compose бесплатна для всех и не списывает лимиты
+    // (сознательное решение). Стоимость прогона в ledger не пишем.
   }
 }

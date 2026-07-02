@@ -679,7 +679,6 @@ const enqueueAiPromptJob = new EnqueueAiPromptJob({
   getKbDocument: new GetKbDocument({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
   rateLimiter: agentRateLimiter,
   resolveDefaultDispatcherUserId: resolveDefaultAiDispatcherUserId,
-  checkBudget,
 });
 const waitForAiPromptJob = new WaitForAiPromptJob({
   aiPromptJobs: aiPromptJobRepo,
@@ -1942,8 +1941,8 @@ const { app, devProxyUpgrade } = createApp({
     enqueueAiPromptJob,
     waitForAiPromptJob,
     listPendingAiPromptJobs: new ListPendingAiPromptJobs({ aiPromptJobs: aiPromptJobRepo }),
-    claimAiPromptJob: new ClaimAiPromptJob({ aiPromptJobs: aiPromptJobRepo, checkBudget }),
-    completeAiPromptJob: new CompleteAiPromptJob({ aiPromptJobs: aiPromptJobRepo, recordUsage }),
+    claimAiPromptJob: new ClaimAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
+    completeAiPromptJob: new CompleteAiPromptJob({ aiPromptJobs: aiPromptJobRepo }),
     listPendingMonitoringAnalysisJobs,
     claimMonitoringAnalysisJob,
     completeMonitoringAnalysisJob,

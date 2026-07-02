@@ -11,7 +11,6 @@ import type { ListProjects } from '../project/ListProjects.js';
 import type { ListKbDocuments } from '../kb/ListKbDocuments.js';
 import type { GetKbDocument } from '../kb/GetKbDocument.js';
 import type { AiPromptJobRepository } from './AiPromptJobRepository.js';
-import { assertDispatcherAllowed, type CheckBudget } from '../usage/CheckBudget.js';
 import { prepareKbContext } from './prepareKbContext.js';
 import { prepareComposeContext } from './prepareComposeContext.js';
 
@@ -35,8 +34,6 @@ type Deps = {
   readonly listKbDocuments: ListKbDocuments;
   readonly getKbDocument: GetKbDocument;
   readonly rateLimiter: InMemoryRateLimiter;
-  // Гейт лимитов инициатора (кто нажал AI): free → нет доступа, исчерпал окно → 402 сразу.
-  readonly checkBudget?: CheckBudget;
   /**
    * Резолвер дефолтного диспетчера для Inbox-задач (без projectId).
    * Возвращает userId или null если не сконфигурирован
@@ -72,9 +69,9 @@ export class EnqueueAiPromptJob {
       throw new AiPromptRateLimitedError();
     }
 
-    // Гейт доступа/бюджета ИНИЦИАТОРА (кто нажал AI): free → PlanRequiredError, исчерпал
-    // окно → UsageBlockedError. Мгновенный 402 в UI, без ожидания диспетчера.
-    await assertDispatcherAllowed(this.deps.checkBudget, input.userId);
+    // AI-переработка/compose доступна ВСЕМ тарифам бесплатно и без списания лимитов
+    // (сознательное решение): гейта плана/бюджета тут нет. От злоупотребления защищает
+    // rate-limit выше (improve 60/час, compose 30/час на пользователя).
 
     let dispatcherUserId: string;
     let kbContext: string | null = null;
