@@ -115,6 +115,11 @@ export function ProjectCover({ projectId, coverUrl, coverPosition, canEdit }: Pr
   };
 
   const download = async (): Promise<void> => {
+    // Градиент — это CSS, а не файл: скачивать нечего.
+    if (isGradient) {
+      toast.info('Градиентную обложку нельзя скачать файлом — загрузите своё фото');
+      return;
+    }
     try {
       const res = await fetch(coverUrl, { credentials: 'include' });
       const blob = await res.blob();
@@ -146,11 +151,11 @@ export function ProjectCover({ projectId, coverUrl, coverPosition, canEdit }: Pr
         )}
       />
 
-      {/* Панель управления — в правом ВЕРХНЕМ углу обложки (как в Notion). */}
+      {/* Панель управления — в правом ВЕРХНЕМ углу обложки (как в Notion). Видна сразу, как
+          только есть обложка (без наведения) — 3 кнопки: Поменять / Переместить / Скачать. */}
       {canEdit && !repositioning && (
         <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-end p-3">
-          {/* На тач-устройствах hover нет — на мобиле контролы показываем всегда, на sm+ по наведению. */}
-          <div className="pointer-events-auto flex items-center gap-1.5 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover/cover:opacity-100 sm:focus-within:opacity-100">
+          <div className="pointer-events-auto flex items-center gap-1.5">
             <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
               <PopoverTrigger asChild>
                 <CoverButton>
@@ -174,17 +179,14 @@ export function ProjectCover({ projectId, coverUrl, coverPosition, canEdit }: Pr
                 />
               </PopoverContent>
             </Popover>
-            {!isGradient && (
-              <CoverButton onClick={startReposition}>
-                <MoveVertical className="size-3.5" />
-                Переместить
-              </CoverButton>
-            )}
-            {!isGradient && (
-              <CoverButton onClick={() => void download()} aria-label="Скачать">
-                <Download className="size-3.5" />
-              </CoverButton>
-            )}
+            {/* Переместить: реально двигает только фото (у градиента позиция не важна). */}
+            <CoverButton onClick={startReposition} disabled={isGradient} aria-label="Переместить">
+              <MoveVertical className="size-3.5" />
+              Переместить
+            </CoverButton>
+            <CoverButton onClick={() => void download()} aria-label="Скачать">
+              <Download className="size-3.5" />
+            </CoverButton>
           </div>
         </div>
       )}
