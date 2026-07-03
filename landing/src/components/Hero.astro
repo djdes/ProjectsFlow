@@ -35,7 +35,7 @@ const points = [
     <!-- Notion-раскладка: центрированный лид сверху. -->
     <div class="hero__lede" data-reveal>
       <h1 id="hero-title" class="hero__title">
-        Опиши идею — получи <span class="hero__kw"><span class="hero__kw-dot" aria-hidden="true"></span>готовый&nbsp;продукт<svg class="hero__kw-line" viewBox="0 0 300 12" preserveAspectRatio="none" fill="none" aria-hidden="true"><path d="M3 8C55 2 110 11 152 6 210 0 255 10 297 6" stroke="currentColor" stroke-width="4" stroke-linecap="round" vector-effect="non-scaling-stroke" /></svg></span>.
+        Опиши идею — получи <span class="hero__kw"><span class="hero__kw-dot" aria-hidden="true"></span><span class="hero__kw-text">готовый&nbsp;продукт<span class="hero__kw-end">.</span><svg class="hero__kw-line" viewBox="0 0 300 12" preserveAspectRatio="none" fill="none" aria-hidden="true"><path d="M3 8C55 2 110 11 152 6 210 0 255 10 297 6" stroke="currentColor" stroke-width="4" stroke-linecap="round" vector-effect="non-scaling-stroke" /></svg></span></span>
       </h1>
 
       <p class="hero__subtitle">
@@ -220,19 +220,21 @@ const points = [
   /* Ключевое слово — синий текст + рисованная подчёркивающая линия (рисуется на входе)
      + маленькая синяя точка-акцент. Без «облака»-плашки. */
   .hero__kw {
-    position: relative;
+    display: inline-flex;
+    align-items: center;
     color: #1f6fe0;
     white-space: nowrap;
   }
   .hero__kw-dot {
-    display: inline-block;
+    flex: none;
     width: 0.34em;
     height: 0.34em;
-    margin-right: 0.32em;
+    margin-right: 0.34em;
     border-radius: 50%;
     background: #2383e2;
-    vertical-align: 0.28em;
   }
+  .hero__kw-text { position: relative; }
+  .hero__kw-end { color: var(--text); }
   .hero__kw-line {
     position: absolute;
     left: 0;
