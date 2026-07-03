@@ -11,9 +11,14 @@ import {
 export function ResizeHandleHint({
   children,
   side = 'right',
+  action = 'Свернуть',
+  shortcut = 'Клик или Ctrl+\\',
 }: {
   children: React.ReactElement;
   side?: 'left' | 'right';
+  // Верхняя строка подсказки — что делает клик по границе (панель: «Свернуть», окно: «Закрыть»).
+  action?: string;
+  shortcut?: string;
 }): React.ReactElement {
   return (
     <TooltipProvider delayDuration={350}>
@@ -25,8 +30,8 @@ export function ResizeHandleHint({
           className="border-transparent bg-neutral-900 text-white dark:bg-neutral-800"
         >
           <div>
-            <span className="font-medium">Свернуть</span>{' '}
-            <span className="text-white/55">Клик или Ctrl+\</span>
+            <span className="font-medium">{action}</span>{' '}
+            <span className="text-white/55">{shortcut}</span>
           </div>
           <div>
             <span className="font-medium">Изменить ширину</span>{' '}

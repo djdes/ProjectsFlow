@@ -163,6 +163,25 @@
     background: hsl(var(--muted-foreground) / 0.65);
   }
 
+  /* Мягкое затухание контента у верхнего и нижнего края прокрутки (как в Notion):
+     маска по вертикали, горизонталь не трогаем (фокус-ринги на -mx-1 остаются видны). */
+  .pf-scroll-fade {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 14px,
+      #000 calc(100% - 14px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 14px,
+      #000 calc(100% - 14px),
+      transparent 100%
+    );
+  }
+
   html,
   body,
   #root {

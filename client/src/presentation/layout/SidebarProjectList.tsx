@@ -601,7 +601,7 @@ export function SidebarProjectList(): React.ReactElement {
         </div>
       )}
 
-      <div className="pf-scroll-visible -mx-1 min-h-0 flex-1 space-y-4 px-1">
+      <div className="pf-scroll-visible pf-scroll-fade -mx-1 min-h-0 flex-1 space-y-4 px-1">
         {/* Вне поиска — «Недавнее» (недавно открытые задачи). В поиске — найденные задачи
             (блок «Задачи»: 3 → «ещё» до 10, сортировка по дате создания, подсветка). */}
         {searching ? (

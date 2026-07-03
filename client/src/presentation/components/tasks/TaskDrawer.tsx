@@ -91,6 +91,7 @@ import { CancelWorkButton } from './CancelWorkButton';
 import { STATUS_LABEL, ADVANCE_NEXT } from './statusLabels';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useResizableWidth } from '@/presentation/hooks/useResizableWidth';
+import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
 import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
 import type { MentionMember, RichTextEditorHandle } from '@/presentation/components/editor/RichTextEditor';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -1450,12 +1451,18 @@ export function TaskDrawer({
   // В asPage (отдельная страница) ресайз не нужен — фиксированная центрированная колонка.
   const resizeEnabled = !asPage && isDesktop && isFinePointer;
   const { width, dragging, isSplit: isSplitRaw, onHandlePointerDown } =
-    useResizableWidth(resizeEnabled, state !== null, () => {
-      // Дотянули окно до самого края — открываем задачу отдельной страницей.
-      if (state?.mode === 'edit') {
-        navigate(`/projects/${state.task.projectId}/tasks/${state.task.id}`);
-      }
-    });
+    useResizableWidth(
+      resizeEnabled,
+      state !== null,
+      () => {
+        // Дотянули окно до самого края — открываем задачу отдельной страницей.
+        if (state?.mode === 'edit') {
+          navigate(`/projects/${state.task.projectId}/tasks/${state.task.id}`);
+        }
+      },
+      // Клик по границе (без тяги) — закрыть окно.
+      () => handleClose(),
+    );
   // В asPage — всегда одна центрированная колонка (Notion-style страница), без split.
   const isSplit = asPage ? false : isSplitRaw;
 
@@ -1535,18 +1542,20 @@ export function TaskDrawer({
         {/* Drag-ручка на ЛЕВОМ крае дравера (тонкая вертикальная полоса). Тянем
             влево — шире, вправо — уже. Только desktop (resizeEnabled). */}
         {resizeEnabled && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Изменить ширину панели"
-            onPointerDown={onHandlePointerDown}
-            className={cn(
-              'group/resize absolute inset-y-0 left-0 z-50 w-1.5 -translate-x-1/2 cursor-col-resize touch-none',
-              'before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-transparent before:transition-colors',
-              'hover:before:bg-primary/40',
-              dragging && 'before:bg-primary/60',
-            )}
-          />
+          <ResizeHandleHint side="left" action="Закрыть" shortcut="Клик">
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Изменить ширину окна или закрыть"
+              onPointerDown={onHandlePointerDown}
+              className={cn(
+                'group/resize absolute inset-y-0 left-0 z-50 w-1.5 -translate-x-1/2 cursor-col-resize touch-none',
+                'before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-transparent before:transition-colors',
+                'hover:before:bg-primary/40',
+                dragging && 'before:bg-primary/60',
+              )}
+            />
+          </ResizeHandleHint>
         )}
 
         {/* a11y stub for Radix Dialog — только в Sheet-режиме (в asPage Sheet'а нет). */}

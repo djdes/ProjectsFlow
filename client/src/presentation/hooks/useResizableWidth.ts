@@ -124,7 +124,14 @@ export function useResizableWidth(
   // Вызывается на отпускании ручки, если окно дотянули почти до края (≈весь экран) —
   // консьюмер открывает задачу отдельной страницей (как кнопка «развернуть»).
   onDragToEdge?: () => void,
+  // Клик по ручке без перетаскивания = закрыть окно (как в Notion: «клик — закрыть,
+  // тянуть — ширина»).
+  onClickCollapse?: () => void,
 ): ResizableWidth {
+  const onClickCollapseRef = useRef(onClickCollapse);
+  useEffect(() => {
+    onClickCollapseRef.current = onClickCollapse;
+  }, [onClickCollapse]);
   const [width, setWidth] = useState<number>(() =>
     clampDrawerWidth(readStoredWidth() ?? DRAWER_DEFAULT_WIDTH, viewport()),
   );
@@ -188,6 +195,7 @@ export function useResizableWidth(
       setMaximized(false);
       reachedSidebarRef.current = false;
       dragRef.current = { startX: e.clientX, startWidth: width };
+      let moved = false;
       setDragging(true);
 
       const onMove = (ev: PointerEvent): void => {
@@ -196,6 +204,7 @@ export function useResizableWidth(
         // Handle is on the LEFT edge of a right-anchored panel: moving the
         // pointer left (smaller clientX) must WIDEN the drawer → subtract delta.
         const delta = ev.clientX - d.startX;
+        if (Math.abs(delta) > 3) moved = true;
         const newWidth = clampDrawerWidth(d.startWidth - delta, nextVw);
         // Левый край окна = nextVw - newWidth. Доехал до сайдбара → просим AppShell
         // свернуть панель (освобождаем место под окно). Поехал обратно (с гистерезисом
@@ -221,6 +230,11 @@ export function useResizableWidth(
         target.removeEventListener('pointermove', onMove);
         target.removeEventListener('pointerup', onUp);
         target.removeEventListener('pointercancel', onUp);
+        // Клик без тяги — закрыть окно (ширину не трогаем).
+        if (!moved) {
+          onClickCollapseRef.current?.();
+          return;
+        }
         setWidth((w) => {
           // Дотянули почти до края (≈весь экран) → открыть отдельной страницей
           // (как кнопка «развернуть»). Почти-полную ширину НЕ персистим.
