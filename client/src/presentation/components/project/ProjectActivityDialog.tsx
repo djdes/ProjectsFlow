@@ -90,7 +90,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
       <SheetContent
         side="right"
         showClose={false}
-        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-xl"
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
       >
         <div className="flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3">
           <SheetTitle className="text-base">Активность проекта</SheetTitle>

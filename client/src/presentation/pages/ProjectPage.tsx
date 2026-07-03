@@ -66,7 +66,7 @@ export function ProjectPage(): React.ReactElement {
     <>
       {/* Хлебные крошки: строка min-h-11 (44px), вертикально центрирована, прижата к верху —
           на одной горизонтали со свитчером пространства в сайдбаре (Notion top-alignment). */}
-      <div className="sticky top-0 z-20 flex h-11 items-center bg-background/85 px-2.5 backdrop-blur-sm">
+      <div className="sticky top-0 z-20 flex h-11 items-center bg-background px-2.5">
         <ProjectBreadcrumbs
           projectId={data.id}
           projectName={data.name}
