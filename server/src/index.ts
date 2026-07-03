@@ -194,6 +194,8 @@ import { CreateTask } from './application/task/CreateTask.js';
 import { UpdateTask } from './application/task/UpdateTask.js';
 import { DrizzleTaskVersionRepository } from './infrastructure/repositories/DrizzleTaskVersionRepository.js';
 import { TaskVersionRecorder } from './application/task/TaskVersionRecorder.js';
+import { GetTaskVersions } from './application/task/GetTaskVersions.js';
+import { RestoreTaskVersion } from './application/task/RestoreTaskVersion.js';
 import { MoveTask } from './application/task/MoveTask.js';
 import { DrizzleEmailActionTokenRepository } from './infrastructure/repositories/DrizzleEmailActionTokenRepository.js';
 import { CreateEmailActionToken } from './application/email-action/CreateEmailActionToken.js';
@@ -1629,6 +1631,26 @@ const { app, devProxyUpgrade } = createApp({
       comments: taskCommentRepo,
       delegations: taskDelegationRepo,
       activityRecorder,
+    }),
+    getTaskVersions: new GetTaskVersions({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      delegations: taskDelegationRepo,
+      versions: taskVersionRepo,
+      users: userRepo,
+      now: () => new Date(),
+    }),
+    restoreTaskVersion: new RestoreTaskVersion({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      delegations: taskDelegationRepo,
+      versions: taskVersionRepo,
+      users: userRepo,
+      now: () => new Date(),
+      activity: activityRecorder,
+      versionRecorder: taskVersionRecorder,
     }),
     linkCommit: new LinkCommit({
       projects: projectRepo,

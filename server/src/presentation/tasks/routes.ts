@@ -3,6 +3,8 @@ import multer from 'multer';
 import type { ListTasks, TaskWithCounts } from '../../application/task/ListTasks.js';
 import type { CreateTask } from '../../application/task/CreateTask.js';
 import type { UpdateTask } from '../../application/task/UpdateTask.js';
+import type { GetTaskVersions } from '../../application/task/GetTaskVersions.js';
+import type { RestoreTaskVersion } from '../../application/task/RestoreTaskVersion.js';
 import type { MoveTask } from '../../application/task/MoveTask.js';
 import type { DeleteTask } from '../../application/task/DeleteTask.js';
 import type { LinkCommit } from '../../application/task/LinkCommit.js';
@@ -52,6 +54,8 @@ type Deps = {
   readonly updateTask: UpdateTask;
   readonly moveTask: MoveTask;
   readonly deleteTask: DeleteTask;
+  readonly getTaskVersions: GetTaskVersions;
+  readonly restoreTaskVersion: RestoreTaskVersion;
   readonly linkCommit: LinkCommit;
   readonly unlinkCommit: UnlinkCommit;
   readonly listTaskCommits: ListTaskCommits;
@@ -346,6 +350,49 @@ export function tasksRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  // Версии задачи (окно версий + restore, как в Notion). Гейтинг 7 дней — на сервере.
+  router.get('/:taskId/versions', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await deps.getTaskVersions.execute(
+        req.params['projectId'] as string,
+        req.params['taskId'] as string,
+        req.user!.id,
+      );
+      res.json({
+        plan: result.plan,
+        cutoffAt: result.cutoffAt,
+        versions: result.versions.map((v) => ({
+          id: v.id,
+          taskId: v.taskId,
+          actorUserId: v.actorUserId,
+          createdAt: v.createdAt.toISOString(),
+          snapshot: v.snapshot,
+        })),
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post(
+    '/:taskId/versions/:versionId/restore',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const projectId = req.params['projectId'] as string;
+        const task = await deps.restoreTaskVersion.execute({
+          projectId,
+          taskId: req.params['taskId'] as string,
+          versionId: req.params['versionId'] as string,
+          ownerUserId: req.user!.id,
+        });
+        deps.notifyTaskChanged(projectId);
+        res.json({ task: toDto(task) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   router.post('/:taskId/move', async (req: Request, res: Response, next: NextFunction) => {
     try {

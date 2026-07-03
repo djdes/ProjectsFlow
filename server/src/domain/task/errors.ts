@@ -12,6 +12,23 @@ export class TaskDescriptionEmptyError extends Error {
   }
 }
 
+export class TaskVersionNotFoundError extends Error {
+  readonly status = 404;
+  constructor(public readonly versionId: string) {
+    super(`Task version not found: ${versionId}`);
+    this.name = 'TaskVersionNotFoundError';
+  }
+}
+
+// Версия старше лимита бесплатного тарифа (7 дней) — нужен Прайм/ВИП.
+export class TaskVersionLockedError extends Error {
+  readonly status = 402;
+  constructor() {
+    super('Эта версия старше 7 дней — доступна на тарифе Прайм или ВИП');
+    this.name = 'TaskVersionLockedError';
+  }
+}
+
 export class TaskCommitNotFoundError extends Error {
   constructor(public readonly sha: string) {
     super(`Commit not linked to task: ${sha}`);

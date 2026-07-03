@@ -83,6 +83,8 @@ import type { CreateTask } from '../application/task/CreateTask.js';
 import type { UpdateTask } from '../application/task/UpdateTask.js';
 import type { MoveTask } from '../application/task/MoveTask.js';
 import type { DeleteTask } from '../application/task/DeleteTask.js';
+import type { GetTaskVersions } from '../application/task/GetTaskVersions.js';
+import type { RestoreTaskVersion } from '../application/task/RestoreTaskVersion.js';
 import type { LinkCommit } from '../application/task/LinkCommit.js';
 import type { UnlinkCommit } from '../application/task/UnlinkCommit.js';
 import type { ListTaskCommits } from '../application/task/ListTaskCommits.js';
@@ -409,6 +411,8 @@ type AppDeps = {
     readonly updateTask: UpdateTask;
     readonly moveTask: MoveTask;
     readonly deleteTask: DeleteTask;
+    readonly getTaskVersions: GetTaskVersions;
+    readonly restoreTaskVersion: RestoreTaskVersion;
     readonly linkCommit: LinkCommit;
     readonly unlinkCommit: UnlinkCommit;
     readonly listTaskCommits: ListTaskCommits;
