@@ -3,6 +3,7 @@ import type { Notification } from '@/domain/notifications/Notification';
 export type ActivityKind =
   | 'task_created'
   | 'task_status_changed'
+  | 'task_updated'
   | 'task_deleted'
   | 'task_commented'
   | 'project_created'
@@ -11,6 +12,13 @@ export type ActivityKind =
   | 'member_added'
   | 'member_removed'
   | 'member_role_changed';
+
+// Одно изменённое поле для task_updated (Notion-style дифф). null = было/стало пусто.
+export type ActivityFieldChange = {
+  readonly field: string;
+  readonly old: string | null;
+  readonly new: string | null;
+};
 
 export type ActivityPayload = {
   readonly projectName?: string;
@@ -22,6 +30,7 @@ export type ActivityPayload = {
   readonly commentExcerpt?: string;
   readonly targetUserId?: string;
   readonly role?: string;
+  readonly changes?: readonly ActivityFieldChange[];
 };
 
 // Амбиентное действие (создание/статус/удаление задач, комментарии, проекты, участники).

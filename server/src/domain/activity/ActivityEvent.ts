@@ -3,6 +3,7 @@
 export type ActivityKind =
   | 'task_created'
   | 'task_status_changed'
+  | 'task_updated'
   | 'task_deleted'
   | 'task_commented'
   | 'project_created'
@@ -11,6 +12,14 @@ export type ActivityKind =
   | 'member_added'
   | 'member_removed'
   | 'member_role_changed';
+
+// Одно изменённое поле (task_updated): что было → что стало. Значения — уже
+// человекочитаемые строки; null = было/стало пусто.
+export type ActivityFieldChange = {
+  readonly field: string;
+  readonly old: string | null;
+  readonly new: string | null;
+};
 
 // Денормализованный payload — чтобы лента читалась без джойнов и переживала удаление
 // сущности (показываем «что было»). Все поля опциональны; набор зависит от kind.
@@ -26,6 +35,8 @@ export type ActivityPayload = {
   readonly targetDisplayName?: string;
   readonly role?: string;
   readonly actorDisplayName?: string;
+  // Список изменённых полей для task_updated (Notion-style дифф в ленте).
+  readonly changes?: readonly ActivityFieldChange[];
 };
 
 export type ActivityEvent = {

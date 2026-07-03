@@ -1606,6 +1606,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       delegations: taskDelegationRepo,
+      activity: activityRecorder,
     }),
     moveTask: new MoveTask({
       projects: projectRepo,
@@ -2016,6 +2017,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       delegations: taskDelegationRepo,
+      activity: activityRecorder,
     }),
     deleteTask: new DeleteTask({
       projects: projectRepo,

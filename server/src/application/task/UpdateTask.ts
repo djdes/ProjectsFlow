@@ -1,9 +1,11 @@
 import { TaskDescriptionEmptyError, TaskNotFoundError } from '../../domain/task/errors.js';
 import type { RalphMode, Task, TaskPriority } from '../../domain/task/Task.js';
+import type { ActivityFieldChange } from '../../domain/activity/ActivityEvent.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository, UpdateTaskPatch } from './TaskRepository.js';
 import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
+import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
 
 type Deps = {
@@ -11,7 +13,14 @@ type Deps = {
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly delegations: TaskDelegationRepository;
+  // Логируем правки в ленту изменений (best-effort; опционально для обратной совместимости).
+  readonly activity?: ActivityRecorder;
 };
+
+// Первая строка описания (заголовок задачи) — короткая выжимка для ленты.
+function taskTitle(description: string | null | undefined): string {
+  return (description ?? '').split('\n')[0]!.trim().slice(0, 80);
+}
 
 export type UpdateTaskCommand = {
   readonly projectId: string;
@@ -53,6 +62,35 @@ export class UpdateTask {
 
     const updated = await this.deps.tasks.update(input.taskId, patch);
     if (!updated) throw new TaskNotFoundError(input.taskId);
+
+    // Логируем в ленту изменений то, что реально поменялось (Notion-style дифф).
+    if (this.deps.activity) {
+      const changes: ActivityFieldChange[] = [];
+      if (patch.description !== undefined && existing.description !== updated.description) {
+        changes.push({ field: 'description', old: existing.description ?? null, new: updated.description ?? null });
+      }
+      if (patch.ralphMode !== undefined && existing.ralphMode !== updated.ralphMode) {
+        changes.push({ field: 'ralphMode', old: existing.ralphMode ?? null, new: updated.ralphMode ?? null });
+      }
+      if (patch.deadline !== undefined && existing.deadline !== updated.deadline) {
+        changes.push({ field: 'deadline', old: existing.deadline ?? null, new: updated.deadline ?? null });
+      }
+      if (patch.priority !== undefined && existing.priority !== updated.priority) {
+        changes.push({
+          field: 'priority',
+          old: existing.priority != null ? String(existing.priority) : null,
+          new: updated.priority != null ? String(updated.priority) : null,
+        });
+      }
+      if (changes.length > 0) {
+        await this.deps.activity.record({
+          projectId: input.projectId,
+          actorUserId: input.ownerUserId,
+          kind: 'task_updated',
+          payload: { taskId: updated.id, taskExcerpt: taskTitle(updated.description), changes },
+        });
+      }
+    }
     return updated;
   }
 }

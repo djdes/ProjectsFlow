@@ -3,6 +3,7 @@ import {
   FolderPlus,
   MessageSquare,
   MoveRight,
+  Pencil,
   SquarePen,
   Trash2,
   UserMinus,
@@ -13,12 +14,17 @@ import {
 import { cn } from '@/lib/utils';
 import { relativeTime } from '@/lib/relativeTime';
 import type { TaskStatus } from '@/domain/task/Task';
-import type { ActivityEventItem, ActivityKind } from '@/domain/activity/ActivityFeedItem';
+import type {
+  ActivityEventItem,
+  ActivityFieldChange,
+  ActivityKind,
+} from '@/domain/activity/ActivityFeedItem';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
 
 const KIND_ICON: Record<ActivityKind, LucideIcon> = {
   task_created: SquarePen,
   task_status_changed: MoveRight,
+  task_updated: Pencil,
   task_deleted: Trash2,
   task_commented: MessageSquare,
   project_created: FolderPlus,
@@ -32,6 +38,55 @@ const KIND_ICON: Record<ActivityKind, LucideIcon> = {
 function statusLabel(s: string | undefined): string {
   if (!s) return '';
   return STATUS_LABEL[s as TaskStatus] ?? s;
+}
+
+// Человекочитаемые подписи изменённых полей + значений (для Notion-style диффа).
+const FIELD_LABEL: Record<string, string> = {
+  description: 'Описание',
+  deadline: 'Дедлайн',
+  priority: 'Приоритет',
+  ralphMode: 'Режим',
+};
+const PRIORITY_LABEL: Record<string, string> = {
+  '1': 'Срочный',
+  '2': 'Высокий',
+  '3': 'Средний',
+  '4': 'Низкий',
+};
+function humanizeValue(field: string, v: string | null): string {
+  if (v == null || v === '') return '—';
+  if (field === 'priority') return PRIORITY_LABEL[v] ?? v;
+  return v.length > 180 ? `${v.slice(0, 180)}…` : v;
+}
+
+// Дифф изменённых полей: новое значение подсвечено синим (как в Notion), старое — зачёркнуто.
+function ChangesDiff({ changes }: { changes: readonly ActivityFieldChange[] }): React.ReactElement {
+  return (
+    <div className="mt-1 space-y-1">
+      {changes.map((c, i) => (
+        <div key={`${c.field}-${i}`} className="text-xs leading-snug">
+          <span className="text-muted-foreground">{FIELD_LABEL[c.field] ?? c.field}: </span>
+          {c.field === 'description' ? (
+            c.new ? (
+              <span className="rounded bg-primary/10 px-1 text-foreground">{humanizeValue(c.field, c.new)}</span>
+            ) : (
+              <span className="text-muted-foreground">очищено</span>
+            )
+          ) : (
+            <>
+              {c.old != null && c.old !== '' && (
+                <span className="text-muted-foreground line-through">{humanizeValue(c.field, c.old)}</span>
+              )}{' '}
+              <span aria-hidden className="text-muted-foreground">→</span>{' '}
+              <span className="rounded bg-primary/10 px-1 font-medium text-primary">
+                {humanizeValue(c.field, c.new)}
+              </span>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // Текст события. actor — имя актора (или «Кто-то»); target — имя затронутого участника.
@@ -51,6 +106,12 @@ function renderText(item: ActivityEventItem): React.ReactNode {
       return (
         <>
           <b>{actor}</b> перенёс {excerpt}: {statusLabel(p.oldStatus)} → <b>{statusLabel(p.newStatus)}</b>
+        </>
+      );
+    case 'task_updated':
+      return (
+        <>
+          <b>{actor}</b> изменил {excerpt}
         </>
       );
     case 'task_deleted':
@@ -103,7 +164,7 @@ function targetUrl(item: ActivityEventItem): string {
   if (!taskId) return base;
   if (item.kind === 'task_commented' && item.payload?.commentId)
     return `${base}?task=${taskId}#comment-${item.payload.commentId}`;
-  if (item.kind === 'task_created' || item.kind === 'task_status_changed')
+  if (item.kind === 'task_created' || item.kind === 'task_status_changed' || item.kind === 'task_updated')
     return `${base}?task=${taskId}`;
   return base;
 }
@@ -125,6 +186,9 @@ export function ActivityItem({ item }: { item: ActivityEventItem }): React.React
         <Icon className="size-3.5" />
       </span>
       <p className="text-sm leading-snug">{renderText(item)}</p>
+      {item.kind === 'task_updated' && item.payload?.changes?.length ? (
+        <ChangesDiff changes={item.payload.changes} />
+      ) : null}
       <p className="mt-0.5 text-xs text-muted-foreground">{relativeTime(item.createdAt)}</p>
     </li>
   );
