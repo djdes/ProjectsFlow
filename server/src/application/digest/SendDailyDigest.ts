@@ -10,6 +10,7 @@ import type { SendAgentTelegramNotification } from '../telegram/SendAgentTelegra
 import type { TelegramClient } from '../telegram/TelegramClient.js';
 import type { DigestSettingsRepository } from './DigestSettingsRepository.js';
 import type { CreateEmailActionToken } from '../email-action/CreateEmailActionToken.js';
+import { markdownToTelegramHtml } from '../telegram/telegramMarkdown.js';
 import {
   buildDigestModel,
   renderDigestHtml,
@@ -143,7 +144,7 @@ export class SendDailyDigest {
           await this.deps.telegram
             .execute({
               userId,
-              text: `📌 ${escapeDigestHtml(digestExcerpt(t.description))}\n<i>${digestStatusLabel(t.status)}</i>`,
+              text: `📌 ${markdownToTelegramHtml(digestExcerpt(t.description))}\n<i>${digestStatusLabel(t.status)}</i>`,
               parseMode: 'HTML',
               kind: 'task_digest_item',
               taskId: t.id,

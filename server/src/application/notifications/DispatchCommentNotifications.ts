@@ -10,6 +10,7 @@ import { resolvePref, type NotifSource } from '../../domain/notifications/Notifi
 import { renderActivityEmail } from './emails/activityEmail.js';
 import { buildTaskUrl } from './taskUrl.js';
 import { parseMentions } from '../task/parseMentions.js';
+import { markdownToTelegramHtml } from '../telegram/telegramMarkdown.js';
 
 export type DispatchCommentAudience = {
   readonly mode: CommentNotifyMode;
@@ -129,7 +130,7 @@ export class DispatchCommentNotifications {
     // --- Telegram-канал: только base (mention в TG — отдельный механизм, вне scope) ---
     const tgText =
       `💬 Новый комментарий в «${escapeTgHtml(projectName)}»:\n` +
-      `<i>${escapeTgHtml(tgExcerpt(comment.body))}</i>\n\n` +
+      `<i>${markdownToTelegramHtml(tgExcerpt(comment.body))}</i>\n\n` +
       `<a href="${url}">Открыть комментарий</a>`;
 
     for (const m of base) {

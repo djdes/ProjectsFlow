@@ -32,6 +32,7 @@ import type { GetCommentNotifications } from '../../application/task/GetCommentN
 import type { TaskRepository } from '../../application/task/TaskRepository.js';
 import type { MaybeReopenForClarification } from '../../application/task/MaybeReopenForClarification.js';
 import type { BroadcastTelegramNotificationByTask } from '../../application/telegram/BroadcastTelegramNotificationByTask.js';
+import { markdownToTelegramHtml } from '../../application/telegram/telegramMarkdown.js';
 import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
 import {
   assignToProjectSchema,
@@ -297,7 +298,7 @@ export function tasksRouter(deps: Deps): Router {
       deps.notifyTaskChanged(projectId);
       void deps.notifier.onTaskCreated(projectId, req.user!.id, task, 'team').catch(() => {});
       fireTgBroadcast(deps, task.id, projectId, req.user!.id, (pn) =>
-        `📋 Новая задача в «${pn}»:\n<i>${tgExcerpt(task.description)}</i>`,
+        `📋 Новая задача в «${pn}»:\n<i>${markdownToTelegramHtml(tgExcerpt(task.description))}</i>`,
         'comment_on_my_task',
       );
       res.status(201).json({ task: toDto(task) });
@@ -374,7 +375,7 @@ export function tasksRouter(deps: Deps): Router {
         const oldLabel = TG_STATUS_LABEL[before.status] ?? before.status;
         const newLabel = TG_STATUS_LABEL[task.status] ?? task.status;
         fireTgBroadcast(deps, taskId, projectId, req.user!.id, (pn) =>
-          `🔄 Статус задачи изменён в «${pn}» (${oldLabel} → ${newLabel}):\n<i>${tgExcerpt(task.description)}</i>`,
+          `🔄 Статус задачи изменён в «${pn}» (${oldLabel} → ${newLabel}):\n<i>${markdownToTelegramHtml(tgExcerpt(task.description))}</i>`,
           'status_change',
         );
       }
