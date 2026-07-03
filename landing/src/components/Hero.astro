@@ -33,48 +33,20 @@ const points = [
     <Floaties count={13} opacity={0.42} />
   </div>
 
-  <div class="hero__wide hero__inner">
-    <div class="hero__col">
+  <div class="hero__wide">
+    <!-- Notion-раскладка: центрированный лид сверху. -->
+    <div class="hero__lede" data-reveal>
       <h1 id="hero-title" class="hero__title">
         Опиши идею — получи <span class="pf-grad">готовый продукт</span>.
       </h1>
 
-      <ul class="hero__points">
-        {
-          points.map((p) => (
-            <li class="hero__point" data-reveal>
-              <span class="hero__point-ic" aria-hidden="true">
-                {p.key === 'llm' && (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-                    <path d="M13 3 4 14h7l-1 7 9-11h-7l1-7Z" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                )}
-                {p.key === 'money' && (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-                    <path d="M4 19V9m5 10V5m5 14v-6m5 6V8" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                )}
-                {p.key === 'auto' && (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-                    <circle cx="12" cy="12" r="3.2" />
-                    <path
-                      d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"
-                      stroke-linecap="round"
-                    />
-                  </svg>
-                )}
-              </span>
-              <span class="hero__point-body">
-                <span class="hero__point-title">{p.title}</span>
-                <span class="hero__point-text">{p.text}</span>
-              </span>
-            </li>
-          ))
-        }
-      </ul>
+      <p class="hero__subtitle">
+        Подписка на Claude уже внутри, проект на автопилоте, а прибыль и траты — понятным
+        языком. Без VPN, своих ключей и лишней настройки.
+      </p>
 
       <!-- Оффер + быстрый старт (email → регистрация). Анимированная приглашающая кнопка. -->
-      <div class="hero__start" data-reveal style="--reveal-delay: 120ms">
+      <div class="hero__start">
         <p class="hero__offer">
           <span class="hero__offer-badge">1 час бесплатно</span>
           <span class="hero__offer-text">Первый час на <b>Прайме</b> — без карты. Первый результат — в первый час.</span>
@@ -110,7 +82,7 @@ const points = [
           </svg>
         </a>
 
-        <div class="hero__promises" data-reveal style="--reveal-delay: 200ms">
+        <div class="hero__promises">
           <span class="hero__promise">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 10.5l4 4 8-9" stroke-linecap="round" stroke-linejoin="round" /></svg>
             Старт без карты
@@ -127,14 +99,51 @@ const points = [
       </div>
     </div>
 
-    <!-- Правая колонка: ЕДИНСТВЕННАЯ на лендинге интерактивная доска. Перетащи задачу на
-         «Воркер» — AI берёт её в работу. Остальные доски со страницы убраны. -->
-    <div class="hero__showcase" data-reveal style="--reveal-delay: 200ms">
-      <KanbanBoard client:visible />
+    <!-- Крупная «сцена» продукта под лидом — как hero-скрин в Notion. ЕДИНСТВЕННАЯ
+         интерактивная доска: перетащи задачу на «Воркер» — AI берёт её в работу. -->
+    <div class="hero__stage" data-reveal style="--reveal-delay: 120ms">
+      <div class="hero__stage-frame">
+        <KanbanBoard client:visible />
+      </div>
       <p class="hero__showcase-cap">
         Перетащи задачу на <b>«Воркер»</b> — или просто нажми. AI возьмёт её в работу.
       </p>
     </div>
+
+    <!-- 3 ключевых пункта — спокойный ряд под сценой. -->
+    <ul class="hero__points">
+      {
+        points.map((p) => (
+          <li class="hero__point" data-reveal>
+            <span class="hero__point-ic" aria-hidden="true">
+              {p.key === 'llm' && (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                  <path d="M13 3 4 14h7l-1 7 9-11h-7l1-7Z" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              )}
+              {p.key === 'money' && (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                  <path d="M4 19V9m5 10V5m5 14v-6m5 6V8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              )}
+              {p.key === 'auto' && (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                  <circle cx="12" cy="12" r="3.2" />
+                  <path
+                    d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              )}
+            </span>
+            <span class="hero__point-body">
+              <span class="hero__point-title">{p.title}</span>
+              <span class="hero__point-text">{p.text}</span>
+            </span>
+          </li>
+        ))
+      }
+    </ul>
   </div>
 </section>
 
@@ -143,10 +152,8 @@ const points = [
     position: relative;
     isolation: isolate;
     overflow: hidden;
-    display: flex;
-    align-items: center;
     /* Меньше воздуха сверху под навбаром; низ — в одном ритме с секциями (--section-y). */
-    padding-top: clamp(1.25rem, 3vw, 2rem);
+    padding-top: clamp(1.5rem, 4vw, 3rem);
     padding-bottom: var(--section-y);
   }
 
@@ -160,23 +167,22 @@ const points = [
     opacity: 0.12;
   }
 
-  /* --- Раскладка --- */
+  /* --- Раскладка (Notion: центрированный лид + крупная сцена ниже) --- */
   .hero__wide {
+    position: relative;
     width: 100%;
-    /* Та же ширина и боковые поля, что и у .pf-container — чтобы край Hero совпадал
-       с навбаром и всеми секциями ниже (единая ширина блоков). */
+    /* Та же ширина и боковые поля, что и у .pf-container — край Hero совпадает с
+       навбаром и всеми секциями ниже (единая ширина блоков). */
     max-width: var(--container);
     margin-inline: auto;
     padding-inline: clamp(1rem, 4vw, 1.5rem);
   }
-  .hero__inner {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-12);
-  }
-  .hero__col { width: 100%; max-width: 620px; }
 
+  .hero__lede {
+    max-width: 48rem;
+    margin-inline: auto;
+    text-align: center;
+  }
   .hero__title {
     font-size: var(--fs-display);
     line-height: var(--lh-tight);
@@ -185,41 +191,24 @@ const points = [
     color: var(--text);
     text-wrap: balance;
   }
-
-  /* --- 3 ключевых пункта --- */
-  .hero__points {
-    list-style: none;
-    margin: var(--sp-8) 0 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-4);
-    max-width: 34rem;
+  .hero__subtitle {
+    margin: var(--sp-5) auto 0;
+    max-width: 40rem;
+    font-size: var(--fs-lg);
+    line-height: var(--lh-normal);
+    color: var(--muted);
+    text-wrap: pretty;
   }
-  .hero__point { display: flex; gap: var(--sp-3); align-items: flex-start; }
-  .hero__point-ic {
-    flex: none;
-    display: grid;
-    place-items: center;
-    width: 38px;
-    height: 38px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--accent-line);
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-  .hero__point-ic svg { width: 20px; height: 20px; }
-  .hero__point-body { display: flex; flex-direction: column; gap: 2px; }
-  .hero__point-title { font-size: var(--fs-base); font-weight: 650; color: var(--text); }
-  .hero__point-text { font-size: var(--fs-sm); color: var(--muted); line-height: var(--lh-snug); }
 
-  /* --- Оффер + старт --- */
-  .hero__start { margin-top: var(--sp-8); max-width: 34rem; }
+  /* --- Оффер + старт (центрированы под лидом) --- */
+  .hero__start { margin-top: var(--sp-6); }
   .hero__offer {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     flex-wrap: wrap;
+    justify-content: center;
     gap: var(--sp-2) var(--sp-3);
+    max-width: 34rem;
     padding: var(--sp-3) var(--sp-4);
     border: 1px solid var(--accent-line);
     border-radius: var(--r);
@@ -227,6 +216,7 @@ const points = [
     font-size: var(--fs-sm);
     color: var(--text);
     line-height: var(--lh-snug);
+    text-align: left;
   }
   .hero__offer b { color: var(--accent-deep); font-weight: 700; }
   .hero__offer-text { flex: 1 1 12rem; min-width: 0; }
@@ -244,11 +234,13 @@ const points = [
   .hero__form {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: var(--sp-2);
-    margin-top: var(--sp-4);
+    max-width: 30rem;
+    margin: var(--sp-4) auto 0;
   }
   .hero__email {
-    flex: 1 1 200px;
+    flex: 1 1 220px;
     min-width: 0;
     height: 50px;
     padding-inline: var(--sp-4);
@@ -258,6 +250,7 @@ const points = [
     color: var(--text);
     font-size: var(--fs-base);
     font-family: inherit;
+    text-align: left;
     transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
   }
   .hero__email::placeholder { color: var(--dim); }
@@ -282,8 +275,9 @@ const points = [
   .hero__promises {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: var(--sp-2);
-    margin-top: var(--sp-4);
+    margin-top: var(--sp-5);
   }
   .hero__promise {
     display: inline-flex;
@@ -305,22 +299,66 @@ const points = [
   }
   .hero__promise--key svg { color: var(--accent-deep); }
 
-  /* --- Правая колонка --- */
-  .hero__showcase { width: 100%; display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); }
+  /* --- Сцена продукта: крупный «hero-скрин» как в Notion --- */
+  .hero__stage {
+    margin-top: clamp(2rem, 5vw, 3.5rem);
+    max-width: 1060px;
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-3);
+  }
+  /* Мягкая «парящая» тень со всех сторон + лёгкий hover-подъём (как рамки скринов ниже). */
+  .hero__stage-frame {
+    width: 100%;
+    border-radius: var(--r-lg);
+    box-shadow:
+      0 1px 2px rgba(11, 18, 32, 0.05),
+      0 12px 30px -10px rgba(11, 18, 32, 0.12),
+      0 40px 70px -30px rgba(11, 18, 32, 0.22);
+    transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero__stage-frame:hover {
+      transform: translateY(-4px);
+      box-shadow:
+        0 2px 4px rgba(11, 18, 32, 0.06),
+        0 18px 40px -12px rgba(11, 18, 32, 0.14),
+        0 60px 100px -40px rgba(11, 18, 32, 0.26);
+    }
+  }
   .hero__showcase-cap { font-size: var(--fs-sm); color: var(--muted); text-align: center; max-width: 30rem; }
   .hero__showcase-cap b { color: var(--accent); font-weight: 700; }
 
-  /* Десктоп: две колонки — текст + доска (пошире). */
-  @media (min-width: 1040px) {
-    .hero__inner {
-      display: grid;
-      grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
-      gap: var(--sp-12);
-      align-items: center;
-    }
-    .hero__col { max-width: 600px; }
-    .hero__showcase { justify-self: end; }
+  /* --- 3 ключевых пункта: ряд под сценой --- */
+  .hero__points {
+    list-style: none;
+    margin: clamp(2.5rem, 5vw, 4rem) 0 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-6);
   }
+  @media (min-width: 760px) {
+    .hero__points { grid-template-columns: repeat(3, 1fr); gap: var(--sp-8); }
+  }
+  .hero__point { display: flex; gap: var(--sp-3); align-items: flex-start; }
+  .hero__point-ic {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--accent-line);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .hero__point-ic svg { width: 20px; height: 20px; }
+  .hero__point-body { display: flex; flex-direction: column; gap: 2px; }
+  .hero__point-title { font-size: var(--fs-base); font-weight: 650; color: var(--text); }
+  .hero__point-text { font-size: var(--fs-sm); color: var(--muted); line-height: var(--lh-snug); }
 </style>
 
 <script>
