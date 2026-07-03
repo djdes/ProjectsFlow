@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
@@ -108,24 +107,6 @@ export function KanbanCard({
 
   // Заголовок (первая строка) рендерим plain-текстом, тело — markdown (см. TaskTitleText).
   const { title, body } = splitTitleBody(task.description ?? '');
-
-  // I1: однострочные карточки не затемняем на hover — иначе единственная строка текста
-  // уходит в 60% прозрачности под мета-оверлеем и почти не читается. Меряем реальную высоту
-  // контента: одна строка ⇒ scrollHeight ≲ 1.6× line-height.
-  const contentRef = useRef<HTMLDivElement>(null);
-  const [singleLine, setSingleLine] = useState(false);
-  useEffect(() => {
-    const el = contentRef.current;
-    if (!el) return;
-    const measure = (): void => {
-      const lh = parseFloat(getComputedStyle(el).lineHeight) || 20;
-      setSingleLine(el.scrollHeight <= lh * 1.6);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [task.description]);
 
   // Есть ли что показывать в нижнем мета-оверлее. Если нет (простая однострочная задача) —
   // не затемняем текст и не рисуем пустую градиент-полосу на hover; кнопки действий
@@ -284,19 +265,11 @@ export function KanbanCard({
           )
         )}
         <div className="min-w-0 flex-1">
-          {/* Текст карточки. На hover ЗАТЕМНЯЕТСЯ — чтобы наложенные снизу мета/корзина
-              читались (внахлёст). Высоты под мету НЕ резервируем (нет «пустого промежутка»). */}
-          <div
-            className={cn(
-              'transition-opacity duration-150 max-sm:!opacity-100',
-              // Затемняем текст только если снизу реально всплывёт мета-оверлей — и мягче,
-              // чем раньше (было opacity-40). Без меты (простая карточка) — и на однострочных
-              // (I1: единственная строка иначе почти не читается под оверлеем) — не гасим.
-              hasMeta && !singleLine && 'group-hover:opacity-60 group-focus-within:opacity-60',
-            )}
-          >
+          {/* Текст карточки НЕ затемняем: мета/действия всплывают как локальные плашки со
+              своим фоном (снизу-слева и сверху-справа), маскируя только свою область. */}
+          <div>
             {task.description?.trim() ? (
-              <div ref={contentRef} className="line-clamp-4 text-sm leading-snug">
+              <div className="line-clamp-4 text-sm leading-snug">
                 {/* Заголовок — plain-текст (не markdown), чтобы `---`/`- `/`* `/`# ` в начале
                     не превращались в hr/список/heading и не пропадали под COMPACT-пресетом. */}
                 <TaskTitleText title={title} />
@@ -317,30 +290,22 @@ export function KanbanCard({
             )}
           </div>
         </div>
-        {/* Оверлей мета+действий: НЕ занимает высоту (карточка = только текст), на hover
-            наложен поверх затемнённого текста снизу. Градиент from-card маскирует текст
-            под иконками. Прячется в режиме выделения и drag-preview.
-            pointer-events-none на контейнере: иначе невидимый (opacity-0) оверлей снизу
-            перехватывал mousedown и не давал начать drag в нижней части карточки. Клики
-            ловят только кнопки (pointer-events-auto, и только когда оверлей реально виден).
-            Рисуем только если есть что показать (hasMeta) — иначе у простой однострочной
-            карточки не будет пустой градиент-полосы снизу. */}
+        {/* Мета (чеклист/комменты/дедлайн/статус…) — ЛОКАЛЬНАЯ плашка снизу-слева со своим
+            сплошным фоном: маскирует только область под самими бейджами, текст карточки не
+            затемняется. Симметрична плашке действий сверху-справа. Не занимает высоту (absolute),
+            прячется в режиме выделения и drag-preview. pointer-events-none — чтобы невидимая
+            (opacity-0) плашка не перехватывала mousedown и не мешала начать drag. */}
         {!selecting && !preview && hasMeta && (
           <div
             className={cn(
-              'pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 rounded-b-lg bg-gradient-to-t to-transparent px-2 pb-1 pt-5 text-[11px] text-muted-foreground opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100',
-              // I1: у однострочной карточки маскируем более тонкую полосу снизу — меньше
-              // «затемнения» единственной строки (текст при этом не гасим, см. выше).
-              singleLine && 'pt-3',
-              // На done — мягкий зелёный градиент-маска (card, подмешанный к success):
-              // снизу непрозрачный (текст за кнопками полностью скрыт), плавно к прозрачному
-              // выше. На обычных — нейтральный card. Тот же приём, что у черновиков.
+              'pointer-events-none absolute bottom-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-hidden rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.05] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100 dark:ring-white/[0.06]',
+              // На done — плашка в тон зелёной заливке карточки; на обычных — нейтральный card.
               doneCard
-                ? 'from-[color-mix(in_srgb,hsl(var(--card)),hsl(var(--success))_20%)] via-[color-mix(in_srgb,hsl(var(--card)),hsl(var(--success))_20%)]'
-                : 'from-card via-card/90',
+                ? 'bg-[color-mix(in_srgb,hsl(var(--card)),hsl(var(--success))_22%)]'
+                : 'bg-card',
             )}
           >
-            <span className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden">
+            <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
               {task.delegation && currentUserId && (
                 <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
               )}
