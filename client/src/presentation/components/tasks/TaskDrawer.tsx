@@ -1531,14 +1531,6 @@ export function TaskDrawer({
           </>
         )}
 
-        {/* #6: два ряда — плашка публикации (auto) сверху + контент (1fr). Второй ряд
-            восстанавливает исходный grid-контекст, чтобы edit/create-раскладка растягивалась
-            как раньше. Слот плашки всегда присутствует (0px, когда плашки нет/закрыта). */}
-        <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-          <div className="min-w-0">
-            {bannerProjectId && <ProjectPublishedBanner projectId={bannerProjectId} />}
-          </div>
-          <div className="grid min-h-0 grid-rows-[minmax(0,1fr)]">
         {state?.mode === 'edit' && task ? (
           // Внешний контейнер раскладки EDIT-mode (заполняет единственную grid-строку
           // SheetContent). isSplit (широкая ширина) → две колонки: задача слева,
@@ -1619,6 +1611,10 @@ export function TaskDrawer({
                   </span>
                 )}
               </div>
+
+              {/* #6: плашка публикации — сразу под верхней панелью окна (как в Notion:
+                  кнопки панели встают вертикально по центру относительно плашки). */}
+              {bannerProjectId && <ProjectPublishedBanner projectId={bannerProjectId} />}
 
               {/* === ОПИСАНИЕ === Заголовок и описание ОДНИМ полем сверху (1-я строка —
                   по сути заголовок). Полное editDescription редактируется напрямую,
@@ -1982,6 +1978,9 @@ export function TaskDrawer({
                   </span>
                 </div>
 
+                {/* #6: плашка публикации — сразу под верхней панелью окна создания. */}
+                {bannerProjectId && <ProjectPublishedBanner projectId={bannerProjectId} />}
+
                 {/* «Восстановить» — если осталась незавершённая задача с прошлого закрытия
                     (текст, дедлайн, приоритет, режим, ответственный). Пропадает после создания. */}
                 {showRestore && (
@@ -2180,8 +2179,6 @@ export function TaskDrawer({
             )}
           </div>
         )}
-          </div>
-        </div>
     </DrawerShell>
   );
 }

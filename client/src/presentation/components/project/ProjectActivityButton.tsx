@@ -10,15 +10,15 @@ import { relativeTime } from '@/lib/relativeTime';
 import type { ProjectActivitySummary } from '@/domain/project/ProjectAnalytics';
 import { ProjectActivityDialog } from './ProjectActivityDialog';
 
-// Минутная точность: «дд.мм.гггг ЧЧ:ММ» в локальной зоне (для тултипа).
+// Дата в минутной точности: «дд.мм.гггг ЧЧ:ММ» (для поповера при наведении).
 function formatDateTime(d: Date): string {
   const p = (n: number): string => String(n).padStart(2, '0');
   return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 // Кнопка активности проекта слева от участников. Показывается ТЕКСТОМ (без иконки):
-// «изменено 12 ч назад». Клик открывает окно активности/аналитики (выезжает справа, как
-// окно задачи). Сводку тянем при монтировании — нужна для подписи кнопки.
+// «Изменено 12 ч назад». Наведение — аккуратный поповер «Изменено/Создано» (как «Activity»
+// в Notion). Клик открывает окно активности/аналитики (выезжает справа, как окно задачи).
 export function ProjectActivityButton({ projectId }: { projectId: string }): React.ReactElement {
   const { projectRepository } = useContainer();
   const [open, setOpen] = useState(false);
@@ -37,9 +37,9 @@ export function ProjectActivityButton({ projectId }: { projectId: string }): Rea
     };
   }, [projectId, projectRepository]);
 
-  // Подпись: «изменено <относительное время>» по последней правке (иначе — по созданию).
+  // Подпись: «Изменено <относительное время>» по последней правке (иначе — по созданию).
   const editedAt = summary?.lastEditedAt ?? summary?.createdAt ?? null;
-  const label = editedAt ? `изменено ${relativeTime(editedAt)}` : 'Активность';
+  const label = editedAt ? `Изменено ${relativeTime(editedAt)}` : 'Активность';
 
   return (
     <>
@@ -55,15 +55,28 @@ export function ProjectActivityButton({ projectId }: { projectId: string }): Rea
           </Button>
         </TooltipTrigger>
         {summary && (
-          <TooltipContent side="bottom">
-            <div className="space-y-0.5 text-xs">
+          <TooltipContent side="bottom" align="end" className="w-64 p-0">
+            <div className="p-2">
+              <p className="px-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Активность
+              </p>
               {summary.lastEditedAt && (
-                <div>
-                  Изменён: {summary.lastEditedByName ?? '—'} · {formatDateTime(summary.lastEditedAt)}
+                <div className="flex items-baseline justify-between gap-3 rounded px-1.5 py-1">
+                  <span className="min-w-0 truncate text-[13px]">
+                    Изменено{summary.lastEditedByName ? ` · ${summary.lastEditedByName}` : ''}
+                  </span>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                    {formatDateTime(summary.lastEditedAt)}
+                  </span>
                 </div>
               )}
-              <div>
-                Создан: {summary.createdByName ?? '—'} · {formatDateTime(summary.createdAt)}
+              <div className="flex items-baseline justify-between gap-3 rounded px-1.5 py-1">
+                <span className="min-w-0 truncate text-[13px]">
+                  Создано{summary.createdByName ? ` · ${summary.createdByName}` : ''}
+                </span>
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  {formatDateTime(summary.createdAt)}
+                </span>
               </div>
             </div>
           </TooltipContent>

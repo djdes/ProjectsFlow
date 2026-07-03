@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Globe, X } from 'lucide-react';
+import { Globe, Settings2, X } from 'lucide-react';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 
 type Props = {
@@ -7,12 +7,18 @@ type Props = {
 };
 
 // Событие синхронизации закрытия между экземплярами плашки (она рендерится и под крошками,
-// и в выехавшем справа окне): закрытие в одном месте гасит все копии этого проекта.
+// и в выехавшем справа окне задачи): закрытие в одном месте гасит все копии этого проекта.
 const DISMISS_EVENT = 'pf:published-banner-dismissed';
 
-// Синяя плашка «проект опубликован» в стиле Notion («This page is live on …»). Закрывается
-// (per-project, sessionStorage). Адрес — <логин>.projectsflow.ru, где логин = local-part email
-// текущего юзера. Кнопка «Показать сайт» и ссылка пока заглушки (функционал добавится позже).
+// Кнопки плашки — белые «пилюли» как в Notion (View site / Site settings). Пока заглушки.
+const BTN =
+  'inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/90 px-2 py-1 text-[12px] font-medium text-[#37352f] shadow-sm ring-1 ring-black/[0.06] transition-colors hover:bg-white dark:bg-white/10 dark:text-blue-50 dark:ring-white/10 dark:hover:bg-white/20';
+
+// Синяя плашка «проект опубликован» — один в один как «This page is live on …» в Notion:
+// бледно-голубой фон, по центру текст с адресом + белые кнопки «Показать сайт» / «Настройки
+// сайта». Один и тот же компонент рендерится под крошками и в окне задачи, поэтому в окне
+// плашка выглядит бесшовным продолжением. Закрывается (per-project, sessionStorage).
+// Адрес — <логин>.projectsflow.ru, где логин = local-part email текущего юзера.
 export function ProjectPublishedBanner({ projectId }: Props): React.ReactElement | null {
   const { user } = useCurrentUser();
   const dismissKey = `pf-published-banner-dismissed:${projectId}`;
@@ -48,23 +54,24 @@ export function ProjectPublishedBanner({ projectId }: Props): React.ReactElement
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-blue-200/70 bg-blue-50 px-3 py-1.5 text-xs text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200">
-      <span className="inline-flex items-center gap-1.5">
-        <Globe className="size-3.5 shrink-0 opacity-70" />
+    <div className="relative flex shrink-0 flex-wrap items-center justify-center gap-x-2.5 gap-y-1 border-b border-black/[0.05] bg-[#e7f3f8] px-10 py-2 text-[13px] leading-tight text-[#37352f] dark:border-white/[0.06] dark:bg-[#1d2a31] dark:text-blue-50">
+      <span className="truncate">
         Проект опубликован на <span className="font-medium">{address}</span>
       </span>
-      {/* Заглушка: пока не ведёт на сайт. */}
-      <button
-        type="button"
-        className="inline-flex items-center gap-1 rounded-md border border-blue-300/70 bg-white/70 px-2 py-0.5 font-medium text-blue-700 transition-colors hover:bg-white dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-200 dark:hover:bg-blue-900/70"
-      >
+      {/* Заглушки: пока не ведут никуда. */}
+      <button type="button" className={BTN}>
+        <Globe className="size-3.5 opacity-80" />
         Показать сайт
+      </button>
+      <button type="button" className={BTN}>
+        <Settings2 className="size-3.5 opacity-80" />
+        Настройки сайта
       </button>
       <button
         type="button"
         onClick={close}
-        aria-label="Закрыть"
-        className="grid size-5 place-items-center rounded text-blue-600/70 transition-colors hover:bg-blue-100 hover:text-blue-800 dark:hover:bg-blue-900/60 dark:hover:text-blue-100"
+        aria-label="Скрыть"
+        className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-[#37352f]/40 transition-colors hover:bg-black/[0.06] hover:text-[#37352f]/70 dark:text-blue-100/40 dark:hover:bg-white/10 dark:hover:text-blue-50"
       >
         <X className="size-3.5" />
       </button>

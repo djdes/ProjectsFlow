@@ -7,9 +7,8 @@ import { useContainer } from '@/infrastructure/di/container';
 import { relativeTime } from '@/lib/relativeTime';
 import { ActivityItem } from '@/presentation/activity/ActivityItem';
 import { TrendChart } from '@/presentation/components/monitoring/TrendChart';
-import { ProjectPublishedBanner } from './ProjectPublishedBanner';
 import type { ActivityEventItem } from '@/domain/activity/ActivityFeedItem';
-import type { ProjectAnalytics } from '@/domain/project/ProjectAnalytics';
+import type { ProjectAnalytics, ProjectActivitySummary } from '@/domain/project/ProjectAnalytics';
 
 type Props = {
   open: boolean;
@@ -33,11 +32,12 @@ function toDailySeries(perDay: { date: string; count: number }[]): number[] {
 }
 
 // Окно активности проекта: выезжает справа (как окно задачи). Вкладки «Активность» (лента
-// событий) и «Аналитика» (просмотры + зрители). Сверху — плашка публикации (наезжает на окно,
-// контент съезжает ниже).
+// событий) и «Аналитика» (просмотры + зрители + редакторы — как в Notion). Синей плашки
+// публикации в этом окне НЕТ (по требованию).
 export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props): React.ReactElement {
   const { projectRepository } = useContainer();
   const [activity, setActivity] = useState<ActivityEventItem[] | null>(null);
+  const [summary, setSummary] = useState<ProjectActivitySummary | null>(null);
   const [analytics, setAnalytics] = useState<ProjectAnalytics | null>(null);
   const [loadingActivity, setLoadingActivity] = useState(true);
   const [loadingAnalytics, setLoadingAnalytics] = useState(true);
@@ -49,8 +49,8 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
     setLoadingAnalytics(true);
     projectRepository
       .getProjectActivity(projectId, 40)
-      .then((r) => { if (!cancelled) setActivity(r.items); })
-      .catch(() => { if (!cancelled) setActivity([]); })
+      .then((r) => { if (!cancelled) { setActivity(r.items); setSummary(r.summary); } })
+      .catch(() => { if (!cancelled) { setActivity([]); setSummary(null); } })
       .finally(() => { if (!cancelled) setLoadingActivity(false); });
     projectRepository
       .getProjectAnalytics(projectId, WINDOW_DAYS)
@@ -67,9 +67,6 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
         showClose={false}
         className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-xl"
       >
-        {/* #6: плашка публикации наезжает на окно — весь контент съезжает ниже. */}
-        <ProjectPublishedBanner projectId={projectId} />
-
         <div className="flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3">
           <SheetTitle className="text-base">Активность проекта</SheetTitle>
           <SheetClose asChild>
@@ -102,8 +99,8 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
             )}
           </TabsContent>
 
-          {/* Аналитика */}
-          <TabsContent value="analytics" className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-3">
+          {/* Аналитика — как в Notion: Просмотры (график) + Зрители + Редакторы. */}
+          <TabsContent value="analytics" className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
             {loadingAnalytics ? (
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" /> Загрузка…
@@ -112,17 +109,17 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
               <p className="py-10 text-center text-sm text-muted-foreground">Нет данных.</p>
             ) : (
               <>
-                <div className="space-y-1">
+                <section className="space-y-1">
                   <div className="flex items-baseline justify-between">
                     <span className="text-sm font-medium">Просмотры</span>
                     <span className="text-xs text-muted-foreground">
-                      {analytics.totalViews} за {analytics.windowDays} дней
+                      {analytics.totalViews} всего · {analytics.windowDays} дней
                     </span>
                   </div>
                   <TrendChart label="За 28 дней" values={toDailySeries(analytics.perDay)} />
-                </div>
+                </section>
 
-                <div className="space-y-1.5">
+                <section className="space-y-1.5">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     Зрители ({analytics.viewers.length})
                   </p>
@@ -147,7 +144,35 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
                       ))}
                     </ul>
                   )}
-                </div>
+                </section>
+
+                {summary && (
+                  <section className="space-y-1.5 border-t pt-3">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Редакторы
+                    </p>
+                    <ul className="space-y-1 text-sm">
+                      {summary.lastEditedByName && summary.lastEditedAt && (
+                        <li className="flex items-center justify-between gap-3">
+                          <span className="min-w-0 truncate">
+                            Изменил · {summary.lastEditedByName}
+                          </span>
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {relativeTime(summary.lastEditedAt)}
+                          </span>
+                        </li>
+                      )}
+                      <li className="flex items-center justify-between gap-3">
+                        <span className="min-w-0 truncate">
+                          Создал · {summary.createdByName ?? '—'}
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {relativeTime(summary.createdAt)}
+                        </span>
+                      </li>
+                    </ul>
+                  </section>
+                )}
               </>
             )}
           </TabsContent>
