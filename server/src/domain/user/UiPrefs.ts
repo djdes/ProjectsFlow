@@ -11,4 +11,6 @@ export type UiPrefs = {
   // Порядок строк-свойств в окне задачи (ключи assignee/deadline/priority/mode/files/created).
   // Один на пользователя для всех проектов; неизвестные/недостающие ключи дополняются дефолтом.
   readonly taskPropertyOrder?: readonly string[];
+  // Ширина левой панели (px). За аккаунтом → одинакова во всех пространствах.
+  readonly sidebarWidth?: number;
 };

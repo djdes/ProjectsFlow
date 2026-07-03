@@ -36,6 +36,8 @@ import { useNotificationStream } from '@/presentation/hooks/useNotificationStrea
 import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
 import { HelpWidget } from '@/presentation/components/help/HelpWidget';
+import { useSidebarWidth } from '@/presentation/hooks/useSidebarWidth';
+import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
 import { Sidebar } from './Sidebar';
 
 const COLLAPSE_KEY = 'pf_sidebar_collapsed';
@@ -120,6 +122,13 @@ export function AppShell(): React.ReactElement {
     return () => window.removeEventListener('keydown', onKey);
   }, [toggleCollapse]);
 
+  // Ширина левой панели (тянется ручкой у правого края), запоминается в профиле.
+  // Активна только на desktop и когда панель развёрнута.
+  const { width: sidebarWidth, dragging: sidebarDragging, onHandlePointerDown } = useSidebarWidth(
+    isDesktop && !collapsed,
+    toggleCollapse,
+  );
+
   // SSE real-time-уведомления (toast + мгновенный бейдж). Только для authenticated-сессии,
   // которой и является AppShell (рендерится внутри ProtectedRoute).
   useNotificationStream();
@@ -142,13 +151,33 @@ export function AppShell(): React.ReactElement {
         {isDesktop ? (
           <div
             className={cn(
-              'grid h-dvh overflow-hidden bg-background text-foreground',
-              // Свёрнутая панель скрывается ЦЕЛИКОМ (Notion-style), а не превращается в rail.
-              // Ширина 270px — измеренная по живому Notion (плотный chrome).
-              collapsed ? 'grid-cols-[1fr]' : 'grid-cols-[270px_1fr]',
+              'relative grid h-dvh overflow-hidden bg-background text-foreground',
+              // Пока тянем ручку — гасим выделение текста.
+              sidebarDragging && 'select-none',
             )}
+            // Свёрнутая панель скрывается ЦЕЛИКОМ (Notion-style); развёрнутая — тянется ручкой.
+            style={{ gridTemplateColumns: collapsed ? '1fr' : `${sidebarWidth}px 1fr` }}
           >
             {!collapsed && <Sidebar collapsed={collapsed} onToggleCollapse={toggleCollapse} />}
+            {/* Ручка ресайза панели: тонкая полоса на её правом крае. Тяга → шире/уже,
+                клик → свернуть (Ctrl+\), на hover — чёрная подсказка справа. */}
+            {!collapsed && (
+              <ResizeHandleHint side="right">
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Изменить ширину панели или свернуть"
+                  onPointerDown={onHandlePointerDown}
+                  style={{ left: sidebarWidth }}
+                  className={cn(
+                    'absolute top-0 z-30 h-full w-2 -translate-x-1/2 cursor-col-resize',
+                    // Тонкая линия-индикатор по центру — проявляется на hover / во время тяги.
+                    'after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:transition-colors hover:after:bg-primary/40',
+                    sidebarDragging && 'after:bg-primary/60',
+                  )}
+                />
+              </ResizeHandleHint>
+            )}
             {/* При скрытой панели резервируем слева место под плавающую кнопку «развернуть»,
                 чтобы она не наезжала на крошки/заголовок страницы. */}
             <main className={cn('relative min-h-0 overflow-y-auto', collapsed && 'pl-10')}>

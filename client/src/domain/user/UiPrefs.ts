@@ -51,4 +51,7 @@ export type UiPrefs = {
   readonly inboxAssignedGrouping?: AssignedGrouping;
   // Порядок строк-свойств окна задачи (TaskPropertyKey[]). Один на пользователя, все проекты.
   readonly taskPropertyOrder?: readonly string[];
+  // Ширина левой панели (px), тянется ручкой у правого края. За аккаунтом → одинакова
+  // во всех пространствах и переживает перезагрузку. Клиент дополнительно кэширует в localStorage.
+  readonly sidebarWidth?: number;
 };

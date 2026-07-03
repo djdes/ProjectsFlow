@@ -100,6 +100,8 @@ export const uiPrefsSchema = z.object({
   // Порядок строк-свойств окна задачи; ограничиваем длину/строки (без жёсткого enum,
   // чтобы добавление новых ключей-свойств не требовало правки схемы).
   taskPropertyOrder: z.array(z.string().max(32)).max(20).optional(),
+  // Ширина левой панели (px). Диапазон с запасом; клиент клампит жёстче.
+  sidebarWidth: z.number().int().min(180).max(800).optional(),
 });
 
 export type CreateProjectBody = z.infer<typeof createProjectSchema>;

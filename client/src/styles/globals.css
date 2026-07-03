@@ -113,17 +113,17 @@
     background: var(--selection);
   }
 
-  /* Тонкие скроллбары в тон темы: системные (особенно в dark) выглядят ярким
-     инородным блоком внутри колонок канбана и дравера. Firefox — scrollbar-width,
-     Chromium/WebKit — ::-webkit-scrollbar. Прозрачный трек, ненавязчивый thumb. */
+  /* Крупный удобный скроллбар «как в Notion» по всему сайту: широкий трек, толстый
+     скруглённый thumb (с прозрачной рамкой-паддингом через background-clip). Firefox —
+     scrollbar-width:auto (нативно шире), Chromium/WebKit — ::-webkit-scrollbar. */
   * {
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
+    scrollbar-width: auto;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
   }
 
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 14px;
+    height: 14px;
   }
 
   ::-webkit-scrollbar-track {
@@ -131,12 +131,14 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.25);
-    border-radius: 8px;
+    background-color: hsl(var(--muted-foreground) / 0.35);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.45);
+    background-color: hsl(var(--muted-foreground) / 0.55);
   }
 
   /* Список проектов в сайдбаре (ПК): постоянно видимый и заметный грабабельный скроллбар.
