@@ -18,11 +18,22 @@ import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { useSwitchWorkspace } from '@/presentation/hooks/useSwitchWorkspace';
 import { NewWorkspaceDialog } from '@/presentation/components/forms/NewWorkspaceDialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { WorkspaceIcon } from './WorkspaceIcon';
 import { useUsageDialog } from '@/presentation/usage/UsageDialogProvider';
 import { useUpgradeDialog } from '@/presentation/usage/UpgradeDialogProvider';
 import { useUsage } from '@/presentation/usage/UsageProvider';
 import { planHeaderLine } from '@/presentation/usage/usageFormat';
+
+// «1 проект» / «2 проекта» / «5 проектов» — для тултипа пространства (кол-во проектов —
+// единственная per-workspace метрика в read-model; числа участников в списке нет).
+function projectsLabel(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${n} проект`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} проекта`;
+  return `${n} проектов`;
+}
 
 // compact — режим icon-rail (свёрнутая панель): триггер только иконка пространства.
 export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {}): React.ReactElement {
@@ -182,50 +193,61 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
           </button>
 
           <div className="max-h-56 overflow-y-auto p-1">
-            {(workspaces ?? []).map((ws) => (
-              <div
-                key={ws.id}
-                className="group/row flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent"
+            <TooltipProvider delayDuration={200}>
+              {(workspaces ?? []).map((ws) => (
+                <Tooltip key={ws.id}>
+                  <div className="group/row flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent">
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => handleSwitch(ws.id)}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none"
+                      >
+                        <WorkspaceIcon name={ws.name} icon={ws.icon} className="size-5 text-[10px]" />
+                        {/* Название не растягиваем — домик встаёт вплотную после него. */}
+                        <span className="min-w-0 truncate">{ws.name}</span>
+                        {ws.kind === 'default' && (
+                          <span title="Пространство по умолчанию" className="inline-flex shrink-0 text-muted-foreground">
+                            <Home className="size-3.5" aria-hidden="true" />
+                          </span>
+                        )}
+                      </button>
+                    </TooltipTrigger>
+                    {/* Правый край: галочка (текущее) → на hover сменяется кнопкой настроек. */}
+                    <div className="relative size-6 shrink-0">
+                      {ws.isCurrent && (
+                        <Check className="absolute inset-0 m-auto size-4 text-foreground transition-opacity group-hover/row:opacity-0" />
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openSettings(ws.id);
+                        }}
+                        aria-label={`Настройки пространства «${ws.name}»`}
+                        className="absolute inset-0 grid place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100"
+                      >
+                        <Settings className="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <TooltipContent side="right" className="border-transparent bg-foreground text-background">
+                    {projectsLabel(ws.projectCount)}
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setOpen(false);
+                  setCreateOpen(true);
+                }}
+                className="text-primary focus:text-primary"
               >
-                <button
-                  type="button"
-                  onClick={() => handleSwitch(ws.id)}
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none"
-                >
-                  <WorkspaceIcon name={ws.name} icon={ws.icon} className="size-5 text-[10px]" />
-                  <span className="min-w-0 flex-1 truncate">{ws.name}</span>
-                  {ws.kind === 'default' && (
-                    <span title="Пространство по умолчанию" className="inline-flex shrink-0 text-muted-foreground">
-                      <Home className="size-3.5" aria-hidden="true" />
-                    </span>
-                  )}
-                  {ws.isCurrent && <Check className="size-4 shrink-0 text-foreground" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openSettings(ws.id);
-                  }}
-                  aria-label={`Настройки пространства «${ws.name}»`}
-                  title="Настройки пространства"
-                  className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100"
-                >
-                  <Settings className="size-3.5" />
-                </button>
-              </div>
-            ))}
-            <DropdownMenuItem
-              onSelect={(e) => {
-                e.preventDefault();
-                setOpen(false);
-                setCreateOpen(true);
-              }}
-              className="text-primary focus:text-primary"
-            >
-              <Plus />
-              Новое пространство
-            </DropdownMenuItem>
+                <Plus />
+                Новое пространство
+              </DropdownMenuItem>
+            </TooltipProvider>
           </div>
 
           <DropdownMenuSeparator className="my-0" />
