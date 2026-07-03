@@ -203,7 +203,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
           </TabsList>
 
           {/* Активность */}
-          <TabsContent value="activity" className="min-h-0 flex-1 overflow-y-auto p-0">
+          <TabsContent value="activity" className="pf-scroll-visible min-h-0 flex-1 p-0">
             {loadingActivity ? (
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" /> Загрузка…
@@ -230,7 +230,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
               <p className="flex-1 py-10 text-center text-sm text-muted-foreground">Нет данных.</p>
             ) : (
               <>
-                <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-4">
+                <div className="pf-scroll-visible min-h-0 flex-1 space-y-6 px-5 py-4">
                   {/* Просмотры + селектор окна (7/28/90 дней). */}
                   <section className="space-y-2">
                     <div className="flex items-center justify-between gap-2">

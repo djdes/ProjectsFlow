@@ -2003,7 +2003,7 @@ export function TaskDrawer({
                   id="task-drawer-form"
                   onSubmit={handleSubmit}
                   onPaste={handleFormPaste}
-                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                  className="pf-scroll-visible min-h-0 flex-1 overscroll-contain"
                 >
                 {/* «Восстановить» — если осталась незавершённая задача с прошлого закрытия
                     (текст, дедлайн, приоритет, режим, ответственный). Пропадает после создания. */}
