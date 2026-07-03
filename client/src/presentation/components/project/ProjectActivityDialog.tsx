@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Calendar, Check, ChevronDown, HelpCircle, Loader2, Settings, X } from 'lucide-react';
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
@@ -28,6 +30,16 @@ const WINDOW_OPTIONS = [7, 28, 90, 3650] as const;
 const windowLabel = (days: number): string => (days >= 365 ? 'Всё время' : `За ${days} дней`);
 const initial = (name: string | null): string => (name?.trim()[0] ?? '?').toUpperCase();
 
+// Ширина панели (px), тянется ручкой у левого края; хранится в localStorage.
+const PANEL_WIDTH_KEY = 'pf-project-activity-width';
+const PANEL_MIN_WIDTH = 420;
+const PANEL_DEFAULT_WIDTH = 768;
+function clampPanelWidth(w: number): number {
+  const vw = typeof window === 'undefined' ? 1280 : window.innerWidth;
+  const max = Math.max(PANEL_MIN_WIDTH, Math.round(vw * 0.95));
+  return Math.min(max, Math.max(PANEL_MIN_WIDTH, Math.round(w)));
+}
+
 // Окно активности проекта: выезжает справа (как окно задачи). Вкладки «Активность» (лента
 // событий) и «Аналитика» (просмотры + зрители + редакторы — как в Notion). Синей плашки
 // публикации в этом окне НЕТ (по требованию).
@@ -38,6 +50,70 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
   const [analytics, setAnalytics] = useState<ProjectAnalytics | null>(null);
   const [loadingActivity, setLoadingActivity] = useState(true);
   const [loadingAnalytics, setLoadingAnalytics] = useState(true);
+
+  // Ширина панели: тянется ручкой у левого края (drag → шире/уже), клик по границе —
+  // закрыть. Значение переживает перезагрузку (localStorage).
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    try {
+      const raw = Number(localStorage.getItem(PANEL_WIDTH_KEY));
+      return clampPanelWidth(Number.isFinite(raw) && raw > 0 ? raw : PANEL_DEFAULT_WIDTH);
+    } catch {
+      return PANEL_DEFAULT_WIDTH;
+    }
+  });
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef<{ x: number; w: number } | null>(null);
+  const onHandlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLElement>): void => {
+      e.preventDefault();
+      const target = e.currentTarget;
+      try {
+        target.setPointerCapture(e.pointerId);
+      } catch {
+        /* best-effort */
+      }
+      dragRef.current = { x: e.clientX, w: panelWidth };
+      let moved = false;
+      setDragging(true);
+      const onMove = (ev: PointerEvent): void => {
+        const d = dragRef.current;
+        if (!d) return;
+        if (Math.abs(ev.clientX - d.x) > 3) moved = true;
+        // Ручка на ЛЕВОМ крае правой панели: влево (меньше clientX) = шире.
+        setPanelWidth(clampPanelWidth(d.w - (ev.clientX - d.x)));
+      };
+      const onUp = (): void => {
+        dragRef.current = null;
+        setDragging(false);
+        try {
+          target.releasePointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+        target.removeEventListener('pointermove', onMove);
+        target.removeEventListener('pointerup', onUp);
+        target.removeEventListener('pointercancel', onUp);
+        // Клик без тяги — закрыть окно; иначе — запомнить ширину.
+        if (!moved) {
+          onOpenChange(false);
+          return;
+        }
+        setPanelWidth((w) => {
+          try {
+            localStorage.setItem(PANEL_WIDTH_KEY, String(w));
+          } catch {
+            /* ignore */
+          }
+          return w;
+        });
+      };
+      target.addEventListener('pointermove', onMove);
+      target.addEventListener('pointerup', onUp);
+      target.addEventListener('pointercancel', onUp);
+    },
+    [panelWidth, onOpenChange],
+  );
+
   // Окно графика просмотров (7/28/90 дней) — селектор справа над графиком.
   const [windowDays, setWindowDays] = useState<number>(DEFAULT_WINDOW_DAYS);
   // Приватность истории просмотров (как в Notion). Серверного гейта пока нет —
@@ -90,8 +166,23 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
       <SheetContent
         side="right"
         showClose={false}
-        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
+        style={{ width: panelWidth, maxWidth: '95vw' }}
+        className={cn('flex w-full flex-col gap-0 overflow-hidden p-0', dragging && 'select-none')}
       >
+        {/* Ручка ресайза у левого края: тяга → шире/уже, клик → закрыть, на hover — подсказка. */}
+        <ResizeHandleHint side="left" action="Закрыть" shortcut="Клик">
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Изменить ширину окна или закрыть"
+            onPointerDown={onHandlePointerDown}
+            className={cn(
+              'absolute inset-y-0 left-0 z-50 w-1.5 -translate-x-1/2 cursor-col-resize touch-none',
+              'before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:transition-colors hover:before:bg-primary/40',
+              dragging && 'before:bg-primary/60',
+            )}
+          />
+        </ResizeHandleHint>
         <div className="flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3">
           <SheetTitle className="text-base">Активность проекта</SheetTitle>
           <SheetClose asChild>
