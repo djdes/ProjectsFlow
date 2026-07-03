@@ -71,12 +71,15 @@ const examples = [
         <span class="shots__float-txt"><b>Claude Opus</b><span>взял задачу в работу</span></span>
       </div>
 
-      <div class="shots__float shots__float--stat" aria-hidden="true">
-        <span class="shots__float-cap">Прибыль за проект</span>
-        <span class="shots__float-row">
-          <span class="shots__float-val">+128 400 ₽</span>
-          <svg class="shots__float-spark" viewBox="0 0 60 22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18 14 12 24 15 36 6 48 9 58 3" /></svg>
-        </span>
+      <!-- Второй экран поверх первого: мини-окно «Финансы» — интерфейс и функции разом. -->
+      <div class="shots__mini shots__mini--finance" aria-hidden="true">
+        <div class="shots__mini-bar">
+          <span class="shots__mini-dot"></span>
+          <span class="shots__mini-dot"></span>
+          <span class="shots__mini-dot"></span>
+          <em class="shots__mini-title">Финансы проекта</em>
+        </div>
+        <img src="/shots/app-finance.png" alt="" width="1680" height="950" loading="lazy" decoding="async" />
       </div>
 
       <figcaption class="shots__cap">
@@ -112,6 +115,17 @@ const examples = [
             <span class="shots__float-val">+128 400 ₽</span>
             <svg class="shots__float-spark" viewBox="0 0 60 22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18 14 12 24 15 36 6 48 9 58 3" /></svg>
           </span>
+        </div>
+
+        <!-- Второй экран поверх: мини-окно «Доска» — видно, что финансы и задачи рядом. -->
+        <div class="shots__mini shots__mini--board" aria-hidden="true">
+          <div class="shots__mini-bar">
+            <span class="shots__mini-dot"></span>
+            <span class="shots__mini-dot"></span>
+            <span class="shots__mini-dot"></span>
+            <em class="shots__mini-title">Доска задач</em>
+          </div>
+          <img src="/shots/app-board.png" alt="" width="1680" height="950" loading="lazy" decoding="async" />
         </div>
       </figure>
     </div>
@@ -358,6 +372,35 @@ const examples = [
   .shots__float-row { display: flex; align-items: center; gap: var(--sp-2); }
   .shots__float-val { font-size: var(--fs-base); font-weight: 800; color: #12a97b; letter-spacing: -0.01em; }
   .shots__float-spark { width: 54px; height: 20px; color: #12a97b; }
+
+  /* Мини-окно второго экрана поверх основного скрина (наложение экранов, как у Notion). */
+  .shots__mini {
+    position: absolute;
+    z-index: 3;
+    overflow: hidden;
+    border-radius: var(--r);
+    background: var(--surface);
+    border: 1px solid rgba(11, 18, 32, 0.10);
+    box-shadow:
+      0 2px 6px rgba(11, 18, 32, 0.10),
+      0 34px 66px -22px rgba(11, 18, 32, 0.45);
+    transform: rotate(var(--rot, 0deg));
+  }
+  .shots__mini-bar {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 10px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--line);
+  }
+  .shots__mini-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: rgba(11, 18, 32, 0.18); }
+  .shots__mini-title { margin-left: 6px; font-style: normal; font-size: 10px; font-weight: 600; color: var(--muted); }
+  .shots__mini img { display: block; width: 100%; height: auto; }
+  .shots__mini--finance { width: 42%; right: 4%; bottom: 7%; --rot: -3deg; }
+  .shots__mini--board { width: 46%; left: -0.5rem; bottom: -0.8rem; --rot: -3deg; }
+  @media (max-width: 720px) { .shots__mini { display: none; } }
 
   .shots__float { transform: rotate(var(--rot, 0deg)); }
   @media (prefers-reduced-motion: no-preference) {
