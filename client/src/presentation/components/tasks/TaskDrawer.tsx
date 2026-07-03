@@ -1567,85 +1567,65 @@ export function TaskDrawer({
           // SheetContent). isSplit (широкая ширина) → две колонки: задача слева,
           // обсуждение справа, серый разделитель между; иначе — привычный стек
           // (шапка сверху, ниже центрированный переключатель + комменты + композер).
-          <div
-            className={cn(
-              'relative min-h-0',
-              // split — две колонки в ряд, у каждой свой скролл; narrow — ОДИН общий
-              // скролл всего окна (скроллится этот контейнер, внутренние блоки —
-              // натуральной высоты, без своих overflow). Так задача+комменты+композер
-              // прокручиваются единой лентой (по просьбе: без разделения на блоки).
-              // Drag&drop файла обрабатывается на уровне видимой коробки окна (DrawerShell).
-              isSplit
-                ? 'flex h-full overflow-hidden'
-                : 'flex h-full flex-col overflow-y-auto overscroll-contain',
-            )}
-          >
-            {/* narrow: sticky-заголовок — первый ребёнок ОБЩЕГО скролл-контейнера, поэтому
-                держится сквозь всю ленту (задача → комменты → LIVE) до конца скролла. */}
-            {!isSplit && stickyTitleBar}
-            {/* === HEADER / ЛЕВАЯ КОЛОНКА === Notion-style. В стеке — sticky-шапка с
-                нижним бордером (единственный разделитель до переключателя вкладок).
-                В split — самостоятельная скроллящаяся левая колонка (бордера снизу нет,
-                разделитель — вертикальная линия справа от колонки). */}
-            <div
-              className={cn(
-                // БЕЗ backdrop-blur: backdrop-filter создаёт stacking-context и делает
-                // колонку containing-block'ом для position:fixed — тогда плавающее меню
-                // форматирования зажимается overflow-колонки и уезжает ЗА правую панель
-                // комментов в split. Непрозрачный bg-background/95 это не ломает.
-                'bg-background/95',
-                // split — своя скроллящаяся колонка; narrow — натуральная высота
-                // (скроллит общий контейнер выше), внизу разделитель-бордер.
-                isSplit
-                  ? 'min-w-0 flex-1 overflow-y-auto overscroll-contain'
-                  : 'shrink-0 border-b',
-              )}
-            >
-              {/* split: sticky-заголовок живёт в левой колонке (у неё свой скролл). */}
-              {isSplit && stickyTitleBar}
-              {/* Row A: контекст · короткий id (слева), статус (справа). Высота/вертикальное
-                  выравнивание как у строки хлебных крошек страницы (min-h-11, по центру) —
-                  чтобы кнопки закрыть/развернуть стояли на одной линии с крошками. */}
-              {/* Кнопки »/↗/ширина — слева (как «ава» в сайдбаре). Название проекта идёт
-                  ПОСЛЕ них (как «ник»), а заголовок задачи ниже остаётся у левого края —
-                  то есть ровно слева относительно названия проекта (как контент в сайдбаре
-                  стоит слева, а ник отступлен аватаркой). */}
-              <div className="flex h-11 items-center gap-2 px-4">
-                {renderCloseButton()}
-                {renderMaximizeButton()}
-                {renderPageWidthToggle()}
-                <div className="flex min-w-0 flex-1 items-baseline gap-2">
-                  {projectName && (
-                    <span className="truncate text-xs font-medium text-muted-foreground">
-                      {projectName}
-                    </span>
-                  )}
-                  <span className="font-mono text-[10px] text-muted-foreground/50">
-                    {taskShortId(task.id)}
-                  </span>
-                </div>
-                {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка). */}
-                {onMove ? (
-                  <TaskStatusChip
-                    task={task}
-                    onMove={onMove}
-                    onChanged={() => notifyChanged()}
-                  />
-                ) : (
-                  <span
-                    className={cn(
-                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                      STATUS_BADGE_COLOR[task.status],
-                    )}
-                  >
-                    {STATUS_LABEL[task.status]}
+          <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+            {/* #3: верхняя панель + плашка — ОБЩАЯ ШАПКА НА ВСЮ ШИРИНУ окна (над обоими
+                столбцами в split), поэтому в split-режиме плашка идёт через оба столбца, а
+                кнопки закрыть/развернуть/статус — по всей ширине шапки. */}
+            <div className="flex h-11 shrink-0 items-center gap-2 border-b bg-background/95 px-4">
+              {renderCloseButton()}
+              {renderMaximizeButton()}
+              {renderPageWidthToggle()}
+              <div className="flex min-w-0 flex-1 items-baseline gap-2">
+                {projectName && (
+                  <span className="truncate text-xs font-medium text-muted-foreground">
+                    {projectName}
                   </span>
                 )}
+                <span className="font-mono text-[10px] text-muted-foreground/50">
+                  {taskShortId(task.id)}
+                </span>
               </div>
+              {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка). */}
+              {onMove ? (
+                <TaskStatusChip task={task} onMove={onMove} onChanged={() => notifyChanged()} />
+              ) : (
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                    STATUS_BADGE_COLOR[task.status],
+                  )}
+                >
+                  {STATUS_LABEL[task.status]}
+                </span>
+              )}
+            </div>
+            {bannerProjectId && <ProjectPublishedBanner projectId={bannerProjectId} />}
 
-              {/* #6: плашка публикации — сразу под верхней панелью окна (как в Notion:
-                  кнопки панели встают вертикально по центру относительно плашки). */}
-              {bannerProjectId && <ProjectPublishedBanner projectId={bannerProjectId} />}
+            {/* Контент под общей шапкой: split → две колонки со своими скроллами; narrow →
+                общий вертикальный скролл (шапка+плашка закреплены сверху). Drag&drop файла —
+                на уровне видимой коробки окна (DrawerShell). */}
+            <div
+              className={cn(
+                'relative flex min-h-0 flex-1',
+                isSplit ? 'overflow-hidden' : 'flex-col overflow-y-auto overscroll-contain',
+              )}
+            >
+              {/* narrow: sticky-заголовок — первый ребёнок общего скролл-контейнера. */}
+              {!isSplit && stickyTitleBar}
+              {/* === ЛЕВАЯ КОЛОНКА (задача) === В split — своя скроллящаяся колонка;
+                  narrow — натуральная высота внутри общего скролла, снизу бордер до комментов.
+                  bg-background/95 (без backdrop-blur — иначе колонка становится containing-block
+                  для position:fixed и плавающее меню форматирования зажимается). */}
+              <div
+                className={cn(
+                  'bg-background/95',
+                  isSplit
+                    ? 'min-w-0 flex-1 overflow-y-auto overscroll-contain'
+                    : 'shrink-0 border-b',
+                )}
+              >
+                {/* split: sticky-заголовок живёт в левой колонке (у неё свой скролл). */}
+                {isSplit && stickyTitleBar}
 
               {/* === ОПИСАНИЕ === Заголовок и описание ОДНИМ полем сверху (1-я строка —
                   по сути заголовок). Полное editDescription редактируется напрямую,
@@ -1976,42 +1956,42 @@ export function TaskDrawer({
                   </div>
                 ))}
             </div>
+            </div>
           </div>
         ) : (
           // === CREATE MODE === — окно создания = окно редактирования: заголовок +
           // плюсики + ряд свойств + тело, resizable + split (справа — плейсхолдер
           // пустых комментариев). Источник правды — единое `description`.
-          <div
-            className={cn('min-h-0 overflow-hidden', isSplit ? 'flex h-full' : 'flex h-full flex-col')}
-          >
-            {/* ЛЕВАЯ КОЛОНКА: скроллящаяся форма + футер (Отмена/Создать). */}
-            <div
-              className={cn(
-                // БЕЗ backdrop-blur — см. коммент у edit-колонки (иначе плавающее меню
-                // форматирования зажимается stacking-context'ом колонки в split).
-                'flex min-h-0 flex-col bg-background/95',
-                isSplit ? 'min-w-0 flex-1' : 'min-h-0 flex-[1.3] border-b',
-              )}
-            >
-              <form
-                ref={formRef}
-                id="task-drawer-form"
-                onSubmit={handleSubmit}
-                onPaste={handleFormPaste}
-                className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          <div className="flex h-full min-h-0 flex-col overflow-hidden">
+            {/* #3: верхняя панель + плашка — ОБЩАЯ ШАПКА НА ВСЮ ШИРИНУ (над обоими столбцами
+                в split), поэтому плашка идёт через оба столбца. */}
+            <div className="flex h-11 shrink-0 items-center gap-2 border-b bg-background/95 px-3">
+              {renderCloseButton()}
+              {renderMaximizeButton()}
+              <span className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {projectName ? `${projectName} · ` : ''}Новая задача
+              </span>
+            </div>
+            {bannerProjectId && <ProjectPublishedBanner projectId={bannerProjectId} />}
+
+            {/* Контент под общей шапкой: split → две колонки; narrow → стек. */}
+            <div className={cn('flex min-h-0 flex-1', isSplit ? 'overflow-hidden' : 'flex-col')}>
+              {/* ЛЕВАЯ КОЛОНКА: скроллящаяся форма + футер (Отмена/Создать). */}
+              <div
+                className={cn(
+                  // БЕЗ backdrop-blur — см. коммент у edit-колонки (иначе плавающее меню
+                  // форматирования зажимается stacking-context'ом колонки в split).
+                  'flex min-h-0 flex-col bg-background/95',
+                  isSplit ? 'min-w-0 flex-1' : 'min-h-0 flex-[1.3] border-b',
+                )}
               >
-                {/* Row A: кнопки слева, контекст после них (как ава→ник в сайдбаре). */}
-                <div className="flex h-11 items-center gap-2 px-3">
-                  {renderCloseButton()}
-                  {renderMaximizeButton()}
-                  <span className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {projectName ? `${projectName} · ` : ''}Новая задача
-                  </span>
-                </div>
-
-                {/* #6: плашка публикации — сразу под верхней панелью окна создания. */}
-                {bannerProjectId && <ProjectPublishedBanner projectId={bannerProjectId} />}
-
+                <form
+                  ref={formRef}
+                  id="task-drawer-form"
+                  onSubmit={handleSubmit}
+                  onPaste={handleFormPaste}
+                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                >
                 {/* «Восстановить» — если осталась незавершённая задача с прошлого закрытия
                     (текст, дедлайн, приоритет, режим, ответственный). Пропадает после создания. */}
                 {showRestore && (
@@ -2208,6 +2188,7 @@ export function TaskDrawer({
                 />
               </div>
             )}
+            </div>
           </div>
         )}
     </DrawerShell>
