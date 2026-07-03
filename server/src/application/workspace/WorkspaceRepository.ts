@@ -19,6 +19,7 @@ export type UpdateWorkspaceInput = {
 export type WorkspaceListItem = Workspace & {
   readonly role: WorkspaceRole;
   readonly projectCount: number;
+  readonly memberCount: number;
 };
 
 export interface WorkspaceRepository {

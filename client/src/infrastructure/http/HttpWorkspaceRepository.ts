@@ -19,6 +19,7 @@ type WorkspaceDto = {
   ownerUserId: string;
   role?: WorkspaceRole;
   projectCount?: number;
+  memberCount?: number;
   isCurrent?: boolean;
   createdAt: string;
 };
@@ -43,6 +44,7 @@ function fromDto(dto: WorkspaceDto): Workspace {
     ownerUserId: dto.ownerUserId,
     role: dto.role ?? 'member',
     projectCount: dto.projectCount ?? 0,
+    memberCount: dto.memberCount ?? 0,
     isCurrent: dto.isCurrent ?? false,
     createdAt: new Date(dto.createdAt),
   };

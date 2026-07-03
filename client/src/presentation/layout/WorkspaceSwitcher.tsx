@@ -35,6 +35,15 @@ function projectsLabel(n: number): string {
   return `${n} проектов`;
 }
 
+// «1 участник» / «2 участника» / «5 участников» — вторая строка тултипа пространства.
+function membersLabel(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${n} участник`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} участника`;
+  return `${n} участников`;
+}
+
 // compact — режим icon-rail (свёрнутая панель): триггер только иконка пространства.
 export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {}): React.ReactElement {
   const navigate = useNavigate();
@@ -196,8 +205,9 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
             <TooltipProvider delayDuration={200}>
               {(workspaces ?? []).map((ws) => (
                 <Tooltip key={ws.id}>
-                  <div className="group/row flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent">
-                    <TooltipTrigger asChild>
+                  {/* Триггер — вся строка: тултип встаёт у ПРАВОГО края всего окна. */}
+                  <TooltipTrigger asChild>
+                    <div className="group/row flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent">
                       <button
                         type="button"
                         onClick={() => handleSwitch(ws.id)}
@@ -212,27 +222,35 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
                           </span>
                         )}
                       </button>
-                    </TooltipTrigger>
-                    {/* Правый край: галочка (текущее) → на hover сменяется кнопкой настроек. */}
-                    <div className="relative size-6 shrink-0">
-                      {ws.isCurrent && (
-                        <Check className="absolute inset-0 m-auto size-4 text-foreground transition-opacity group-hover/row:opacity-0" />
-                      )}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openSettings(ws.id);
-                        }}
-                        aria-label={`Настройки пространства «${ws.name}»`}
-                        className="absolute inset-0 grid place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100"
-                      >
-                        <Settings className="size-3.5" />
-                      </button>
+                      {/* Правый край: галочка (текущее) → на hover сменяется кнопкой настроек. */}
+                      <div className="relative size-6 shrink-0">
+                        {ws.isCurrent && (
+                          <Check className="absolute inset-0 m-auto size-4 text-foreground transition-opacity group-hover/row:opacity-0" />
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openSettings(ws.id);
+                          }}
+                          aria-label={`Настройки пространства «${ws.name}»`}
+                          className="absolute inset-0 grid place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100"
+                        >
+                          <Settings className="size-3.5" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <TooltipContent side="right" className="border-transparent bg-foreground text-background">
-                    {projectsLabel(ws.projectCount)}
+                  </TooltipTrigger>
+                  {/* Всегда справа за окном (avoidCollisions=false → не перекидывается). */}
+                  <TooltipContent
+                    side="right"
+                    align="center"
+                    avoidCollisions={false}
+                    sideOffset={10}
+                    className="border-transparent bg-foreground text-background"
+                  >
+                    <div>{projectsLabel(ws.projectCount)}</div>
+                    <div className="text-background/70">{membersLabel(ws.memberCount)}</div>
                   </TooltipContent>
                 </Tooltip>
               ))}

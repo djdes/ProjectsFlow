@@ -21,6 +21,7 @@ type WorkspaceDto = {
   ownerUserId: string;
   role?: 'owner' | 'member';
   projectCount?: number;
+  memberCount?: number;
   isCurrent?: boolean;
   createdAt: string;
 };
@@ -37,6 +38,7 @@ function toDto(ws: Workspace | WorkspaceListItem, isCurrent?: boolean): Workspac
     ownerUserId: ws.ownerUserId,
     role: listItem.role,
     projectCount: listItem.projectCount,
+    memberCount: listItem.memberCount,
     isCurrent,
     createdAt: ws.createdAt.toISOString(),
   };

@@ -49,7 +49,18 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
       .select({
         workspace: workspaces,
         role: workspaceMembers.role,
-        projectCount: sql<number>`(SELECT COUNT(*) FROM projects p WHERE p.workspace_id = ${workspaces.id})`,
+        // Точный счётчик: проекты, где юзер — участник (как в ListProjects, без inbox).
+        // Дефолт-хаб агрегирует ВСЕ его проекты (любое пространство); команда — только
+        // проекты этого пространства. Иначе счётчик врал (считал по workspace_id всех).
+        projectCount: sql<number>`(
+          SELECT COUNT(*) FROM project_members pm
+          JOIN projects p ON p.id = pm.project_id
+          WHERE pm.user_id = ${userId}
+            AND p.is_inbox = FALSE
+            AND (${workspaces.kind} = 'default' OR p.workspace_id = ${workspaces.id})
+        )`,
+        // Сколько всего участников в пространстве.
+        memberCount: sql<number>`(SELECT COUNT(*) FROM workspace_members wm WHERE wm.workspace_id = ${workspaces.id})`,
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
@@ -64,6 +75,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
       ...toWorkspace(r.workspace),
       role: r.role,
       projectCount: Number(r.projectCount),
+      memberCount: Number(r.memberCount),
     }));
   }
 

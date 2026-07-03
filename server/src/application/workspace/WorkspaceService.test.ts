@@ -42,7 +42,12 @@ function makeFakes(seed: Seed) {
         .filter((m) => m.userId === userId)
         .map((m) => {
           const w = workspaces.get(m.workspaceId)!;
-          return { ...w, role: m.role, projectCount: projects.filter((p) => p.workspaceId === w.id).length };
+          return {
+            ...w,
+            role: m.role,
+            projectCount: projects.filter((p) => p.workspaceId === w.id).length,
+            memberCount: members.filter((mm) => mm.workspaceId === w.id).length,
+          };
         });
     },
     async getById(id) {

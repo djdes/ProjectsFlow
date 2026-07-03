@@ -14,8 +14,10 @@ export type Workspace = {
   readonly ownerUserId: string;
   // Роль текущего юзера в пространстве.
   readonly role: WorkspaceRole;
-  // Число проектов в пространстве (read-model для UI).
+  // Число проектов в пространстве (read-model для UI). Для дефолт-хаба — все проекты юзера.
   readonly projectCount: number;
+  // Число участников пространства (read-model для UI).
+  readonly memberCount: number;
   // Активное ли это пространство у текущего юзера (источник правды — сервер).
   readonly isCurrent: boolean;
   readonly createdAt: Date;
