@@ -30,6 +30,12 @@
   --accent-soft: #e6f7fc;   /* фон чипов/eyebrow/drop-зоны */
   --accent-line: rgba(8, 146, 192, 0.28);
   --accent-glow: rgba(8, 146, 192, 0.5);  /* свечение кнопок; флипается ярче в тёмных секциях */
+
+  /* Вторичный акцент — фиолет. Живёт ТОЛЬКО в градиентах/свечениях (не в тексте),
+     чтобы «раскрасить» точки действия, не ломая бумажную базу. */
+  --violet: #7c5cff;
+  --violet-bright: #9d7bff;
+  --violet-glow: rgba(124, 92, 255, 0.5);
   --signal: #129a6e;        /* готово/онлайн */
   --warn: #d97706;          /* в работе */
   --danger: #e5484d;
@@ -44,8 +50,10 @@
   --dark-surface: #111a2e;
 
   /* --- Градиенты ---------------------------------------------------------- */
-  --grad-accent: linear-gradient(135deg, #22e0ff 0%, #0892c0 100%);
-  --grad-text: linear-gradient(120deg, #0aa2c7, #22c3e6);
+  --grad-accent: linear-gradient(135deg, #22e0ff 0%, #4bbcff 45%, #9d7bff 100%);
+  --grad-text: linear-gradient(115deg, #0aa2c7 0%, #2aa5e6 45%, #7c5cff 100%);
+  /* Насыщенный градиент для главных кнопок: белый текст держит контраст на всех стопах. */
+  --grad-cta: linear-gradient(135deg, #0f9fc9 0%, #2a72d6 55%, #6b48f5 100%);
 
   /* --- Шрифты ------------------------------------------------------------- */
   --font-sans: 'Segoe UI', -apple-system, system-ui, sans-serif;

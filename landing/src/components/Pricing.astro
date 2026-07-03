@@ -108,7 +108,11 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
   }
   .pricing__plan--pop {
     border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent), var(--shadow-accent);
+    /* Цветной cyan+violet лифт на рекомендуемой карте — притягивает взгляд к конверсии. */
+    box-shadow:
+      0 0 0 1px var(--accent),
+      0 22px 55px -20px var(--violet-glow),
+      0 10px 30px -14px var(--accent-glow);
   }
   /* Выделенный тариф чуть приподнят на десктопе. */
   @media (min-width: 880px) {

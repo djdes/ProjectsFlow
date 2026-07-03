@@ -58,7 +58,11 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
   .cta {
     position: relative;
     overflow: hidden;
-    background: var(--bg);
+    /* Тёмный остров + двухтоновое (cyan/violet) свечение по углам — «сочно», но не заливка. */
+    background:
+      radial-gradient(70% 60% at 15% -10%, rgba(34, 224, 255, 0.12), transparent 60%),
+      radial-gradient(70% 60% at 88% 115%, rgba(124, 92, 255, 0.16), transparent 60%),
+      var(--bg);
   }
   /* Мягкий цианный свет из-под контента — точечный акцент, не заливка. */
   .cta__glow {

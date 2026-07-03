@@ -135,6 +135,14 @@ const bonuses = [
 </section>
 
 <style>
+  /* Тёмный «остров» (data-theme="dark" флипает токены). Без этого фона near-white текст
+     ложился на светлую бумагу и сливался — красим фон + мягкое циан-свечение сверху. */
+  .guarantee {
+    background:
+      radial-gradient(120% 90% at 50% -10%, rgba(34, 224, 255, 0.14), transparent 60%),
+      radial-gradient(90% 70% at 88% 112%, rgba(124, 92, 255, 0.16), transparent 60%),
+      var(--bg);
+  }
   .guarantee__head {
     max-width: 42rem;
     margin-inline: auto;
