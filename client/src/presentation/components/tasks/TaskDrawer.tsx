@@ -1970,7 +1970,7 @@ export function TaskDrawer({
                 className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
               >
                 {/* Row A: кнопки слева, контекст после них (как ава→ник в сайдбаре). */}
-                <div className="flex h-11 items-center gap-2 px-4">
+                <div className="flex h-11 items-center gap-2 px-3">
                   {renderCloseButton()}
                   {renderMaximizeButton()}
                   <span className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -1984,7 +1984,7 @@ export function TaskDrawer({
                 {/* «Восстановить» — если осталась незавершённая задача с прошлого закрытия
                     (текст, дедлайн, приоритет, режим, ответственный). Пропадает после создания. */}
                 {showRestore && (
-                  <div className="px-4 pt-1">
+                  <div className="px-3 pt-1">
                     <button
                       type="button"
                       onClick={handleRestoreCreateDraft}
@@ -1998,7 +1998,7 @@ export function TaskDrawer({
                 )}
 
                 {/* Заголовок и описание — ОДНИМ полем сверху (1-я строка = заголовок). */}
-                <div ref={createBodyContainerRef} className="px-4 pb-1 pt-0">
+                <div ref={createBodyContainerRef} className="px-3 pb-1 pt-0">
                   <Suspense fallback={<div className="min-h-[6rem]" />}>
                     <RichTextEditor
                       ref={createEditorRef}
@@ -2024,7 +2024,7 @@ export function TaskDrawer({
 
                 {/* Плюсики: + Подзадача / + Файл. Справа — Копировать / AI (как в edit-mode;
                     Переработка/План тут нет — они требуют уже сохранённой задачи). */}
-                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 pb-1 pt-0.5">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 pb-1 pt-0.5">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <button
                       type="button"
@@ -2140,11 +2140,11 @@ export function TaskDrawer({
                   </PropertyRow>
                 </div>
 
-                {error && <p className="px-4 pb-2 text-xs text-destructive">{error}</p>}
+                {error && <p className="px-3 pb-2 text-xs text-destructive">{error}</p>}
               </form>
 
               {/* Футер: AI слева, Отмена/Создать справа. */}
-              <div className="flex flex-col gap-2 border-t bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-2 border-t bg-background px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <AiImproveButton
                     text={description}
