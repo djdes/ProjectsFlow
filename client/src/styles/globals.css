@@ -113,17 +113,17 @@
     background: var(--selection);
   }
 
-  /* Крупный удобный скроллбар «как в Notion» по всему сайту: широкий трек, толстый
-     скруглённый thumb (с прозрачной рамкой-паддингом через background-clip). Firefox —
-     scrollbar-width:auto (нативно шире), Chromium/WebKit — ::-webkit-scrollbar. */
+  /* Скроллбар «один в один как в Notion» по всему сайту: ПРЯМОУГОЛЬНЫЙ (без скруглений),
+     всегда видимый серый thumb, прозрачный трек. Firefox — scrollbar-width:auto,
+     Chromium/WebKit — ::-webkit-scrollbar. */
   * {
     scrollbar-width: auto;
-    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.4) transparent;
   }
 
   ::-webkit-scrollbar {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
   }
 
   ::-webkit-scrollbar-track {
@@ -131,14 +131,12 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--muted-foreground) / 0.35);
-    border-radius: 999px;
-    border: 3px solid transparent;
-    background-clip: padding-box;
+    background-color: hsl(var(--muted-foreground) / 0.4);
+    border-radius: 0; /* прямоугольный, как в Notion */
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background-color: hsl(var(--muted-foreground) / 0.55);
+    background-color: hsl(var(--muted-foreground) / 0.6);
   }
 
   /* Список проектов в сайдбаре (ПК): постоянно видимый и заметный грабабельный скроллбар.
@@ -153,11 +151,11 @@
     scrollbar-color: hsl(var(--muted-foreground) / 0.5) transparent;
   }
   .pf-scroll-visible::-webkit-scrollbar {
-    width: 10px;
+    width: 12px;
   }
   .pf-scroll-visible::-webkit-scrollbar-thumb {
     background: hsl(var(--muted-foreground) / 0.45);
-    border-radius: 8px;
+    border-radius: 0;
   }
   .pf-scroll-visible::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--muted-foreground) / 0.65);

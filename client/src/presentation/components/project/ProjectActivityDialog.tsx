@@ -203,7 +203,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
           </TabsList>
 
           {/* Активность */}
-          <TabsContent value="activity" className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+          <TabsContent value="activity" className="min-h-0 flex-1 overflow-y-auto p-0">
             {loadingActivity ? (
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" /> Загрузка…

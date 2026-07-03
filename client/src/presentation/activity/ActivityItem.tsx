@@ -213,7 +213,8 @@ export function ActivityItem({
       className={cn(
         // overflow-hidden = содержит float иконки; текст обтекает иконку (начинается справа
         // от неё и продолжается под ней на всю ширину блока) — так шире и читабельнее.
-        'group relative cursor-pointer overflow-hidden px-3 py-2 transition-colors hover:bg-muted/40',
+        // pr-11 резервирует место под всегда-видимую кнопку версии у правого края.
+        'group relative cursor-pointer overflow-hidden py-3 pl-4 pr-11 transition-colors hover:bg-muted/40',
       )}
     >
       {versionTaskId && (
@@ -227,7 +228,7 @@ export function ActivityItem({
                   onOpenVersions?.(versionTaskId);
                 }}
                 aria-label="Посмотреть версию"
-                className="absolute right-2 top-2 z-10 grid size-7 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                className="absolute right-3 top-3 z-10 grid size-7 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Clock className="size-4" />
               </button>
