@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Globe, Settings2, X } from 'lucide-react';
+import { Globe, X } from 'lucide-react';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 
 type Props = {
@@ -15,7 +15,7 @@ type Props = {
 // Закрытие живёт только в памяти — при обновлении страницы плашка возвращается (по требованию).
 const DISMISS_EVENT = 'pf:published-banner-dismissed';
 
-// Кнопки плашки — белые «пилюли» как в Notion (View site / Site settings). Пока заглушки.
+// Кнопка плашки — белая «пилюля» «Показать сайт» (как в Notion). Пока заглушка.
 const BTN =
   'inline-flex shrink-0 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 py-1 text-[13px] font-medium text-[#37352f] shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-colors hover:bg-white/70 dark:border-white/10 dark:bg-white/10 dark:text-blue-50 dark:hover:bg-white/20';
 
@@ -58,24 +58,23 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
         <span className="truncate">
           Проект опубликован на <span className="font-medium">{address}</span>
         </span>
-        {/* Заглушки: пока не ведут никуда. */}
+        {/* Заглушка: пока не ведёт никуда. */}
         <button type="button" className={BTN}>
           <Globe className="size-3.5 opacity-80" />
           Показать сайт
         </button>
-        <button type="button" className={BTN}>
-          <Settings2 className="size-3.5 opacity-80" />
-          Настройки сайта
-        </button>
-        <button
-          type="button"
-          onClick={close}
-          aria-label="Скрыть"
-          className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-[#37352f]/40 transition-colors hover:bg-black/[0.06] hover:text-[#37352f]/70 dark:text-blue-100/40 dark:hover:bg-white/10 dark:hover:text-blue-50"
-        >
-          <X className="size-3.5" />
-        </button>
       </div>
+      {/* Крестик — на ВНЕШНЕМ слое у правого края всей плашки (не сдвигается с контентом).
+          При открытом окне плашка основного вида уходит под окно вместе со своим крестиком —
+          видимым остаётся только один крестик плашки в самом окне, у его правого края. */}
+      <button
+        type="button"
+        onClick={close}
+        aria-label="Скрыть"
+        className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-[#37352f]/40 transition-colors hover:bg-black/[0.06] hover:text-[#37352f]/70 dark:text-blue-100/40 dark:hover:bg-white/10 dark:hover:text-blue-50"
+      >
+        <X className="size-3.5" />
+      </button>
     </div>
   );
 }
