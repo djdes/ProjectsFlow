@@ -44,7 +44,7 @@ const examples = [
     </div>
 
     <!-- Мокап 1 · Реальный скриншот доски задач (снят с прод-приложения). -->
-    <figure class="shots__hero" data-reveal>
+    <figure class="shots__hero" data-reveal style="--tone-bg: #fdefda">
       <div class="shots__frame">
         <img
           src="/shots/app-board.png"
@@ -62,7 +62,7 @@ const examples = [
     </figure>
 
     <!-- Мокап 2 · Финансы простым языком (текст слева, окно справа). -->
-    <div class="shots__split" data-reveal>
+    <div class="shots__split" data-reveal style="--tone-bg: #e9f1fc">
       <div class="shots__copy">
         <div class="pf-eyebrow">Деньги</div>
         <h3 class="shots__h3">Прибыль и траты — с одного взгляда</h3>
@@ -86,7 +86,7 @@ const examples = [
     </div>
 
     <!-- Мокап 3 · Живой воркер (окно слева, текст справа) — локально тёмное окно. -->
-    <div class="shots__split shots__split--rev" data-reveal>
+    <div class="shots__split shots__split--rev" data-reveal style="--tone-bg: #efe9fd">
       <figure class="shots__fig">
         <div class="mock mock--lift" data-theme="dark">
           <div class="mock__chrome">
@@ -127,7 +127,7 @@ const examples = [
     </div>
 
     <!-- Мокап 4 · Автопроверки перед выкаткой (текст слева, окно справа). -->
-    <div class="shots__split" data-reveal>
+    <div class="shots__split" data-reveal style="--tone-bg: #ddf2ea">
       <div class="shots__copy">
         <div class="pf-eyebrow">Безопасно</div>
         <h3 class="shots__h3">Проверки перед выкаткой</h3>
@@ -269,8 +269,13 @@ const examples = [
     }
   }
 
-  /* --- Editorial-раскладка: текст + мокап ------------------------------- */
-  .shots__hero { margin: var(--sp-12) 0 0; }
+  /* --- Раскладка: скрин/мокап на цветной панели (как в Notion) ---------- */
+  .shots__hero {
+    margin: var(--sp-12) 0 0;
+    padding: clamp(1.25rem, 3vw, 2.5rem);
+    border-radius: var(--r-lg);
+    background: var(--tone-bg, transparent);
+  }
   .shots__cap {
     margin-top: var(--sp-3);
     font-size: var(--fs-sm);
@@ -285,7 +290,10 @@ const examples = [
     grid-template-columns: 1fr;
     gap: var(--sp-6);
     align-items: center;
-    margin-top: var(--sp-16);
+    margin-top: var(--sp-8);
+    padding: clamp(1.5rem, 3vw, 2.75rem);
+    border-radius: var(--r-lg);
+    background: var(--tone-bg, transparent);
   }
   @media (min-width: 900px) {
     .shots__split { grid-template-columns: 0.85fr 1.15fr; gap: var(--sp-12); }

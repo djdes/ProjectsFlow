@@ -22,6 +22,14 @@ const steps = [
     body: 'Готовый продукт — у тебя на руках. Дальше развивай новыми идеями, когда захочешь.',
   },
 ];
+
+// Пастельные тона шагов — та же палитра «живости», что и в фичах.
+const tones = [
+  { bg: '#e9f1fc', accent: '#2f6fd4', line: 'rgba(47, 111, 212, 0.20)' },
+  { bg: '#efe9fd', accent: '#7c5cff', line: 'rgba(124, 92, 255, 0.20)' },
+  { bg: '#fdefda', accent: '#c9760a', line: 'rgba(201, 118, 10, 0.22)' },
+  { bg: '#ddf2ea', accent: '#0f9d77', line: 'rgba(15, 157, 119, 0.22)' },
+];
 ---
 
 <section id="how" class="pf-section how">
@@ -39,7 +47,11 @@ const steps = [
       <span class="step-connector how__connector" aria-hidden="true"></span>
       {
         steps.map((s, i) => (
-          <li class="how__step" data-reveal style={`--reveal-delay: ${i * 110}ms`}>
+          <li
+            class="how__step"
+            data-reveal
+            style={`--reveal-delay: ${i * 110}ms; --tone-bg: ${tones[i].bg}; --tone-accent: ${tones[i].accent}; --tone-line: ${tones[i].line}`}
+          >
             <div class="pf-mono how__num">{s.n}</div>
             <h3 class="how__title">{s.title}</h3>
             <p class="how__body">{s.body}</p>
@@ -71,46 +83,28 @@ const steps = [
     .how__grid { grid-template-columns: repeat(4, 1fr); }
   }
 
-  /* Анимированный коннектор — только на десктопе (4 в ряд).
-     Едва заметная холодная линия вместо яркого циана из тёмной эпохи. */
-  .how__connector {
-    display: none;
-  }
-  @media (min-width: 1024px) {
-    .how__connector {
-      display: block;
-      top: 2.6rem;
-      left: 8%;
-      right: 8%;
-      height: 1px;
-      background: linear-gradient(
-        90deg,
-        transparent,
-        var(--accent-line) 50%,
-        transparent
-      );
-    }
-  }
+  /* Коннектор убран: цветные панели-шаги сами читаются как последовательность. */
+  .how__connector { display: none; }
 
   .how__step {
     position: relative;
-    padding: var(--sp-6);
-    border: 1px solid var(--line);
-    border-radius: var(--r-md);
-    background: var(--surface);
-    box-shadow: var(--shadow-sm);
-    transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+    padding: clamp(1.5rem, 2.5vw, 2rem);
+    border: 1px solid var(--tone-line, var(--line));
+    border-radius: var(--r-lg);
+    background: var(--tone-bg, var(--surface));
+    transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
   }
   @media (prefers-reduced-motion: no-preference) {
     .how__step:hover {
-      border-color: var(--line-strong);
+      transform: translateY(-3px);
       box-shadow: var(--shadow);
     }
   }
   .how__num {
-    font-size: var(--fs-sm);
-    letter-spacing: 0.18em;
-    color: var(--accent);
+    font-size: var(--fs-lg);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--tone-accent, var(--accent));
   }
   .how__title {
     margin-top: var(--sp-3);
