@@ -6,6 +6,7 @@ import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository, UpdateTaskPatch } from './TaskRepository.js';
 import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
+import type { TaskVersionRecorder } from './TaskVersionRecorder.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
 
 type Deps = {
@@ -15,6 +16,8 @@ type Deps = {
   readonly delegations: TaskDelegationRepository;
   // Логируем правки в ленту изменений (best-effort; опционально для обратной совместимости).
   readonly activity?: ActivityRecorder;
+  // Снимок версии после правки (для окна версий + restore).
+  readonly versions?: TaskVersionRecorder;
 };
 
 // Первая строка описания (заголовок задачи) — короткая выжимка для ленты.
@@ -62,6 +65,9 @@ export class UpdateTask {
 
     const updated = await this.deps.tasks.update(input.taskId, patch);
     if (!updated) throw new TaskNotFoundError(input.taskId);
+
+    // Снимок версии после правки (для окна версий + restore).
+    await this.deps.versions?.record(updated, input.ownerUserId);
 
     // Логируем в ленту изменений то, что реально поменялось (Notion-style дифф).
     if (this.deps.activity) {

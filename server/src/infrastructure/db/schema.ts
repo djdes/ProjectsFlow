@@ -577,6 +577,24 @@ export const tasks = mysqlTable(
 export type TaskRow = typeof tasks.$inferSelect;
 export type NewTaskRow = typeof tasks.$inferInsert;
 
+// Версии задач (db/092): снимок изменяемых полей на каждое изменение — окно версий + restore.
+export const taskVersions = mysqlTable(
+  'task_versions',
+  {
+    id: id(),
+    taskId: char('task_id', { length: 36 }).notNull(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    actorUserId: char('actor_user_id', { length: 36 }),
+    snapshot: json('snapshot').$type<import('../../domain/task/TaskVersion.js').TaskSnapshot>().notNull(),
+    createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    index('idx_task_versions_task_time').on(t.taskId, t.createdAt),
+    index('idx_task_versions_project').on(t.projectId),
+  ],
+);
+export type TaskVersionRow = typeof taskVersions.$inferSelect;
+
 export const taskAttachments = mysqlTable(
   'task_attachments',
   {

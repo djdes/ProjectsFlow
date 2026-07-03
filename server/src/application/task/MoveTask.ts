@@ -14,6 +14,8 @@ type Deps = {
   readonly delegations: TaskDelegationRepository;
   // Лента действий (best-effort). Опционально.
   readonly activityRecorder?: ActivityRecorder;
+  // Снимок версии при смене статуса (для окна версий + restore).
+  readonly versions?: import('./TaskVersionRecorder.js').TaskVersionRecorder;
 };
 
 // Клиент сообщает соседей в целевой колонке — сервер сам считает midpoint position.
@@ -107,6 +109,7 @@ export class MoveTask {
           newStatus: updated.status,
         },
       });
+      void this.deps.versions?.record(updated, input.ownerUserId);
     }
     return updated;
   }

@@ -192,6 +192,8 @@ import { SearchTasks } from './application/task/SearchTasks.js';
 import { DrizzleTaskSearchRepository } from './infrastructure/repositories/DrizzleTaskSearchRepository.js';
 import { CreateTask } from './application/task/CreateTask.js';
 import { UpdateTask } from './application/task/UpdateTask.js';
+import { DrizzleTaskVersionRepository } from './infrastructure/repositories/DrizzleTaskVersionRepository.js';
+import { TaskVersionRecorder } from './application/task/TaskVersionRecorder.js';
 import { MoveTask } from './application/task/MoveTask.js';
 import { DrizzleEmailActionTokenRepository } from './infrastructure/repositories/DrizzleEmailActionTokenRepository.js';
 import { CreateEmailActionToken } from './application/email-action/CreateEmailActionToken.js';
@@ -438,6 +440,8 @@ const kbDocumentRepo = new DrizzleKbDocumentRepository(db);
 
 const secretsRepo = new DrizzleSecretsRepository(db);
 const taskRepo = new DrizzleTaskRepository(db);
+const taskVersionRepo = new DrizzleTaskVersionRepository(db);
+const taskVersionRecorder = new TaskVersionRecorder({ versions: taskVersionRepo, idGen: idGenerator });
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
@@ -1600,6 +1604,7 @@ const { app, devProxyUpgrade } = createApp({
       idGen: idGenerator,
       appUrl: appBaseUrl,
       activityRecorder,
+      versions: taskVersionRecorder,
     }),
     updateTask: new UpdateTask({
       projects: projectRepo,
@@ -1607,6 +1612,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       delegations: taskDelegationRepo,
       activity: activityRecorder,
+      versions: taskVersionRecorder,
     }),
     moveTask: new MoveTask({
       projects: projectRepo,
@@ -1614,6 +1620,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       delegations: taskDelegationRepo,
       activityRecorder,
+      versions: taskVersionRecorder,
     }),
     deleteTask: new DeleteTask({
       projects: projectRepo,
@@ -1908,6 +1915,7 @@ const { app, devProxyUpgrade } = createApp({
       idGen: idGenerator,
       appUrl: appBaseUrl,
       activityRecorder,
+      versions: taskVersionRecorder,
     }),
     createComment: createTaskCommentUseCase,
     // Чтение комментариев задачи (Ralph F11 polling): фильтры since/limit/marker
@@ -1926,6 +1934,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       delegations: taskDelegationRepo,
       activityRecorder,
+      versions: taskVersionRecorder,
     }),
     linkCommit: new LinkCommit({
       projects: projectRepo,
@@ -2018,6 +2027,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       delegations: taskDelegationRepo,
       activity: activityRecorder,
+      versions: taskVersionRecorder,
     }),
     deleteTask: new DeleteTask({
       projects: projectRepo,
