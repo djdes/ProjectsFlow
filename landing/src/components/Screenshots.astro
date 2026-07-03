@@ -43,7 +43,8 @@ const examples = [
       </p>
     </div>
 
-    <!-- Мокап 1 · Реальный скриншот доски задач (снят с прод-приложения). -->
+    <!-- Мокап 1 · Реальный скриншот доски задач (снят с прод-приложения) + плавающие
+         UI-фрагменты поверх — «разные экраны на одном», объём как у Notion. -->
     <figure class="shots__hero" data-reveal style="--tone-bg: #fdefda">
       <div class="shots__frame">
         <img
@@ -55,6 +56,29 @@ const examples = [
           decoding="async"
         />
       </div>
+
+      <div class="shots__float shots__float--done" aria-hidden="true">
+        <span class="shots__float-ic shots__float-ic--ok">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+        </span>
+        <span class="shots__float-txt"><b>Готово</b><span>PF-214 · лендинг собран</span></span>
+      </div>
+
+      <div class="shots__float shots__float--worker" aria-hidden="true">
+        <span class="shots__float-ic shots__float-ic--ai">
+          <svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2.6l1.7 5.4h5.6l-4.5 3.3 1.7 5.4-4.5-3.3-4.5 3.3 1.7-5.4-4.5-3.3h5.6z" /></svg>
+        </span>
+        <span class="shots__float-txt"><b>Claude Opus</b><span>взял задачу в работу</span></span>
+      </div>
+
+      <div class="shots__float shots__float--stat" aria-hidden="true">
+        <span class="shots__float-cap">Прибыль за проект</span>
+        <span class="shots__float-row">
+          <span class="shots__float-val">+128 400 ₽</span>
+          <svg class="shots__float-spark" viewBox="0 0 60 22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18 14 12 24 15 36 6 48 9 58 3" /></svg>
+        </span>
+      </div>
+
       <figcaption class="shots__cap">
         <span class="shots__cap-label">Доска проекта.</span> Бросаешь идею — AI берёт её
         в работу и на глазах доводит до «Готово».
@@ -71,7 +95,7 @@ const examples = [
           потратил и в плюсе ли ты по проекту.
         </p>
       </div>
-      <figure class="shots__fig">
+      <figure class="shots__fig shots__fig--tilt">
         <div class="shots__frame">
           <img
             src="/shots/app-finance.png"
@@ -81,6 +105,13 @@ const examples = [
             loading="lazy"
             decoding="async"
           />
+        </div>
+        <div class="shots__float shots__float--income" aria-hidden="true">
+          <span class="shots__float-cap">Прибыль за месяц</span>
+          <span class="shots__float-row">
+            <span class="shots__float-val">+128 400 ₽</span>
+            <svg class="shots__float-spark" viewBox="0 0 60 22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18 14 12 24 15 36 6 48 9 58 3" /></svg>
+          </span>
         </div>
       </figure>
     </div>
@@ -271,10 +302,76 @@ const examples = [
 
   /* --- Раскладка: скрин/мокап на цветной панели (как в Notion) ---------- */
   .shots__hero {
+    position: relative;
     margin: var(--sp-12) 0 0;
     padding: clamp(1.25rem, 3vw, 2.5rem);
     border-radius: var(--r-lg);
     background: var(--tone-bg, transparent);
+  }
+  /* Лёгкий 3D-наклон большого скрина — объёмный вид как в Notion. */
+  .shots__hero .shots__frame {
+    transform: perspective(2600px) rotateX(4deg);
+    transform-origin: center 78%;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .shots__hero .shots__frame:hover {
+      transform: perspective(2600px) rotateX(2deg) translateY(-6px);
+    }
+  }
+
+  /* Плавающие UI-фрагменты поверх скрина (композит «разные экраны»). */
+  .shots__float {
+    position: absolute;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: 9px var(--sp-3);
+    border-radius: var(--r);
+    background: var(--surface);
+    border: 1px solid rgba(11, 18, 32, 0.06);
+    box-shadow:
+      0 1px 2px rgba(11, 18, 32, 0.06),
+      0 20px 40px -14px rgba(11, 18, 32, 0.30);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .shots__float-txt { display: flex; flex-direction: column; line-height: 1.25; }
+  .shots__float-txt b { font-size: var(--fs-sm); font-weight: 700; color: var(--text); }
+  .shots__float-txt span { font-size: var(--fs-xs); color: var(--muted); }
+  .shots__float-ic {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+  }
+  .shots__float-ic svg { width: 16px; height: 16px; }
+  .shots__float-ic--ok { background: linear-gradient(150deg, #43d6a0, #12a97b); }
+  .shots__float-ic--ai { background: linear-gradient(150deg, #9b7bff, #6d4bf5); }
+
+  .shots__float--done { top: 4%; right: 3%; --rot: 2.5deg; }
+  .shots__float--worker { top: 40%; left: 2%; --rot: -2.5deg; }
+  .shots__float--stat { bottom: 9%; right: 4%; --rot: 2deg; flex-direction: column; align-items: flex-start; gap: 3px; }
+  .shots__float-cap { font-size: var(--fs-xs); color: var(--muted); }
+  .shots__float-row { display: flex; align-items: center; gap: var(--sp-2); }
+  .shots__float-val { font-size: var(--fs-base); font-weight: 800; color: #12a97b; letter-spacing: -0.01em; }
+  .shots__float-spark { width: 54px; height: 20px; color: #12a97b; }
+
+  .shots__float { transform: rotate(var(--rot, 0deg)); }
+  @media (prefers-reduced-motion: no-preference) {
+    .shots__float { animation: shots-float 6s var(--fd, 0s) ease-in-out infinite; }
+    .shots__float--worker { --fd: -2s; }
+    .shots__float--stat { --fd: -4s; }
+    @keyframes shots-float {
+      0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
+      50% { transform: translateY(-8px) rotate(calc(var(--rot, 0deg) * 0.4)); }
+    }
+  }
+  /* На узких экранах прячем плавашки — негде размещать без наложения на текст. */
+  @media (max-width: 720px) {
+    .shots__float { display: none; }
   }
   .shots__cap {
     margin-top: var(--sp-3);
@@ -315,7 +412,20 @@ const examples = [
     color: var(--muted);
     line-height: var(--lh-normal);
   }
-  .shots__fig { margin: 0; }
+  .shots__fig { margin: 0; position: relative; }
+  /* Лёгкий боковой 3D-угол для скрина финансов + плавающая карточка прибыли. */
+  .shots__fig--tilt .shots__frame { transform: perspective(2200px) rotateY(-6deg); transform-origin: right center; }
+  @media (prefers-reduced-motion: no-preference) {
+    .shots__fig--tilt .shots__frame:hover { transform: perspective(2200px) rotateY(-3deg) translateY(-6px); }
+  }
+  .shots__float--income {
+    top: -0.8rem;
+    left: -0.8rem;
+    --rot: -2deg;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+  }
 
 
   /* --- Живой воркер: терминал (мокап 3, локально тёмный) ----------------- */
