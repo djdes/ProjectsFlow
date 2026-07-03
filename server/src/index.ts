@@ -1292,7 +1292,7 @@ const { app, devProxyUpgrade } = createApp({
       resolveDefaultDispatcher,
       activityRecorder,
     }),
-    updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo }),
+    updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo, activity: activityRecorder }),
     deleteProject: new DeleteProject({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -1906,11 +1906,11 @@ const { app, devProxyUpgrade } = createApp({
         resolveDefaultDispatcher,
         activityRecorder,
       }),
-      updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo }),
+      updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo, activity: activityRecorder }),
       tokens: githubTokenRepo,
       api: githubApi,
     }),
-    updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo }),
+    updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo, activity: activityRecorder }),
     listUserRepos: new ListUserRepos({ tokens: githubTokenRepo, api: githubApi }),
     listKbDocuments: new ListKbDocuments({
       projects: projectRepo,

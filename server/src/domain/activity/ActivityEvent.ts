@@ -7,6 +7,7 @@ export type ActivityKind =
   | 'task_deleted'
   | 'task_commented'
   | 'project_created'
+  | 'project_updated'
   | 'project_archived'
   | 'project_deleted'
   | 'member_added'

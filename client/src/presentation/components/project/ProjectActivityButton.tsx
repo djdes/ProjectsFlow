@@ -10,12 +10,6 @@ import { relativeTime } from '@/lib/relativeTime';
 import type { ProjectActivitySummary } from '@/domain/project/ProjectAnalytics';
 import { ProjectActivityDialog } from './ProjectActivityDialog';
 
-// Дата в минутной точности: «дд.мм.гггг ЧЧ:ММ» (для поповера при наведении).
-function formatDateTime(d: Date): string {
-  const p = (n: number): string => String(n).padStart(2, '0');
-  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
 // Кнопка активности проекта слева от участников. Показывается ТЕКСТОМ (без иконки):
 // «Изменено 12 ч назад». Наведение — аккуратный поповер «Изменено/Создано» (как «Activity»
 // в Notion). Клик открывает окно активности/аналитики (выезжает справа, как окно задачи).
@@ -66,7 +60,7 @@ export function ProjectActivityButton({ projectId }: { projectId: string }): Rea
                     Изменено{summary.lastEditedByName ? ` · ${summary.lastEditedByName}` : ''}
                   </span>
                   <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {formatDateTime(summary.lastEditedAt)}
+                    {relativeTime(summary.lastEditedAt)}
                   </span>
                 </div>
               )}
@@ -75,7 +69,7 @@ export function ProjectActivityButton({ projectId }: { projectId: string }): Rea
                   Создано{summary.createdByName ? ` · ${summary.createdByName}` : ''}
                 </span>
                 <span className="shrink-0 text-[11px] text-muted-foreground">
-                  {formatDateTime(summary.createdAt)}
+                  {relativeTime(summary.createdAt)}
                 </span>
               </div>
             </div>

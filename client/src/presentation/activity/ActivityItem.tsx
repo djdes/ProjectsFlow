@@ -35,6 +35,7 @@ const KIND_ICON: Record<ActivityKind, LucideIcon> = {
   task_deleted: Trash2,
   task_commented: MessageSquare,
   project_created: FolderPlus,
+  project_updated: Pencil,
   project_archived: FolderPlus,
   project_deleted: Trash2,
   member_added: UserPlus,
@@ -53,6 +54,8 @@ const FIELD_LABEL: Record<string, string> = {
   deadline: 'Дедлайн',
   priority: 'Приоритет',
   ralphMode: 'Режим',
+  name: 'Название',
+  cover: 'Обложка',
 };
 const PRIORITY_LABEL: Record<string, string> = {
   '1': 'Срочный',
@@ -61,6 +64,7 @@ const PRIORITY_LABEL: Record<string, string> = {
   '4': 'Низкий',
 };
 function humanizeValue(field: string, v: string | null): string {
+  if (field === 'cover') return v ? 'обновлена' : 'убрана';
   if (v == null || v === '') return '—';
   if (field === 'priority') return PRIORITY_LABEL[v] ?? v;
   return v.length > 180 ? `${v.slice(0, 180)}…` : v;
@@ -138,6 +142,12 @@ function renderText(item: ActivityEventItem): React.ReactNode {
       return (
         <>
           <b>{actor}</b> создал проект {p.projectName ? <b>«{p.projectName}»</b> : ''}
+        </>
+      );
+    case 'project_updated':
+      return (
+        <>
+          <b>{actor}</b> изменил проект {p.projectName ? <b>«{p.projectName}»</b> : ''}
         </>
       );
     case 'member_added':
@@ -232,7 +242,8 @@ export function ActivityItem({
         <Icon className="size-3.5" />
       </span>
       <p className="text-sm leading-snug">{renderText(item)}</p>
-      {item.kind === 'task_updated' && item.payload?.changes?.length ? (
+      {(item.kind === 'task_updated' || item.kind === 'project_updated') &&
+      item.payload?.changes?.length ? (
         <ChangesDiff changes={item.payload.changes} />
       ) : null}
       <p className="mt-0.5 text-xs text-muted-foreground">{relativeTime(item.createdAt)}</p>
