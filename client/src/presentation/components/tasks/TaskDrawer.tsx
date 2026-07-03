@@ -85,8 +85,7 @@ import type { TaskPriority } from '@/domain/task/Task';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
 import { CommentsEmptyState } from './CommentsEmptyState';
 import { TaskBodyEditor } from './TaskBodyEditor';
-import { splitTitleBody, joinTitleBody, parseTitleHeading, stripInlineMarkdown } from '@/lib/taskTitleBody';
-import { TaskTitleEditor } from './TaskTitleEditor';
+import { splitTitleBody, parseTitleHeading, stripInlineMarkdown } from '@/lib/taskTitleBody';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
 import { STATUS_LABEL, ADVANCE_NEXT } from './statusLabels';
@@ -819,6 +818,10 @@ export function TaskDrawer({
     [state, taskRepository, editDescription, notifyChanged],
   );
 
+  // Заголовок и описание — ОДНО поле: правим полное описание напрямую (1-я строка = заголовок).
+  const handleDescriptionChange = useCallback((next: string): void => {
+    setEditDescription(next);
+  }, []);
   const bodyContainerRef = useRef<HTMLDivElement>(null);
   // Task 3: при скролле вниз вверху закрепляем укороченный заголовок задачи; клик по нему
   // прокручивает обратно наверх. Sentinel у заголовка + IntersectionObserver: когда заголовок
@@ -1622,37 +1625,18 @@ export function TaskDrawer({
                   сохраняется по blur / Ctrl+Cmd+Enter. Работает в любом статусе. */}
               {/* Sentinel у заголовка — когда уходит под шапку, показываем sticky-заголовок. */}
               <div ref={titleSentinelRef} aria-hidden className="h-0" />
-              {/* Заголовок и тело — ДВА поля (одно поле `editDescription` бьётся на title/body
-                  через splitTitleBody, склеивается joinTitleBody). Заголовок — плоское поле
-                  TaskTitleEditor: `---`/`- `/`* `/`# ` в начале видны как есть (не превращаются
-                  в hr/список/heading, как было в едином rich-text-редакторе). */}
-              <div className="px-4 pt-0">
-                <TaskTitleEditor
-                  key={`title-${task.id}`}
-                  value={splitTitleBody(editDescription).title}
-                  onChange={(nextTitleRaw) =>
-                    setEditDescription(joinTitleBody(nextTitleRaw, splitTitleBody(editDescription).body))
-                  }
-                  onCommit={() => void commitDescription(editDescription)}
-                  onEnter={() => bodyEditorRef.current?.focusEnd()}
-                  disabled={editSaving}
-                  placeholder="Без названия"
-                />
-              </div>
-              <div ref={bodyContainerRef} className="px-4 pb-1 pt-1">
+              <div ref={bodyContainerRef} className="px-4 pb-1 pt-0">
                 <TaskBodyEditor
                   key={`desc-${task.id}`}
                   editorRef={bodyEditorRef}
                   onUploadImage={uploadImageInline}
                   onImageRemoved={handleInlineImageRemoved}
-                  body={splitTitleBody(editDescription).body}
-                  onBodyChange={(nextBody) =>
-                    setEditDescription(joinTitleBody(splitTitleBody(editDescription).title, nextBody))
-                  }
+                  body={editDescription}
+                  onBodyChange={handleDescriptionChange}
                   onCommit={() => void commitDescription(editDescription)}
                   onPasteFiles={(files) => void uploadFilesDirectly(files)}
                   disabled={editSaving}
-                  placeholder="Описание, детали, подзадачи…"
+                  placeholder="Название и описание…"
                 />
               </div>
 
