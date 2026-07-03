@@ -190,15 +190,21 @@ export class HttpProjectRepository implements ProjectRepository {
     }
   }
 
-  async uploadCover(projectId: string, file: File): Promise<Project> {
+  async uploadCover(projectId: string, file: File, onProgress?: (pct: number) => void): Promise<Project> {
     // multipart/form-data через XHR (httpClient рассчитан под JSON). Content-Type с boundary
-    // проставит браузер; withCredentials — для cookie-сессии.
+    // проставит браузер; withCredentials — для cookie-сессии. XHR (в отличие от fetch) даёт
+    // событие прогресса аплоада — прокидываем в onProgress для живого прогресс-бара.
     return new Promise<Project>((resolve, reject) => {
       const form = new FormData();
       form.append('file', file);
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `/api/projects/${projectId}/cover`);
       xhr.withCredentials = true;
+      if (onProgress) {
+        xhr.upload.onprogress = (e): void => {
+          if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+        };
+      }
       xhr.onload = (): void => {
         type Resp = { project?: ProjectDto; error?: string; message?: string };
         let data: Resp | null;

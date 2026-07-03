@@ -109,7 +109,8 @@ export interface ProjectRepository {
   update(id: string, patch: UpdateProjectInput): Promise<Project>;
   // Загрузка своего файла-обложки (multipart). Сервер сохраняет и возвращает проект с
   // проставленным coverUrl (`/api/projects/:id/cover/...`). Градиент/ссылку ставим через update.
-  uploadCover(projectId: string, file: File): Promise<Project>;
+  // onProgress — прогресс аплоада 0..100 (для мгновенного прогресс-бара в UI).
+  uploadCover(projectId: string, file: File, onProgress?: (pct: number) => void): Promise<Project>;
   // Безвозвратное удаление проекта (owner-only, инбокс запрещён). Каскадно чистит
   // все child-данные (задачи, KB, секреты, финансы и т.д.) — подробности
   // на серверном DeleteProject use-case.
