@@ -298,11 +298,9 @@ export function KanbanCard({
         {!selecting && !preview && hasMeta && (
           <div
             className={cn(
-              'pointer-events-none absolute bottom-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-hidden rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.05] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100 dark:ring-white/[0.06]',
-              // На done — плашка в тон зелёной заливке карточки; на обычных — нейтральный card.
-              doneCard
-                ? 'bg-[color-mix(in_srgb,hsl(var(--card)),hsl(var(--success))_22%)]'
-                : 'bg-card',
+              // Нейтральный bg-card + ring — один в один как плашка действий сверху-справа
+              // (она нормально смотрится на любой карточке, включая зелёную done).
+              'pointer-events-none absolute bottom-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-hidden rounded-md bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100 dark:ring-white/[0.08]',
             )}
           >
             <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
