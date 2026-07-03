@@ -482,4 +482,71 @@ const MOCK_KINDS = new Set<MockKind>(['idea', 'autopilot', 'cost', 'claude']);
     line-height: var(--lh-snug);
     color: var(--muted);
   }
+
+  /* --- Оживление мини-мокапов (уважает reduced-motion) --- */
+  @media (prefers-reduced-motion: no-preference) {
+    /* Столбики расхода дышат как живой эквалайзер. */
+    .mock__bar { transform-origin: bottom; animation: mock-bars 3s ease-in-out infinite; }
+    .mock__bars .mock__bar:nth-child(2) { animation-delay: 0.35s; }
+    .mock__bars .mock__bar:nth-child(3) { animation-delay: 0.7s; }
+    .mock__bars .mock__bar:nth-child(4) { animation-delay: 0.15s; }
+    .mock__bars .mock__bar:nth-child(5) { animation-delay: 0.55s; }
+    .mock__bar--live { animation-duration: 1.5s; }
+    @keyframes mock-bars {
+      0%, 100% { transform: scaleY(0.7); }
+      50% { transform: scaleY(1); }
+    }
+
+    /* «В работе» — мягкая пульсация. */
+    .mock__status--run { animation: mock-fade 1.8s ease-in-out infinite; }
+    @keyframes mock-fade { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    /* Claude онлайн — расходящийся пульс точки. */
+    .mock__dot--online { animation: mock-ping 1.9s ease-out infinite; }
+    @keyframes mock-ping {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+      70%, 100% { box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
+    }
+
+    /* Галочка «Готово» — периодический мягкий «поп». */
+    .mock__check { animation: mock-pop 3.4s ease-in-out infinite; }
+    @keyframes mock-pop {
+      0%, 88%, 100% { transform: scale(1); }
+      94% { transform: scale(1.2); }
+    }
+
+    /* Текущий шаг воркера — мигающий каретка-курсор набора. */
+    .mock__step--now::after {
+      content: '';
+      display: inline-block;
+      width: 5px;
+      height: 1.05em;
+      margin-left: 4px;
+      border-radius: 1px;
+      background: var(--accent);
+      vertical-align: -0.16em;
+      animation: mock-caret 1s steps(1) infinite;
+    }
+    @keyframes mock-caret { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+  }
 </style>
+
+<script>
+  // «Живые» цифры в мокапе расхода: общий расход ползёт вверх, цена за задачу подрагивает.
+  // Уважает prefers-reduced-motion.
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const total = document.querySelector<HTMLElement>('.mock--cost .mock__amount--spend');
+    const per = document.querySelector<HTMLElement>('.mock--cost .mock__amount-sm');
+    if (total && per) {
+      const fmt = (n: number) => n.toLocaleString('ru-RU');
+      let t = 1240;
+      const tick = (): void => {
+        t += Math.floor(Math.random() * 8);
+        if (t > 1420) t = 1180;
+        total.textContent = `${fmt(t)} ₽`;
+        per.textContent = `≈ ${34 + Math.floor(Math.random() * 10)} ₽`;
+      };
+      setInterval(tick, 1600);
+    }
+  }
+</script>

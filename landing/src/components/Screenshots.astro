@@ -488,4 +488,57 @@ const examples = [
     color: var(--muted);
   }
 
+  /* --- Оживление: прогресс-бар воркера + чек-лист (reduced-motion-safe) --- */
+  .term__progress span { position: relative; overflow: hidden; transition: width 0.8s ease; }
+  @media (prefers-reduced-motion: no-preference) {
+    /* Блик бежит по прогресс-бару — «идёт сборка». */
+    .term__progress span::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+      transform: translateX(-100%);
+      animation: term-shimmer 1.9s ease-in-out infinite;
+    }
+    @keyframes term-shimmer {
+      0% { transform: translateX(-100%); }
+      55%, 100% { transform: translateX(320%); }
+    }
+
+    /* Чек-лист: галочки «прожимаются» по очереди. */
+    .checks__mark { animation: checks-pop 4.5s ease-in-out infinite; }
+    .checks__item:nth-child(2) .checks__mark { animation-delay: 0.4s; }
+    .checks__item:nth-child(3) .checks__mark { animation-delay: 0.8s; }
+    .checks__item:nth-child(4) .checks__mark { animation-delay: 1.2s; }
+    @keyframes checks-pop {
+      0%, 82%, 100% { transform: scale(1); }
+      88% { transform: scale(1.22); }
+    }
+
+    /* Точка «Готово к выкатке» — пульс. */
+    .checks__ready::before { animation: ready-pulse 2s ease-in-out infinite; }
+    @keyframes ready-pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--signal); }
+      50% { opacity: 0.6; box-shadow: 0 0 2px var(--signal); }
+    }
+  }
 </style>
+
+<script>
+  // «Живой» воркер-терминал: процент и стоимость ползут, прогресс плавно догоняет,
+  // на 98% — «новый прогон». Уважает prefers-reduced-motion.
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const bar = document.querySelector<HTMLElement>('.term__progress span');
+    const cost = document.querySelector<HTMLElement>('.term__cost');
+    if (bar && cost) {
+      let pct = 84;
+      const tick = (): void => {
+        pct += Math.random() < 0.75 ? 1 : 0;
+        if (pct >= 98) pct = 71;
+        bar.style.width = `${pct}%`;
+        cost.textContent = `${pct}% · ${(pct * 0.038).toFixed(2)} ₽`;
+      };
+      setInterval(tick, 950);
+    }
+  }
+</script>
