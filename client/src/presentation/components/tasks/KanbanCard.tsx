@@ -287,7 +287,6 @@ export function KanbanCard({
           {/* Текст карточки. На hover ЗАТЕМНЯЕТСЯ — чтобы наложенные снизу мета/корзина
               читались (внахлёст). Высоты под мету НЕ резервируем (нет «пустого промежутка»). */}
           <div
-            ref={contentRef}
             className={cn(
               'transition-opacity duration-150 max-sm:!opacity-100',
               // Затемняем текст только если снизу реально всплывёт мета-оверлей — и мягче,
@@ -297,7 +296,7 @@ export function KanbanCard({
             )}
           >
             {task.description?.trim() ? (
-              <div className="line-clamp-4 text-sm leading-snug">
+              <div ref={contentRef} className="line-clamp-4 text-sm leading-snug">
                 {/* Заголовок — plain-текст (не markdown), чтобы `---`/`- `/`* `/`# ` в начале
                     не превращались в hr/список/heading и не пропадали под COMPACT-пресетом. */}
                 <TaskTitleText title={title} />
@@ -330,6 +329,9 @@ export function KanbanCard({
           <div
             className={cn(
               'pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 rounded-b-lg bg-gradient-to-t to-transparent px-2 pb-1 pt-5 text-[11px] text-muted-foreground opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100',
+              // I1: у однострочной карточки маскируем более тонкую полосу снизу — меньше
+              // «затемнения» единственной строки (текст при этом не гасим, см. выше).
+              singleLine && 'pt-3',
               // На done — мягкий зелёный градиент-маска (card, подмешанный к success):
               // снизу непрозрачный (текст за кнопками полностью скрыт), плавно к прозрачному
               // выше. На обычных — нейтральный card. Тот же приём, что у черновиков.

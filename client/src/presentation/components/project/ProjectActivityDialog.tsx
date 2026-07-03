@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Loader2, X } from 'lucide-react';
+import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useContainer } from '@/infrastructure/di/container';
 import { relativeTime } from '@/lib/relativeTime';
 import { ActivityItem } from '@/presentation/activity/ActivityItem';
 import { TrendChart } from '@/presentation/components/monitoring/TrendChart';
+import { ProjectPublishedBanner } from './ProjectPublishedBanner';
 import type { ActivityEventItem } from '@/domain/activity/ActivityFeedItem';
 import type { ProjectAnalytics } from '@/domain/project/ProjectAnalytics';
 
@@ -30,8 +32,9 @@ function toDailySeries(perDay: { date: string; count: number }[]): number[] {
   return out;
 }
 
-// Окно активности проекта: вкладки «Активность» (лента событий) и «Аналитика» (просмотры +
-// зрители). Открывается кнопкой в шапке проекта. Каркас — как у окна создания задачи.
+// Окно активности проекта: выезжает справа (как окно задачи). Вкладки «Активность» (лента
+// событий) и «Аналитика» (просмотры + зрители). Сверху — плашка публикации (наезжает на окно,
+// контент съезжает ниже).
 export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props): React.ReactElement {
   const { projectRepository } = useContainer();
   const [activity, setActivity] = useState<ActivityEventItem[] | null>(null);
@@ -58,20 +61,32 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
   }, [open, projectId, projectRepository]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-hidden">
-        <DialogHeader>
-          <DialogTitle>Активность проекта</DialogTitle>
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        showClose={false}
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-xl"
+      >
+        {/* #6: плашка публикации наезжает на окно — весь контент съезжает ниже. */}
+        <ProjectPublishedBanner projectId={projectId} />
 
-        <Tabs defaultValue="activity" className="min-h-0 flex-1">
-          <TabsList>
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3">
+          <SheetTitle className="text-base">Активность проекта</SheetTitle>
+          <SheetClose asChild>
+            <Button variant="ghost" size="icon" className="size-8" aria-label="Закрыть">
+              <X className="size-4" />
+            </Button>
+          </SheetClose>
+        </div>
+
+        <Tabs defaultValue="activity" className="flex min-h-0 flex-1 flex-col">
+          <TabsList className="mx-5 mt-3 self-start">
             <TabsTrigger value="activity">Активность</TabsTrigger>
             <TabsTrigger value="analytics">Аналитика</TabsTrigger>
           </TabsList>
 
           {/* Активность */}
-          <TabsContent value="activity" className="max-h-[60vh] overflow-y-auto">
+          <TabsContent value="activity" className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
             {loadingActivity ? (
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" /> Загрузка…
@@ -88,7 +103,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
           </TabsContent>
 
           {/* Аналитика */}
-          <TabsContent value="analytics" className="max-h-[60vh] space-y-4 overflow-y-auto p-1">
+          <TabsContent value="analytics" className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-3">
             {loadingAnalytics ? (
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" /> Загрузка…
@@ -137,7 +152,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
             )}
           </TabsContent>
         </Tabs>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

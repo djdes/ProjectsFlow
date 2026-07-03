@@ -123,14 +123,9 @@ export function UpgradeDialog({
                   )}
                 </div>
                 <div className="mt-1 text-2xl font-bold tabular-nums">
-                  {p.priceRub == null ? (
-                    '0 рублей'
-                  ) : (
-                    <>
-                      {p.priceRub.toLocaleString('ru-RU')} ₽
-                      <span className="text-sm font-normal text-muted-foreground">/мес</span>
-                    </>
-                  )}
+                  {/* Бесплатный тариф — в том же формате, что и платные: «0 ₽/мес». */}
+                  {(p.priceRub ?? 0).toLocaleString('ru-RU')} ₽
+                  <span className="text-sm font-normal text-muted-foreground">/мес</span>
                 </div>
                 <p className="mt-1 text-xs leading-snug text-muted-foreground">{p.tagline}</p>
 

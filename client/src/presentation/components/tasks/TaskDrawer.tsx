@@ -94,6 +94,7 @@ import { useResizableWidth } from '@/presentation/hooks/useResizableWidth';
 import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
 import type { MentionMember, RichTextEditorHandle } from '@/presentation/components/editor/RichTextEditor';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
+import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
 
 // Tiptap-редактор грузим лениво — он тяжёлый и не нужен на read-heavy экранах,
 // которые не открывают drawer. Suspense-fallback держит высоту, чтобы layout не прыгал.
@@ -1479,6 +1480,11 @@ export function TaskDrawer({
     </button>
   ) : null;
 
+  // #6: плашка публикации наезжает и на окно задачи (edit/create) — контент съезжает ниже.
+  // Только в Sheet-режиме и не для inbox (у него нет опубликованного сайта).
+  const bannerProjectId =
+    asPage || isInbox ? null : state?.mode === 'edit' ? state.task.projectId : aiProjectId;
+
   return (
     <DrawerShell
       asPage={asPage}
@@ -1525,6 +1531,14 @@ export function TaskDrawer({
           </>
         )}
 
+        {/* #6: два ряда — плашка публикации (auto) сверху + контент (1fr). Второй ряд
+            восстанавливает исходный grid-контекст, чтобы edit/create-раскладка растягивалась
+            как раньше. Слот плашки всегда присутствует (0px, когда плашки нет/закрыта). */}
+        <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+          <div className="min-w-0">
+            {bannerProjectId && <ProjectPublishedBanner projectId={bannerProjectId} />}
+          </div>
+          <div className="grid min-h-0 grid-rows-[minmax(0,1fr)]">
         {state?.mode === 'edit' && task ? (
           // Внешний контейнер раскладки EDIT-mode (заполняет единственную grid-строку
           // SheetContent). isSplit (широкая ширина) → две колонки: задача слева,
@@ -2166,6 +2180,8 @@ export function TaskDrawer({
             )}
           </div>
         )}
+          </div>
+        </div>
     </DrawerShell>
   );
 }

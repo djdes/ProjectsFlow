@@ -1,36 +1,45 @@
-import { useCallback, useRef, useState } from 'react';
-import { History } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useContainer } from '@/infrastructure/di/container';
+import { relativeTime } from '@/lib/relativeTime';
 import type { ProjectActivitySummary } from '@/domain/project/ProjectAnalytics';
 import { ProjectActivityDialog } from './ProjectActivityDialog';
 
-// Минутная точность: «дд.мм.гггг ЧЧ:ММ» в локальной зоне.
+// Минутная точность: «дд.мм.гггг ЧЧ:ММ» в локальной зоне (для тултипа).
 function formatDateTime(d: Date): string {
   const p = (n: number): string => String(n).padStart(2, '0');
   return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-// Кнопка активности проекта слева от участников: hover — сводка «изменён/создан» (минутная
-// точность), клик — окно с вкладками «Активность»/«Аналитика». Сводку тянем лениво при
-// первом наведении, чтобы не грузить сервер на каждом открытии проекта.
+// Кнопка активности проекта слева от участников. Показывается ТЕКСТОМ (без иконки):
+// «изменено 12 ч назад». Клик открывает окно активности/аналитики (выезжает справа, как
+// окно задачи). Сводку тянем при монтировании — нужна для подписи кнопки.
 export function ProjectActivityButton({ projectId }: { projectId: string }): React.ReactElement {
   const { projectRepository } = useContainer();
   const [open, setOpen] = useState(false);
   const [summary, setSummary] = useState<ProjectActivitySummary | null>(null);
-  const fetchedRef = useRef(false);
 
-  const loadSummary = useCallback(() => {
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
+  useEffect(() => {
+    let cancelled = false;
     projectRepository
       .getProjectActivity(projectId, 1)
-      .then((r) => setSummary(r.summary))
-      .catch(() => {
-        fetchedRef.current = false;
-      });
+      .then((r) => {
+        if (!cancelled) setSummary(r.summary);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, projectRepository]);
+
+  // Подпись: «изменено <относительное время>» по последней правке (иначе — по созданию).
+  const editedAt = summary?.lastEditedAt ?? summary?.createdAt ?? null;
+  const label = editedAt ? `изменено ${relativeTime(editedAt)}` : 'Активность';
 
   return (
     <>
@@ -38,18 +47,15 @@ export function ProjectActivityButton({ projectId }: { projectId: string }): Rea
         <TooltipTrigger asChild>
           <Button
             variant="ghost"
-            size="icon"
-            className="size-8 text-muted-foreground hover:text-foreground"
-            onMouseEnter={loadSummary}
-            onFocus={loadSummary}
+            size="sm"
+            className="h-8 px-2 text-sm font-normal text-muted-foreground hover:text-foreground"
             onClick={() => setOpen(true)}
-            aria-label="Активность проекта"
           >
-            <History className="size-4" />
+            {label}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">
-          {summary ? (
+        {summary && (
+          <TooltipContent side="bottom">
             <div className="space-y-0.5 text-xs">
               {summary.lastEditedAt && (
                 <div>
@@ -60,10 +66,8 @@ export function ProjectActivityButton({ projectId }: { projectId: string }): Rea
                 Создан: {summary.createdByName ?? '—'} · {formatDateTime(summary.createdAt)}
               </div>
             </div>
-          ) : (
-            'Активность проекта'
-          )}
-        </TooltipContent>
+          </TooltipContent>
+        )}
       </Tooltip>
       <ProjectActivityDialog open={open} onOpenChange={setOpen} projectId={projectId} />
     </>

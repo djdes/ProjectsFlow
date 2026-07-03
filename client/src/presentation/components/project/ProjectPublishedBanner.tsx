@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Globe, X } from 'lucide-react';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 
 type Props = {
   projectId: string;
 };
+
+// Событие синхронизации закрытия между экземплярами плашки (она рендерится и под крошками,
+// и в выехавшем справа окне): закрытие в одном месте гасит все копии этого проекта.
+const DISMISS_EVENT = 'pf:published-banner-dismissed';
 
 // Синяя плашка «проект опубликован» в стиле Notion («This page is live on …»). Закрывается
 // (per-project, sessionStorage). Адрес — <логин>.projectsflow.ru, где логин = local-part email
@@ -20,6 +24,14 @@ export function ProjectPublishedBanner({ projectId }: Props): React.ReactElement
     }
   });
 
+  useEffect(() => {
+    const onDismiss = (e: Event): void => {
+      if ((e as CustomEvent<string>).detail === projectId) setDismissed(true);
+    };
+    window.addEventListener(DISMISS_EVENT, onDismiss);
+    return () => window.removeEventListener(DISMISS_EVENT, onDismiss);
+  }, [projectId]);
+
   if (dismissed) return null;
 
   const login = (user?.email ?? '').split('@')[0] || 'you';
@@ -32,6 +44,7 @@ export function ProjectPublishedBanner({ projectId }: Props): React.ReactElement
     } catch {
       /* sessionStorage недоступен — плашка закроется только на этот рендер */
     }
+    window.dispatchEvent(new CustomEvent(DISMISS_EVENT, { detail: projectId }));
   };
 
   return (

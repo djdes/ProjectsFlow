@@ -111,8 +111,6 @@ export function TasksPage(): React.ReactElement {
   // одну горизонталь со свитчером пространства в сайдбаре; тело — комфортные отступы ниже.
   return (
     <div className="flex h-full flex-col">
-      {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая). */}
-      <ProjectPublishedBanner projectId={data.id} />
       {/* Хлебные крошки прячем на мобиле: имя проекта дублируется в заголовке ниже,
           навигация — в нижнем таб-баре/drawer. Это возвращает вертикальное место канбану. */}
       <div className="hidden min-h-11 items-center px-2.5 pt-2 sm:flex">
@@ -123,6 +121,8 @@ export function TasksPage(): React.ReactElement {
           view="board"
         />
       </div>
+      {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая) — ПОД крошками. */}
+      <ProjectPublishedBanner projectId={data.id} />
 
       {/* Тело страницы: комфортные отступы ПОД строкой крошек. */}
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-3 pb-3 pt-2 sm:gap-4 sm:px-5 sm:pb-6 sm:pt-1">
@@ -147,20 +147,16 @@ export function TasksPage(): React.ReactElement {
                 canInvite={data.role === 'owner' || data.role === 'editor'}
               />
             )}
-            {/* «Поделиться» справа от участников (пока заглушка — функционал позже). */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 text-muted-foreground hover:text-foreground"
-                  aria-label="Поделиться"
-                >
-                  <Share2 className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Поделиться</TooltipContent>
-            </Tooltip>
+            {/* «Поделиться» справа от участников: иконка + подпись (пока заглушка). */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+              aria-label="Поделиться"
+            >
+              <Share2 className="size-4" />
+              <span className="text-sm">Поделиться</span>
+            </Button>
             {financeVisible && (
               <PageActionButton label="Финансы" to={`/projects/${data.id}/finance`}>
                 <Wallet className="size-4" />
