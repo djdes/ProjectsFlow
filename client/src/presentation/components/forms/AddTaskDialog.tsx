@@ -446,7 +446,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
           {/* Drag overlay indicator. Не блокирует ввод — просто рамку подсветит. */}
           <div
             className={cn(
-              'relative space-y-2 rounded-md border bg-background px-2 py-2 transition-colors',
+              'relative space-y-2 rounded-md border bg-background px-3 py-2 transition-colors',
               dragActive ? 'border-primary bg-primary/5' : 'border-input',
             )}
           >
@@ -494,8 +494,8 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 disabled={saving}
                 autoFocus={!isCoarsePointer}
                 placeholder="Что нужно сделать. Контекст, шаги, ссылки. Ctrl+V — скриншот вставится в текст."
-                // Левый жёлоб под ручку-«6 точек»: без него она вылезала за рамку поля.
-                className="min-h-[6rem] pl-6 text-sm leading-snug"
+                // Симметричные отступы: текст и картинки равно отстоят слева и справа (px-3 у поля).
+                className="min-h-[6rem] text-sm leading-snug"
               />
             </Suspense>
           </div>
@@ -522,46 +522,24 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
             </button>
           </div>
 
-          {/* Ряд минималистичных icon-кнопок под полем ввода — мелкие size-8 ghost,
-              как кластер действий в окне редактирования задачи. */}
-          <div className="flex flex-wrap items-center gap-1">
-            <PrioritySelect value={priority} onChange={setPriority} disabled={saving} iconOnly className="size-8" />
-            <DeadlinePicker
-              value={deadline}
-              onChange={setDeadline}
-              disabled={saving}
-              iconOnly
-              className={cn('h-8', deadline === null ? 'w-8 px-0' : 'px-2')}
-            />
-            {(projectId === null || (realProjects.find((p) => p.id === projectId)?.memberCount ?? 0) > 1) && (
-              <DelegateSelect
-                value={delegateUserId}
-                onChange={setDelegateUserId}
-                disabled={saving}
-                projectId={projectId ?? undefined}
-                className="size-8"
-              />
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files) addFiles(e.target.files);
-                e.target.value = '';
-              }}
-            />
-          </div>
-
           {error && <p className="text-xs text-destructive">{error}</p>}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) addFiles(e.target.files);
+              e.target.value = '';
+            }}
+          />
           </div>{/* /scrollable wrapper */}
 
-          {/* Footer: проект-чип слева, [RalphMode | Cancel | Submit] справа.
-              На мобильных — flex-shrink-0 (не уезжает за скролл). */}
+          {/* Панель действий (разделитель-линия сразу под «+ Подзадача/+ Файл»):
+              слева — выбор проекта + icon-кнопки (Приоритет, Дедлайн, Ответственный,
+              Режим воркера, AI-перефразировка); справа по краю — Отмена/Добавить. */}
           <div className="max-sm:flex-shrink-0 flex flex-col gap-2 border-t pt-2 sm:pt-3 sm:flex-row sm:items-center sm:justify-between">
-            {/* Верхняя строка footer: проект + ralph + AI */}
-            <div className="flex flex-wrap items-center gap-1.5 sm:contents">
+            <div className="flex flex-wrap items-center gap-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -569,17 +547,14 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                     variant="ghost"
                     size="sm"
                     disabled={saving}
-                    className="h-7 max-w-full gap-1 px-2 text-xs font-normal sm:h-8 sm:gap-1.5 sm:max-w-[50%]"
+                    className="h-8 max-w-[45%] gap-1.5 px-2 text-xs font-normal"
                   >
                     <Inbox className="size-3.5 shrink-0 text-muted-foreground" />
                     <span className="truncate">{selectedName}</span>
                     <ChevronDown className="size-3 shrink-0 opacity-60" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="start"
-                  className="max-h-72 min-w-[260px] overflow-y-auto"
-                >
+                <DropdownMenuContent align="start" className="max-h-72 min-w-[260px] overflow-y-auto">
                   <DropdownMenuRadioGroup
                     value={projectId ?? INBOX_VALUE}
                     onValueChange={(v) => {
@@ -598,6 +573,23 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
+              <PrioritySelect value={priority} onChange={setPriority} disabled={saving} iconOnly className="size-8" />
+              <DeadlinePicker
+                value={deadline}
+                onChange={setDeadline}
+                disabled={saving}
+                iconOnly
+                className={cn('h-8', deadline === null ? 'w-8 px-0' : 'px-2')}
+              />
+              {(projectId === null || (realProjects.find((p) => p.id === projectId)?.memberCount ?? 0) > 1) && (
+                <DelegateSelect
+                  value={delegateUserId}
+                  onChange={setDelegateUserId}
+                  disabled={saving}
+                  projectId={projectId ?? undefined}
+                  className="size-8"
+                />
+              )}
               <RalphModeSelect
                 value={ralphMode}
                 onChange={setRalphMode}
@@ -617,7 +609,6 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
               />
             </div>
 
-            {/* Нижняя строка footer: Cancel + Submit — компактные, как в окне задачи. */}
             <div className="flex items-center justify-end gap-1.5">
               <Button
                 type="button"
