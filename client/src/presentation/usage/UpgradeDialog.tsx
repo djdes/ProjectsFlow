@@ -91,7 +91,7 @@ export function UpgradeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Отдайте рутину AI-диспетчеру</DialogTitle>
           <DialogDescription>
@@ -106,34 +106,52 @@ export function UpgradeDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid items-stretch gap-3 sm:grid-cols-3">
           {PLAN_CATALOG.map((p) => {
             const isCurrent = p.id === currentPlan;
             // Якорим выбор: для новичка (free) флагманский Прайм — рекомендованный.
-            const recommended = p.id === 'prime' && currentPlan === 'free';
+            const recommended = !isCurrent && p.id === 'prime' && currentPlan === 'free';
+            // VIP — отдельная «премиум»-идентичность (фиолетовый), чтобы не выглядел лишним
+            // рядом с текущим и рекомендованным. Уступает isCurrent (если ты уже на VIP).
+            const isVip = !isCurrent && !recommended && p.id === 'vip';
+            const tone: 'current' | 'recommended' | 'vip' | 'plain' = isCurrent
+              ? 'current'
+              : recommended
+                ? 'recommended'
+                : isVip
+                  ? 'vip'
+                  : 'plain';
             const actions = actionsFor(p.id);
             const prev = PREV_NAME[p.id];
             return (
               <div
                 key={p.id}
                 className={cn(
-                  'flex flex-col rounded-2xl border p-4 transition-colors',
-                  isCurrent && 'border-primary bg-primary/[0.03] ring-1 ring-primary/30',
-                  recommended && 'border-primary bg-primary/[0.05] ring-1 ring-primary/40',
-                  !isCurrent && !recommended && 'border-border bg-card',
+                  'flex flex-col rounded-2xl border p-5 transition-colors',
+                  tone === 'current' && 'border-border bg-muted/40',
+                  tone === 'recommended' && 'border-primary bg-primary/[0.04] shadow-sm ring-2 ring-primary/25',
+                  tone === 'vip' &&
+                    'border-violet-300/60 bg-violet-50/50 ring-1 ring-violet-300/40 dark:border-violet-400/25 dark:bg-violet-500/[0.07] dark:ring-violet-400/20',
+                  tone === 'plain' && 'border-border bg-card',
                 )}
               >
                 <div className="flex min-h-6 items-center justify-between gap-2">
                   <span className="font-semibold">{p.nameRu}</span>
-                  {isCurrent ? (
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                  {tone === 'current' && (
+                    <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-[11px] font-medium text-foreground/60">
                       Ваш план
                     </span>
-                  ) : recommended ? (
+                  )}
+                  {tone === 'recommended' && (
                     <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">
                       Рекомендуем
                     </span>
-                  ) : null}
+                  )}
+                  {tone === 'vip' && (
+                    <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[11px] font-medium text-violet-600 dark:text-violet-300">
+                      Максимум
+                    </span>
+                  )}
                 </div>
                 <div className="mt-1 text-2xl font-bold tabular-nums">
                   {/* Бесплатный тариф — в том же формате, что и платные: «0 ₽/мес». */}
@@ -148,13 +166,18 @@ export function UpgradeDialog({
                 <ul className="mt-1.5 flex-1 space-y-1.5 text-[13px]">
                   {prev && (
                     <li className="flex gap-2 font-medium text-foreground">
-                      <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+                      <Check className={cn('mt-0.5 size-4 shrink-0', tone === 'vip' ? 'text-violet-500' : 'text-primary')} />
                       <span>Всё из «{prev}»</span>
                     </li>
                   )}
                   {p.features.map((f) => (
                     <li key={f} className="flex gap-2 text-muted-foreground">
-                      <Check className="mt-0.5 size-4 shrink-0 text-primary/70" />
+                      <Check
+                        className={cn(
+                          'mt-0.5 size-4 shrink-0',
+                          tone === 'vip' ? 'text-violet-500/80' : 'text-primary/70',
+                        )}
+                      />
                       <span>{f}</span>
                     </li>
                   ))}
@@ -163,7 +186,19 @@ export function UpgradeDialog({
                 {actions.length > 0 && (
                   <div className="mt-4 space-y-2">
                     {actions.map((a) => (
-                      <Button key={a.key} className="w-full" variant={a.variant} disabled={a.disabled} onClick={a.onClick}>
+                      <Button
+                        key={a.key}
+                        className={cn(
+                          'w-full',
+                          // VIP: фиолетовая заливка на основном действии — в тон премиум-карточке.
+                          tone === 'vip' &&
+                            a.variant === 'default' &&
+                            'bg-violet-600 text-white hover:bg-violet-600/90 focus-visible:ring-violet-500',
+                        )}
+                        variant={a.variant}
+                        disabled={a.disabled}
+                        onClick={a.onClick}
+                      >
                         {pending && a.key === 'trial' && a.onClick && <Loader2 className="size-4 animate-spin" />}
                         {a.label}
                       </Button>
