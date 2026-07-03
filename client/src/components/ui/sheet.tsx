@@ -54,17 +54,14 @@ export interface SheetContentProps
   showClose?: boolean;
 }
 
-export function SheetContent({
-  side = 'right',
-  className,
-  children,
-  showClose = true,
-  ...props
-}: SheetContentProps): React.ReactElement {
+export const SheetContent = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  SheetContentProps
+>(function SheetContent({ side = 'right', className, children, showClose = true, ...props }, ref) {
   return (
     <SheetPortal>
       <SheetOverlay />
-      <DialogPrimitive.Content className={cn(sheetVariants({ side }), className)} {...props}>
+      <DialogPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
         {children}
         {showClose && (
           <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
@@ -75,7 +72,7 @@ export function SheetContent({
       </DialogPrimitive.Content>
     </SheetPortal>
   );
-}
+});
 
 export function SheetHeader({
   className,

@@ -286,6 +286,7 @@ function DrawerShell({
   onOpenChange,
   contentClassName,
   contentStyle,
+  contentRef,
   dragHandlers,
   dragOverlay,
   children,
@@ -298,6 +299,9 @@ function DrawerShell({
   onOpenChange: (open: boolean) => void;
   contentClassName: string;
   contentStyle: React.CSSProperties | undefined;
+  // Ref на коробку окна (Sheet) — нужен, чтобы мерить ширину окна и центрировать плашку
+  // «за окном» в видимой области. В asPage не используется.
+  contentRef?: React.Ref<HTMLDivElement>;
   // drag&drop вешаем на видимую коробку окна — оверлей покрывает ровно её (любой размер/скролл).
   dragHandlers: {
     onDragEnter: (e: DragEvent<HTMLElement>) => void;
@@ -332,6 +336,7 @@ function DrawerShell({
       {/* SheetContent уже position:fixed → служит containing-block'ом для absolute-оверлея,
           поэтому dragOverlay (absolute inset-0) покрывает ровно видимую коробку окна. */}
       <SheetContent
+        ref={contentRef}
         side="right"
         showClose={false}
         className={cn(contentClassName, 'outline-none focus:outline-none focus-visible:outline-none')}
@@ -1485,8 +1490,34 @@ export function TaskDrawer({
   const bannerProjectId =
     asPage || isInbox ? null : state?.mode === 'edit' ? state.task.projectId : aiProjectId;
 
+  // #2: публикуем ширину открытого окна в CSS-переменную --pf-drawer-open-w. Плашка «за окном»
+  // (основной вид) сдвигает контент на эту ширину, чтобы центрироваться в ВИДИМОЙ области.
+  const drawerWidthRoRef = useRef<ResizeObserver | null>(null);
+  const setDrawerBox = useCallback((el: HTMLDivElement | null): void => {
+    drawerWidthRoRef.current?.disconnect();
+    const root = document.documentElement;
+    if (!el) {
+      root.style.setProperty('--pf-drawer-open-w', '0px');
+      return;
+    }
+    const apply = (): void =>
+      root.style.setProperty('--pf-drawer-open-w', `${Math.round(el.getBoundingClientRect().width)}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    drawerWidthRoRef.current = ro;
+  }, []);
+  useEffect(
+    () => () => {
+      drawerWidthRoRef.current?.disconnect();
+      document.documentElement.style.setProperty('--pf-drawer-open-w', '0px');
+    },
+    [],
+  );
+
   return (
     <DrawerShell
+      contentRef={setDrawerBox}
       asPage={asPage}
       asPageWide={asPageWide}
       breadcrumbs={breadcrumbs}

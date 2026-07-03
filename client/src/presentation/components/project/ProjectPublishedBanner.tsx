@@ -4,6 +4,10 @@ import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 
 type Props = {
   projectId: string;
+  // #2: если true — контент плашки центрируется в ВИДИМОЙ области (сдвигается влево на ширину
+  // открытого справа окна задачи, ширина берётся из CSS-переменной --pf-drawer-open-w).
+  // Ставим только у плашки основного вида; у плашки ВНУТРИ окна — нет.
+  shiftForOverlay?: boolean;
 };
 
 // Событие синхронизации закрытия между экземплярами плашки (она рендерится и под крошками,
@@ -20,7 +24,7 @@ const BTN =
 // сайта». Симметричные вертикальные отступы (контент строго по центру). Один и тот же компонент
 // рендерится под крошками и в окне задачи, поэтому в окне плашка выглядит бесшовным продолжением.
 // Адрес — <логин>.projectsflow.ru, где логин = local-part email текущего юзера.
-export function ProjectPublishedBanner({ projectId }: Props): React.ReactElement | null {
+export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: Props): React.ReactElement | null {
   const { user } = useCurrentUser();
   // Только in-memory: refresh страницы возвращает плашку.
   const [dismissed, setDismissed] = useState(false);
@@ -44,27 +48,34 @@ export function ProjectPublishedBanner({ projectId }: Props): React.ReactElement
   };
 
   return (
-    <div className="relative flex min-h-[4.375rem] shrink-0 flex-wrap items-center justify-center gap-x-2.5 gap-y-1 border-b border-black/[0.05] bg-[#e8f3f9] px-10 py-2 text-[13px] leading-tight text-[#37352f] dark:border-white/[0.06] dark:bg-[#1d2a31] dark:text-blue-50">
-      <span className="truncate">
-        Проект опубликован на <span className="font-medium">{address}</span>
-      </span>
-      {/* Заглушки: пока не ведут никуда. */}
-      <button type="button" className={BTN}>
-        <Globe className="size-3.5 opacity-80" />
-        Показать сайт
-      </button>
-      <button type="button" className={BTN}>
-        <Settings2 className="size-3.5 opacity-80" />
-        Настройки сайта
-      </button>
-      <button
-        type="button"
-        onClick={close}
-        aria-label="Скрыть"
-        className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-[#37352f]/40 transition-colors hover:bg-black/[0.06] hover:text-[#37352f]/70 dark:text-blue-100/40 dark:hover:bg-white/10 dark:hover:text-blue-50"
+    // Внешний слой — сплошной фон на ВСЮ ширину (в т.ч. под открытым окном). Внутренний —
+    // контент, который при shiftForOverlay сжимается на ширину окна и центрируется в видимой части.
+    <div className="relative flex min-h-[4.375rem] shrink-0 items-stretch border-b border-black/[0.05] bg-[#e8f3f9] dark:border-white/[0.06] dark:bg-[#1d2a31]">
+      <div
+        className="relative flex flex-1 flex-wrap items-center justify-center gap-x-2.5 gap-y-1 px-10 py-2 text-[13px] leading-tight text-[#37352f] dark:text-blue-50"
+        style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
       >
-        <X className="size-3.5" />
-      </button>
+        <span className="truncate">
+          Проект опубликован на <span className="font-medium">{address}</span>
+        </span>
+        {/* Заглушки: пока не ведут никуда. */}
+        <button type="button" className={BTN}>
+          <Globe className="size-3.5 opacity-80" />
+          Показать сайт
+        </button>
+        <button type="button" className={BTN}>
+          <Settings2 className="size-3.5 opacity-80" />
+          Настройки сайта
+        </button>
+        <button
+          type="button"
+          onClick={close}
+          aria-label="Скрыть"
+          className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-[#37352f]/40 transition-colors hover:bg-black/[0.06] hover:text-[#37352f]/70 dark:text-blue-100/40 dark:hover:bg-white/10 dark:hover:text-blue-50"
+        >
+          <X className="size-3.5" />
+        </button>
+      </div>
     </div>
   );
 }

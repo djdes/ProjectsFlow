@@ -121,8 +121,9 @@ export function TasksPage(): React.ReactElement {
           view="board"
         />
       </div>
-      {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая) — ПОД крошками. */}
-      <ProjectPublishedBanner projectId={data.id} />
+      {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая) — ПОД крошками.
+          shiftForOverlay: контент центрируется в видимой области, когда открыто окно задачи. */}
+      <ProjectPublishedBanner projectId={data.id} shiftForOverlay />
 
       {/* Тело страницы: комфортные отступы ПОД строкой крошек. */}
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-3 pb-3 pt-2 sm:gap-4 sm:px-5 sm:pb-6 sm:pt-1">
