@@ -78,8 +78,8 @@
   --sp-1: 0.25rem; --sp-2: 0.5rem; --sp-3: 0.75rem; --sp-4: 1rem; --sp-5: 1.25rem;
   --sp-6: 1.5rem; --sp-8: 2rem; --sp-12: 3rem; --sp-16: 4rem; --sp-24: 6rem;
   --section-y: clamp(2.75rem, 5vw, 4.5rem);
-  --container: 1240px;
-  --container-wide: 1360px;
+  --container: 1400px;
+  --container-wide: 1480px;
 
   /* --- Радиусы ------------------------------------------------------------ */
   --r-sm: 8px;

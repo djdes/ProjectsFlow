@@ -193,61 +193,71 @@ const MOCK_KINDS = new Set<MockKind>(['idea', 'autopilot', 'cost', 'claude']);
   }
   .features__head { max-width: 40rem; }
 
+  /* Крупные цветные панели-бенто (как секции возможностей у Notion): 2 в ряд. */
   .features__grid {
     display: grid;
     grid-template-columns: 1fr;
     gap: var(--sp-5);
     margin-top: var(--sp-12);
   }
-  @media (min-width: 640px) {
-    .features__grid { grid-template-columns: repeat(2, 1fr); }
-  }
-  @media (min-width: 1024px) {
-    .features__grid { grid-template-columns: repeat(4, 1fr); }
+  @media (min-width: 768px) {
+    .features__grid { grid-template-columns: repeat(2, 1fr); gap: var(--sp-6); }
   }
 
   .features__card {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    padding: var(--sp-6);
+    padding: clamp(1.5rem, 3vw, 2.5rem);
+    border-radius: var(--r-lg);
+    background: var(--tone-bg, var(--surface));
+    border-color: var(--tone-line, var(--line));
   }
-  .features__card-top { flex: 1; }
+  /* Пастельные тона панелей — «живость». Каждая фича — свой цвет. */
+  .features__card:nth-child(1) { --tone-bg: #e9f1fc; --tone-accent: #2f6fd4; --tone-line: rgba(47, 111, 212, 0.20); }
+  .features__card:nth-child(2) { --tone-bg: #efe9fd; --tone-accent: #7c5cff; --tone-line: rgba(124, 92, 255, 0.20); }
+  .features__card:nth-child(3) { --tone-bg: #fdefda; --tone-accent: #c9760a; --tone-line: rgba(201, 118, 10, 0.22); }
+  .features__card:nth-child(4) { --tone-bg: #ddf2ea; --tone-accent: #0f9d77; --tone-line: rgba(15, 157, 119, 0.22); }
+  .features__card-top { flex: 1; max-width: 30rem; }
   .features__icon {
     display: grid;
     place-items: center;
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     border-radius: var(--r-sm);
-    color: var(--accent);
-    background: var(--accent-soft);
-    border: 1px solid var(--accent-line);
+    color: var(--tone-accent, var(--accent));
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid var(--tone-line, var(--accent-line));
   }
-  .features__icon svg { width: 22px; height: 22px; }
+  .features__icon svg { width: 24px; height: 24px; }
   .features__title {
-    margin-top: var(--sp-4);
-    font-size: var(--fs-lg);
+    margin-top: var(--sp-5);
+    font-size: var(--fs-xl);
     font-weight: 700;
     letter-spacing: var(--tracking-tight);
     color: var(--text);
   }
   .features__body {
-    margin-top: var(--sp-2);
-    font-size: var(--fs-sm);
+    margin-top: var(--sp-3);
+    font-size: var(--fs-base);
     line-height: var(--lh-normal);
     color: var(--muted);
   }
 
   /* --- Мини-мокап реального UI внутри карточки --- */
-  .features__mock { margin-top: var(--sp-5); }
+  .features__mock { margin-top: var(--sp-6); }
+  /* На цветной панели мокап — белый «скрин», который выпрыгивает (как в Notion). */
   .mock {
     display: flex;
     flex-direction: column;
     gap: var(--sp-3);
     padding: var(--sp-4);
     border-radius: var(--r);
-    background: var(--surface-2);
-    border: 1px solid var(--line);
+    background: var(--surface);
+    border: 1px solid rgba(11, 18, 32, 0.06);
+    box-shadow:
+      0 1px 2px rgba(11, 18, 32, 0.05),
+      0 12px 26px -14px rgba(11, 18, 32, 0.16);
   }
   .mock__row {
     display: flex;
