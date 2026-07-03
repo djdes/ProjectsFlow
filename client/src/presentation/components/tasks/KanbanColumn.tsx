@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useRef, useState, type KeyboardEvent } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { AnimatePresence } from 'motion/react';
@@ -64,6 +64,12 @@ type Props = {
   colorClasses?: KanbanColumnColorClasses;
   // Меню колонки (троеточие): переименование / цвет / скрытие. Рендерится в шапке.
   columnMenu?: React.ReactNode;
+  // Если задан — клик по названию колонки открывает inline-правку (тот же setLabel,
+  // что и в меню). Без него заголовок некликабельный.
+  onRename?: (label: string) => void;
+  // I6: если задан — тело колонки приглушается и поверх рисуется этот оверлей-оффер
+  // («Воркер» на бесплатном тарифе). Колонка становится «запертой» (клики перехвачены).
+  lockOffer?: React.ReactNode;
   // Если задан — под колонкой появляется кнопка «Добавить задачу», раскрывающая
   // inline-композер (со всем функционалом быстрого создания). Создаёт задачу в этой колонке.
   onInlineCreate?: (input: InlineCreateInput) => Promise<Task>;
@@ -125,6 +131,8 @@ export function KanbanColumn({
   liveTaskIds,
   colorClasses,
   columnMenu,
+  onRename,
+  lockOffer,
   onInlineCreate,
   isInbox = false,
   isShared = false,
@@ -149,6 +157,38 @@ export function KanbanColumn({
   // «Готово» распухает (десятки карточек) — по умолчанию показываем хвост из
   // DONE_PREVIEW_COUNT, остальное за кнопкой «Показать все». Прочие колонки — целиком.
   const [showAllDone, setShowAllDone] = useState(false);
+
+  // I8: inline-правка названия колонки по клику. Тот же колбэк, что у меню-троеточия.
+  const [editingLabel, setEditingLabel] = useState(false);
+  const [labelDraft, setLabelDraft] = useState(label);
+  // Esc отменяет правку: ставим флаг, чтобы следующий blur не сохранял черновик.
+  const cancelNextBlur = useRef(false);
+  const startRename = (): void => {
+    if (!onRename) return;
+    setLabelDraft(label);
+    setEditingLabel(true);
+  };
+  const commitRename = (): void => {
+    if (cancelNextBlur.current) {
+      cancelNextBlur.current = false;
+      setEditingLabel(false);
+      return;
+    }
+    const next = labelDraft.trim();
+    if (next && next !== label) onRename?.(next);
+    setEditingLabel(false);
+  };
+  const handleLabelKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.currentTarget.blur();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelNextBlur.current = true;
+      e.currentTarget.blur();
+    }
+  };
+
   const collapsible = status === 'done' && !selectionMode && tasks.length > DONE_PREVIEW_COUNT;
   const visibleTasks = collapsible && !showAllDone ? tasks.slice(0, DONE_PREVIEW_COUNT) : tasks;
   const hiddenCount = tasks.length - visibleTasks.length;
@@ -214,10 +254,41 @@ export function KanbanColumn({
                     aria-hidden
                   />
                   <div className="min-w-0">
-                    <span className="inline-block max-w-full truncate text-[13px] font-medium leading-snug text-foreground/80">
-                      {label}
-                    </span>
-                    {STATUS_SUBTITLE[status] && (
+                    {editingLabel ? (
+                      <input
+                        autoFocus
+                        value={labelDraft}
+                        onChange={(e) => setLabelDraft(e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        onKeyDown={handleLabelKeyDown}
+                        onBlur={commitRename}
+                        maxLength={40}
+                        aria-label="Название колонки"
+                        className="w-full max-w-[10rem] rounded border bg-background px-1 py-0 text-[13px] font-medium leading-snug text-foreground focus:border-foreground/30 focus:outline-none"
+                      />
+                    ) : (
+                      <span
+                        role={onRename ? 'button' : undefined}
+                        tabIndex={onRename ? 0 : undefined}
+                        onClick={onRename ? startRename : undefined}
+                        onKeyDown={
+                          onRename
+                            ? (e) => {
+                                if (e.key === 'Enter' || e.key === 'F2') startRename();
+                              }
+                            : undefined
+                        }
+                        title={onRename ? 'Переименовать колонку' : undefined}
+                        className={cn(
+                          'inline-block max-w-full truncate text-[13px] font-medium leading-snug text-foreground/80',
+                          onRename &&
+                            'cursor-text rounded px-0.5 outline-none hover:bg-foreground/5 focus-visible:ring-1 focus-visible:ring-ring',
+                        )}
+                      >
+                        {label}
+                      </span>
+                    )}
+                    {STATUS_SUBTITLE[status] && !editingLabel && (
                       <p className="truncate text-[10px] leading-tight text-muted-foreground/60">
                         {STATUS_SUBTITLE[status]}
                       </p>
@@ -262,11 +333,15 @@ export function KanbanColumn({
         )}
       </div>
 
+      <div className="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={setNodeRef}
-        className={`flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 transition-colors ${
-          isOver ? 'bg-muted/60' : ''
-        }`}
+        className={cn(
+          'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 transition-colors',
+          isOver && 'bg-muted/60',
+          // I6: под замком-оффером тело колонки приглушено и не реагирует на клики/drag.
+          lockOffer && 'pointer-events-none select-none opacity-40 blur-[1px]',
+        )}
       >
         <SortableContext
           items={visibleTasks.map((t) => t.id)}
@@ -325,8 +400,10 @@ export function KanbanColumn({
           <span className="sr-only">{`Скрыто карточек: ${hiddenCount}`}</span>
         )}
       </div>
+        {lockOffer}
+      </div>
 
-      {onInlineCreate && (
+      {onInlineCreate && !lockOffer && (
         <div className="shrink-0 p-2 pt-0">
           {composing ? (
             <TaskComposer

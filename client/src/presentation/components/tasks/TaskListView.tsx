@@ -14,6 +14,8 @@ import type { Task, TaskStatus } from '@/domain/task/Task';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import { ExpandableMarkdown } from './ExpandableMarkdown';
+import { TaskTitleText } from './TaskTitleText';
+import { splitTitleBody } from '@/lib/taskTitleBody';
 import { RalphModeBadge } from './RalphMode';
 import { InboxCheckbox } from './InboxCheckbox';
 import { DelegationBadge } from './DelegationBadge';
@@ -335,6 +337,8 @@ function TaskListRow({
 }): React.ReactElement {
   const { animations } = useMotion();
   const isDone = task.status === 'done';
+  // Заголовок/тело описания (см. I3): заголовок — plain, тело — markdown.
+  const { title, body } = splitTitleBody(task.description ?? '');
   const hasDelegation = task.delegation !== null && task.delegation !== undefined;
   const hasBadges =
     (task.attachmentCount ?? 0) > 0 ||
@@ -380,9 +384,12 @@ function TaskListRow({
         {task.description?.trim() ? (
           // Done-текст остаётся полноцветным (Notion: готовая задача не «гасится»);
           // маркер готовности — зелёная заливка строки + чек в чекбоксе.
-          <ExpandableMarkdown>
-            {task.description}
-          </ExpandableMarkdown>
+          // Заголовок — plain-текст (см. TaskTitleText): `---`/`- `/`* `/`# ` в начале
+          // не морфятся в hr/список/heading. Тело — раскрываемый markdown.
+          <>
+            <TaskTitleText title={title} />
+            {body.trim() && <ExpandableMarkdown>{body}</ExpandableMarkdown>}
+          </>
         ) : (
           <p className="text-sm leading-snug text-muted-foreground">—</p>
         )}

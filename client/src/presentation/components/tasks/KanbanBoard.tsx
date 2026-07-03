@@ -51,6 +51,10 @@ import { LIVE_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { KanbanCard } from './KanbanCard';
 import { KanbanColumn } from './KanbanColumn';
 import { KanbanColumnMenu } from './KanbanColumnMenu';
+import { WorkerLockOffer } from './WorkerLockOffer';
+import { useUsage } from '@/presentation/usage/UsageProvider';
+import { useUpgradeDialog } from '@/presentation/usage/UpgradeDialogProvider';
+import { isFree } from '@/domain/usage/Usage';
 import { BulkActionBar } from './BulkActionBar';
 import {
   nextAnchor,
@@ -219,6 +223,11 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   // Общие (на проект) настройки доски: цвета/переименования/скрытие колонок + глобальные
   // дефолтные цвета юзера. Резолв цвета/подписи делаем на лету при рендере колонок.
   const { settings, defaults, setColor, setLabel, setHidden } = useKanbanSettings(projectId);
+  // I6: на бесплатном тарифе колонка «Воркер» (todo) заперта оффером апгрейда. Админ/владелец
+  // безлимитного доступа не гейтится. В inbox воркера нет — там замок не нужен.
+  const { usage } = useUsage();
+  const { open: openUpgrade } = useUpgradeDialog();
+  const workerLocked = !isInbox && usage !== null && isFree(usage.plan) && !usage.isAdmin;
   // Перезагрузка страницы не должна закрывать открытое окно задачи. Какое окно открыто
   // (edit-<taskId> / create-<status>) держим в sessionStorage пер-проект — переживает
   // reload, чистится на закрытие. Черновик create-формы хранит сам TaskDrawer.
@@ -883,6 +892,12 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
                 dropTarget={dropTarget?.status === status ? dropTarget : null}
                 liveTaskIds={liveTaskIds}
                 colorClasses={KANBAN_COLOR_CLASSES[color]}
+                onRename={label.length > 0 ? (l) => setLabel(status, l) : undefined}
+                lockOffer={
+                  status === 'todo' && workerLocked ? (
+                    <WorkerLockOffer onUpgrade={openUpgrade} />
+                  ) : undefined
+                }
                 onInlineCreate={(input) => create({ ...input, status: input.status ?? status })}
                 isInbox={isInbox}
                 isShared={isShared}

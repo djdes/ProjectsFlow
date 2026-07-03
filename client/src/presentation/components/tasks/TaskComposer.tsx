@@ -53,9 +53,13 @@ type PendingFile = {
 const ICON_BTN =
   'grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-40';
 const ICON_GLYPH = 'size-3.5';
-// Живая иконка: лёгкий scale при наведении на кнопку (для пикеров-компонентов).
-const ICON_BTN_ANIM = '[&_svg]:size-3.5 [&_svg]:transition-transform hover:[&_svg]:scale-110';
-const ICON_BTN_PICKER = 'size-7 [&_svg]:size-3.5 [&_svg]:transition-transform hover:[&_svg]:scale-110';
+// I2: пикеры (режим/приоритет/дедлайн/делегат) делим общую «пилюлю» с plain-кнопками —
+// size-7, rounded-md, тот же нейтральный hover-фон (bg-hover), чтобы нижний ряд был ровным.
+// Цвет иконки НЕ форсим (у пикеров он свой — приоритет/дедлайн бывают цветными).
+const ICON_BTN_ANIM =
+  'rounded-md transition-colors hover:bg-hover [&_svg]:size-3.5 [&_svg]:transition-transform hover:[&_svg]:scale-110';
+const ICON_BTN_PICKER =
+  'size-7 shrink-0 rounded-md transition-colors hover:bg-hover [&_svg]:size-3.5 [&_svg]:transition-transform hover:[&_svg]:scale-110';
 
 type Props = {
   // Колбэк создания задачи. Передаёт выбранный/форсированный status.
@@ -462,7 +466,7 @@ export function TaskComposer({
       {/* Ряд доп-действий. На телефоне в свёрнутом состоянии скрыт, выезжает по фокусу; на sm+ виден всегда. */}
       <div
         className={cn(
-          'flex items-center gap-0.5 px-1.5 pb-2',
+          'flex items-center gap-1 px-1.5 pb-2',
           isInline && 'flex-wrap',
           !expanded && 'hidden sm:flex',
         )}
@@ -509,7 +513,7 @@ export function TaskComposer({
           iconOnly
           className={cn('h-7', ICON_BTN_ANIM, deadline === null ? 'w-7 px-0' : 'px-2')}
         />
-        <div className="ml-auto flex items-center gap-0.5">
+        <div className="ml-auto flex items-center gap-1">
           {/* В floating AI живёт здесь (в inline — рядом с отправкой сверху). */}
           {!isInline && aiButton}
           {isInline && onClose && (

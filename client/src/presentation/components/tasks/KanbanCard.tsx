@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
@@ -6,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SelectModifiers } from './selection/selectionReducer';
 import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
+import { TaskTitleText } from './TaskTitleText';
+import { splitTitleBody } from '@/lib/taskTitleBody';
 import type { Task } from '@/domain/task/Task';
 import { ClaudeIcon } from './ClaudeIcon';
 import { DelegationBadge } from './DelegationBadge';
@@ -102,6 +105,27 @@ export function KanbanCard({
 
   // Прогресс GFM-чеклиста из описания — бейдж «3/7» в мета-строке.
   const checklist = task.description ? checklistProgress(task.description) : null;
+
+  // Заголовок (первая строка) рендерим plain-текстом, тело — markdown (см. TaskTitleText).
+  const { title, body } = splitTitleBody(task.description ?? '');
+
+  // I1: однострочные карточки не затемняем на hover — иначе единственная строка текста
+  // уходит в 60% прозрачности под мета-оверлеем и почти не читается. Меряем реальную высоту
+  // контента: одна строка ⇒ scrollHeight ≲ 1.6× line-height.
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [singleLine, setSingleLine] = useState(false);
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const measure = (): void => {
+      const lh = parseFloat(getComputedStyle(el).lineHeight) || 20;
+      setSingleLine(el.scrollHeight <= lh * 1.6);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [task.description]);
 
   // Есть ли что показывать в нижнем мета-оверлее. Если нет (простая однострочная задача) —
   // не затемняем текст и не рисуем пустую градиент-полосу на hover; кнопки действий
@@ -263,24 +287,32 @@ export function KanbanCard({
           {/* Текст карточки. На hover ЗАТЕМНЯЕТСЯ — чтобы наложенные снизу мета/корзина
               читались (внахлёст). Высоты под мету НЕ резервируем (нет «пустого промежутка»). */}
           <div
+            ref={contentRef}
             className={cn(
               'transition-opacity duration-150 max-sm:!opacity-100',
               // Затемняем текст только если снизу реально всплывёт мета-оверлей — и мягче,
-              // чем раньше (было opacity-40). Без меты (простая карточка) текст не гаснет.
-              hasMeta && 'group-hover:opacity-60 group-focus-within:opacity-60',
+              // чем раньше (было opacity-40). Без меты (простая карточка) — и на однострочных
+              // (I1: единственная строка иначе почти не читается под оверлеем) — не гасим.
+              hasMeta && !singleLine && 'group-hover:opacity-60 group-focus-within:opacity-60',
             )}
           >
             {task.description?.trim() ? (
-              <Markdown
-                className={cn(
-                  MARKDOWN_COMPACT,
-                  'line-clamp-4',
-                  '[&_h1]:font-normal [&_h2]:font-normal [&_h3]:font-normal [&_h4]:font-normal',
-                  '[&_strong]:font-normal [&_b]:font-normal',
+              <div className="line-clamp-4 text-sm leading-snug">
+                {/* Заголовок — plain-текст (не markdown), чтобы `---`/`- `/`* `/`# ` в начале
+                    не превращались в hr/список/heading и не пропадали под COMPACT-пресетом. */}
+                <TaskTitleText title={title} />
+                {body.trim() && (
+                  <Markdown
+                    className={cn(
+                      MARKDOWN_COMPACT,
+                      '[&_h1]:font-normal [&_h2]:font-normal [&_h3]:font-normal [&_h4]:font-normal',
+                      '[&_strong]:font-normal [&_b]:font-normal',
+                    )}
+                  >
+                    {body}
+                  </Markdown>
                 )}
-              >
-                {task.description}
-              </Markdown>
+              </div>
             ) : (
               <p className="text-sm leading-snug text-muted-foreground">—</p>
             )}
