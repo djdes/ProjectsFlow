@@ -76,13 +76,14 @@ export function UpgradeDialog({
             ]
           : [{ key: 'cur', label: 'Уже улучшено', variant: 'outline', disabled: true }];
       }
-      const acts: Action[] = [
-        { key: 'up', label: 'Улучшить', variant: 'default', disabled: pending, onClick: () => requestUpgrade('prime') },
-      ];
+      // Снижаем риск/усилие: бесплатный пробный час — главная кнопка, апгрейд — вторичная.
       if (trialAvailable) {
-        acts.push({ key: 'trial', label: 'Попробовать 1 час', variant: 'outline', disabled: pending, onClick: () => void activateTrial() });
+        return [
+          { key: 'trial', label: 'Попробовать час бесплатно', variant: 'default', disabled: pending, onClick: () => void activateTrial() },
+          { key: 'up', label: 'Улучшить', variant: 'outline', disabled: pending, onClick: () => requestUpgrade('prime') },
+        ];
       }
-      return acts;
+      return [{ key: 'up', label: 'Улучшить', variant: 'default', disabled: pending, onClick: () => requestUpgrade('prime') }];
     }
     if (currentPlan === 'vip') return [{ key: 'cur', label: 'Уже улучшено', variant: 'outline', disabled: true }];
     return [{ key: 'up', label: 'Улучшить', variant: 'default', disabled: pending, onClick: () => requestUpgrade('vip') }];
@@ -92,18 +93,24 @@ export function UpgradeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Тарифы</DialogTitle>
+          <DialogTitle>Отдайте рутину AI-диспетчеру</DialogTitle>
           <DialogDescription>
-            Ваш план:{' '}
-            <span className="font-medium text-foreground">{planNameRu(currentPlan)}</span>
-            {trial && ' (пробный час)'}
-            {expiryNote ? ` · ${expiryNote}` : ''}
+            Диспетчер берёт задачи и выполняет их сам — код, тексты, рутина. Платите за подписку,
+            а не за каждую задачу.
+            <span className="mt-1 block text-xs">
+              Ваш план:{' '}
+              <span className="font-medium text-foreground">{planNameRu(currentPlan)}</span>
+              {trial && ' (пробный час)'}
+              {expiryNote ? ` · ${expiryNote}` : ''}
+            </span>
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3 sm:grid-cols-3">
           {PLAN_CATALOG.map((p) => {
             const isCurrent = p.id === currentPlan;
+            // Якорим выбор: для новичка (free) флагманский Прайм — рекомендованный.
+            const recommended = p.id === 'prime' && currentPlan === 'free';
             const actions = actionsFor(p.id);
             const prev = PREV_NAME[p.id];
             return (
@@ -111,16 +118,22 @@ export function UpgradeDialog({
                 key={p.id}
                 className={cn(
                   'flex flex-col rounded-2xl border p-4 transition-colors',
-                  isCurrent ? 'border-primary bg-primary/[0.03] ring-1 ring-primary/30' : 'border-border bg-card',
+                  isCurrent && 'border-primary bg-primary/[0.03] ring-1 ring-primary/30',
+                  recommended && 'border-primary bg-primary/[0.05] ring-1 ring-primary/40',
+                  !isCurrent && !recommended && 'border-border bg-card',
                 )}
               >
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex min-h-6 items-center justify-between gap-2">
                   <span className="font-semibold">{p.nameRu}</span>
-                  {isCurrent && (
+                  {isCurrent ? (
                     <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
                       Ваш план
                     </span>
-                  )}
+                  ) : recommended ? (
+                    <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">
+                      Рекомендуем
+                    </span>
+                  ) : null}
                 </div>
                 <div className="mt-1 text-2xl font-bold tabular-nums">
                   {/* Бесплатный тариф — в том же формате, что и платные: «0 ₽/мес». */}
@@ -129,7 +142,10 @@ export function UpgradeDialog({
                 </div>
                 <p className="mt-1 text-xs leading-snug text-muted-foreground">{p.tagline}</p>
 
-                <ul className="mt-3 flex-1 space-y-1.5 text-[13px]">
+                <div className="mt-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/60">
+                  Что входит
+                </div>
+                <ul className="mt-1.5 flex-1 space-y-1.5 text-[13px]">
                   {prev && (
                     <li className="flex gap-2 font-medium text-foreground">
                       <Check className="mt-0.5 size-4 shrink-0 text-primary" />
@@ -158,6 +174,12 @@ export function UpgradeDialog({
             );
           })}
         </div>
+
+        {/* Снятие риска (Хормози): честный пробный час + возможность отключить. */}
+        <p className="text-center text-xs text-muted-foreground">
+          {trialAvailable && 'Прайм — 1 час бесплатно, без карты. '}
+          Полные тарифы подключаются по запросу, отключить можно в любой момент.
+        </p>
       </DialogContent>
     </Dialog>
   );
