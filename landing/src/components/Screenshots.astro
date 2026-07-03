@@ -1,9 +1,9 @@
 ---
-// «Внутри продукта» — Notion-style бенто из отдельных панелек интерфейса.
-// ВАЖНО: панельки нарисованы вёрсткой (CSS/HTML), а НЕ растровыми скринами —
-// поэтому они идеально резкие на любом экране (никакого «мыла» от ужатых картинок).
+// «Внутри продукта» — Notion-style бенто. РЕАЛЬНЫЕ скрины приложения (3360×1900, 2×),
+// ОБРЕЗАННЫЕ до отдельных панелей и показанные крупно → чётко (исходников с запасом).
+// Обрезка — через .shot (overflow + позиционирование img: --zoom масштаб, --x/--y сдвиг).
+// Живой воркер и чек-лист — вёрстка (для них нет отдельного скрина).
 
-// Живой воркер (терминал). Строки лога.
 const workerLog = [
   { k: 'c', text: '// PF-219 · Собрать лендинг для запуска' },
   { k: 'p', text: '$ читаю ТЗ и структуру проекта' },
@@ -13,7 +13,6 @@ const workerLog = [
   { k: 'p', text: '$ прогоняю сборку и линтер' },
 ];
 
-// Автоулучшения — чек-лист проверок перед выкаткой.
 const checks = [
   { label: 'Сборка проходит без ошибок', done: true },
   { label: 'Линтер и типы — чисто', done: true },
@@ -21,7 +20,6 @@ const checks = [
   { label: 'Адаптив на телефоне', done: true },
 ];
 
-// Примеры использования — реальные типы задач, которые бросают простым текстом.
 const examples = [
   'Собери лендинг для запуска',
   'Добавь экран оплаты',
@@ -38,49 +36,28 @@ const examples = [
       <div class="pf-stag">Внутри продукта</div>
       <h2 class="pf-h2">Как это выглядит в&nbsp;работе</h2>
       <p class="pf-lead">
-        Настоящий интерфейс — по кусочку: доска, живой воркер, деньги, обсуждения, проверки
-        и уведомления. Каждый экран крупно и чётко.
+        Настоящий интерфейс — по кусочку: доска, живой воркер, деньги и проверки.
+        Не картинки-заглушки, а реальные экраны продукта.
       </p>
     </div>
 
     <div class="shots__bento">
-      <!-- Доска — мини-канбан -->
+      <!-- Доска — реальный скрин, обрезан до колонок -->
       <article class="shots__panel shots__panel--blue shots__panel--wide" data-reveal>
         <div class="shots__panel-head">
           <h3 class="shots__panel-title">Доску ведёт AI</h3>
-          <p class="shots__panel-sub">Перетащи задачу на «Воркер» — берёт в работу и доводит до «Готово».</p>
+          <p class="shots__panel-sub">Колонки Черновики → Воркер → Готово. Бросил задачу — AI берёт и доводит.</p>
         </div>
-        <div class="ui ui--kb" role="img" aria-label="Мини-доска задач: колонки Черновики, Воркер, Готово">
-          <div class="kbx">
-            <div class="kbx__col">
-              <div class="kbx__ch"><span class="kbx__dot kbx__dot--gray"></span>Черновики<em>2</em></div>
-              <div class="kbx__card">Тёмная тема для дашборда</div>
-              <div class="kbx__card">Экспорт отчёта в PDF</div>
-            </div>
-            <div class="kbx__col">
-              <div class="kbx__ch"><span class="kbx__dot kbx__dot--blue"></span>Воркер · Claude<em>1</em></div>
-              <div class="kbx__card kbx__card--wip">
-                <span class="kbx__live" aria-hidden="true"></span>
-                Экран оплаты через СБП
-                <span class="kbx__wip"><span class="kbx__wip-dot"></span>В работе</span>
-              </div>
-            </div>
-            <div class="kbx__col">
-              <div class="kbx__ch"><span class="kbx__dot kbx__dot--green"></span>Готово<em>2</em></div>
-              <div class="kbx__card kbx__card--done"><span class="kbx__ok">✓</span>Онбординг юзеров</div>
-              <div class="kbx__card kbx__card--done"><span class="kbx__ok">✓</span>Импорт из CSV</div>
-            </div>
-          </div>
-        </div>
+        <div class="shot" style="--img:url(/shots/app-board.png); --ar:54%; --zoom:152%; --pos:57% 27%" role="img" aria-label="Доска задач ProjectsFlow: колонки и карточки"></div>
       </article>
 
-      <!-- Живой воркер — терминал (локально тёмное окно) -->
+      <!-- Живой воркер — вёрстка (нет отдельного скрина) -->
       <article class="shots__panel shots__panel--violet" data-reveal>
         <div class="shots__panel-head">
           <h3 class="shots__panel-title">Видно каждый шаг</h3>
           <p class="shots__panel-sub">Живой лог: что AI делает и во что обходится — до копейки.</p>
         </div>
-        <div class="mock mock--lift term-win" data-theme="dark">
+        <div class="mock mock--lift" data-theme="dark">
           <div class="mock__chrome">
             <span class="mock__dot mock__dot--r"></span>
             <span class="mock__dot mock__dot--y"></span>
@@ -107,58 +84,40 @@ const examples = [
         </div>
       </article>
 
-      <!-- Финансы — виджет -->
+      <!-- Финансы — реальный скрин, обрезан до сводки -->
       <article class="shots__panel shots__panel--green" data-reveal>
         <div class="shots__panel-head">
           <h3 class="shots__panel-title">Деньги с одного взгляда</h3>
           <p class="shots__panel-sub">Доход, расход и прибыль по проекту — в рублях.</p>
         </div>
-        <div class="ui ui--fin" role="img" aria-label="Финансы проекта: доход, расход, прибыль">
-          <div class="finx">
-            <div class="finx__tiles">
-              <div class="finx__tile"><span>Доход</span><b>214 000&nbsp;₽</b></div>
-              <div class="finx__tile"><span>Расход</span><b>85 600&nbsp;₽</b></div>
-              <div class="finx__tile finx__tile--profit"><span>Прибыль</span><b>+128 400&nbsp;₽</b></div>
-            </div>
-            <div class="finx__chart" aria-hidden="true">
-              <span style="--h:44%"></span><span style="--h:62%"></span><span style="--h:53%"></span>
-              <span style="--h:71%"></span><span style="--h:66%"></span><span style="--h:82%"></span>
-              <span class="finx__bar--up" style="--h:94%"></span>
-            </div>
-          </div>
-        </div>
+        <div class="shot" style="--img:url(/shots/app-finance.png); --ar:30%; --zoom:225%; --pos:62% 11%" role="img" aria-label="Финансы: доход, зарплаты, расходы, прибыль"></div>
       </article>
 
-      <!-- Обсуждение в задаче — тред -->
+      <!-- Финансы — детали (обрезано до карточки расходов/доходов) -->
       <article class="shots__panel shots__panel--peach" data-reveal>
         <div class="shots__panel-head">
-          <h3 class="shots__panel-title">Обсуждение прямо в задаче</h3>
-          <p class="shots__panel-sub">Комментарии, упоминания и ответы AI — в одном месте.</p>
+          <h3 class="shots__panel-title">Расходы и доходы — по строкам</h3>
+          <p class="shots__panel-sub">Каждая трата и оплата — с суммой, категорией и датой.</p>
         </div>
-        <div class="ui ui--thread" role="img" aria-label="Тред задачи с комментариями">
-          <div class="thx">
-            <div class="thx__task"><span class="thx__id">PF-231</span> Кнопка оплаты на мобиле</div>
-            <div class="thx__msg">
-              <span class="thx__av" style="--c:#e0679a">А</span>
-              <div class="thx__bub"><b>Аня · дизайн</b><p>Сделай кнопку крупнее на телефоне 🙏</p></div>
-            </div>
-            <div class="thx__msg">
-              <span class="thx__av thx__av--ai" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2.6l1.7 5.4h5.6l-4.5 3.3 1.7 5.4-4.5-3.3-4.5 3.3 1.7-5.4-4.5-3.3h5.6z" /></svg>
-              </span>
-              <div class="thx__bub"><b>Claude Opus</b><p>Готово — увеличил, собрал и выкатил. Проверь 👍</p></div>
-            </div>
-          </div>
-        </div>
+        <div class="shot" style="--img:url(/shots/app-finance.png); --ar:56%; --zoom:205%; --pos:64% 46%" role="img" aria-label="Прочие расходы и доходы по строкам"></div>
       </article>
 
-      <!-- Автопроверки — чек-лист -->
-      <article class="shots__panel shots__panel--amber" data-reveal>
+      <!-- Колонка «Воркер» + «Готово» — обрезано из доски -->
+      <article class="shots__panel shots__panel--amber shots__panel--wide" data-reveal>
+        <div class="shots__panel-head">
+          <h3 class="shots__panel-title">Колонка «Воркер · Claude Opus»</h3>
+          <p class="shots__panel-sub">Перетащил задачу сюда — AI берёт в работу и переносит в «Готово».</p>
+        </div>
+        <div class="shot" style="--img:url(/shots/app-board.png); --ar:42%; --zoom:270%; --pos:84% 24%" role="img" aria-label="Колонки Воркер и Готово с задачами"></div>
+      </article>
+
+      <!-- Автопроверки — вёрстка -->
+      <article class="shots__panel shots__panel--coral" data-reveal>
         <div class="shots__panel-head">
           <h3 class="shots__panel-title">Проверки перед выкаткой</h3>
           <p class="shots__panel-sub">Сборка, линтер, секреты — зелёные галочки, можно катить.</p>
         </div>
-        <div class="mock mock--lift checks-win">
+        <div class="mock mock--lift">
           <div class="mock__chrome">
             <span class="mock__dot mock__dot--r"></span>
             <span class="mock__dot mock__dot--y"></span>
@@ -187,36 +146,8 @@ const examples = [
           </div>
         </div>
       </article>
-
-      <!-- Telegram — уведомление -->
-      <article class="shots__panel shots__panel--coral shots__panel--wide" data-reveal>
-        <div class="shots__panel-head">
-          <h3 class="shots__panel-title">Апдейты прилетают в Telegram</h3>
-          <p class="shots__panel-sub">Сводки, упоминания и прогресс — прямо в чат, без захода в приложение.</p>
-        </div>
-        <div class="ui ui--tg" role="img" aria-label="Уведомление в Telegram">
-          <div class="tgx">
-            <div class="tgx__bar">
-              <span class="tgx__logo" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="#fff"><path d="M21 4L3 11l6 2.5L11 20l3-4 4 3z" /></svg>
-              </span>
-              <b>ProjectsFlow</b><span class="tgx__handle">@pf_bot</span>
-            </div>
-            <div class="tgx__msg">
-              <b>Сводка по «Мой проект»</b>
-              <ul class="tgx__list">
-                <li><span class="tgx__ic tgx__ic--ok">✓</span>Готово: 3 задачи</li>
-                <li><span class="tgx__ic tgx__ic--run">●</span>В работе: «Экран оплаты через СБП»</li>
-                <li><span class="tgx__ic tgx__ic--money">₽</span>Прибыль за месяц: +128 400&nbsp;₽</li>
-              </ul>
-              <span class="tgx__time">14:20</span>
-            </div>
-          </div>
-        </div>
-      </article>
     </div>
 
-    <!-- Примеры использования: что можно поручить простым текстом. -->
     <div class="shots__examples" data-reveal>
       <div class="pf-stag shots__examples-tag">Примеры: что можно поручить</div>
       <div class="shots__examples-grid">
@@ -239,7 +170,7 @@ const examples = [
 <style>
   .shots__head { max-width: 42rem; }
 
-  /* --- Бенто панелей (как у Notion): крупные цветные блоки с UI-панельками --- */
+  /* --- Бенто панелей (как у Notion) --- */
   .shots__bento {
     display: grid;
     grid-template-columns: 1fr;
@@ -251,10 +182,7 @@ const examples = [
     .shots__panel { grid-column: span 6; }
     .shots__panel--wide { grid-column: span 7; }
     .shots__panel--violet { grid-column: span 5; }
-    .shots__panel--green { grid-column: span 5; }
-    .shots__panel--peach { grid-column: span 7; }
-    .shots__panel--amber { grid-column: span 5; }
-    .shots__panel--coral { grid-column: span 7; }
+    .shots__panel--coral { grid-column: span 5; }
   }
 
   .shots__panel {
@@ -267,7 +195,6 @@ const examples = [
     background: var(--tone-bg, var(--surface));
     overflow: hidden;
   }
-  /* Пастельные тона — точь-в-точь как на панелях Notion. */
   .shots__panel--blue { --tone-bg: #dbeaf7; --tone-line: rgba(47, 111, 212, 0.18); }
   .shots__panel--violet { --tone-bg: #e7e1fa; --tone-line: rgba(124, 92, 255, 0.18); }
   .shots__panel--green { --tone-bg: #cfebe0; --tone-line: rgba(18, 169, 123, 0.20); }
@@ -275,120 +202,32 @@ const examples = [
   .shots__panel--amber { --tone-bg: #fbeecb; --tone-line: rgba(183, 121, 31, 0.22); }
   .shots__panel--coral { --tone-bg: #fbddd4; --tone-line: rgba(224, 93, 67, 0.20); }
 
-  .shots__panel-head { max-width: 30rem; }
-  .shots__panel-title {
-    font-size: var(--fs-xl);
-    font-weight: 700;
-    letter-spacing: var(--tracking-tight);
-    color: var(--text);
-  }
-  .shots__panel-sub {
-    margin-top: var(--sp-2);
-    font-size: var(--fs-sm);
-    line-height: var(--lh-normal);
-    color: var(--muted);
-  }
+  .shots__panel-head { max-width: 32rem; }
+  .shots__panel-title { font-size: var(--fs-xl); font-weight: 700; letter-spacing: var(--tracking-tight); color: var(--text); }
+  .shots__panel-sub { margin-top: var(--sp-2); font-size: var(--fs-sm); line-height: var(--lh-normal); color: var(--muted); }
 
-  /* Обёртка UI-панельки: белый «экран», парящий на цветном фоне. */
-  .ui {
+  /* --- Обрезанный реальный скрин: крупно и чётко (background-crop) ---
+     --img: url скрина; --ar: пропорция окна (высота/ширина); --zoom: background-size
+     (масштаб, >100% = ближе); --pos: background-position (какую часть показать). */
+  .shot {
+    position: relative;
     margin-top: auto;
     border-radius: var(--r);
-    border: 1px solid rgba(11, 18, 32, 0.06);
-    background: var(--surface);
+    border: 1px solid rgba(11, 18, 32, 0.08);
+    background-color: var(--surface);
+    background-image: var(--img);
+    background-repeat: no-repeat;
+    background-size: var(--zoom, cover);
+    background-position: var(--pos, center);
     box-shadow:
       0 1px 2px rgba(11, 18, 32, 0.05),
-      0 16px 34px -18px rgba(11, 18, 32, 0.20);
-    overflow: hidden;
+      0 18px 38px -18px rgba(11, 18, 32, 0.22);
   }
-
-  /* === Мини-канбан === */
-  .kbx { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2); padding: var(--sp-3); }
-  .kbx__col { display: flex; flex-direction: column; gap: 6px; padding: 6px; border-radius: var(--r-sm); background: var(--surface-2); }
-  .kbx__ch { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--muted); padding: 2px 4px; }
-  .kbx__ch em { margin-left: auto; font-style: normal; color: var(--dim); }
-  .kbx__dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
-  .kbx__dot--gray { background: #9aa4b2; }
-  .kbx__dot--blue { background: #2f6fd4; }
-  .kbx__dot--green { background: #12a97b; }
-  .kbx__card {
-    position: relative;
-    padding: 8px 9px;
-    border-radius: 7px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    font-size: 12px;
-    line-height: 1.3;
-    color: var(--text);
-    box-shadow: 0 1px 1px rgba(11, 18, 32, 0.04);
-  }
-  .kbx__card--wip { border-color: rgba(47, 111, 212, 0.4); padding-left: 14px; }
-  .kbx__live { position: absolute; left: 6px; top: 10px; width: 6px; height: 6px; border-radius: 50%; background: #f6685e; box-shadow: 0 0 0 3px rgba(246, 104, 94, 0.18); }
-  .kbx__wip { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 10px; font-weight: 600; color: var(--warn); }
-  .kbx__wip-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--warn); }
-  .kbx__card--done { display: flex; align-items: center; gap: 6px; color: var(--muted); background: color-mix(in srgb, var(--profit) 8%, var(--surface)); border-color: color-mix(in srgb, var(--profit) 20%, var(--line)); }
-  .kbx__ok { display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: var(--profit); color: #fff; font-size: 9px; flex: none; }
-
-  /* === Финансы === */
-  .finx { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); }
-  .finx__tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2); }
-  .finx__tile { padding: 9px 10px; border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--line); }
-  .finx__tile span { display: block; font-size: 10px; color: var(--dim); }
-  .finx__tile b { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); }
-  .finx__tile--profit { background: color-mix(in srgb, var(--profit) 10%, var(--surface)); border-color: color-mix(in srgb, var(--profit) 26%, transparent); }
-  .finx__tile--profit b { color: #12a97b; }
-  .finx__chart { display: flex; align-items: flex-end; gap: 7px; height: 54px; padding-top: 4px; }
-  .finx__chart span { flex: 1; height: var(--h); border-radius: 4px 4px 2px 2px; background: color-mix(in srgb, var(--spend) 22%, var(--surface-2)); }
-  .finx__chart .finx__bar--up { background: linear-gradient(180deg, #22c98a, #12a97b); }
-
-  /* === Тред обсуждения === */
-  .thx { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); }
-  .thx__task { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text); padding-bottom: var(--sp-3); border-bottom: 1px solid var(--line); }
-  .thx__id { font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--accent-deep); padding: 2px 6px; border-radius: var(--r-full); background: var(--accent-soft); }
-  .thx__msg { display: flex; gap: 9px; }
-  .thx__av { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--c, #888); color: #fff; font-size: 12px; font-weight: 700; }
-  .thx__av--ai { background: linear-gradient(150deg, #9b7bff, #6d4bf5); }
-  .thx__av--ai svg { width: 14px; height: 14px; }
-  .thx__bub { min-width: 0; }
-  .thx__bub b { font-size: 12px; font-weight: 700; color: var(--text); }
-  .thx__bub p { margin-top: 2px; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
-
-  /* === Telegram === */
-  .tgx { padding: var(--sp-4); }
-  .tgx__bar { display: flex; align-items: center; gap: 8px; padding-bottom: var(--sp-3); border-bottom: 1px solid var(--line); }
-  .tgx__logo { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(160deg, #37aee2, #1e96c8); }
-  .tgx__logo svg { width: 15px; height: 15px; }
-  .tgx__bar b { font-size: 13px; font-weight: 700; color: var(--text); }
-  .tgx__handle { font-size: 11px; color: var(--dim); }
-  .tgx__msg { position: relative; margin-top: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: 4px 14px 14px 14px; background: var(--accent-soft); border: 1px solid var(--accent-line); }
-  .tgx__msg > b { font-size: 13px; font-weight: 700; color: var(--text); }
-  .tgx__list { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-  .tgx__list li { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
-  .tgx__ic { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; font-size: 9px; color: #fff; flex: none; }
-  .tgx__ic--ok { background: var(--profit); }
-  .tgx__ic--run { background: var(--warn); font-size: 7px; }
-  .tgx__ic--money { background: #12a97b; font-family: var(--font-mono); }
-  .tgx__time { position: absolute; right: 10px; bottom: 6px; font-size: 9px; color: var(--dim); }
+  .shot::before { content: ''; display: block; padding-top: var(--ar, 56%); }
 
   /* --- Оконная рамка (терминал/чек-лист) --- */
-  .mock {
-    border: 1px solid var(--line);
-    border-radius: var(--r);
-    background: var(--surface);
-    overflow: hidden;
-    box-shadow:
-      0 1px 2px rgba(11, 18, 32, 0.05),
-      0 16px 34px -18px rgba(11, 18, 32, 0.22);
-    margin-top: auto;
-  }
-  .mock__chrome {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-2);
-    height: 34px;
-    padding-inline: var(--sp-3);
-    border-bottom: 1px solid var(--line);
-    background: var(--surface-2);
-  }
+  .mock { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); overflow: hidden; box-shadow: 0 1px 2px rgba(11, 18, 32, 0.05), 0 18px 38px -18px rgba(11, 18, 32, 0.22); margin-top: auto; }
+  .mock__chrome { display: flex; align-items: center; gap: var(--sp-2); height: 34px; padding-inline: var(--sp-3); border-bottom: 1px solid var(--line); background: var(--surface-2); }
   .mock__dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
   .mock__dot--r { background: var(--danger); }
   .mock__dot--y { background: var(--warn); }
@@ -398,7 +237,6 @@ const examples = [
   .mock__body { padding: var(--sp-4); }
   .mock[data-theme='dark'] { --surface-2: var(--dark-bg); }
 
-  /* --- Терминал живого воркера --- */
   .term { display: flex; flex-direction: column; gap: var(--sp-4); }
   .term__log { display: flex; flex-direction: column; gap: 6px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; }
   .term__line { color: var(--muted); white-space: pre-wrap; word-break: break-word; }
@@ -419,7 +257,6 @@ const examples = [
   .term__status { color: var(--warn); display: inline-flex; align-items: center; gap: 5px; }
   .term__status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
 
-  /* --- Автопроверки --- */
   .checks { display: flex; flex-direction: column; gap: var(--sp-3); }
   .checks__head { display: flex; align-items: center; justify-content: space-between; }
   .checks__title { font-size: var(--fs-base); font-weight: 700; color: var(--text); }
@@ -433,7 +270,6 @@ const examples = [
   .checks__ready { font-size: var(--fs-sm); font-weight: 600; color: var(--signal); display: inline-flex; align-items: center; gap: 7px; }
   .checks__ready::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 8px var(--signal); }
 
-  /* --- Оживление (reduced-motion-safe) --- */
   @media (prefers-reduced-motion: no-preference) {
     .term__progress span::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent); transform: translateX(-100%); animation: term-shimmer 1.9s ease-in-out infinite; }
     @keyframes term-shimmer { 0% { transform: translateX(-100%); } 55%, 100% { transform: translateX(320%); } }
@@ -444,7 +280,6 @@ const examples = [
     @keyframes checks-pop { 0%, 82%, 100% { transform: scale(1); } 88% { transform: scale(1.22); } }
     .checks__ready::before { animation: ready-pulse 2s ease-in-out infinite; }
     @keyframes ready-pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--signal); } 50% { opacity: 0.6; box-shadow: 0 0 2px var(--signal); } }
-    .kbx__live { animation: ready-pulse 1.6s ease-in-out infinite; }
   }
 
   /* --- Примеры использования --- */
@@ -463,8 +298,6 @@ const examples = [
 </style>
 
 <script>
-  // «Живой» воркер-терминал: процент и стоимость ползут, прогресс догоняет, на 98% —
-  // новый прогон. Уважает prefers-reduced-motion.
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const bar = document.querySelector<HTMLElement>('.term__progress span');
     const cost = document.querySelector<HTMLElement>('.term__cost');
