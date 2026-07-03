@@ -20,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useProjects } from '@/presentation/hooks/useProjects';
+import { useSidebarCollapsed } from './sidebarCollapsedContext';
 import { avatarColor } from './projectIcons';
 
 // Notion-style крошки для страниц проекта: «Проекты ▾ · {проект} ▾ · {вид}».
@@ -140,9 +141,17 @@ export function ProjectBreadcrumbs({
   const viewsMenu = useHoverMenu();
   const taskMenu = useHoverMenu();
   const currentView = VIEWS.find((v) => v.key === view);
+  const collapsed = useSidebarCollapsed();
 
   return (
-    <nav className="flex min-w-0 items-center gap-0.5 text-sm" aria-label="Хлебные крошки">
+    <nav
+      className={cn(
+        'flex min-w-0 items-center gap-0.5 text-sm',
+        // Свёрнутая панель → уступаем место плавающему бургеру в углу.
+        collapsed && 'pl-10',
+      )}
+      aria-label="Хлебные крошки"
+    >
       {/* Сегмент «Проекты» — дропдаун со всеми проектами для быстрого перехода. */}
       <DropdownMenu open={projectsMenu.open} onOpenChange={projectsMenu.setOpen} modal={false}>
         <DropdownMenuTrigger

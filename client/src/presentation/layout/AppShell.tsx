@@ -38,6 +38,7 @@ import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt
 import { HelpWidget } from '@/presentation/components/help/HelpWidget';
 import { useSidebarWidth } from '@/presentation/hooks/useSidebarWidth';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
+import { SidebarCollapsedContext } from './sidebarCollapsedContext';
 import { Sidebar } from './Sidebar';
 
 const COLLAPSE_KEY = 'pf_sidebar_collapsed';
@@ -158,6 +159,7 @@ export function AppShell(): React.ReactElement {
   // ProjectsProvider — внутри ProtectedRoute (этот компонент рендерится только для authenticated),
   // поэтому не делает 401-запросов когда пользователь не залогинен.
   return (
+    <SidebarCollapsedContext.Provider value={isDesktop && collapsed}>
     <WorkspacesProvider>
     <ProjectsProvider>
     <UsageProvider>
@@ -216,7 +218,7 @@ export function AppShell(): React.ReactElement {
                           toggleCollapse();
                         }}
                         aria-label="Показать боковую панель"
-                        className="absolute left-2 top-2.5 z-40 grid size-8 place-items-center rounded-md bg-background/70 text-muted-foreground backdrop-blur-sm transition-colors hover:bg-hover hover:text-foreground"
+                        className="absolute left-2 top-1.5 z-40 grid size-8 place-items-center rounded-md bg-background/70 text-muted-foreground backdrop-blur-sm transition-colors hover:bg-hover hover:text-foreground"
                       >
                         <Menu className="size-4" />
                       </button>
@@ -308,6 +310,7 @@ export function AppShell(): React.ReactElement {
     </UsageProvider>
     </ProjectsProvider>
     </WorkspacesProvider>
+    </SidebarCollapsedContext.Provider>
   );
 }
 
