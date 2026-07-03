@@ -820,6 +820,7 @@ const attachmentStorage = new FileSystemAttachmentStorage(uploadsDir);
 console.log(`[projectsflow] attachments dir: ${uploadsDir}`);
 
 const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024; // 100 MB. Любой тип файла (валидация = размер).
+const MAX_COVER_BYTES = 20 * 1024 * 1024; // 20 MB. Обложка проекта — только картинки (jpg/png/webp/gif).
 
 // --- file-sync (PF Desktop Companion, миграция db/044) ---
 const syncBlobsDir = resolvePath(process.env['SYNC_BLOBS_DIR'] ?? 'sync-blobs');
@@ -1403,6 +1404,8 @@ const { app, devProxyUpgrade } = createApp({
     notifyProjectChanged,
     setActiveWorkspaceForProject,
     members: projectMemberRepo,
+    coverStorage: attachmentStorage,
+    maxCoverBytes: MAX_COVER_BYTES,
   },
   workspaces: {
     service: workspaceService,

@@ -36,7 +36,11 @@ import { ProjectNotFoundError } from '../../domain/project/errors.js';
 import type { Project } from '../../domain/project/Project.js';
 import type { ProjectInvite } from '../../domain/project/ProjectInvite.js';
 import type { GithubCommit } from '../../domain/github/GithubConnection.js';
+import multer from 'multer';
+import { randomUUID } from 'node:crypto';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { requireProjectAccess } from '../../application/project/projectAccess.js';
+import type { AttachmentStorage } from '../../application/task/AttachmentStorage.js';
 import {
   createInviteSchema,
   createProjectSchema,
@@ -96,6 +100,10 @@ type Deps = {
   // Email-оповещения команде (изменения состава) + чтение/запись пер-участниковых настроек.
   readonly notifier: ProjectNotificationService;
   readonly members: ProjectMemberRepository;
+  // Хранилище обложек проекта (то же локальное файловое, что и у аттачей задач).
+  readonly coverStorage: AttachmentStorage;
+  // Лимит размера файла обложки в байтах.
+  readonly maxCoverBytes: number;
 };
 
 // Project всегда содержит role (для текущего юзера). На list-эндпоинте role приходит
@@ -326,6 +334,90 @@ export function projectsRouter(deps: Deps): Router {
       });
       deps.notifyProjectChanged(id);
       res.json({ project: toDto(project) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // === Обложка проекта (Notion-style cover) ===
+  // Загрузка своего файла: сохраняем в то же локальное хранилище, что и аттачи задач, и пишем
+  // в project.coverUrl ссылку `/api/projects/:id/cover/<uuid>.<ext>` (отдаётся GET-ом ниже, с
+  // проверкой доступа к проекту). Градиенты и внешние ссылки на картинку идут обычным PATCH.
+  const COVER_EXT: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/avif': 'avif',
+  };
+  const COVER_MIME: Record<string, string> = {
+    jpg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    gif: 'image/gif',
+    avif: 'image/avif',
+  };
+  const coverUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: deps.maxCoverBytes },
+  });
+
+  router.post('/:id/cover', coverUpload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const f = req.file;
+      if (!f) {
+        res.status(400).json({ error: 'Файл не передан' });
+        return;
+      }
+      const ext = COVER_EXT[f.mimetype];
+      if (!ext) {
+        res.status(400).json({ error: 'Поддерживаются только jpg / png / webp / gif' });
+        return;
+      }
+      await requireProjectAccess(
+        { projects: deps.projects, members: deps.members },
+        id,
+        req.user!.id,
+        'update_project',
+      );
+      const file = `${randomUUID()}.${ext}`;
+      await deps.coverStorage.put({ storageKey: `covers/${id}/${file}`, data: f.buffer, mimeType: f.mimetype });
+      const updated = await deps.projects.update(id, { coverUrl: `/api/projects/${id}/cover/${file}` });
+      if (!updated) throw new ProjectNotFoundError();
+      deps.notifyProjectChanged(id);
+      res.json({ project: toDto(updated) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get('/:id/cover/:file', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      const file = req.params.file;
+      // Только `<uuid>.<ext>` — защита от path-traversal и мусорных ключей.
+      if (
+        typeof id !== 'string' ||
+        typeof file !== 'string' ||
+        !/^[a-f0-9-]+\.(jpg|png|webp|gif|avif)$/i.test(file)
+      ) {
+        throw new ProjectNotFoundError();
+      }
+      await requireProjectAccess(
+        { projects: deps.projects, members: deps.members },
+        id,
+        req.user!.id,
+        'read_project',
+      );
+      const ext = file.split('.').pop()!.toLowerCase();
+      const stored = await deps.coverStorage.read(`covers/${id}/${file}`);
+      if (!stored) throw new ProjectNotFoundError();
+      res.setHeader('Content-Type', COVER_MIME[ext] ?? 'application/octet-stream');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+      res.send(stored.data);
     } catch (e) {
       next(e);
     }

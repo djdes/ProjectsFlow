@@ -39,5 +39,11 @@ export type Project = {
   // списка `GET /api/projects`. Дефолты применяются на маппинге, чтобы тип оставался строгим.
   readonly isFavorite: boolean;
   readonly favoriteSortOrder: number;
+  // Notion-style шапка проекта: описание под названием + обложка. coverUrl —
+  // `gradient:<id>` (градиент из палитры coverGallery) ИЛИ URL картинки (внешняя ссылка /
+  // загруженный файл `/api/projects/:id/cover/...`). coverPosition — % по вертикали (0–100).
+  readonly description: string | null;
+  readonly coverUrl: string | null;
+  readonly coverPosition: number;
   readonly createdAt: Date;
 };

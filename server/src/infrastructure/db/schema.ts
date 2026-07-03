@@ -242,6 +242,13 @@ export const projects = mysqlTable(
     // Общая (на весь проект) кастомизация канбан-колонок: цвет / переименованный заголовок /
     // флаг скрытия. Карта status→{color,label,hidden}. NULL = встроенные дефолты. См. db/057.
     kanbanSettings: json('kanban_settings').$type<KanbanBoardSettings | null>(),
+    // Notion-style шапка проекта (db/091): описание под названием + обложка.
+    // description — свободный текст. coverUrl — `gradient:<id>` (градиент из клиентской
+    // палитры) ИЛИ URL картинки (внешняя ссылка / загруженный файл `/api/projects/:id/cover/...`).
+    // coverPosition — вертикальное позиционирование фона в % (0–100), для «переместить».
+    description: text('description'),
+    coverUrl: varchar('cover_url', { length: 500 }),
+    coverPosition: int('cover_position').notNull().default(50),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },

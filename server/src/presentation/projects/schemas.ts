@@ -44,6 +44,11 @@ export const updateProjectSchema = z
     kbRepoFullName: kbRepoFullNameOrNullSchema.optional(),
     // Статус проекта: 'archived' прячет его в секцию «Архивные», 'active' возвращает.
     status: z.enum(['active', 'paused', 'archived']).optional(),
+    // Notion-style шапка (db/091): описание (свободный текст, лимит 2000 симв.),
+    // обложка (`gradient:<id>` или URL) и её вертикальная позиция (%).
+    description: z.string().max(2000).nullable().optional(),
+    coverUrl: z.string().trim().max(500).nullable().optional(),
+    coverPosition: z.number().int().min(0).max(100).optional(),
   })
   .refine((obj) => Object.keys(obj).length > 0, { message: 'Нечего обновлять' });
 

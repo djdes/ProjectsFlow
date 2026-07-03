@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Activity, BookOpen, Bot, Settings, Share2, Wallet } from 'lucide-react';
+import { Activity, BookOpen, Bot, Image as ImageIcon, Settings, Share2, Text, Wallet } from 'lucide-react';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,9 +9,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { toast } from '@/components/ui/sonner';
+import { cn } from '@/lib/utils';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useContainer } from '@/infrastructure/di/container';
+import { useUpdateProject } from '@/presentation/hooks/useUpdateProject';
 import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
 import { AutomationDialog } from '@/presentation/components/project/AutomationDialog';
 import { EditableProjectTitle } from '@/presentation/components/project/EditableProjectTitle';
@@ -19,6 +22,9 @@ import { ProjectIconPicker } from '@/presentation/components/project/ProjectIcon
 import { MemberAvatarStack } from '@/presentation/components/project/MemberAvatarStack';
 import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
 import { ProjectActivityButton } from '@/presentation/components/project/ProjectActivityButton';
+import { ProjectCover } from '@/presentation/components/project/ProjectCover';
+import { ProjectDescription } from '@/presentation/components/project/ProjectDescription';
+import { randomCover } from '@/presentation/components/project/coverGallery';
 
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -35,6 +41,9 @@ export function TasksPage(): React.ReactElement {
   const [automationOpen, setAutomationOpen] = useState(false);
   // Участники для аватар-стека в шапке (только совместные проекты).
   const [members, setMembers] = useState<ProjectMember[]>([]);
+  // #3: описание можно скрыть/показать (Notion-style toggle над заголовком).
+  const [descriptionHidden, setDescriptionHidden] = useState(false);
+  const { submit: submitProject } = useUpdateProject();
 
   // Заголовок вкладки браузера = имя проекта (помогает ориентироваться в табах).
   useEffect(() => {
@@ -43,6 +52,11 @@ export function TasksPage(): React.ReactElement {
       document.title = 'ProjectsFlow';
     };
   }, [data?.name]);
+
+  // Сброс «описание скрыто» при переходе на другой проект (страница не перемонтируется).
+  useEffect(() => {
+    setDescriptionHidden(false);
+  }, [projectId]);
 
   useEffect(() => {
     if (!projectId || !data || (data.memberCount ?? 0) <= 1) {
@@ -107,38 +121,30 @@ export function TasksPage(): React.ReactElement {
     );
   }
 
+  const canEdit = data.role === 'owner' || data.role === 'editor';
+  const addRandomCover = (): void => {
+    void submitProject(data.id, { coverUrl: randomCover() }).catch((e) =>
+      toast.error(`Не удалось добавить обложку: ${(e as Error).message}`),
+    );
+  };
+
   // Notion top-alignment: строка крошек (min-h-11, по центру, прижата к верху) встаёт на
   // одну горизонталь со свитчером пространства в сайдбаре; тело — комфортные отступы ниже.
   return (
     <div className="flex h-full flex-col">
       {/* Хлебные крошки прячем на мобиле: имя проекта дублируется в заголовке ниже,
           навигация — в нижнем таб-баре/drawer. Это возвращает вертикальное место канбану. */}
-      <div className="hidden h-11 items-center px-2.5 sm:flex">
+      <div className="hidden h-11 items-center justify-between gap-2 px-2.5 sm:flex">
         <ProjectBreadcrumbs
           projectId={data.id}
           projectName={data.name}
           projectIcon={data.icon}
           view="board"
         />
-      </div>
-      {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая) — ПОД крошками.
-          shiftForOverlay: контент центрируется в видимой области, когда открыто окно задачи. */}
-      <ProjectPublishedBanner projectId={data.id} shiftForOverlay />
-
-      {/* Тело страницы: комфортные отступы ПОД строкой крошек. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-3 pb-3 pt-2 sm:gap-4 sm:px-5 sm:pb-6 sm:pt-1">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Notion-style: иконка проекта + имя как заголовок страницы (клик — переименовать).
-            Генерик-«Задачи» убран — контекст и так в хлебных крошках. */}
-        <div className="flex min-w-0 items-center gap-1.5">
-          <ProjectIconPicker projectId={data.id} icon={data.icon} />
-          <EditableProjectTitle projectId={data.id} name={data.name} />
-        </div>
-        {/* Действия — тихие иконки с тултипами (Notion top-right style). Тоггл
-            мультизадачного воркера переехал в диалог «Автоматизация». */}
+        {/* #1: действия проекта — в строке крошек, по правому краю (Notion top-right). */}
         <TooltipProvider delayDuration={300}>
-          <div className="flex items-center gap-0.5">
-            {/* Активность/аналитика проекта — слева от участников. */}
+          <div className="flex shrink-0 items-center gap-0.5">
+            {/* Активность/аналитика проекта. */}
             <ProjectActivityButton projectId={data.id} />
             {/* Аватар-стек участников: наведение/клик → панель участников с зумом аватара. */}
             {members.length > 1 && (
@@ -148,7 +154,7 @@ export function TasksPage(): React.ReactElement {
                 canInvite={data.role === 'owner' || data.role === 'editor'}
               />
             )}
-            {/* «Поделиться» справа от участников: иконка + подпись (пока заглушка). */}
+            {/* «Поделиться»: иконка + подпись (пока заглушка). */}
             <Button
               variant="ghost"
               size="sm"
@@ -201,6 +207,54 @@ export function TasksPage(): React.ReactElement {
           </div>
         </TooltipProvider>
       </div>
+      {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая) — ПОД крошками.
+          shiftForOverlay: контент центрируется в видимой области, когда открыто окно задачи. */}
+      <ProjectPublishedBanner projectId={data.id} shiftForOverlay />
+
+      {/* #3: обложка проекта — во всю ширину, над заголовком (если задана). */}
+      {data.coverUrl && (
+        <ProjectCover
+          projectId={data.id}
+          coverUrl={data.coverUrl}
+          coverPosition={data.coverPosition}
+          canEdit={canEdit}
+        />
+      )}
+
+      {/* Тело страницы: крупный заголовок с большими отступами (Notion-style). */}
+      <div className="flex min-h-0 flex-1 flex-col px-4 pb-3 sm:px-14 sm:pb-6">
+      {/* #2: заголовок проекта — крупный, с большим отступом сверху и по бокам (как в Notion).
+          При наведении на «шапку» — панель: добавить обложку / скрыть-показать описание (#3). */}
+      <div
+        className={cn(
+          'group/head shrink-0 pb-3 sm:pb-4',
+          data.coverUrl ? 'pt-4 sm:pt-5' : 'pt-8 sm:pt-12',
+        )}
+      >
+        {canEdit && (
+          <div className="mb-1.5 flex h-7 items-center gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/head:opacity-100">
+            {!data.coverUrl && (
+              <HeadToolButton onClick={addRandomCover}>
+                <ImageIcon className="size-3.5" />
+                Добавить обложку
+              </HeadToolButton>
+            )}
+            <HeadToolButton onClick={() => setDescriptionHidden((h) => !h)}>
+              <Text className="size-3.5" />
+              {descriptionHidden ? 'Показать описание' : 'Скрыть описание'}
+            </HeadToolButton>
+          </div>
+        )}
+        <div className="flex min-w-0 items-center gap-2">
+          <ProjectIconPicker projectId={data.id} icon={data.icon} big />
+          <EditableProjectTitle projectId={data.id} name={data.name} />
+        </div>
+        {!descriptionHidden && (
+          <div className="mt-2 pl-14 sm:mt-2.5">
+            <ProjectDescription projectId={data.id} description={data.description} canEdit={canEdit} />
+          </div>
+        )}
+      </div>
 
       {/* key={data.id} — при переключении проекта доска полностью пересоздаётся. Иначе
           состояние inline-композера (composingStatus + открытый композер) переживало бы смену
@@ -223,6 +277,22 @@ export function TasksPage(): React.ReactElement {
       />
       </div>
     </div>
+  );
+}
+
+// Мелкая ghost-кнопка панели над заголовком (добавить обложку / скрыть описание).
+function HeadToolButton({
+  children,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>): React.ReactElement {
+  return (
+    <button
+      type="button"
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      {...props}
+    >
+      {children}
+    </button>
   );
 }
 

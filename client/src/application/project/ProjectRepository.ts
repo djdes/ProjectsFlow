@@ -81,6 +81,11 @@ export type UpdateProjectInput = {
   readonly kbRepoFullName?: string | null;
   // Статус: 'archived' прячет проект в секцию «Архивные», 'active' возвращает.
   readonly status?: ProjectStatus;
+  // Notion-style шапка: описание, обложка (`gradient:<id>` или URL картинки; null = убрать),
+  // позиция обложки по вертикали в % (0–100).
+  readonly description?: string | null;
+  readonly coverUrl?: string | null;
+  readonly coverPosition?: number;
 };
 
 export type CreateInviteInput = {
@@ -102,6 +107,9 @@ export interface ProjectRepository {
   getInbox(): Promise<Project>;
   create(input: CreateProjectInput): Promise<Project>;
   update(id: string, patch: UpdateProjectInput): Promise<Project>;
+  // Загрузка своего файла-обложки (multipart). Сервер сохраняет и возвращает проект с
+  // проставленным coverUrl (`/api/projects/:id/cover/...`). Градиент/ссылку ставим через update.
+  uploadCover(projectId: string, file: File): Promise<Project>;
   // Безвозвратное удаление проекта (owner-only, инбокс запрещён). Каскадно чистит
   // все child-данные (задачи, KB, секреты, финансы и т.д.) — подробности
   // на серверном DeleteProject use-case.

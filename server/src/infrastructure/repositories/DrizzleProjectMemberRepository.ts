@@ -58,6 +58,9 @@ function toProject(row: ProjectRow): Project {
     financeVisibility: row.financeVisibility,
     dispatcherUserId: row.dispatcherUserId ?? null,
     multiTaskWorker: row.multiTaskWorker,
+    description: row.description ?? null,
+    coverUrl: row.coverUrl ?? null,
+    coverPosition: row.coverPosition,
     createdAt: row.createdAt,
   };
 }

@@ -72,7 +72,7 @@ export function EditableProjectTitle({ projectId, name }: Props): React.ReactEle
           onBlur={() => void save()}
           maxLength={MAX_LEN}
           disabled={saving}
-          className="flex-1 rounded-md border bg-background px-3 py-1.5 text-xl font-semibold tracking-tight outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex-1 rounded-md border bg-background px-3 py-1 text-3xl font-bold tracking-tight outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:text-4xl"
           aria-label="Название проекта"
         />
         <button

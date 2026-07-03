@@ -30,5 +30,10 @@ export type Project = {
   // через GetOrCreateInbox. Из обычных списков (sidebar, HomePage) клиент должен
   // отфильтровать inbox-проекты — у них отдельная вкладка.
   readonly isInbox: boolean;
+  // Notion-style шапка (db/091): описание под названием + обложка. coverUrl —
+  // `gradient:<id>` (градиент из палитры) ИЛИ URL картинки. coverPosition — % по вертикали.
+  readonly description: string | null;
+  readonly coverUrl: string | null;
+  readonly coverPosition: number;
   readonly createdAt: Date;
 };

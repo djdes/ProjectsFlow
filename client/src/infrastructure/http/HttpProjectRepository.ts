@@ -53,6 +53,10 @@ type ProjectDto = {
   // Только на list-эндпоинте; на get/create/update сервер не отдаёт. Дефолтим false/0.
   isFavorite?: boolean;
   favoriteSortOrder?: number;
+  // Notion-style шапка: описание + обложка (`gradient:<id>` или URL) + позиция (%).
+  description?: string | null;
+  coverUrl?: string | null;
+  coverPosition?: number;
   createdAt: string;
 };
 
@@ -76,6 +80,9 @@ function fromDto(dto: ProjectDto): Project {
     multiTaskWorker: dto.multiTaskWorker ?? false,
     isFavorite: dto.isFavorite ?? false,
     favoriteSortOrder: dto.favoriteSortOrder ?? 0,
+    description: dto.description ?? null,
+    coverUrl: dto.coverUrl ?? null,
+    coverPosition: dto.coverPosition ?? 50,
     createdAt: new Date(dto.createdAt),
   };
 }
@@ -181,6 +188,34 @@ export class HttpProjectRepository implements ProjectRepository {
       }
       throw err;
     }
+  }
+
+  async uploadCover(projectId: string, file: File): Promise<Project> {
+    // multipart/form-data через XHR (httpClient рассчитан под JSON). Content-Type с boundary
+    // проставит браузер; withCredentials — для cookie-сессии.
+    return new Promise<Project>((resolve, reject) => {
+      const form = new FormData();
+      form.append('file', file);
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `/api/projects/${projectId}/cover`);
+      xhr.withCredentials = true;
+      xhr.onload = (): void => {
+        type Resp = { project?: ProjectDto; error?: string; message?: string };
+        let data: Resp | null;
+        try {
+          data = xhr.responseText ? (JSON.parse(xhr.responseText) as Resp) : null;
+        } catch {
+          data = null;
+        }
+        if (xhr.status < 200 || xhr.status >= 300 || !data?.project) {
+          reject(new Error(data?.message ?? data?.error ?? `Не удалось загрузить обложку (HTTP ${xhr.status})`));
+          return;
+        }
+        resolve(fromDto(data.project));
+      };
+      xhr.onerror = (): void => reject(new Error('Сетевая ошибка при загрузке обложки'));
+      xhr.send(form);
+    });
   }
 
   async delete(id: string): Promise<void> {

@@ -55,6 +55,9 @@ export class MockProjectRepository implements ProjectRepository {
       multiTaskWorker: false,
       isFavorite: false,
       favoriteSortOrder: 0,
+      description: null,
+      coverUrl: null,
+      coverPosition: 50,
       createdAt: new Date(),
     };
     this.projects.unshift(inbox);
@@ -136,6 +139,9 @@ export class MockProjectRepository implements ProjectRepository {
       multiTaskWorker: false,
       isFavorite: false,
       favoriteSortOrder: 0,
+      description: null,
+      coverUrl: null,
+      coverPosition: 50,
       createdAt: new Date(),
     };
     // Новые проекты — наверху списка: user видит результат там, где он его ждёт
@@ -252,5 +258,8 @@ export class MockProjectRepository implements ProjectRepository {
   }
   getProjectActivity(): Promise<never> {
     return Promise.reject(new Error('Mock.getProjectActivity: not implemented'));
+  }
+  uploadCover(): Promise<never> {
+    return Promise.reject(new Error('Mock.uploadCover: not implemented'));
   }
 }

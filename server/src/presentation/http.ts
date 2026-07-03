@@ -72,6 +72,7 @@ import type { WriteKbDocument } from '../application/kb/WriteKbDocument.js';
 import type { DeleteKbDocument } from '../application/kb/DeleteKbDocument.js';
 import type { BulkCreateCredential } from '../application/kb/BulkCreateCredential.js';
 import type { ListTasks } from '../application/task/ListTasks.js';
+import type { AttachmentStorage } from '../application/task/AttachmentStorage.js';
 import type { ExportTasksDigest } from '../application/task/ExportTasksDigest.js';
 import type { GetDigestSettings } from '../application/digest/GetDigestSettings.js';
 import type { SaveDigestSettings } from '../application/digest/SaveDigestSettings.js';
@@ -298,6 +299,9 @@ type AppDeps = {
     // Deep-link авто-switch: при открытии проекта делает его пространство активным.
     readonly setActiveWorkspaceForProject: (userId: string, projectId: string) => Promise<void>;
     readonly members: ProjectMemberRepository;
+    // Обложка проекта: то же локальное файловое хранилище, что и у аттачей задач + лимит.
+    readonly coverStorage: AttachmentStorage;
+    readonly maxCoverBytes: number;
   };
   readonly workspaces: {
     readonly service: WorkspaceService;

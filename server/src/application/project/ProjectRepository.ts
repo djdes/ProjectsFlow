@@ -22,6 +22,10 @@ export type UpdateProjectInput = {
   readonly dispatcherUserId?: string | null;
   readonly multiTaskWorker?: boolean;
   readonly status?: 'active' | 'paused' | 'archived';
+  // Notion-style шапка (db/091): описание + обложка (см. domain Project).
+  readonly description?: string | null;
+  readonly coverUrl?: string | null;
+  readonly coverPosition?: number;
 };
 
 // Multi-tenancy: проверка доступа НЕ внутри ProjectRepository — она в use-case'ах через

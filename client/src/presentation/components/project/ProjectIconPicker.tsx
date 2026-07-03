@@ -24,12 +24,14 @@ export const EMOJI = [
 type Props = {
   projectId: string;
   icon: string | null;
+  // Крупный вариант (для большого заголовка проекта в шапке страницы, Notion-style).
+  big?: boolean;
 };
 
 // Иконка проекта рядом с заголовком: эмодзи (или дефолтная папка) → клик
 // открывает поповер с палитрой. Выбор PATCH'ится сразу; список проектов
 // обновится через useUpdateProject (он дёргает refresh контекста).
-export function ProjectIconPicker({ projectId, icon }: Props): React.ReactElement {
+export function ProjectIconPicker({ projectId, icon, big = false }: Props): React.ReactElement {
   const { submit, saving } = useUpdateProject();
   const [open, setOpen] = useState(false);
 
@@ -51,14 +53,17 @@ export function ProjectIconPicker({ projectId, icon }: Props): React.ReactElemen
           disabled={saving}
           aria-label="Сменить иконку проекта"
           title="Иконка проекта"
-          className="grid size-9 shrink-0 place-items-center rounded-md text-2xl leading-none transition-colors hover:bg-accent disabled:opacity-50"
+          className={cn(
+            'grid shrink-0 place-items-center rounded-md leading-none transition-colors hover:bg-accent disabled:opacity-50',
+            big ? 'size-12 text-[2.5rem]' : 'size-9 text-2xl',
+          )}
         >
           {saving ? (
             <Loader2 className="size-4 animate-spin text-muted-foreground" />
           ) : icon ? (
             <span aria-hidden>{icon}</span>
           ) : (
-            <FolderIcon className="size-5 text-muted-foreground" />
+            <FolderIcon className={cn(big ? 'size-8' : 'size-5', 'text-muted-foreground')} />
           )}
         </button>
       </DropdownMenuTrigger>
