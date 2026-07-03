@@ -146,7 +146,7 @@ export function ProjectCover({ projectId, coverUrl, coverPosition, canEdit }: Pr
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         className={cn(
-          'h-40 w-full bg-muted sm:h-52',
+          'h-48 w-full bg-muted sm:h-64',
           repositioning && !isGradient && 'cursor-grab touch-none active:cursor-grabbing',
         )}
       />

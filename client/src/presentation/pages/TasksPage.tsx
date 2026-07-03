@@ -234,7 +234,7 @@ export function TasksPage(): React.ReactElement {
       <div
         className={cn(
           'group/head shrink-0 pb-4 sm:pb-6',
-          data.coverUrl ? 'pt-8 sm:pt-12' : 'pt-10 sm:pt-16',
+          data.coverUrl ? 'pt-4 sm:pt-6' : 'pt-10 sm:pt-16',
         )}
       >
         {canEdit && (

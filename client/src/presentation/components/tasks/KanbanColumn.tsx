@@ -324,18 +324,18 @@ export function KanbanColumn({
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-6"
+                className="size-8"
                 onClick={() => onCreate(status)}
                 aria-label="Добавить задачу"
               >
-                <Plus className="size-4" />
+                <Plus className="size-5" />
               </Button>
             </div>
           </>
         )}
       </div>
 
-      <div className="relative flex flex-col">
+      <div className={cn('relative flex flex-col', lockOffer && 'min-h-[22rem]')}>
       <div
         ref={setNodeRef}
         className={cn(
