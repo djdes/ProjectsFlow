@@ -3,7 +3,8 @@ import type { ActivityEventItem } from '@/domain/activity/ActivityFeedItem';
 // Аналитика просмотров проекта (вкладка «Аналитика» окна активности).
 export type ProjectViewsPerDay = {
   readonly date: string; // 'YYYY-MM-DD'
-  readonly count: number;
+  readonly count: number; // всего просмотров за день
+  readonly unique: number; // уникальных зрителей за день
 };
 
 export type ProjectViewer = {

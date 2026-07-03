@@ -36,6 +36,7 @@ export class DrizzleProjectViewRepository implements ProjectViewRepository {
       .select({
         date: sql<string>`DATE(${projectViews.viewedAt})`,
         count: sql<number>`COUNT(*)`,
+        unique: sql<number>`COUNT(DISTINCT ${projectViews.userId})`,
       })
       .from(projectViews)
       .where(and(eq(projectViews.projectId, projectId), gte(projectViews.viewedAt, windowCutoff)))
@@ -57,7 +58,11 @@ export class DrizzleProjectViewRepository implements ProjectViewRepository {
       .groupBy(projectViews.userId, users.displayName, users.avatarUrl)
       .orderBy(desc(sql`MAX(${projectViews.viewedAt})`));
 
-    const perDay = perDayRows.map((r) => ({ date: String(r.date), count: Number(r.count) }));
+    const perDay = perDayRows.map((r) => ({
+      date: String(r.date),
+      count: Number(r.count),
+      unique: Number(r.unique),
+    }));
     const totalViews = perDay.reduce((s, r) => s + r.count, 0);
 
     return {

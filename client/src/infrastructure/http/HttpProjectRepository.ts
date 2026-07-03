@@ -356,7 +356,7 @@ export class HttpProjectRepository implements ProjectRepository {
       analytics: {
         totalViews: number;
         windowDays: number;
-        perDay: { date: string; count: number }[];
+        perDay: { date: string; count: number; unique: number }[];
         viewers: {
           userId: string;
           displayName: string;

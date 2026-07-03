@@ -12,7 +12,7 @@ import {
 import { useContainer } from '@/infrastructure/di/container';
 import { relativeTime } from '@/lib/relativeTime';
 import { ActivityItem } from '@/presentation/activity/ActivityItem';
-import { TrendChart } from '@/presentation/components/monitoring/TrendChart';
+import { ProjectViewsChart } from './ProjectViewsChart';
 import type { ActivityEventItem } from '@/domain/activity/ActivityFeedItem';
 import type { ProjectAnalytics, ProjectActivitySummary } from '@/domain/project/ProjectAnalytics';
 
@@ -23,22 +23,10 @@ type Props = {
 };
 
 const DEFAULT_WINDOW_DAYS = 28;
-const WINDOW_OPTIONS = [7, 28, 90] as const;
-const windowLabel = (days: number): string => `За ${days} дней`;
+// 3650 = «Всё время» (график ограничит ленту годом). Остальные — окна в днях.
+const WINDOW_OPTIONS = [7, 28, 90, 3650] as const;
+const windowLabel = (days: number): string => (days >= 365 ? 'Всё время' : `За ${days} дней`);
 const initial = (name: string | null): string => (name?.trim()[0] ?? '?').toUpperCase();
-
-// Массив из `days` чисел (просмотры по дням, старые → новые), нули для пропущенных дней.
-function toDailySeries(perDay: { date: string; count: number }[], days: number): number[] {
-  const byDate = new Map(perDay.map((p) => [p.date, p.count]));
-  const out: number[] = [];
-  const today = new Date();
-  for (let i = days - 1; i >= 0; i -= 1) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    out.push(byDate.get(d.toISOString().slice(0, 10)) ?? 0);
-  }
-  return out;
-}
 
 // Окно активности проекта: выезжает справа (как окно задачи). Вкладки «Активность» (лента
 // событий) и «Аналитика» (просмотры + зрители + редакторы — как в Notion). Синей плашки
@@ -177,10 +165,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                    <TrendChart
-                      label={windowLabel(windowDays)}
-                      values={toDailySeries(analytics.perDay, windowDays)}
-                    />
+                    <ProjectViewsChart perDay={analytics.perDay} windowDays={windowDays} />
                   </section>
 
                   {/* Зрители + карточка приватности истории просмотров. */}

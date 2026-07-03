@@ -3,7 +3,8 @@
 // Число просмотров за конкретную дату (МSK-независимо, по UTC-дате БД — для v1 достаточно).
 export type ProjectViewsPerDay = {
   readonly date: string; // 'YYYY-MM-DD'
-  readonly count: number;
+  readonly count: number; // всего просмотров за день
+  readonly unique: number; // уникальных зрителей за день (COUNT DISTINCT user)
 };
 
 // Зритель проекта: кто заходил, сколько раз и когда в последний раз.
