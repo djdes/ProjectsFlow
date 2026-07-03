@@ -131,7 +131,9 @@ export function TasksPage(): React.ReactElement {
   // Notion top-alignment: строка крошек (min-h-11, по центру, прижата к верху) встаёт на
   // одну горизонталь со свитчером пространства в сайдбаре; тело — комфортные отступы ниже.
   return (
-    <div className="flex h-full flex-col">
+    // min-h-full (не h-full): страница растёт по контенту, вертикально скроллит её родительский
+    // <main overflow-y-auto> целиком (Notion single-scroll — доска не скроллится отдельно).
+    <div className="flex min-h-full flex-col">
       {/* Хлебные крошки прячем на мобиле: имя проекта дублируется в заголовке ниже,
           навигация — в нижнем таб-баре/drawer. Это возвращает вертикальное место канбану. */}
       <div className="sticky top-0 z-20 hidden h-11 items-center justify-between gap-2 bg-background/85 px-2.5 backdrop-blur-sm sm:flex">
@@ -224,14 +226,15 @@ export function TasksPage(): React.ReactElement {
         />
       )}
 
-      {/* Тело страницы: крупный заголовок с большими отступами по краям (Notion-style). */}
-      <div className="flex min-h-0 flex-1 flex-col px-5 pb-4 sm:px-16 sm:pb-8 lg:px-24">
+      {/* Тело страницы: крупный заголовок с большими отступами по краям (Notion-style).
+          flex-1 без min-h-0 — тело заполняет экран при коротком контенте и растёт при длинном. */}
+      <div className="flex flex-1 flex-col px-6 pb-10 sm:px-14 sm:pb-12 lg:px-24">
       {/* #2: заголовок проекта — крупный, с большим отступом сверху и по бокам (как в Notion).
           При наведении на «шапку» — панель: добавить обложку / скрыть-показать описание (#3). */}
       <div
         className={cn(
           'group/head shrink-0 pb-4 sm:pb-6',
-          data.coverUrl ? 'pt-5 sm:pt-8' : 'pt-10 sm:pt-16',
+          data.coverUrl ? 'pt-8 sm:pt-12' : 'pt-10 sm:pt-16',
         )}
       >
         {canEdit && (
@@ -255,7 +258,9 @@ export function TasksPage(): React.ReactElement {
         </div>
         {!descriptionHidden && (
           // #1: описание выравнено строго по левому краю — под иконку проекта (без pl-отступа).
-          <div className="mt-2.5 sm:mt-3">
+          // #2: max-w — правый край описания заканчивается «чуть дальше центра» (как в Notion),
+          // а не тянется во всю ширину. Канбан ниже при этом остаётся полноширинным.
+          <div className="mt-2.5 max-w-3xl sm:mt-3">
             <ProjectDescription projectId={data.id} description={data.description} canEdit={canEdit} />
           </div>
         )}

@@ -755,9 +755,9 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   );
 
   return (
-    // Доска занимает оставшуюся высоту экрана (родитель страницы — flex h-full flex-col),
-    // колонки скроллятся внутри себя (Todoist-стиль). pb на ряду — резерв под floating-композер.
-    <div className="flex min-h-0 flex-1 flex-col">
+    // Single-scroll (Notion): доска НЕ ограничена высотой экрана и НЕ скроллится внутри себя —
+    // растёт по контенту, а скроллится вся страница (родительский <main overflow-y-auto>).
+    <div className="flex flex-col">
       {confettiKey > 0 && <ConfettiBurst key={confettiKey} onDone={() => setConfettiKey(0)} />}
 
       {/* Тихий ряд фильтров: поиск по проекту + приоритет + срок (+ делегат в совместных). */}
@@ -866,8 +866,10 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
       >
         {/* На мобиле колонки занимают почти всю ширину и «прилипают» при свайпе
             (snap), на десктопе — обычный горизонтальный ряд. Drag между колонками
-            работает в обоих режимах: все колонки в DOM, просто проскроллены. */}
-        <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto pb-20 sm:snap-none sm:pb-28">
+            работает в обоих режимах: все колонки в DOM, просто проскроллены.
+            items-start — каждая колонка своей высоты по контенту (не тянется до самой длинной);
+            высота ряда = самой длинной колонки, вертикально скроллит страница целиком. */}
+        <div className="flex items-start snap-x snap-mandatory gap-3 overflow-x-auto pb-20 sm:snap-none sm:pb-28">
           {shownStatuses.map((status) => {
             const perColumn = settings?.[status];
             const color = resolveColumnColor(perColumn, defaults?.[status], status);

@@ -1,18 +1,14 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useUpdateProject } from '@/presentation/hooks/useUpdateProject';
 import { defaultProjectIcon as FolderIcon } from '@/presentation/layout/projectIcons';
+import { EMOJI_CATEGORIES } from './emojiData';
 
-// Курируемая палитра (Notion-style): достаточно для индивидуальности без
-// полноценного emoji-пикера (новых зависимостей не вводим — см. CLAUDE.md).
-// Экспортируется для переиспользования (напр., иконка пространства).
+// Курируемая палитра (Notion-style) — используется формой «Новый проект» (EmojiGrid).
+// Полный набор для пикера иконки проекта живёт в emojiData.ts (EMOJI_CATEGORIES).
 export const EMOJI = [
   '🚀', '🎯', '⭐', '🔥', '💡', '📦', '🛠️', '⚙️',
   '💻', '🖥️', '📱', '🌐', '🤖', '🧠', '🔬', '🧪',
@@ -21,6 +17,31 @@ export const EMOJI = [
   '✈️', '🚗', '🌱', '🌍', '☀️', '🌙', '❤️', '✅',
 ] as const;
 
+const RECENT_KEY = 'pf:recent-emojis';
+const RECENT_MAX = 27;
+
+function loadRecent(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    const arr = raw ? (JSON.parse(raw) as unknown) : null;
+    return Array.isArray(arr)
+      ? arr.filter((x): x is string => typeof x === 'string').slice(0, RECENT_MAX)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function pushRecent(emoji: string): string[] {
+  const next = [emoji, ...loadRecent().filter((e) => e !== emoji)].slice(0, RECENT_MAX);
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    /* localStorage недоступен — просто не персистим */
+  }
+  return next;
+}
+
 type Props = {
   projectId: string;
   icon: string | null;
@@ -28,15 +49,19 @@ type Props = {
   big?: boolean;
 };
 
-// Иконка проекта рядом с заголовком: эмодзи (или дефолтная папка) → клик
-// открывает поповер с палитрой. Выбор PATCH'ится сразу; список проектов
-// обновится через useUpdateProject (он дёргает refresh контекста).
+// Иконка проекта рядом с заголовком: эмодзи (или дефолтная папка). Клик открывает пикер с
+// категориями + «Недавние» (большой набор emojiData). Сама иконка занимает квадрат целиком
+// (от края до края), на hover — только курсор-поинтер, без серой заливки (Notion-style).
 export function ProjectIconPicker({ projectId, icon, big = false }: Props): React.ReactElement {
   const { submit, saving } = useUpdateProject();
   const [open, setOpen] = useState(false);
+  const [recent, setRecent] = useState<string[]>(loadRecent);
+  // Активная категория: 'all' — все секции (с «Недавние»), либо id одной категории.
+  const [activeCat, setActiveCat] = useState<string>('all');
 
   const choose = async (next: string | null): Promise<void> => {
     setOpen(false);
+    if (next && next !== icon) setRecent(pushRecent(next));
     if (next === icon) return;
     try {
       await submit(projectId, { icon: next });
@@ -45,55 +70,139 @@ export function ProjectIconPicker({ projectId, icon, big = false }: Props): Reac
     }
   };
 
+  const sections = activeCat === 'all' ? EMOJI_CATEGORIES : EMOJI_CATEGORIES.filter((c) => c.id === activeCat);
+
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
         <button
           type="button"
           disabled={saving}
           aria-label="Сменить иконку проекта"
           title="Иконка проекта"
           className={cn(
-            'grid shrink-0 place-items-center rounded-md leading-none transition-colors hover:bg-accent disabled:opacity-50',
-            big ? 'size-12 text-[2.5rem]' : 'size-9 text-2xl',
+            // Квадрат-контейнер: иконка заполняет его от края до края. На hover — только курсор.
+            'grid shrink-0 cursor-pointer select-none place-items-center overflow-hidden rounded-md leading-none disabled:opacity-50',
+            big ? 'size-12' : 'size-9',
           )}
         >
           {saving ? (
-            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            <Loader2 className="size-5 animate-spin text-muted-foreground" />
           ) : icon ? (
-            <span aria-hidden>{icon}</span>
+            <span aria-hidden className={cn('block leading-none', big ? 'text-[2.9rem]' : 'text-[1.9rem]')}>
+              {icon}
+            </span>
           ) : (
-            <FolderIcon className={cn(big ? 'size-8' : 'size-5', 'text-muted-foreground')} />
+            <FolderIcon className={cn(big ? 'size-11' : 'size-8', 'text-muted-foreground')} />
           )}
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64 p-2">
-        <div className="grid grid-cols-8 gap-0.5">
-          {EMOJI.map((e) => (
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[22rem] max-w-[92vw] overflow-hidden p-0"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        {/* Шапка пикера: чипы категорий (горизонтальный скролл) + «Убрать». */}
+        <div className="flex items-center gap-1 border-b px-2 py-1.5">
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+            <CatChip active={activeCat === 'all'} onClick={() => setActiveCat('all')}>
+              Все
+            </CatChip>
+            {EMOJI_CATEGORIES.map((c) => (
+              <CatChip key={c.id} active={activeCat === c.id} onClick={() => setActiveCat(c.id)}>
+                {c.label.split(' ')[0]}
+              </CatChip>
+            ))}
+          </div>
+          {icon && (
             <button
-              key={e}
               type="button"
-              onClick={() => void choose(e)}
-              className={cn(
-                'grid size-7 place-items-center rounded-md text-base transition-colors hover:bg-accent',
-                e === icon && 'bg-accent ring-1 ring-primary/40',
-              )}
-              aria-label={`Иконка ${e}`}
+              onClick={() => void choose(null)}
+              className="shrink-0 rounded px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
-              {e}
+              Убрать
             </button>
+          )}
+        </div>
+
+        <div className="max-h-[52vh] overflow-y-auto p-2">
+          {activeCat === 'all' && recent.length > 0 && (
+            <EmojiSection label="Недавние" emojis={recent} current={icon} onPick={(e) => void choose(e)} />
+          )}
+          {sections.map((c) => (
+            <EmojiSection
+              key={c.id}
+              label={c.label}
+              emojis={c.emojis}
+              current={icon}
+              onPick={(e) => void choose(e)}
+            />
           ))}
         </div>
-        {icon && (
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// Чип категории в шапке пикера.
+function CatChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-xs transition-colors',
+        active
+          ? 'bg-primary/10 font-medium text-primary'
+          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Секция эмодзи одной категории (заголовок + сетка кнопок).
+function EmojiSection({
+  label,
+  emojis,
+  current,
+  onPick,
+}: {
+  label: string;
+  emojis: readonly string[];
+  current: string | null;
+  onPick: (emoji: string) => void;
+}): React.ReactElement {
+  return (
+    <div className="mb-2 last:mb-0">
+      <p className="mb-1 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+        {label}
+      </p>
+      <div className="grid grid-cols-9 gap-0.5">
+        {emojis.map((e, i) => (
           <button
+            key={`${e}-${i}`}
             type="button"
-            onClick={() => void choose(null)}
-            className="mt-1.5 w-full rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={() => onPick(e)}
+            aria-label={`Иконка ${e}`}
+            className={cn(
+              'grid aspect-square place-items-center rounded-md text-xl leading-none transition-colors hover:bg-accent',
+              e === current && 'bg-accent ring-1 ring-primary/40',
+            )}
           >
-            Убрать иконку
+            <span aria-hidden>{e}</span>
           </button>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+        ))}
+      </div>
+    </div>
   );
 }

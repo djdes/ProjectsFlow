@@ -198,7 +198,9 @@ export function KanbanColumn({
       className={cn(
         // group/column — именованный, чтобы не конфликтовать с голым `group` карточек:
         // на hover колонки проявляем «тихие» иконки шапки (Notion-style).
-        'group/column flex h-full min-h-0 w-[92vw] max-w-[24rem] shrink-0 snap-start flex-col rounded-xl sm:w-72 sm:max-w-none',
+        // Высота — по контенту (Notion single-scroll): колонка растёт вниз, свой скролл не нужен —
+        // скроллится вся страница целиком.
+        'group/column flex w-[92vw] max-w-[24rem] shrink-0 snap-start flex-col rounded-xl sm:w-72 sm:max-w-none',
         colorClasses?.body ?? 'bg-muted/60 sm:bg-muted/30',
       )}
     >
@@ -333,11 +335,12 @@ export function KanbanColumn({
         )}
       </div>
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="relative flex flex-col">
       <div
         ref={setNodeRef}
         className={cn(
-          'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 transition-colors',
+          // min-h — чтобы у пустой/короткой колонки была зона для drop'а (высота по контенту).
+          'flex min-h-[4rem] flex-col gap-2 p-2 transition-colors',
           isOver && 'bg-muted/60',
           // I6: под замком-оффером тело колонки приглушено и не реагирует на клики/drag.
           lockOffer && 'pointer-events-none select-none opacity-40 blur-[1px]',
