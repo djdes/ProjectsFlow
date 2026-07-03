@@ -139,7 +139,8 @@ export function ProjectCover({ projectId, coverUrl, coverPosition, canEdit }: Pr
       {/* Панель управления при наведении (у кого есть права на редактирование) */}
       {canEdit && !repositioning && (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-end p-3">
-          <div className="pointer-events-auto flex items-center gap-1.5 opacity-0 transition-opacity duration-150 group-hover/cover:opacity-100 focus-within:opacity-100">
+          {/* На тач-устройствах hover нет — на мобиле контролы показываем всегда, на sm+ по наведению. */}
+          <div className="pointer-events-auto flex items-center gap-1.5 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover/cover:opacity-100 sm:focus-within:opacity-100">
             <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
               <PopoverTrigger asChild>
                 <CoverButton>

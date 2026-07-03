@@ -232,7 +232,8 @@ export function TasksPage(): React.ReactElement {
         )}
       >
         {canEdit && (
-          <div className="mb-1.5 flex h-7 items-center gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/head:opacity-100">
+          // На тач-устройствах hover нет — на мобиле панель видна всегда, на sm+ по наведению.
+          <div className="mb-1.5 flex h-7 items-center gap-1 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/head:opacity-100">
             {!data.coverUrl && (
               <HeadToolButton onClick={addRandomCover}>
                 <ImageIcon className="size-3.5" />
