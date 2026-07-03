@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Shuffle } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,12 @@ export const EMOJI = [
 
 const RECENT_KEY = 'pf:recent-emojis';
 const RECENT_MAX = 27;
+
+// Случайная иконка из всего набора (кнопка-шафл, Notion-style).
+function randomEmoji(): string {
+  const all = EMOJI_CATEGORIES.flatMap((c) => c.emojis);
+  return all.length ? all[Math.floor(Math.random() * all.length)] : '🚀';
+}
 
 function loadRecent(): string[] {
   try {
@@ -78,12 +84,22 @@ export function ProjectIconPicker({ projectId, icon, big = false }: Props): Reac
         <button
           type="button"
           disabled={saving}
-          aria-label="Сменить иконку проекта"
+          aria-label={icon ? 'Сменить иконку проекта' : 'Добавить иконку проекта'}
           title="Иконка проекта"
           className={cn(
-            // Квадрат-контейнер: иконка заполняет его от края до края. На hover — только курсор.
-            'grid shrink-0 cursor-pointer select-none place-items-center overflow-hidden rounded-md leading-none disabled:opacity-50',
-            big ? 'size-12' : 'size-9',
+            'shrink-0 cursor-pointer select-none leading-none disabled:opacity-50',
+            // С иконкой — квадрат-контейнер (иконка от края до края, на hover только курсор).
+            icon || saving
+              ? cn('grid place-items-center overflow-hidden rounded-md', big ? 'size-12' : 'size-9')
+              : // Пусто (big) — Notion-style призрачная кнопка «Добавить иконку», проявляется
+                // при наведении на заголовок; при открытом пикере остаётся видимой.
+                big
+                ? cn(
+                    'flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground',
+                    'opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100',
+                    'group-hover/title:opacity-100 data-[state=open]:opacity-100',
+                  )
+                : cn('grid place-items-center rounded-md', 'size-9'),
           )}
         >
           {saving ? (
@@ -92,8 +108,13 @@ export function ProjectIconPicker({ projectId, icon, big = false }: Props): Reac
             <span aria-hidden className={cn('block leading-none', big ? 'text-[2.9rem]' : 'text-[1.9rem]')}>
               {icon}
             </span>
+          ) : big ? (
+            <>
+              <FolderIcon className="size-4" />
+              Добавить иконку
+            </>
           ) : (
-            <FolderIcon className={cn(big ? 'size-11' : 'size-8', 'text-muted-foreground')} />
+            <FolderIcon className="size-8 text-muted-foreground" />
           )}
         </button>
       </PopoverTrigger>
@@ -114,6 +135,15 @@ export function ProjectIconPicker({ projectId, icon, big = false }: Props): Reac
               </CatChip>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() => void choose(randomEmoji())}
+            aria-label="Случайная иконка"
+            title="Случайная иконка"
+            className="grid size-7 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Shuffle className="size-4" />
+          </button>
           {icon && (
             <button
               type="button"

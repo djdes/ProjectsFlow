@@ -252,7 +252,7 @@ export function TasksPage(): React.ReactElement {
             </HeadToolButton>
           </div>
         )}
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="group/title flex min-w-0 items-center gap-2">
           <ProjectIconPicker projectId={data.id} icon={data.icon} big />
           <EditableProjectTitle projectId={data.id} name={data.name} />
         </div>

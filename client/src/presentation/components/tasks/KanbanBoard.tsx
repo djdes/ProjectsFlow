@@ -42,6 +42,7 @@ import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useContainer } from '@/infrastructure/di/container';
 import { ConfettiBurst } from './ConfettiBurst';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
+import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
 import { stashComposerDraft } from './composerDraft';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { useBulkTaskActions } from '@/presentation/hooks/useBulkTaskActions';
@@ -281,6 +282,8 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   // Цель удаления для стильного диалога подтверждения (вместо window.confirm).
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Прокручиваемый контейнер доски — для закреплённого снизу горизонтального скролла.
+  const boardScrollRef = useRef<HTMLDivElement>(null);
 
   // Единый открытый inline-композер на все колонки (состояние поднято из колонки):
   // открыть в другой колонке → прошлый закрывается (со stash). Переживает перезагрузку
@@ -869,7 +872,10 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
             работает в обоих режимах: все колонки в DOM, просто проскроллены.
             items-start — каждая колонка своей высоты по контенту (не тянется до самой длинной);
             высота ряда = самой длинной колонки, вертикально скроллит страница целиком. */}
-        <div className="flex items-start snap-x snap-mandatory gap-3 overflow-x-auto pb-20 sm:snap-none sm:pb-28">
+        <div
+          ref={boardScrollRef}
+          className="flex items-start snap-x snap-mandatory gap-3 overflow-x-auto pb-20 sm:snap-none sm:pb-28"
+        >
           {shownStatuses.map((status) => {
             const perColumn = settings?.[status];
             const color = resolveColumnColor(perColumn, defaults?.[status], status);
@@ -955,6 +961,8 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
             onShow={(status) => setHidden(status, false)}
           />
         </div>
+        {/* Закреплённый снизу вьюпорта горизонтальный скролл доски (см. компонент). */}
+        <SyncedStickyScrollbar targetRef={boardScrollRef} />
         <DragOverlay dropAnimation={DROP_ANIMATION}>
           {activeTask ? (
             // Tilt + scale живут на motion-обёртке, а не на CSS карточки — иначе оверлей
