@@ -35,7 +35,7 @@ const points = [
     <!-- Notion-раскладка: центрированный лид сверху. -->
     <div class="hero__lede" data-reveal>
       <h1 id="hero-title" class="hero__title">
-        Опиши идею — получи <span class="hero__kw"><span class="hero__kw-dot" aria-hidden="true"></span>готовый&nbsp;продукт</span>.
+        Опиши идею — получи <span class="hero__kw"><span class="hero__kw-dot" aria-hidden="true"></span>готовый&nbsp;продукт<svg class="hero__kw-line" viewBox="0 0 300 12" preserveAspectRatio="none" fill="none" aria-hidden="true"><path d="M3 8C55 2 110 11 152 6 210 0 255 10 297 6" stroke="currentColor" stroke-width="4" stroke-linecap="round" vector-effect="non-scaling-stroke" /></svg></span>.
       </h1>
 
       <p class="hero__subtitle">
@@ -100,32 +100,30 @@ const points = [
     <!-- Крупная «сцена» продукта под лидом — как hero-скрин в Notion. ЕДИНСТВЕННАЯ
          интерактивная доска: перетащи задачу на «Воркер» — AI берёт её в работу. -->
     <div class="hero__stage" data-reveal style="--reveal-delay: 120ms">
-      <!-- Иконки-бейджи + линии движения/«ветер»/искры вокруг скрина (как у Notion). Десктоп, декор. -->
+      <!-- Иконки-бейджи + линии движения ЛЕТАЮТ В ПОЛЯХ вокруг скрина (не наезжают), как у Notion.
+           Только на широких экранах, где есть поля по бокам. Чистый декор. -->
       <div class="hero__stickers" aria-hidden="true">
-        <span class="hero__sticker hero__sticker--v" style="top: -1.7rem; left: 1%; --rot: -10deg; --d: 0s">
+        <span class="hero__sticker hero__sticker--v" style="top: 2%; left: -6rem; --rot: -10deg; --d: 0s">
           <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z" /></svg>
         </span>
-        <span class="hero__sticker hero__sticker--b" style="top: -2rem; right: 5%; --rot: 8deg; --d: -2.4s">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18" /><path d="M17 6h6v6" /></svg>
-        </span>
-        <span class="hero__sticker hero__sticker--g" style="top: 40%; left: -1.8rem; --rot: -7deg; --d: -3.6s">
+        <span class="hero__sticker hero__sticker--g" style="bottom: 20%; left: -6rem; --rot: -7deg; --d: -3.6s">
           <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
         </span>
-        <span class="hero__sticker hero__sticker--a" style="bottom: 12%; right: -1.6rem; --rot: 9deg; --d: -1.4s">
+        <span class="hero__sticker hero__sticker--b" style="top: 1%; right: -6rem; --rot: 8deg; --d: -2.4s">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18" /><path d="M17 6h6v6" /></svg>
+        </span>
+        <span class="hero__sticker hero__sticker--a" style="bottom: 16%; right: -6rem; --rot: 9deg; --d: -1.4s">
           <svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2.6l1.9 5.9h6.2l-5 3.6 1.9 5.9-5-3.6-5 3.6 1.9-5.9-5-3.6h6.2z" /></svg>
         </span>
 
-        <span class="hero__doodle hero__doodle--wind" style="top: -1.9rem; left: 15%; --d: 0s">
+        <span class="hero__doodle hero__doodle--wind" style="top: 34%; left: -7rem; --d: 0s">
           <svg viewBox="0 0 46 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 8h22a5 5 0 10-5-6" /><path d="M2 15h30a5 5 0 11-5 7" /><path d="M2 22h15" /></svg>
         </span>
-        <span class="hero__doodle hero__doodle--spark" style="top: -2.4rem; right: 16%; --d: -1.5s">
+        <span class="hero__doodle hero__doodle--spark" style="top: 36%; right: -6.6rem; --d: -1.5s">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v6M12 15v6M3 12h6M15 12h6" /></svg>
         </span>
-        <span class="hero__doodle hero__doodle--speed" style="top: 32%; right: -2rem; --d: -0.8s">
+        <span class="hero__doodle hero__doodle--speed" style="top: -1.6rem; left: 44%; --d: -0.8s">
           <svg viewBox="0 0 34 22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 5h18M8 11h22M2 17h12" /></svg>
-        </span>
-        <span class="hero__doodle hero__doodle--arc" style="bottom: 1%; left: 9%; --d: -2s">
-          <svg viewBox="0 0 44 22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 20C10 4 34 4 42 20" /></svg>
         </span>
       </div>
 
@@ -219,24 +217,41 @@ const points = [
     color: var(--text);
     text-wrap: balance;
   }
-  /* Ключевое слово — синяя пилюля с ЧЁРНЫМ текстом внутри + синяя точка (как «● Think»). */
+  /* Ключевое слово — синий текст + рисованная подчёркивающая линия (рисуется на входе)
+     + маленькая синяя точка-акцент. Без «облака»-плашки. */
   .hero__kw {
-    color: var(--text);
-    background: #cfe4fb;
-    padding: 0.06em 0.5em 0.12em;
-    border-radius: 999px;
+    position: relative;
+    color: #1f6fe0;
     white-space: nowrap;
-    box-decoration-break: clone;
-    -webkit-box-decoration-break: clone;
   }
   .hero__kw-dot {
     display: inline-block;
-    width: 0.4em;
-    height: 0.4em;
-    margin-right: 0.36em;
+    width: 0.34em;
+    height: 0.34em;
+    margin-right: 0.32em;
     border-radius: 50%;
     background: #2383e2;
-    vertical-align: 0.18em;
+    vertical-align: 0.28em;
+  }
+  .hero__kw-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -0.12em;
+    width: 100%;
+    height: 0.32em;
+    color: #58a0f7;
+    overflow: visible;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero__kw-line {
+      transform-origin: left center;
+      animation: hero-underline 0.75s 0.5s cubic-bezier(0.65, 0, 0.25, 1) both;
+    }
+    @keyframes hero-underline {
+      from { transform: scaleX(0); }
+      to { transform: scaleX(1); }
+    }
   }
   .hero__subtitle {
     margin: var(--sp-5) auto 0;
@@ -359,7 +374,8 @@ const points = [
   }
   /* Иконки-бейджи + декоративные линии вокруг скрина продукта (десктоп). */
   .hero__stickers { position: absolute; inset: 0; pointer-events: none; z-index: 3; display: none; }
-  @media (min-width: 900px) { .hero__stickers { display: block; } }
+  /* Показываем только когда по бокам скрина реально есть поля (иначе бейджи наезжали бы). */
+  @media (min-width: 1240px) { .hero__stickers { display: block; } }
 
   /* Бейдж: цветной круг + белая иконка, лёгкий наклон и плавное парение. */
   .hero__sticker {
