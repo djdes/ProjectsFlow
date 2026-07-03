@@ -102,6 +102,16 @@ const points = [
     <!-- Крупная «сцена» продукта под лидом — как hero-скрин в Notion. ЕДИНСТВЕННАЯ
          интерактивная доска: перетащи задачу на «Воркер» — AI берёт её в работу. -->
     <div class="hero__stage" data-reveal style="--reveal-delay: 120ms">
+      <!-- Playful-стикеры вокруг скрина (как у Notion). Только десктоп, чистый декор. -->
+      <div class="hero__stickers" aria-hidden="true">
+        <span class="hero__sticker" style="top: -1.4rem; left: -1.1rem; --d: 0s">🚀</span>
+        <span class="hero__sticker" style="top: -1.9rem; right: 7%; --d: -2.4s">✨</span>
+        <span class="hero__sticker" style="top: 30%; left: -2rem; --d: -4s">💡</span>
+        <span class="hero__sticker" style="top: 46%; right: -1.9rem; --d: -1.2s">💰</span>
+        <span class="hero__sticker" style="bottom: 24%; left: -1.7rem; --d: -3.2s">📊</span>
+        <span class="hero__sticker" style="bottom: 3.5rem; right: -1.3rem; --d: -5s">✅</span>
+      </div>
+
       <div class="hero__stage-frame">
         <KanbanBoard client:visible />
       </div>
@@ -301,6 +311,7 @@ const points = [
 
   /* --- Сцена продукта: крупный «hero-скрин» как в Notion --- */
   .hero__stage {
+    position: relative;
     margin-top: clamp(2rem, 5vw, 3.5rem);
     max-width: 1060px;
     margin-inline: auto;
@@ -308,6 +319,24 @@ const points = [
     flex-direction: column;
     align-items: center;
     gap: var(--sp-3);
+  }
+  /* Playful-стикеры вокруг скрина продукта (десктоп). */
+  .hero__stickers { position: absolute; inset: 0; pointer-events: none; z-index: 3; display: none; }
+  @media (min-width: 900px) { .hero__stickers { display: block; } }
+  .hero__sticker {
+    position: absolute;
+    font-size: clamp(1.7rem, 2.4vw, 2.5rem);
+    line-height: 1;
+    filter: drop-shadow(0 8px 16px rgba(11, 18, 32, 0.18));
+    animation: hero-sticker-bob 6.5s var(--d, 0s) ease-in-out infinite;
+    will-change: transform;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero__sticker { animation: none; }
+  }
+  @keyframes hero-sticker-bob {
+    0%, 100% { transform: translateY(0) rotate(-5deg); }
+    50% { transform: translateY(-12px) rotate(5deg); }
   }
   /* Мягкая «парящая» тень со всех сторон + лёгкий hover-подъём (как рамки скринов ниже). */
   .hero__stage-frame {

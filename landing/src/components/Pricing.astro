@@ -2,6 +2,13 @@
 import { PLANS, formatRub } from '@/data/pricing';
 
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
+
+// Лёгкие пастельные подложки карт — попадают в общий цветной ритм страницы.
+const TONE: Record<string, string> = {
+  free: '#eef4fb', // светло-синяя
+  prime: '#ebfaff', // светло-циан (рекомендуемая — ярче + свечение)
+  vip: '#f2eefe', // светло-фиолетовая
+};
 ---
 
 <section id="pricing" class="pf-section pricing">
@@ -21,7 +28,7 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
           <article
             class:list={['pf-card', 'pricing__plan', plan.highlight && 'pricing__plan--pop']}
             data-reveal
-            style={`--reveal-delay: ${i * 90}ms`}
+            style={`--reveal-delay: ${i * 90}ms; --tone-bg: ${TONE[plan.id]}`}
           >
             {plan.badge && <span class="pricing__badge">{plan.badge}</span>}
 
@@ -104,7 +111,7 @@ const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 
   .pricing__plan {
     padding: var(--sp-6);
-    background: var(--surface);
+    background: var(--tone-bg, var(--surface));
   }
   .pricing__plan--pop {
     border-color: var(--accent);

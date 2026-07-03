@@ -52,6 +52,8 @@ const posts = (await getCollection('blog', ({ data }) => !data.draft))
 </section>
 
 <style>
+  /* Чередующийся тёплый фон — ритм между секциями, чтобы цветные карточки дышали. */
+  .blog-teaser { background: var(--bg-alt); }
   .blog-teaser__head {
     display: flex;
     align-items: flex-end;
