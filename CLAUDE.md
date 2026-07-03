@@ -14,7 +14,7 @@
 - **Где живёт.** FastPanel на VPS `projectsflow.ru` (Azure Ubuntu 24.04).
   Код приложения: `/var/www/projectsflow/data/www/projectsflow.ru/`.
 - **Статус.** В переходе: лендинг снесён, платформа строится в `client/` (UI) и `server/`
-  (backend появится в Spec #2). Прод-инфра не обновляется до завершения Spec #3 (auth).
+  (backend появился в Spec #2). Катим на прод по мере готовности (push в `main` → автодеплой).
 
 ## Стек
 
@@ -106,8 +106,8 @@ npm run deploy       # node scripts/deploy.mjs
 npm run deploy
 ```
 
-Подробности — [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 4. **До завершения Spec #3
-(auth) на прод ничего не катим** — фронт без auth раскатывать нечем.
+Подробности — [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 4. Push в `main` триггерит
+автодеплой на прод (`.github/workflows/deploy.yml`) — катим по мере готовности.
 
 ## SSH / Git / доступы
 
@@ -115,7 +115,7 @@ npm run deploy
 Bare repo: `/var/www/projectsflow/data/git/projectsflow.git`, ветка `main`.
 Полные URL, пароли — [docs/ONBOARDING.md](docs/ONBOARDING.md).
 
-Workflow: фича → ветка → merge в `main` → `npm run deploy` (после Spec #3).
+Workflow: фича → ветка → merge в `main` → автодеплой (или `npm run deploy` вручную).
 
 ## Ритуал коммита: sync с kanban-задачами через MCP
 
