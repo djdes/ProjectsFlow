@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import {
+  Clock,
   FolderPlus,
   MessageSquare,
   MoveRight,
@@ -13,6 +14,12 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { relativeTime } from '@/lib/relativeTime';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { TaskStatus } from '@/domain/task/Task';
 import type {
   ActivityEventItem,
@@ -169,19 +176,58 @@ function targetUrl(item: ActivityEventItem): string {
   return base;
 }
 
+// Задачные события, у которых есть история версий (кнопка-часы «Посмотреть версию»).
+const TASK_KINDS: ReadonlySet<ActivityKind> = new Set([
+  'task_created',
+  'task_updated',
+  'task_status_changed',
+]);
+
 // Строка амбиентного действия в ленте «Все». Клик ведёт к задаче/коммену/доске.
-export function ActivityItem({ item }: { item: ActivityEventItem }): React.ReactElement {
+// onOpenVersions — если задан и событие задачное, справа-сверху появляется часы-иконка,
+// открывающая окно версий этой задачи.
+export function ActivityItem({
+  item,
+  onOpenVersions,
+}: {
+  item: ActivityEventItem;
+  onOpenVersions?: (taskId: string) => void;
+}): React.ReactElement {
   const navigate = useNavigate();
   const Icon = KIND_ICON[item.kind] ?? SquarePen;
+  const versionTaskId =
+    onOpenVersions && TASK_KINDS.has(item.kind) ? (item.payload?.taskId ?? null) : null;
   return (
     <li
       onClick={() => navigate(targetUrl(item))}
       className={cn(
         // overflow-hidden = содержит float иконки; текст обтекает иконку (начинается справа
         // от неё и продолжается под ней на всю ширину блока) — так шире и читабельнее.
-        'group cursor-pointer overflow-hidden px-3 py-2 transition-colors hover:bg-muted/40',
+        'group relative cursor-pointer overflow-hidden px-3 py-2 transition-colors hover:bg-muted/40',
       )}
     >
+      {versionTaskId && (
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenVersions?.(versionTaskId);
+                }}
+                aria-label="Посмотреть версию"
+                className="absolute right-2 top-2 z-10 grid size-7 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+              >
+                <Clock className="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="border-transparent bg-neutral-900 text-white">
+              Посмотреть версию
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
       <span className="float-left mr-2.5 grid size-7 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground ring-1 ring-border">
         <Icon className="size-3.5" />
       </span>

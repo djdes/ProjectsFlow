@@ -1,6 +1,7 @@
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
+import type { TaskVersionsResult } from '@/domain/task/TaskVersion';
 import type {
   CommentNotifications,
   NotifyAudience,
@@ -74,6 +75,9 @@ export interface TaskRepository {
   update(projectId: string, taskId: string, input: UpdateTaskInput): Promise<Task>;
   move(projectId: string, taskId: string, input: MoveTaskInput): Promise<Task>;
   delete(projectId: string, taskId: string): Promise<void>;
+  // История версий задачи (окно версий + Restore, как в Notion).
+  getVersions(projectId: string, taskId: string): Promise<TaskVersionsResult>;
+  restoreVersion(projectId: string, taskId: string, versionId: string): Promise<Task>;
   listCommits(projectId: string, taskId: string): Promise<TaskCommit[]>;
   linkCommit(projectId: string, taskId: string, sha: string): Promise<TaskCommit>;
   unlinkCommit(projectId: string, taskId: string, sha: string): Promise<void>;

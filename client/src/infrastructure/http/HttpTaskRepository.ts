@@ -1,6 +1,8 @@
 import type { Task } from '@/domain/task/Task';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
+import type { TaskSnapshot, TaskVersionsResult } from '@/domain/task/TaskVersion';
+import type { PlanId } from '@/domain/usage/Usage';
 import type {
   CommentNotification,
   CommentNotifications,
@@ -208,6 +210,31 @@ export class HttpTaskRepository implements TaskRepository {
   }
   async delete(projectId: string, taskId: string): Promise<void> {
     await httpClient.delete<void>(`/projects/${projectId}/tasks/${taskId}`);
+  }
+  async getVersions(projectId: string, taskId: string): Promise<TaskVersionsResult> {
+    const res = await httpClient.get<{
+      plan: PlanId;
+      cutoffAt: string | null;
+      versions: Array<{
+        id: string;
+        taskId: string;
+        actorUserId: string | null;
+        createdAt: string;
+        snapshot: TaskSnapshot;
+      }>;
+    }>(`/projects/${projectId}/tasks/${taskId}/versions`);
+    return {
+      plan: res.plan,
+      cutoffAt: res.cutoffAt ? new Date(res.cutoffAt) : null,
+      versions: res.versions.map((v) => ({ ...v, createdAt: new Date(v.createdAt) })),
+    };
+  }
+  async restoreVersion(projectId: string, taskId: string, versionId: string): Promise<Task> {
+    const { task } = await httpClient.post<{ task: TaskDto }>(
+      `/projects/${projectId}/tasks/${taskId}/versions/${versionId}/restore`,
+      {},
+    );
+    return fromDto(task);
   }
   async listCommits(projectId: string, taskId: string): Promise<TaskCommit[]> {
     const { commits } = await httpClient.get<{ commits: CommitDto[] }>(

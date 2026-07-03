@@ -15,6 +15,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { relativeTime } from '@/lib/relativeTime';
 import { ActivityItem } from '@/presentation/activity/ActivityItem';
 import { ProjectViewsChart } from './ProjectViewsChart';
+import { TaskVersionsDialog } from '@/presentation/components/tasks/TaskVersionsDialog';
 import type { ActivityEventItem } from '@/domain/activity/ActivityFeedItem';
 import type { ProjectAnalytics, ProjectActivitySummary } from '@/domain/project/ProjectAnalytics';
 
@@ -50,6 +51,8 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
   const [analytics, setAnalytics] = useState<ProjectAnalytics | null>(null);
   const [loadingActivity, setLoadingActivity] = useState(true);
   const [loadingAnalytics, setLoadingAnalytics] = useState(true);
+  // Задача, для которой открыто окно версий (из часы-кнопки события). null = закрыто.
+  const [versionsFor, setVersionsFor] = useState<string | null>(null);
 
   // Ширина панели: тянется ручкой у левого края (drag → шире/уже), клик по границе —
   // закрыть. Значение переживает перезагрузку (localStorage).
@@ -162,6 +165,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
   }, [open, projectId, projectRepository, windowDays]);
 
   return (
+    <>
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
@@ -209,7 +213,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
             ) : (
               <ul className="divide-y">
                 {activity.map((item) => (
-                  <ActivityItem key={item.id} item={item} />
+                  <ActivityItem key={item.id} item={item} onOpenVersions={setVersionsFor} />
                 ))}
               </ul>
             )}
@@ -404,5 +408,14 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
         </Tabs>
       </SheetContent>
     </Sheet>
+    {versionsFor && (
+      <TaskVersionsDialog
+        projectId={projectId}
+        taskId={versionsFor}
+        open={versionsFor !== null}
+        onOpenChange={(o) => !o && setVersionsFor(null)}
+      />
+    )}
+    </>
   );
 }
