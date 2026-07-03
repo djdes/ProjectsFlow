@@ -335,17 +335,21 @@ export function KanbanColumn({
         )}
       </div>
 
-      <div className={cn('relative flex flex-col', lockOffer && 'min-h-[22rem]')}>
+      <div className="relative flex flex-col">
       <div
         ref={setNodeRef}
         className={cn(
           // min-h — чтобы у пустой/короткой колонки была зона для drop'а (высота по контенту).
           'flex min-h-[4rem] flex-col gap-2 p-2 transition-colors',
-          isOver && 'bg-muted/60',
-          // I6: под замком-оффером тело колонки приглушено и не реагирует на клики/drag.
-          lockOffer && 'pointer-events-none select-none opacity-40 blur-[1px]',
+          isOver && !lockOffer && 'bg-muted/60',
         )}
       >
+        {/* I6: на free-тарифе колонка «Воркер» — не список задач, а оффер (в обычном потоке,
+            колонка выглядит как нормальная). Иначе — обычный список карточек. */}
+        {lockOffer ? (
+          lockOffer
+        ) : (
+        <>
         <SortableContext
           items={visibleTasks.map((t) => t.id)}
           strategy={verticalListSortingStrategy}
@@ -402,8 +406,9 @@ export function KanbanColumn({
         {hiddenCount > 0 && !showAllDone && (
           <span className="sr-only">{`Скрыто карточек: ${hiddenCount}`}</span>
         )}
+        </>
+        )}
       </div>
-        {lockOffer}
       </div>
 
       {onInlineCreate && !lockOffer && (
