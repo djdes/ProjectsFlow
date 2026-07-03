@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { Calendar, Check, ChevronDown, HelpCircle, Loader2, Settings, X } from 'lucide-react';
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useContainer } from '@/infrastructure/di/container';
 import { relativeTime } from '@/lib/relativeTime';
 import { ActivityItem } from '@/presentation/activity/ActivityItem';
@@ -16,14 +22,17 @@ type Props = {
   projectId: string;
 };
 
-const WINDOW_DAYS = 28;
+const DEFAULT_WINDOW_DAYS = 28;
+const WINDOW_OPTIONS = [7, 28, 90] as const;
+const windowLabel = (days: number): string => `За ${days} дней`;
+const initial = (name: string | null): string => (name?.trim()[0] ?? '?').toUpperCase();
 
-// Массив из WINDOW_DAYS чисел (просмотры по дням, старые → новые), нули для пропущенных дней.
-function toDailySeries(perDay: { date: string; count: number }[]): number[] {
+// Массив из `days` чисел (просмотры по дням, старые → новые), нули для пропущенных дней.
+function toDailySeries(perDay: { date: string; count: number }[], days: number): number[] {
   const byDate = new Map(perDay.map((p) => [p.date, p.count]));
   const out: number[] = [];
   const today = new Date();
-  for (let i = WINDOW_DAYS - 1; i >= 0; i -= 1) {
+  for (let i = days - 1; i >= 0; i -= 1) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
     out.push(byDate.get(d.toISOString().slice(0, 10)) ?? 0);
@@ -41,24 +50,52 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
   const [analytics, setAnalytics] = useState<ProjectAnalytics | null>(null);
   const [loadingActivity, setLoadingActivity] = useState(true);
   const [loadingAnalytics, setLoadingAnalytics] = useState(true);
+  // Окно графика просмотров (7/28/90 дней) — селектор справа над графиком.
+  const [windowDays, setWindowDays] = useState<number>(DEFAULT_WINDOW_DAYS);
+  // Приватность истории просмотров (как в Notion). Серверного гейта пока нет —
+  // выбор храним локально (per-project), это UI-состояние.
+  const [viewHistory, setViewHistory] = useState<'allow' | 'deny'>('allow');
+  useEffect(() => {
+    try {
+      setViewHistory(localStorage.getItem(`pf-view-history:${projectId}`) === 'deny' ? 'deny' : 'allow');
+    } catch {
+      /* localStorage недоступен */
+    }
+  }, [projectId]);
+  const changeViewHistory = (v: 'allow' | 'deny'): void => {
+    setViewHistory(v);
+    try {
+      localStorage.setItem(`pf-view-history:${projectId}`, v);
+    } catch {
+      /* ignore */
+    }
+  };
 
+  // Лента активности + сводка (создатель/редактор) — не зависят от окна графика.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setLoadingActivity(true);
-    setLoadingAnalytics(true);
     projectRepository
       .getProjectActivity(projectId, 40)
       .then((r) => { if (!cancelled) { setActivity(r.items); setSummary(r.summary); } })
       .catch(() => { if (!cancelled) { setActivity([]); setSummary(null); } })
       .finally(() => { if (!cancelled) setLoadingActivity(false); });
+    return () => { cancelled = true; };
+  }, [open, projectId, projectRepository]);
+
+  // Аналитика просмотров — перезапрашивается при смене окна (7/28/90).
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLoadingAnalytics(true);
     projectRepository
-      .getProjectAnalytics(projectId, WINDOW_DAYS)
+      .getProjectAnalytics(projectId, windowDays)
       .then((a) => { if (!cancelled) setAnalytics(a); })
       .catch(() => { if (!cancelled) setAnalytics(null); })
       .finally(() => { if (!cancelled) setLoadingAnalytics(false); });
     return () => { cancelled = true; };
-  }, [open, projectId, projectRepository]);
+  }, [open, projectId, projectRepository, windowDays]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -99,80 +136,192 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
             )}
           </TabsContent>
 
-          {/* Аналитика — как в Notion: Просмотры (график) + Зрители + Редакторы. */}
-          <TabsContent value="analytics" className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          {/* Аналитика — как в Notion: Просмотры (график + окно) + Зрители (с настройкой
+              приватности) + Редакторы, и нижняя панель «Настройки / Справка». */}
+          <TabsContent value="analytics" className="flex min-h-0 flex-1 flex-col">
             {loadingAnalytics ? (
-              <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+              <div className="flex flex-1 items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" /> Загрузка…
               </div>
             ) : !analytics ? (
-              <p className="py-10 text-center text-sm text-muted-foreground">Нет данных.</p>
+              <p className="flex-1 py-10 text-center text-sm text-muted-foreground">Нет данных.</p>
             ) : (
               <>
-                <section className="space-y-1">
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-sm font-medium">Просмотры</span>
-                    <span className="text-xs text-muted-foreground">
-                      {analytics.totalViews} всего · {analytics.windowDays} дней
-                    </span>
-                  </div>
-                  <TrendChart label="За 28 дней" values={toDailySeries(analytics.perDay)} />
-                </section>
-
-                <section className="space-y-1.5">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Зрители ({analytics.viewers.length})
-                  </p>
-                  {analytics.viewers.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Пока никто не заходил.</p>
-                  ) : (
-                    <ul className="space-y-1">
-                      {analytics.viewers.map((v) => (
-                        <li key={v.userId} className="flex items-center gap-2.5 rounded-md px-1 py-1">
-                          <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-muted-foreground">
-                            {v.avatarUrl ? (
-                              <img src={v.avatarUrl} alt="" className="size-full object-cover" />
-                            ) : (
-                              (v.displayName[0] ?? '?').toUpperCase()
-                            )}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-sm">{v.displayName}</span>
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            {relativeTime(v.lastViewedAt)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                {summary && (
-                  <section className="space-y-1.5 border-t pt-3">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Редакторы
-                    </p>
-                    <ul className="space-y-1 text-sm">
-                      {summary.lastEditedByName && summary.lastEditedAt && (
-                        <li className="flex items-center justify-between gap-3">
-                          <span className="min-w-0 truncate">
-                            Изменил · {summary.lastEditedByName}
-                          </span>
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            {relativeTime(summary.lastEditedAt)}
-                          </span>
-                        </li>
-                      )}
-                      <li className="flex items-center justify-between gap-3">
-                        <span className="min-w-0 truncate">
-                          Создал · {summary.createdByName ?? '—'}
-                        </span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {relativeTime(summary.createdAt)}
-                        </span>
-                      </li>
-                    </ul>
+                <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-4">
+                  {/* Просмотры + селектор окна (7/28/90 дней). */}
+                  <section className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm">
+                        Просмотры{' '}
+                        <span className="text-muted-foreground">({analytics.totalViews} всего)</span>
+                      </span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="h-7 gap-1.5 rounded-full px-3 text-xs font-normal text-primary"
+                          >
+                            <Calendar className="size-3.5" />
+                            {windowLabel(windowDays)}
+                            <ChevronDown className="size-3.5 opacity-60" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {WINDOW_OPTIONS.map((d) => (
+                            <DropdownMenuItem key={d} onClick={() => setWindowDays(d)}>
+                              {windowLabel(d)}
+                              {windowDays === d && <Check className="ml-auto size-4" />}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    <TrendChart
+                      label={windowLabel(windowDays)}
+                      values={toDailySeries(analytics.perDay, windowDays)}
+                    />
                   </section>
-                )}
+
+                  {/* Зрители + карточка приватности истории просмотров. */}
+                  <section className="space-y-2.5">
+                    <p className="text-sm font-medium">Зрители</p>
+
+                    <div className="flex items-start justify-between gap-3 rounded-lg bg-muted/50 px-3.5 py-3">
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="text-sm font-medium">Показывать историю ваших просмотров</p>
+                        <p className="text-xs text-muted-foreground">
+                          Редакторы страницы видят, когда вы её открывали.{' '}
+                          <button
+                            type="button"
+                            className="underline underline-offset-2 hover:text-foreground"
+                          >
+                            Подробнее
+                          </button>
+                        </p>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 shrink-0 gap-1.5 px-2.5 text-xs font-normal"
+                          >
+                            {viewHistory === 'allow' ? 'Разрешить' : 'Запретить'}
+                            <ChevronDown className="size-3.5 opacity-60" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-[180px]">
+                          <DropdownMenuItem onClick={() => changeViewHistory('allow')}>
+                            Разрешить
+                            {viewHistory === 'allow' && <Check className="ml-auto size-4" />}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => changeViewHistory('deny')}>
+                            Запретить
+                            {viewHistory === 'deny' && <Check className="ml-auto size-4" />}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+
+                    {analytics.viewers.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Пока никто не заходил.</p>
+                    ) : (
+                      <ul className="space-y-0.5">
+                        {analytics.viewers.map((v) => (
+                          <li key={v.userId} className="flex items-center gap-2.5 rounded-md px-1 py-1">
+                            <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                              {v.avatarUrl ? (
+                                <img src={v.avatarUrl} alt="" className="size-full object-cover" />
+                              ) : (
+                                initial(v.displayName)
+                              )}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-sm">{v.displayName}</span>
+                            <span className="shrink-0 text-xs text-muted-foreground">
+                              {relativeTime(v.lastViewedAt)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+
+                  {/* Редакторы: Создатель / Недавно изменил — с аватарами (инициалы). */}
+                  {summary && (
+                    <section className="space-y-3">
+                      <p className="text-sm font-medium">Редакторы</p>
+
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Создатель</p>
+                        <div className="flex items-center gap-2.5">
+                          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                            {initial(summary.createdByName)}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-sm">
+                            {summary.createdByName ?? '—'}
+                          </span>
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {relativeTime(summary.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {summary.lastEditedByName && summary.lastEditedAt && (
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">Недавно изменил</p>
+                          <div className="flex items-center gap-2.5">
+                            <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                              {initial(summary.lastEditedByName)}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-sm">
+                              {summary.lastEditedByName}
+                            </span>
+                            <span className="shrink-0 text-xs text-muted-foreground">
+                              {relativeTime(summary.lastEditedAt)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </section>
+                  )}
+                </div>
+
+                {/* Нижняя панель: «Настройки» (приватность истории) слева, «Справка» справа. */}
+                <div className="flex shrink-0 items-center justify-between border-t px-4 py-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1.5 px-2 text-xs font-normal text-muted-foreground"
+                      >
+                        <Settings className="size-3.5" />
+                        Настройки
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="min-w-[220px]">
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                        История ваших просмотров
+                      </div>
+                      <DropdownMenuItem onClick={() => changeViewHistory('allow')}>
+                        Разрешить
+                        {viewHistory === 'allow' && <Check className="ml-auto size-4" />}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => changeViewHistory('deny')}>
+                        Запретить
+                        {viewHistory === 'deny' && <Check className="ml-auto size-4" />}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <HelpCircle className="size-3.5" />
+                    Справка
+                  </button>
+                </div>
               </>
             )}
           </TabsContent>
