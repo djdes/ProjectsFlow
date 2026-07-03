@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   COVER_GRADIENTS,
-  COVER_PHOTOS,
-  gradientTileStyle,
+  COVER_SCENES,
+  presetTileStyle,
   gradientToken,
 } from './coverGallery';
 
@@ -60,8 +60,25 @@ export function ProjectCoverPicker({ onSetCover, onUploadFile, onRemove, onClose
           </button>
         </div>
 
-        {/* Галерея: градиенты + фото */}
+        {/* Галерея: арт-обложки + одноцветные градиенты (всё — чистый CSS) */}
         <TabsContent value="gallery" className="max-h-[50vh] space-y-3 overflow-y-auto p-3">
+          <div>
+            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Обложки
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {COVER_SCENES.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => pick(gradientToken(s.id))}
+                  style={presetTileStyle(s.css)}
+                  className="h-14 rounded-md bg-cover bg-center ring-1 ring-black/5 transition-transform hover:scale-[1.03] dark:ring-white/10"
+                  aria-label={`Обложка ${s.id}`}
+                />
+              ))}
+            </div>
+          </div>
           <div>
             <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               Цвета и градиенты
@@ -72,28 +89,10 @@ export function ProjectCoverPicker({ onSetCover, onUploadFile, onRemove, onClose
                   key={g.id}
                   type="button"
                   onClick={() => pick(gradientToken(g.id))}
-                  style={gradientTileStyle(g.css)}
+                  style={presetTileStyle(g.css)}
                   className="h-10 rounded-md ring-1 ring-black/5 transition-transform hover:scale-[1.04] dark:ring-white/10"
                   aria-label={`Градиент ${g.id}`}
                 />
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Фото
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              {COVER_PHOTOS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => pick(p.url)}
-                  className="h-14 overflow-hidden rounded-md ring-1 ring-black/5 transition-transform hover:scale-[1.03] dark:ring-white/10"
-                  aria-label={`Фото ${p.id}`}
-                >
-                  <img src={p.thumb} alt="" loading="lazy" className="size-full object-cover" />
-                </button>
               ))}
             </div>
           </div>
