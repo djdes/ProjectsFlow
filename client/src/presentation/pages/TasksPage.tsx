@@ -207,9 +207,12 @@ export function TasksPage(): React.ReactElement {
           </div>
         </TooltipProvider>
       </div>
-      {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая) — ПОД крошками.
+      {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая) — ПОД крошками,
+          тоже закреплена при скролле (сразу под sticky-строкой крошек, top-11 = её высота).
           shiftForOverlay: контент центрируется в видимой области, когда открыто окно задачи. */}
-      <ProjectPublishedBanner projectId={data.id} shiftForOverlay />
+      <div className="sticky top-11 z-10">
+        <ProjectPublishedBanner projectId={data.id} shiftForOverlay />
+      </div>
 
       {/* #3: обложка проекта — во всю ширину, над заголовком (если задана). */}
       {data.coverUrl && (
