@@ -44,7 +44,7 @@ export function ProjectPublishedBanner({ projectId }: Props): React.ReactElement
   };
 
   return (
-    <div className="relative flex shrink-0 flex-wrap items-center justify-center gap-x-2.5 gap-y-1 border-b border-black/[0.05] bg-[#e8f3f9] px-10 py-2 text-[13px] leading-tight text-[#37352f] dark:border-white/[0.06] dark:bg-[#1d2a31] dark:text-blue-50">
+    <div className="relative flex min-h-[3.375rem] shrink-0 flex-wrap items-center justify-center gap-x-2.5 gap-y-1 border-b border-black/[0.05] bg-[#e8f3f9] px-10 py-1.5 text-[13px] leading-tight text-[#37352f] dark:border-white/[0.06] dark:bg-[#1d2a31] dark:text-blue-50">
       <span className="truncate">
         Проект опубликован на <span className="font-medium">{address}</span>
       </span>

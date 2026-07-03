@@ -87,7 +87,7 @@ export function FinancePage(): React.ReactElement {
     <>
       {/* Хлебные крошки: строка min-h-11 (44px), вертикально центрирована, прижата к верху —
           на одной горизонтали со свитчером пространства в сайдбаре (Notion top-alignment). */}
-      <div className="flex min-h-11 items-center px-2.5 pt-2">
+      <div className="flex h-11 items-center px-2.5">
         <ProjectBreadcrumbs
           projectId={pid ?? ''}
           projectName={project.name}

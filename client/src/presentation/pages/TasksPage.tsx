@@ -113,7 +113,7 @@ export function TasksPage(): React.ReactElement {
     <div className="flex h-full flex-col">
       {/* Хлебные крошки прячем на мобиле: имя проекта дублируется в заголовке ниже,
           навигация — в нижнем таб-баре/drawer. Это возвращает вертикальное место канбану. */}
-      <div className="hidden min-h-11 items-center px-2.5 pt-2 sm:flex">
+      <div className="hidden h-11 items-center px-2.5 sm:flex">
         <ProjectBreadcrumbs
           projectId={data.id}
           projectName={data.name}

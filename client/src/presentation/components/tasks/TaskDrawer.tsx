@@ -315,7 +315,7 @@ function DrawerShell({
         {...dragHandlers}
       >
         {dragOverlay}
-        <div className="flex min-h-11 shrink-0 items-center px-3 pt-2 sm:px-6">{breadcrumbs}</div>
+        <div className="flex h-11 shrink-0 items-center px-3 sm:px-6">{breadcrumbs}</div>
         <div
           className={cn(
             'mx-auto grid w-full flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden',
@@ -1579,7 +1579,7 @@ export function TaskDrawer({
                   ПОСЛЕ них (как «ник»), а заголовок задачи ниже остаётся у левого края —
                   то есть ровно слева относительно названия проекта (как контент в сайдбаре
                   стоит слева, а ник отступлен аватаркой). */}
-              <div className="flex min-h-9 items-center gap-2 px-4 pt-1.5">
+              <div className="flex h-11 items-center gap-2 px-4">
                 {renderCloseButton()}
                 {renderMaximizeButton()}
                 {renderPageWidthToggle()}
@@ -1970,7 +1970,7 @@ export function TaskDrawer({
                 className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
               >
                 {/* Row A: кнопки слева, контекст после них (как ава→ник в сайдбаре). */}
-                <div className="flex min-h-9 items-center gap-2 px-4 pt-1.5">
+                <div className="flex h-11 items-center gap-2 px-4">
                   {renderCloseButton()}
                   {renderMaximizeButton()}
                   <span className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">

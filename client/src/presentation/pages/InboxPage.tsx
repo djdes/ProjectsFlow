@@ -130,7 +130,7 @@ export function InboxPage(): React.ReactElement {
           пространства раскрывается при наведении для быстрого переключения. Прячем на мобиле.
           Строка крошек = min-h-11 (44px), вертикально центрирована, прижата к верху — ровно
           на одной горизонтали со свитчером пространства в сайдбаре (Notion top-alignment). */}
-      <div className="hidden min-h-11 items-center px-2.5 pt-2 sm:flex">
+      <div className="hidden h-11 items-center px-2.5 sm:flex">
         <InboxBreadcrumbs />
       </div>
 
