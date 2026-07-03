@@ -8,27 +8,22 @@ type Props = {
 
 // Событие синхронизации закрытия между экземплярами плашки (она рендерится и под крошками,
 // и в выехавшем справа окне задачи): закрытие в одном месте гасит все копии этого проекта.
+// Закрытие живёт только в памяти — при обновлении страницы плашка возвращается (по требованию).
 const DISMISS_EVENT = 'pf:published-banner-dismissed';
 
 // Кнопки плашки — белые «пилюли» как в Notion (View site / Site settings). Пока заглушки.
 const BTN =
-  'inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/90 px-2 py-1 text-[12px] font-medium text-[#37352f] shadow-sm ring-1 ring-black/[0.06] transition-colors hover:bg-white dark:bg-white/10 dark:text-blue-50 dark:ring-white/10 dark:hover:bg-white/20';
+  'inline-flex shrink-0 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 py-1 text-[13px] font-medium text-[#37352f] shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-colors hover:bg-white/70 dark:border-white/10 dark:bg-white/10 dark:text-blue-50 dark:hover:bg-white/20';
 
 // Синяя плашка «проект опубликован» — один в один как «This page is live on …» в Notion:
 // бледно-голубой фон, по центру текст с адресом + белые кнопки «Показать сайт» / «Настройки
-// сайта». Один и тот же компонент рендерится под крошками и в окне задачи, поэтому в окне
-// плашка выглядит бесшовным продолжением. Закрывается (per-project, sessionStorage).
+// сайта». Симметричные вертикальные отступы (контент строго по центру). Один и тот же компонент
+// рендерится под крошками и в окне задачи, поэтому в окне плашка выглядит бесшовным продолжением.
 // Адрес — <логин>.projectsflow.ru, где логин = local-part email текущего юзера.
 export function ProjectPublishedBanner({ projectId }: Props): React.ReactElement | null {
   const { user } = useCurrentUser();
-  const dismissKey = `pf-published-banner-dismissed:${projectId}`;
-  const [dismissed, setDismissed] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem(dismissKey) === '1';
-    } catch {
-      return false;
-    }
-  });
+  // Только in-memory: refresh страницы возвращает плашку.
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     const onDismiss = (e: Event): void => {
@@ -45,16 +40,11 @@ export function ProjectPublishedBanner({ projectId }: Props): React.ReactElement
 
   const close = (): void => {
     setDismissed(true);
-    try {
-      sessionStorage.setItem(dismissKey, '1');
-    } catch {
-      /* sessionStorage недоступен — плашка закроется только на этот рендер */
-    }
     window.dispatchEvent(new CustomEvent(DISMISS_EVENT, { detail: projectId }));
   };
 
   return (
-    <div className="relative flex shrink-0 flex-wrap items-center justify-center gap-x-2.5 gap-y-1 border-b border-black/[0.05] bg-[#e7f3f8] px-10 py-2 text-[13px] leading-tight text-[#37352f] dark:border-white/[0.06] dark:bg-[#1d2a31] dark:text-blue-50">
+    <div className="relative flex shrink-0 flex-wrap items-center justify-center gap-x-2.5 gap-y-1 border-b border-black/[0.05] bg-[#e8f3f9] px-10 py-2 text-[13px] leading-tight text-[#37352f] dark:border-white/[0.06] dark:bg-[#1d2a31] dark:text-blue-50">
       <span className="truncate">
         Проект опубликован на <span className="font-medium">{address}</span>
       </span>
