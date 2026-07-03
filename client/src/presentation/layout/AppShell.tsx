@@ -1,7 +1,7 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { ChevronsRight, Menu, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Menu, X } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -128,6 +128,28 @@ export function AppShell(): React.ReactElement {
     isDesktop && !collapsed,
     toggleCollapse,
   );
+  const { animations } = useMotion();
+
+  // Свёрнутая панель: наведение на бургер (или на предпросмотр) показывает плавающий
+  // предпросмотр панели; клик по бургеру — закрепляет её открытой. Таймер на закрытие
+  // «сшивает» зазор между бургером и оверлеем, чтобы предпросмотр не мигал.
+  const [peek, setPeek] = useState(false);
+  const peekTimer = useRef<number | null>(null);
+  const openPeek = useCallback((): void => {
+    if (peekTimer.current) {
+      window.clearTimeout(peekTimer.current);
+      peekTimer.current = null;
+    }
+    setPeek(true);
+  }, []);
+  const closePeekSoon = useCallback((): void => {
+    if (peekTimer.current) window.clearTimeout(peekTimer.current);
+    peekTimer.current = window.setTimeout(() => setPeek(false), 140);
+  }, []);
+  // Смена маршрута (клик по проекту в предпросмотре) — прячем предпросмотр.
+  useEffect(() => {
+    setPeek(false);
+  }, [pathname]);
 
   // SSE real-time-уведомления (toast + мгновенный бейдж). Только для authenticated-сессии,
   // которой и является AppShell (рендерится внутри ProtectedRoute).
@@ -178,30 +200,57 @@ export function AppShell(): React.ReactElement {
                 />
               </ResizeHandleHint>
             )}
-            {/* При скрытой панели резервируем слева место под плавающую кнопку «развернуть»,
-                чтобы она не наезжала на крошки/заголовок страницы. */}
-            <main className={cn('relative min-h-0 overflow-y-auto', collapsed && 'pl-10')}>
-              {/* Плавающая кнопка «развернуть» в углу контента, когда панель скрыта. */}
-              {collapsed && (
+            {/* Свёрнутая панель (Notion-style): бургер сверху-слева + предпросмотр на hover.
+                Контент (обложка, синяя плашка) при этом растянут до левого края. */}
+            {collapsed && (
+              <>
                 <TooltipProvider delayDuration={300}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
                         type="button"
-                        onClick={toggleCollapse}
-                        aria-label="Развернуть панель"
-                        className="absolute left-2 top-2.5 z-30 grid size-8 place-items-center rounded-md bg-background/80 text-muted-foreground backdrop-blur-sm transition-colors hover:bg-hover hover:text-foreground"
+                        onMouseEnter={openPeek}
+                        onMouseLeave={closePeekSoon}
+                        onClick={() => {
+                          setPeek(false);
+                          toggleCollapse();
+                        }}
+                        aria-label="Показать боковую панель"
+                        className="absolute left-2 top-2.5 z-40 grid size-8 place-items-center rounded-md bg-background/70 text-muted-foreground backdrop-blur-sm transition-colors hover:bg-hover hover:text-foreground"
                       >
-                        <ChevronsRight className="size-4" />
+                        <Menu className="size-4" />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent side="right" className="flex items-center gap-1.5">
-                      <span>Развернуть панель</span>
-                      <kbd className="rounded bg-foreground/10 px-1 text-[10px] leading-4">Ctrl+\</kbd>
+                    <TooltipContent
+                      side="right"
+                      className="flex items-center gap-1.5 border-transparent bg-neutral-900 text-white"
+                    >
+                      <span>Закрепить панель</span>
+                      <kbd className="rounded bg-white/15 px-1 text-[10px] leading-4">Ctrl+\</kbd>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-              )}
+                {/* Плавающий предпросмотр панели — оверлей поверх контента (не двигает его). */}
+                <AnimatePresence>
+                  {peek && (
+                    <motion.div
+                      key="sidebar-peek"
+                      initial={animations ? { x: -14, opacity: 0 } : false}
+                      animate={{ x: 0, opacity: 1 }}
+                      exit={animations ? { x: -14, opacity: 0 } : { opacity: 0 }}
+                      transition={animations ? { type: 'spring', stiffness: 560, damping: 44 } : { duration: 0 }}
+                      onMouseEnter={openPeek}
+                      onMouseLeave={closePeekSoon}
+                      style={{ width: sidebarWidth }}
+                      className="absolute inset-y-1.5 left-1.5 z-30 overflow-hidden rounded-xl border bg-sidebar shadow-2xl"
+                    >
+                      <Sidebar collapsed={false} onToggleCollapse={toggleCollapse} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </>
+            )}
+            <main className="relative min-h-0 overflow-y-auto">
               <PageTransition>
                 <Outlet />
               </PageTransition>
