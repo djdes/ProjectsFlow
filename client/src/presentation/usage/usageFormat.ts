@@ -33,6 +33,19 @@ export function subscriptionExpiryNote(plan: PlanId, expiresAt: Date | null): st
   return `активен до ${formatExpiry(expiresAt)} · затем Бесплатный`;
 }
 
+// Короткая дата окончания для шапки: «30 июня» (без времени).
+export function formatExpiryShort(d: Date): string {
+  return d.toLocaleString('ru-RU', { day: 'numeric', month: 'long' });
+}
+
+// Компактная строка тарифа для шапки свитчера (в стиле «Free Plan · 5 members» в Notion):
+// «Прайм · до 30 июня» для платных, просто «Бесплатный» — когда срока нет.
+export function planHeaderLine(plan: PlanId, expiresAt: Date | null): string {
+  const name = planNameRu(plan);
+  if (plan === 'free' || !expiresAt) return name;
+  return `${name} · до ${formatExpiryShort(expiresAt)}`;
+}
+
 export function planNameRu(plan: PlanId): string {
   switch (plan) {
     case 'prime':

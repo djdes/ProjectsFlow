@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, ChevronsUpDown, CircleArrowUp, Copy, Gauge, Home, LogOut, Plus, Settings, UserPlus } from 'lucide-react';
+import { Check, ChevronsUpDown, CircleArrowUp, Copy, Gauge, Home, Plus, Settings, UserPlus } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,7 +22,7 @@ import { WorkspaceIcon } from './WorkspaceIcon';
 import { useUsageDialog } from '@/presentation/usage/UsageDialogProvider';
 import { useUpgradeDialog } from '@/presentation/usage/UpgradeDialogProvider';
 import { useUsage } from '@/presentation/usage/UsageProvider';
-import { planNameRu, subscriptionExpiryNote } from '@/presentation/usage/usageFormat';
+import { planHeaderLine } from '@/presentation/usage/usageFormat';
 
 // compact — режим icon-rail (свёрнутая панель): триггер только иконка пространства.
 export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {}): React.ReactElement {
@@ -109,7 +109,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
           sideOffset={compact ? 8 : 4}
           className="w-72 p-0"
         >
-          {/* Шапка: аватар + никнейм пользователя + email (с копированием). */}
+          {/* Шапка: аватар + никнейм + строка тарифа со сроком (как «Free Plan · …» в Notion). */}
           <div className="flex items-center gap-3 px-3 py-3">
             <ViewableAvatar
               displayName={user.displayName}
@@ -118,44 +118,13 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
             />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold leading-tight">{user.displayName}</div>
-              <div className="truncate text-xs text-muted-foreground">{user.email}</div>
+              {usage && (
+                <div className="truncate text-xs text-muted-foreground">
+                  {planHeaderLine(usage.plan, usage.subscription.expiresAt)}
+                </div>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                copyEmail();
-              }}
-              aria-label="Скопировать email"
-              title="Скопировать email"
-              className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            </button>
           </div>
-
-          {/* Подписка: тариф + срок, клик → окно тарифов (как «Free Plan» в Notion). */}
-          {usage && (
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                upgrade.open();
-              }}
-              className="group/plan flex w-full items-center gap-2 border-t border-border/60 px-3 py-2 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-            >
-              <Gauge className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">Тариф «{planNameRu(usage.plan)}»</span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {subscriptionExpiryNote(usage.plan, usage.subscription.expiresAt) ??
-                    'Управление подпиской и лимитами'}
-                </span>
-              </span>
-              <ChevronRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/plan:opacity-100" />
-            </button>
-          )}
 
           <DropdownMenuSeparator className="my-0" />
 
@@ -192,20 +161,31 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
 
           <DropdownMenuSeparator className="my-0" />
 
-          {/* Список пространств */}
-          <div className="px-3 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-            Пространства
-          </div>
+          {/* Над списком пространств — email аккаунта (клик копирует), как в Notion. */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              copyEmail();
+            }}
+            aria-label="Скопировать email"
+            title="Скопировать email"
+            className="group/mail flex w-full items-center gap-1.5 px-3 pt-1.5 pb-0.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
+          >
+            <span className="min-w-0 flex-1 truncate">{user.email}</span>
+            {copied ? (
+              <Check className="size-3 shrink-0" />
+            ) : (
+              <Copy className="size-3 shrink-0 opacity-0 transition-opacity group-hover/mail:opacity-100" />
+            )}
+          </button>
 
           <div className="max-h-56 overflow-y-auto p-1">
             {(workspaces ?? []).map((ws) => (
               <div
                 key={ws.id}
-                className={cn(
-                  'group/row flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent',
-                  // Текущее пространство — мягкая подсветка (как в Notion), не только жирный.
-                  ws.isCurrent && 'bg-foreground/[0.06] font-medium dark:bg-white/[0.08]',
-                )}
+                className="group/row flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent"
               >
                 <button
                   type="button"
@@ -215,15 +195,11 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
                   <WorkspaceIcon name={ws.name} icon={ws.icon} className="size-5 text-[10px]" />
                   <span className="min-w-0 flex-1 truncate">{ws.name}</span>
                   {ws.kind === 'default' && (
-                    <span
-                      title="Пространство по умолчанию — все ваши проекты"
-                      className="inline-flex shrink-0 items-center gap-1 text-[10px] font-medium text-muted-foreground"
-                    >
-                      <Home className="size-3" aria-hidden="true" />
-                      по умолчанию
+                    <span title="Пространство по умолчанию" className="inline-flex shrink-0 text-muted-foreground">
+                      <Home className="size-3.5" aria-hidden="true" />
                     </span>
                   )}
-                  {ws.isCurrent && <Check className="size-4 shrink-0 text-primary motion-safe:animate-in motion-safe:zoom-in-50" />}
+                  {ws.isCurrent && <Check className="size-4 shrink-0 text-foreground" />}
                 </button>
                 <button
                   type="button"
@@ -254,10 +230,9 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
 
           <DropdownMenuSeparator className="my-0" />
 
-          {/* Выход — в самом низу */}
+          {/* Выход — в самом низу, минималистично: без иконки, приглушённый */}
           <div className="p-1">
-            <DropdownMenuItem onClick={handleLogout}>
-              <LogOut />
+            <DropdownMenuItem onClick={handleLogout} className="text-muted-foreground focus:text-foreground">
               Выйти
             </DropdownMenuItem>
           </div>
