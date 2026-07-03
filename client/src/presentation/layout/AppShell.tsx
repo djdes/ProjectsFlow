@@ -218,7 +218,7 @@ export function AppShell(): React.ReactElement {
                           toggleCollapse();
                         }}
                         aria-label="Показать боковую панель"
-                        className="absolute left-2 top-1.5 z-40 grid size-8 place-items-center rounded-md bg-background/70 text-muted-foreground backdrop-blur-sm transition-colors hover:bg-hover hover:text-foreground"
+                        className="absolute left-2 top-1.5 z-40 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
                       >
                         <Menu className="size-4" />
                       </button>
@@ -244,7 +244,7 @@ export function AppShell(): React.ReactElement {
                       onMouseEnter={openPeek}
                       onMouseLeave={closePeekSoon}
                       style={{ width: sidebarWidth }}
-                      className="absolute inset-y-1.5 left-1.5 z-30 overflow-hidden rounded-xl border bg-sidebar shadow-2xl"
+                      className="absolute bottom-1.5 left-1.5 top-12 z-30 overflow-hidden rounded-xl border bg-sidebar shadow-2xl"
                     >
                       <Sidebar collapsed={false} onToggleCollapse={toggleCollapse} />
                     </motion.div>
