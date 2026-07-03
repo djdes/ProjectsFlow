@@ -318,19 +318,10 @@ const examples = [
   .shots__hero {
     position: relative;
     margin: var(--sp-12) 0 0;
-    padding: clamp(1.25rem, 3vw, 2.5rem);
+    /* Меньше полей — скрин крупнее (как в Notion). */
+    padding: clamp(0.75rem, 1.4vw, 1.25rem);
     border-radius: var(--r-lg);
     background: var(--tone-bg, transparent);
-  }
-  /* Лёгкий 3D-наклон большого скрина — объёмный вид как в Notion. */
-  .shots__hero .shots__frame {
-    transform: perspective(2600px) rotateX(4deg);
-    transform-origin: center 78%;
-  }
-  @media (prefers-reduced-motion: no-preference) {
-    .shots__hero .shots__frame:hover {
-      transform: perspective(2600px) rotateX(2deg) translateY(-6px);
-    }
   }
 
   /* Плавающие UI-фрагменты поверх скрина (композит «разные экраны»). */
@@ -398,8 +389,8 @@ const examples = [
   .shots__mini-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: rgba(11, 18, 32, 0.18); }
   .shots__mini-title { margin-left: 6px; font-style: normal; font-size: 10px; font-weight: 600; color: var(--muted); }
   .shots__mini img { display: block; width: 100%; height: auto; }
-  .shots__mini--finance { width: 42%; right: 4%; bottom: 7%; --rot: -3deg; }
-  .shots__mini--board { width: 46%; left: -0.5rem; bottom: -0.8rem; --rot: -3deg; }
+  .shots__mini--finance { width: 48%; right: 3%; bottom: 6%; --rot: -2.5deg; }
+  .shots__mini--board { width: 52%; left: -0.6rem; bottom: -0.8rem; --rot: -2.5deg; }
   @media (max-width: 720px) { .shots__mini { display: none; } }
 
   .shots__float { transform: rotate(var(--rot, 0deg)); }
@@ -456,11 +447,6 @@ const examples = [
     line-height: var(--lh-normal);
   }
   .shots__fig { margin: 0; position: relative; }
-  /* Лёгкий боковой 3D-угол для скрина финансов + плавающая карточка прибыли. */
-  .shots__fig--tilt .shots__frame { transform: perspective(2200px) rotateY(-6deg); transform-origin: right center; }
-  @media (prefers-reduced-motion: no-preference) {
-    .shots__fig--tilt .shots__frame:hover { transform: perspective(2200px) rotateY(-3deg) translateY(-6px); }
-  }
   .shots__float--income {
     top: -0.8rem;
     left: -0.8rem;
