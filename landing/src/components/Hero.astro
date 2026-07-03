@@ -1,6 +1,5 @@
 ---
 import KanbanBoard from './KanbanBoard.tsx';
-import Floaties from './Floaties.astro';
 
 // Лендинг и SPA — один Express в prod, пути относительные.
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
@@ -30,14 +29,13 @@ const points = [
   <div class="hero__bg" aria-hidden="true">
     <div class="hero__grid grid-bg"></div>
     <div class="mesh-blob mesh-blob--magnetic hero__glow" data-magnetic-blob></div>
-    <Floaties count={13} opacity={0.42} />
   </div>
 
   <div class="hero__wide">
     <!-- Notion-раскладка: центрированный лид сверху. -->
     <div class="hero__lede" data-reveal>
       <h1 id="hero-title" class="hero__title">
-        Опиши идею — получи <span class="pf-grad">готовый продукт</span>.
+        Опиши идею — получи <span class="hero__kw"><span class="hero__kw-dot" aria-hidden="true"></span>готовый&nbsp;продукт</span>.
       </h1>
 
       <p class="hero__subtitle">
@@ -102,14 +100,12 @@ const points = [
     <!-- Крупная «сцена» продукта под лидом — как hero-скрин в Notion. ЕДИНСТВЕННАЯ
          интерактивная доска: перетащи задачу на «Воркер» — AI берёт её в работу. -->
     <div class="hero__stage" data-reveal style="--reveal-delay: 120ms">
-      <!-- Playful-стикеры вокруг скрина (как у Notion). Только десктоп, чистый декор. -->
+      <!-- Playful-стикеры-бейджи вокруг скрина (как у Notion): мало, аккуратно, десктоп. -->
       <div class="hero__stickers" aria-hidden="true">
-        <span class="hero__sticker" style="top: -1.4rem; left: -1.1rem; --d: 0s">🚀</span>
-        <span class="hero__sticker" style="top: -1.9rem; right: 7%; --d: -2.4s">✨</span>
-        <span class="hero__sticker" style="top: 30%; left: -2rem; --d: -4s">💡</span>
-        <span class="hero__sticker" style="top: 46%; right: -1.9rem; --d: -1.2s">💰</span>
-        <span class="hero__sticker" style="bottom: 24%; left: -1.7rem; --d: -3.2s">📊</span>
-        <span class="hero__sticker" style="bottom: 3.5rem; right: -1.3rem; --d: -5s">✅</span>
+        <span class="hero__sticker" style="top: -1.5rem; left: 4%; --d: 0s; --rot: -8deg">🚀</span>
+        <span class="hero__sticker" style="top: -1.9rem; right: 9%; --d: -2.6s; --rot: 7deg">✨</span>
+        <span class="hero__sticker" style="top: 44%; left: -1.5rem; --d: -3.6s; --rot: -6deg">💰</span>
+        <span class="hero__sticker" style="bottom: 14%; right: -1.4rem; --d: -1.6s; --rot: 9deg">✅</span>
       </div>
 
       <div class="hero__stage-frame">
@@ -200,6 +196,25 @@ const points = [
     font-weight: 720;
     color: var(--text);
     text-wrap: balance;
+  }
+  /* Ключевое слово — синяя подсветка + синяя точка (как «● Think» у Notion). */
+  .hero__kw {
+    color: #2383e2;
+    background: rgba(35, 131, 226, 0.12);
+    padding: 0.02em 0.26em;
+    border-radius: 0.26em;
+    white-space: nowrap;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .hero__kw-dot {
+    display: inline-block;
+    width: 0.42em;
+    height: 0.42em;
+    margin-right: 0.34em;
+    border-radius: 50%;
+    background: #2383e2;
+    vertical-align: 0.16em;
   }
   .hero__subtitle {
     margin: var(--sp-5) auto 0;
@@ -313,7 +328,7 @@ const points = [
   .hero__stage {
     position: relative;
     margin-top: clamp(2rem, 5vw, 3.5rem);
-    max-width: 1060px;
+    max-width: 940px;
     margin-inline: auto;
     display: flex;
     flex-direction: column;
@@ -323,11 +338,22 @@ const points = [
   /* Playful-стикеры вокруг скрина продукта (десктоп). */
   .hero__stickers { position: absolute; inset: 0; pointer-events: none; z-index: 3; display: none; }
   @media (min-width: 900px) { .hero__stickers { display: block; } }
+  /* Белый бейдж-стикер с эмодзи (app-icon вид), лёгкий наклон и покачивание. */
   .hero__sticker {
     position: absolute;
-    font-size: clamp(1.7rem, 2.4vw, 2.5rem);
+    display: grid;
+    place-items: center;
+    width: clamp(42px, 3vw, 54px);
+    height: clamp(42px, 3vw, 54px);
+    font-size: clamp(1.2rem, 1.5vw, 1.55rem);
     line-height: 1;
-    filter: drop-shadow(0 8px 16px rgba(11, 18, 32, 0.18));
+    background: #fff;
+    border-radius: 15px;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 10px 22px -8px rgba(11, 18, 32, 0.24),
+      0 2px 6px rgba(11, 18, 32, 0.10);
+    transform: rotate(var(--rot, -6deg));
     animation: hero-sticker-bob 6.5s var(--d, 0s) ease-in-out infinite;
     will-change: transform;
   }
@@ -335,8 +361,8 @@ const points = [
     .hero__sticker { animation: none; }
   }
   @keyframes hero-sticker-bob {
-    0%, 100% { transform: translateY(0) rotate(-5deg); }
-    50% { transform: translateY(-12px) rotate(5deg); }
+    0%, 100% { transform: translateY(0) rotate(var(--rot, -6deg)); }
+    50% { transform: translateY(-9px) rotate(calc(var(--rot, -6deg) * -1)); }
   }
   /* Мягкая «парящая» тень со всех сторон + лёгкий hover-подъём (как рамки скринов ниже). */
   .hero__stage-frame {
@@ -357,6 +383,8 @@ const points = [
         0 60px 100px -40px rgba(11, 18, 32, 0.26);
     }
   }
+  /* Тень «парения» даёт рамка; у самой доски её гасим, чтобы не двоилась. */
+  .hero__stage-frame :global(.kb2) { box-shadow: none; max-width: 100%; }
   .hero__showcase-cap { font-size: var(--fs-sm); color: var(--muted); text-align: center; max-width: 30rem; }
   .hero__showcase-cap b { color: var(--accent); font-weight: 700; }
 
