@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import {
   COVER_GRADIENTS,
@@ -12,20 +13,59 @@ import {
 type Props = {
   // Выбор готового значения (градиент/фото/ссылка) — ставим coverUrl через PATCH.
   onSetCover: (coverUrl: string) => void;
-  // Загрузка своего файла (multipart).
+  // Загрузка своего файла (multipart). Поповер НЕ закрываем здесь — родитель закроет по завершении.
   onUploadFile: (file: File) => void;
   // Убрать обложку.
   onRemove: () => void;
-  // Закрыть поповер (после выбора/загрузки/ссылки/убрать).
+  // Закрыть поповер (после выбора пресета/ссылки/убрать).
   onClose: () => void;
   busy?: boolean;
+  // Идёт аплоад файла (показываем прогресс-бар).
+  uploading?: boolean;
+  // Прогресс аплоада 0..100.
+  uploadPct?: number;
 };
 
+// Достаёт файл-изображение из буфера обмена (ctrl+v). null — если картинки в буфере нет
+// (например, скопирован текст/ссылка) — тогда вставку не перехватываем.
+function imageFromClipboard(data: DataTransfer | null): File | null {
+  if (!data) return null;
+  for (const item of Array.from(data.items)) {
+    if (item.kind === 'file' && item.type.startsWith('image/')) {
+      const f = item.getAsFile();
+      if (f) return f;
+    }
+  }
+  return null;
+}
+
 // Поповер «Поменять обложку» — как в Notion: вкладки Галерея / Загрузить / Ссылка, а справа —
-// «Убрать». Любой выбор сразу применяет обложку и закрывает поповер.
-export function ProjectCoverPicker({ onSetCover, onUploadFile, onRemove, onClose, busy }: Props): React.ReactElement {
+// «Убрать». Плюс: пока поповер открыт, ctrl+v из любого места (на любой вкладке) вставляет
+// картинку из буфера и грузит её с мгновенным прогресс-баром.
+export function ProjectCoverPicker({
+  onSetCover,
+  onUploadFile,
+  onRemove,
+  onClose,
+  busy,
+  uploading,
+  uploadPct = 0,
+}: Props): React.ReactElement {
   const fileRef = useRef<HTMLInputElement>(null);
   const [link, setLink] = useState('');
+
+  // Перехват ctrl+v пока открыт поповер — вставка картинки из буфера на любой вкладке.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent): void => {
+      if (busy || uploading) return;
+      const file = imageFromClipboard(e.clipboardData);
+      if (!file) return; // в буфере не картинка — не мешаем обычной вставке (напр. ссылки)
+      e.preventDefault();
+      onUploadFile(file);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [busy, uploading, onUploadFile]);
 
   const pick = (coverUrl: string): void => {
     onSetCover(coverUrl);
@@ -59,6 +99,17 @@ export function ProjectCoverPicker({ onSetCover, onUploadFile, onRemove, onClose
             Убрать
           </button>
         </div>
+
+        {/* Прогресс аплоада (файл или ctrl+v) — виден на любой вкладке, появляется моментально. */}
+        {uploading && (
+          <div className="space-y-1.5 border-b px-3 py-2.5">
+            <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+              <span>Загрузка обложки…</span>
+              <span className="tabular-nums">{uploadPct}%</span>
+            </div>
+            <Progress value={uploadPct} />
+          </div>
+        )}
 
         {/* Галерея: арт-обложки + одноцветные градиенты (всё — чистый CSS) */}
         <TabsContent value="gallery" className="max-h-[50vh] space-y-3 overflow-y-auto p-3">
@@ -116,14 +167,14 @@ export function ProjectCoverPicker({ onSetCover, onUploadFile, onRemove, onClose
             onChange={(e) => {
               const f = e.target.files?.[0];
               e.target.value = '';
-              if (f) {
-                onUploadFile(f);
-                onClose();
-              }
+              // Поповер не закрываем — покажем прогресс-бар, родитель закроет по завершении.
+              if (f) onUploadFile(f);
             }}
           />
           <p className="text-center text-xs text-muted-foreground">
             jpg, png, webp, gif · до 20&nbsp;МБ · лучше шире 1500&nbsp;px
+            <br />
+            или просто вставьте картинку через&nbsp;Ctrl+V
           </p>
         </TabsContent>
 

@@ -221,14 +221,14 @@ export function TasksPage(): React.ReactElement {
         />
       )}
 
-      {/* Тело страницы: крупный заголовок с большими отступами (Notion-style). */}
-      <div className="flex min-h-0 flex-1 flex-col px-4 pb-3 sm:px-14 sm:pb-6">
+      {/* Тело страницы: крупный заголовок с большими отступами по краям (Notion-style). */}
+      <div className="flex min-h-0 flex-1 flex-col px-5 pb-4 sm:px-16 sm:pb-8 lg:px-24">
       {/* #2: заголовок проекта — крупный, с большим отступом сверху и по бокам (как в Notion).
           При наведении на «шапку» — панель: добавить обложку / скрыть-показать описание (#3). */}
       <div
         className={cn(
-          'group/head shrink-0 pb-3 sm:pb-4',
-          data.coverUrl ? 'pt-4 sm:pt-5' : 'pt-8 sm:pt-12',
+          'group/head shrink-0 pb-4 sm:pb-6',
+          data.coverUrl ? 'pt-5 sm:pt-8' : 'pt-10 sm:pt-16',
         )}
       >
         {canEdit && (
@@ -251,7 +251,8 @@ export function TasksPage(): React.ReactElement {
           <EditableProjectTitle projectId={data.id} name={data.name} />
         </div>
         {!descriptionHidden && (
-          <div className="mt-2 pl-14 sm:mt-2.5">
+          // #1: описание выравнено строго по левому краю — под иконку проекта (без pl-отступа).
+          <div className="mt-2.5 sm:mt-3">
             <ProjectDescription projectId={data.id} description={data.description} canEdit={canEdit} />
           </div>
         )}

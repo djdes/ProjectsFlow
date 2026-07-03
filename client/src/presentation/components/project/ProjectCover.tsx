@@ -33,6 +33,8 @@ export function ProjectCover({ projectId, coverUrl, coverPosition, canEdit }: Pr
   const [repositioning, setRepositioning] = useState(false);
   const [tempPos, setTempPos] = useState(coverPosition);
   const [uploading, setUploading] = useState(false);
+  // Прогресс аплоада 0..100 — для мгновенного прогресс-бара в поповере (файл или ctrl+v).
+  const [uploadPct, setUploadPct] = useState(0);
   const drag = useRef<{ startY: number; startPos: number } | null>(null);
 
   const isGradient = isGradientCover(coverUrl);
@@ -45,14 +47,22 @@ export function ProjectCover({ projectId, coverUrl, coverPosition, canEdit }: Pr
   };
 
   const uploadFile = async (file: File): Promise<void> => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Можно вставить только изображение');
+      return;
+    }
+    // Показываем прогресс-бар моментально (0 %), ещё до первого события аплоада.
+    setUploadPct(0);
     setUploading(true);
     try {
-      const next = await projectRepository.uploadCover(projectId, file);
+      const next = await projectRepository.uploadCover(projectId, file, setUploadPct);
       applyReplace(next);
+      setPickerOpen(false);
     } catch (e) {
       toast.error(`Не удалось загрузить обложку: ${(e as Error).message}`);
     } finally {
       setUploading(false);
+      setUploadPct(0);
     }
   };
 
@@ -136,9 +146,9 @@ export function ProjectCover({ projectId, coverUrl, coverPosition, canEdit }: Pr
         )}
       />
 
-      {/* Панель управления при наведении (у кого есть права на редактирование) */}
+      {/* Панель управления — в правом ВЕРХНЕМ углу обложки (как в Notion). */}
       {canEdit && !repositioning && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-end p-3">
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-end p-3">
           {/* На тач-устройствах hover нет — на мобиле контролы показываем всегда, на sm+ по наведению. */}
           <div className="pointer-events-auto flex items-center gap-1.5 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover/cover:opacity-100 sm:focus-within:opacity-100">
             <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
@@ -159,6 +169,8 @@ export function ProjectCover({ projectId, coverUrl, coverPosition, canEdit }: Pr
                   onRemove={removeCover}
                   onClose={() => setPickerOpen(false)}
                   busy={busy}
+                  uploading={uploading}
+                  uploadPct={uploadPct}
                 />
               </PopoverContent>
             </Popover>
