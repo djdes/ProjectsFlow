@@ -1,17 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import {
-  Clock,
-  FolderPlus,
-  MessageSquare,
-  MoveRight,
-  Pencil,
-  SquarePen,
-  Trash2,
-  UserMinus,
-  UserPlus,
-  UserCog,
-  type LucideIcon,
-} from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { relativeTime } from '@/lib/relativeTime';
 import {
   Tooltip,
@@ -19,6 +7,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { UserAvatar } from '@/presentation/components/user/UserAvatar';
 import type { TaskStatus } from '@/domain/task/Task';
 import type {
   ActivityEventItem,
@@ -26,21 +15,6 @@ import type {
   ActivityKind,
 } from '@/domain/activity/ActivityFeedItem';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
-
-const KIND_ICON: Record<ActivityKind, LucideIcon> = {
-  task_created: SquarePen,
-  task_status_changed: MoveRight,
-  task_updated: Pencil,
-  task_deleted: Trash2,
-  task_commented: MessageSquare,
-  project_created: FolderPlus,
-  project_updated: Pencil,
-  project_archived: FolderPlus,
-  project_deleted: Trash2,
-  member_added: UserPlus,
-  member_removed: UserMinus,
-  member_role_changed: UserCog,
-};
 
 function statusLabel(s: string | undefined): string {
   if (!s) return '';
@@ -203,57 +177,52 @@ export function ActivityItem({
   onOpenVersions?: (taskId: string) => void;
 }): React.ReactElement {
   const navigate = useNavigate();
-  const Icon = KIND_ICON[item.kind] ?? SquarePen;
+  const actor = item.actorDisplayName ?? 'Кто-то';
   const versionTaskId =
     onOpenVersions && TASK_KINDS.has(item.kind) ? (item.payload?.taskId ?? null) : null;
   return (
     <li
       onClick={() => navigate(targetUrl(item))}
-      className="group cursor-pointer px-4 py-3 transition-colors hover:bg-muted/40"
+      className="group flex cursor-pointer gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
     >
-      {/* Flex-раскладка во всю ширину окна (Notion-style): иконка · контент (flex-1) ·
-          время справа. Короткий текст больше не оставляет правую половину пустой — время
-          «прижато» к правому краю, строка занимает всю ширину. */}
-      <div className="flex gap-2.5">
-        <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground ring-1 ring-border">
-          <Icon className="size-3.5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <p className="min-w-0 text-sm leading-snug">{renderText(item)}</p>
-            <div className="flex shrink-0 items-center gap-1.5">
-              {versionTaskId && (
-                <TooltipProvider delayDuration={300}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenVersions?.(versionTaskId);
-                        }}
-                        aria-label="Посмотреть версию"
-                        className="grid size-7 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
-                      >
-                        <Clock className="size-4" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="left" className="border-transparent bg-neutral-900 text-white">
-                      Посмотреть версию
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              <span className="whitespace-nowrap text-xs text-muted-foreground">
-                {relativeTime(item.createdAt)}
-              </span>
-            </div>
-          </div>
-          {(item.kind === 'task_updated' || item.kind === 'project_updated') &&
-          item.payload?.changes?.length ? (
-            <ChangesDiff changes={item.payload.changes} />
-          ) : null}
+      {/* Notion-style: аватар автора · контент (действие → серое время → дифф) · часы справа. */}
+      <UserAvatar
+        displayName={actor}
+        avatarUrl={item.actorAvatarUrl}
+        className="mt-0.5 size-7 rounded-full text-[11px]"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <p className="min-w-0 text-sm leading-snug">{renderText(item)}</p>
+          {versionTaskId && (
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenVersions?.(versionTaskId);
+                    }}
+                    aria-label="Посмотреть версию"
+                    className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <Clock className="size-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="border-transparent bg-neutral-900 text-white">
+                  Посмотреть версию
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
+        {/* Время — серым, чуть ниже (как в Notion). */}
+        <p className="mt-0.5 text-xs text-muted-foreground">{relativeTime(item.createdAt)}</p>
+        {(item.kind === 'task_updated' || item.kind === 'project_updated') &&
+        item.payload?.changes?.length ? (
+          <ChangesDiff changes={item.payload.changes} />
+        ) : null}
       </div>
     </li>
   );

@@ -69,15 +69,26 @@ export function useTasks(projectId: string): UseTasks {
   // возврате фокуса. void — refetch возвращает Promise, нам результат не нужен.
   useRealtimeTaskRefresh(projectId, () => void refetch());
 
+  // Событие «в проекте что-то поменялось» → мгновенно обновить «Изменено …» и ленту активности.
+  const notifyChanged = (): void => {
+    try {
+      window.dispatchEvent(new CustomEvent('pf:project-activity-changed', { detail: { projectId } }));
+    } catch {
+      /* среда без window — no-op */
+    }
+  };
+
   const create: UseTasks['create'] = async (input) => {
     const task = await taskRepository.create(projectId, input);
     setState((s) => ({ ...s, tasks: [...s.tasks, task] }));
+    notifyChanged();
     return task;
   };
 
   const update: UseTasks['update'] = async (taskId, input) => {
     const updated = await taskRepository.update(projectId, taskId, input);
     setState((s) => ({ ...s, tasks: s.tasks.map((t) => (t.id === taskId ? updated : t)) }));
+    notifyChanged();
     return updated;
   };
 
@@ -111,6 +122,7 @@ export function useTasks(projectId: string): UseTasks {
     try {
       const updated = await taskRepository.move(projectId, taskId, input);
       setState((s) => ({ ...s, tasks: s.tasks.map((t) => (t.id === taskId ? updated : t)) }));
+      notifyChanged();
     } catch (e) {
       // Откатываемся через refetch — проще чем хранить старое состояние.
       await refetch();
@@ -121,6 +133,7 @@ export function useTasks(projectId: string): UseTasks {
   const remove: UseTasks['remove'] = async (taskId) => {
     await taskRepository.delete(projectId, taskId);
     setState((s) => ({ ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }));
+    notifyChanged();
   };
 
   return { ...state, refetch, create, update, move, remove };

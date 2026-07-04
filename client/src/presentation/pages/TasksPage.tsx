@@ -35,6 +35,8 @@ export function TasksPage(): React.ReactElement {
   // Число активных алертов — для бейджа на кнопке.
   const [monitoringAlerts, setMonitoringAlerts] = useState(0);
   const [automationOpen, setAutomationOpen] = useState(false);
+  // Окно активности открыто? Пока открыто — действия в шапке страницы прячем (они в окне).
+  const [activityOpen, setActivityOpen] = useState(false);
   // Участники для аватар-стека в шапке (только совместные проекты).
   const [members, setMembers] = useState<ProjectMember[]>([]);
   // #3: описание можно скрыть/показать (Notion-style toggle над заголовком).
@@ -174,9 +176,15 @@ export function TasksPage(): React.ReactElement {
           <div className="flex shrink-0 items-center gap-0.5">
             {/* Активность/аналитика проекта. */}
             {/* Кнопка «Изменено …» открывает окно активности; ему же отдаём действия,
-                чтобы они были и в шапке, и в правом верхнем углу окна (Notion-style). */}
-            <ProjectActivityButton projectId={data.id} actions={projectActions} />
-            {projectActions}
+                чтобы они были в правом верхнем углу окна (Notion-style). Пока окно открыто —
+                и кнопку «Изменено», и действия шапки прячем (они уже внутри окна). */}
+            <ProjectActivityButton
+              projectId={data.id}
+              actions={projectActions}
+              open={activityOpen}
+              onOpenChange={setActivityOpen}
+            />
+            {!activityOpen && projectActions}
           </div>
         </TooltipProvider>
       </div>

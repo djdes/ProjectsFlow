@@ -4,7 +4,6 @@ import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/she
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
-import { useSetRightPanelWidth } from '@/presentation/layout/rightPanelContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
@@ -75,13 +74,9 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{ x: number; w: number } | null>(null);
 
-  // Публикуем ширину открытого окна в AppShell → главный <main> сужается, его скролл
-  // сдвигается влево к линии ресайза (Notion-style). Сброс при закрытии/размонтировании.
-  const setRightPanelWidth = useSetRightPanelWidth();
-  useEffect(() => {
-    setRightPanelWidth(open ? panelWidth : 0);
-    return () => setRightPanelWidth(0);
-  }, [open, panelWidth, setRightPanelWidth]);
+  // По требованию: при открытии окна активности главное окно НЕ меняется (не сужается,
+  // описание не переверстывается) — окно просто открывается поверх. Поэтому ширину в
+  // AppShell НЕ публикуем (в отличие от drawer'а задачи).
   const onHandlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLElement>): void => {
       e.preventDefault();
@@ -158,13 +153,22 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setLoadingActivity(true);
-    projectRepository
-      .getProjectActivity(projectId, 40)
-      .then((r) => { if (!cancelled) { setActivity(r.items); setSummary(r.summary); } })
-      .catch(() => { if (!cancelled) { setActivity([]); setSummary(null); } })
-      .finally(() => { if (!cancelled) setLoadingActivity(false); });
-    return () => { cancelled = true; };
+    const load = (withSpinner: boolean): void => {
+      if (withSpinner) setLoadingActivity(true);
+      projectRepository
+        .getProjectActivity(projectId, 40)
+        .then((r) => { if (!cancelled) { setActivity(r.items); setSummary(r.summary); } })
+        .catch(() => { if (!cancelled) { setActivity([]); setSummary(null); } })
+        .finally(() => { if (!cancelled) setLoadingActivity(false); });
+    };
+    load(true);
+    // Открытое окно моментально подхватывает новые события (создали/перенесли задачу).
+    const onChanged = (e: Event): void => {
+      const detail = (e as CustomEvent<{ projectId?: string }>).detail;
+      if (!detail || detail.projectId === projectId) load(false);
+    };
+    window.addEventListener('pf:project-activity-changed', onChanged);
+    return () => { cancelled = true; window.removeEventListener('pf:project-activity-changed', onChanged); };
   }, [open, projectId, projectRepository]);
 
   // Аналитика просмотров — перезапрашивается при смене окна (7/28/90).
@@ -206,8 +210,9 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
           />
         </ResizeHandleHint>
         {/* Верхняя строка: слева — кнопка сворачивания «»» (появляется при наведении на окно),
-            справа — действия проекта (участники · Поделиться · ⋯). Без заголовка, без крестика. */}
-        <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-2.5">
+            справа — действия проекта (участники · Поделиться · ⋯). Без заголовка, без крестика.
+            h-11 px-2.5 — тот же блок, что и строка крошек в шапке страницы (выровнены по высоте). */}
+        <div className="flex h-11 shrink-0 items-center justify-between gap-2 px-2.5">
           <SheetClose asChild>
             <button
               type="button"

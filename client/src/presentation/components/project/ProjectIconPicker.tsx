@@ -32,12 +32,20 @@ function randomEmoji(): string {
   return ALL_EMOJIS.length ? ALL_EMOJIS[Math.floor(Math.random() * ALL_EMOJIS.length)] : '🚀';
 }
 
+// «Недавние» — только обычные эмодзи. lucide-иконки (`lucide:…`) и картинки (`data:`/URL)
+// не годятся для этой сетки (рендерились бы сырым текстом), поэтому не сохраняем/фильтруем их.
+function isPlainEmoji(s: string): boolean {
+  return !(
+    s.startsWith('lucide:') || s.startsWith('data:') || s.startsWith('http') || s.startsWith('/')
+  );
+}
+
 function loadRecent(): string[] {
   try {
     const raw = localStorage.getItem(RECENT_KEY);
     const arr = raw ? (JSON.parse(raw) as unknown) : null;
     return Array.isArray(arr)
-      ? arr.filter((x): x is string => typeof x === 'string').slice(0, RECENT_MAX)
+      ? arr.filter((x): x is string => typeof x === 'string' && isPlainEmoji(x)).slice(0, RECENT_MAX)
       : [];
   } catch {
     return [];
@@ -96,7 +104,7 @@ export function ProjectIconPicker({ projectId, icon, big = false, variant = 'inl
 
   const choose = async (next: string | null): Promise<void> => {
     setOpen(false);
-    if (next && next !== icon) setRecent(pushRecent(next));
+    if (next && next !== icon && isPlainEmoji(next)) setRecent(pushRecent(next));
     if (next === icon) return;
     try {
       await submit(projectId, { icon: next });

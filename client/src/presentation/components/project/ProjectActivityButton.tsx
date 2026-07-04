@@ -16,25 +16,40 @@ import { ProjectActivityDialog } from './ProjectActivityDialog';
 export function ProjectActivityButton({
   projectId,
   actions,
+  open,
+  onOpenChange,
 }: {
   projectId: string;
   // Действия проекта (участники · Поделиться · ⋯) — прокидываются в окно активности.
   actions?: React.ReactNode;
+  // Управляемое состояние окна — чтобы TasksPage прятал действия шапки, пока окно открыто.
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }): React.ReactElement {
   const { projectRepository } = useContainer();
-  const [open, setOpen] = useState(false);
   const [summary, setSummary] = useState<ProjectActivitySummary | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    projectRepository
-      .getProjectActivity(projectId, 1)
-      .then((r) => {
-        if (!cancelled) setSummary(r.summary);
-      })
-      .catch(() => undefined);
+    const load = (): void => {
+      projectRepository
+        .getProjectActivity(projectId, 1)
+        .then((r) => {
+          if (!cancelled) setSummary(r.summary);
+        })
+        .catch(() => undefined);
+    };
+    load();
+    // Мгновенно обновляем «Изменено …» когда в проекте что-то поменялось (создали/перенесли
+    // задачу и т.п.) — по кастомному событию из useTasks.
+    const onChanged = (e: Event): void => {
+      const detail = (e as CustomEvent<{ projectId?: string }>).detail;
+      if (!detail || detail.projectId === projectId) load();
+    };
+    window.addEventListener('pf:project-activity-changed', onChanged);
     return () => {
       cancelled = true;
+      window.removeEventListener('pf:project-activity-changed', onChanged);
     };
   }, [projectId, projectRepository]);
 
@@ -44,13 +59,15 @@ export function ProjectActivityButton({
 
   return (
     <>
+      {/* Пока окно активности открыто — кнопку «Изменено …» прячем: действия уже в самом окне. */}
+      {!open && (
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
             variant="ghost"
             size="sm"
             className="h-8 px-2 text-sm font-normal text-muted-foreground hover:text-foreground"
-            onClick={() => setOpen(true)}
+            onClick={() => onOpenChange(true)}
           >
             {label}
           </Button>
@@ -83,7 +100,8 @@ export function ProjectActivityButton({
           </TooltipContent>
         )}
       </Tooltip>
-      <ProjectActivityDialog open={open} onOpenChange={setOpen} projectId={projectId} actions={actions} />
+      )}
+      <ProjectActivityDialog open={open} onOpenChange={onOpenChange} projectId={projectId} actions={actions} />
     </>
   );
 }
