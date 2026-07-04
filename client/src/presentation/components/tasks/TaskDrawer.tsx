@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, Clock, CornerDownRight, Download, FileText, Flag, GripVertical, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, FileText, Flag, GripVertical, Link2, Loader2, Maximize2, Minimize2, MoreHorizontal, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -26,6 +26,7 @@ import { normalizeTaskPropertyOrder, type TaskPropertyKey } from '@/domain/user/
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -222,6 +223,9 @@ type Props = {
   asPage?: boolean;
   // Хлебные крошки для asPage-режима (строит вызывающая страница: проект → задача).
   breadcrumbs?: React.ReactNode;
+  // Навигация пред/след по колонке (открыть задачу выше/ниже). undefined = кнопка неактивна.
+  onPrev?: () => void;
+  onNext?: () => void;
   // Подсветить тело задачи при открытии (переход из ленты активности по блоку изменения,
   // ?hl=<поле>). Значение — имя изменённого поля; на короткое время «мигаем» телом.
   highlightField?: string | null;
@@ -587,6 +591,8 @@ export function TaskDrawer({
   onMove,
   asPage = false,
   breadcrumbs = null,
+  onPrev,
+  onNext,
   highlightField = null,
 }: Props): React.ReactElement {
   const { user: currentUser } = useCurrentUser();
@@ -1608,10 +1614,37 @@ export function TaskDrawer({
               {renderCloseButton()}
               {renderMaximizeButton()}
               {renderPageWidthToggle()}
+              {/* Пред/след задача по колонке (задача выше/ниже). Неактивна = нет соседа. */}
+              {(onPrev || onNext) && (
+                <div className="ml-0.5 flex items-center">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                    disabled={!onPrev}
+                    onClick={onPrev}
+                    aria-label="Предыдущая задача"
+                    title="Предыдущая задача"
+                  >
+                    <ChevronUp className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                    disabled={!onNext}
+                    onClick={onNext}
+                    aria-label="Следующая задача"
+                    title="Следующая задача"
+                  >
+                    <ChevronDown className="size-4" />
+                  </Button>
+                </div>
+              )}
               {/* Название проекта и хеш задачи убраны (по требованию) — только спейсер,
                   чтобы действия/статус ушли к правому краю (Notion-style). */}
               <div className="min-w-0 flex-1" />
-              {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка). */}
+              {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка) = «передать в другой канбан». */}
               {onMove ? (
                 <TaskStatusChip task={task} onMove={onMove} onChanged={() => notifyChanged()} />
               ) : (
@@ -1624,6 +1657,45 @@ export function TaskDrawer({
                   {STATUS_LABEL[task.status]}
                 </span>
               )}
+              {/* Поделиться + ⋯ (задачные действия) — по правому краю, как в главном окне.
+                  «Изменено …» и участники в окне НЕ показываем (по требованию). */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+                aria-label="Поделиться"
+              >
+                <Share2 className="size-4" />
+                <span className="text-sm">Поделиться</span>
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground hover:text-foreground"
+                    aria-label="Ещё"
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[200px]">
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      try {
+                        void navigator.clipboard.writeText(
+                          `${window.location.origin}/projects/${task.projectId}/tasks/${task.id}`,
+                        );
+                        toast.success('Ссылка на задачу скопирована');
+                      } catch {
+                        /* clipboard недоступен */
+                      }
+                    }}
+                  >
+                    <Link2 className="text-muted-foreground" /> Копировать ссылку
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             {bannerProjectId && <ProjectPublishedBanner projectId={bannerProjectId} />}
 

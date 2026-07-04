@@ -790,6 +790,14 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     (s) => ({ status: s, label: resolveColumnLabel(settings?.[s], STATUS_LABEL[s]) }),
   );
 
+  // Пред/след задача для навигации в окне: соседи в той же колонке (в порядке отображения).
+  const drawerSiblings = dialog?.mode === 'edit' ? grouped[dialog.task.status] ?? [] : [];
+  const drawerIdx =
+    dialog?.mode === 'edit' ? drawerSiblings.findIndex((t) => t.id === dialog.task.id) : -1;
+  const drawerPrev = drawerIdx > 0 ? drawerSiblings[drawerIdx - 1] : null;
+  const drawerNext =
+    drawerIdx >= 0 && drawerIdx < drawerSiblings.length - 1 ? drawerSiblings[drawerIdx + 1] : null;
+
   return (
     // Single-scroll (Notion): доска НЕ ограничена высотой экрана и НЕ скроллится внутри себя —
     // растёт по контенту, а скроллится вся страница (родительский <main overflow-y-auto>).
@@ -1047,6 +1055,8 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         isInbox={isInbox}
         isShared={isShared}
         aiProjectId={isInbox ? null : projectId}
+        onPrev={drawerPrev ? () => setDialog({ mode: 'edit', task: drawerPrev }) : undefined}
+        onNext={drawerNext ? () => setDialog({ mode: 'edit', task: drawerNext }) : undefined}
         onMove={async (taskId, targetStatus) => {
           await move(taskId, {
             targetStatus,
