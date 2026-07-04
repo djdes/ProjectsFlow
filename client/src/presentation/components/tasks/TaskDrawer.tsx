@@ -41,7 +41,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { taskShortId, type Task } from '@/domain/task/Task';
+import { type Task } from '@/domain/task/Task';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import type { NotifyAudience, TaskComment } from '@/domain/task/TaskComment';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
@@ -1608,16 +1608,9 @@ export function TaskDrawer({
               {renderCloseButton()}
               {renderMaximizeButton()}
               {renderPageWidthToggle()}
-              <div className="flex min-w-0 flex-1 items-baseline gap-2">
-                {projectName && (
-                  <span className="truncate text-xs font-medium text-muted-foreground">
-                    {projectName}
-                  </span>
-                )}
-                <span className="font-mono text-[10px] text-muted-foreground/50">
-                  {taskShortId(task.id)}
-                </span>
-              </div>
+              {/* Название проекта и хеш задачи убраны (по требованию) — только спейсер,
+                  чтобы действия/статус ушли к правому краю (Notion-style). */}
+              <div className="min-w-0 flex-1" />
               {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка). */}
               {onMove ? (
                 <TaskStatusChip task={task} onMove={onMove} onChanged={() => notifyChanged()} />
