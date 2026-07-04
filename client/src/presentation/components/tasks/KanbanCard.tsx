@@ -1,6 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
+import { useSidebarResizing } from '@/presentation/layout/sidebarResizingContext';
 import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -360,9 +361,12 @@ function MotionWrapper({
   layoutId: string;
   children: React.ReactNode;
 }): React.ReactElement {
+  // Пока тянут ручку левой панели — layout-анимацию выключаем: иначе карточки «плывут»
+  // пружиной за колонками на каждом шаге ресайза и «висят в воздухе» до отпускания.
+  const resizing = useSidebarResizing();
   return (
     <motion.div
-      layout="position"
+      layout={resizing ? false : 'position'}
       layoutId={layoutId}
       initial={false}
       transition={{ type: 'spring', stiffness: 500, damping: 38, mass: 0.6 }}

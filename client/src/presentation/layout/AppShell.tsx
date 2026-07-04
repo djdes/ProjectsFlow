@@ -40,6 +40,7 @@ import { useSidebarWidth } from '@/presentation/hooks/useSidebarWidth';
 import { RightPanelProvider } from './rightPanelContext';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
 import { SidebarCollapsedContext } from './sidebarCollapsedContext';
+import { SidebarResizingContext } from './sidebarResizingContext';
 import { Sidebar } from './Sidebar';
 
 const COLLAPSE_KEY = 'pf_sidebar_collapsed';
@@ -164,6 +165,7 @@ export function AppShell(): React.ReactElement {
   // поэтому не делает 401-запросов когда пользователь не залогинен.
   return (
     <SidebarCollapsedContext.Provider value={isDesktop && collapsed}>
+    <SidebarResizingContext.Provider value={sidebarDragging}>
     <WorkspacesProvider>
     <ProjectsProvider>
     <UsageProvider>
@@ -321,6 +323,7 @@ export function AppShell(): React.ReactElement {
     </UsageProvider>
     </ProjectsProvider>
     </WorkspacesProvider>
+    </SidebarResizingContext.Provider>
     </SidebarCollapsedContext.Provider>
   );
 }
