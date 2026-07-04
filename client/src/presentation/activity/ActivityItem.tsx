@@ -2,6 +2,15 @@ import { useNavigate } from 'react-router-dom';
 import { CalendarDays, Clock } from 'lucide-react';
 import { relativeTime } from '@/lib/relativeTime';
 import { formatExactDateTime } from '@/lib/datetime';
+import { splitTitleBody, stripInlineMarkdown } from '@/lib/taskTitleBody';
+
+// Чистое короткое имя для ленты (Notion-минимализм): берём заголовок (первую строку),
+// срезаем markdown-разметку (** * ` ~~ и т.п.), схлопываем пробелы и обрезаем по длине.
+function cleanName(raw: string | null | undefined, max = 40): string {
+  if (!raw) return '';
+  const title = stripInlineMarkdown(splitTitleBody(raw).title).replace(/\s+/g, ' ').trim();
+  return title.length > max ? `${title.slice(0, max).trimEnd()}…` : title;
+}
 import {
   Tooltip,
   TooltipContent,
@@ -42,7 +51,9 @@ function humanizeValue(field: string, v: string | null): string {
   if (field === 'cover') return v ? 'обновлена' : 'убрана';
   if (v == null || v === '') return '—';
   if (field === 'priority') return PRIORITY_LABEL[v] ?? v;
-  return v.length > 180 ? `${v.slice(0, 180)}…` : v;
+  // Текстовые поля (описание/название) — чистим markdown-разметку и коротко обрезаем (Notion).
+  const clean = stripInlineMarkdown(v).replace(/\s+/g, ' ').trim();
+  return clean.length > 80 ? `${clean.slice(0, 80).trimEnd()}…` : clean;
 }
 
 // Дифф изменённых полей: новое значение подсвечено синим (как в Notion), старое — зачёркнуто.
@@ -120,12 +131,14 @@ function renderText(item: ActivityEventItem, nav: NavHandlers): React.ReactNode 
   const actor = item.actorDisplayName ?? 'Кто-то';
   const target = item.targetDisplayName ?? 'участника';
   const p = item.payload ?? {};
-  const taskLink = p.taskExcerpt ? (
-    <ActLink onClick={nav.openTask}>«{p.taskExcerpt}»</ActLink>
+  const taskName = cleanName(p.taskExcerpt);
+  const taskLink = taskName ? (
+    <ActLink onClick={nav.openTask}>«{taskName}»</ActLink>
   ) : (
     <ActLink onClick={nav.openTask}>задачу</ActLink>
   );
-  const projectLink = p.projectName ? <ActLink onClick={nav.openProject}>«{p.projectName}»</ActLink> : null;
+  const projectName = cleanName(p.projectName, 32);
+  const projectLink = projectName ? <ActLink onClick={nav.openProject}>«{projectName}»</ActLink> : null;
   switch (item.kind) {
     case 'task_created':
       return (
@@ -148,14 +161,16 @@ function renderText(item: ActivityEventItem, nav: NavHandlers): React.ReactNode 
     case 'task_deleted':
       return (
         <>
-          <b>{actor}</b> удалил {p.taskExcerpt ? `«${p.taskExcerpt}»` : 'задачу'}
+          <b>{actor}</b> удалил {taskName ? `«${taskName}»` : 'задачу'}
         </>
       );
     case 'task_commented':
       return (
         <>
           <b>{actor}</b> прокомментировал {taskLink}
-          {p.commentExcerpt ? <span className="text-muted-foreground">: «{p.commentExcerpt}»</span> : null}
+          {p.commentExcerpt ? (
+            <span className="text-muted-foreground">: «{cleanName(p.commentExcerpt, 48)}»</span>
+          ) : null}
         </>
       );
     case 'project_created':
