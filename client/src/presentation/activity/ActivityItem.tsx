@@ -2,13 +2,21 @@ import { useNavigate } from 'react-router-dom';
 import { CalendarDays, Clock } from 'lucide-react';
 import { relativeTime } from '@/lib/relativeTime';
 import { formatExactDateTime } from '@/lib/datetime';
-import { splitTitleBody, stripInlineMarkdown } from '@/lib/taskTitleBody';
+import { parseTitleHeading, splitTitleBody, stripInlineMarkdown } from '@/lib/taskTitleBody';
 
-// Чистое короткое имя для ленты (Notion-минимализм): берём заголовок (первую строку),
-// срезаем markdown-разметку (** * ` ~~ и т.п.), схлопываем пробелы и обрезаем по длине.
+// Полная очистка текста от markdown для минималистичной ленты (Notion): инлайн-разметка
+// (** * ` ~~ == и т.п.) + ведущие маркеры заголовков/списков/цитат (### - * + > =) + схлоп пробелов.
+function cleanText(s: string): string {
+  return stripInlineMarkdown(s)
+    .replace(/^\s*[-*+>~=#]+\s*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Чистое короткое имя (заголовок = первая строка, без markdown-заголовка ### и разметки), обрезка.
 function cleanName(raw: string | null | undefined, max = 40): string {
   if (!raw) return '';
-  const title = stripInlineMarkdown(splitTitleBody(raw).title).replace(/\s+/g, ' ').trim();
+  const title = cleanText(parseTitleHeading(splitTitleBody(raw).title).text);
   return title.length > max ? `${title.slice(0, max).trimEnd()}…` : title;
 }
 import {
@@ -51,8 +59,8 @@ function humanizeValue(field: string, v: string | null): string {
   if (field === 'cover') return v ? 'обновлена' : 'убрана';
   if (v == null || v === '') return '—';
   if (field === 'priority') return PRIORITY_LABEL[v] ?? v;
-  // Текстовые поля (описание/название) — чистим markdown-разметку и коротко обрезаем (Notion).
-  const clean = stripInlineMarkdown(v).replace(/\s+/g, ' ').trim();
+  // Текстовые поля (описание/название) — полная чистка markdown и короткая обрезка (Notion).
+  const clean = cleanText(v);
   return clean.length > 80 ? `${clean.slice(0, 80).trimEnd()}…` : clean;
 }
 
