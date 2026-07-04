@@ -124,6 +124,36 @@ export function TasksPage(): React.ReactElement {
     );
   };
 
+  // Действия проекта (участники · Поделиться · ⋯) — один набор, рендерится и в шапке страницы,
+  // и в правом верхнем углу окна активности (Notion-style).
+  const projectActions = (
+    <>
+      {members.length > 1 && (
+        <MemberAvatarStack
+          members={members}
+          projectId={data.id}
+          canInvite={data.role === 'owner' || data.role === 'editor'}
+        />
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+        aria-label="Поделиться"
+      >
+        <Share2 className="size-4" />
+        <span className="text-sm">Поделиться</span>
+      </Button>
+      <ProjectActionsMenu
+        projectId={data.id}
+        financeVisible={financeVisible}
+        monitoringVisible={monitoringVisible}
+        monitoringAlerts={monitoringAlerts}
+        onOpenAutomation={() => setAutomationOpen(true)}
+      />
+    </>
+  );
+
   // Notion top-alignment: строка крошек (min-h-11, по центру, прижата к верху) встаёт на
   // одну горизонталь со свитчером пространства в сайдбаре; тело — комфортные отступы ниже.
   return (
@@ -143,34 +173,10 @@ export function TasksPage(): React.ReactElement {
         <TooltipProvider delayDuration={300}>
           <div className="flex shrink-0 items-center gap-0.5">
             {/* Активность/аналитика проекта. */}
-            <ProjectActivityButton projectId={data.id} />
-            {/* Аватар-стек участников: наведение/клик → панель участников с зумом аватара. */}
-            {members.length > 1 && (
-              <MemberAvatarStack
-                members={members}
-                projectId={data.id}
-                canInvite={data.role === 'owner' || data.role === 'editor'}
-              />
-            )}
-            {/* «Поделиться»: иконка + подпись (пока заглушка). */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
-              aria-label="Поделиться"
-            >
-              <Share2 className="size-4" />
-              <span className="text-sm">Поделиться</span>
-            </Button>
-            {/* Второстепенные действия (Финансы/Автоматизация/КБ/Мониторинг/Настройки) —
-                свёрнуты в меню «⋯» (Notion top-right), вместо ряда отдельных кнопок. */}
-            <ProjectActionsMenu
-              projectId={data.id}
-              financeVisible={financeVisible}
-              monitoringVisible={monitoringVisible}
-              monitoringAlerts={monitoringAlerts}
-              onOpenAutomation={() => setAutomationOpen(true)}
-            />
+            {/* Кнопка «Изменено …» открывает окно активности; ему же отдаём действия,
+                чтобы они были и в шапке, и в правом верхнем углу окна (Notion-style). */}
+            <ProjectActivityButton projectId={data.id} actions={projectActions} />
+            {projectActions}
           </div>
         </TooltipProvider>
       </div>

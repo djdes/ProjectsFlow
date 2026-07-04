@@ -13,7 +13,14 @@ import { ProjectActivityDialog } from './ProjectActivityDialog';
 // Кнопка активности проекта слева от участников. Показывается ТЕКСТОМ (без иконки):
 // «Изменено 12 ч назад». Наведение — аккуратный поповер «Изменено/Создано» (как «Activity»
 // в Notion). Клик открывает окно активности/аналитики (выезжает справа, как окно задачи).
-export function ProjectActivityButton({ projectId }: { projectId: string }): React.ReactElement {
+export function ProjectActivityButton({
+  projectId,
+  actions,
+}: {
+  projectId: string;
+  // Действия проекта (участники · Поделиться · ⋯) — прокидываются в окно активности.
+  actions?: React.ReactNode;
+}): React.ReactElement {
   const { projectRepository } = useContainer();
   const [open, setOpen] = useState(false);
   const [summary, setSummary] = useState<ProjectActivitySummary | null>(null);
@@ -76,7 +83,7 @@ export function ProjectActivityButton({ projectId }: { projectId: string }): Rea
           </TooltipContent>
         )}
       </Tooltip>
-      <ProjectActivityDialog open={open} onOpenChange={setOpen} projectId={projectId} />
+      <ProjectActivityDialog open={open} onOpenChange={setOpen} projectId={projectId} actions={actions} />
     </>
   );
 }

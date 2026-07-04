@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Calendar, Check, ChevronDown, HelpCircle, Loader2, Settings, X } from 'lucide-react';
+import { Calendar, Check, ChevronDown, ChevronsRight, HelpCircle, Loader2, Settings } from 'lucide-react';
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -24,7 +24,14 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
+  // Действия проекта (участники + «Поделиться» + меню «⋯») — рендерятся в правом верхнем
+  // углу окна (Notion-style), как и в шапке страницы.
+  actions?: React.ReactNode;
 };
+
+// Вкладка-«текст с подчёркиванием» (Notion): без пилюли-фона, у активной — чёрная линия снизу.
+const UNDERLINE_TAB =
+  'relative -mb-px rounded-none border-b-2 border-transparent bg-transparent px-0 pb-2 pt-1 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none';
 
 const DEFAULT_WINDOW_DAYS = 28;
 // 3650 = «Всё время» (график ограничит ленту годом). Остальные — окна в днях.
@@ -45,7 +52,7 @@ function clampPanelWidth(w: number): number {
 // Окно активности проекта: выезжает справа (как окно задачи). Вкладки «Активность» (лента
 // событий) и «Аналитика» (просмотры + зрители + редакторы — как в Notion). Синей плашки
 // публикации в этом окне НЕТ (по требованию).
-export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props): React.ReactElement {
+export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }: Props): React.ReactElement {
   const { projectRepository } = useContainer();
   const [activity, setActivity] = useState<ActivityEventItem[] | null>(null);
   const [summary, setSummary] = useState<ProjectActivitySummary | null>(null);
@@ -180,8 +187,10 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
         side="right"
         showClose={false}
         style={{ width: panelWidth, maxWidth: '95vw' }}
-        className={cn('flex w-full flex-col gap-0 overflow-hidden p-0', dragging && 'select-none')}
+        className={cn('group/panel flex h-full w-full flex-col gap-0 overflow-hidden p-0', dragging && 'select-none')}
       >
+        {/* Заголовок для a11y (Radix требует Title), визуально скрыт — по требованию без «Активность проекта». */}
+        <SheetTitle className="sr-only">Активность проекта</SheetTitle>
         {/* Ручка ресайза у левого края: тяга → шире/уже, клик → закрыть, на hover — подсказка. */}
         <ResizeHandleHint side="left" action="Закрыть" shortcut="Клик">
           <div
@@ -196,23 +205,30 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
             )}
           />
         </ResizeHandleHint>
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3">
-          <SheetTitle className="text-base">Активность проекта</SheetTitle>
+        {/* Верхняя строка: слева — кнопка сворачивания «»» (появляется при наведении на окно),
+            справа — действия проекта (участники · Поделиться · ⋯). Без заголовка, без крестика. */}
+        <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-2.5">
           <SheetClose asChild>
-            <Button variant="ghost" size="icon" className="size-8" aria-label="Закрыть">
-              <X className="size-4" />
-            </Button>
+            <button
+              type="button"
+              aria-label="Свернуть"
+              title="Свернуть"
+              className="grid size-8 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/panel:opacity-100"
+            >
+              <ChevronsRight className="size-4" />
+            </button>
           </SheetClose>
+          {actions ? <div className="flex items-center gap-0.5">{actions}</div> : <span />}
         </div>
 
         <Tabs defaultValue="activity" className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-5 mt-3 self-start">
-            <TabsTrigger value="activity">Активность</TabsTrigger>
-            <TabsTrigger value="analytics">Аналитика</TabsTrigger>
+          <TabsList className="mx-4 h-auto shrink-0 justify-start gap-4 rounded-none border-b border-border bg-transparent p-0">
+            <TabsTrigger value="activity" className={UNDERLINE_TAB}>Активность</TabsTrigger>
+            <TabsTrigger value="analytics" className={UNDERLINE_TAB}>Аналитика</TabsTrigger>
           </TabsList>
 
-          {/* Активность */}
-          <TabsContent value="activity" className="pf-scroll-visible min-h-0 flex-1 p-0">
+          {/* Активность — лента во всю высоту окна (flex-1 + собственный скролл). */}
+          <TabsContent value="activity" className="pf-scroll-visible mt-0 min-h-0 flex-1 p-0">
             {loadingActivity ? (
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" /> Загрузка…
