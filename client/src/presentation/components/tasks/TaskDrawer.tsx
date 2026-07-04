@@ -222,6 +222,9 @@ type Props = {
   asPage?: boolean;
   // Хлебные крошки для asPage-режима (строит вызывающая страница: проект → задача).
   breadcrumbs?: React.ReactNode;
+  // Подсветить тело задачи при открытии (переход из ленты активности по блоку изменения,
+  // ?hl=<поле>). Значение — имя изменённого поля; на короткое время «мигаем» телом.
+  highlightField?: string | null;
 };
 
 // localStorage-ключ режима ширины страницы задачи (asPage): '1' = во всю ширину.
@@ -586,9 +589,21 @@ export function TaskDrawer({
   onMove,
   asPage = false,
   breadcrumbs = null,
+  highlightField = null,
 }: Props): React.ReactElement {
   const { user: currentUser } = useCurrentUser();
   const { taskRepository, recordTaskView, userRepository } = useContainer();
+  // Флеш-подсветка тела при переходе из ленты активности (?hl=<поле>): мигаем ~1.8с.
+  const [flashBody, setFlashBody] = React.useState(false);
+  React.useEffect(() => {
+    if (!highlightField) return;
+    setFlashBody(true);
+    const t = window.setTimeout(() => setFlashBody(false), 1800);
+    return () => window.clearTimeout(t);
+  }, [highlightField]);
+  const flashCls = flashBody
+    ? 'rounded-lg ring-2 ring-primary/60 ring-offset-2 ring-offset-background transition-shadow duration-500'
+    : 'transition-shadow duration-500';
   const navigate = useNavigate();
   // Ширина колонки на отдельной странице задачи (asPage): по центру (читаемая колонка)
   // или во всю ширину. Запоминаем в localStorage — следующая открытая страница задачи
@@ -1908,7 +1923,7 @@ export function TaskDrawer({
                 {/* Описание закреплено в шапке, коммиты скрыты — тело целиком отдано
                     обсуждению (Notion-style: комментарии и есть страница). В split — свой
                     скролл; в narrow — натуральная высота (скроллит общий контейнер). */}
-                <div ref={bodyRef} className={cn('px-4 py-5', isSplit && 'h-full overflow-y-auto')}>
+                <div ref={bodyRef} className={cn('px-4 py-5', isSplit && 'h-full overflow-y-auto', flashCls)}>
                   <TaskCommentsSection
                     projectId={task.projectId}
                     taskId={task.id}

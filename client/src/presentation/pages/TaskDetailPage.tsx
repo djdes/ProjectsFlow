@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useContainer } from '@/infrastructure/di/container';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
@@ -18,6 +18,7 @@ function taskTitle(task: Task): string {
 // центрированная колонка + хлебные крошки сверху (Проекты → Проект → Задача).
 export function TaskDetailPage(): React.ReactElement {
   const { projectId, taskId } = useParams<{ projectId: string; taskId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { data: project } = useProject(projectId ?? '');
   const { taskRepository } = useContainer();
@@ -106,6 +107,7 @@ export function TaskDetailPage(): React.ReactElement {
     <TaskDrawer
       asPage
       breadcrumbs={breadcrumbs}
+      highlightField={searchParams.get('hl')}
       state={{ mode: 'edit', task }}
       onClose={() => navigate(`/projects/${projectId}`)}
       // onSubmit нужен только в create-mode; на странице задача уже существует.
