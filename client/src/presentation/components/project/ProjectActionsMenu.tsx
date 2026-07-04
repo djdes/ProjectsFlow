@@ -5,6 +5,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
@@ -38,21 +39,21 @@ export function ProjectActionsMenu({
           <MoreHorizontal className="size-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[200px]">
+      <DropdownMenuContent align="end" className="min-w-[220px]">
         {financeVisible && (
           <DropdownMenuItem onSelect={() => navigate(`/projects/${projectId}/finance`)}>
-            <Wallet /> Финансы
+            <Wallet className="text-muted-foreground" /> Финансы
           </DropdownMenuItem>
         )}
         <DropdownMenuItem onSelect={() => onOpenAutomation()}>
-          <Bot /> Автоматизация
+          <Bot className="text-muted-foreground" /> Автоматизация
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => navigate(`/projects/${projectId}/kb`)}>
-          <BookOpen /> База знаний
+          <BookOpen className="text-muted-foreground" /> База знаний
         </DropdownMenuItem>
         {monitoringVisible && (
           <DropdownMenuItem onSelect={() => navigate(`/projects/${projectId}/monitoring`)}>
-            <Activity /> Мониторинг
+            <Activity className="text-muted-foreground" /> Мониторинг
             {monitoringAlerts > 0 && (
               <span className="ml-auto inline-flex min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-4 text-white">
                 {monitoringAlerts}
@@ -60,8 +61,9 @@ export function ProjectActionsMenu({
             )}
           </DropdownMenuItem>
         )}
+        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => navigate(`/projects/${projectId}/overview`)}>
-          <Settings /> Настройки
+          <Settings className="text-muted-foreground" /> Настройки
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
