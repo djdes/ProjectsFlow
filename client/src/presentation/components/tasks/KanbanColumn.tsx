@@ -1,8 +1,8 @@
-import { Fragment, useRef, useState, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { AnimatePresence } from 'motion/react';
-import { ListChecks, Plus, X } from 'lucide-react';
+import { ListChecks, PanelRight, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { cn } from '@/lib/utils';
@@ -157,6 +157,9 @@ export function KanbanColumn({
   // «Готово» распухает (десятки карточек) — по умолчанию показываем хвост из
   // DONE_PREVIEW_COUNT, остальное за кнопкой «Показать все». Прочие колонки — целиком.
   const [showAllDone, setShowAllDone] = useState(false);
+  // Notion-style inline-создание: «+» вверху колонки → карточка с полем названия сразу в
+  // потоке (без окна создания). Enter → сохранить и открыть следующую (быстрый ввод).
+  const [inlineCreating, setInlineCreating] = useState(false);
 
   // I8: inline-правка названия колонки по клику. Тот же колбэк, что у меню-троеточия.
   const [editingLabel, setEditingLabel] = useState(false);
@@ -325,7 +328,7 @@ export function KanbanColumn({
                 variant="ghost"
                 size="icon"
                 className="size-8"
-                onClick={() => onCreate(status)}
+                onClick={() => (onInlineCreate ? setInlineCreating(true) : onCreate(status))}
                 aria-label="Добавить задачу"
               >
                 <Plus className="size-5" />
@@ -350,6 +353,14 @@ export function KanbanColumn({
           lockOffer
         ) : (
         <>
+        {/* Notion-style: новая карточка с полем названия — прямо вверху потока колонки. */}
+        {inlineCreating && onInlineCreate && (
+          <InlineNewCard
+            onOpenFull={onEdit}
+            onCreate={(name) => onInlineCreate({ description: name, status })}
+            onClose={() => setInlineCreating(false)}
+          />
+        )}
         <SortableContext
           items={visibleTasks.map((t) => t.id)}
           strategy={verticalListSortingStrategy}
@@ -437,6 +448,113 @@ export function KanbanColumn({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// Notion-style карточка создания: поле названия сразу в потоке колонки. Enter — сохранить и
+// открыть следующую (быстрый ввод); клик вне карточки — сохранить и закрыть; Esc — отмена;
+// «открыть справа» — сохранить и открыть задачу в окне справа.
+function InlineNewCard({
+  onCreate,
+  onClose,
+  onOpenFull,
+}: {
+  onCreate: (name: string) => Promise<Task>;
+  onClose: () => void;
+  onOpenFull: (task: Task) => void;
+}): React.ReactElement {
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const closingRef = useRef(false);
+
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
+
+  const grow = (el: HTMLTextAreaElement): void => {
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
+  const create = async (): Promise<Task | null> => {
+    const name = value.trim();
+    if (!name || busy) return null;
+    setBusy(true);
+    try {
+      return await onCreate(name);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Enter → создать и остаться (следующая карточка).
+  const onEnter = async (): Promise<void> => {
+    const t = await create();
+    if (t) {
+      setValue('');
+      requestAnimationFrame(() => {
+        const el = ref.current;
+        if (el) {
+          el.style.height = 'auto';
+          el.focus();
+        }
+      });
+    }
+  };
+  // Клик вне карточки → создать (если есть текст) и закрыть.
+  const onBlurCommit = async (): Promise<void> => {
+    if (closingRef.current) return;
+    await create();
+    onClose();
+  };
+  // «Открыть справа» → создать и открыть в окне справа.
+  const openFull = async (): Promise<void> => {
+    closingRef.current = true;
+    const t = await create();
+    onClose();
+    if (t) onOpenFull(t);
+  };
+
+  return (
+    <div className="group/new rounded-xl border bg-card p-2.5 shadow-sm ring-1 ring-primary/20">
+      <div className="flex items-start gap-2">
+        <textarea
+          ref={ref}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            grow(e.currentTarget);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              void onEnter();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              closingRef.current = true;
+              onClose();
+            }
+          }}
+          onBlur={() => void onBlurCommit()}
+          rows={1}
+          placeholder="Название задачи…"
+          disabled={busy}
+          className="min-h-[1.25rem] w-full resize-none overflow-hidden bg-transparent text-sm leading-snug outline-none placeholder:text-muted-foreground/70"
+        />
+        <button
+          type="button"
+          // preventDefault на mousedown — не терять фокус textarea до клика (иначе onBlur обгонит).
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => void openFull()}
+          title="Открыть справа"
+          aria-label="Открыть справа"
+          className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover/new:opacity-100"
+        >
+          <PanelRight className="size-4" />
+        </button>
+      </div>
     </div>
   );
 }
