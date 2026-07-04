@@ -6,7 +6,8 @@ import { GripVertical, Plus } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { buildExtensions, type MentionMember } from './extensions/buildExtensions';
-import { SlashCommand } from './extensions/slashCommand';
+import { SlashCommand, SLASH_ITEMS, applyBlockType } from './extensions/slashCommand';
+import { SuggestionList, type SuggestionListHandle, type SuggestionItem } from './SuggestionList';
 import { FloatingFormatMenu, type FloatingAnchor } from './FloatingFormatMenu';
 
 export type { MentionMember };
@@ -253,9 +254,15 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
   // наведении). Нужна кнопке «+»: вставить новый блок ПОД этим и открыть меню типов блоков.
   const hoverPosRef = React.useRef<number | null>(null);
 
+  // Меню типов блока по кнопке «+» (Notion-style): позиция на экране (курсор нового абзаца).
+  // Не полагаемся на «/»-suggestion (ненадёжно триггерится программно) — рисуем своё меню
+  // тем же списком SLASH_ITEMS с превью-карточкой.
+  const [blockMenu, setBlockMenu] = React.useState<{ left: number; top: number } | null>(null);
+  const blockMenuRef = React.useRef<SuggestionListHandle>(null);
+
   // «+» рядом с ручкой: добавить пустой абзац под наведённым блоком, поставить курсор и
-  // открыть slash-меню (H1/H2/список/…) — вставляем «/», suggestion-плагин ловит его.
-  const insertBlockBelow = React.useCallback((): void => {
+  // открыть меню типов блока у курсора.
+  const openBlockMenu = React.useCallback((): void => {
     const editor = editorRef.current;
     if (!editor || editor.isDestroyed || !editor.isEditable) return;
     const pos = hoverPosRef.current;
@@ -270,9 +277,42 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       .focus()
       .insertContentAt(insertAt, { type: 'paragraph' })
       .setTextSelection(insertAt + 1)
-      .insertContent('/')
       .run();
+    // Координаты курсора нового абзаца → позиция меню (после применения транзакции).
+    requestAnimationFrame(() => {
+      const ed = editorRef.current;
+      if (!ed || ed.isDestroyed) return;
+      const coords = ed.view.coordsAtPos(ed.state.selection.from);
+      setBlockMenu({ left: Math.round(coords.left), top: Math.round(coords.bottom + 6) });
+    });
   }, []);
+
+  const closeBlockMenu = React.useCallback((): void => {
+    setBlockMenu(null);
+    const ed = editorRef.current;
+    if (ed && !ed.isDestroyed) ed.chain().focus().run();
+  }, []);
+
+  const pickBlockType = React.useCallback((item: SuggestionItem): void => {
+    const ed = editorRef.current;
+    if (ed && !ed.isDestroyed) applyBlockType(ed, item.id);
+    setBlockMenu(null);
+  }, []);
+
+  // Клавиатура для меню блока: стрелки/Enter → SuggestionList, Escape → закрыть.
+  React.useEffect(() => {
+    if (!blockMenu) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeBlockMenu();
+        return;
+      }
+      if (blockMenuRef.current?.onKeyDown(e)) e.preventDefault();
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [blockMenu, closeBlockMenu]);
 
   const selectionKey = (e: Editor): string => `${e.state.selection.from}-${e.state.selection.to}`;
   const closeMenu = React.useCallback(() => {
@@ -583,7 +623,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.preventDefault();
-                insertBlockBelow();
+                openBlockMenu();
               }}
               className="flex size-5 items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground"
             >
@@ -600,6 +640,24 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
         </DragHandle>
       ) : null}
       <EditorContent editor={editor} />
+      {/* Меню типов блока по «+» (Notion-style): бэкдроп для клика-мимо + список у курсора. */}
+      {blockMenu && editor ? (
+        <>
+          <div
+            className="fixed inset-0 z-[59]"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              closeBlockMenu();
+            }}
+          />
+          <div
+            className="fixed z-[60]"
+            style={{ left: `${blockMenu.left}px`, top: `${blockMenu.top}px` }}
+          >
+            <SuggestionList ref={blockMenuRef} items={SLASH_ITEMS} command={pickBlockType} />
+          </div>
+        </>
+      ) : null}
     </div>
   );
   },

@@ -158,6 +158,48 @@ const SLASH_ITEMS: SlashItem[] = [
   },
 ];
 
+// Пункты меню блоков доступны и извне (кнопка «+» у блока рендерит своё меню тем же списком).
+export { SLASH_ITEMS };
+
+// Применить тип блока к ТЕКУЩЕМУ выделению/курсору (для кнопки «+», без deleteRange).
+export function applyBlockType(editor: Editor, id: string): void {
+  const c = editor.chain().focus();
+  switch (id) {
+    case 'text':
+      c.setParagraph().run();
+      break;
+    case 'h1':
+      c.toggleHeading({ level: 1 }).run();
+      break;
+    case 'h2':
+      c.toggleHeading({ level: 2 }).run();
+      break;
+    case 'h3':
+      c.toggleHeading({ level: 3 }).run();
+      break;
+    case 'bullet':
+      c.toggleBulletList().run();
+      break;
+    case 'ordered':
+      c.toggleOrderedList().run();
+      break;
+    case 'todo':
+      c.toggleTaskList().run();
+      break;
+    case 'quote':
+      c.toggleBlockquote().run();
+      break;
+    case 'code':
+      c.toggleCodeBlock().run();
+      break;
+    case 'divider':
+      c.setHorizontalRule().run();
+      break;
+    default:
+      c.run();
+  }
+}
+
 // Slash-меню «/» в стиле Notion: вставка блоков. Использует @tiptap/suggestion.
 export const SlashCommand = Extension.create({
   name: 'slashCommand',
@@ -166,6 +208,8 @@ export const SlashCommand = Extension.create({
     const suggestion: Omit<SuggestionOptions<SlashItem>, 'editor'> = {
       char: '/',
       startOfLine: false,
+      // null — не ограничивать префикс перед «/» (иначе «/» в некоторых позициях не триггерит меню).
+      allowedPrefixes: null,
       items: ({ query }) =>
         SLASH_ITEMS.filter((i) => i.label.toLowerCase().includes(query.toLowerCase())),
       command: ({ editor, range, props }) => {
