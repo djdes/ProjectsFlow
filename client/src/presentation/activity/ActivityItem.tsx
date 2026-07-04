@@ -9,6 +9,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
+import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import type { TaskStatus } from '@/domain/task/Task';
 import type {
   ActivityEventItem,
@@ -210,7 +211,9 @@ export function ActivityItem({
   onOpenVersions?: (taskId: string) => void;
 }): React.ReactElement {
   const navigate = useNavigate();
+  const { user } = useCurrentUser();
   const actor = item.actorDisplayName ?? 'Кто-то';
+  const isYou = !!user?.id && item.actorUserId === user.id;
   const versionTaskId =
     onOpenVersions && TASK_KINDS.has(item.kind) ? (item.payload?.taskId ?? null) : null;
   const taskId = item.payload?.taskId ?? null;
@@ -237,15 +240,20 @@ export function ActivityItem({
               />
             </span>
           </TooltipTrigger>
+          {/* Появляется чуть ВЫШЕ и ЛЕВЕЕ наведённого аватара (Notion-style): side=top align=end. */}
           <TooltipContent
-            side="bottom"
-            align="start"
-            className="flex items-center gap-2.5 border-border/60 p-2.5 shadow-lg"
+            side="top"
+            align="end"
+            sideOffset={8}
+            className="flex items-center gap-3 rounded-xl border-border/60 p-3 shadow-lg"
           >
-            <UserAvatar displayName={actor} avatarUrl={item.actorAvatarUrl} className="size-9 rounded-full text-sm" />
-            <span className="text-left">
-              <span className="block text-[13px] font-semibold text-foreground">{actor}</span>
-              <span className="block text-xs text-muted-foreground">
+            <UserAvatar displayName={actor} avatarUrl={item.actorAvatarUrl} className="size-11 rounded-full text-base" />
+            <span className="pr-2 text-left">
+              <span className="block text-sm font-semibold text-foreground">
+                {actor}
+                {isYou && <span className="font-normal text-muted-foreground"> (вы)</span>}
+              </span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
                 {new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })} — местное время
               </span>
             </span>
