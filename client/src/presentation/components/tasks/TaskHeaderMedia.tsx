@@ -257,11 +257,11 @@ export function TaskHeaderMedia({
       )}
 
       {/* === ИКОНКА + КНОПКИ «ДОБАВИТЬ» === Иконка (если задана) — крупный квадрат слева над
-          заголовком; при наличии обложки чуть наезжает на неё снизу (Notion-style). Ряд кнопок
-          «Добавить иконку / Добавить обложку» виден на hover шапки (на тач — всегда). */}
-      <div className="group/head px-4">
+          заголовком, ПОД обложкой с небольшим зазором (без наезда, как в Notion-peek на скрине).
+          Ряд кнопок «Добавить иконку / Добавить обложку» виден на hover шапки (на тач — всегда). */}
+      <div className="group/head px-[var(--pf-drawer-px)]">
         {localIcon && (
-          <div className={cn('flex', localCover ? '-mt-7 sm:-mt-8' : 'pt-1')}>
+          <div className={cn('flex', localCover ? 'pt-3 sm:pt-4' : 'pt-2')}>
             <IconPicker
               value={localIcon}
               onChange={setIcon}
@@ -270,11 +270,7 @@ export function TaskHeaderMedia({
                   type="button"
                   aria-label="Сменить иконку"
                   title="Иконка"
-                  className={cn(
-                    'grid shrink-0 cursor-pointer select-none place-items-center overflow-hidden rounded-lg leading-none transition-colors hover:bg-muted',
-                    'size-14 sm:size-16',
-                    localCover && 'bg-background shadow-sm ring-1 ring-border',
-                  )}
+                  className="grid size-14 shrink-0 cursor-pointer select-none place-items-center overflow-hidden rounded-lg leading-none transition-colors hover:bg-muted sm:size-16"
                 >
                   <ProjectIconView icon={localIcon} pixelSize={40} className="text-[2.2rem]" />
                 </button>

@@ -377,6 +377,29 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
     if (editor && !editor.isDestroyed) prevImageSrcsRef.current = collectImageSrcs(editor);
   }, [editor]);
 
+  // Синяя линия-dropcursor должна пропадать СРАЗУ после дропа. drag-handle перехватывает
+  // `drop` на уровне document, поэтому drop/dragend не доходят до DOM редактора и
+  // prosemirror-dropcursor не гасит линию (она «залипает» до следующего движения мышью).
+  // Форсируем гашение синтетическим `dragleave` (без relatedTarget) по DOM редактора.
+  React.useEffect(() => {
+    if (!editor) return;
+    const clearDropcursor = (): void => {
+      const ed = editorRef.current;
+      if (!ed || ed.isDestroyed) return;
+      try {
+        ed.view.dom.dispatchEvent(new DragEvent('dragleave', { bubbles: false }));
+      } catch {
+        /* окружение без конструктора DragEvent — no-op */
+      }
+    };
+    document.addEventListener('drop', clearDropcursor);
+    document.addEventListener('dragend', clearDropcursor);
+    return () => {
+      document.removeEventListener('drop', clearDropcursor);
+      document.removeEventListener('dragend', clearDropcursor);
+    };
+  }, [editor]);
+
   // Императивный API для родителя (кнопка «+ Подзадача» и т.п.). Читает editor через
   // editorRef, поэтому handle стабилен (deps []).
   React.useImperativeHandle(

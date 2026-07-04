@@ -1538,44 +1538,40 @@ export function TaskDrawer({
     );
   };
 
-  // Hover-полоса над заголовком (Notion-style): при наведении на пустую зону сверху
-  // проявляются переключатель peek-режима, вертикальные линии-разделители и пред/след.
-  // Только desktop-оверлей (в asPage/мобиле не показываем).
-  const renderPeekHoverStrip = (): React.ReactElement | null => {
+  // Hover-контролы в ТОПБАРЕ (Notion-style): при наведении на верхнюю панель после кнопок
+  // закрыть/развернуть проявляются | линия | переключатель peek | линия | пред/след.
+  // Пред/след всегда видны (серые/неактивные, если нет соседа по колонке). Пока открыт
+  // dropdown peek-режима — кластер не гаснет. Только desktop-оверлей.
+  const renderTopHoverControls = (): React.ReactElement | null => {
     if (asPage || !isDesktop) return null;
-    const hasNav = Boolean(onPrev || onNext);
     return (
-      <div className="group/peekzone px-4 pt-1.5">
-        <div className="flex h-6 items-center gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/peekzone:opacity-100">
-          <span className="h-3.5 w-px bg-border" aria-hidden />
-          {renderPeekSwitcher()}
-          <span className="h-3.5 w-px bg-border" aria-hidden />
-          {hasNav && (
-            <div className="flex items-center">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-6 text-muted-foreground hover:text-foreground disabled:opacity-30"
-                disabled={!onPrev}
-                onClick={onPrev}
-                aria-label="Предыдущая задача"
-                title="Предыдущая задача"
-              >
-                <ChevronUp className="size-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-6 text-muted-foreground hover:text-foreground disabled:opacity-30"
-                disabled={!onNext}
-                onClick={onNext}
-                aria-label="Следующая задача"
-                title="Следующая задача"
-              >
-                <ChevronDown className="size-4" />
-              </Button>
-            </div>
-          )}
+      <div className="flex items-center gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/topbar:opacity-100 has-[[data-state=open]]:opacity-100">
+        <span className="h-4 w-px shrink-0 bg-border" aria-hidden />
+        {renderPeekSwitcher()}
+        <span className="h-4 w-px shrink-0 bg-border" aria-hidden />
+        <div className="flex items-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground hover:text-foreground disabled:opacity-30"
+            disabled={!onPrev}
+            onClick={onPrev}
+            aria-label="Предыдущая задача"
+            title="Предыдущая задача (задача выше)"
+          >
+            <ChevronUp className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground hover:text-foreground disabled:opacity-30"
+            disabled={!onNext}
+            onClick={onNext}
+            aria-label="Следующая задача"
+            title="Следующая задача (задача ниже)"
+          >
+            <ChevronDown className="size-4" />
+          </Button>
         </div>
       </div>
     );
@@ -1655,7 +1651,7 @@ export function TaskDrawer({
         // Непрозрачный фон (без /95 и backdrop-blur) — иначе сквозь «фрост» просвечивал
         // скроллящийся контент и на hover казалось, что фон пропадает. Hover — мягкий
         // СПЛОШНОЙ серый (bg-muted), а не полупрозрачный оверлей.
-        'sticky top-0 z-20 block w-full shrink-0 border-b bg-background px-4 py-2 text-left',
+        'sticky top-0 z-20 block w-full shrink-0 border-b bg-background px-[var(--pf-drawer-px)] py-2 text-left',
         'cursor-pointer transition-colors hover:bg-muted',
         animations && 'duration-150 animate-in fade-in-0 slide-in-from-top-1',
       )}
@@ -1756,17 +1752,21 @@ export function TaskDrawer({
           // SheetContent). isSplit (широкая ширина) → две колонки: задача слева,
           // обсуждение справа, серый разделитель между; иначе — привычный стек
           // (шапка сверху, ниже центрированный переключатель + комменты + композер).
-          <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+          <div className="relative flex h-full min-h-0 flex-col overflow-hidden [--pf-drawer-px:1rem] sm:[--pf-drawer-px:3.25rem] lg:[--pf-drawer-px:4rem]">
             {/* #3: верхняя панель + плашка — ОБЩАЯ ШАПКА НА ВСЮ ШИРИНУ окна (над обоими
                 столбцами в split), поэтому в split-режиме плашка идёт через оба столбца, а
                 кнопки закрыть/развернуть/статус — по всей ширине шапки. */}
-            <div className="flex h-11 shrink-0 items-center gap-2 border-b bg-background/95 px-4">
-              {renderCloseButton()}
-              {renderMaximizeButton()}
-              {renderPageWidthToggle()}
-              {/* Переключатель peek-режима и пред/след переехали в hover-полосу над заголовком
-                  (Notion-style), см. renderPeekHoverStrip ниже. Название проекта и хеш убраны —
-                  спейсер отправляет действия/статус к правому краю. */}
+            <div className="group/topbar flex h-11 shrink-0 items-center gap-1 border-b bg-background/95 pr-[var(--pf-drawer-px)]">
+              {/* Кнопки закрыть/развернуть — по ЦЕНТРУ левого отступа окна (Notion-style):
+                  бокс шириной ровно с левый отступ контента, кнопки в нём центрированы. */}
+              <div className="flex shrink-0 items-center justify-center gap-0.5 min-w-[var(--pf-drawer-px)]">
+                {renderCloseButton()}
+                {renderMaximizeButton()}
+                {renderPageWidthToggle()}
+              </div>
+              {/* При наведении на топбар — | линия | peek-режим | линия | пред/след (Notion-style). */}
+              {renderTopHoverControls()}
+              {/* Название проекта и хеш убраны — спейсер отправляет действия/статус к правому краю. */}
               <div className="min-w-0 flex-1" />
               {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка) = «передать в другой канбан». */}
               {onMove ? (
@@ -1849,9 +1849,6 @@ export function TaskDrawer({
                 {/* split: sticky-заголовок живёт в левой колонке (у неё свой скролл). */}
                 {isSplit && stickyTitleBar}
 
-              {/* === HOVER-ПОЛОСА === peek-режим + пред/след над заголовком (Notion-style). */}
-              {renderPeekHoverStrip()}
-
               {/* === ОБЛОЖКА + ИКОНКА === Над заголовком (Notion-style). Обложка во всю ширину,
                   иконка/кнопки «Добавить …» с тем же боковым отступом, что и заголовок. */}
               <TaskHeaderMedia
@@ -1867,7 +1864,7 @@ export function TaskDrawer({
               {/* === ОПИСАНИЕ === Заголовок и описание ОДНИМ полем сверху (1-я строка —
                   по сути заголовок). Полное editDescription редактируется напрямую,
                   сохраняется по blur / Ctrl+Cmd+Enter. Работает в любом статусе. */}
-              <div ref={bodyContainerRef} className="px-4 pb-1 pt-0">
+              <div ref={bodyContainerRef} className="px-[var(--pf-drawer-px)] pb-1 pt-0">
                 <TaskBodyEditor
                   key={`desc-${task.id}`}
                   editorRef={bodyEditorRef}
@@ -1894,7 +1891,7 @@ export function TaskDrawer({
                   (открывает скрытый file-picker → uploadFilesDirectly). Переносятся
                   на узких экранах (flex-wrap, вплоть до 320px). */}
               {canEdit && (
-                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 pb-1 pt-0.5">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-[var(--pf-drawer-px)] pb-1 pt-0.5">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <button
                       type="button"
@@ -1953,7 +1950,7 @@ export function TaskDrawer({
               {/* Task 11: строки свойств можно перетаскивать (ручка-grip на hover), порядок
                   сохраняется в профиль (ui_prefs) для всех проектов. Значения и видимость
                   собираем в map по ключу, рендерим в сохранённом порядке. */}
-              <div className="px-3 pb-2.5 pt-1">
+              <div className="px-[var(--pf-drawer-px)] pb-2.5 pt-1">
                 {(() => {
                   const propValues: Record<TaskPropertyKey, React.ReactNode> = {
                     assignee: (
