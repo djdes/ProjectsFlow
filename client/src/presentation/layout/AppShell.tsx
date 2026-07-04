@@ -36,7 +36,7 @@ import { useNotificationStream } from '@/presentation/hooks/useNotificationStrea
 import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
 import { HelpWidget } from '@/presentation/components/help/HelpWidget';
-import { useSidebarWidth, SIDEBAR_COMPACT_WIDTH } from '@/presentation/hooks/useSidebarWidth';
+import { useSidebarWidth } from '@/presentation/hooks/useSidebarWidth';
 import { RightPanelProvider } from './rightPanelContext';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
 import { SidebarCollapsedContext } from './sidebarCollapsedContext';
@@ -189,13 +189,7 @@ export function AppShell(): React.ReactElement {
             // Свёрнутая панель скрывается ЦЕЛИКОМ (Notion-style); развёрнутая — тянется ручкой.
             style={{ gridTemplateColumns: collapsed ? '1fr' : `${sidebarWidth}px 1fr` }}
           >
-            {!collapsed && (
-              <Sidebar
-                collapsed={collapsed}
-                onToggleCollapse={toggleCollapse}
-                compact={sidebarWidth < SIDEBAR_COMPACT_WIDTH}
-              />
-            )}
+            {!collapsed && <Sidebar collapsed={collapsed} onToggleCollapse={toggleCollapse} />}
             {/* Ручка ресайза панели: тонкая полоса на её правом крае. Тяга → шире/уже,
                 клик → свернуть (Ctrl+\), на hover — чёрная подсказка справа. */}
             {!collapsed && (
@@ -259,11 +253,7 @@ export function AppShell(): React.ReactElement {
                       style={{ width: sidebarWidth }}
                       className="absolute bottom-3 left-1.5 top-12 z-30 overflow-hidden rounded-xl border bg-sidebar shadow-2xl"
                     >
-                      <Sidebar
-                        collapsed={false}
-                        onToggleCollapse={toggleCollapse}
-                        compact={sidebarWidth < SIDEBAR_COMPACT_WIDTH}
-                      />
+                      <Sidebar collapsed={false} onToggleCollapse={toggleCollapse} />
                     </motion.div>
                   )}
                 </AnimatePresence>

@@ -51,11 +51,9 @@ type SidebarProps = {
   // Свёрнутый режим (desktop): узкий icon-rail вместо полной панели. Навигация остаётся
   // доступной (иконки + избранные проекты + профиль), а не прячется целиком.
   collapsed?: boolean;
-  // Узкая (но не свёрнутая) панель: навигация и свитчер — только иконки, без подписей.
-  compact?: boolean;
 };
 
-export function Sidebar({ onToggleCollapse, collapsed = false, compact = false }: SidebarProps): React.ReactElement {
+export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): React.ReactElement {
   // Колокольчик убран — единственная поверхность уведомлений теперь чат-лента. Сигнал
   // «нужно действие» вешаем на rail-кнопку «Чат», чтобы он был виден и на «Главной».
   const { count: actionable } = useActionableUnreadCount();
@@ -179,7 +177,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false, compact = false }
           переехали в чат-ленту; колокольчика больше нет. На мобиле (drawer) правый отступ,
           чтобы контролы не лезли под крестик SheetContent. */}
       <div className="flex h-11 items-center gap-1 max-md:pr-8">
-        <WorkspaceSwitcher compact={compact} />
+        <WorkspaceSwitcher />
 
         {onToggleCollapse && (
           <TooltipProvider delayDuration={300}>
@@ -209,7 +207,6 @@ export function Sidebar({ onToggleCollapse, collapsed = false, compact = false }
         items={railItems}
         activeIndex={RAIL_ORDER.indexOf(activeRail)}
         onSelect={onRailSelect}
-        compact={compact}
       />
 
       {/* Нижняя область: список проектов («Главная») ИЛИ общий чат пространства. Crossfade. */}
@@ -255,7 +252,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false, compact = false }
             }
           >
             <Shield className="size-4 shrink-0 text-muted-foreground" />
-            {!compact && <span className="flex-1 truncate">Администрирование</span>}
+            <span className="flex-1 truncate">Администрирование</span>
           </NavLink>
         </div>
       )}

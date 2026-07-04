@@ -44,6 +44,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { ConfettiBurst } from './ConfettiBurst';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
+import { SidebarResizingContext, useSidebarResizing } from '@/presentation/layout/sidebarResizingContext';
 import { stashComposerDraft } from './composerDraft';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { useBulkTaskActions } from '@/presentation/hooks/useBulkTaskActions';
@@ -291,6 +292,31 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   const [deleting, setDeleting] = useState(false);
   // Прокручиваемый контейнер доски — для закреплённого снизу горизонтального скролла.
   const boardScrollRef = useRef<HTMLDivElement>(null);
+  // ЛЮБОЙ ресайз ширины доски (тяга сайдбара/правого окна, сворачивание панели, ресайз окна)
+  // → на время реколонки выключаем layout-анимацию карточек (иначе «плывут»/«висят в воздухе»,
+  // особенно заметно на macOS). Сигнал true во время изменений + 160мс после последнего.
+  const parentResizing = useSidebarResizing();
+  const [boardResizing, setBoardResizing] = useState(false);
+  useEffect(() => {
+    const el = boardScrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let t: number | undefined;
+    let first = true;
+    const ro = new ResizeObserver(() => {
+      if (first) {
+        first = false;
+        return;
+      } // пропускаем первичное измерение при монтировании
+      setBoardResizing(true);
+      window.clearTimeout(t);
+      t = window.setTimeout(() => setBoardResizing(false), 160);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(t);
+    };
+  }, []);
 
   // Единый открытый inline-композер на все колонки (состояние поднято из колонки):
   // открыть в другой колонке → прошлый закрывается (со stash). Переживает перезагрузку
@@ -767,6 +793,8 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   return (
     // Single-scroll (Notion): доска НЕ ограничена высотой экрана и НЕ скроллится внутри себя —
     // растёт по контенту, а скроллится вся страница (родительский <main overflow-y-auto>).
+    // Провайдер «идёт ресайз» = тяга сайдбара ИЛИ реколонка доски по любой причине.
+    <SidebarResizingContext.Provider value={parentResizing || boardResizing}>
     <div className="flex flex-col">
       {confettiKey > 0 && <ConfettiBurst key={confettiKey} onDone={() => setConfettiKey(0)} />}
 
@@ -1074,5 +1102,6 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         />
       )}
     </div>
+    </SidebarResizingContext.Provider>
   );
 }

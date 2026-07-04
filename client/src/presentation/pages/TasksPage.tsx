@@ -36,7 +36,24 @@ export function TasksPage(): React.ReactElement {
   const [monitoringAlerts, setMonitoringAlerts] = useState(0);
   const [automationOpen, setAutomationOpen] = useState(false);
   // Окно активности открыто? Пока открыто — действия в шапке страницы прячем (они в окне).
-  const [activityOpen, setActivityOpen] = useState(false);
+  // Окно активности переживает перезагрузку страницы (sessionStorage пер-проект): открыто
+  // до reload → открыто после. Восстанавливаем синхронно в инициализаторе useState.
+  const activityStoreKey = `pf-activity-open:${projectId ?? ''}`;
+  const [activityOpen, setActivityOpenRaw] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem(activityStoreKey) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const setActivityOpen = (open: boolean): void => {
+    setActivityOpenRaw(open);
+    try {
+      sessionStorage.setItem(activityStoreKey, open ? '1' : '0');
+    } catch {
+      /* sessionStorage недоступен */
+    }
+  };
   // Участники для аватар-стека в шапке (только совместные проекты).
   const [members, setMembers] = useState<ProjectMember[]>([]);
   // #3: описание можно скрыть/показать (Notion-style toggle над заголовком).
