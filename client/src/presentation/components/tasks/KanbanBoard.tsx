@@ -28,6 +28,7 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -91,6 +92,12 @@ type Props = {
   memberCount?: number;
   // Открыть диалог «Автоматизация» (кнопка в пустом состоянии доски). Передаёт TasksPage.
   onOpenAutomation?: () => void;
+  // Full-bleed доски (Notion-style): отрицательные margin'ы, выносящие ряд колонок и
+  // закреплённый горизонтальный скролл во всю ширину окна (в край обложки/плашки), и
+  // левый padding, задающий начальный отступ первой колонки (который «уезжает» при скролле).
+  // Значения зависят от паддинга страницы, поэтому передаются снаружи. По умолчанию — без bleed.
+  bleedNegClass?: string;
+  bleedPadClass?: string;
 };
 
 // Локальная ISO-дата 'YYYY-MM-DD' (без UTC-сдвига) — для сравнения с deadline.
@@ -211,7 +218,7 @@ function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStat
   return out;
 }
 
-export function KanbanBoard({ projectId, showCommits = true, projectName, hideDone = false, memberCount, onOpenAutomation }: Props): React.ReactElement {
+export function KanbanBoard({ projectId, showCommits = true, projectName, hideDone = false, memberCount, onOpenAutomation, bleedNegClass = '', bleedPadClass = '' }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const { user } = useCurrentUser();
   const { projectRepository } = useContainer();
@@ -874,7 +881,13 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
             высота ряда = самой длинной колонки, вертикально скроллит страница целиком. */}
         <div
           ref={boardScrollRef}
-          className="flex items-start snap-x snap-mandatory gap-3 overflow-x-auto pb-20 sm:snap-none sm:pb-28"
+          className={cn(
+            // items-start + full-bleed: ряд колонок во всю ширину окна; первая колонка
+            // отступает на bleedPadClass (уезжает при скролле), последняя доходит до края.
+            'flex items-start snap-x snap-mandatory gap-3 overflow-x-auto pb-20 sm:snap-none sm:pb-28',
+            bleedNegClass,
+            bleedPadClass,
+          )}
         >
           {shownStatuses.map((status) => {
             const perColumn = settings?.[status];
@@ -961,8 +974,9 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
             onShow={(status) => setHidden(status, false)}
           />
         </div>
-        {/* Закреплённый снизу вьюпорта горизонтальный скролл доски (см. компонент). */}
-        <SyncedStickyScrollbar targetRef={boardScrollRef} />
+        {/* Закреплённый снизу вьюпорта горизонтальный скролл доски (см. компонент).
+            bleedNegClass — во всю ширину окна (по краям обложки/плашки), как ряд колонок. */}
+        <SyncedStickyScrollbar targetRef={boardScrollRef} className={bleedNegClass} />
         <DragOverlay dropAnimation={DROP_ANIMATION}>
           {activeTask ? (
             // Tilt + scale живут на motion-обёртке, а не на CSS карточки — иначе оверлей

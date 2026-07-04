@@ -233,21 +233,22 @@ export function TasksPage(): React.ReactElement {
           При наведении на «шапку» — панель: добавить обложку / скрыть-показать описание (#3). */}
       <div
         className={cn(
-          'group/head shrink-0 pb-4 sm:pb-6',
-          data.coverUrl ? 'pt-4 sm:pt-6' : 'pt-10 sm:pt-16',
+          // Отступ сверху одинаковый независимо от обложки (Notion-style): небольшой зазор
+          // до кнопок-действий, затем такой же небольшой до названия проекта.
+          'group/head shrink-0 pb-4 pt-3 sm:pb-6 sm:pt-4',
         )}
       >
         {canEdit && (
           // На тач-устройствах hover нет — на мобиле панель видна всегда, на sm+ по наведению.
-          <div className="mb-1.5 flex h-7 items-center gap-1 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/head:opacity-100">
+          <div className="mb-2 flex h-8 items-center gap-1 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/head:opacity-100">
             {!data.coverUrl && (
               <HeadToolButton onClick={addRandomCover}>
-                <ImageIcon className="size-3.5" />
+                <ImageIcon className="size-4" />
                 Добавить обложку
               </HeadToolButton>
             )}
             <HeadToolButton onClick={() => setDescriptionHidden((h) => !h)}>
-              <Text className="size-3.5" />
+              <Text className="size-4" />
               {descriptionHidden ? 'Показать описание' : 'Скрыть описание'}
             </HeadToolButton>
           </div>
@@ -276,6 +277,11 @@ export function TasksPage(): React.ReactElement {
         projectName={data.name}
         memberCount={data.memberCount}
         onOpenAutomation={() => setAutomationOpen(true)}
+        // Full-bleed: доска и её нижний горизонтальный скролл во всю ширину окна (по краям
+        // обложки/плашки). Первая колонка отступает как тело страницы (px-6/14/24), последняя
+        // доходит до правого края; при скролле колонки уезжают влево до самого края.
+        bleedNegClass="-mx-6 sm:-mx-14 lg:-mx-24"
+        bleedPadClass="pl-6 sm:pl-14 lg:pl-24"
       />
 
       <AutomationDialog
@@ -298,7 +304,7 @@ function HeadToolButton({
   return (
     <button
       type="button"
-      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       {...props}
     >
       {children}

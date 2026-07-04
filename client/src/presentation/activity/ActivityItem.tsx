@@ -12,7 +12,6 @@ import {
   UserCog,
   type LucideIcon,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { relativeTime } from '@/lib/relativeTime';
 import {
   Tooltip,
@@ -210,44 +209,52 @@ export function ActivityItem({
   return (
     <li
       onClick={() => navigate(targetUrl(item))}
-      className={cn(
-        // overflow-hidden = содержит float иконки; текст обтекает иконку (начинается справа
-        // от неё и продолжается под ней на всю ширину блока) — так шире и читабельнее.
-        // pr-11 резервирует место под всегда-видимую кнопку версии у правого края.
-        'group relative cursor-pointer overflow-hidden py-3 pl-4 pr-11 transition-colors hover:bg-muted/40',
-      )}
+      className="group cursor-pointer px-4 py-3 transition-colors hover:bg-muted/40"
     >
-      {versionTaskId && (
-        <TooltipProvider delayDuration={300}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenVersions?.(versionTaskId);
-                }}
-                aria-label="Посмотреть версию"
-                className="absolute right-3 top-3 z-10 grid size-7 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <Clock className="size-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="left" className="border-transparent bg-neutral-900 text-white">
-              Посмотреть версию
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      )}
-      <span className="float-left mr-2.5 grid size-7 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground ring-1 ring-border">
-        <Icon className="size-3.5" />
-      </span>
-      <p className="text-sm leading-snug">{renderText(item)}</p>
-      {(item.kind === 'task_updated' || item.kind === 'project_updated') &&
-      item.payload?.changes?.length ? (
-        <ChangesDiff changes={item.payload.changes} />
-      ) : null}
-      <p className="mt-0.5 text-xs text-muted-foreground">{relativeTime(item.createdAt)}</p>
+      {/* Flex-раскладка во всю ширину окна (Notion-style): иконка · контент (flex-1) ·
+          время справа. Короткий текст больше не оставляет правую половину пустой — время
+          «прижато» к правому краю, строка занимает всю ширину. */}
+      <div className="flex gap-2.5">
+        <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground ring-1 ring-border">
+          <Icon className="size-3.5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <p className="min-w-0 text-sm leading-snug">{renderText(item)}</p>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {versionTaskId && (
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenVersions?.(versionTaskId);
+                        }}
+                        aria-label="Посмотреть версию"
+                        className="grid size-7 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <Clock className="size-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" className="border-transparent bg-neutral-900 text-white">
+                      Посмотреть версию
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              <span className="whitespace-nowrap text-xs text-muted-foreground">
+                {relativeTime(item.createdAt)}
+              </span>
+            </div>
+          </div>
+          {(item.kind === 'task_updated' || item.kind === 'project_updated') &&
+          item.payload?.changes?.length ? (
+            <ChangesDiff changes={item.payload.changes} />
+          ) : null}
+        </div>
+      </div>
     </li>
   );
 }
