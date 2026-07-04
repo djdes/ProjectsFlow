@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import { TextSelection, NodeSelection } from '@tiptap/pm/state';
 import { DragHandle } from '@tiptap/extension-drag-handle-react';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, Plus } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { buildExtensions, type MentionMember } from './extensions/buildExtensions';
@@ -247,6 +247,31 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
         }
       })();
     }
+  }, []);
+
+  // Позиция блока под drag-ручкой (обновляется @tiptap/extension-drag-handle-react при
+  // наведении). Нужна кнопке «+»: вставить новый блок ПОД этим и открыть меню типов блоков.
+  const hoverPosRef = React.useRef<number | null>(null);
+
+  // «+» рядом с ручкой: добавить пустой абзац под наведённым блоком, поставить курсор и
+  // открыть slash-меню (H1/H2/список/…) — вставляем «/», suggestion-плагин ловит его.
+  const insertBlockBelow = React.useCallback((): void => {
+    const editor = editorRef.current;
+    if (!editor || editor.isDestroyed || !editor.isEditable) return;
+    const pos = hoverPosRef.current;
+    const doc = editor.state.doc;
+    let insertAt = editor.state.selection.to;
+    if (pos !== null && pos >= 0 && pos <= doc.content.size) {
+      const node = doc.nodeAt(pos);
+      insertAt = node ? pos + node.nodeSize : pos;
+    }
+    editor
+      .chain()
+      .focus()
+      .insertContentAt(insertAt, { type: 'paragraph' })
+      .setTextSelection(insertAt + 1)
+      .insertContent('/')
+      .run();
   }, []);
 
   const selectionKey = (e: Editor): string => `${e.state.selection.from}-${e.state.selection.to}`;
@@ -514,17 +539,41 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
           getRange={() => savedRangeRef.current}
         />
       ) : null}
-      {/* Ручка-«6 точек» слева при наведении на блок (абзац/картинка) → drag-reorder.
-          Только в описании (не в комментариях), в редактируемом режиме. */}
+      {/* Слева при наведении на блок (Notion-style): «+» (добавить блок под этим + меню типов)
+          и ручка-«6 точек» (drag-reorder). Только в описании (не в комментариях), в
+          редактируемом режиме. onNodeChange даёт позицию наведённого блока для кнопки «+». */}
       {editor && variant === 'description' && !disabled ? (
-        <DragHandle editor={editor} computePositionConfig={{ placement: 'left-start' }}>
-          <button
-            type="button"
-            aria-label="Переместить блок"
-            className="flex h-6 w-4 cursor-grab items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground active:cursor-grabbing"
-          >
-            <GripVertical className="size-4" />
-          </button>
+        <DragHandle
+          editor={editor}
+          computePositionConfig={{ placement: 'left-start' }}
+          onNodeChange={({ pos }) => {
+            hoverPosRef.current = typeof pos === 'number' ? pos : null;
+          }}
+        >
+          <div className="flex items-center">
+            <button
+              type="button"
+              aria-label="Добавить блок"
+              title="Добавить блок ниже"
+              // Не drag: mousedown не должен начинать перетаскивание ручки.
+              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.preventDefault();
+                insertBlockBelow();
+              }}
+              className="flex size-5 items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground"
+            >
+              <Plus className="size-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Переместить блок"
+              className="flex h-6 w-4 cursor-grab items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground active:cursor-grabbing"
+            >
+              <GripVertical className="size-4" />
+            </button>
+          </div>
         </DragHandle>
       ) : null}
       <EditorContent editor={editor} />

@@ -45,7 +45,11 @@ interface BuildExtensionsOptions {
 export function buildExtensions({ placeholder, members }: BuildExtensionsOptions = {}): Extensions {
   const extensions: Extensions = [
     // StarterKit v3 уже включает Bold/Italic/Strike/Code/Underline/Link + heading/списки/quote/codeBlock/hr/history.
-    StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+    // dropcursor — синяя жирная линия места вставки при перетаскивании блока (Notion-style).
+    StarterKit.configure({
+      heading: { levels: [1, 2, 3] },
+      dropcursor: { color: '#2383e2', width: 3 },
+    }),
     Markdown,
     TaskList,
     TaskItem.configure({ nested: true }),
