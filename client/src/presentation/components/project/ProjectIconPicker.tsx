@@ -28,19 +28,19 @@ const RECENT_MAX = 27;
 const ALL_EMOJIS: readonly string[] = EMOJI_CATEGORIES.flatMap((c) => c.emojis);
 
 // Случайная иконка из всего набора (кнопка-шафл, Notion-style).
-function randomEmoji(): string {
+export function randomEmoji(): string {
   return ALL_EMOJIS.length ? ALL_EMOJIS[Math.floor(Math.random() * ALL_EMOJIS.length)] : '🚀';
 }
 
 // «Недавние» — только обычные эмодзи. lucide-иконки (`lucide:…`) и картинки (`data:`/URL)
 // не годятся для этой сетки (рендерились бы сырым текстом), поэтому не сохраняем/фильтруем их.
-function isPlainEmoji(s: string): boolean {
+export function isPlainEmoji(s: string): boolean {
   return !(
     s.startsWith('lucide:') || s.startsWith('data:') || s.startsWith('http') || s.startsWith('/')
   );
 }
 
-function loadRecent(): string[] {
+export function loadRecent(): string[] {
   try {
     const raw = localStorage.getItem(RECENT_KEY);
     const arr = raw ? (JSON.parse(raw) as unknown) : null;
@@ -52,7 +52,7 @@ function loadRecent(): string[] {
   }
 }
 
-function pushRecent(emoji: string): string[] {
+export function pushRecent(emoji: string): string[] {
   const next = [emoji, ...loadRecent().filter((e) => e !== emoji)].slice(0, RECENT_MAX);
   try {
     localStorage.setItem(RECENT_KEY, JSON.stringify(next));
@@ -224,7 +224,7 @@ export function ProjectIconPicker({ projectId, icon, big = false, variant = 'inl
 }
 
 // ── Вкладка «Эмодзи» ────────────────────────────────────────────────────────
-function EmojiPane({
+export function EmojiPane({
   query,
   recent,
   current,
@@ -265,7 +265,7 @@ function EmojiPane({
 
 // ── Вкладка «Иконки» (lucide) ───────────────────────────────────────────────
 // onPick получает готовую строку иконки `lucide:<Name>[:<colorKey>]`.
-function IconsPane({
+export function IconsPane({
   query,
   current,
   onPick,
@@ -336,7 +336,7 @@ function IconsPane({
 }
 
 // ── Вкладка «Загрузить» ─────────────────────────────────────────────────────
-function UploadPane({ onPick }: { onPick: (url: string) => void }): React.ReactElement {
+export function UploadPane({ onPick }: { onPick: (url: string) => void }): React.ReactElement {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [link, setLink] = useState('');

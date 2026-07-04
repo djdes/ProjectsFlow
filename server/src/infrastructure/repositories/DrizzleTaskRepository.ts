@@ -31,6 +31,7 @@ function toTask(row: TaskRowJoined): Task {
     projectId: row.projectId,
     createdBy: row.createdBy ?? null,
     description: row.description ?? null,
+    icon: row.icon ?? null,
     status: row.status as TaskStatus,
     statusBeforeDone: asTaskStatus(row.statusBeforeDone),
     position: row.position,
@@ -68,6 +69,7 @@ export class DrizzleTaskRepository implements TaskRepository {
         // на диспетчера, а не на создателя задачи (баг: `as TaskRowJoined` прятал это от tsc).
         createdBy: tasks.createdBy,
         description: tasks.description,
+        icon: tasks.icon,
         status: tasks.status,
         statusBeforeDone: tasks.statusBeforeDone,
         position: tasks.position,
@@ -126,6 +128,7 @@ export class DrizzleTaskRepository implements TaskRepository {
       projectId: input.projectId,
       createdBy: input.createdBy,
       description: input.description,
+      icon: input.icon ?? null,
       status: input.status,
       position: input.position,
       // Не выставляем если undefined — пусть отработает SQL DEFAULT.
@@ -143,6 +146,7 @@ export class DrizzleTaskRepository implements TaskRepository {
       Pick<
         TaskRow,
         | 'description'
+        | 'icon'
         | 'status'
         | 'statusBeforeDone'
         | 'position'
@@ -152,6 +156,7 @@ export class DrizzleTaskRepository implements TaskRepository {
       >
     > = {};
     if (patch.description !== undefined) set.description = patch.description;
+    if (patch.icon !== undefined) set.icon = patch.icon;
     if (patch.status !== undefined) set.status = patch.status;
     if (patch.statusBeforeDone !== undefined) set.statusBeforeDone = patch.statusBeforeDone;
     if (patch.position !== undefined) set.position = patch.position;

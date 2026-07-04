@@ -46,6 +46,8 @@ export type Task = {
   // старых задач без делегации (db/088). Заполняется на create; репозиторий читает колонку.
   readonly createdBy: string | null;
   readonly description: string | null;
+  // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL картинки. null = без иконки. См. db/093.
+  readonly icon: string | null;
   readonly status: TaskStatus;
   // Статус задачи до перехода в 'done'. Снимок ставится при move→done, очищается при
   // move из done. Снятие галочки «выполнено» восстанавливает его (фолбэк 'todo', если

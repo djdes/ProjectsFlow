@@ -38,6 +38,7 @@ function mk(overrides: {
     id,
     projectId: overrides.projectId ?? 'p1',
     description: 'desc',
+    icon: null,
     status: 'todo',
     statusBeforeDone: null,
     position: overrides.position ?? 0,

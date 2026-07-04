@@ -40,6 +40,8 @@ export type CreateTaskCommand = {
   readonly projectId: string;
   readonly ownerUserId: string;
   readonly description: string;
+  // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL. null/undefined = без иконки. См. db/093.
+  readonly icon?: string | null;
   // По умолчанию новая карточка добавляется в TODO наверх столбца.
   readonly status: TaskStatus;
   // Режим работы Ralph по задаче. Если не указан — БД проставит DEFAULT 'normal'.
@@ -87,6 +89,7 @@ export class CreateTask {
       projectId: input.projectId,
       createdBy,
       description,
+      icon: input.icon ?? null,
       status: input.status,
       position,
       ralphMode: input.ralphMode,

@@ -14,6 +14,7 @@ export type UseTasks = State & {
   refetch: () => Promise<void>;
   create: (input: {
     description: string;
+    icon?: string | null;
     status: TaskStatus;
     ralphMode?: RalphMode;
     delegateUserId?: string | null;
@@ -24,6 +25,7 @@ export type UseTasks = State & {
     taskId: string,
     input: {
       description?: string;
+      icon?: string | null;
       ralphMode?: RalphMode;
       deadline?: string | null;
       priority?: TaskPriority | null;

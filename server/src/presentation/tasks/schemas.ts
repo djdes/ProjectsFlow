@@ -24,10 +24,15 @@ const prioritySchema = z
   .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
   .nullable();
 
+// Иконка задачи: эмодзи / lucide:Name[:color] / data-URL картинки. nullable: null = убрать иконку.
+// Лимит 2_000_000 — вмещает base64 data-URL картинки, защищая от гигантского payload'а.
+const iconSchema = z.string().max(2_000_000).nullable();
+
 export const createTaskSchema = z.object({
   // Лимит 50000 — фактически «без ограничения по объёму» для задач автоматизации
   // (крупные/сложные ТЗ). Колонка tasks.description — MEDIUMTEXT (db/058).
   description: z.string().trim().min(1, 'Введите описание').max(50000),
+  icon: iconSchema.optional(),
   status: taskStatusSchema.optional(),
   ralphMode: ralphModeSchema.optional(),
   // Опциональное one-to-one делегирование (только для inbox-задач). UUID юзера.
@@ -40,6 +45,7 @@ export const createTaskSchema = z.object({
 export const updateTaskSchema = z
   .object({
     description: z.string().trim().min(1).max(50000).optional(),
+    icon: iconSchema.optional(),
     ralphMode: ralphModeSchema.optional(),
     deadline: deadlineSchema.optional(),
     priority: prioritySchema.optional(),

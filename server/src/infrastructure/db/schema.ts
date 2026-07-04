@@ -217,8 +217,9 @@ export const projects = mysqlTable(
     // доступ-чек идёт через project_members (см. spec фазу P4 — финальный дроп колонки).
     ownerId: fkUserId('owner_id'),
     name: varchar('name', { length: 80 }).notNull(),
-    // Эмодзи-иконка проекта (Notion-style); NULL = дефолтная папка. См. db/071.
-    icon: varchar('icon', { length: 16 }),
+    // Иконка проекта (Notion-style): эмодзи / lucide:Name[:color] / data-URL. NULL = дефолтная папка.
+    // TEXT (было varchar(16)) — вмещает lucide:Name:color и data-URL. См. db/071, db/093.
+    icon: text('icon'),
     status: mysqlEnum('status', ['active', 'paused', 'archived']).notNull().default('active'),
     gitRepoUrl: varchar('git_repo_url', { length: 500 }),
     kbRepoFullName: varchar('kb_repo_full_name', { length: 255 }),
@@ -536,6 +537,8 @@ export const tasks = mysqlTable(
     // Кто создал задачу («кто отдал воркеру») — для пер-юзерной атрибуции расхода (db/088).
     createdBy: char('created_by', { length: 36 }),
     description: text('description'),
+    // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL картинки. TEXT — влезает data-URL. См. db/093.
+    icon: text('icon'),
     status: mysqlEnum('status', [
       'backlog',
       'todo',

@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { KanbanCard } from './KanbanCard';
 import { DropIndicatorLine } from './DropIndicatorLine';
 import { TaskComposer } from './TaskComposer';
+import { IconPicker } from '@/presentation/components/project/IconPicker';
 import { STATUS_SUBTITLE } from './statusLabels';
 import type { SelectModifiers } from './selection/selectionReducer';
 
@@ -23,6 +24,7 @@ export type KanbanColumnColorClasses = {
 type InlineCreateInput = {
   description: string;
   status?: TaskStatus;
+  icon?: string | null;
   ralphMode?: RalphMode;
   delegateUserId?: string | null;
   deadline?: string | null;
@@ -357,7 +359,7 @@ export function KanbanColumn({
         {inlineCreating && onInlineCreate && (
           <InlineNewCard
             onOpenFull={onEdit}
-            onCreate={(name) => onInlineCreate({ description: name, status })}
+            onCreate={(name, icon) => onInlineCreate({ description: name, status, icon })}
             onClose={() => setInlineCreating(false)}
           />
         )}
@@ -460,11 +462,12 @@ function InlineNewCard({
   onClose,
   onOpenFull,
 }: {
-  onCreate: (name: string) => Promise<Task>;
+  onCreate: (name: string, icon: string | null) => Promise<Task>;
   onClose: () => void;
   onOpenFull: (task: Task) => void;
 }): React.ReactElement {
   const [value, setValue] = useState('');
+  const [icon, setIcon] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const closingRef = useRef(false);
@@ -483,7 +486,7 @@ function InlineNewCard({
     if (!name || busy) return null;
     setBusy(true);
     try {
-      return await onCreate(name);
+      return await onCreate(name, icon);
     } finally {
       setBusy(false);
     }
@@ -494,6 +497,7 @@ function InlineNewCard({
     const t = await create();
     if (t) {
       setValue('');
+      setIcon(null);
       requestAnimationFrame(() => {
         const el = ref.current;
         if (el) {
@@ -519,7 +523,14 @@ function InlineNewCard({
 
   return (
     <div className="group/new rounded-xl border bg-card p-2.5 shadow-sm ring-1 ring-primary/20">
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-1.5">
+        {/* Иконка задачи — тот же пикер, что у проекта (эмодзи/иконки/загрузка). */}
+        <IconPicker
+          value={icon}
+          onChange={setIcon}
+          size="sm"
+          triggerClassName="mt-px"
+        />
         <textarea
           ref={ref}
           value={value}

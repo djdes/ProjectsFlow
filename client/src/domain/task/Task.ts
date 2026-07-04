@@ -60,6 +60,8 @@ export type Task = {
   readonly id: string;
   readonly projectId: string;
   readonly description: string | null;
+  // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL картинки. null = без иконки. См. db/093.
+  readonly icon: string | null;
   readonly status: TaskStatus;
   // Статус до перехода в 'done' — для восстановления прежней колонки при снятии галочки.
   // null = нет снапшота. Заполняется backend'ом (db/055). Optional на проводе.

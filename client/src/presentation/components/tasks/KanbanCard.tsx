@@ -9,6 +9,7 @@ import type { SelectModifiers } from './selection/selectionReducer';
 import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import { TaskTitleText } from './TaskTitleText';
 import { splitTitleBody } from '@/lib/taskTitleBody';
+import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import type { Task } from '@/domain/task/Task';
 import { ClaudeIcon } from './ClaudeIcon';
 import { DelegationBadge } from './DelegationBadge';
@@ -271,6 +272,12 @@ export function KanbanCard({
           <div>
             {task.description?.trim() ? (
               <div className="line-clamp-4 text-sm leading-snug">
+                {/* Иконка задачи (эмодзи/lucide/картинка) — перед заголовком, как в Notion. */}
+                {task.icon && (
+                  <span className="mr-1 inline-grid size-[1.05rem] shrink-0 translate-y-[3px] place-items-center overflow-hidden">
+                    <ProjectIconView icon={task.icon} pixelSize={17} className="text-[1.05rem]" />
+                  </span>
+                )}
                 {/* Заголовок — plain-текст (не markdown), чтобы `---`/`- `/`* `/`# ` в начале
                     не превращались в hr/список/heading и не пропадали под COMPACT-пресетом. */}
                 <TaskTitleText title={title} />

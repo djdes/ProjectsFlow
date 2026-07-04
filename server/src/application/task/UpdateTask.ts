@@ -30,6 +30,8 @@ export type UpdateTaskCommand = {
   readonly ownerUserId: string;
   readonly taskId: string;
   readonly description: string | undefined;
+  // null = очистить иконку; undefined = не менять. См. db/093.
+  readonly icon?: string | null;
   // Сменить режим Ralph можно в любой момент — диспетчер на следующем тике увидит.
   readonly ralphMode?: RalphMode;
   // null = очистить deadline; undefined = не менять.
@@ -59,6 +61,7 @@ export class UpdateTask {
       if (trimmed.length === 0) throw new TaskDescriptionEmptyError();
       patch.description = trimmed;
     }
+    if (input.icon !== undefined) patch.icon = input.icon;
     if (input.ralphMode !== undefined) patch.ralphMode = input.ralphMode;
     if (input.deadline !== undefined) patch.deadline = input.deadline;
     if (input.priority !== undefined) patch.priority = input.priority;

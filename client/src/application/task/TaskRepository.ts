@@ -10,6 +10,8 @@ import type {
 
 export type CreateTaskInput = {
   readonly description: string;
+  // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL. null/undefined = без иконки. См. db/093.
+  readonly icon?: string | null;
   readonly status?: TaskStatus;
   // Режим работы Ralph. Если не передан — backend дефолтит 'normal'.
   readonly ralphMode?: RalphMode;
@@ -25,6 +27,8 @@ export type CreateTaskInput = {
 
 export type UpdateTaskInput = {
   readonly description?: string;
+  // null = очистить иконку; undefined = не менять. См. db/093.
+  readonly icon?: string | null;
   readonly ralphMode?: RalphMode;
   // null = очистить deadline; undefined = не менять.
   readonly deadline?: string | null;

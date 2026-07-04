@@ -6,6 +6,8 @@ export type CreateTaskInput = {
   // Кто создал («кто отдал воркеру») — инициатор для метеринга/гейта расхода (db/088).
   readonly createdBy: string | null;
   readonly description: string;
+  // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL. null/undefined = без иконки. См. db/093.
+  readonly icon?: string | null;
   readonly status: TaskStatus;
   readonly position: number;
   // Режим работы Ralph (default 'normal'). См. domain RalphMode.
@@ -18,6 +20,8 @@ export type CreateTaskInput = {
 
 export type UpdateTaskPatch = {
   readonly description?: string | null;
+  // null = очистить иконку. undefined = не менять. См. db/093.
+  readonly icon?: string | null;
   readonly status?: TaskStatus;
   // Снимок статуса до 'done'. null = очистить. undefined = не менять. См. db/055, MoveTask.
   readonly statusBeforeDone?: TaskStatus | null;

@@ -19,6 +19,7 @@ function task(partial: Partial<TaskWithCounts> & { id: string }): TaskWithCounts
   return {
     projectId: 'p1',
     description: null,
+    icon: null,
     status: 'todo',
     statusBeforeDone: null,
     position: 0,
