@@ -9,7 +9,10 @@ import { useContainer } from '@/infrastructure/di/container';
 
 export const SIDEBAR_WIDTH_KEY = 'pf_sidebar_width';
 export const SIDEBAR_DEFAULT_WIDTH = 270;
-export const SIDEBAR_MIN_WIDTH = 240;
+// Ниже SIDEBAR_COMPACT_WIDTH подписи у навигации/свитчера скрываются (иконки-only), поэтому
+// можно сузить сильнее прежнего минимума — но не в кашу.
+export const SIDEBAR_MIN_WIDTH = 176;
+export const SIDEBAR_COMPACT_WIDTH = 212;
 export const SIDEBAR_MAX_WIDTH = 480;
 
 export function clampSidebarWidth(w: number): number {

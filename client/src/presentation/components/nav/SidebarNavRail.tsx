@@ -27,11 +27,14 @@ export function SidebarNavRail({
   items,
   activeIndex,
   onSelect,
+  compact = false,
 }: {
   readonly items: readonly RailItem[];
   readonly activeIndex: number;
   // Вызывается при клике по вкладке (variant: 'tab'); index — позиция в исходном массиве.
   readonly onSelect: (index: number) => void;
+  // Узкий сайдбар: прячем подписи, оставляем только иконки.
+  readonly compact?: boolean;
 }): React.ReactElement {
   const { animations } = useMotion();
   const [hovered, setHovered] = useState<number | null>(null);
@@ -91,7 +94,7 @@ export function SidebarNavRail({
               {renderIcon(item, idx, active)}
               {badge(item)}
             </span>
-            {!accent && <span className="max-w-full truncate">{item.label}</span>}
+            {!accent && !compact && <span className="max-w-full truncate">{item.label}</span>}
           </button>
         );
       })}

@@ -4,6 +4,7 @@ import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/she
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
+import { SIDEBAR_WIDTH, SIDEBAR_RESTORE_MARGIN } from '@/presentation/hooks/useResizableWidth';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
@@ -73,6 +74,15 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
   });
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{ x: number; w: number } | null>(null);
+  // Доехало ли окно левым краем до сайдбара (тогда просим AppShell свернуть панель).
+  const reachedSidebarRef = useRef(false);
+  // Окно закрылось, а сайдбар был свёрнут из-за него → вернуть панель.
+  useEffect(() => {
+    if (!open && reachedSidebarRef.current) {
+      reachedSidebarRef.current = false;
+      window.dispatchEvent(new CustomEvent('pf:drawer-clear-sidebar'));
+    }
+  }, [open]);
 
   // По требованию: при открытии окна активности главное окно НЕ меняется (не сужается,
   // описание не переверстывается) — окно просто открывается поверх. Поэтому ширину в
@@ -94,7 +104,18 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
         if (!d) return;
         if (Math.abs(ev.clientX - d.x) > 3) moved = true;
         // Ручка на ЛЕВОМ крае правой панели: влево (меньше clientX) = шире.
-        setPanelWidth(clampPanelWidth(d.w - (ev.clientX - d.x)));
+        const newWidth = clampPanelWidth(d.w - (ev.clientX - d.x));
+        // Левый край окна доехал до сайдбара → просим свернуть панель; поехал обратно
+        // (с гистерезисом) → вернуть. Тот же механизм, что у окна задачи (useResizableWidth).
+        const leftEdge = window.innerWidth - newWidth;
+        if (leftEdge <= SIDEBAR_WIDTH && !reachedSidebarRef.current) {
+          reachedSidebarRef.current = true;
+          window.dispatchEvent(new CustomEvent('pf:drawer-over-sidebar'));
+        } else if (leftEdge > SIDEBAR_WIDTH + SIDEBAR_RESTORE_MARGIN && reachedSidebarRef.current) {
+          reachedSidebarRef.current = false;
+          window.dispatchEvent(new CustomEvent('pf:drawer-clear-sidebar'));
+        }
+        setPanelWidth(newWidth);
       };
       const onUp = (): void => {
         dragRef.current = null;
