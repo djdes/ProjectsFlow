@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Clock } from 'lucide-react';
+import { CalendarDays, Clock } from 'lucide-react';
 import { relativeTime } from '@/lib/relativeTime';
 import { formatExactDateTime } from '@/lib/datetime';
 import {
@@ -237,10 +237,14 @@ export function ActivityItem({
               />
             </span>
           </TooltipTrigger>
-          <TooltipContent side="bottom" align="start" className="flex items-center gap-2 p-2">
-            <UserAvatar displayName={actor} avatarUrl={item.actorAvatarUrl} className="size-8 rounded-full text-xs" />
+          <TooltipContent
+            side="bottom"
+            align="start"
+            className="flex items-center gap-2.5 border-border/60 p-2.5 shadow-lg"
+          >
+            <UserAvatar displayName={actor} avatarUrl={item.actorAvatarUrl} className="size-9 rounded-full text-sm" />
             <span className="text-left">
-              <span className="block text-sm font-medium">{actor}</span>
+              <span className="block text-[13px] font-semibold text-foreground">{actor}</span>
               <span className="block text-xs text-muted-foreground">
                 {new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })} — местное время
               </span>
@@ -281,7 +285,8 @@ export function ActivityItem({
                 {relativeTime(item.createdAt)}
               </span>
             </TooltipTrigger>
-            <TooltipContent side="bottom" align="start">
+            <TooltipContent side="bottom" align="start" className="flex items-center gap-1.5 border-border/60 shadow-lg">
+              <CalendarDays className="size-3.5 text-muted-foreground" />
               {formatExactDateTime(item.createdAt)}
             </TooltipContent>
           </Tooltip>
