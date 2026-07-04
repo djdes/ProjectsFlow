@@ -45,9 +45,22 @@ function humanizeValue(field: string, v: string | null): string {
 }
 
 // Дифф изменённых полей: новое значение подсвечено синим (как в Notion), старое — зачёркнуто.
-function ChangesDiff({ changes }: { changes: readonly ActivityFieldChange[] }): React.ReactElement {
+// onOpen — клик по блоку открывает задачу/страницу с подсветкой изменённого поля.
+function ChangesDiff({
+  changes,
+  onOpen,
+}: {
+  changes: readonly ActivityFieldChange[];
+  onOpen?: () => void;
+}): React.ReactElement {
   return (
-    <div className="mt-1 space-y-1">
+    <div
+      onClick={onOpen ? () => onOpen() : undefined}
+      className="-mx-1 mt-1 space-y-1 rounded px-1 py-0.5 transition-colors hover:bg-muted/60"
+      role={onOpen ? 'button' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onKeyDown={onOpen ? (e) => (e.key === 'Enter' ? onOpen() : undefined) : undefined}
+    >
       {changes.map((c, i) => (
         <div key={`${c.field}-${i}`} className="text-xs leading-snug">
           <span className="text-muted-foreground">{FIELD_LABEL[c.field] ?? c.field}: </span>
@@ -74,54 +87,86 @@ function ChangesDiff({ changes }: { changes: readonly ActivityFieldChange[] }): 
   );
 }
 
-// Текст события. actor — имя актора (или «Кто-то»); target — имя затронутого участника.
-function renderText(item: ActivityEventItem): React.ReactNode {
+// Кликабельный фрагмент текста события (название задачи / имя проекта). stopPropagation —
+// чтобы клик по ссылке не «проваливался» дальше по строке.
+function ActLink({ onClick, children }: { onClick: () => void; children: React.ReactNode }): React.ReactElement {
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.stopPropagation();
+          onClick();
+        }
+      }}
+      className="cursor-pointer rounded font-semibold text-foreground decoration-muted-foreground/40 underline-offset-2 hover:underline"
+    >
+      {children}
+    </span>
+  );
+}
+
+type NavHandlers = { openTask: () => void; openProject: () => void };
+
+// Текст события. Название задачи и имя проекта — отдельные кликабельные ссылки; сам глагол
+// («изменил», «перенёс») и имя автора — обычный выделяемый/копируемый текст.
+function renderText(item: ActivityEventItem, nav: NavHandlers): React.ReactNode {
   const actor = item.actorDisplayName ?? 'Кто-то';
   const target = item.targetDisplayName ?? 'участника';
   const p = item.payload ?? {};
-  const excerpt = p.taskExcerpt ? `«${p.taskExcerpt}»` : 'задачу';
+  const taskLink = p.taskExcerpt ? (
+    <ActLink onClick={nav.openTask}>«{p.taskExcerpt}»</ActLink>
+  ) : (
+    <ActLink onClick={nav.openTask}>задачу</ActLink>
+  );
+  const projectLink = p.projectName ? <ActLink onClick={nav.openProject}>«{p.projectName}»</ActLink> : null;
   switch (item.kind) {
     case 'task_created':
       return (
         <>
-          <b>{actor}</b> создал {excerpt}
+          <b>{actor}</b> создал {taskLink}
         </>
       );
     case 'task_status_changed':
       return (
         <>
-          <b>{actor}</b> перенёс {excerpt}: {statusLabel(p.oldStatus)} → <b>{statusLabel(p.newStatus)}</b>
+          <b>{actor}</b> перенёс {taskLink}: {statusLabel(p.oldStatus)} → <b>{statusLabel(p.newStatus)}</b>
         </>
       );
     case 'task_updated':
       return (
         <>
-          <b>{actor}</b> изменил {excerpt}
+          <b>{actor}</b> изменил {taskLink}
         </>
       );
     case 'task_deleted':
       return (
         <>
-          <b>{actor}</b> удалил {excerpt}
+          <b>{actor}</b> удалил {p.taskExcerpt ? `«${p.taskExcerpt}»` : 'задачу'}
         </>
       );
     case 'task_commented':
       return (
         <>
-          <b>{actor}</b> прокомментировал {excerpt}
+          <b>{actor}</b> прокомментировал {taskLink}
           {p.commentExcerpt ? <span className="text-muted-foreground">: «{p.commentExcerpt}»</span> : null}
         </>
       );
     case 'project_created':
       return (
         <>
-          <b>{actor}</b> создал проект {p.projectName ? <b>«{p.projectName}»</b> : ''}
+          <b>{actor}</b> создал проект {projectLink}
         </>
       );
     case 'project_updated':
       return (
         <>
-          <b>{actor}</b> изменил проект {p.projectName ? <b>«{p.projectName}»</b> : ''}
+          <b>{actor}</b> изменил проект {projectLink}
         </>
       );
     case 'member_added':
@@ -147,19 +192,6 @@ function renderText(item: ActivityEventItem): React.ReactNode {
   }
 }
 
-// Куда ведёт клик: задача+коммент для task_commented, открытие карточки для созданной/
-// перенесённой задачи, иначе — доска проекта (удалённую задачу не открываем).
-function targetUrl(item: ActivityEventItem): string {
-  const base = `/projects/${item.projectId}`;
-  const taskId = item.payload?.taskId;
-  if (!taskId) return base;
-  if (item.kind === 'task_commented' && item.payload?.commentId)
-    return `${base}?task=${taskId}#comment-${item.payload.commentId}`;
-  if (item.kind === 'task_created' || item.kind === 'task_status_changed' || item.kind === 'task_updated')
-    return `${base}?task=${taskId}`;
-  return base;
-}
-
 // Задачные события, у которых есть история версий (кнопка-часы «Посмотреть версию»).
 const TASK_KINDS: ReadonlySet<ActivityKind> = new Set([
   'task_created',
@@ -181,12 +213,19 @@ export function ActivityItem({
   const actor = item.actorDisplayName ?? 'Кто-то';
   const versionTaskId =
     onOpenVersions && TASK_KINDS.has(item.kind) ? (item.payload?.taskId ?? null) : null;
+  const taskId = item.payload?.taskId ?? null;
+  // Название задачи / блок изменения ведут на страницу задачи (при hl= — с подсветкой поля);
+  // имя проекта — на доску проекта. Сам глагол/имя автора остаются обычным текстом (выделяется).
+  const openTask = (field?: string): void => {
+    if (!taskId) return;
+    navigate(`/projects/${item.projectId}/tasks/${taskId}${field ? `?hl=${encodeURIComponent(field)}` : ''}`);
+  };
+  const openProject = (): void => {
+    navigate(`/projects/${item.projectId}`);
+  };
   return (
     <TooltipProvider delayDuration={300}>
-      <li
-        onClick={() => navigate(targetUrl(item))}
-        className="group flex cursor-pointer gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
-      >
+      <li className="group flex gap-3 px-4 py-3 transition-colors hover:bg-muted/40">
         {/* Аватар автора — hover: карточка с именем и текущим местным временем (как в Notion). */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -211,7 +250,9 @@ export function ActivityItem({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <p className="min-w-0 text-sm leading-snug">{renderText(item)}</p>
+            <p className="min-w-0 select-text text-sm leading-snug">
+              {renderText(item, { openTask: () => openTask(), openProject })}
+            </p>
             {versionTaskId && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -246,7 +287,13 @@ export function ActivityItem({
           </Tooltip>
           {(item.kind === 'task_updated' || item.kind === 'project_updated') &&
           item.payload?.changes?.length ? (
-            <ChangesDiff changes={item.payload.changes} />
+            <ChangesDiff
+              changes={item.payload.changes}
+              // Клик по блоку изменения → задача с подсветкой изменённого поля (или проект).
+              onOpen={() =>
+                taskId ? openTask(item.payload?.changes?.[0]?.field) : openProject()
+              }
+            />
           ) : null}
         </div>
       </li>
