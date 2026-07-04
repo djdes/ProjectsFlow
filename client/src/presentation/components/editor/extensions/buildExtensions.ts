@@ -13,6 +13,7 @@ import type { Extensions, JSONContent } from '@tiptap/core';
 
 import { HighlightMark } from './HighlightMark';
 import { FigureImage } from './FigureImage';
+import { BlockMovedHighlight } from './blockMovedHighlight';
 import { createMentionSuggestion, type MentionMember } from './mentionSuggestion';
 
 export type { MentionMember };
@@ -54,6 +55,8 @@ export function buildExtensions({ placeholder, members }: BuildExtensionsOptions
     TaskList,
     TaskItem.configure({ nested: true }),
     HighlightMark,
+    // Пастельно-синяя подсветка только что перетащенного блока (Notion-style). См. blockMovedHighlight.ts.
+    BlockMovedHighlight,
     // Блок-картинка с подписью (inline-скрины в описании). См. FigureImage.ts.
     FigureImage,
     // Цвет текста/фона через textStyle-mark. Color/BackgroundColor добавляют
