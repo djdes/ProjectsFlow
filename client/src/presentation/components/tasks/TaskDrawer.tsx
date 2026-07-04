@@ -337,7 +337,7 @@ function DrawerShell({
     );
   }
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
       {/* SheetContent уже position:fixed → служит containing-block'ом для absolute-оверлея,
           поэтому dragOverlay (absolute inset-0) покрывает ровно видимую коробку окна. */}
       <SheetContent
@@ -352,12 +352,10 @@ function DrawerShell({
         // фокусит контент → у левого (единственного видимого) края мелькает чёрный outline.
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
-        // Клик/фокус внутри лайтбокса картинки (портал в body) не закрывает дровер.
-        onInteractOutside={(e) => {
-          const orig = (e.detail as { originalEvent?: Event } | undefined)?.originalEvent;
-          const target = (orig?.target ?? null) as Element | null;
-          if (target?.closest?.('[data-figure-lightbox]')) e.preventDefault();
-        }}
+        // Немодально (как в Notion): остальной сайт кликабелен, клик мимо окна НЕ закрывает
+        // его — закрытие только кнопкой/Esc. Иначе первый же клик по доске закрывал бы окно.
+        onInteractOutside={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
         {...dragHandlers}
       >
         {dragOverlay}

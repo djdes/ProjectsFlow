@@ -1,7 +1,7 @@
 import { cloneElement, isValidElement, useCallback, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ChevronsLeft, PanelLeft, Plus, Shield } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Plus, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -120,7 +120,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
         <TooltipProvider delayDuration={300}>
           {onToggleCollapse && (
             <RailButton onClick={onToggleCollapse} label="Развернуть панель">
-              <PanelLeft className="size-4" />
+              <ChevronsRight className="size-5" />
             </RailButton>
           )}
           <WorkspaceSwitcher compact />
@@ -170,7 +170,7 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
   }
 
   return (
-    <aside className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_1fr_auto] gap-2 overflow-hidden bg-sidebar px-2.5 pb-3">
+    <aside className="group/sidebar grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_1fr_auto] gap-2 overflow-hidden bg-sidebar px-2.5 pb-3">
       {/* Шапка: переключатель пространства + тоггл панели. Высота строки = min-h-11 (44px)
           с вертикальным центрированием — ровно как верхняя строка крошек на страницах
           (Notion-style: свитчер пространства и топбар на одной горизонтали). Уведомления
@@ -187,9 +187,10 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
                   type="button"
                   onClick={onToggleCollapse}
                   aria-label="Свернуть панель"
-                  className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+                  // Кнопка сворачивания появляется только при наведении на левую панель (Notion).
+                  className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-hover hover:text-foreground focus-visible:opacity-100 group-hover/sidebar:opacity-100"
                 >
-                  <ChevronsLeft className="size-4" />
+                  <ChevronsLeft className="size-5" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="flex items-center gap-1.5">

@@ -16,9 +16,9 @@ export function SheetOverlay({
   return (
     <DialogPrimitive.Overlay
       className={cn(
-        // Без затемнения (по запросу): оверлей прозрачный, но остаётся в DOM — клик
-        // мимо окна по-прежнему его закрывает (Radix вешает обработчик на overlay).
-        'fixed inset-0 z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+        // Прозрачный + pointer-events-none: клики «проходят» сквозь оверлей к остальному
+        // приложению (немодальные правые окна — можно тыкать весь сайт, как в Notion).
+        'pointer-events-none fixed inset-0 z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
         className,
       )}
       {...props}

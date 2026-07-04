@@ -186,10 +186,14 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
 
   return (
     <>
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
       <SheetContent
         side="right"
         showClose={false}
+        // Немодально: остальной сайт кликабелен; клик мимо окна НЕ закрывает его (закрытие —
+        // только кнопкой сворачивания). Как в Notion.
+        onInteractOutside={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
         style={{ width: panelWidth, maxWidth: '95vw' }}
         className={cn('group/panel flex h-full w-full flex-col gap-0 overflow-hidden p-0', dragging && 'select-none')}
       >
@@ -220,7 +224,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
               title="Свернуть"
               className="grid size-8 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/panel:opacity-100"
             >
-              <ChevronsRight className="size-4" />
+              <ChevronsRight className="size-5" />
             </button>
           </SheetClose>
           {actions ? <div className="flex items-center gap-0.5">{actions}</div> : <span />}
