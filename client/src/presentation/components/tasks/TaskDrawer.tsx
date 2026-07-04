@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { ArrowRight, Bot, CalendarClock, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, FileText, Flag, GripVertical, Link2, Loader2, Maximize2, Minimize2, MoreHorizontal, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
+import { AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, GripVertical, Link2, Loader2, Maximize2, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -234,6 +234,19 @@ type Props = {
 // localStorage-ключ режима ширины страницы задачи (asPage): '1' = во всю ширину.
 const TASK_PAGE_WIDE_KEY = 'pf-task-page-wide';
 
+// Режим «подглядывания» окна задачи (peek), как в Notion. Запоминается в localStorage —
+// следующая открытая задача стартует в том же режиме. 'page'/'newtab' — одноразовые
+// действия (навигация), в localStorage хранятся только layout-режимы 'right' | 'center'.
+type PeekMode = 'right' | 'center';
+const TASK_PEEK_MODE_KEY = 'pf-task-peek-mode';
+function readPeekMode(): PeekMode {
+  try {
+    return localStorage.getItem(TASK_PEEK_MODE_KEY) === 'center' ? 'center' : 'right';
+  } catch {
+    return 'right';
+  }
+}
+
 // Черновик формы создания задачи — переживает перезагрузку страницы (sessionStorage,
 // пер-проект). Файлы (File-объекты) не сериализуются и в черновик не попадают.
 type CreateDraft = {
@@ -290,6 +303,7 @@ function clearCreateDraft(key: string): void {
 function DrawerShell({
   asPage,
   asPageWide,
+  peekMode,
   breadcrumbs,
   open,
   onOpenChange,
@@ -303,6 +317,8 @@ function DrawerShell({
   asPage: boolean;
   // asPage: колонка во всю ширину (true) или центрированная читаемая колонка (false).
   asPageWide: boolean;
+  // peek-режим окна-оверлея (не asPage): 'right' сбоку (немодально) | 'center' по центру (модально).
+  peekMode: PeekMode;
   breadcrumbs: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -340,13 +356,17 @@ function DrawerShell({
       </div>
     );
   }
+  // center-peek — модальное окно по центру (Notion «center peek»): затемнение, клик мимо
+  // закрывает. side-peek ('right') — немодально, клик мимо НЕ закрывает (тыкать весь сайт).
+  const isCenter = peekMode === 'center';
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+    <Sheet open={open} onOpenChange={onOpenChange} modal={isCenter}>
       {/* SheetContent уже position:fixed → служит containing-block'ом для absolute-оверлея,
           поэтому dragOverlay (absolute inset-0) покрывает ровно видимую коробку окна. */}
       <SheetContent
         ref={contentRef}
-        side="right"
+        side={isCenter ? 'center' : 'right'}
+        dimmed={isCenter}
         showClose={false}
         className={cn(contentClassName, 'outline-none focus:outline-none focus-visible:outline-none')}
         style={contentStyle}
@@ -356,10 +376,11 @@ function DrawerShell({
         // фокусит контент → у левого (единственного видимого) края мелькает чёрный outline.
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
-        // Немодально (как в Notion): остальной сайт кликабелен, клик мимо окна НЕ закрывает
-        // его — закрытие только кнопкой/Esc. Иначе первый же клик по доске закрывал бы окно.
-        onInteractOutside={(e) => e.preventDefault()}
-        onPointerDownOutside={(e) => e.preventDefault()}
+        // side-peek: немодально (как в Notion) — остальной сайт кликабелен, клик мимо окна НЕ
+        // закрывает его (закрытие только кнопкой/Esc). center-peek: модально — клик мимо закрывает
+        // (даём Radix обработать), поэтому preventDefault только в side-режиме.
+        onInteractOutside={isCenter ? undefined : (e) => e.preventDefault()}
+        onPointerDownOutside={isCenter ? undefined : (e) => e.preventDefault()}
         {...dragHandlers}
       >
         {dragOverlay}
@@ -629,6 +650,17 @@ export function TaskDrawer({
       }
       return next;
     });
+  }, []);
+  // Peek-режим окна: 'right' (сбоку, немодально, ресайз) | 'center' (по центру, модально).
+  // Запоминается в localStorage. 'page'/'newtab' — одноразовая навигация (не хранится).
+  const [peekMode, setPeekModeState] = useState<PeekMode>(readPeekMode);
+  const setPeekMode = useCallback((next: PeekMode): void => {
+    setPeekModeState(next);
+    try {
+      localStorage.setItem(TASK_PEEK_MODE_KEY, next);
+    } catch {
+      /* localStorage недоступен — режим действует только на эту сессию */
+    }
   }, []);
   // Task 11: порядок строк-свойств — за пользователем (ui_prefs), один на все проекты.
   const [propertyOrder, setPropertyOrder] = useState<TaskPropertyKey[]>(() =>
@@ -1451,6 +1483,60 @@ export function TaskDrawer({
     );
   };
 
+  // Переключатель peek-режима окна (Notion «Open in»): сбоку / по центру / отдельная
+  // страница / новая вкладка. Первые два — layout-режимы (запоминаются), последние два —
+  // одноразовая навигация. Только desktop-оверлей (в asPage/мобиле не показываем).
+  const renderPeekSwitcher = (): React.ReactElement | null => {
+    const swTask = state?.mode === 'edit' ? state.task : null;
+    if (!swTask || asPage || !isDesktop) return null;
+    const taskUrl = `/projects/${swTask.projectId}/tasks/${swTask.id}`;
+    const CurrentIcon = peekMode === 'center' ? AppWindow : PanelRight;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7 shrink-0 text-muted-foreground hover:text-foreground sm:size-7"
+            aria-label="Режим окна"
+            title="Режим окна"
+          >
+            <CurrentIcon className="size-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[210px]">
+          <DropdownMenuItem onSelect={() => setPeekMode('right')}>
+            <PanelRight className="text-muted-foreground" />
+            <span className="flex-1">Сбоку</span>
+            {peekMode === 'right' && <Check className="size-4 text-foreground" />}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setPeekMode('center')}>
+            <AppWindow className="text-muted-foreground" />
+            <span className="flex-1">По центру</span>
+            {peekMode === 'center' && <Check className="size-4 text-foreground" />}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => navigate(taskUrl)}>
+            <Maximize2 className="text-muted-foreground" />
+            <span className="flex-1">Отдельной страницей</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              try {
+                window.open(taskUrl, '_blank', 'noopener');
+              } catch {
+                /* окно недоступно */
+              }
+            }}
+          >
+            <ExternalLink className="text-muted-foreground" />
+            <span className="flex-1">Открыть в новой вкладке</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
   const task = state?.mode === 'edit' ? state.task : null;
   const scrollToCommentId = state?.mode === 'edit' ? state.scrollToCommentId : undefined;
   // Контекст ответа/цитаты: выбран в треде (кнопка «Ответить» / выделение), читается
@@ -1469,7 +1555,8 @@ export function TaskDrawer({
   // закрытии (state→null) инлайн-ширина мгновенно слетала на дефолтные 900px → окно «дёргано»
   // расширялось перед закрытием. Без mode-гейта ширина держится всю анимацию закрытия.
   // В asPage (отдельная страница) ресайз не нужен — фиксированная центрированная колонка.
-  const resizeEnabled = !asPage && isDesktop && isFinePointer;
+  // В center-peek (модальное окно по центру) ресайз тоже выключен — фиксированный размер.
+  const resizeEnabled = !asPage && peekMode === 'right' && isDesktop && isFinePointer;
   const { width, dragging, isSplit: isSplitRaw, onHandlePointerDown } =
     useResizableWidth(
       resizeEnabled,
@@ -1557,12 +1644,17 @@ export function TaskDrawer({
       contentRef={setDrawerBox}
       asPage={asPage}
       asPageWide={asPageWide}
+      peekMode={peekMode}
       breadcrumbs={breadcrumbs}
       open={state !== null}
       onOpenChange={(open) => !open && handleClose()}
       contentClassName={cn(
-        'grid h-dvh w-full gap-0 overflow-hidden p-0 sm:max-w-[900px]',
-        'grid-rows-[minmax(0,1fr)]',
+        'grid gap-0 overflow-hidden p-0 grid-rows-[minmax(0,1fr)]',
+        // center-peek: фиксированное окно по центру (85vh, читаемая ширина). side-peek: во всю
+        // высоту, у правого края, ресайзится.
+        peekMode === 'center' && !asPage
+          ? 'h-[85vh] max-h-[85vh] w-[min(92vw,900px)]'
+          : 'h-dvh w-full sm:max-w-[900px]',
         dragging && '!transition-none',
       )}
       contentStyle={resizeEnabled ? { width: `${width}px`, maxWidth: '96vw' } : undefined}
@@ -1613,6 +1705,7 @@ export function TaskDrawer({
             <div className="flex h-11 shrink-0 items-center gap-2 border-b bg-background/95 px-4">
               {renderCloseButton()}
               {renderMaximizeButton()}
+              {renderPeekSwitcher()}
               {renderPageWidthToggle()}
               {/* Пред/след задача по колонке (задача выше/ниже). Неактивна = нет соседа. */}
               {(onPrev || onNext) && (

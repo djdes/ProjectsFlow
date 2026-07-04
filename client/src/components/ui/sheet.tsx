@@ -11,14 +11,19 @@ export const SheetPortal = DialogPrimitive.Portal;
 
 export function SheetOverlay({
   className,
+  dimmed = false,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>): React.ReactElement {
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay> & {
+  dimmed?: boolean;
+}): React.ReactElement {
   return (
     <DialogPrimitive.Overlay
       className={cn(
-        // Прозрачный + pointer-events-none: клики «проходят» сквозь оверлей к остальному
-        // приложению (немодальные правые окна — можно тыкать весь сайт, как в Notion).
-        'pointer-events-none fixed inset-0 z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+        'fixed inset-0 z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+        // dimmed (center-peek, модально): затемняющий фон + клики ловятся (клик мимо закрывает).
+        // Иначе (side-peek): прозрачный + pointer-events-none — клики «проходят» сквозь оверлей
+        // к остальному приложению (немодальные правые окна — тыкать весь сайт, как в Notion).
+        dimmed ? 'bg-black/40 backdrop-blur-[1px]' : 'pointer-events-none',
         className,
       )}
       {...props}
@@ -38,6 +43,10 @@ const sheetVariants = cva(
         left: 'inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm',
         right:
           'inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm',
+        // center: модальное окно по центру (Notion «center peek»). Центрирование +
+        // zoom-анимация. Скругление/рамка/высота задаются через className вызывающего.
+        center:
+          'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl border data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-bottom-2 data-[state=open]:slide-in-from-bottom-2',
       },
     },
     defaultVariants: {
@@ -52,15 +61,20 @@ export interface SheetContentProps
   // По умолчанию рисуем встроенный крестик. Если у контента своя кнопка закрытия
   // (напр. в собственной шапке) — передай showClose={false}, чтобы не было двух крестиков.
   showClose?: boolean;
+  // dimmed: затемняющий фон + клик мимо закрывает (модальный center-peek).
+  dimmed?: boolean;
 }
 
 export const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   SheetContentProps
->(function SheetContent({ side = 'right', className, children, showClose = true, ...props }, ref) {
+>(function SheetContent(
+  { side = 'right', className, children, showClose = true, dimmed = false, ...props },
+  ref,
+) {
   return (
     <SheetPortal>
-      <SheetOverlay />
+      <SheetOverlay dimmed={dimmed} />
       <DialogPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
         {children}
         {showClose && (
