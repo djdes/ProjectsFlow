@@ -469,6 +469,10 @@ function InlineNewCard({
   const [value, setValue] = useState('');
   const [icon, setIcon] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Идёт ли взаимодействие с поповером иконки — пока да, блёр textarea НЕ коммитит/не
+  // закрывает карточку (иначе клик по эмодзи в пикере убивал бы карточку до выбора).
+  // Держим флаг ещё ~200мс после закрытия, чтобы отложенный blur-commit его увидел.
+  const pickingRef = useRef(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const closingRef = useRef(false);
 
@@ -507,11 +511,15 @@ function InlineNewCard({
       });
     }
   };
-  // Клик вне карточки → создать (если есть текст) и закрыть.
-  const onBlurCommit = async (): Promise<void> => {
-    if (closingRef.current) return;
-    await create();
-    onClose();
+  // Клик вне карточки → создать (если есть текст) и закрыть. Откладываем на тик и
+  // пропускаем, если фокус ушёл в поповер иконки (взаимодействие с пикером, не выход).
+  const onBlurCommit = (): void => {
+    window.setTimeout(() => {
+      if (closingRef.current || pickingRef.current) return;
+      const active = document.activeElement;
+      if (active && active.closest('[data-radix-popper-content-wrapper], .bg-popover')) return;
+      void create().then(() => onClose());
+    }, 0);
   };
   // «Открыть справа» → создать и открыть в окне справа.
   const openFull = async (): Promise<void> => {
@@ -523,13 +531,29 @@ function InlineNewCard({
 
   return (
     <div className="group/new rounded-xl border bg-card p-2.5 shadow-sm ring-1 ring-primary/20">
-      <div className="flex items-start gap-1.5">
-        {/* Иконка задачи — тот же пикер, что у проекта (эмодзи/иконки/загрузка). */}
+      <div className="flex items-start gap-2">
+        {/* Иконка задачи — тот же пикер, что у иконки проекта (эмодзи/иконки/загрузка),
+            крупный квадрат. Пока пикер открыт — не закрываем карточку; после выбора
+            возвращаем фокус в поле. */}
         <IconPicker
           value={icon}
-          onChange={setIcon}
-          size="sm"
-          triggerClassName="mt-px"
+          onChange={(v) => {
+            setIcon(v);
+            requestAnimationFrame(() => ref.current?.focus());
+          }}
+          size="lg"
+          onOpenChange={(open) => {
+            if (open) {
+              pickingRef.current = true;
+            } else {
+              // Держим флаг чуть дольше, чтобы уже запланированный blur-commit его увидел,
+              // затем возвращаем фокус в поле — карточка живёт.
+              window.setTimeout(() => {
+                pickingRef.current = false;
+              }, 200);
+              requestAnimationFrame(() => ref.current?.focus());
+            }
+          }}
         />
         <textarea
           ref={ref}
@@ -548,7 +572,7 @@ function InlineNewCard({
               onClose();
             }
           }}
-          onBlur={() => void onBlurCommit()}
+          onBlur={onBlurCommit}
           rows={1}
           placeholder="Название задачи…"
           disabled={busy}

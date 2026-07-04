@@ -24,13 +24,20 @@ type Props = {
   // Кастомный триггер (напр. текстовая кнопка «Добавить иконку»). Если задан — заменяет
   // квадрат-превью. Оборачивается в PopoverTrigger asChild.
   trigger?: React.ReactNode;
+  // Открылся/закрылся поповер — родителю (напр. inline-создание) нужно знать, чтобы не
+  // коммитить/не закрывать карточку, пока пикер открыт.
+  onOpenChange?: (open: boolean) => void;
 };
 
 // Универсальный пикер иконки (value + onChange) — то же окно, что у иконки проекта
 // (эмодзи / lucide / загрузка + фильтр + случайная + убрать), но без привязки к проекту.
 // Используется для иконки задачи (inline-создание и окно редактирования).
-export function IconPicker({ value, onChange, size = 'sm', triggerClassName, trigger }: Props): React.ReactElement {
-  const [open, setOpen] = useState(false);
+export function IconPicker({ value, onChange, size = 'sm', triggerClassName, trigger, onOpenChange }: Props): React.ReactElement {
+  const [open, setOpenState] = useState(false);
+  const setOpen = (next: boolean): void => {
+    setOpenState(next);
+    onOpenChange?.(next);
+  };
   const [recent, setRecent] = useState<string[]>(loadRecent);
   const [tab, setTab] = useState<'emoji' | 'icons' | 'upload'>('emoji');
   const [query, setQuery] = useState('');
@@ -48,6 +55,9 @@ export function IconPicker({ value, onChange, size = 'sm', triggerClassName, tri
         {trigger ?? (
           <button
             type="button"
+            // Не крадём фокус у поля рядом (inline-создание: клик по иконке не должен
+            // блёрить textarea → закрывать карточку до открытия пикера).
+            onMouseDown={(e) => e.preventDefault()}
             aria-label={value ? 'Сменить иконку' : 'Добавить иконку'}
             title="Иконка"
             className={cn(
