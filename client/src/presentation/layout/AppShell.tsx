@@ -37,6 +37,7 @@ import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnre
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
 import { HelpWidget } from '@/presentation/components/help/HelpWidget';
 import { useSidebarWidth } from '@/presentation/hooks/useSidebarWidth';
+import { RightPanelProvider } from './rightPanelContext';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
 import { SidebarCollapsedContext } from './sidebarCollapsedContext';
 import { Sidebar } from './Sidebar';
@@ -46,6 +47,9 @@ const COLLAPSE_KEY = 'pf_sidebar_collapsed';
 export function AppShell(): React.ReactElement {
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Ширина открытого справа окна-оверлея: главный <main> сужается на неё → его вертикальный
+  // скролл сдвигается влево, к линии ресайза окна (Notion-style). 0 — ничего не открыто.
+  const [rightPanelWidth, setRightPanelWidth] = useState(0);
   const { pathname } = useLocation();
   // Закрываем мобильный drawer ТОЛЬКО при смене маршрута (клик по проекту/разделу). Раньше
   // тут была обёртка onClick={close} вокруг всего Sidebar — она закрывала панель на ЛЮБОЙ
@@ -172,6 +176,7 @@ export function AppShell(): React.ReactElement {
             Снаружи этих провайдеров «Добавить задачу» падало «must be used inside …». */}
         <AddTaskDialogProvider>
         <GlobalSearchProvider>
+        <RightPanelProvider value={setRightPanelWidth}>
         {isDesktop ? (
           <div
             className={cn(
@@ -252,7 +257,12 @@ export function AppShell(): React.ReactElement {
                 </AnimatePresence>
               </>
             )}
-            <main className="relative min-h-0 overflow-y-auto">
+            <main
+              className="relative min-h-0 overflow-y-auto transition-[margin] duration-300 ease-in-out"
+              // Сужаемся на ширину открытого справа окна → скролл главного окна уезжает влево,
+              // к линии ресайза окна, а не прячется под оверлеем (Notion-style).
+              style={{ marginRight: rightPanelWidth }}
+            >
               <PageTransition>
                 <Outlet />
               </PageTransition>
@@ -301,6 +311,7 @@ export function AppShell(): React.ReactElement {
         <HelpWidget />
         {/* Висящий баннер при низком/исчерпанном лимите — снизу по центру, клик → окно usage. */}
         <UsageBanner />
+        </RightPanelProvider>
         </GlobalSearchProvider>
         </AddTaskDialogProvider>
         </UsageDialogProvider>

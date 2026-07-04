@@ -4,6 +4,7 @@ import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/she
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
+import { useSetRightPanelWidth } from '@/presentation/layout/rightPanelContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
@@ -66,6 +67,14 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId }: Props):
   });
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{ x: number; w: number } | null>(null);
+
+  // Публикуем ширину открытого окна в AppShell → главный <main> сужается, его скролл
+  // сдвигается влево к линии ресайза (Notion-style). Сброс при закрытии/размонтировании.
+  const setRightPanelWidth = useSetRightPanelWidth();
+  useEffect(() => {
+    setRightPanelWidth(open ? panelWidth : 0);
+    return () => setRightPanelWidth(0);
+  }, [open, panelWidth, setRightPanelWidth]);
   const onHandlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLElement>): void => {
       e.preventDefault();

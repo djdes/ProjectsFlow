@@ -91,6 +91,7 @@ import { CancelWorkButton } from './CancelWorkButton';
 import { STATUS_LABEL, ADVANCE_NEXT } from './statusLabels';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useResizableWidth } from '@/presentation/hooks/useResizableWidth';
+import { useSetRightPanelWidth } from '@/presentation/layout/rightPanelContext';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
 import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
 import type { MentionMember, RichTextEditorHandle } from '@/presentation/components/editor/RichTextEditor';
@@ -1465,6 +1466,16 @@ export function TaskDrawer({
     );
   // В asPage — всегда одна центрированная колонка (Notion-style страница), без split.
   const isSplit = asPage ? false : isSplitRaw;
+
+  // Публикуем ширину открытого drawer'а в AppShell → главный <main> сужается, его скролл
+  // сдвигается влево к линии ресайза (Notion-style). Только когда окно открыто и ресайзится
+  // (десктоп-оверлей); в asPage/мобиле — 0. Сброс при закрытии/размонтировании.
+  const setRightPanelWidth = useSetRightPanelWidth();
+  React.useEffect(() => {
+    const active = state !== null && resizeEnabled;
+    setRightPanelWidth(active ? width : 0);
+    return () => setRightPanelWidth(0);
+  }, [state, resizeEnabled, width, setRightPanelWidth]);
 
   // Закреплённый укороченный заголовок при скролле. Клик — к началу задачи. Рендерим
   // как первый ребёнок РЕАЛЬНОГО скролл-контейнера: в narrow это внешний контейнер
