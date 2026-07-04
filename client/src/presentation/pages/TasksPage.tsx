@@ -1,14 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Activity, BookOpen, Bot, Image as ImageIcon, Settings, Share2, Text, Wallet } from 'lucide-react';
+import { Image as ImageIcon, Share2, Text } from 'lucide-react';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
@@ -20,6 +15,7 @@ import { AutomationDialog } from '@/presentation/components/project/AutomationDi
 import { EditableProjectTitle } from '@/presentation/components/project/EditableProjectTitle';
 import { ProjectIconPicker } from '@/presentation/components/project/ProjectIconPicker';
 import { MemberAvatarStack } from '@/presentation/components/project/MemberAvatarStack';
+import { ProjectActionsMenu } from '@/presentation/components/project/ProjectActionsMenu';
 import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
 import { ProjectActivityButton } from '@/presentation/components/project/ProjectActivityButton';
 import { ProjectCover } from '@/presentation/components/project/ProjectCover';
@@ -166,46 +162,15 @@ export function TasksPage(): React.ReactElement {
               <Share2 className="size-4" />
               <span className="text-sm">Поделиться</span>
             </Button>
-            {financeVisible && (
-              <PageActionButton label="Финансы" to={`/projects/${data.id}/finance`}>
-                <Wallet className="size-4" />
-              </PageActionButton>
-            )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 text-muted-foreground hover:text-foreground"
-                  onClick={() => setAutomationOpen(true)}
-                  aria-label="Автоматизация"
-                >
-                  <Bot className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Автоматизация</TooltipContent>
-            </Tooltip>
-            <PageActionButton label="База знаний" to={`/projects/${data.id}/kb`}>
-              <BookOpen className="size-4" />
-            </PageActionButton>
-            {monitoringVisible && (
-              <PageActionButton label="Мониторинг" to={`/projects/${data.id}/monitoring`}>
-                <span className="relative">
-                  <Activity className="size-4" />
-                  {monitoringAlerts > 0 && (
-                    <span
-                      className="absolute -right-1.5 -top-1.5 inline-flex min-w-3.5 items-center justify-center rounded-full bg-red-500 px-0.5 text-[9px] font-semibold leading-[14px] text-white"
-                      aria-label={`Алертов: ${monitoringAlerts}`}
-                    >
-                      {monitoringAlerts}
-                    </span>
-                  )}
-                </span>
-              </PageActionButton>
-            )}
-            <PageActionButton label="Настройки" to={`/projects/${data.id}/overview`}>
-              <Settings className="size-4" />
-            </PageActionButton>
+            {/* Второстепенные действия (Финансы/Автоматизация/КБ/Мониторинг/Настройки) —
+                свёрнуты в меню «⋯» (Notion top-right), вместо ряда отдельных кнопок. */}
+            <ProjectActionsMenu
+              projectId={data.id}
+              financeVisible={financeVisible}
+              monitoringVisible={monitoringVisible}
+              monitoringAlerts={monitoringAlerts}
+              onOpenAutomation={() => setAutomationOpen(true)}
+            />
           </div>
         </TooltipProvider>
       </div>
@@ -241,6 +206,9 @@ export function TasksPage(): React.ReactElement {
         {canEdit && (
           // На тач-устройствах hover нет — на мобиле панель видна всегда, на sm+ по наведению.
           <div className="mb-2 flex h-8 items-center gap-1 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/head:opacity-100">
+            {!data.icon && (
+              <ProjectIconPicker projectId={data.id} icon={data.icon} variant="head" />
+            )}
             {!data.coverUrl && (
               <HeadToolButton onClick={addRandomCover}>
                 <ImageIcon className="size-4" />
@@ -253,8 +221,10 @@ export function TasksPage(): React.ReactElement {
             </HeadToolButton>
           </div>
         )}
-        <div className="group/title flex min-w-0 items-center gap-2">
-          <ProjectIconPicker projectId={data.id} icon={data.icon} big />
+        {/* Инлайн-иконка (квадрат) — ТОЛЬКО когда иконка задана, иначе название начинается
+            строго слева без отступа (пустой триггер больше не занимает место). */}
+        <div className="flex min-w-0 items-center gap-2">
+          {data.icon && <ProjectIconPicker projectId={data.id} icon={data.icon} big />}
           <EditableProjectTitle projectId={data.id} name={data.name} />
         </div>
         {!descriptionHidden && (
@@ -312,31 +282,3 @@ function HeadToolButton({
   );
 }
 
-// Иконка-действие в шапке страницы: ghost-кнопка + тултип (Notion top-right style).
-function PageActionButton({
-  label,
-  to,
-  children,
-}: {
-  label: string;
-  to: string;
-  children: React.ReactNode;
-}): React.ReactElement {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          asChild
-          variant="ghost"
-          size="icon"
-          className="size-8 text-muted-foreground hover:text-foreground"
-        >
-          <Link to={to} aria-label={label}>
-            {children}
-          </Link>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">{label}</TooltipContent>
-    </Tooltip>
-  );
-}

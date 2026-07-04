@@ -66,9 +66,14 @@ export function ProjectIconView({ icon, className, pixelSize = 20 }: Props): Rea
     // Неизвестное имя (иконка убрана из набора) — деградируем до текста-заглушки.
     return <span aria-hidden>▫️</span>;
   }
-  // Эмодзи — размер задаётся через font-size в className.
+  // Эмодзи — центрируем во всю площадь контейнера («метод квадрата»): flex + size-full,
+  // чтобы глиф не «выпадал» из квадрата (у части эмодзи метрики шире/выше базовой линии).
+  // Размер задаётся через font-size в className.
   return (
-    <span aria-hidden className={cn('block leading-none', className)}>
+    <span
+      aria-hidden
+      className={cn('flex size-full items-center justify-center overflow-hidden leading-none', className)}
+    >
       {icon}
     </span>
   );

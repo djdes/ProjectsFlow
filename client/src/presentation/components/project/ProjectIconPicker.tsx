@@ -78,12 +78,16 @@ type Props = {
   icon: string | null;
   // Крупный вариант (для большого заголовка проекта в шапке страницы, Notion-style).
   big?: boolean;
+  // 'inline' (по умолчанию) — квадрат-иконка рядом с заголовком. 'head' — текстовая кнопка
+  // «Добавить иконку» в ряду hover-действий шапки (когда иконки нет, чтобы название не
+  // получало лишний левый отступ от пустого инлайн-триггера).
+  variant?: 'inline' | 'head';
 };
 
 // Иконка проекта рядом с заголовком. Клик открывает пикер с тремя вкладками (Notion-style):
 // «Эмодзи» (категории + недавние), «Иконки» (lucide), «Загрузить» (файл/ссылка). Сверху —
 // фильтр, справа — «случайная» и «убрать». Сама иконка занимает квадрат целиком.
-export function ProjectIconPicker({ projectId, icon, big = false }: Props): React.ReactElement {
+export function ProjectIconPicker({ projectId, icon, big = false, variant = 'inline' }: Props): React.ReactElement {
   const { submit, saving } = useUpdateProject();
   const [open, setOpen] = useState(false);
   const [recent, setRecent] = useState<string[]>(loadRecent);
@@ -104,41 +108,44 @@ export function ProjectIconPicker({ projectId, icon, big = false }: Props): Reac
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          disabled={saving}
-          aria-label={icon ? 'Сменить иконку проекта' : 'Добавить иконку проекта'}
-          title="Иконка проекта"
-          className={cn(
-            'shrink-0 cursor-pointer select-none leading-none disabled:opacity-50',
-            icon || saving
-              ? cn('grid place-items-center overflow-hidden rounded-md', big ? 'size-12' : 'size-9')
-              : big
-                ? cn(
-                    'flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground',
-                    'opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100',
-                    'group-hover/title:opacity-100 data-[state=open]:opacity-100',
-                  )
+        {variant === 'head' ? (
+          // Текстовая кнопка «Добавить иконку» для ряда hover-действий шапки (Notion-style).
+          <button
+            type="button"
+            disabled={saving}
+            aria-label="Добавить иконку проекта"
+            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="size-4 animate-spin" /> : <FolderIcon className="size-4" />}
+            Добавить иконку
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={saving}
+            aria-label={icon ? 'Сменить иконку проекта' : 'Добавить иконку проекта'}
+            title="Иконка проекта"
+            className={cn(
+              'shrink-0 cursor-pointer select-none leading-none disabled:opacity-50',
+              icon || saving
+                ? cn('grid place-items-center overflow-hidden rounded-md', big ? 'size-12' : 'size-9')
                 : cn('grid place-items-center rounded-md', 'size-9'),
-          )}
-        >
-          {saving ? (
-            <Loader2 className="size-5 animate-spin text-muted-foreground" />
-          ) : icon ? (
-            <ProjectIconView
-              icon={icon}
-              pixelSize={big ? 44 : 30}
-              className={big ? 'text-[2.9rem]' : 'text-[1.9rem]'}
-            />
-          ) : big ? (
-            <>
-              <FolderIcon className="size-4" />
-              Добавить иконку
-            </>
-          ) : (
-            <FolderIcon className="size-8 text-muted-foreground" />
-          )}
-        </button>
+            )}
+          >
+            {saving ? (
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            ) : icon ? (
+              <ProjectIconView
+                icon={icon}
+                pixelSize={big ? 40 : 26}
+                // Чуть меньше стороны квадрата — эмодзи гарантированно влезает целиком.
+                className={big ? 'text-[2.35rem]' : 'text-[1.5rem]'}
+              />
+            ) : (
+              <FolderIcon className="size-8 text-muted-foreground" />
+            )}
+          </button>
+        )}
       </PopoverTrigger>
       <PopoverContent
         align="start"

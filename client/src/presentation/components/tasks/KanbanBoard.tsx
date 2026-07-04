@@ -885,6 +885,9 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
             // items-start + full-bleed: ряд колонок во всю ширину окна; первая колонка
             // отступает на bleedPadClass (уезжает при скролле), последняя доходит до края.
             'flex items-start snap-x snap-mandatory gap-3 overflow-x-auto pb-20 sm:snap-none sm:pb-28',
+            // Родной горизонтальный скролл прячем — видимый и закреплённый снизу даёт
+            // SyncedStickyScrollbar (иначе внизу доски появляется второй «раздвоенный» бар).
+            '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
             bleedNegClass,
             bleedPadClass,
           )}
