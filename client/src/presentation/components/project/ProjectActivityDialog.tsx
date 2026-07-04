@@ -251,7 +251,13 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
 
           {/* Аналитика — как в Notion: Просмотры (график + окно) + Зрители (с настройкой
               приватности) + Редакторы, и нижняя панель «Настройки / Справка». */}
-          <TabsContent value="analytics" className="flex min-h-0 flex-1 flex-col">
+          {/* data-[state=active]:flex (не голый `flex`): иначе класс display:flex перебивает
+              атрибут [hidden] у неактивной вкладки, и скрытая «Аналитика» забирает половину
+              высоты flex-колонки → лента «Активность» показывалась лишь на пол-окна. */}
+          <TabsContent
+            value="analytics"
+            className="min-h-0 flex-1 flex-col data-[state=active]:flex"
+          >
             {loadingAnalytics ? (
               <div className="flex flex-1 items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" /> Загрузка…
