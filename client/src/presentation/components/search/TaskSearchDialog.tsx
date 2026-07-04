@@ -19,6 +19,7 @@ import { useAddTaskDialog } from '@/presentation/components/forms/AddTaskDialogP
 import { useTheme } from '@/presentation/components/theme/ThemeProvider';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
 import { defaultProjectIcon as FolderIcon } from '@/presentation/layout/projectIcons';
+import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 
 const DEBOUNCE_MS = 250;
 
@@ -114,7 +115,9 @@ export function TaskSearchDialog({
         section: 'projects',
         label: p.name,
         icon: p.icon ? (
-          <span className="text-sm leading-none" aria-hidden>{p.icon}</span>
+          <span className="grid size-5 shrink-0 place-items-center overflow-hidden text-sm leading-none" aria-hidden>
+            <ProjectIconView icon={p.icon} pixelSize={16} />
+          </span>
         ) : (
           <FolderIcon className="size-4 text-muted-foreground" />
         ),

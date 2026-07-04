@@ -61,6 +61,7 @@ import { avatarColor } from './projectIcons';
 import { RenameProjectDialog } from '@/presentation/components/project/RenameProjectDialog';
 import { DeleteProjectDialog } from '@/presentation/components/project/DeleteProjectDialog';
 import type { Project } from '@/domain/project/Project';
+import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 
 type MoveDir = 'up' | 'down';
 type Bucket = 'favorites' | 'main';
@@ -195,8 +196,8 @@ function SidebarProjectRow({
                 маленькая зелёная точка-индикатор поверх. */}
             <span className="relative shrink-0">
               {project.icon ? (
-                <span className="grid size-5 place-items-center text-base leading-none" aria-hidden>
-                  {project.icon}
+                <span className="grid size-5 place-items-center overflow-hidden text-base leading-none" aria-hidden>
+                  <ProjectIconView icon={project.icon} pixelSize={18} />
                 </span>
               ) : (
                 <span

@@ -22,6 +22,7 @@ import {
 import { useProjects } from '@/presentation/hooks/useProjects';
 import { useSidebarCollapsed } from './sidebarCollapsedContext';
 import { avatarColor } from './projectIcons';
+import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 
 // Notion-style крошки для страниц проекта: «Проекты ▾ · {проект} ▾ · {вид}».
 // Каждый сегмент с иконкой, hover-подсветкой и дропдауном навигации, который
@@ -71,8 +72,8 @@ function useHoverMenu(): {
 function ProjectChip({ name, icon }: { name: string; icon?: string | null }): React.ReactElement {
   if (icon) {
     return (
-      <span className="grid size-4 shrink-0 place-items-center text-sm leading-none" aria-hidden>
-        {icon}
+      <span className="grid size-4 shrink-0 place-items-center overflow-hidden text-sm leading-none" aria-hidden>
+        <ProjectIconView icon={icon} pixelSize={14} />
       </span>
     );
   }
