@@ -13,3 +13,17 @@ const TASK_CREATED_FMT = new Intl.DateTimeFormat('ru-RU', {
 export function formatTaskCreated(date: Date): string {
   return TASK_CREATED_FMT.format(date);
 }
+
+// Точная дата+время до секунды (Notion-style тултип на «N назад»): "4 июля 2026 г., 18:23:22".
+const EXACT_DT_FMT = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+});
+
+export function formatExactDateTime(date: Date): string {
+  return EXACT_DT_FMT.format(date);
+}

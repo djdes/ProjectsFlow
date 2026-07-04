@@ -227,7 +227,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
         </div>
 
         <Tabs defaultValue="activity" className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-4 h-auto shrink-0 justify-start gap-4 rounded-none border-b border-border bg-transparent p-0">
+          <TabsList className="mx-4 mt-2 h-auto shrink-0 justify-start gap-4 rounded-none border-b border-border bg-transparent p-0">
             <TabsTrigger value="activity" className={UNDERLINE_TAB}>Активность</TabsTrigger>
             <TabsTrigger value="analytics" className={UNDERLINE_TAB}>Аналитика</TabsTrigger>
           </TabsList>

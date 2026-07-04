@@ -173,7 +173,14 @@ export function TasksPage(): React.ReactElement {
         />
         {/* #1: действия проекта — в строке крошек, по правому краю (Notion top-right). */}
         <TooltipProvider delayDuration={300}>
-          <div className="flex shrink-0 items-center gap-0.5">
+          <div
+            className={cn(
+              // Плавно гаснут при открытии окна активности (окно выезжает справа — кнопки
+              // синхронно исчезают, т.к. они уже есть в самом окне).
+              'flex shrink-0 items-center gap-0.5 transition-opacity duration-500',
+              activityOpen && 'pointer-events-none opacity-0',
+            )}
+          >
             {/* Активность/аналитика проекта. */}
             {/* Кнопка «Изменено …» открывает окно активности; ему же отдаём действия,
                 чтобы они были в правом верхнем углу окна (Notion-style). Пока окно открыто —
@@ -184,7 +191,7 @@ export function TasksPage(): React.ReactElement {
               open={activityOpen}
               onOpenChange={setActivityOpen}
             />
-            {!activityOpen && projectActions}
+            {projectActions}
           </div>
         </TooltipProvider>
       </div>

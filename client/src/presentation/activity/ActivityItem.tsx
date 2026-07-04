@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Clock } from 'lucide-react';
 import { relativeTime } from '@/lib/relativeTime';
+import { formatExactDateTime } from '@/lib/datetime';
 import {
   Tooltip,
   TooltipContent,
@@ -181,21 +182,37 @@ export function ActivityItem({
   const versionTaskId =
     onOpenVersions && TASK_KINDS.has(item.kind) ? (item.payload?.taskId ?? null) : null;
   return (
-    <li
-      onClick={() => navigate(targetUrl(item))}
-      className="group flex cursor-pointer gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
-    >
-      {/* Notion-style: аватар автора · контент (действие → серое время → дифф) · часы справа. */}
-      <UserAvatar
-        displayName={actor}
-        avatarUrl={item.actorAvatarUrl}
-        className="mt-0.5 size-7 rounded-full text-[11px]"
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <p className="min-w-0 text-sm leading-snug">{renderText(item)}</p>
-          {versionTaskId && (
-            <TooltipProvider delayDuration={300}>
+    <TooltipProvider delayDuration={300}>
+      <li
+        onClick={() => navigate(targetUrl(item))}
+        className="group flex cursor-pointer gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+      >
+        {/* Аватар автора — hover: карточка с именем и текущим местным временем (как в Notion). */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="mt-0.5 shrink-0">
+              <UserAvatar
+                displayName={actor}
+                avatarUrl={item.actorAvatarUrl}
+                className="size-7 rounded-full text-[11px]"
+              />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="start" className="flex items-center gap-2 p-2">
+            <UserAvatar displayName={actor} avatarUrl={item.actorAvatarUrl} className="size-8 rounded-full text-xs" />
+            <span className="text-left">
+              <span className="block text-sm font-medium">{actor}</span>
+              <span className="block text-xs text-muted-foreground">
+                {new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })} — местное время
+              </span>
+            </span>
+          </TooltipContent>
+        </Tooltip>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <p className="min-w-0 text-sm leading-snug">{renderText(item)}</p>
+            {versionTaskId && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -214,16 +231,25 @@ export function ActivityItem({
                   Посмотреть версию
                 </TooltipContent>
               </Tooltip>
-            </TooltipProvider>
-          )}
+            )}
+          </div>
+          {/* Время — серым, чуть ниже; hover: точная дата/время до секунды (Notion-style). */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="mt-0.5 inline-block w-fit text-xs text-muted-foreground hover:text-foreground">
+                {relativeTime(item.createdAt)}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="start">
+              {formatExactDateTime(item.createdAt)}
+            </TooltipContent>
+          </Tooltip>
+          {(item.kind === 'task_updated' || item.kind === 'project_updated') &&
+          item.payload?.changes?.length ? (
+            <ChangesDiff changes={item.payload.changes} />
+          ) : null}
         </div>
-        {/* Время — серым, чуть ниже (как в Notion). */}
-        <p className="mt-0.5 text-xs text-muted-foreground">{relativeTime(item.createdAt)}</p>
-        {(item.kind === 'task_updated' || item.kind === 'project_updated') &&
-        item.payload?.changes?.length ? (
-          <ChangesDiff changes={item.payload.changes} />
-        ) : null}
-      </div>
-    </li>
+      </li>
+    </TooltipProvider>
   );
 }

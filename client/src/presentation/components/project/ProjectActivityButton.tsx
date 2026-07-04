@@ -59,8 +59,6 @@ export function ProjectActivityButton({
 
   return (
     <>
-      {/* Пока окно активности открыто — кнопку «Изменено …» прячем: действия уже в самом окне. */}
-      {!open && (
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -100,7 +98,6 @@ export function ProjectActivityButton({
           </TooltipContent>
         )}
       </Tooltip>
-      )}
       <ProjectActivityDialog open={open} onOpenChange={onOpenChange} projectId={projectId} actions={actions} />
     </>
   );
