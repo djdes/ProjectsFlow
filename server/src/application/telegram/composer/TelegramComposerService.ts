@@ -31,6 +31,7 @@ import {
   resolveColumnLabel,
   isColumnHidden,
 } from '../../../domain/kanban/KanbanSettings.js';
+import { markdownToTelegramHtml } from '../telegramMarkdown.js';
 
 // Минимальный slice callback_query, который мы обрабатываем (см. TG Bot API #callbackquery).
 export type TelegramCallbackQuery = {
@@ -65,10 +66,10 @@ type Deps = {
   readonly waitForAiPromptJob: WaitForAiPromptJob;
 };
 
-// composing-черновик живёт 30 мин; confirmed (делегирование) — долго, т.к. accept может
-// прийти спустя часы, а нам нужен intended project_id для переноса на accept.
-const DRAFT_TTL_SECONDS = 30 * 60;
-const CONFIRMED_TTL_SECONDS = 30 * 24 * 60 * 60;
+// composing-черновик по запросу владельца практически не истекает (~10 лет) — можно вернуться
+// к карточке «Новая задача» когда угодно. confirmed (делегирование) — тоже долго.
+const DRAFT_TTL_SECONDS = 3650 * 24 * 60 * 60;
+const CONFIRMED_TTL_SECONDS = 3650 * 24 * 60 * 60;
 const PAGE_SIZE = 6; // кнопок-вариантов на страницу пикера
 const EXCERPT_LIMIT = 120;
 
@@ -110,6 +111,12 @@ function escapeHtml(s: string): string {
 function excerpt(text: string, limit = EXCERPT_LIMIT): string {
   const s = text.trim().replace(/\s+/g, ' ');
   return s.length <= limit ? s : s.slice(0, limit - 1).trimEnd() + '…';
+}
+
+// Markdown → чистый текст без сырых маркеров (**, `, _, ~): прогоняем через TG-конвертер и
+// снимаем теги. Для вставки ВНУТРЬ <b>/<i> (заголовки), где вложенные теги сломали бы парсер.
+function mdToPlain(s: string): string {
+  return markdownToTelegramHtml(s).replace(/<\/?[^>]+>/g, '');
 }
 
 // --- callback_data ---------------------------------------------------------
@@ -714,7 +721,7 @@ export class TelegramComposerService {
           await this.edit(
             chatId,
             messageId,
-            `✅ Задача делегирована <b>${escapeHtml(delegateName)}</b> (контекст: <b>${escapeHtml(projName)}</b>).\n📝 ${escapeHtml(excerpt(text))}\n\n⏳ Жду ответа: принять / отказать.`,
+            `✅ Задача делегирована <b>${escapeHtml(delegateName)}</b> (контекст: <b>${escapeHtml(projName)}</b>).\n📝 ${markdownToTelegramHtml(excerpt(text))}\n\n⏳ Жду ответа: принять / отказать.`,
           );
         }
         await this.deps.client.answerCallbackQuery(cqId, { text: 'Делегировано' });
@@ -743,7 +750,7 @@ export class TelegramComposerService {
           await this.edit(
             chatId,
             messageId,
-            `✅ Задача создана в <b>${escapeHtml(projName)}</b>.\n📝 ${escapeHtml(excerpt(text))}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
+            `✅ Задача создана в <b>${escapeHtml(projName)}</b>.\n📝 ${markdownToTelegramHtml(excerpt(text))}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
           );
         }
         await this.deps.client.answerCallbackQuery(cqId, { text: 'Создано' });
@@ -772,7 +779,7 @@ export class TelegramComposerService {
       ? ((await this.deps.projects.getById(draft.projectId))?.name ?? null)
       : null;
     const ctx = projName ? ` Проект: <b>${escapeHtml(projName)}</b>.` : ' (во «Входящие»).';
-    const msg = `👤 <b>${escapeHtml(creatorName)}</b> делегирует тебе задачу:\n📝 <i>${escapeHtml(excerpt(text))}</i>.${ctx}`;
+    const msg = `👤 <b>${escapeHtml(creatorName)}</b> делегирует тебе задачу:\n📝 <i>${mdToPlain(excerpt(text))}</i>.${ctx}`;
     const replyMarkup: InlineKeyboardMarkup = {
       inline_keyboard: [
         [
@@ -905,7 +912,7 @@ export class TelegramComposerService {
     ]);
     const hint = all.length === 0 ? '\nНе нашёл проект по запросу — выбери из списка.' : '';
     return {
-      text: `🆕 <b>Новая задача</b>\n📝 ${escapeHtml(excerpt(draft.taskText ?? ''))}\n\n📁 В какой проект?${hint}`,
+      text: `🆕 <b>Новая задача</b>\n📝 ${markdownToTelegramHtml(excerpt(draft.taskText ?? ''))}\n\n📁 В какой проект?${hint}`,
       replyMarkup: { inline_keyboard: rows },
     };
   }
@@ -922,7 +929,7 @@ export class TelegramComposerService {
       { text: '✖️ Отмена', callback_data: `tx:${draft.id}` },
     ]);
     return {
-      text: `🆕 <b>Новая задача</b>\n📝 ${escapeHtml(excerpt(draft.taskText ?? ''))}\n\n👤 Кому делегировать?`,
+      text: `🆕 <b>Новая задача</b>\n📝 ${markdownToTelegramHtml(excerpt(draft.taskText ?? ''))}\n\n👤 Кому делегировать?`,
       replyMarkup: { inline_keyboard: rows },
     };
   }
@@ -941,7 +948,7 @@ export class TelegramComposerService {
       `📊 Колонка: <b>${escapeHtml(columnName)}</b>`,
     ];
     if (delegateName) lines.push(`👤 Делегат: <b>${escapeHtml(delegateName)}</b>`);
-    lines.push(`📝 ${escapeHtml(excerpt(draft.taskText ?? ''))}`);
+    lines.push(`📝 ${markdownToTelegramHtml(excerpt(draft.taskText ?? ''))}`);
     const createLabel = delegateName ? '✅ Создать и делегировать' : '✅ Создать';
     return {
       text: lines.join('\n'),
@@ -1122,8 +1129,8 @@ export class TelegramComposerService {
     if (assignee) lines.push(`👤 Исполнитель: <b>${escapeHtml(assignee)}</b>`);
     lines.push(`📊 Колонка: <b>${escapeHtml(columnName)}</b>`);
     if (seg.deadline) lines.push(`📅 Срок: <b>${escapeHtml(seg.deadline)}</b>`);
-    if (seg.title.trim()) lines.push(`📝 <b>${escapeHtml(seg.title.trim())}</b>`);
-    lines.push(escapeHtml(excerpt(seg.body)));
+    if (seg.title.trim()) lines.push(`📝 <b>${mdToPlain(seg.title.trim())}</b>`);
+    lines.push(markdownToTelegramHtml(excerpt(seg.body)));
     return {
       text: lines.join('\n'),
       replyMarkup: {
@@ -1162,7 +1169,7 @@ export class TelegramComposerService {
       meta.push(`📅 ${seg.deadline ? escapeHtml(seg.deadline) : '—'}`);
       const titleText = seg.title.trim() || excerpt(seg.body, 60);
       const strike = seg.included ? '' : ' <i>(исключена)</i>';
-      lines.push(`${i + 1}. ${seg.included ? '' : '🚫 '}<b>${escapeHtml(titleText)}</b>${strike}`);
+      lines.push(`${i + 1}. ${seg.included ? '' : '🚫 '}<b>${mdToPlain(titleText)}</b>${strike}`);
       lines.push(`   ${meta.join(' · ')}`);
     }
     const rows: { text: string; callback_data: string }[][] = [
@@ -1199,7 +1206,7 @@ export class TelegramComposerService {
       `👤 Исполнитель: <b>${assignee ? escapeHtml(assignee) : '—'}</b>`,
       `📅 Срок: <b>${seg.deadline ? escapeHtml(seg.deadline) : '—'}</b>`,
       '',
-      `📝 ${escapeHtml(excerpt(seg.body))}`,
+      `📝 ${markdownToTelegramHtml(excerpt(seg.body))}`,
     ];
     if (!seg.included) lines.push('\n🚫 <i>Исключена из создания</i>');
     const rows: { text: string; callback_data: string }[][] = [
@@ -1589,7 +1596,7 @@ export class TelegramComposerService {
     const creator = await this.deps.users.getById(creatorUserId);
     const creatorName = creator?.displayName ?? 'Коллега';
     const projName = await this.projNameOf(seg.projectId);
-    const msg = `👤 <b>${escapeHtml(creatorName)}</b> делегирует тебе задачу:\n📝 <i>${escapeHtml(excerpt(description))}</i>. Проект: <b>${escapeHtml(projName)}</b>.`;
+    const msg = `👤 <b>${escapeHtml(creatorName)}</b> делегирует тебе задачу:\n📝 <i>${markdownToTelegramHtml(excerpt(description))}</i>. Проект: <b>${escapeHtml(projName)}</b>.`;
     const replyMarkup: InlineKeyboardMarkup = {
       inline_keyboard: [
         [
