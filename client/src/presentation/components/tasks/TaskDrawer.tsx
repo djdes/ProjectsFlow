@@ -1538,6 +1538,49 @@ export function TaskDrawer({
     );
   };
 
+  // Hover-полоса над заголовком (Notion-style): при наведении на пустую зону сверху
+  // проявляются переключатель peek-режима, вертикальные линии-разделители и пред/след.
+  // Только desktop-оверлей (в asPage/мобиле не показываем).
+  const renderPeekHoverStrip = (): React.ReactElement | null => {
+    if (asPage || !isDesktop) return null;
+    const hasNav = Boolean(onPrev || onNext);
+    return (
+      <div className="group/peekzone px-4 pt-1.5">
+        <div className="flex h-6 items-center gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/peekzone:opacity-100">
+          <span className="h-3.5 w-px bg-border" aria-hidden />
+          {renderPeekSwitcher()}
+          <span className="h-3.5 w-px bg-border" aria-hidden />
+          {hasNav && (
+            <div className="flex items-center">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                disabled={!onPrev}
+                onClick={onPrev}
+                aria-label="Предыдущая задача"
+                title="Предыдущая задача"
+              >
+                <ChevronUp className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                disabled={!onNext}
+                onClick={onNext}
+                aria-label="Следующая задача"
+                title="Следующая задача"
+              >
+                <ChevronDown className="size-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const task = state?.mode === 'edit' ? state.task : null;
   const scrollToCommentId = state?.mode === 'edit' ? state.scrollToCommentId : undefined;
   // Контекст ответа/цитаты: выбран в треде (кнопка «Ответить» / выделение), читается
@@ -1720,37 +1763,10 @@ export function TaskDrawer({
             <div className="flex h-11 shrink-0 items-center gap-2 border-b bg-background/95 px-4">
               {renderCloseButton()}
               {renderMaximizeButton()}
-              {renderPeekSwitcher()}
               {renderPageWidthToggle()}
-              {/* Пред/след задача по колонке (задача выше/ниже). Неактивна = нет соседа. */}
-              {(onPrev || onNext) && (
-                <div className="ml-0.5 flex items-center">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7 text-muted-foreground hover:text-foreground disabled:opacity-30"
-                    disabled={!onPrev}
-                    onClick={onPrev}
-                    aria-label="Предыдущая задача"
-                    title="Предыдущая задача"
-                  >
-                    <ChevronUp className="size-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7 text-muted-foreground hover:text-foreground disabled:opacity-30"
-                    disabled={!onNext}
-                    onClick={onNext}
-                    aria-label="Следующая задача"
-                    title="Следующая задача"
-                  >
-                    <ChevronDown className="size-4" />
-                  </Button>
-                </div>
-              )}
-              {/* Название проекта и хеш задачи убраны (по требованию) — только спейсер,
-                  чтобы действия/статус ушли к правому краю (Notion-style). */}
+              {/* Переключатель peek-режима и пред/след переехали в hover-полосу над заголовком
+                  (Notion-style), см. renderPeekHoverStrip ниже. Название проекта и хеш убраны —
+                  спейсер отправляет действия/статус к правому краю. */}
               <div className="min-w-0 flex-1" />
               {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка) = «передать в другой канбан». */}
               {onMove ? (
@@ -1832,6 +1848,9 @@ export function TaskDrawer({
               >
                 {/* split: sticky-заголовок живёт в левой колонке (у неё свой скролл). */}
                 {isSplit && stickyTitleBar}
+
+              {/* === HOVER-ПОЛОСА === peek-режим + пред/след над заголовком (Notion-style). */}
+              {renderPeekHoverStrip()}
 
               {/* === ОБЛОЖКА + ИКОНКА === Над заголовком (Notion-style). Обложка во всю ширину,
                   иконка/кнопки «Добавить …» с тем же боковым отступом, что и заголовок. */}
