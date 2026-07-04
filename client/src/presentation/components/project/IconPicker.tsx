@@ -21,12 +21,15 @@ type Props = {
   // Размер квадрата-триггера.
   size?: 'sm' | 'lg';
   triggerClassName?: string;
+  // Кастомный триггер (напр. текстовая кнопка «Добавить иконку»). Если задан — заменяет
+  // квадрат-превью. Оборачивается в PopoverTrigger asChild.
+  trigger?: React.ReactNode;
 };
 
 // Универсальный пикер иконки (value + onChange) — то же окно, что у иконки проекта
 // (эмодзи / lucide / загрузка + фильтр + случайная + убрать), но без привязки к проекту.
 // Используется для иконки задачи (inline-создание и окно редактирования).
-export function IconPicker({ value, onChange, size = 'sm', triggerClassName }: Props): React.ReactElement {
+export function IconPicker({ value, onChange, size = 'sm', triggerClassName, trigger }: Props): React.ReactElement {
   const [open, setOpen] = useState(false);
   const [recent, setRecent] = useState<string[]>(loadRecent);
   const [tab, setTab] = useState<'emoji' | 'icons' | 'upload'>('emoji');
@@ -42,26 +45,28 @@ export function IconPicker({ value, onChange, size = 'sm', triggerClassName }: P
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={value ? 'Сменить иконку' : 'Добавить иконку'}
-          title="Иконка"
-          className={cn(
-            'grid shrink-0 cursor-pointer select-none place-items-center overflow-hidden rounded-md leading-none text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-            big ? 'size-9' : 'size-7',
-            triggerClassName,
-          )}
-        >
-          {value ? (
-            <ProjectIconView
-              icon={value}
-              pixelSize={big ? 26 : 18}
-              className={big ? 'text-[1.5rem]' : 'text-[1.1rem]'}
-            />
-          ) : (
-            <FolderIcon className={big ? 'size-5' : 'size-4'} />
-          )}
-        </button>
+        {trigger ?? (
+          <button
+            type="button"
+            aria-label={value ? 'Сменить иконку' : 'Добавить иконку'}
+            title="Иконка"
+            className={cn(
+              'grid shrink-0 cursor-pointer select-none place-items-center overflow-hidden rounded-md leading-none text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+              big ? 'size-9' : 'size-7',
+              triggerClassName,
+            )}
+          >
+            {value ? (
+              <ProjectIconView
+                icon={value}
+                pixelSize={big ? 26 : 18}
+                className={big ? 'text-[1.5rem]' : 'text-[1.1rem]'}
+              />
+            ) : (
+              <FolderIcon className={big ? 'size-5' : 'size-4'} />
+            )}
+          </button>
+        )}
       </PopoverTrigger>
       <PopoverContent
         align="start"

@@ -20,6 +20,8 @@ function task(partial: Partial<TaskWithCounts> & { id: string }): TaskWithCounts
     projectId: 'p1',
     description: null,
     icon: null,
+    cover: null,
+    coverPosition: 50,
     status: 'todo',
     statusBeforeDone: null,
     position: 0,

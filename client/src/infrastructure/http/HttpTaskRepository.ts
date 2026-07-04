@@ -45,11 +45,16 @@ export type TaskDto = Omit<
   | 'priority'
   | 'statusBeforeDone'
   | 'icon'
+  | 'cover'
+  | 'coverPosition'
 > & {
   createdAt: string;
   updatedAt: string;
   // Optional — старый backend без db/093 не присылает.
   icon?: string | null;
+  // Optional — старый backend без db/094 не присылает.
+  cover?: string | null;
+  coverPosition?: number;
   // Optional — старый backend без db/055 не присылает.
   statusBeforeDone?: import('@/domain/task/Task').TaskStatus | null;
   // Optional на проводе — старый backend без миграции 035 не присылает.
@@ -86,6 +91,8 @@ export function fromDto(dto: TaskDto): Task {
     createdAt: new Date(dto.createdAt),
     updatedAt: new Date(dto.updatedAt),
     icon: dto.icon ?? null,
+    cover: dto.cover ?? null,
+    coverPosition: dto.coverPosition ?? 50,
     statusBeforeDone: dto.statusBeforeDone ?? null,
     // Graceful default — backend без 035 продолжает работать (mode = текущее поведение).
     ralphMode: dto.ralphMode ?? 'normal',

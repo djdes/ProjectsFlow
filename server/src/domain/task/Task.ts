@@ -48,6 +48,10 @@ export type Task = {
   readonly description: string | null;
   // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL картинки. null = без иконки. См. db/093.
   readonly icon: string | null;
+  // Обложка задачи (Notion-style): CSS-градиент/пресет или data-URL картинки. null = без обложки. См. db/094.
+  readonly cover: string | null;
+  // Вертикальное положение фокуса обложки (0..100). Дефолт 50 = центр. См. db/094.
+  readonly coverPosition: number;
   readonly status: TaskStatus;
   // Статус задачи до перехода в 'done'. Снимок ставится при move→done, очищается при
   // move из done. Снятие галочки «выполнено» восстанавливает его (фолбэк 'todo', если

@@ -42,6 +42,10 @@ export type CreateTaskCommand = {
   readonly description: string;
   // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL. null/undefined = без иконки. См. db/093.
   readonly icon?: string | null;
+  // Обложка задачи: CSS-градиент/пресет или data-URL. null/undefined = без обложки. См. db/094.
+  readonly cover?: string | null;
+  // Вертикальное положение фокуса обложки (0..100). undefined = дефолт 50. См. db/094.
+  readonly coverPosition?: number;
   // По умолчанию новая карточка добавляется в TODO наверх столбца.
   readonly status: TaskStatus;
   // Режим работы Ralph по задаче. Если не указан — БД проставит DEFAULT 'normal'.
@@ -90,6 +94,8 @@ export class CreateTask {
       createdBy,
       description,
       icon: input.icon ?? null,
+      cover: input.cover ?? null,
+      coverPosition: input.coverPosition ?? 50,
       status: input.status,
       position,
       ralphMode: input.ralphMode,

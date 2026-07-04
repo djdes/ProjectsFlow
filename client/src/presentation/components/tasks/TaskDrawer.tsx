@@ -86,6 +86,7 @@ import type { TaskPriority } from '@/domain/task/Task';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
 import { CommentsEmptyState } from './CommentsEmptyState';
 import { TaskBodyEditor } from './TaskBodyEditor';
+import { TaskHeaderMedia, type TaskMediaPatch } from './TaskHeaderMedia';
 import { splitTitleBody, parseTitleHeading, stripInlineMarkdown } from '@/lib/taskTitleBody';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
@@ -1546,6 +1547,20 @@ export function TaskDrawer({
   // редактируема» — плюсики, свойства, тело и кнопки доступны и для выполненных).
   const canEdit = !!task;
 
+  // Сохранить медиа-поля (иконка/обложка/положение обложки). Оптимистичный показ живёт в
+  // TaskHeaderMedia; здесь только PATCH + оповещение. Ошибка — тост (локальный показ уже стоит).
+  const saveMedia = useCallback(
+    (patch: TaskMediaPatch): void => {
+      const t = state?.mode === 'edit' ? state.task : null;
+      if (!t) return;
+      void taskRepository
+        .update(t.projectId, t.id, patch)
+        .then(() => notifyChanged())
+        .catch((e) => toast.error(`Не удалось сохранить: ${(e as Error).message}`));
+    },
+    [state, taskRepository, notifyChanged],
+  );
+
   // === Resizable + split drawer (EDIT-mode, desktop only) ===
   // Coarse pointer / narrow viewport → resize disabled, keep default full-width
   // stacked Sheet (mobile untouched). `md` breakpoint is 768px (Tailwind default).
@@ -1817,6 +1832,18 @@ export function TaskDrawer({
               >
                 {/* split: sticky-заголовок живёт в левой колонке (у неё свой скролл). */}
                 {isSplit && stickyTitleBar}
+
+              {/* === ОБЛОЖКА + ИКОНКА === Над заголовком (Notion-style). Обложка во всю ширину,
+                  иконка/кнопки «Добавить …» с тем же боковым отступом, что и заголовок. */}
+              <TaskHeaderMedia
+                key={`media-${task.id}`}
+                taskId={task.id}
+                icon={task.icon}
+                cover={task.cover}
+                coverPosition={task.coverPosition}
+                canEdit={canEdit}
+                onSave={saveMedia}
+              />
 
               {/* === ОПИСАНИЕ === Заголовок и описание ОДНИМ полем сверху (1-я строка —
                   по сути заголовок). Полное editDescription редактируется напрямую,

@@ -539,6 +539,10 @@ export const tasks = mysqlTable(
     description: text('description'),
     // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL картинки. TEXT — влезает data-URL. См. db/093.
     icon: text('icon'),
+    // Обложка задачи (Notion-style): CSS-градиент/пресет или data-URL картинки. TEXT — влезает data-URL. См. db/094.
+    cover: text('cover'),
+    // Вертикальное положение фокуса обложки (0..100), как у проекта. DEFAULT 50 = центр. См. db/094.
+    coverPosition: int('cover_position').notNull().default(50),
     status: mysqlEnum('status', [
       'backlog',
       'todo',

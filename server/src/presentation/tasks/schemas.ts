@@ -28,11 +28,20 @@ const prioritySchema = z
 // Лимит 2_000_000 — вмещает base64 data-URL картинки, защищая от гигантского payload'а.
 const iconSchema = z.string().max(2_000_000).nullable();
 
+// Обложка задачи: CSS-градиент/пресет или data-URL картинки. nullable: null = убрать обложку.
+// Лимит 5_000_000 — вмещает base64 data-URL картинки-обложки, защищая от гигантского payload'а.
+const coverSchema = z.string().max(5_000_000).nullable();
+
+// Вертикальное положение фокуса обложки (0..100), как у проекта. 50 = центр.
+const coverPositionSchema = z.number().int().min(0).max(100);
+
 export const createTaskSchema = z.object({
   // Лимит 50000 — фактически «без ограничения по объёму» для задач автоматизации
   // (крупные/сложные ТЗ). Колонка tasks.description — MEDIUMTEXT (db/058).
   description: z.string().trim().min(1, 'Введите описание').max(50000),
   icon: iconSchema.optional(),
+  cover: coverSchema.optional(),
+  coverPosition: coverPositionSchema.optional(),
   status: taskStatusSchema.optional(),
   ralphMode: ralphModeSchema.optional(),
   // Опциональное one-to-one делегирование (только для inbox-задач). UUID юзера.
@@ -46,6 +55,8 @@ export const updateTaskSchema = z
   .object({
     description: z.string().trim().min(1).max(50000).optional(),
     icon: iconSchema.optional(),
+    cover: coverSchema.optional(),
+    coverPosition: coverPositionSchema.optional(),
     ralphMode: ralphModeSchema.optional(),
     deadline: deadlineSchema.optional(),
     priority: prioritySchema.optional(),

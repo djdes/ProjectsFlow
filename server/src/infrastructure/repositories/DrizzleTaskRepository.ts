@@ -32,6 +32,8 @@ function toTask(row: TaskRowJoined): Task {
     createdBy: row.createdBy ?? null,
     description: row.description ?? null,
     icon: row.icon ?? null,
+    cover: row.cover ?? null,
+    coverPosition: row.coverPosition ?? 50,
     status: row.status as TaskStatus,
     statusBeforeDone: asTaskStatus(row.statusBeforeDone),
     position: row.position,
@@ -70,6 +72,8 @@ export class DrizzleTaskRepository implements TaskRepository {
         createdBy: tasks.createdBy,
         description: tasks.description,
         icon: tasks.icon,
+        cover: tasks.cover,
+        coverPosition: tasks.coverPosition,
         status: tasks.status,
         statusBeforeDone: tasks.statusBeforeDone,
         position: tasks.position,
@@ -129,6 +133,8 @@ export class DrizzleTaskRepository implements TaskRepository {
       createdBy: input.createdBy,
       description: input.description,
       icon: input.icon ?? null,
+      cover: input.cover ?? null,
+      coverPosition: input.coverPosition ?? 50,
       status: input.status,
       position: input.position,
       // Не выставляем если undefined — пусть отработает SQL DEFAULT.
@@ -147,6 +153,8 @@ export class DrizzleTaskRepository implements TaskRepository {
         TaskRow,
         | 'description'
         | 'icon'
+        | 'cover'
+        | 'coverPosition'
         | 'status'
         | 'statusBeforeDone'
         | 'position'
@@ -157,6 +165,8 @@ export class DrizzleTaskRepository implements TaskRepository {
     > = {};
     if (patch.description !== undefined) set.description = patch.description;
     if (patch.icon !== undefined) set.icon = patch.icon;
+    if (patch.cover !== undefined) set.cover = patch.cover;
+    if (patch.coverPosition !== undefined) set.coverPosition = patch.coverPosition;
     if (patch.status !== undefined) set.status = patch.status;
     if (patch.statusBeforeDone !== undefined) set.statusBeforeDone = patch.statusBeforeDone;
     if (patch.position !== undefined) set.position = patch.position;

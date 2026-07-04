@@ -12,6 +12,10 @@ export type CreateTaskInput = {
   readonly description: string;
   // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL. null/undefined = без иконки. См. db/093.
   readonly icon?: string | null;
+  // Обложка задачи: CSS-градиент/пресет или data-URL. null/undefined = без обложки. См. db/094.
+  readonly cover?: string | null;
+  // Вертикальное положение фокуса обложки (0..100). undefined = дефолт 50. См. db/094.
+  readonly coverPosition?: number;
   readonly status?: TaskStatus;
   // Режим работы Ralph. Если не передан — backend дефолтит 'normal'.
   readonly ralphMode?: RalphMode;
@@ -29,6 +33,10 @@ export type UpdateTaskInput = {
   readonly description?: string;
   // null = очистить иконку; undefined = не менять. См. db/093.
   readonly icon?: string | null;
+  // null = очистить обложку; undefined = не менять. См. db/094.
+  readonly cover?: string | null;
+  // Вертикальное положение фокуса обложки (0..100); undefined = не менять. См. db/094.
+  readonly coverPosition?: number;
   readonly ralphMode?: RalphMode;
   // null = очистить deadline; undefined = не менять.
   readonly deadline?: string | null;

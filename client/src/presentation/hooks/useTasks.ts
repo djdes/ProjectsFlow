@@ -15,6 +15,8 @@ export type UseTasks = State & {
   create: (input: {
     description: string;
     icon?: string | null;
+    cover?: string | null;
+    coverPosition?: number;
     status: TaskStatus;
     ralphMode?: RalphMode;
     delegateUserId?: string | null;
@@ -26,6 +28,8 @@ export type UseTasks = State & {
     input: {
       description?: string;
       icon?: string | null;
+      cover?: string | null;
+      coverPosition?: number;
       ralphMode?: RalphMode;
       deadline?: string | null;
       priority?: TaskPriority | null;
