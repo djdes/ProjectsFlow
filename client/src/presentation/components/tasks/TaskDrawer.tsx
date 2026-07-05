@@ -306,6 +306,7 @@ function DrawerShell({
   asPageWide,
   peekMode,
   breadcrumbs,
+  topActions,
   open,
   onOpenChange,
   contentClassName,
@@ -321,6 +322,9 @@ function DrawerShell({
   // peek-режим окна-оверлея (не asPage): 'right' сбоку (немодально) | 'center' по центру (модально).
   peekMode: PeekMode;
   breadcrumbs: React.ReactNode;
+  // asPage: кластер кнопок действий (закрыть/окном в проекте/ширина/статус/поделиться/⋯),
+  // выровненный по ПРАВОМУ краю строки хлебных крошек. В окне-оверлее не используется.
+  topActions?: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contentClassName: string;
@@ -345,7 +349,12 @@ function DrawerShell({
         {...dragHandlers}
       >
         {dragOverlay}
-        <div className="flex h-11 shrink-0 items-center px-3 sm:px-6">{breadcrumbs}</div>
+        <div className="flex h-11 shrink-0 items-center gap-2 px-3 sm:px-6">
+          {breadcrumbs}
+          {topActions && (
+            <div className="ml-auto flex shrink-0 items-center gap-0.5">{topActions}</div>
+          )}
+        </div>
         <div
           className={cn(
             'mx-auto grid w-full flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden',
@@ -1694,6 +1703,77 @@ export function TaskDrawer({
   const bannerProjectId =
     asPage || isInbox ? null : state?.mode === 'edit' ? state.task.projectId : aiProjectId;
 
+  // Правый кластер задачных действий (статус + Поделиться + ⋯). Общий для окна-оверлея
+  // (шапка) и отдельной страницы (строка хлебных крошек) — единый источник.
+  const statusShareMore = task ? (
+    <>
+      {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка) = «передать в другой канбан». */}
+      {onMove ? (
+        <TaskStatusChip task={task} onMove={onMove} onChanged={() => notifyChanged()} />
+      ) : (
+        <span
+          className={cn(
+            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+            STATUS_BADGE_COLOR[task.status],
+          )}
+        >
+          {STATUS_LABEL[task.status]}
+        </span>
+      )}
+      {/* Поделиться + ⋯ (задачные действия) — по правому краю, как в главном окне.
+          «Изменено …» и участники в окне НЕ показываем (по требованию). */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+        aria-label="Поделиться"
+      >
+        <Share2 className="size-4" />
+        <span className="text-sm">Поделиться</span>
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground hover:text-foreground"
+            aria-label="Ещё"
+          >
+            <MoreHorizontal className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[200px]">
+          <DropdownMenuItem
+            onSelect={() => {
+              try {
+                void navigator.clipboard.writeText(
+                  `${window.location.origin}/projects/${task.projectId}/tasks/${task.id}`,
+                );
+                toast.success('Ссылка на задачу скопирована');
+              } catch {
+                /* clipboard недоступен */
+              }
+            }}
+          >
+            <Link2 className="text-muted-foreground" /> Копировать ссылку
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  ) : null;
+
+  // asPage: весь кластер кнопок уезжает в строку хлебных крошек, выровненный по правому краю,
+  // в порядке: закрыть → открыть окном в проекте → ширина → статус → Поделиться → ⋯.
+  const pageTopActions =
+    asPage && task ? (
+      <>
+        {renderCloseButton()}
+        {renderMaximizeButton()}
+        {renderPageWidthToggle()}
+        {statusShareMore}
+      </>
+    ) : null;
+
   // Окно — чистый ОВЕРЛЕЙ (point 1): на главном экране ничего не сдвигаем, поэтому ширину
   // окна в --pf-drawer-open-w НЕ публикуем (держим 0) — плашка «проект опубликован» не съезжает.
   const setDrawerBox = useCallback((): void => {
@@ -1707,6 +1787,7 @@ export function TaskDrawer({
       asPageWide={asPageWide}
       peekMode={peekMode}
       breadcrumbs={breadcrumbs}
+      topActions={pageTopActions}
       open={state !== null}
       onOpenChange={(open) => !open && handleClose()}
       contentClassName={cn(
@@ -1762,76 +1843,28 @@ export function TaskDrawer({
           <div className="relative flex h-full min-h-0 flex-col overflow-hidden [--pf-drawer-px:1rem] sm:[--pf-drawer-px:3.25rem] lg:[--pf-drawer-px:4rem]">
             {/* #3: верхняя панель + плашка — ОБЩАЯ ШАПКА НА ВСЮ ШИРИНУ окна (над обоими
                 столбцами в split), поэтому в split-режиме плашка идёт через оба столбца, а
-                кнопки закрыть/развернуть/статус — по всей ширине шапки. */}
-            <div
-              className="flex h-11 shrink-0 items-center gap-1 bg-background/95 pr-3"
-              onMouseEnter={enterTopZone}
-              onMouseLeave={leaveTopZone}
-            >
-              {/* Кнопки закрыть/развернуть — по ЦЕНТРУ левого отступа окна (Notion-style):
-                  бокс шириной ровно с левый отступ контента, кнопки в нём центрированы. */}
-              <div className="flex shrink-0 items-center justify-center gap-0.5 min-w-[var(--pf-drawer-px)]">
-                {renderCloseButton()}
-                {renderMaximizeButton()}
-                {renderPageWidthToggle()}
-              </div>
-              {/* При наведении на топбар — | линия | peek-режим | линия | пред/след (Notion-style). */}
-              {renderTopHoverControls()}
-              {/* Название проекта и хеш убраны — спейсер отправляет действия/статус к правому краю. */}
-              <div className="min-w-0 flex-1" />
-              {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка) = «передать в другой канбан». */}
-              {onMove ? (
-                <TaskStatusChip task={task} onMove={onMove} onChanged={() => notifyChanged()} />
-              ) : (
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                    STATUS_BADGE_COLOR[task.status],
-                  )}
-                >
-                  {STATUS_LABEL[task.status]}
-                </span>
-              )}
-              {/* Поделиться + ⋯ (задачные действия) — по правому краю, как в главном окне.
-                  «Изменено …» и участники в окне НЕ показываем (по требованию). */}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
-                aria-label="Поделиться"
+                кнопки закрыть/развернуть/статус — по всей ширине шапки. В asPage этой шапки
+                НЕТ — весь кластер кнопок живёт в строке хлебных крошек (см. pageTopActions). */}
+            {!asPage && (
+              <div
+                className="flex h-11 shrink-0 items-center gap-1 bg-background/95 pr-3"
+                onMouseEnter={enterTopZone}
+                onMouseLeave={leaveTopZone}
               >
-                <Share2 className="size-4" />
-                <span className="text-sm">Поделиться</span>
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 text-muted-foreground hover:text-foreground"
-                    aria-label="Ещё"
-                  >
-                    <MoreHorizontal className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[200px]">
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      try {
-                        void navigator.clipboard.writeText(
-                          `${window.location.origin}/projects/${task.projectId}/tasks/${task.id}`,
-                        );
-                        toast.success('Ссылка на задачу скопирована');
-                      } catch {
-                        /* clipboard недоступен */
-                      }
-                    }}
-                  >
-                    <Link2 className="text-muted-foreground" /> Копировать ссылку
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                {/* Кнопки закрыть/развернуть — по ЦЕНТРУ левого отступа окна (Notion-style):
+                    бокс шириной ровно с левый отступ контента, кнопки в нём центрированы. */}
+                <div className="flex shrink-0 items-center justify-center gap-0.5 min-w-[var(--pf-drawer-px)]">
+                  {renderCloseButton()}
+                  {renderMaximizeButton()}
+                  {renderPageWidthToggle()}
+                </div>
+                {/* При наведении на топбар — | линия | peek-режим | линия | пред/след (Notion-style). */}
+                {renderTopHoverControls()}
+                {/* Название проекта и хеш убраны — спейсер отправляет действия/статус к правому краю. */}
+                <div className="min-w-0 flex-1" />
+                {statusShareMore}
+              </div>
+            )}
             {bannerProjectId && <ProjectPublishedBanner projectId={bannerProjectId} />}
 
             {/* Контент под общей шапкой: split → две колонки со своими скроллами; narrow →
