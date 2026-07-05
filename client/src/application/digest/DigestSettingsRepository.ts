@@ -11,6 +11,8 @@ export type DailyDigestConfig = {
   readonly channels: DigestChannelKind[];
   readonly tgTargets: DigestTgTarget[];
   readonly statuses: TaskStatus[];
+  // true — слать только по будням (Пн–Пт МSK), в выходные не отправлять.
+  readonly weekdaysOnly: boolean;
 };
 
 export type DigestSettings = {

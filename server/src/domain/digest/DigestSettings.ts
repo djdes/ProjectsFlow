@@ -16,6 +16,8 @@ export type DailyDigestConfig = {
   readonly channels: DigestChannelKind[];
   readonly tgTargets: DigestTgTarget[];
   readonly statuses: TaskStatus[]; // какие колонки включать
+  // true — слать только по будням (Пн–Пт по Europe/Moscow), в выходные не тревожить.
+  readonly weekdaysOnly: boolean;
 };
 
 export type DigestSettings = {
@@ -42,6 +44,7 @@ export function defaultDigestSettings(projectId: string): DigestSettings {
       channels: ['notification'],
       tgTargets: ['personal'],
       statuses: ['backlog', 'manual', 'todo', 'done'],
+      weekdaysOnly: false,
     },
     dailyLastSentOn: null,
   };

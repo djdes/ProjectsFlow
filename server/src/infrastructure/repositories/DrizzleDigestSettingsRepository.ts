@@ -34,6 +34,7 @@ function rowToSettings(row: ProjectDigestSettingsRow): DigestSettings {
       channels: parseJsonCol<DigestChannelKind[]>(row.dailyChannels, def.daily.channels),
       tgTargets: parseJsonCol<DigestTgTarget[]>(row.dailyTgTargets, def.daily.tgTargets),
       statuses: parseJsonCol<TaskStatus[]>(row.dailyStatuses, def.daily.statuses),
+      weekdaysOnly: row.dailyWeekdaysOnly,
     },
     dailyLastSentOn: row.dailyLastSentOn ?? null,
   };
@@ -62,6 +63,7 @@ export class DrizzleDigestSettingsRepository implements DigestSettingsRepository
       dailyChannels: input.daily.channels,
       dailyTgTargets: input.daily.tgTargets,
       dailyStatuses: input.daily.statuses,
+      dailyWeekdaysOnly: input.daily.weekdaysOnly,
     };
     await this.db
       .insert(projectDigestSettings)

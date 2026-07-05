@@ -1153,6 +1153,8 @@ export const projectDigestSettings = mysqlTable('project_digest_settings', {
   dailyChannels: json('daily_channels').$type<string[] | null>(),
   dailyTgTargets: json('daily_tg_targets').$type<string[] | null>(),
   dailyStatuses: json('daily_statuses').$type<string[] | null>(),
+  // true — слать сводку только по будням (Пн–Пт МSK). См. db/095.
+  dailyWeekdaysOnly: boolean('daily_weekdays_only').notNull().default(false),
   dailyLastSentOn: date('daily_last_sent_on', { mode: 'string' }),
   updatedAt: updatedAtCol(),
 });

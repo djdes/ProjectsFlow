@@ -31,6 +31,8 @@ const saveSchema = z.object({
     channels: z.array(z.enum(['email', 'telegram', 'notification'])).max(3),
     tgTargets: z.array(z.enum(['personal', 'group'])).max(2),
     statuses: z.array(taskStatusSchema).max(6),
+    // Старые клиенты поле не шлют — дефолт false (обратная совместимость).
+    weekdaysOnly: z.boolean().optional().default(false),
   }),
 });
 

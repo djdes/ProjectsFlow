@@ -48,8 +48,15 @@ export class DailyDigestScheduler {
   async tick(): Promise<void> {
     const now = mskNow();
     const nowMin = now.hour * 60 + now.minute;
+    // День недели МSK-даты (0=Вс..6=Сб). new Date(Y,M-1,D) — календарная дата, weekday
+    // от tz не зависит; берём компоненты из уже посчитанной МSK-даты.
+    const [y, m, d] = now.date.split('-').map(Number);
+    const dow = new Date(y!, (m ?? 1) - 1, d!).getDay();
+    const isWeekend = dow === 0 || dow === 6;
     const due = await this.deps.settings.listDailyEnabled();
     for (const s of due) {
+      // «Только по будням»: в выходные не шлём (кому надо — отправят вручную «Сейчас»).
+      if (s.daily.weekdaysOnly && isWeekend) continue;
       const schedMin = s.daily.hour * 60 + s.daily.minute;
       if (nowMin < schedMin || s.dailyLastSentOn === now.date) continue;
       try {

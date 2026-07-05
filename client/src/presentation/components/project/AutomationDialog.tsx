@@ -126,6 +126,7 @@ type DigestDraft = {
   channels: DigestChannelKind[];
   tgTargets: DigestTgTarget[];
   statuses: TaskStatus[];
+  weekdaysOnly: boolean;
 };
 
 // Набор «включённых автоматизаций», которыми управляет мастер-переключатель. Снимок
@@ -160,6 +161,7 @@ function digestToPayload(d: DigestDraft): SaveDigestSettingsInput {
       channels: d.channels,
       tgTargets: d.tgTargets,
       statuses: d.statuses,
+      weekdaysOnly: d.weekdaysOnly,
     },
   };
 }
@@ -369,6 +371,7 @@ export function AutomationDialog({
           channels: digestSettings.daily.channels,
           tgTargets: digestSettings.daily.tgTargets,
           statuses: digestSettings.daily.statuses,
+          weekdaysOnly: digestSettings.daily.weekdaysOnly,
         });
       })
       .catch((e) => {
@@ -1087,6 +1090,20 @@ export function AutomationDialog({
                       className="h-8 w-16"
                     />
                   </div>
+
+                  {/* Только по будням: в выходные автосводку не шлём — кому надо, зайдёт и
+                      нажмёт «Отправить сейчас». */}
+                  <label className="flex cursor-pointer items-start gap-2 text-sm">
+                    <Checkbox
+                      className="mt-0.5"
+                      checked={digest.weekdaysOnly}
+                      onCheckedChange={(v) => updateDigest({ weekdaysOnly: v === true })}
+                    />
+                    <span>
+                      Только по будням
+                      <span className="text-muted-foreground"> — в выходные не отправлять (Сб/Вс)</span>
+                    </span>
+                  </label>
 
                   <div className="space-y-1.5">
                     <FieldGroupLabel>Кому</FieldGroupLabel>
