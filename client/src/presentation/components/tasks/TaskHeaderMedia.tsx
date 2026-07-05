@@ -256,35 +256,16 @@ export function TaskHeaderMedia({
         </div>
       )}
 
-      {/* === ИКОНКА + КНОПКИ «ДОБАВИТЬ» === Иконка (если задана) — крупный квадрат слева над
-          заголовком, ПОД обложкой с небольшим зазором (без наезда, как в Notion-peek на скрине).
-          Ряд кнопок «Добавить иконку / Добавить обложку» виден на hover шапки (на тач — всегда). */}
+      {/* === КНОПКИ «ДОБАВИТЬ» + ИКОНКА === Ряд «Добавить иконку / Добавить обложку» — НАД
+          иконкой/заголовком (hover), с симметричными верт. отступами (сверху от верхних кнопок =
+          снизу до текста). Иконка (если задана) — крупный квадрат сразу над заголовком. */}
       <div className="group/head px-[var(--pf-drawer-px)]">
-        {localIcon && (
-          <div className={cn('flex', localCover ? 'pt-3 sm:pt-4' : 'pt-2')}>
-            <IconPicker
-              value={localIcon}
-              onChange={setIcon}
-              trigger={
-                <button
-                  type="button"
-                  aria-label="Сменить иконку"
-                  title="Иконка"
-                  className="grid size-14 shrink-0 cursor-pointer select-none place-items-center overflow-hidden rounded-lg leading-none transition-colors hover:bg-muted sm:size-16"
-                >
-                  <ProjectIconView icon={localIcon} pixelSize={40} className="text-[2.2rem]" />
-                </button>
-              }
-            />
-          </div>
-        )}
-
-        {canEdit && (
+        {canEdit && (!localIcon || !localCover) && (
           <div
             className={cn(
-              'flex h-8 items-center gap-1 transition-opacity duration-150',
+              // py-2 — одинаковый зазор сверху (от верхних кнопок) и снизу (до иконки/текста).
+              'flex items-center gap-1 py-2 transition-opacity duration-150',
               'opacity-100 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/head:opacity-100',
-              localIcon ? 'mt-1' : 'pt-1',
             )}
           >
             {!localIcon && (
@@ -305,6 +286,28 @@ export function TaskHeaderMedia({
                 Добавить обложку
               </HeadToolButton>
             )}
+          </div>
+        )}
+
+        {localIcon && (
+          // pb-1 — маленький зазор от эмодзи до первого абзаца (как на скрине). При обложке —
+          // отступ сверху, чтобы иконка стояла под обложкой с зазором.
+          <div className={cn('flex pb-1', localCover && 'pt-3 sm:pt-4')}>
+            <IconPicker
+              value={localIcon}
+              onChange={setIcon}
+              trigger={
+                // Без серого hover-фона (point 5): только курсор-поинтер.
+                <button
+                  type="button"
+                  aria-label="Сменить иконку"
+                  title="Иконка"
+                  className="grid size-14 shrink-0 cursor-pointer select-none place-items-center overflow-hidden rounded-lg leading-none sm:size-16"
+                >
+                  <ProjectIconView icon={localIcon} pixelSize={40} className="text-[2.2rem]" />
+                </button>
+              }
+            />
           </div>
         )}
       </div>

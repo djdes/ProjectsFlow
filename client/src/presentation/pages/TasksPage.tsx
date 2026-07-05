@@ -54,6 +54,17 @@ export function TasksPage(): React.ReactElement {
       /* sessionStorage недоступен */
     }
   };
+  // Открыто ли окно задачи (overlay сверху) — тогда прячем верхние действия страницы
+  // (Изменено/Поделиться/⋯), т.к. они дублируются в шапке самого окна. Сигнал — из TaskDrawer.
+  const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
+  useEffect(() => {
+    const onDrawer = (e: Event): void => {
+      const open = (e as CustomEvent<{ open?: boolean }>).detail?.open ?? false;
+      setTaskDrawerOpen(open);
+    };
+    window.addEventListener('pf:task-drawer-open', onDrawer);
+    return () => window.removeEventListener('pf:task-drawer-open', onDrawer);
+  }, []);
   // Участники для аватар-стека в шапке (только совместные проекты).
   const [members, setMembers] = useState<ProjectMember[]>([]);
   // #3: описание можно скрыть/показать (Notion-style toggle над заголовком).
@@ -192,10 +203,10 @@ export function TasksPage(): React.ReactElement {
         <TooltipProvider delayDuration={300}>
           <div
             className={cn(
-              // Плавно гаснут при открытии окна активности (окно выезжает справа — кнопки
-              // синхронно исчезают, т.к. они уже есть в самом окне).
+              // Плавно гаснут при открытии окна активности ИЛИ окна задачи (оба выезжают
+              // справа overlay'ем — верхние действия у них свои, дублировать не нужно).
               'flex shrink-0 items-center gap-0.5 transition-opacity duration-500',
-              activityOpen && 'pointer-events-none opacity-0',
+              (activityOpen || taskDrawerOpen) && 'pointer-events-none opacity-0',
             )}
           >
             {/* Активность/аналитика проекта. */}

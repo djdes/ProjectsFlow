@@ -1627,15 +1627,23 @@ export function TaskDrawer({
   // В asPage — всегда одна центрированная колонка (Notion-style страница), без split.
   const isSplit = asPage ? false : isSplitRaw;
 
-  // Публикуем ширину открытого drawer'а в AppShell → главный <main> сужается, его скролл
-  // сдвигается влево к линии ресайза (Notion-style). Только когда окно открыто и ресайзится
-  // (десктоп-оверлей); в asPage/мобиле — 0. Сброс при закрытии/размонтировании.
+  // Окно редактирования — чистый ОВЕРЛЕЙ (как окно активности): просто перекрывает главный
+  // экран и НЕ сдвигает/не сужает его. Поэтому ширину в AppShell НЕ публикуем (всегда 0).
   const setRightPanelWidth = useSetRightPanelWidth();
   React.useEffect(() => {
-    const active = state !== null && resizeEnabled;
-    setRightPanelWidth(active ? width : 0);
+    setRightPanelWidth(0);
     return () => setRightPanelWidth(0);
-  }, [state, resizeEnabled, width, setRightPanelWidth]);
+  }, [setRightPanelWidth]);
+
+  // Сигналим главному окну, что окно задачи открыто/закрыто — чтобы оно спрятало свои
+  // верхние действия (Изменено/Поделиться/⋯): они уже есть в шапке окна (overlay сверху).
+  React.useEffect(() => {
+    const open = state !== null && !asPage;
+    window.dispatchEvent(new CustomEvent('pf:task-drawer-open', { detail: { open } }));
+    return () => {
+      window.dispatchEvent(new CustomEvent('pf:task-drawer-open', { detail: { open: false } }));
+    };
+  }, [state, asPage]);
 
   // Закреплённый укороченный заголовок при скролле. Клик — к началу задачи. Рендерим
   // как первый ребёнок РЕАЛЬНОГО скролл-контейнера: в narrow это внешний контейнер
@@ -1668,30 +1676,11 @@ export function TaskDrawer({
   const bannerProjectId =
     asPage || isInbox ? null : state?.mode === 'edit' ? state.task.projectId : aiProjectId;
 
-  // #2: публикуем ширину открытого окна в CSS-переменную --pf-drawer-open-w. Плашка «за окном»
-  // (основной вид) сдвигает контент на эту ширину, чтобы центрироваться в ВИДИМОЙ области.
-  const drawerWidthRoRef = useRef<ResizeObserver | null>(null);
-  const setDrawerBox = useCallback((el: HTMLDivElement | null): void => {
-    drawerWidthRoRef.current?.disconnect();
-    const root = document.documentElement;
-    if (!el) {
-      root.style.setProperty('--pf-drawer-open-w', '0px');
-      return;
-    }
-    const apply = (): void =>
-      root.style.setProperty('--pf-drawer-open-w', `${Math.round(el.getBoundingClientRect().width)}px`);
-    apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(el);
-    drawerWidthRoRef.current = ro;
+  // Окно — чистый ОВЕРЛЕЙ (point 1): на главном экране ничего не сдвигаем, поэтому ширину
+  // окна в --pf-drawer-open-w НЕ публикуем (держим 0) — плашка «проект опубликован» не съезжает.
+  const setDrawerBox = useCallback((): void => {
+    document.documentElement.style.setProperty('--pf-drawer-open-w', '0px');
   }, []);
-  useEffect(
-    () => () => {
-      drawerWidthRoRef.current?.disconnect();
-      document.documentElement.style.setProperty('--pf-drawer-open-w', '0px');
-    },
-    [],
-  );
 
   return (
     <DrawerShell
@@ -1756,7 +1745,7 @@ export function TaskDrawer({
             {/* #3: верхняя панель + плашка — ОБЩАЯ ШАПКА НА ВСЮ ШИРИНУ окна (над обоими
                 столбцами в split), поэтому в split-режиме плашка идёт через оба столбца, а
                 кнопки закрыть/развернуть/статус — по всей ширине шапки. */}
-            <div className="group/topbar flex h-11 shrink-0 items-center gap-1 border-b bg-background/95 pr-[var(--pf-drawer-px)]">
+            <div className="group/topbar flex h-11 shrink-0 items-center gap-1 bg-background/95 pr-3">
               {/* Кнопки закрыть/развернуть — по ЦЕНТРУ левого отступа окна (Notion-style):
                   бокс шириной ровно с левый отступ контента, кнопки в нём центрированы. */}
               <div className="flex shrink-0 items-center justify-center gap-0.5 min-w-[var(--pf-drawer-px)]">

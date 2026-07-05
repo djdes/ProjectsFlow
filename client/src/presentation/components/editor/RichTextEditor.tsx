@@ -613,7 +613,9 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
             hoverPosRef.current = typeof pos === 'number' ? pos : null;
           }}
         >
-          <div className="flex items-center">
+          {/* pr-1.5 — чуть больший зазор между кнопками и абзацем (ручка позиционируется правым
+              краем к блоку, паддинг отодвигает кнопки левее). Кнопки крупнее (point 6). */}
+          <div className="flex items-center pr-1.5">
             <button
               type="button"
               aria-label="Добавить блок"
@@ -625,16 +627,16 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
                 e.preventDefault();
                 openBlockMenu();
               }}
-              className="flex size-5 items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground"
+              className="flex size-7 items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground"
             >
-              <Plus className="size-4" />
+              <Plus className="size-[18px]" />
             </button>
             <button
               type="button"
               aria-label="Переместить блок"
-              className="flex h-6 w-4 cursor-grab items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground active:cursor-grabbing"
+              className="flex h-7 w-5 cursor-grab items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground active:cursor-grabbing"
             >
-              <GripVertical className="size-4" />
+              <GripVertical className="size-[18px]" />
             </button>
           </div>
         </DragHandle>

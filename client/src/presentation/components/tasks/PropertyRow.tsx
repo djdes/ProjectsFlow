@@ -18,7 +18,9 @@ interface PropertyRowProps {
 
 export function PropertyRow({ icon: Icon, label, children, handle }: PropertyRowProps): React.ReactElement {
   return (
-    <div className="group/prop flex min-h-8 items-center gap-2 rounded-md px-1.5 py-0.5 transition-colors hover:bg-hover">
+    <div className="group/prop -mx-1.5 flex min-h-8 items-center gap-2 rounded-md px-1.5 py-0.5 transition-colors hover:bg-hover">
+      {/* -mx-1.5 гасит собственный px-1.5 в раскладке: иконка свойства встаёт ровно на левый
+          край контента — вровень с «+ Подзадача» — а мягкая hover-подложка всё равно шире. */}
       <span className="flex w-[130px] shrink-0 items-center gap-1.5 text-sm text-muted-foreground sm:w-[150px]">
         {handle ? (
           <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
