@@ -51,6 +51,9 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
   const address = `${login}.projectsflow.ru`;
 
   const close = (): void => {
+    // ВАЖНО: пишем в модульный набор — иначе плашка, смонтированная ПОЗЖЕ (окно задачи открыли
+    // после закрытия на главном), не узнает о закрытии (событие ловят только уже смонтированные).
+    dismissedProjects.add(projectId);
     setDismissed(true);
     window.dispatchEvent(new CustomEvent(DISMISS_EVENT, { detail: projectId }));
   };
