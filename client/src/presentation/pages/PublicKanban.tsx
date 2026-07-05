@@ -1,3 +1,4 @@
+import { Calendar } from 'lucide-react';
 import { splitTitleBody } from '@/lib/taskTitleBody';
 import { coverStyle } from '@/presentation/components/project/coverGallery';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
@@ -12,10 +13,28 @@ const PRIORITY_COLOR: Record<1 | 2 | 3 | 4, string> = {
   4: '#94a3b8',
 };
 
-function PublicCard({ task }: { task: PublicTask }): React.ReactElement {
+function fmtDeadline(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
+function PublicCard({
+  task,
+  onOpen,
+}: {
+  task: PublicTask;
+  onOpen: (taskId: string) => void;
+}): React.ReactElement {
   const { title } = splitTitleBody(task.description ?? '');
   return (
-    <div className="overflow-hidden rounded-lg border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06)] dark:border-white/[0.08] dark:bg-white/[0.04]">
+    <button
+      type="button"
+      onClick={() => onOpen(task.id)}
+      className="w-full overflow-hidden rounded-lg border border-black/[0.06] bg-white text-left shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-shadow hover:shadow-[0_2px_6px_rgba(15,23,42,0.12)] dark:border-white/[0.08] dark:bg-white/[0.04]"
+    >
       {task.cover && (
         <div className="h-16 w-full" style={coverStyle(task.cover, task.coverPosition)} aria-hidden />
       )}
@@ -36,13 +55,25 @@ function PublicCard({ task }: { task: PublicTask }): React.ReactElement {
           />
         )}
       </div>
-    </div>
+      {task.deadline && (
+        <div className="flex items-center gap-1 px-3 pb-2.5 text-[11px] text-[#37352f]/50 dark:text-blue-100/50">
+          <Calendar className="size-3" />
+          {fmtDeadline(task.deadline)}
+        </div>
+      )}
+    </button>
   );
 }
 
 // Read-only канбан публичной доски: колонки только с задачами (пустые статусы не рисуем,
-// чтобы наружу не было визуального шума). Никаких drag/меню/создания — чистый просмотр.
-export function PublicKanban({ columns }: { columns: PublicColumn[] }): React.ReactElement {
+// чтобы наружу не было визуального шума). Клик по карточке открывает read-only окно задачи.
+export function PublicKanban({
+  columns,
+  onOpenTask,
+}: {
+  columns: PublicColumn[];
+  onOpenTask: (taskId: string) => void;
+}): React.ReactElement {
   const visible = columns.filter((c) => c.tasks.length > 0);
 
   if (visible.length === 0) {
@@ -61,7 +92,7 @@ export function PublicKanban({ columns }: { columns: PublicColumn[] }): React.Re
           </header>
           <div className="flex flex-col gap-2">
             {col.tasks.map((t) => (
-              <PublicCard key={t.id} task={t} />
+              <PublicCard key={t.id} task={t} onOpen={onOpenTask} />
             ))}
           </div>
         </section>

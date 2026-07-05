@@ -64,6 +64,9 @@ import { PublishProject } from './application/project/PublishProject.js';
 import { UnpublishProject } from './application/project/UnpublishProject.js';
 import { SetPublicIndexing } from './application/project/SetPublicIndexing.js';
 import { GetPublicBoard } from './application/project/GetPublicBoard.js';
+import { GetPublicTaskDetail } from './application/project/GetPublicTaskDetail.js';
+import { GetPublicTaskAccess } from './application/project/GetPublicTaskAccess.js';
+import { GetPublicAttachment } from './application/project/GetPublicAttachment.js';
 import { ReorderProjects } from './application/project/ReorderProjects.js';
 import { ToggleProjectFavorite } from './application/project/ToggleProjectFavorite.js';
 import { ReorderFavoriteProjects } from './application/project/ReorderFavoriteProjects.js';
@@ -1484,6 +1487,23 @@ const { app, devProxyUpgrade } = createApp({
   // Публичная доска (Publish to web, db/096) — анонимный доступ по slug.
   public: {
     getPublicBoard: new GetPublicBoard({ projects: projectRepo, tasks: taskRepo }),
+    getPublicTaskDetail: new GetPublicTaskDetail({
+      projects: projectRepo,
+      tasks: taskRepo,
+      comments: taskCommentRepo,
+      users: userRepo,
+    }),
+    getPublicTaskAccess: new GetPublicTaskAccess({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+    }),
+    getPublicAttachment: new GetPublicAttachment({
+      projects: projectRepo,
+      tasks: taskRepo,
+      attachments: taskAttachmentRepo,
+      storage: attachmentStorage,
+    }),
     projects: projectRepo,
     coverStorage: attachmentStorage,
   },

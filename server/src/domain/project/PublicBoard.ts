@@ -37,3 +37,27 @@ export type PublicBoard = {
   // Все статусы в порядке TASK_STATUSES; пустые колонки клиент может не рисовать.
   readonly columns: PublicColumn[];
 };
+
+// Read-only деталь задачи для окна на публичной доске. Расширяет карточную выдачу телом
+// (с переписанными URL картинок) и комментариями (только человеческие, read-only). НЕ содержит
+// делегаций/ralph/коммитов/LIVE/списка участников. См. spec public-task-detail-and-gate.
+export type PublicComment = {
+  readonly id: string;
+  readonly authorDisplayName: string;
+  readonly authorAvatarUrl: string | null;
+  readonly body: string;
+  readonly createdAt: string; // ISO
+};
+
+export type PublicTaskDetail = {
+  readonly id: string;
+  // Тело задачи с абзацами/фото; ссылки на вложения переписаны на публичный роут.
+  readonly description: string | null;
+  readonly icon: string | null;
+  readonly cover: string | null;
+  readonly coverPosition: number;
+  readonly status: TaskStatus;
+  readonly priority: TaskPriority | null;
+  readonly deadline: string | null;
+  readonly comments: PublicComment[];
+};

@@ -18,6 +18,7 @@ import { RegisterPage } from '@/presentation/pages/RegisterPage';
 import { DevicePage } from '@/presentation/pages/DevicePage';
 import { InvitePage } from '@/presentation/pages/InvitePage';
 import { PublicBoardPage } from '@/presentation/pages/PublicBoardPage';
+import { PublicTaskGatePage } from '@/presentation/pages/PublicTaskGatePage';
 import { ProtectedRoute } from '@/presentation/auth/ProtectedRoute';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 
@@ -44,6 +45,8 @@ export const router = createBrowserRouter([
   { path: '/invite/:token', element: <InvitePage /> },
   // /p/:slug — публичная доска проекта (Publish to web). Anon-доступ, вне AppShell/сайдбара.
   { path: '/p/:slug', element: <PublicBoardPage /> },
+  // /p/:slug/t/:taskId — гейт отдельной страницы задачи (регистрация / редирект участника / отказ).
+  { path: '/p/:slug/t/:taskId', element: <PublicTaskGatePage /> },
   {
     path: '/device',
     element: (

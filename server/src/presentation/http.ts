@@ -24,6 +24,9 @@ import type { PublishProject } from '../application/project/PublishProject.js';
 import type { UnpublishProject } from '../application/project/UnpublishProject.js';
 import type { SetPublicIndexing } from '../application/project/SetPublicIndexing.js';
 import type { GetPublicBoard } from '../application/project/GetPublicBoard.js';
+import type { GetPublicTaskDetail } from '../application/project/GetPublicTaskDetail.js';
+import type { GetPublicTaskAccess } from '../application/project/GetPublicTaskAccess.js';
+import type { GetPublicAttachment } from '../application/project/GetPublicAttachment.js';
 import { publicBoardRouter } from './public/routes.js';
 import type { SetProjectDispatcher } from '../application/project/SetProjectDispatcher.js';
 import type { SetProjectMultiTaskWorker } from '../application/project/SetProjectMultiTaskWorker.js';
@@ -328,6 +331,9 @@ type AppDeps = {
   // Публичная доска (Publish to web, db/096) — анонимный доступ по slug, БЕЗ requireAuth.
   readonly public: {
     readonly getPublicBoard: GetPublicBoard;
+    readonly getPublicTaskDetail: GetPublicTaskDetail;
+    readonly getPublicTaskAccess: GetPublicTaskAccess;
+    readonly getPublicAttachment: GetPublicAttachment;
     // Для отдачи обложки-картинки опубликованной доски анониму (lookup проекта по slug).
     readonly projects: ProjectRepository;
     readonly coverStorage: AttachmentStorage;

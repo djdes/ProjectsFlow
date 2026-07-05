@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { coverStyle } from '@/presentation/components/project/coverGallery';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { usePublicBoard } from '@/presentation/hooks/usePublicBoard';
 import type { PublicBoard } from '@/domain/public/PublicBoard';
 import { PublicKanban } from './PublicKanban';
+import { PublicTaskPanel } from './PublicTaskPanel';
 
 // Управление <meta name="robots">: индексация публичной доски включается только тогглом
 // в окне Publish. Пока indexing=false — просим краулеры не индексировать.
@@ -32,7 +33,13 @@ function useDocumentTitle(title: string | null): void {
   }, [title]);
 }
 
-function BoardView({ board }: { board: PublicBoard }): React.ReactElement {
+function BoardView({
+  board,
+  onOpenTask,
+}: {
+  board: PublicBoard;
+  onOpenTask: (taskId: string) => void;
+}): React.ReactElement {
   return (
     <>
       {/* Обложка во всю ширину (как в приватном виде и на скрине публичной страницы). */}
@@ -60,7 +67,7 @@ function BoardView({ board }: { board: PublicBoard }): React.ReactElement {
 
         {/* Канбан. */}
         <div className="mt-8">
-          <PublicKanban columns={board.columns} />
+          <PublicKanban columns={board.columns} onOpenTask={onOpenTask} />
         </div>
       </div>
     </>
@@ -71,9 +78,18 @@ function BoardView({ board }: { board: PublicBoard }): React.ReactElement {
 export function PublicBoardPage(): React.ReactElement {
   const { slug } = useParams<{ slug: string }>();
   const { status, board } = usePublicBoard(slug ?? '');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openTaskId = searchParams.get('task');
 
   useRobotsMeta(board ? board.indexing : null);
   useDocumentTitle(board ? board.name : status === 'notfound' ? 'Доска не найдена' : null);
+
+  const openTask = (taskId: string): void => {
+    setSearchParams({ task: taskId });
+  };
+  const closeTask = (): void => {
+    setSearchParams({});
+  };
 
   return (
     <div className="min-h-dvh bg-background pb-16">
@@ -112,7 +128,12 @@ export function PublicBoardPage(): React.ReactElement {
         </div>
       )}
 
-      {status === 'ready' && board && <BoardView board={board} />}
+      {status === 'ready' && board && <BoardView board={board} onOpenTask={openTask} />}
+
+      {/* Read-only окно задачи (открывается по ?task=<id>, шарится). */}
+      {slug && openTaskId && (
+        <PublicTaskPanel slug={slug} taskId={openTaskId} onClose={closeTask} />
+      )}
     </div>
   );
 }
