@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { AnimatePresence } from 'motion/react';
@@ -526,10 +526,25 @@ function InlineNewCard({
   const pickingRef = useRef(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const closingRef = useRef(false);
+  // Запрос на возврат фокуса ПОСЛЕ рендера. Enter создаёт задачу выше → карточка создания
+  // сдвигается в DOM (теряет фокус); rAF не успевает. Фокусим в effect после коммита DOM.
+  const refocusRef = useRef(false);
 
   useEffect(() => {
     ref.current?.focus();
   }, []);
+  // useLayoutEffect — синхронно после коммита DOM (до макротаска blur-commit), чтобы фокус
+  // гарантированно вернулся в поле раньше, чем сработает отложенная проверка закрытия.
+  useLayoutEffect(() => {
+    if (refocusRef.current) {
+      refocusRef.current = false;
+      const el = ref.current;
+      if (el) {
+        el.style.height = 'auto';
+        el.focus();
+      }
+    }
+  });
 
   const grow = (el: HTMLTextAreaElement): void => {
     el.style.height = 'auto';
@@ -548,19 +563,14 @@ function InlineNewCard({
   };
 
   // Enter → создать задачу (она встаёт ВЫШЕ), поле очищается и остаётся для следующей.
+  // Фокус возвращаем в effect после коммита (карточка сдвигается в DOM и теряет фокус).
   const onEnter = async (): Promise<void> => {
     const t = await create();
     if (t) {
       onCreated?.(t);
       setValue('');
       setIcon(null);
-      requestAnimationFrame(() => {
-        const el = ref.current;
-        if (el) {
-          el.style.height = 'auto';
-          el.focus();
-        }
-      });
+      refocusRef.current = true;
     }
   };
   // Клик вне карточки → создать (если есть текст) и закрыть. Откладываем на тик и
@@ -569,6 +579,8 @@ function InlineNewCard({
     window.setTimeout(() => {
       if (closingRef.current || pickingRef.current) return;
       const active = document.activeElement;
+      // Фокус вернулся в само поле (сдвиг карточки в DOM после Enter) — это НЕ выход, не закрываем.
+      if (active === ref.current) return;
       if (active && active.closest('[data-radix-popper-content-wrapper], .bg-popover')) return;
       void create().then(() => onClose());
     }, 0);
