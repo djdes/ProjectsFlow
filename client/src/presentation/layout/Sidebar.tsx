@@ -48,12 +48,18 @@ type SidebarProps = {
   // Передаётся только на desktop — рисует иконку сворачивания панели. На мобиле (drawer)
   // не передаётся, тоггл не рендерится.
   onToggleCollapse?: () => void;
-  // Свёрнутый режим (desktop): узкий icon-rail вместо полной панели. Навигация остаётся
-  // доступной (иконки + избранные проекты + профиль), а не прячется целиком.
+  // Свёрнутый режим (desktop, кнопка-бургер): узкий icon-rail вместо полной панели.
   collapsed?: boolean;
+  // Компактный режим по ширине (ресайз ниже SIDEBAR_COMPACT_WIDTH): тот же icon-rail, но
+  // расширяется обратно перетаскиванием ручки (без кнопки «развернуть»).
+  compact?: boolean;
 };
 
-export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): React.ReactElement {
+export function Sidebar({
+  onToggleCollapse,
+  collapsed = false,
+  compact = false,
+}: SidebarProps): React.ReactElement {
   // Колокольчик убран — единственная поверхность уведомлений теперь чат-лента. Сигнал
   // «нужно действие» вешаем на rail-кнопку «Чат», чтобы он был виден и на «Главной».
   const { count: actionable } = useActionableUnreadCount();
@@ -113,12 +119,14 @@ export function Sidebar({ onToggleCollapse, collapsed = false }: SidebarProps): 
     setRailPersist(RAIL_ORDER[i] ?? 'home');
   };
 
-  if (collapsed) {
+  if (collapsed || compact) {
     const favorites = (projects ?? []).filter((p) => !p.isInbox && p.isFavorite);
     return (
       <aside className="flex h-full min-h-0 flex-col items-center gap-1 overflow-hidden bg-sidebar p-2">
         <TooltipProvider delayDuration={300}>
-          {onToggleCollapse && (
+          {/* Кнопка «развернуть» — только в свёрнутом бургером режиме. В compact (ресайз)
+              панель расширяют перетаскиванием ручки у правого края. */}
+          {collapsed && onToggleCollapse && (
             <RailButton onClick={onToggleCollapse} label="Развернуть панель">
               <ChevronsRight className="size-5" />
             </RailButton>

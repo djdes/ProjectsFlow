@@ -9,10 +9,10 @@ import { useContainer } from '@/infrastructure/di/container';
 
 export const SIDEBAR_WIDTH_KEY = 'pf_sidebar_width';
 export const SIDEBAR_DEFAULT_WIDTH = 270;
-// Ниже SIDEBAR_COMPACT_WIDTH подписи у навигации/свитчера скрываются (иконки-only), поэтому
-// можно сузить сильнее прежнего минимума — но не в кашу.
-export const SIDEBAR_MIN_WIDTH = 176;
-export const SIDEBAR_COMPACT_WIDTH = 212;
+// Ниже SIDEBAR_COMPACT_WIDTH панель превращается в узкий icon-rail (кнопки → иконки).
+// SIDEBAR_MIN_WIDTH — где иконки уже впритык: это абсолютный минимум (дальше не сузить).
+export const SIDEBAR_MIN_WIDTH = 60;
+export const SIDEBAR_COMPACT_WIDTH = 210;
 export const SIDEBAR_MAX_WIDTH = 480;
 
 export function clampSidebarWidth(w: number): number {
