@@ -36,6 +36,9 @@ type Props = {
   onUploadImage?: (file: File, onProgress: (pct: number) => void) => Promise<string | null>;
   // Inline-картинку убрали из редактора → родитель уберёт соответствующее вложение (edit-режим).
   onImageRemoved?: (src: string) => void;
+  // Inline-картинка догрузилась → приходит актуальный markdown; родитель СРАЗУ сохраняет
+  // (иначе картинка теряется на reload, а аттач «осиротеет» в «Файлы»).
+  onImageUploaded?: (markdown: string) => void;
   disabled?: boolean;
   // Плейсхолдер редактора (по умолчанию — для тела; для объединённого поля переопределяем).
   placeholder?: string;
@@ -53,6 +56,7 @@ export function TaskBodyEditor({
   onPasteFiles,
   onUploadImage,
   onImageRemoved,
+  onImageUploaded,
   disabled = false,
   placeholder = 'Описание, детали, подзадачи…',
   editorRef,
@@ -84,6 +88,7 @@ export function TaskBodyEditor({
           onPasteFiles={onPasteFiles}
           onUploadImage={onUploadImage}
           onImageRemoved={onImageRemoved}
+          onImageUploaded={onImageUploaded}
           placeholder={placeholder}
           // БЕЗ собственного max-h/scroll: тело всегда раскрыто на полную высоту, чтобы
           // скролл был ОДИН (колонка в split / окно в narrow), а не «2 поля» внутри задачи.

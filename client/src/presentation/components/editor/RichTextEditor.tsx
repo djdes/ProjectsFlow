@@ -157,6 +157,13 @@ export interface RichTextEditorProps {
    * может удалить соответствующий attachment по url.
    */
   onImageRemoved?: (src: string) => void;
+  /**
+   * Inline-картинка ДОГРУЗИЛАСЬ (src проставлен) — приходит актуальный markdown документа с
+   * этой картинкой. Родитель должен СРАЗУ сохранить его: иначе инлайн-картинка живёт только в
+   * локальном состоянии редактора и теряется при reload, а загруженный аттач «осиротеет» и
+   * вылезет отдельным файлом в ряд «Файлы».
+   */
+  onImageUploaded?: (markdown: string) => void;
 }
 
 // Notion-style WYSIWYG: форматирование видно при наборе (без сырых `**`/`#`),
@@ -199,6 +206,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       onPasteFiles,
       onUploadImage,
       onImageRemoved,
+      onImageUploaded,
     },
     ref,
   ): React.ReactElement {
@@ -209,6 +217,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
   const onPasteFilesRef = React.useRef(onPasteFiles);
   const onUploadImageRef = React.useRef(onUploadImage);
   const onImageRemovedRef = React.useRef(onImageRemoved);
+  const onImageUploadedRef = React.useRef(onImageUploaded);
   // Набор src уже загруженных inline-картинок в документе — база для детекта удаления ноды.
   const prevImageSrcsRef = React.useRef<Set<string>>(new Set());
   React.useEffect(() => {
@@ -218,6 +227,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
     onPasteFilesRef.current = onPasteFiles;
     onUploadImageRef.current = onUploadImage;
     onImageRemovedRef.current = onImageRemoved;
+    onImageUploadedRef.current = onImageUploaded;
   });
 
   // Плавающее меню форматирования (по выделению И по правому клику). Якорь в
@@ -257,8 +267,13 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       void (async () => {
         try {
           const url = await upload(file, (pct) => updateFigure(editor, uploadId, { progress: pct }));
-          if (url) updateFigure(editor, uploadId, { uploading: false, progress: 100, src: url });
-          else removeFigure(editor, uploadId);
+          if (url) {
+            updateFigure(editor, uploadId, { uploading: false, progress: 100, src: url });
+            // Персистим СРАЗУ: фигура теперь сериализуется в markdown (src проставлен). Без
+            // этого инлайн-картинка живёт только в локальном состоянии редактора и теряется на
+            // reload, а загруженный аттач «осиротеет» и вылезет отдельным файлом в «Файлы».
+            if (!editor.isDestroyed) onImageUploadedRef.current?.(editor.getMarkdown());
+          } else removeFigure(editor, uploadId);
         } catch {
           removeFigure(editor, uploadId);
         }

@@ -875,7 +875,10 @@ export function TaskDrawer({
 
   // Единый путь сохранения описания (title+body) → taskRepository.update. Возвращаемое
   // описание становится новым источником правды (на случай нормализации сервером).
-  // No-op, если ничего не изменилось.
+  // No-op, если ничего не изменилось ОТНОСИТЕЛЬНО ПОСЛЕДНЕГО СОХРАНЁННОГО значения
+  // (originalEditDescRef), а не текущего editDescription — иначе commitDescription(editDescription)
+  // на blur был бы no-op и правки/вставленные картинки сохранялись бы только на закрытии окна
+  // (терялись на reload, аттач «осиротевал» в «Файлы»).
   const commitDescription = useCallback(
     async (nextDescription: string): Promise<void> => {
       if (state?.mode !== 'edit') return;
@@ -883,7 +886,7 @@ export function TaskDrawer({
       const trimmed = nextDescription.trim();
       // Заголовок (1-я строка) обязателен: пустое описание — не сохраняем (как прежде).
       if (splitTitleBody(trimmed).title.length === 0) return;
-      if (trimmed === editDescription.trim()) return;
+      if (trimmed === originalEditDescRef.current.trim()) return;
       setEditSaving(true);
       try {
         const updated = await taskRepository.update(projectId, id, { description: trimmed });
@@ -896,7 +899,7 @@ export function TaskDrawer({
         setEditSaving(false);
       }
     },
-    [state, taskRepository, editDescription, notifyChanged],
+    [state, taskRepository, notifyChanged],
   );
 
   // Заголовок и описание — ОДНО поле: правим полное описание напрямую (1-я строка = заголовок).
@@ -1936,6 +1939,9 @@ export function TaskDrawer({
                   body={editDescription}
                   onBodyChange={handleDescriptionChange}
                   onCommit={() => void commitDescription(editDescription)}
+                  // Догрузилась инлайн-картинка → сохраняем СРАЗУ (переданный markdown уже
+                  // содержит фигуру): переживает reload, аттач не «осиротеет» в «Файлы».
+                  onImageUploaded={(md) => void commitDescription(md)}
                   onPasteFiles={(files) => void uploadFilesDirectly(files)}
                   disabled={editSaving}
                   placeholder="Название и описание…"
