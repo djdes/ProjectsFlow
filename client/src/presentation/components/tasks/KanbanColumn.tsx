@@ -581,8 +581,10 @@ function InlineNewCard({
     el.style.height = `${el.scrollHeight}px`;
   };
 
-  const create = async (): Promise<Task | null> => {
-    const name = value.trim();
+  // defaultName — имя, если поле пустое (для Enter по пустому полю: «Новая задача»).
+  // blur/«открыть справа» его НЕ передают: по пустому полю там просто закрываем без создания.
+  const create = async (defaultName?: string): Promise<Task | null> => {
+    const name = value.trim() || defaultName?.trim() || '';
     if (!name || busy) return null;
     setBusy(true);
     try {
@@ -604,7 +606,8 @@ function InlineNewCard({
   const onEnter = async (): Promise<void> => {
     // Ставим флаг СРАЗУ (до await) — блёр от сохранения/сдвига не должен закрыть карточку.
     markJustEntered();
-    const t = await create();
+    // Enter по ПУСТОМУ полю → задача «Новая задача» (и снова пустая карточка ниже).
+    const t = await create('Новая задача');
     if (t) {
       onCreated?.(t);
       setValue('');
