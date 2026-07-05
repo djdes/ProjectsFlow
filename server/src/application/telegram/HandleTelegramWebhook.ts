@@ -17,6 +17,7 @@ import {
   getAllTgPrefsResolved,
   type TelegramNotificationPrefs,
 } from '../../domain/telegram/TelegramNotificationPrefs.js';
+import { stripAllMarkdown } from '../../domain/task/digestFormat.js';
 
 // Минимальный набор полей TG Update, которые мы реально обрабатываем (allowed_updates
 // = message + callback_query + inline_query). Структура совпадает с Telegram Bot API:
@@ -783,8 +784,10 @@ function chunk2<T>(items: readonly T[]): T[][] {
   return rows;
 }
 
+// Чистый однострочный excerpt: снимаем markdown-разметку (#, **, `, -, [ссылки], картинки),
+// схлопываем пробелы и обрезаем. Кнопки/детали Telegram показывают текст, а не разметку.
 function excerptShort(text: string | null, limit: number): string {
-  const s = (text ?? '').trim().replace(/\s+/g, ' ');
+  const s = stripAllMarkdown(text).replace(/\s+/g, ' ').trim();
   if (s.length === 0) return '(без описания)';
   return s.length <= limit ? s : s.slice(0, limit - 1).trimEnd() + '…';
 }

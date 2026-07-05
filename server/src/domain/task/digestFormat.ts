@@ -125,6 +125,31 @@ export function extractImageSrcs(md: string | null): string[] {
   return out;
 }
 
+// Полностью снять markdown-разметку → чистый текст. Для мест, где показываем БЕЗ parse_mode
+// (например, заголовок inline-кнопки Telegram) или как plain-excerpt: сырые #, **, `, -, >,
+// [ссылки], картинки-фигуры не нужны. Многострочно: срезаем блочные маркеры построчно + инлайн.
+export function stripAllMarkdown(md: string | null): string {
+  const lines = stripFigureLines(md)
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/^\s{0,3}#{1,6}\s+/, '') // заголовок
+        .replace(/^(\s*)[-*+]\s+/, '$1') // буллет
+        .replace(/^(\s*)\d+\.\s+/, '$1') // нумерация
+        .replace(/^\s{0,3}>\s?/, ''), // цитата
+    );
+  return lines
+    .join('\n')
+    .replace(/<\/?u>/gi, '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '') // ![alt](url) → ничего
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [text](url) → text
+    .replace(/(\*\*|__)(.+?)\1/g, '$2') // **жирный** / __жирный__
+    .replace(/~~(.+?)~~/g, '$1') // ~~зачёркнутый~~
+    .replace(/`([^`]+)`/g, '$1') // `код`
+    .replace(/(?<![\p{L}\p{N}_*])\*([^*\n]+?)\*(?![\p{L}\p{N}_*])/gu, '$1') // *курсив*
+    .replace(/(?<![\p{L}\p{N}_])_([^_\n]+?)_(?![\p{L}\p{N}_])/gu, '$1'); // _курсив_
+}
+
 // Убрать строки-картинки из markdown (чтобы сырой <figure> не показывался кодом в TG-тексте).
 export function stripFigureLines(md: string | null): string {
   return (md ?? '')
