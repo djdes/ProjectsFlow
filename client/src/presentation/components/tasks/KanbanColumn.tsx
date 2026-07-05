@@ -547,6 +547,11 @@ function InlineNewCard({
   // Запрос на возврат фокуса ПОСЛЕ рендера. Enter создаёт задачу выше → карточка создания
   // сдвигается в DOM (теряет фокус); rAF не успевает. Фокусим в effect после коммита DOM.
   const refocusRef = useRef(false);
+  // Окно ~после Enter: любой блёр в это время (сдвиг карточки в DOM, разное поведение фокуса
+  // на разных ОС/браузерах) НЕ закрывает карточку. Иначе на части машин Enter сохранял задачу,
+  // но карточку создания тут же закрывал blur-commit — новая пустая не появлялась.
+  const justEnteredRef = useRef(false);
+  const justEnteredTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     ref.current?.focus();
@@ -589,13 +594,23 @@ function InlineNewCard({
 
   // Enter → создать задачу (она встаёт ВЫШЕ), поле очищается и остаётся для следующей.
   // Фокус возвращаем в effect после коммита (карточка сдвигается в DOM и теряет фокус).
+  const markJustEntered = (): void => {
+    justEnteredRef.current = true;
+    if (justEnteredTimer.current) window.clearTimeout(justEnteredTimer.current);
+    justEnteredTimer.current = window.setTimeout(() => {
+      justEnteredRef.current = false;
+    }, 400);
+  };
   const onEnter = async (): Promise<void> => {
+    // Ставим флаг СРАЗУ (до await) — блёр от сохранения/сдвига не должен закрыть карточку.
+    markJustEntered();
     const t = await create();
     if (t) {
       onCreated?.(t);
       setValue('');
       setIcon(null);
       refocusRef.current = true;
+      markJustEntered();
     }
   };
   // Клик вне карточки → создать (если есть текст) и закрыть. Откладываем на тик и
@@ -603,6 +618,8 @@ function InlineNewCard({
   const onBlurCommit = (): void => {
     window.setTimeout(() => {
       if (closingRef.current || pickingRef.current) return;
+      // Только что был Enter — блёр от сохранения/сдвига карточки, НЕ выход. Не закрываем.
+      if (justEnteredRef.current) return;
       const active = document.activeElement;
       // Фокус вернулся в само поле (сдвиг карточки в DOM после Enter) — это НЕ выход, не закрываем.
       if (active === ref.current) return;
