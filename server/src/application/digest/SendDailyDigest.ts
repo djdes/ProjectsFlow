@@ -17,8 +17,15 @@ import {
   renderDigestMarkdown,
   renderDigestTelegram,
 } from '../task/digest/buildTaskDigest.js';
-import { toVisibleStatus } from '../../domain/task/digestFormat.js';
+import { extractImageSrcs, stripFigureLines, toVisibleStatus } from '../../domain/task/digestFormat.js';
+import {
+  makeAttachmentImageResolver,
+  signAttachmentUrl,
+} from '../attachments/signedAttachmentUrl.js';
 import type { TaskStatus } from '../../domain/task/Task.js';
+
+// Подписанные URL картинок живут 14 дней — письмо/сводку могут открыть не сразу.
+const IMG_URL_TTL_SECONDS = 14 * 24 * 60 * 60;
 
 type Deps = {
   readonly tasks: TaskRepository;
@@ -35,6 +42,8 @@ type Deps = {
   readonly idGen: () => string;
   // Токен-ссылки one-click действий в письме (своя на каждого получателя × задачу).
   readonly createEmailActionToken: CreateEmailActionToken;
+  // Секрет для подписи URL картинок-вложений (письмо: <img>, Telegram: альбом).
+  readonly signingSecret: string;
 };
 
 // Отправка ежедневной сводки по проекту (вызывается планировщиком). Полностью
@@ -87,6 +96,9 @@ export class SendDailyDigest {
     const text = renderDigestMarkdown(model);
     // Telegram: массив сообщений (длинная сводка разбивается, все задачи целиком).
     const tgChunks = renderDigestTelegram(model);
+    // Резолвер картинок-вложений → подписанные URL (письмо: <img> в теле, TG: альбом на карточке).
+    const nowMs = Date.now();
+    const resolveImageUrl = makeAttachmentImageResolver(base, this.deps.signingSecret, IMG_URL_TTL_SECONDS, nowMs);
 
     const members = await this.deps.members.listByProject(projectId);
     const memberById = new Map(members.map((m) => [m.userId, m] as const));
@@ -107,7 +119,7 @@ export class SendDailyDigest {
             commentUrl: `${base}/api/email-actions/${commentToken}`,
           });
         }
-        const html = renderDigestHtml(model, { actionUrls });
+        const html = renderDigestHtml(model, { actionUrls, resolveImageUrl });
         await this.deps.email
           .send({ to: member.user.email, subject, html, text })
           .catch((e) => console.warn('[daily-digest] email failed', userId, e));
@@ -141,15 +153,20 @@ export class SendDailyDigest {
           })
           .catch((e) => console.warn('[daily-digest] tg personal header failed', userId, e));
         for (const t of selected.slice(0, TG_DIGEST_ACTION_LIMIT)) {
+          // Картинки задачи — альбомом после карточки (подписанные URL); из текста срезаны.
+          const imgUrls = extractImageSrcs(t.description)
+            .map((s) => signAttachmentUrl(base, s, this.deps.signingSecret, IMG_URL_TTL_SECONDS, nowMs))
+            .filter((u): u is string => u !== null);
           await this.deps.telegram
             .execute({
               userId,
-              text: `📌 ${markdownToTelegramHtml(digestExcerpt(t.description))}\n<i>${digestStatusLabel(t.status)}</i>`,
+              text: `📌 ${markdownToTelegramHtml(digestExcerpt(stripFigureLines(t.description)))}\n<i>${digestStatusLabel(t.status)}</i>`,
               parseMode: 'HTML',
               kind: 'task_digest_item',
               taskId: t.id,
               projectId,
               skipDedupCheck: true,
+              imageUrls: imgUrls,
             })
             .catch((e) => console.warn('[daily-digest] tg personal card failed', userId, e));
         }

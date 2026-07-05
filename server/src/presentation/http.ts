@@ -421,6 +421,8 @@ type AppDeps = {
     readonly deleteAttachment: DeleteTaskAttachment;
     readonly listAttachments: ListTaskAttachments;
     readonly getAttachment: GetTaskAttachment;
+    // Секрет для проверки подписанных URL картинок-вложений (письмо/Telegram, без сессии).
+    readonly signingSecret: string;
     readonly listComments: ListTaskComments;
     readonly createComment: CreateTaskComment;
     readonly updateComment: UpdateTaskComment;

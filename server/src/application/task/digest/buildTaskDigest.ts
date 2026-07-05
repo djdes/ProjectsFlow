@@ -7,6 +7,7 @@ import {
   markdownToRich,
   priorityHeading,
   splitDescription,
+  stripFigureLines,
   toVisibleStatus,
 } from '../../../domain/task/digestFormat.js';
 
@@ -117,7 +118,10 @@ export function renderDigestMarkdown(m: DigestModel): string {
       if (it.deadline) meta.push(`⏰ ${it.deadline}`);
       if (it.assignee) meta.push(`👤 ${it.assignee}`);
       if (meta.length) lines.push(meta.join(' · '));
-      if (it.body) lines.push(it.body);
+      if (it.body) {
+        const b = stripFigureLines(it.body); // сырой <figure> в plain-text не нужен
+        if (b) lines.push(b);
+      }
       if (it.attachments.length) {
         lines.push(it.attachments.map((a) => `📎 [${a.name}](${a.url})`).join(' · '));
       }
@@ -148,7 +152,11 @@ export type DigestEmailUrls = ReadonlyMap<string, { completeUrl: string; comment
 // «Завершить» внизу каждой задачи. Стиль письма богаче TG (TG остаётся на deep-links).
 export function renderDigestHtml(
   m: DigestModel,
-  opts: { actionUrls?: DigestEmailUrls } = {},
+  opts: {
+    actionUrls?: DigestEmailUrls;
+    // Резолвер картинок-фигур описания → подписанный <img src>. Без него картинки не вставляются.
+    resolveImageUrl?: (rawSrc: string) => string | null;
+  } = {},
 ): string {
   const p: string[] = [
     '<div style="background:#f1f5f9;padding:24px 0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;">',
@@ -180,7 +188,7 @@ export function renderDigestHtml(
       if (it.assignee) meta.push(`👤 ${escapeHtml(it.assignee)}`);
       if (it.deadline) meta.push(`⏰ ${escapeHtml(it.deadline)}`);
       if (meta.length) p.push(`<div style="color:#64748b;font-size:12px;margin:4px 0 0;">${meta.join(' · ')}</div>`);
-      if (it.body) p.push(`<div style="font-size:13px;color:#334155;margin:6px 0 0;">${markdownToRich(it.body, 'email')}</div>`);
+      if (it.body) p.push(`<div style="font-size:13px;color:#334155;margin:6px 0 0;">${markdownToRich(it.body, 'email', { resolveImageUrl: opts.resolveImageUrl })}</div>`);
       if (it.attachments.length) {
         p.push(
           `<div style="font-size:12px;margin:6px 0 0;">${it.attachments

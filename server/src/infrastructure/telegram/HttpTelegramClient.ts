@@ -213,6 +213,35 @@ export class HttpTelegramClient implements TelegramClient {
     };
   }
 
+  // Картинки в чат: 1 → sendPhoto, 2..10 → sendMediaGroup, >10 → чанки по 10. Best-effort:
+  // картинки — дополнение к текстовому сообщению, их сбой не должен ронять доставку текста.
+  async sendPhotos(chatId: number, photoUrls: readonly string[]): Promise<void> {
+    const urls = photoUrls.filter((u) => u.length > 0);
+    for (let i = 0; i < urls.length; i += 10) {
+      const batch = urls.slice(i, i + 10);
+      try {
+        if (batch.length === 1) {
+          await this.tgFetch('/sendPhoto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, photo: batch[0] }),
+          });
+        } else {
+          await this.tgFetch('/sendMediaGroup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              media: batch.map((url) => ({ type: 'photo', media: url })),
+            }),
+          });
+        }
+      } catch {
+        /* best-effort — картинки не критичны */
+      }
+    }
+  }
+
   async getUpdates(offset: number, timeoutSeconds: number): Promise<TelegramUpdate[]> {
     // long-poll: undici keep-alive держит соединение открытым timeoutSeconds. Нам важно
     // дать proxy чуть больше времени чтоб не порвал раньше TG (timeoutSeconds + 5).

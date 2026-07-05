@@ -106,9 +106,51 @@ function inlineMd(s: string): string {
   return t;
 }
 
+// Строка-картинка из редактора описания: '<figure data-figure-image><img … src="…" …></figure>'.
+// Возвращает src (обычно '/api/attachments/<id>') или null, если строка — не картинка-фигура.
+const FIGURE_IMG_RE =
+  /^<figure\s+data-figure-image>\s*<img\b[^>]*\bsrc="([^"]+)"[^>]*>\s*<\/figure>$/i;
+export function figureImageSrc(line: string): string | null {
+  const m = FIGURE_IMG_RE.exec(line.trim());
+  return m ? m[1]! : null;
+}
+
+// Все src картинок-фигур в описании — для Telegram-альбома (в тексте их не рендерим).
+export function extractImageSrcs(md: string | null): string[] {
+  const out: string[] = [];
+  for (const line of (md ?? '').replace(/\r/g, '').split('\n')) {
+    const src = figureImageSrc(line);
+    if (src) out.push(src);
+  }
+  return out;
+}
+
+// Убрать строки-картинки из markdown (чтобы сырой <figure> не показывался кодом в TG-тексте).
+export function stripFigureLines(md: string | null): string {
+  return (md ?? '')
+    .replace(/\r/g, '')
+    .split('\n')
+    .filter((l) => figureImageSrc(l) === null)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+export type MarkdownRichOptions = {
+  // Резолвер картинок (email): '/api/attachments/<id>' → абсолютный (подписанный) URL <img>.
+  // Не задан или вернул null → картинку не вставляем (сырой тег не показываем).
+  readonly resolveImageUrl?: (rawSrc: string) => string | null;
+};
+
 // markdown тела задачи → HTML. mode='email' — блочный (<p>/<ul>/<pre>);
 // mode='telegram' — инлайн-теги + переводы строк (Telegram HTML не знает блочных тегов).
-export function markdownToRich(md: string, mode: 'email' | 'telegram'): string {
+// Картинки-фигуры: email → настоящий <img> (по resolveImageUrl), telegram → срезаем
+// (в тексте картинку не вставить — уходит альбомом отдельным сообщением).
+export function markdownToRich(
+  md: string,
+  mode: 'email' | 'telegram',
+  opts: MarkdownRichOptions = {},
+): string {
   const lines = (md ?? '').replace(/\r/g, '').split('\n');
   const out: string[] = [];
   let inUl = false;
@@ -147,6 +189,22 @@ export function markdownToRich(md: string, mode: 'email' | 'telegram'): string {
       closeUl();
       if (mode === 'email') out.push('<div style="height:6px"></div>');
       else out.push('');
+      continue;
+    }
+
+    // Картинка-фигура: email → <img> (по резолверу), telegram → срезаем (уходит альбомом).
+    const imgSrc = figureImageSrc(t);
+    if (imgSrc) {
+      closeUl();
+      if (mode === 'email') {
+        const url = opts.resolveImageUrl?.(imgSrc);
+        if (url) {
+          out.push(
+            `<img src="${escapeHtml(url)}" alt="" style="max-width:100%;height:auto;` +
+              `border-radius:10px;margin:8px 0;display:block;" />`,
+          );
+        }
+      }
       continue;
     }
 

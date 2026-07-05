@@ -35,6 +35,9 @@ export type SendAgentNotificationCommand = {
   // (chat_id, message_id) → (task_id, question_id), чтобы webhook потом мог найти
   // привязку при reply'е от юзера. Если поле не задано — мэппинг не пишется.
   readonly ralphQuestionId?: string;
+  // Подписанные URL картинок из описания задачи. Если заданы — после текста шлём альбомом
+  // (в тексте Telegram картинку между абзацев не вставить). Best-effort.
+  readonly imageUrls?: readonly string[];
 };
 
 // Дискриминированный результат — caller (route) мапит в HTTP-код.
@@ -128,6 +131,10 @@ export class SendAgentTelegramNotification {
 
     if (send.kind === 'ok') {
       await this.audit(cmd, link.tgChatId, 'ok', send.messageId, null);
+      // Картинки описания — альбомом после текста (best-effort, не влияет на статус send'а).
+      if (cmd.imageUrls && cmd.imageUrls.length > 0) {
+        await this.deps.client.sendPhotos?.(link.tgChatId, cmd.imageUrls).catch(() => {});
+      }
       // Маппинг для ralph_question reply-handling. Best-effort: ошибка БД не должна
       // ломать уже успешно отправленное сообщение (юзер увидит TG-сообщение в любом
       // случае; в худшем — его reply не зашьётся, но это лучше чем фейл send'а).

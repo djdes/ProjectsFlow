@@ -146,6 +146,10 @@ export interface TelegramClient {
   // тестовые фейки могут не реализовывать. null — бот не в чате / нет прав / ошибка
   // (мягкий фоллбэк, не кидаем — резолв имени не должен ронять сохранение настроек).
   getChat?(chatId: number): Promise<TelegramChatInfo | null>;
+  // Отправить картинки в чат: 1 → sendPhoto, 2..10 → sendMediaGroup (альбом), >10 → чанки.
+  // photoUrls — публично доступные (подписанные) ссылки; Telegram сам их выкачивает.
+  // Best-effort (картинки — дополнение к тексту). Опционально: тестовые фейки могут не иметь.
+  sendPhotos?(chatId: number, photoUrls: readonly string[]): Promise<void>;
 }
 
 // Набор update-типов, которые мы реально обрабатываем. Используется в allowed_updates

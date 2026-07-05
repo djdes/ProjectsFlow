@@ -1,9 +1,12 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import type { GetTaskAttachment } from '../../application/task/GetTaskAttachment.js';
+import { verifyAttachmentToken } from '../../application/attachments/signedAttachmentUrl.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 type Deps = {
   readonly getAttachment: GetTaskAttachment;
+  // Секрет для проверки подписанных URL картинок (письмо/Telegram — без сессии).
+  readonly signingSecret: string;
 };
 
 // Растровые расширения → image-MIME. Фолбэк, когда сохранённый mimeType пустой/кривой
@@ -36,12 +39,29 @@ function inlineImageMime(mimeType: string, filename: string): string | null {
 // description есть markdown-link).
 export function attachmentBinaryRouter(deps: Deps): Router {
   const router = Router();
-  router.use(requireAuth);
 
-  router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  // Гейт доступа: валидный подписанный токен (?e=&s=) → отдаём без сессии (письмо/Telegram).
+  // Иначе — обычная сессионная авторизация (requireAuth + проверка членства).
+  const gate = (req: Request, res: Response, next: NextFunction): void => {
+    const { e, s } = req.query;
+    if (
+      typeof e === 'string' &&
+      typeof s === 'string' &&
+      verifyAttachmentToken(req.params['id'] as string, e, s, deps.signingSecret, Date.now())
+    ) {
+      res.locals['signedAttachment'] = true;
+      next();
+      return;
+    }
+    requireAuth(req, res, next);
+  };
+
+  router.get('/:id', gate, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const id = req.params['id'] as string;
-      const { attachment, data } = await deps.getAttachment.execute(req.user!.id, id);
+      const { attachment, data } = res.locals['signedAttachment']
+        ? await deps.getAttachment.executeSigned(id)
+        : await deps.getAttachment.execute(req.user!.id, id);
 
       // Любой тип файла разрешён к загрузке, поэтому отдаём безопасно:
       // - nosniff, чтобы браузер не «угадывал» MIME (анти-XSS на same-origin).

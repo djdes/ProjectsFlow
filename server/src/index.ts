@@ -1250,6 +1250,7 @@ const sendDailyDigest = new SendDailyDigest({
   appUrl: appBaseUrl,
   idGen: idGenerator,
   createEmailActionToken,
+  signingSecret: repoAccessSecret,
 });
 
 const { app, devProxyUpgrade } = createApp({
@@ -1718,6 +1719,8 @@ const { app, devProxyUpgrade } = createApp({
       storage: attachmentStorage,
       delegations: taskDelegationRepo,
     }),
+    // Секрет для проверки подписанных URL картинок (письмо/Telegram — без сессии).
+    signingSecret: repoAccessSecret,
     listComments: new ListTaskComments({
       projects: projectRepo,
       members: projectMemberRepo,

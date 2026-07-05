@@ -38,4 +38,15 @@ export class GetTaskAttachment {
     if (!data) throw new TaskAttachmentNotFoundError(attachmentId);
     return { attachment: att, data };
   }
+
+  // Отдача по ПОДПИСАННОМУ токену (письмо/Telegram — без сессии). Доступ уже подтверждён
+  // валидной подписью URL (её выдаёт только сервер для авторизованного получателя), поэтому
+  // per-user проверку членства здесь НЕ делаем — только читаем байты по id.
+  async executeSigned(attachmentId: string): Promise<GetTaskAttachmentResult> {
+    const att = await this.deps.attachments.getById(attachmentId);
+    if (!att) throw new TaskAttachmentNotFoundError(attachmentId);
+    const data = await this.deps.storage.read(att.storageKey);
+    if (!data) throw new TaskAttachmentNotFoundError(attachmentId);
+    return { attachment: att, data };
+  }
 }
