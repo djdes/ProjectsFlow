@@ -13,7 +13,9 @@ export const SIDEBAR_DEFAULT_WIDTH = 270;
 // теряет подписи и становится иконками. Остальное (свитчер пространства, список проектов) —
 // не меняется. SIDEBAR_MIN_WIDTH — абсолютный минимум ширины панели.
 export const SIDEBAR_MIN_WIDTH = 176;
-export const SIDEBAR_COMPACT_WIDTH = 232;
+// Порог подобран так, чтобы иконки включались ДО того, как подписи (самая длинная —
+// «Входящие») начнут обрезаться: лучше сразу иконки, чем куцый «Поис…».
+export const SIDEBAR_COMPACT_WIDTH = 256;
 export const SIDEBAR_MAX_WIDTH = 480;
 
 export function clampSidebarWidth(w: number): number {

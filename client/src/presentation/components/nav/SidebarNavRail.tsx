@@ -75,7 +75,7 @@ export function SidebarNavRail({
               // Компакт (узкая панель): только иконка, натуральная ширина + по центру по вертикали.
               // Ряд их распределяет justify-between → крайние кнопки ровно по краям (над поиском
               // по проектам). Обычный режим: кнопки тянутся (flex-1), иконка + подпись снизу.
-              compact ? 'justify-center py-1.5' : 'flex-1 gap-1 px-1 py-1.5',
+              compact ? 'justify-center py-1.5' : 'flex-1 gap-1 px-0.5 py-1.5',
               animations && 'transition-colors duration-200 ease-out',
               // Акцентная «Задача» — без подписи, кружок центрируется по высоте ряда.
               accent && !compact && 'justify-center',
