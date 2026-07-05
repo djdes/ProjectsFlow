@@ -134,9 +134,9 @@ export function AppShell(): React.ReactElement {
     isDesktop && !collapsed,
     toggleCollapse,
   );
-  // Ресайз увёл ширину ниже порога → панель показывает узкий icon-rail (кнопки → иконки).
-  // Минимум ширины (SIDEBAR_MIN_WIDTH) — где иконки впритык.
-  const railCompact = !collapsed && sidebarWidth < SIDEBAR_COMPACT_WIDTH;
+  // Ресайз увёл ширину ниже порога → ТОЛЬКО верхний навигационный ряд становится иконками
+  // (без подписей). Остальная панель (свитчер, список проектов) не меняется.
+  const navCompact = !collapsed && sidebarWidth < SIDEBAR_COMPACT_WIDTH;
   const { animations } = useMotion();
 
   // Свёрнутая панель: наведение на бургер (или на предпросмотр) показывает плавающий
@@ -193,7 +193,7 @@ export function AppShell(): React.ReactElement {
             style={{ gridTemplateColumns: collapsed ? '1fr' : `${sidebarWidth}px 1fr` }}
           >
             {!collapsed && (
-              <Sidebar collapsed={collapsed} compact={railCompact} onToggleCollapse={toggleCollapse} />
+              <Sidebar collapsed={collapsed} navCompact={navCompact} onToggleCollapse={toggleCollapse} />
             )}
             {/* Ручка ресайза панели: тонкая полоса на её правом крае. Тяга → шире/уже,
                 клик → свернуть (Ctrl+\), на hover — чёрная подсказка справа. */}
@@ -260,7 +260,7 @@ export function AppShell(): React.ReactElement {
                     >
                       <Sidebar
                         collapsed={false}
-                        compact={sidebarWidth < SIDEBAR_COMPACT_WIDTH}
+                        navCompact={sidebarWidth < SIDEBAR_COMPACT_WIDTH}
                         onToggleCollapse={toggleCollapse}
                       />
                     </motion.div>

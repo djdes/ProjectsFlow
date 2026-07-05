@@ -50,15 +50,15 @@ type SidebarProps = {
   onToggleCollapse?: () => void;
   // Свёрнутый режим (desktop, кнопка-бургер): узкий icon-rail вместо полной панели.
   collapsed?: boolean;
-  // Компактный режим по ширине (ресайз ниже SIDEBAR_COMPACT_WIDTH): тот же icon-rail, но
-  // расширяется обратно перетаскиванием ручки (без кнопки «развернуть»).
-  compact?: boolean;
+  // Узкая ширина (ресайз ниже порога): ТОЛЬКО верхний навигационный ряд без подписей
+  // (иконки). Остальная панель (свитчер, список проектов) — как есть.
+  navCompact?: boolean;
 };
 
 export function Sidebar({
   onToggleCollapse,
   collapsed = false,
-  compact = false,
+  navCompact = false,
 }: SidebarProps): React.ReactElement {
   // Колокольчик убран — единственная поверхность уведомлений теперь чат-лента. Сигнал
   // «нужно действие» вешаем на rail-кнопку «Чат», чтобы он был виден и на «Главной».
@@ -119,14 +119,12 @@ export function Sidebar({
     setRailPersist(RAIL_ORDER[i] ?? 'home');
   };
 
-  if (collapsed || compact) {
+  if (collapsed) {
     const favorites = (projects ?? []).filter((p) => !p.isInbox && p.isFavorite);
     return (
       <aside className="flex h-full min-h-0 flex-col items-center gap-1 overflow-hidden bg-sidebar p-2">
         <TooltipProvider delayDuration={300}>
-          {/* Кнопка «развернуть» — только в свёрнутом бургером режиме. В compact (ресайз)
-              панель расширяют перетаскиванием ручки у правого края. */}
-          {collapsed && onToggleCollapse && (
+          {onToggleCollapse && (
             <RailButton onClick={onToggleCollapse} label="Развернуть панель">
               <ChevronsRight className="size-5" />
             </RailButton>
@@ -210,11 +208,13 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Навигационный rail: Главная/Чат/Входящие/Поиск — активная широкая, прочие узкие. */}
+      {/* Навигационный rail: Главная/Чат/Задача/Входящие/Поиск. Узкая панель → без подписей
+          (только иконки), остальная панель не меняется. */}
       <SidebarNavRail
         items={railItems}
         activeIndex={RAIL_ORDER.indexOf(activeRail)}
         onSelect={onRailSelect}
+        compact={navCompact}
       />
 
       {/* Нижняя область: список проектов («Главная») ИЛИ общий чат пространства. Crossfade. */}
