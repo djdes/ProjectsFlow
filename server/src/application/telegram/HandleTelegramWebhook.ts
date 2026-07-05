@@ -17,7 +17,15 @@ import {
   getAllTgPrefsResolved,
   type TelegramNotificationPrefs,
 } from '../../domain/telegram/TelegramNotificationPrefs.js';
-import { stripAllMarkdown } from '../../domain/task/digestFormat.js';
+import {
+  stripAllMarkdown,
+  markdownToRich,
+  extractImageSrcs,
+} from '../../domain/task/digestFormat.js';
+import { signAttachmentUrl } from '../attachments/signedAttachmentUrl.js';
+
+// Подписанные URL картинок задачи (открытие задачи в TG → альбом) живут 14 дней.
+const TG_IMG_URL_TTL_SECONDS = 14 * 24 * 60 * 60;
 
 // Минимальный набор полей TG Update, которые мы реально обрабатываем (allowed_updates
 // = message + callback_query + inline_query). Структура совпадает с Telegram Bot API:
@@ -52,6 +60,8 @@ type Deps = {
   readonly tasks: TaskRepository;
   readonly client: TelegramClient;
   readonly appUrl: string;
+  // Секрет для подписи URL картинок задачи (альбом при открытии задачи в TG, без сессии).
+  readonly signingSecret: string;
   readonly botUsername: string | null;
   // Reply→ralph-answer ветка. См. spec telegram-reply-to-ralph-answer.md.
   readonly ralphQuestionMessages: TelegramRalphQuestionRepository;
@@ -675,12 +685,12 @@ export class HandleTelegramWebhook {
         return;
       }
       const shown = tasks.slice(0, BROWSE_LIMIT);
-      const rows = shown.map((t) => [
-        {
-          text: excerptShort(t.description, 56),
-          callback_data: `bt:t:${t.id}`,
-        },
-      ]);
+      const rows = shown.map((t) => {
+        // Есть картинки в описании → префикс 🖼 (в кнопке видно, что внутри фото).
+        const hasImg = extractImageSrcs(t.description).length > 0;
+        const label = `${hasImg ? '🖼 ' : ''}${excerptShort(t.description, hasImg ? 52 : 56)}`;
+        return [{ text: label, callback_data: `bt:t:${t.id}` }];
+      });
       const note =
         tasks.length > BROWSE_LIMIT
           ? `\n\n<i>Показаны первые ${BROWSE_LIMIT} из ${tasks.length}.</i>`
@@ -706,9 +716,15 @@ export class HandleTelegramWebhook {
       }
       const base = this.deps.appUrl.replace(/\/$/, '');
       const url = `${base}/projects/${task.projectId}?task=${task.id}`;
+      // Полное тело задачи с сохранением абзацев (каждый абзац на сайте = абзац в TG),
+      // markdown → TG-теги, картинки-фигуры из текста срезаны (уйдут альбомом ниже). Режем
+      // сырой markdown с запасом под TG-лимит (4096) — теги остаются сбалансированными.
+      const rawBody = (task.description ?? '').replace(/\r/g, '');
+      const capped = rawBody.length > 3200 ? rawBody.slice(0, 3200).trimEnd() + '…' : rawBody;
+      const rendered = markdownToRich(capped, 'telegram').trim();
       const body2 =
-        `📌 <b>Задача</b> (${escapeHtml(task.status)})\n` +
-        `${escapeHtml(excerptShort(task.description, 300))}\n\n` +
+        `📋 <b>Задача</b>\n\n` +
+        (rendered ? `${rendered}\n\n` : '') +
         `<a href="${url}">Открыть в ProjectsFlow</a>\n\n` +
         `↩️ Ответь reply'ем на это сообщение, чтобы добавить комментарий.`;
       const messageId = await this.sendReturningId(chatId, body2);
@@ -720,6 +736,13 @@ export class HandleTelegramWebhook {
           taskId: task.id,
           projectId: task.projectId,
         });
+      }
+      // Картинки задачи — альбомом после текста (подписанные URL; в текст TG их не вставить).
+      const imgUrls = extractImageSrcs(task.description)
+        .map((s) => signAttachmentUrl(base, s, this.deps.signingSecret, TG_IMG_URL_TTL_SECONDS, Date.now()))
+        .filter((u): u is string => u !== null);
+      if (imgUrls.length > 0) {
+        await this.deps.client.sendPhotos?.(chatId, imgUrls).catch(() => {});
       }
       await this.deps.client.answerCallbackQuery(cq.id);
       return;

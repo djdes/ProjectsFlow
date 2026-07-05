@@ -140,6 +140,8 @@ export function stripAllMarkdown(md: string | null): string {
     );
   return lines
     .join('\n')
+    .replace(/<figure\b[^>]*>[\s\S]*?<\/figure>/gi, '') // инлайн-картинка редактора → убрать
+    .replace(/<img\b[^>]*>/gi, '') // одиночный <img> → убрать
     .replace(/<\/?u>/gi, '')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '') // ![alt](url) → ничего
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [text](url) → text

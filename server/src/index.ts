@@ -784,6 +784,7 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   tasks: taskRepo,
   client: telegramClient,
   appUrl: appBaseUrl,
+  signingSecret: repoAccessSecret,
   botUsername: telegramBotUsername,
   ralphQuestionMessages: telegramRalphQuestionRepo,
   taskMessages: telegramTaskMessageRepo,
