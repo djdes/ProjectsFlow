@@ -60,6 +60,10 @@ import { configureAdminBypass } from './application/project/projectAccess.js';
 import { GetProject } from './application/project/GetProject.js';
 import { CreateProject } from './application/project/CreateProject.js';
 import { UpdateProject } from './application/project/UpdateProject.js';
+import { PublishProject } from './application/project/PublishProject.js';
+import { UnpublishProject } from './application/project/UnpublishProject.js';
+import { SetPublicIndexing } from './application/project/SetPublicIndexing.js';
+import { GetPublicBoard } from './application/project/GetPublicBoard.js';
 import { ReorderProjects } from './application/project/ReorderProjects.js';
 import { ToggleProjectFavorite } from './application/project/ToggleProjectFavorite.js';
 import { ReorderFavoriteProjects } from './application/project/ReorderFavoriteProjects.js';
@@ -1295,6 +1299,9 @@ const { app, devProxyUpgrade } = createApp({
       activityRecorder,
     }),
     updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo, activity: activityRecorder }),
+    publishProject: new PublishProject({ projects: projectRepo, members: projectMemberRepo }),
+    unpublishProject: new UnpublishProject({ projects: projectRepo, members: projectMemberRepo }),
+    setPublicIndexing: new SetPublicIndexing({ projects: projectRepo, members: projectMemberRepo }),
     deleteProject: new DeleteProject({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -1473,6 +1480,12 @@ const { app, devProxyUpgrade } = createApp({
       activityRecorder,
       hubSync: hubMembershipSync,
     }),
+  },
+  // Публичная доска (Publish to web, db/096) — анонимный доступ по slug.
+  public: {
+    getPublicBoard: new GetPublicBoard({ projects: projectRepo, tasks: taskRepo }),
+    projects: projectRepo,
+    coverStorage: attachmentStorage,
   },
   search: {
     searchTasks: new SearchTasks({ search: taskSearchRepo }),

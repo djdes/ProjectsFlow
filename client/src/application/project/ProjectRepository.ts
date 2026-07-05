@@ -123,6 +123,11 @@ export interface ProjectRepository {
   // Мультизадачный воркер проекта: вкл/выкл параллельное выполнение задач диспетчером.
   // Любой участник проекта (viewer+). Сервер вернёт обновлённый проект.
   setMultiTaskWorker(projectId: string, enabled: boolean): Promise<Project>;
+  // Публичная ссылка доски (Publish to web, db/096). Owner-only. publish → возвращает
+  // slug + полный url; unpublish снимает; setPublicIndexing тогглит индексацию поисковиками.
+  publish(projectId: string): Promise<{ slug: string; url: string }>;
+  unpublish(projectId: string): Promise<void>;
+  setPublicIndexing(projectId: string, indexing: boolean): Promise<void>;
   // v0.15: per-member opt-in. GET возвращает `mine` (статус caller'а) + `all`
   // (полный список членов, только для owner-а). PUT включает/выключает ОДНУ
   // делегацию: без granterUserId — caller's own, с granterUserId — admin-on-behalf.

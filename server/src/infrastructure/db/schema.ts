@@ -250,6 +250,14 @@ export const projects = mysqlTable(
     description: text('description'),
     coverUrl: varchar('cover_url', { length: 500 }),
     coverPosition: int('cover_position').notNull().default(50),
+    // Публичная ссылка доски (Publish to web, db/096). publicSlug — случайный неугадываемый
+    // slug (URL: /p/<slug>), NULL = не публиковали. isPublic гейтит анонимный доступ.
+    // publicIndexing — тоггл индексации поисковиками (default off). publishedAt — момент
+    // первой публикации (в domain не читается, только БД-аналитика).
+    publicSlug: varchar('public_slug', { length: 64 }),
+    isPublic: boolean('is_public').notNull().default(false),
+    publicIndexing: boolean('public_indexing').notNull().default(false),
+    publishedAt: timestamp('published_at'),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -260,6 +268,8 @@ export const projects = mysqlTable(
     index('idx_projects_owner').on(t.ownerId),
     index('idx_projects_dispatcher_user').on(t.dispatcherUserId),
     index('idx_projects_workspace').on(t.workspaceId),
+    // Уникальность + lookup по slug для анонимного публичного роута. См. db/096.
+    uniqueIndex('uq_projects_public_slug').on(t.publicSlug),
   ],
 );
 

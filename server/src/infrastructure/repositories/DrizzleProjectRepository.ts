@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   kbDocuments,
@@ -45,6 +45,9 @@ function toProject(row: ProjectRow): Project {
     description: row.description ?? null,
     coverUrl: row.coverUrl ?? null,
     coverPosition: row.coverPosition,
+    publicSlug: row.publicSlug ?? null,
+    isPublic: row.isPublic,
+    publicIndexing: row.publicIndexing,
     createdAt: row.createdAt,
   };
 }
@@ -155,6 +158,43 @@ export class DrizzleProjectRepository implements ProjectRepository {
     }
 
     return this.getById(id);
+  }
+
+  async getBySlug(slug: string): Promise<Project | null> {
+    const rows = await this.db
+      .select()
+      .from(projects)
+      .where(eq(projects.publicSlug, slug))
+      .limit(1);
+    const row = rows[0];
+    return row ? toProject(row) : null;
+  }
+
+  async publish(id: string, slug: string): Promise<'ok' | 'slug_taken'> {
+    try {
+      await this.db
+        .update(projects)
+        .set({
+          publicSlug: slug,
+          isPublic: true,
+          // published_at ставим только при первой публикации; COALESCE сохраняет старую дату.
+          publishedAt: sql`COALESCE(${projects.publishedAt}, NOW())`,
+        })
+        .where(eq(projects.id, id));
+    } catch (err) {
+      // UNIQUE(public_slug) конфликт с другим проектом → пусть use-case перегенерирует slug.
+      if (isDuplicateKey(err)) return 'slug_taken';
+      throw err;
+    }
+    return 'ok';
+  }
+
+  async unpublish(id: string): Promise<void> {
+    await this.db.update(projects).set({ isPublic: false }).where(eq(projects.id, id));
+  }
+
+  async setPublicIndexing(id: string, on: boolean): Promise<void> {
+    await this.db.update(projects).set({ publicIndexing: on }).where(eq(projects.id, id));
   }
 
   async setWorkspace(projectId: string, workspaceId: string): Promise<void> {

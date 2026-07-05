@@ -17,6 +17,7 @@ import { LoginPage } from '@/presentation/pages/LoginPage';
 import { RegisterPage } from '@/presentation/pages/RegisterPage';
 import { DevicePage } from '@/presentation/pages/DevicePage';
 import { InvitePage } from '@/presentation/pages/InvitePage';
+import { PublicBoardPage } from '@/presentation/pages/PublicBoardPage';
 import { ProtectedRoute } from '@/presentation/auth/ProtectedRoute';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 
@@ -41,6 +42,8 @@ export const router = createBrowserRouter([
   // /invite/:token — anon-доступная страница. Внутри сам решает, что показать
   // (preview + accept или редирект на /login через state.from).
   { path: '/invite/:token', element: <InvitePage /> },
+  // /p/:slug — публичная доска проекта (Publish to web). Anon-доступ, вне AppShell/сайдбара.
+  { path: '/p/:slug', element: <PublicBoardPage /> },
   {
     path: '/device',
     element: (

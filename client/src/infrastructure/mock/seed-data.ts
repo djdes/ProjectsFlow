@@ -20,6 +20,9 @@ export const seedProjects: Project[] = [
     description: null,
     coverUrl: null,
     coverPosition: 50,
+    publicSlug: null,
+    isPublic: false,
+    publicIndexing: false,
     createdAt: new Date('2025-01-15'),
   },
   {
@@ -40,6 +43,9 @@ export const seedProjects: Project[] = [
     description: null,
     coverUrl: null,
     coverPosition: 50,
+    publicSlug: null,
+    isPublic: false,
+    publicIndexing: false,
     createdAt: new Date('2025-03-20'),
   },
   {
@@ -60,6 +66,9 @@ export const seedProjects: Project[] = [
     description: null,
     coverUrl: null,
     coverPosition: 50,
+    publicSlug: null,
+    isPublic: false,
+    publicIndexing: false,
     createdAt: new Date('2024-11-02'),
   },
   {
@@ -80,6 +89,9 @@ export const seedProjects: Project[] = [
     description: null,
     coverUrl: null,
     coverPosition: 50,
+    publicSlug: null,
+    isPublic: false,
+    publicIndexing: false,
     createdAt: new Date('2024-05-10'),
   },
 ];

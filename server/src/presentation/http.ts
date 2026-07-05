@@ -20,6 +20,11 @@ import type { GetProject } from '../application/project/GetProject.js';
 import type { CreateProject } from '../application/project/CreateProject.js';
 import type { UpdateProject } from '../application/project/UpdateProject.js';
 import type { DeleteProject } from '../application/project/DeleteProject.js';
+import type { PublishProject } from '../application/project/PublishProject.js';
+import type { UnpublishProject } from '../application/project/UnpublishProject.js';
+import type { SetPublicIndexing } from '../application/project/SetPublicIndexing.js';
+import type { GetPublicBoard } from '../application/project/GetPublicBoard.js';
+import { publicBoardRouter } from './public/routes.js';
 import type { SetProjectDispatcher } from '../application/project/SetProjectDispatcher.js';
 import type { SetProjectMultiTaskWorker } from '../application/project/SetProjectMultiTaskWorker.js';
 import type { ListDispatcherCandidates } from '../application/project/ListDispatcherCandidates.js';
@@ -265,6 +270,9 @@ type AppDeps = {
     readonly createProject: CreateProject;
     readonly updateProject: UpdateProject;
     readonly deleteProject: DeleteProject;
+    readonly publishProject: PublishProject;
+    readonly unpublishProject: UnpublishProject;
+    readonly setPublicIndexing: SetPublicIndexing;
     readonly setProjectDispatcher: SetProjectDispatcher;
     readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
     readonly listDispatcherCandidates: ListDispatcherCandidates;
@@ -316,6 +324,13 @@ type AppDeps = {
   readonly invites: {
     readonly getByToken: GetInviteByToken;
     readonly accept: AcceptProjectInvite;
+  };
+  // Публичная доска (Publish to web, db/096) — анонимный доступ по slug, БЕЗ requireAuth.
+  readonly public: {
+    readonly getPublicBoard: GetPublicBoard;
+    // Для отдачи обложки-картинки опубликованной доски анониму (lookup проекта по slug).
+    readonly projects: ProjectRepository;
+    readonly coverStorage: AttachmentStorage;
   };
   readonly search: {
     readonly searchTasks: SearchTasks;
@@ -698,6 +713,8 @@ export function createApp(deps: AppDeps): CreatedApp {
     getByToken: deps.invites.getByToken,
     accept: deps.invites.accept,
   }));
+  // Публичная доска (Publish to web, db/096) — анонимный доступ по slug, БЕЗ requireAuth.
+  app.use('/api/public/boards', publicBoardRouter(deps.public));
   app.use('/api/notifications', notificationsRouter(deps.notifications));
   app.use('/api/recent-task-views', recentTaskViewsRouter(deps.recentTaskViews));
   app.use('/api/projects', projectAnalyticsRouter(deps.projectAnalytics));

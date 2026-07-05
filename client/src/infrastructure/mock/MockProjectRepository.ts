@@ -58,6 +58,9 @@ export class MockProjectRepository implements ProjectRepository {
       description: null,
       coverUrl: null,
       coverPosition: 50,
+      publicSlug: null,
+      isPublic: false,
+      publicIndexing: false,
       createdAt: new Date(),
     };
     this.projects.unshift(inbox);
@@ -142,6 +145,9 @@ export class MockProjectRepository implements ProjectRepository {
       description: null,
       coverUrl: null,
       coverPosition: 50,
+      publicSlug: null,
+      isPublic: false,
+      publicIndexing: false,
       createdAt: new Date(),
     };
     // Новые проекты — наверху списка: user видит результат там, где он его ждёт
@@ -189,6 +195,15 @@ export class MockProjectRepository implements ProjectRepository {
   }
   setMultiTaskWorker(): Promise<never> {
     return Promise.reject(new Error('Mock.setMultiTaskWorker: not implemented'));
+  }
+  publish(): Promise<never> {
+    return Promise.reject(new Error('Mock.publish: not implemented'));
+  }
+  unpublish(): Promise<never> {
+    return Promise.reject(new Error('Mock.unpublish: not implemented'));
+  }
+  setPublicIndexing(): Promise<never> {
+    return Promise.reject(new Error('Mock.setPublicIndexing: not implemented'));
   }
   getGitTokenDelegation(): Promise<never> {
     return Promise.reject(new Error('Mock.getGitTokenDelegation: not implemented'));

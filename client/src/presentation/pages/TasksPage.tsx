@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Image as ImageIcon, Share2, Text } from 'lucide-react';
+import { Image as ImageIcon, Text } from 'lucide-react';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -16,6 +16,7 @@ import { EditableProjectTitle } from '@/presentation/components/project/Editable
 import { ProjectIconPicker } from '@/presentation/components/project/ProjectIconPicker';
 import { MemberAvatarStack } from '@/presentation/components/project/MemberAvatarStack';
 import { ProjectActionsMenu } from '@/presentation/components/project/ProjectActionsMenu';
+import { ProjectSharePopover } from '@/presentation/components/project/ProjectSharePopover';
 import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
 import { ProjectActivityButton } from '@/presentation/components/project/ProjectActivityButton';
 import { ProjectCover } from '@/presentation/components/project/ProjectCover';
@@ -165,15 +166,12 @@ export function TasksPage(): React.ReactElement {
           canInvite={data.role === 'owner' || data.role === 'editor'}
         />
       )}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
-        aria-label="Поделиться"
-      >
-        <Share2 className="size-4" />
-        <span className="text-sm">Поделиться</span>
-      </Button>
+      <ProjectSharePopover
+        project={data}
+        members={members}
+        canInvite={data.role === 'owner' || data.role === 'editor'}
+        isOwner={data.role === 'owner'}
+      />
       <ProjectActionsMenu
         projectId={data.id}
         financeVisible={financeVisible}

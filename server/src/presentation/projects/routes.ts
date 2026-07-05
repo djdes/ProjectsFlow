@@ -4,6 +4,10 @@ import type { GetProject } from '../../application/project/GetProject.js';
 import type { CreateProject } from '../../application/project/CreateProject.js';
 import type { UpdateProject } from '../../application/project/UpdateProject.js';
 import type { DeleteProject } from '../../application/project/DeleteProject.js';
+import type { PublishProject } from '../../application/project/PublishProject.js';
+import type { UnpublishProject } from '../../application/project/UnpublishProject.js';
+import type { SetPublicIndexing } from '../../application/project/SetPublicIndexing.js';
+import { publicBoardUrl } from '../../domain/project/publicBoardUrl.js';
 import type { SetProjectDispatcher } from '../../application/project/SetProjectDispatcher.js';
 import type { SetProjectMultiTaskWorker } from '../../application/project/SetProjectMultiTaskWorker.js';
 import type { ListDispatcherCandidates } from '../../application/project/ListDispatcherCandidates.js';
@@ -50,6 +54,7 @@ import {
   reorderProjectsSchema,
   setDispatcherSchema,
   setMultiTaskWorkerSchema,
+  setPublicIndexingSchema,
   setGitTokenDelegationSchema,
   toggleFavoriteSchema,
   transferOwnershipSchema,
@@ -63,6 +68,10 @@ type Deps = {
   readonly createProject: CreateProject;
   readonly updateProject: UpdateProject;
   readonly deleteProject: DeleteProject;
+  // Публичная ссылка доски (Publish to web, db/096). Owner-only.
+  readonly publishProject: PublishProject;
+  readonly unpublishProject: UnpublishProject;
+  readonly setPublicIndexing: SetPublicIndexing;
   readonly setProjectDispatcher: SetProjectDispatcher;
   readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
   readonly listDispatcherCandidates: ListDispatcherCandidates;
@@ -334,6 +343,46 @@ export function projectsRouter(deps: Deps): Router {
       });
       deps.notifyProjectChanged(id);
       res.json({ project: toDto(project) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // === Публичная ссылка доски (Publish to web, db/096). Owner-only. ===
+  // Публичная выдача самой доски — анонимный роутер /api/public/boards/:slug (отдельно,
+  // без requireAuth). Здесь только управление публикацией из окна «Поделиться».
+  router.post('/:id/publish', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const { slug } = await deps.publishProject.execute({ id, ownerId: req.user!.id });
+      deps.notifyProjectChanged(id);
+      res.json({ slug, url: publicBoardUrl(deps.appUrl, slug) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.delete('/:id/publish', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      await deps.unpublishProject.execute({ id, ownerId: req.user!.id });
+      deps.notifyProjectChanged(id);
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.patch('/:id/publish', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const { indexing } = setPublicIndexingSchema.parse(req.body);
+      await deps.setPublicIndexing.execute({ id, ownerId: req.user!.id, indexing });
+      deps.notifyProjectChanged(id);
+      res.status(204).end();
     } catch (e) {
       next(e);
     }

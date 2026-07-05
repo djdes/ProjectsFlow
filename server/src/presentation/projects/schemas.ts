@@ -9,6 +9,11 @@ export const createProjectSchema = z.object({
   name: z.string().trim().min(1, 'Введите название').max(80),
 });
 
+// PATCH /:id/publish — тоггл индексации публичной доски поисковиками.
+export const setPublicIndexingSchema = z.object({
+  indexing: z.boolean(),
+});
+
 // Мягкая валидация URL: пытаемся распарсить как URL.
 // Поддерживаем http(s) и git+ssh-форму (parse() это принимает с протоколом).
 const urlOrNullSchema = z

@@ -57,6 +57,10 @@ type ProjectDto = {
   description?: string | null;
   coverUrl?: string | null;
   coverPosition?: number;
+  // Публичная ссылка доски (Publish to web). Могут отсутствовать в старых ответах.
+  publicSlug?: string | null;
+  isPublic?: boolean;
+  publicIndexing?: boolean;
   createdAt: string;
 };
 
@@ -83,6 +87,9 @@ function fromDto(dto: ProjectDto): Project {
     description: dto.description ?? null,
     coverUrl: dto.coverUrl ?? null,
     coverPosition: dto.coverPosition ?? 50,
+    publicSlug: dto.publicSlug ?? null,
+    isPublic: dto.isPublic ?? false,
+    publicIndexing: dto.publicIndexing ?? false,
     createdAt: new Date(dto.createdAt),
   };
 }
@@ -249,6 +256,18 @@ export class HttpProjectRepository implements ProjectRepository {
       { enabled },
     );
     return fromDto(project);
+  }
+
+  async publish(projectId: string): Promise<{ slug: string; url: string }> {
+    return httpClient.post<{ slug: string; url: string }>(`/projects/${projectId}/publish`);
+  }
+
+  async unpublish(projectId: string): Promise<void> {
+    await httpClient.delete<void>(`/projects/${projectId}/publish`);
+  }
+
+  async setPublicIndexing(projectId: string, indexing: boolean): Promise<void> {
+    await httpClient.patch<void>(`/projects/${projectId}/publish`, { indexing });
   }
 
   async getGitTokenDelegation(projectId: string): Promise<GitTokenDelegationStatus> {

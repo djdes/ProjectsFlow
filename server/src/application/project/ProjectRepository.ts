@@ -45,6 +45,19 @@ export interface ProjectRepository {
   createWithOwnerMembership(input: CreateProjectInput): Promise<Project>;
   // Без owner-фильтра: caller уже проверил доступ. Возвращает null если проект не найден.
   update(id: string, patch: UpdateProjectInput): Promise<Project | null>;
+
+  // Публичная ссылка доски (Publish to web, db/096).
+  // Lookup по public_slug для анонимного роута. null если такого slug нет.
+  getBySlug(slug: string): Promise<Project | null>;
+  // Опубликовать: проставить public_slug + is_public=1 + published_at (только если ещё NULL,
+  // чтобы повторная публикация не сбрасывала дату первой). Возвращает 'slug_taken' если
+  // slug занят другим проектом (UNIQUE-конфликт) — PublishProject перегенерирует и повторит.
+  publish(id: string, slug: string): Promise<'ok' | 'slug_taken'>;
+  // Снять с публикации: is_public=0. public_slug и published_at НЕ трогаем (повторный
+  // Publish вернёт тот же URL).
+  unpublish(id: string): Promise<void>;
+  // Тоггл индексации поисковиками (public_indexing).
+  setPublicIndexing(id: string, on: boolean): Promise<void>;
   // Перенос проекта в другое пространство (см. WorkspaceService.moveProject).
   setWorkspace(projectId: string, workspaceId: string): Promise<void>;
   // workspace_id проекта — для deep-link авто-switch активного пространства.

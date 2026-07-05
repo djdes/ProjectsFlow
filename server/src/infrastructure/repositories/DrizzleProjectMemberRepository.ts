@@ -61,6 +61,9 @@ function toProject(row: ProjectRow): Project {
     description: row.description ?? null,
     coverUrl: row.coverUrl ?? null,
     coverPosition: row.coverPosition,
+    publicSlug: row.publicSlug ?? null,
+    isPublic: row.isPublic,
+    publicIndexing: row.publicIndexing,
     createdAt: row.createdAt,
   };
 }

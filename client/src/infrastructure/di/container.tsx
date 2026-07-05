@@ -73,6 +73,8 @@ import type { UserRepository } from '@/application/user/UserRepository';
 import type { WorkspaceRepository } from '@/application/workspace/WorkspaceRepository';
 import type { ActivityRepository } from '@/application/activity/ActivityRepository';
 import { HttpUsageRepository } from '@/infrastructure/http/HttpUsageRepository';
+import { HttpPublicBoardRepository } from '@/infrastructure/http/HttpPublicBoardRepository';
+import type { PublicBoardRepository } from '@/application/public/PublicBoardRepository';
 import { GetUsage } from '@/application/usage/GetUsage';
 import { ChangePlan } from '@/application/usage/ChangePlan';
 import type { UsageRepository } from '@/application/usage/UsageRepository';
@@ -125,6 +127,7 @@ type Container = {
   usageRepository: UsageRepository;
   getUsage: GetUsage;
   changePlan: ChangePlan;
+  publicBoardRepository: PublicBoardRepository;
 };
 
 function buildContainer(): Container {
@@ -156,6 +159,7 @@ function buildContainer(): Container {
   const recentTaskViewRepo = new HttpRecentTaskViewRepository();
   const helpRepo = new HttpHelpRepository();
   const usageRepo = new HttpUsageRepository();
+  const publicBoardRepo = new HttpPublicBoardRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -204,6 +208,7 @@ function buildContainer(): Container {
     usageRepository: usageRepo,
     getUsage: new GetUsage(usageRepo),
     changePlan: new ChangePlan(usageRepo),
+    publicBoardRepository: publicBoardRepo,
   };
 }
 

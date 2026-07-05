@@ -45,5 +45,11 @@ export type Project = {
   readonly description: string | null;
   readonly coverUrl: string | null;
   readonly coverPosition: number;
+  // Публичная ссылка доски (Publish to web). publicSlug — случайный slug (URL: /p/<slug>),
+  // null = не публиковали. isPublic — опубликовано ли сейчас. publicIndexing — тоггл
+  // индексации поисковиками. На list-эндпоинте могут отсутствовать — дефолты на маппинге.
+  readonly publicSlug: string | null;
+  readonly isPublic: boolean;
+  readonly publicIndexing: boolean;
   readonly createdAt: Date;
 };
