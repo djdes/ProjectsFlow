@@ -71,10 +71,14 @@ export function SidebarNavRail({
             aria-label={item.label}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'group/nav relative flex flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px] font-medium leading-none',
+              'group/nav relative flex flex-col items-center rounded-lg text-[10px] font-medium leading-none',
+              // Компакт (узкая панель): только иконка, натуральная ширина + по центру по вертикали.
+              // Ряд их распределяет justify-between → крайние кнопки ровно по краям (над поиском
+              // по проектам). Обычный режим: кнопки тянутся (flex-1), иконка + подпись снизу.
+              compact ? 'justify-center py-1.5' : 'flex-1 gap-1 px-1 py-1.5',
               animations && 'transition-colors duration-200 ease-out',
               // Акцентная «Задача» — без подписи, кружок центрируется по высоте ряда.
-              accent && 'justify-center',
+              accent && !compact && 'justify-center',
               active
                 ? 'bg-foreground/[0.06] text-foreground ring-1 ring-black/[0.04] dark:bg-white/10 dark:ring-white/10'
                 : 'text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]',

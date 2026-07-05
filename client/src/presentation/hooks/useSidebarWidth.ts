@@ -12,7 +12,7 @@ export const SIDEBAR_DEFAULT_WIDTH = 270;
 // Ниже SIDEBAR_COMPACT_WIDTH ТОЛЬКО верхний навигационный ряд (Главная/Чат/Входящие/Поиск)
 // теряет подписи и становится иконками. Остальное (свитчер пространства, список проектов) —
 // не меняется. SIDEBAR_MIN_WIDTH — абсолютный минимум ширины панели.
-export const SIDEBAR_MIN_WIDTH = 180;
+export const SIDEBAR_MIN_WIDTH = 176;
 export const SIDEBAR_COMPACT_WIDTH = 232;
 export const SIDEBAR_MAX_WIDTH = 480;
 
