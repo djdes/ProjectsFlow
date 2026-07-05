@@ -15,6 +15,11 @@ type Props = {
 // Закрытие живёт только в памяти — при обновлении страницы плашка возвращается (по требованию).
 const DISMISS_EVENT = 'pf:published-banner-dismissed';
 
+// Модульный in-memory-набор закрытых проектов — чтобы экземпляр, смонтированный ПОСЛЕ закрытия
+// (напр. плашка в окне задачи, которое открыли уже после закрытия плашки на главном), тоже
+// стартовал скрытым. Живёт до перезагрузки страницы (плашка возвращается на refresh — по требованию).
+const dismissedProjects = new Set<string>();
+
 // Кнопка плашки — белая «пилюля» «Показать сайт» (как в Notion). Пока заглушка.
 const BTN =
   'inline-flex shrink-0 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 py-1 text-[13px] font-medium text-[#37352f] shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-colors hover:bg-white/70 dark:border-white/10 dark:bg-white/10 dark:text-blue-50 dark:hover:bg-white/20';
@@ -26,10 +31,13 @@ const BTN =
 // Адрес — <логин>.projectsflow.ru, где логин = local-part email текущего юзера.
 export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: Props): React.ReactElement | null {
   const { user } = useCurrentUser();
-  // Только in-memory: refresh страницы возвращает плашку.
-  const [dismissed, setDismissed] = useState(false);
+  // Только in-memory: refresh страницы возвращает плашку. Стартовое значение — из модульного
+  // набора, чтобы плашка в только что открытом окне задачи знала о раннем закрытии на главном.
+  const [dismissed, setDismissed] = useState(() => dismissedProjects.has(projectId));
 
   useEffect(() => {
+    // При смене проекта — синкаемся с актуальным состоянием набора.
+    setDismissed(dismissedProjects.has(projectId));
     const onDismiss = (e: Event): void => {
       if ((e as CustomEvent<string>).detail === projectId) setDismissed(true);
     };
