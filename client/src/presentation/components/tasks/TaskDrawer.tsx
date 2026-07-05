@@ -631,6 +631,19 @@ export function TaskDrawer({
     ? 'rounded-lg ring-2 ring-primary/60 ring-offset-2 ring-offset-background transition-shadow duration-500'
     : 'transition-shadow duration-500';
   const navigate = useNavigate();
+  // Единый hover-зоны сверху: верхние кнопки (peek/пред-след) И кнопки «Добавить иконку/обложку»
+  // проявляются ВМЕСТЕ при наведении на любую из них. Небольшая задержка ухода — чтобы переход
+  // между зонами (через плашку) не гасил их. См. renderTopHoverControls + TaskHeaderMedia.
+  const [topZoneHover, setTopZoneHover] = useState(false);
+  const topZoneTimer = useRef<number | undefined>(undefined);
+  const enterTopZone = useCallback((): void => {
+    if (topZoneTimer.current) window.clearTimeout(topZoneTimer.current);
+    setTopZoneHover(true);
+  }, []);
+  const leaveTopZone = useCallback((): void => {
+    if (topZoneTimer.current) window.clearTimeout(topZoneTimer.current);
+    topZoneTimer.current = window.setTimeout(() => setTopZoneHover(false), 150);
+  }, []);
   // Ширина колонки на отдельной странице задачи (asPage): по центру (читаемая колонка)
   // или во всю ширину. Запоминаем в localStorage — следующая открытая страница задачи
   // стартует в том же режиме. На обычное окно-оверлей не влияет.
@@ -1545,7 +1558,12 @@ export function TaskDrawer({
   const renderTopHoverControls = (): React.ReactElement | null => {
     if (asPage || !isDesktop) return null;
     return (
-      <div className="flex items-center gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/topbar:opacity-100 has-[[data-state=open]]:opacity-100">
+      <div
+        className={cn(
+          'flex items-center gap-1 transition-opacity duration-150 focus-within:opacity-100 has-[[data-state=open]]:opacity-100',
+          topZoneHover ? 'opacity-100' : 'opacity-0',
+        )}
+      >
         <span className="h-4 w-px shrink-0 bg-border" aria-hidden />
         {renderPeekSwitcher()}
         <span className="h-4 w-px shrink-0 bg-border" aria-hidden />
@@ -1745,7 +1763,11 @@ export function TaskDrawer({
             {/* #3: верхняя панель + плашка — ОБЩАЯ ШАПКА НА ВСЮ ШИРИНУ окна (над обоими
                 столбцами в split), поэтому в split-режиме плашка идёт через оба столбца, а
                 кнопки закрыть/развернуть/статус — по всей ширине шапки. */}
-            <div className="group/topbar flex h-11 shrink-0 items-center gap-1 bg-background/95 pr-3">
+            <div
+              className="flex h-11 shrink-0 items-center gap-1 bg-background/95 pr-3"
+              onMouseEnter={enterTopZone}
+              onMouseLeave={leaveTopZone}
+            >
               {/* Кнопки закрыть/развернуть — по ЦЕНТРУ левого отступа окна (Notion-style):
                   бокс шириной ровно с левый отступ контента, кнопки в нём центрированы. */}
               <div className="flex shrink-0 items-center justify-center gap-0.5 min-w-[var(--pf-drawer-px)]">
@@ -1848,6 +1870,8 @@ export function TaskDrawer({
                 coverPosition={task.coverPosition}
                 canEdit={canEdit}
                 onSave={saveMedia}
+                hovered={topZoneHover}
+                onHoverChange={(enter) => (enter ? enterTopZone() : leaveTopZone())}
               />
 
               {/* === ОПИСАНИЕ === Заголовок и описание ОДНИМ полем сверху (1-я строка —

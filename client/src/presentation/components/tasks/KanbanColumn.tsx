@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from 'react
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { AnimatePresence } from 'motion/react';
-import { ListChecks, PanelRight, Plus, X } from 'lucide-react';
+import { FileText, ListChecks, PanelRight, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { cn } from '@/lib/utils';
@@ -10,6 +10,7 @@ import { KanbanCard } from './KanbanCard';
 import { DropIndicatorLine } from './DropIndicatorLine';
 import { TaskComposer } from './TaskComposer';
 import { IconPicker } from '@/presentation/components/project/IconPicker';
+import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { STATUS_SUBTITLE } from './statusLabels';
 import type { SelectModifiers } from './selection/selectionReducer';
 
@@ -25,6 +26,8 @@ type InlineCreateInput = {
   description: string;
   status?: TaskStatus;
   icon?: string | null;
+  // Позиция: поставить сразу ПОСЛЕ этой задачи (цепочка inline-создания, порядок создания).
+  afterTaskId?: string | null;
   ralphMode?: RalphMode;
   delegateUserId?: string | null;
   deadline?: string | null;
@@ -160,8 +163,26 @@ export function KanbanColumn({
   // DONE_PREVIEW_COUNT, остальное за кнопкой «Показать все». Прочие колонки — целиком.
   const [showAllDone, setShowAllDone] = useState(false);
   // Notion-style inline-создание: «+» вверху колонки → карточка с полем названия сразу в
-  // потоке (без окна создания). Enter → сохранить и открыть следующую (быстрый ввод).
+  // потоке (без окна создания). Enter → сохранить задачу И тут же создать пустую НИЖЕ.
   const [inlineCreating, setInlineCreating] = useState(false);
+  // id задач, созданных в текущей inline-сессии (в порядке создания). Рендерим их сверху
+  // колонки, а карточку создания — ПОД ними (стабильный key → без ремаунта и потери фокуса).
+  const [sessionIds, setSessionIds] = useState<string[]>([]);
+  const lastSessionIdRef = useRef<string | null>(null);
+  const closeInline = (): void => {
+    setInlineCreating(false);
+    setSessionIds([]);
+    lastSessionIdRef.current = null;
+  };
+  const handleInlineCreate = async (name: string, taskIcon: string | null): Promise<Task | null> => {
+    if (!onInlineCreate) return null;
+    // afterTaskId = последняя созданная в сессии → новая встаёт ПОД ней (порядок создания).
+    return onInlineCreate({ description: name, status, icon: taskIcon, afterTaskId: lastSessionIdRef.current });
+  };
+  const appendSession = (t: Task): void => {
+    lastSessionIdRef.current = t.id;
+    setSessionIds((prev) => [...prev, t.id]);
+  };
 
   // I8: inline-правка названия колонки по клику. Тот же колбэк, что у меню-троеточия.
   const [editingLabel, setEditingLabel] = useState(false);
@@ -197,6 +218,48 @@ export function KanbanColumn({
   const collapsible = status === 'done' && !selectionMode && tasks.length > DONE_PREVIEW_COUNT;
   const visibleTasks = collapsible && !showAllDone ? tasks.slice(0, DONE_PREVIEW_COUNT) : tasks;
   const hiddenCount = tasks.length - visibleTasks.length;
+
+  // Задачи, созданные в текущей inline-сессии (в порядке создания) — рендерим их сверху
+  // отдельно, чтобы карточка создания оставалась ПОД ними и не ремаунтилась. Остальные —
+  // обычным сортируемым списком. Пока сессии нет (sessionIds пуст) — всё как обычно.
+  const sessionActive = inlineCreating && sessionIds.length > 0;
+  const sessionSet = sessionActive ? new Set(sessionIds) : null;
+  const sessionTasks = sessionActive
+    ? (sessionIds.map((id) => tasks.find((t) => t.id === id)).filter(Boolean) as Task[])
+    : [];
+  const listTasks = sessionSet ? visibleTasks.filter((t) => !sessionSet.has(t.id)) : visibleTasks;
+
+  // Единый рендер карточки (используется и в сессии, и в основном списке).
+  const renderCard = (t: Task): React.ReactElement => (
+    <KanbanCard
+      task={t}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      showShortId={showShortId}
+      onQuickPromote={onQuickPromote}
+      onTaskChanged={onTaskChanged}
+      showCheckbox={showCheckbox}
+      lastDoneTaskId={lastDoneTaskId}
+      lastTodoTaskId={lastTodoTaskId}
+      currentUserId={currentUserId}
+      liveRunning={liveTaskIds?.has(t.id) ?? false}
+      selectionMode={selectionMode}
+      selected={selectedIds?.has(t.id) ?? false}
+      onSelectToggle={onSelectToggle}
+    />
+  );
+
+  // Карточка inline-создания (стабильный key — без ремаунта при добавлении сессионных карточек).
+  const inlineCard =
+    inlineCreating && onInlineCreate ? (
+      <InlineNewCard
+        key="inline-new"
+        onOpenFull={onEdit}
+        onCreate={handleInlineCreate}
+        onCreated={appendSession}
+        onClose={closeInline}
+      />
+    ) : null;
 
   return (
     <div
@@ -355,24 +418,23 @@ export function KanbanColumn({
           lockOffer
         ) : (
         <>
-        {/* Notion-style: новая карточка с полем названия — прямо вверху потока колонки. */}
-        {inlineCreating && onInlineCreate && (
-          <InlineNewCard
-            onOpenFull={onEdit}
-            onCreate={(name, icon) => onInlineCreate({ description: name, status, icon })}
-            onClose={() => setInlineCreating(false)}
-          />
-        )}
+        {/* Notion-style inline-создание: сверху — уже созданные в этой сессии карточки (в
+            порядке создания), ПОД ними — карточка создания (стабильный key, без ремаунта).
+            Enter сохраняет и оставляет пустое поле ниже. Остальные задачи — обычным списком. */}
+        {sessionTasks.map((t) => (
+          <Fragment key={t.id}>{renderCard(t)}</Fragment>
+        ))}
+        {inlineCard}
         <SortableContext
-          items={visibleTasks.map((t) => t.id)}
+          items={listTasks.map((t) => t.id)}
           strategy={verticalListSortingStrategy}
         >
-          {visibleTasks.map((t, idx) => (
+          {listTasks.map((t, idx) => (
             <Fragment key={t.id}>
               {/* «Готово» группируем по датам завершения: Сегодня / Вчера / Ранее. */}
               {status === 'done' &&
                 (idx === 0 ||
-                  doneBucket((visibleTasks[idx - 1] ?? t).updatedAt) !== doneBucket(t.updatedAt)) && (
+                  doneBucket((listTasks[idx - 1] ?? t).updatedAt) !== doneBucket(t.updatedAt)) && (
                   <p className="px-1 pb-0.5 pt-1.5 text-[11px] font-medium text-muted-foreground/70 first:pt-0">
                     {doneBucket(t.updatedAt)}
                   </p>
@@ -382,22 +444,7 @@ export function KanbanColumn({
                   <DropIndicatorLine key={`drop-before-${t.id}`} />
                 )}
               </AnimatePresence>
-              <KanbanCard
-                task={t}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                showShortId={showShortId}
-                onQuickPromote={onQuickPromote}
-                onTaskChanged={onTaskChanged}
-                showCheckbox={showCheckbox}
-                lastDoneTaskId={lastDoneTaskId}
-                lastTodoTaskId={lastTodoTaskId}
-                currentUserId={currentUserId}
-                liveRunning={liveTaskIds?.has(t.id) ?? false}
-                selectionMode={selectionMode}
-                selected={selectedIds?.has(t.id) ?? false}
-                onSelectToggle={onSelectToggle}
-              />
+              {renderCard(t)}
             </Fragment>
           ))}
         </SortableContext>
@@ -459,10 +506,14 @@ export function KanbanColumn({
 // «открыть справа» — сохранить и открыть задачу в окне справа.
 function InlineNewCard({
   onCreate,
+  onCreated,
   onClose,
   onOpenFull,
 }: {
-  onCreate: (name: string, icon: string | null) => Promise<Task>;
+  onCreate: (name: string, icon: string | null) => Promise<Task | null>;
+  // Вызывается после успешного Enter-создания (родитель добавляет задачу в сессию и рендерит
+  // её ВЫШЕ карточки создания). Не вызывается при blur/«открыть справа» (там сессия закрывается).
+  onCreated?: (task: Task) => void;
   onClose: () => void;
   onOpenFull: (task: Task) => void;
 }): React.ReactElement {
@@ -496,10 +547,11 @@ function InlineNewCard({
     }
   };
 
-  // Enter → создать и остаться (следующая карточка).
+  // Enter → создать задачу (она встаёт ВЫШЕ), поле очищается и остаётся для следующей.
   const onEnter = async (): Promise<void> => {
     const t = await create();
     if (t) {
+      onCreated?.(t);
       setValue('');
       setIcon(null);
       requestAnimationFrame(() => {
@@ -530,18 +582,18 @@ function InlineNewCard({
   };
 
   return (
-    <div className="group/new rounded-xl border bg-card p-2.5 shadow-sm ring-1 ring-primary/20">
-      <div className="flex items-start gap-2">
-        {/* Иконка задачи — тот же пикер, что у иконки проекта (эмодзи/иконки/загрузка),
-            крупный квадрат. Пока пикер открыт — не закрываем карточку; после выбора
-            возвращаем фокус в поле. */}
+    <div className="group/new rounded-xl border bg-card p-2 shadow-sm ring-1 ring-primary/20">
+      {/* items-start: иконка стоит рядом с ПЕРВОЙ строкой (при многострочном названии остаётся
+          сверху); при однострочном — визуально по центру. gap-1.5 — компактно. */}
+      <div className="flex items-start gap-1.5">
+        {/* Иконка задачи размером с текст (не крупный квадрат) — пикер тот же. Пока пикер
+            открыт — не закрываем карточку; после выбора возвращаем фокус в поле. */}
         <IconPicker
           value={icon}
           onChange={(v) => {
             setIcon(v);
             requestAnimationFrame(() => ref.current?.focus());
           }}
-          size="lg"
           onOpenChange={(open) => {
             if (open) {
               pickingRef.current = true;
@@ -554,6 +606,22 @@ function InlineNewCard({
               requestAnimationFrame(() => ref.current?.focus());
             }
           }}
+          trigger={
+            <button
+              type="button"
+              // Не крадём фокус у поля (иначе blur-commit закроет карточку до открытия пикера).
+              onMouseDown={(e) => e.preventDefault()}
+              aria-label={icon ? 'Сменить иконку' : 'Добавить иконку'}
+              title="Иконка задачи"
+              className="mt-px grid size-5 shrink-0 cursor-pointer place-items-center overflow-hidden rounded text-muted-foreground/80 transition-colors hover:text-foreground"
+            >
+              {icon ? (
+                <ProjectIconView icon={icon} pixelSize={18} className="text-[1.05rem]" />
+              ) : (
+                <FileText className="size-[1.05rem]" />
+              )}
+            </button>
+          }
         />
         <textarea
           ref={ref}

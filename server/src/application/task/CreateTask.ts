@@ -48,6 +48,8 @@ export type CreateTaskCommand = {
   readonly coverPosition?: number;
   // По умолчанию новая карточка добавляется в TODO наверх столбца.
   readonly status: TaskStatus;
+  // Позиция: поставить сразу ПОСЛЕ этой задачи (для цепочки inline-создания). undefined = наверх колонки.
+  readonly afterTaskId?: string | null;
   // Режим работы Ralph по задаче. Если не указан — БД проставит DEFAULT 'normal'.
   readonly ralphMode?: RalphMode;
   // Опциональное one-to-one делегирование. Допустимо только для inbox-задач
@@ -85,8 +87,20 @@ export class CreateTask {
 
     // Кладём в самый верх колонки: position = min - STEP. Это даёт «свежее наверху»
     // в обоих UI-режимах (kanban и list — оба сортируют по position по возрастанию).
-    const bounds = await this.deps.tasks.getPositionBounds(input.projectId, input.status);
-    const position = bounds ? bounds.min - POSITION_STEP : POSITION_STEP;
+    // Исключение: если задан afterTaskId — ставим сразу ПОСЛЕ якорной задачи (в той же
+    // колонке проекта+статуса), чтобы сохранить порядок при цепочке inline-создания.
+    let position: number;
+    const anchor = input.afterTaskId ? await this.deps.tasks.getById(input.afterTaskId) : null;
+    if (
+      anchor &&
+      anchor.projectId === input.projectId &&
+      anchor.status === input.status
+    ) {
+      position = anchor.position + 1;
+    } else {
+      const bounds = await this.deps.tasks.getPositionBounds(input.projectId, input.status);
+      position = bounds ? bounds.min - POSITION_STEP : POSITION_STEP;
+    }
 
     const task = await this.deps.tasks.create({
       id: this.deps.idGen(),

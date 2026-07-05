@@ -17,6 +17,8 @@ export type CreateTaskInput = {
   // Вертикальное положение фокуса обложки (0..100). undefined = дефолт 50. См. db/094.
   readonly coverPosition?: number;
   readonly status?: TaskStatus;
+  // Позиция: поставить сразу ПОСЛЕ этой задачи (для цепочки inline-создания). undefined = наверх колонки.
+  readonly afterTaskId?: string | null;
   // Режим работы Ralph. Если не передан — backend дефолтит 'normal'.
   readonly ralphMode?: RalphMode;
   // Опциональное one-to-one делегирование. Для inbox-задач делегат — из shared-members

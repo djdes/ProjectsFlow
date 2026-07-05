@@ -297,6 +297,7 @@ export function tasksRouter(deps: Deps): Router {
         cover: body.cover ?? null,
         coverPosition: body.coverPosition,
         status: body.status ?? 'todo',
+        afterTaskId: body.afterTaskId ?? null,
         ralphMode: body.ralphMode,
         delegateUserId: body.delegateUserId ?? null,
         deadline: body.deadline ?? null,

@@ -28,6 +28,10 @@ type Props = {
   canEdit: boolean;
   // Сохранить изменения (оптимистично отражаются локально сразу же).
   onSave: (patch: TaskMediaPatch) => void;
+  // Наведена ли верхняя зона окна (топбар ИЛИ шапка) — кнопки «Добавить …» проявляются
+  // вместе с верхними кнопками (peek/пред-след). Наведение на шапку зовёт onHoverChange.
+  hovered?: boolean;
+  onHoverChange?: (enter: boolean) => void;
 };
 
 function clamp(n: number, min: number, max: number): number {
@@ -63,6 +67,8 @@ export function TaskHeaderMedia({
   coverPosition,
   canEdit,
   onSave,
+  hovered = false,
+  onHoverChange,
 }: Props): React.ReactElement {
   // Оптимистичные локальные значения (окно показывает `task` из пропсов, который не
   // рефетчится синхронно). Пересеиваем при смене задачи.
@@ -259,13 +265,19 @@ export function TaskHeaderMedia({
       {/* === КНОПКИ «ДОБАВИТЬ» + ИКОНКА === Ряд «Добавить иконку / Добавить обложку» — НАД
           иконкой/заголовком (hover), с симметричными верт. отступами (сверху от верхних кнопок =
           снизу до текста). Иконка (если задана) — крупный квадрат сразу над заголовком. */}
-      <div className="group/head px-[var(--pf-drawer-px)]">
+      <div
+        className="px-[var(--pf-drawer-px)]"
+        onMouseEnter={() => onHoverChange?.(true)}
+        onMouseLeave={() => onHoverChange?.(false)}
+      >
         {canEdit && (!localIcon || !localCover) && (
           <div
             className={cn(
               // py-2 — одинаковый зазор сверху (от верхних кнопок) и снизу (до иконки/текста).
+              // Видны вместе с верхними кнопками (общая hover-зона, prop hovered).
               'flex items-center gap-1 py-2 transition-opacity duration-150',
-              'opacity-100 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/head:opacity-100',
+              'opacity-100 focus-within:opacity-100',
+              hovered ? 'sm:opacity-100' : 'sm:opacity-0',
             )}
           >
             {!localIcon && (

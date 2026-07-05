@@ -43,6 +43,8 @@ export const createTaskSchema = z.object({
   cover: coverSchema.optional(),
   coverPosition: coverPositionSchema.optional(),
   status: taskStatusSchema.optional(),
+  // Позиция: поставить новую задачу сразу ПОСЛЕ этой (цепочка inline-создания). Только на create.
+  afterTaskId: z.string().uuid().nullable().optional(),
   ralphMode: ralphModeSchema.optional(),
   // Опциональное one-to-one делегирование (только для inbox-задач). UUID юзера.
   // Сервер дополнительно валидирует: не self, в shared-members caller'а, проект isInbox.

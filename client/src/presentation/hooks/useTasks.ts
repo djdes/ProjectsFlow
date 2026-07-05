@@ -18,6 +18,7 @@ export type UseTasks = State & {
     cover?: string | null;
     coverPosition?: number;
     status: TaskStatus;
+    afterTaskId?: string | null;
     ralphMode?: RalphMode;
     delegateUserId?: string | null;
     deadline?: string | null;
