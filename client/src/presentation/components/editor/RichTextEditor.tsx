@@ -9,6 +9,7 @@ import { buildExtensions, type MentionMember } from './extensions/buildExtension
 import { SlashCommand, SLASH_ITEMS, applyBlockType } from './extensions/slashCommand';
 import { SuggestionList, type SuggestionListHandle, type SuggestionItem } from './SuggestionList';
 import { FloatingFormatMenu, type FloatingAnchor } from './FloatingFormatMenu';
+import { extractClipboardFiles, isImageFile } from '@/presentation/components/attachments/files';
 
 export type { MentionMember };
 
@@ -166,6 +167,21 @@ const PROSE_CLASS =
   'prose-p:my-1.5 prose-headings:mb-1 prose-headings:mt-3 prose-pre:my-2 ' +
   'prose-ul:my-1.5 prose-ol:my-1.5 prose-blockquote:my-2';
 
+// Высота ручки блока (кнопки size-7 = 28px). Нужна, чтобы центрировать ручку по первой
+// строке наведённого блока: сдвиг = (высота первой строки − высота ручки) / 2.
+const DRAG_HANDLE_H = 28;
+
+// Высота ПЕРВОЙ строки блока (line-box). line-height='normal' → шрифт × 1.3 (эвристика).
+// По ней центрируем drag-ручку, чтобы на блоках разной высоты (h1/h2/абзац/список) она
+// стояла на одном уровне со своим текстом, а не «прыгала» по верхам блоков.
+function firstLineHeight(el: HTMLElement): number {
+  const cs = getComputedStyle(el);
+  const lh = Number.parseFloat(cs.lineHeight);
+  if (Number.isFinite(lh) && lh > 0) return lh;
+  const fs = Number.parseFloat(cs.fontSize) || 16;
+  return fs * 1.3;
+}
+
 export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEditorProps>(
   function RichTextEditor(
     {
@@ -253,6 +269,9 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
   // Позиция блока под drag-ручкой (обновляется @tiptap/extension-drag-handle-react при
   // наведении). Нужна кнопке «+»: вставить новый блок ПОД этим и открыть меню типов блоков.
   const hoverPosRef = React.useRef<number | null>(null);
+  // Вертикальный сдвиг ручки, чтобы её иконки центрировались по ПЕРВОЙ СТРОКЕ наведённого
+  // блока (а не по его верху). Без этого на блоках разной высоты ручка «съезжает» (issue 1).
+  const [handleShift, setHandleShift] = React.useState(0);
 
   // Меню типов блока по кнопке «+» (Notion-style): позиция на экране (курсор нового абзаца).
   // Не полагаемся на «/»-suggestion (ненадёжно триггерится программно) — рисуем своё меню
@@ -366,11 +385,16 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
         return false;
       },
       handlePaste: (_view, event) => {
-        const files = Array.from(event.clipboardData?.files ?? []);
+        // ВАЖНО: картинки из буфера часто приходят в clipboardData.items (kind==='file'),
+        // а .files при этом ПУСТ (копирование картинки из браузера/приложения, а не скрин).
+        // Раньше читали только .files → такой Ctrl+V «не работал». Берём через items (как
+        // extractClipboardFiles) — тогда вставка работает для любого источника картинки.
+        const files = extractClipboardFiles(event.clipboardData ?? null);
         if (files.length === 0) return false;
         // Картинки → inline-блок в позицию (если задан onUploadImage); остальное → вложения.
+        // isImageFile ловит и webp/без-MIME (по расширению) — как в остальном приложении.
         const upload = onUploadImageRef.current;
-        const images = upload ? files.filter((f) => f.type.startsWith('image/')) : [];
+        const images = upload ? files.filter((f) => isImageFile(f.type, f.name)) : [];
         const others = files.filter((f) => !images.includes(f));
         if (images.length === 0 && !onPasteFilesRef.current) return false;
         event.preventDefault();
@@ -426,17 +450,25 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
     const clearDropcursor = (): void => {
       const ed = editorRef.current;
       if (!ed || ed.isDestroyed) return;
-      try {
-        ed.view.dom.dispatchEvent(new DragEvent('dragleave', { bubbles: false }));
-      } catch {
-        /* окружение без конструктора DragEvent — no-op */
-      }
+      const fire = (): void => {
+        try {
+          ed.view.dom.dispatchEvent(new DragEvent('dragleave', { bubbles: false }));
+        } catch {
+          /* окружение без конструктора DragEvent — no-op */
+        }
+      };
+      fire();
+      // Ещё раз на следующем кадре — после того как транзакция-дроп применилась (иначе линия
+      // могла «залипнуть» до следующего движения мышью).
+      requestAnimationFrame(fire);
     };
-    document.addEventListener('drop', clearDropcursor);
-    document.addEventListener('dragend', clearDropcursor);
+    // capture: drag-handle перехватывает `drop`/`dragend` на уровне document и глушит
+    // всплытие, поэтому bubble-слушатель не срабатывал (линия оставалась). Ловим в capture.
+    document.addEventListener('drop', clearDropcursor, true);
+    document.addEventListener('dragend', clearDropcursor, true);
     return () => {
-      document.removeEventListener('drop', clearDropcursor);
-      document.removeEventListener('dragend', clearDropcursor);
+      document.removeEventListener('drop', clearDropcursor, true);
+      document.removeEventListener('dragend', clearDropcursor, true);
     };
   }, [editor]);
 
@@ -611,11 +643,19 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
           computePositionConfig={{ placement: 'left-start' }}
           onNodeChange={({ pos }) => {
             hoverPosRef.current = typeof pos === 'number' ? pos : null;
+            // Центрируем ручку по первой строке наведённого блока (issue 1: не «прыгает»).
+            const ed = editorRef.current;
+            if (!ed || ed.isDestroyed || typeof pos !== 'number' || pos < 0) return;
+            const dom = ed.view.nodeDOM(pos);
+            if (dom instanceof HTMLElement) {
+              setHandleShift(Math.round((firstLineHeight(dom) - DRAG_HANDLE_H) / 2));
+            }
           }}
         >
           {/* pr-1.5 — чуть больший зазор между кнопками и абзацем (ручка позиционируется правым
-              краем к блоку, паддинг отодвигает кнопки левее). Кнопки крупнее (point 6). */}
-          <div className="flex items-center pr-1.5">
+              краем к блоку, паддинг отодвигает кнопки левее). marginTop центрирует ручку по
+              первой строке блока (issue 1). */}
+          <div className="flex items-center pr-1.5" style={{ marginTop: `${handleShift}px` }}>
             <button
               type="button"
               aria-label="Добавить блок"
@@ -634,9 +674,10 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
             <button
               type="button"
               aria-label="Переместить блок"
-              className="flex h-7 w-5 cursor-grab items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground active:cursor-grabbing"
+              title="Потяните, чтобы переместить блок"
+              className="flex h-7 w-7 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground active:cursor-grabbing"
             >
-              <GripVertical className="size-[18px]" />
+              <GripVertical className="size-5" />
             </button>
           </div>
         </DragHandle>
