@@ -169,6 +169,9 @@ export function KanbanColumn({
   // колонки, а карточку создания — ПОД ними (стабильный key → без ремаунта и потери фокуса).
   const [sessionIds, setSessionIds] = useState<string[]>([]);
   const lastSessionIdRef = useRef<string | null>(null);
+  // Сигнал «верни фокус в поле» — растёт при «+»: карточка создания переезжает наверх (сдвиг
+  // в DOM теряет фокус), поле надо сфокусировать заново после коммита.
+  const [refocusSignal, setRefocusSignal] = useState(0);
   const closeInline = (): void => {
     setInlineCreating(false);
     setSessionIds([]);
@@ -180,6 +183,7 @@ export function KanbanColumn({
     setSessionIds([]);
     lastSessionIdRef.current = null;
     setInlineCreating(true);
+    setRefocusSignal((s) => s + 1);
   };
   const handleInlineCreate = async (name: string, taskIcon: string | null): Promise<Task | null> => {
     if (!onInlineCreate) return null;
@@ -261,6 +265,7 @@ export function KanbanColumn({
     inlineCreating && onInlineCreate ? (
       <InlineNewCard
         key="inline-new"
+        refocusSignal={refocusSignal}
         onOpenFull={onEdit}
         onCreate={handleInlineCreate}
         onCreated={appendSession}
@@ -400,6 +405,9 @@ export function KanbanColumn({
                 variant="ghost"
                 size="icon"
                 className="size-8"
+                // Не крадём фокус у открытой карточки создания — иначе её blur-commit закроет
+                // сессию раньше, чем «+» успеет открыть новую сверху.
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => (onInlineCreate ? openInlineAtTop() : onCreate(status))}
                 aria-label="Добавить задачу"
               >
@@ -516,6 +524,7 @@ function InlineNewCard({
   onCreated,
   onClose,
   onOpenFull,
+  refocusSignal = 0,
 }: {
   onCreate: (name: string, icon: string | null) => Promise<Task | null>;
   // Вызывается после успешного Enter-создания (родитель добавляет задачу в сессию и рендерит
@@ -523,6 +532,8 @@ function InlineNewCard({
   onCreated?: (task: Task) => void;
   onClose: () => void;
   onOpenFull: (task: Task) => void;
+  // Растёт по «+» — вернуть фокус в поле после переезда карточки наверх.
+  refocusSignal?: number;
 }): React.ReactElement {
   const [value, setValue] = useState('');
   const [icon, setIcon] = useState<string | null>(null);
@@ -552,6 +563,13 @@ function InlineNewCard({
       }
     }
   });
+  // По «+» карточка переезжает наверх (сдвиг в DOM теряет фокус) — возвращаем его. Пропускаем
+  // самый первый рендер (mount-эффект уже сфокусировал).
+  const mountedRef = useRef(false);
+  useLayoutEffect(() => {
+    if (mountedRef.current) ref.current?.focus();
+    else mountedRef.current = true;
+  }, [refocusSignal]);
 
   const grow = (el: HTMLTextAreaElement): void => {
     el.style.height = 'auto';
