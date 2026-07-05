@@ -174,6 +174,13 @@ export function KanbanColumn({
     setSessionIds([]);
     lastSessionIdRef.current = null;
   };
+  // Кнопка «+» ВСЕГДА открывает пустую карточку создания СВЕРХУ колонки (сбрасывает сессию —
+  // если цепочка была ниже, новая начинается заново сверху). Цепочка вниз — только по Enter.
+  const openInlineAtTop = (): void => {
+    setSessionIds([]);
+    lastSessionIdRef.current = null;
+    setInlineCreating(true);
+  };
   const handleInlineCreate = async (name: string, taskIcon: string | null): Promise<Task | null> => {
     if (!onInlineCreate) return null;
     // afterTaskId = последняя созданная в сессии → новая встаёт ПОД ней (порядок создания).
@@ -393,7 +400,7 @@ export function KanbanColumn({
                 variant="ghost"
                 size="icon"
                 className="size-8"
-                onClick={() => (onInlineCreate ? setInlineCreating(true) : onCreate(status))}
+                onClick={() => (onInlineCreate ? openInlineAtTop() : onCreate(status))}
                 aria-label="Добавить задачу"
               >
                 <Plus className="size-5" />
