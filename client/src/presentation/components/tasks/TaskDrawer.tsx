@@ -1260,6 +1260,23 @@ export function TaskDrawer({
     if (att) deleteAttachmentDirectly(att);
   };
 
+  // Картинки, вставленные ИНЛАЙН в тело (Ctrl+V), хранятся как attachments (src ноды = att.url).
+  // В ряду «Файлы» их дублировать не нужно — они уже видны в тексте. Иначе фото появлялось и в
+  // теле, и в списке файлов («фотки странно прикрепляются»). Прячем инлайн-картинки из ряда.
+  const inlineImageSrcs = React.useMemo(() => {
+    const set = new Set<string>();
+    const unescape = (s: string): string =>
+      s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+    const re = /<img[^>]+src="([^"]+)"/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(editDescription)) !== null) set.add(unescape(m[1]));
+    return set;
+  }, [editDescription]);
+  const filesRowAttachments = React.useMemo(
+    () => headerAttachments.filter((a) => !inlineImageSrcs.has(a.url)),
+    [headerAttachments, inlineImageSrcs],
+  );
+
   // «+ подзадача» (edit-mode): вставляем пустой checklist-пункт через императивный
   // handle редактора и СРАЗУ ставим в него курсор — пользователь печатает без клика
   // мышью. onChange редактора обновит editDescription; запись — по blur/unmount-save.
@@ -2054,7 +2071,7 @@ export function TaskDrawer({
                     files: (
                       <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-1.5">
                         <TaskDrawerAttachmentRow
-                          items={headerAttachments}
+                          items={filesRowAttachments}
                           canEdit={canEdit}
                           onAddFiles={(files) => {
                             void uploadFilesDirectly(files);
