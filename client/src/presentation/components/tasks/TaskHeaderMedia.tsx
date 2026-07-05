@@ -290,21 +290,22 @@ export function TaskHeaderMedia({
         )}
 
         {localIcon && (
-          // pb-1 — маленький зазор от эмодзи до первого абзаца (как на скрине). При обложке —
+          // pb-0.5 — маленький зазор от эмодзи до первого абзаца (как на скрине). При обложке —
           // отступ сверху, чтобы иконка стояла под обложкой с зазором.
-          <div className={cn('flex pb-1', localCover && 'pt-3 sm:pt-4')}>
+          <div className={cn('flex pb-0.5', localCover && 'pt-3 sm:pt-4')}>
             <IconPicker
               value={localIcon}
               onChange={setIcon}
               trigger={
-                // Без серого hover-фона (point 5): только курсор-поинтер.
+                // Кнопка обжимает саму иконку (без широкого квадрата) — эмодзи ровно по левому
+                // краю заголовка. Без серого hover-фона (point 5): только курсор-поинтер.
                 <button
                   type="button"
                   aria-label="Сменить иконку"
                   title="Иконка"
-                  className="grid size-14 shrink-0 cursor-pointer select-none place-items-center overflow-hidden rounded-lg leading-none sm:size-16"
+                  className="inline-flex shrink-0 cursor-pointer select-none items-center overflow-hidden rounded-lg leading-none"
                 >
-                  <ProjectIconView icon={localIcon} pixelSize={40} className="text-[2.2rem]" />
+                  <ProjectIconView icon={localIcon} pixelSize={44} className="text-[2.6rem]" />
                 </button>
               }
             />
