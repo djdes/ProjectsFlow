@@ -277,10 +277,11 @@ export function TasksPage(): React.ReactElement {
           <EditableProjectTitle projectId={data.id} name={data.name} />
         </div>
         {!descriptionHidden && (
-          // #1: описание выравнено строго по левому краю — под иконку проекта (без pl-отступа).
+          // #1: небольшой левый отступ (pl-3 ≈ 12px) — описание чуть отодвинуто от края (как в
+          // Notion), не прижато вплотную под иконку.
           // #2: max-w — правый край описания заканчивается «чуть дальше центра» (как в Notion),
           // а не тянется во всю ширину. Канбан ниже при этом остаётся полноширинным.
-          <div className="mt-2.5 max-w-3xl sm:mt-3">
+          <div className="mt-2.5 max-w-3xl pl-3 sm:mt-3">
             <ProjectDescription projectId={data.id} description={data.description} canEdit={canEdit} />
           </div>
         )}
