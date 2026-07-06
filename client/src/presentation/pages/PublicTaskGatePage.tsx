@@ -4,6 +4,7 @@ import { Loader2, Lock, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { useContainer } from '@/infrastructure/di/container';
+import { boardSlugFromHost } from '@/lib/publicBoardUrl';
 import type { PublicTaskAccess } from '@/domain/public/PublicBoard';
 
 function Shell({ children }: { children: React.ReactNode }): React.ReactElement {
@@ -28,7 +29,9 @@ function Shell({ children }: { children: React.ReactNode }): React.ReactElement 
 //   участник      → редирект в полное app-окно задачи;
 //   не участник   → отказ доступа «вы не в проекте».
 export function PublicTaskGatePage(): React.ReactElement {
-  const { slug, taskId } = useParams<{ slug: string; taskId: string }>();
+  // slug из пути (/p/:slug/t/:taskId) ИЛИ из hostname (поддомен доски, где роут /t/:taskId).
+  const { slug: paramSlug, taskId } = useParams<{ slug: string; taskId: string }>();
+  const slug = paramSlug ?? boardSlugFromHost() ?? undefined;
   const { status } = useAuth();
   const { publicBoardRepository } = useContainer();
   const [access, setAccess] = useState<PublicTaskAccess | 'notfound' | 'loading'>('loading');

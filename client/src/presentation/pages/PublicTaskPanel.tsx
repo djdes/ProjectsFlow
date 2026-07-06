@@ -9,6 +9,7 @@ import { coverStyle } from '@/presentation/components/project/coverGallery';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { Markdown } from '@/presentation/components/markdown/Markdown';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
+import { boardSlugFromHost, publicBoardUrl } from '@/lib/publicBoardUrl';
 import type { PublicComment, PublicTaskDetail } from '@/domain/public/PublicBoard';
 
 const PRIORITY_COLOR: Record<1 | 2 | 3 | 4, string> = {
@@ -92,8 +93,11 @@ export function PublicTaskPanel({
   const title = detail ? splitTitleBody(detail.description ?? '').title : '';
   const body = detail ? splitTitleBody(detail.description ?? '').body : '';
 
+  // Открыть отдельной страницей: на поддомене доски роут /t/:taskId, на апексе — /p/:slug/t/:taskId.
+  const expandPath = boardSlugFromHost() ? `/t/${taskId}` : `/p/${slug}/t/${taskId}`;
+
   const copyLink = (): void => {
-    void navigator.clipboard.writeText(`${window.location.origin}/p/${slug}?task=${taskId}`);
+    void navigator.clipboard.writeText(`${publicBoardUrl(slug)}?task=${taskId}`);
     toast.success('Ссылка скопирована');
   };
 
@@ -107,7 +111,7 @@ export function PublicTaskPanel({
         <div className="sticky top-0 z-10 flex items-center justify-end gap-1 border-b bg-background/80 px-2 py-1.5 backdrop-blur">
           <button
             type="button"
-            onClick={() => navigate(`/p/${slug}/t/${taskId}`)}
+            onClick={() => navigate(expandPath)}
             aria-label="Открыть отдельной страницей"
             className="grid size-7 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
           >

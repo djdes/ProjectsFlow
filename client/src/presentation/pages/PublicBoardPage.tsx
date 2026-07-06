@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { coverStyle } from '@/presentation/components/project/coverGallery';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { usePublicBoard } from '@/presentation/hooks/usePublicBoard';
+import { boardSlugFromHost } from '@/lib/publicBoardUrl';
 import type { PublicBoard } from '@/domain/public/PublicBoard';
 import { PublicKanban } from './PublicKanban';
 import { PublicTaskPanel } from './PublicTaskPanel';
@@ -76,8 +77,10 @@ function BoardView({
 
 // Публичная страница доски проекта (/p/:slug). Рендерится ВНЕ AppShell/сайдбара и без auth.
 export function PublicBoardPage(): React.ReactElement {
-  const { slug } = useParams<{ slug: string }>();
-  const { status, board } = usePublicBoard(slug ?? '');
+  // slug из пути (/p/:slug) ИЛИ из hostname (<slug>.projectsflow.ru, Notion-style поддомен).
+  const { slug: paramSlug } = useParams<{ slug: string }>();
+  const slug = paramSlug ?? boardSlugFromHost() ?? '';
+  const { status, board } = usePublicBoard(slug);
   const [searchParams, setSearchParams] = useSearchParams();
   const openTaskId = searchParams.get('task');
 

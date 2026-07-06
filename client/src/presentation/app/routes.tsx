@@ -19,6 +19,7 @@ import { DevicePage } from '@/presentation/pages/DevicePage';
 import { InvitePage } from '@/presentation/pages/InvitePage';
 import { PublicBoardPage } from '@/presentation/pages/PublicBoardPage';
 import { PublicTaskGatePage } from '@/presentation/pages/PublicTaskGatePage';
+import { boardSlugFromHost } from '@/lib/publicBoardUrl';
 import { ProtectedRoute } from '@/presentation/auth/ProtectedRoute';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 
@@ -37,7 +38,18 @@ function AdminOnly({ children }: { children: React.ReactElement }): React.ReactE
   return children;
 }
 
-export const router = createBrowserRouter([
+// Notion-style поддомен доски: <slug>.projectsflow.ru. Если открыты на нём — ВЕСЬ SPA это
+// публичная доска (slug берётся из hostname, не из пути). Иначе — обычное приложение.
+const boardHostSlug = boardSlugFromHost();
+
+export const router = createBrowserRouter(
+  boardHostSlug
+    ? [
+        { path: '/', element: <PublicBoardPage /> },
+        { path: '/t/:taskId', element: <PublicTaskGatePage /> },
+        { path: '*', element: <PublicBoardPage /> },
+      ]
+    : [
   { path: '/login', element: <LoginPage /> },
   { path: '/register', element: <RegisterPage /> },
   // /invite/:token — anon-доступная страница. Внутри сам решает, что показать

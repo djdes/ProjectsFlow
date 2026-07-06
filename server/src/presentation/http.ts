@@ -979,11 +979,15 @@ export function createApp(deps: AppDeps): CreatedApp {
         return next();
       }
       if (!existsSync(dir)) {
-        res
-          .status(404)
-          .type('html')
-          .send('<!doctype html><meta charset="utf-8"><title>Сайт не найден</title><p>Этот сайт ещё не опубликован.</p>');
-        return;
+        // Не задеплоенный сайт-slug → это может быть поддомен ПУБЛИЧНОЙ ДОСКИ
+        // (<board-slug>.projectsflow.ru, Notion-style). Отдаём SPA — клиент по hostname
+        // отрендерит публичную доску (или «не найдена», если и не доска). В dev SPA нет
+        // (Vite-proxy) — тогда next().
+        if (!isDev && hasClient) {
+          res.sendFile(resolve(clientDist, 'index.html'));
+          return;
+        }
+        return next();
       }
       const rel = req.path.replace(/^\/+/, '') || 'index.html';
       const abs = resolve(dir, rel);
