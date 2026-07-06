@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Globe, X } from 'lucide-react';
-import { useProject } from '@/presentation/hooks/useProject';
-import { publicBoardUrl, publicBoardDisplayUrl } from '@/lib/publicBoardUrl';
-import { onPublishChanged } from '@/presentation/lib/publishEvents';
+import { useContainer } from '@/infrastructure/di/container';
 
 type Props = {
   projectId: string;
@@ -22,40 +20,51 @@ const DISMISS_EVENT = 'pf:published-banner-dismissed';
 // стартовал скрытым. Живёт до перезагрузки страницы (плашка возвращается на refresh — по требованию).
 const dismissedProjects = new Set<string>();
 
-// Кнопка плашки — белая «пилюля» «Показать сайт» (как в Notion).
+// Кнопка плашки — белая «пилюля» «Открыть результат» (как в Notion).
 const BTN =
   'inline-flex shrink-0 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 py-1 text-[13px] font-medium text-[#37352f] shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-colors hover:bg-white/70 dark:border-white/10 dark:bg-white/10 dark:text-blue-50 dark:hover:bg-white/20';
 
-// Синяя плашка «проект опубликован» — один в один как «This page is live on …» в Notion.
-// Показывается ТОЛЬКО когда проект реально опубликован (is_public + public_slug). Адрес —
-// projectsflow.ru/p/<slug>; «Показать сайт» открывает публичную доску. Состояние берём из
-// useProject + слушаем pf:project-publish-changed (мгновенное обновление после Publish/Unpublish).
+// Синяя плашка «результат опубликован» — один в один как «This page is live on …» в Notion, но
+// про РЕЗУЛЬТАТ проекта (задеплоенный воркером статический сайт на <slug>.projectsflow.ru), НЕ про
+// публичную доску (доска включается тумблером в окне «Поделиться»). Появляется, только когда воркер
+// уже что-то задеплоил (site-артефакт, self-serve воркер-раннер, M3). Пока результата нет — тихо
+// поллим (воркер до-деплоивает асинхронно), чтобы плашка всплыла сама, без ручного refresh.
 export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: Props): React.ReactElement | null {
-  const { data } = useProject(projectId);
-
-  // Публичное состояние: seed из проекта, обновляется событиями публикации.
-  const [isPublic, setIsPublic] = useState<boolean>(data?.isPublic ?? false);
-  const [slug, setSlug] = useState<string | null>(data?.publicSlug ?? null);
+  const { projectRepository } = useContainer();
+  const [slug, setSlug] = useState<string | null>(null);
 
   // Только in-memory: refresh страницы возвращает плашку.
   const [dismissed, setDismissed] = useState(() => dismissedProjects.has(projectId));
 
-  // Синк с загруженным проектом (первый рендер data может быть null).
+  // Фетч результата + лёгкий поллинг, пока его нет (воркер деплоит в фоне). Как только slug
+  // появился — поллинг останавливаем.
   useEffect(() => {
-    if (data && data.id === projectId) {
-      setIsPublic(data.isPublic);
-      setSlug(data.publicSlug);
-    }
-  }, [data, projectId]);
-
-  // Живое обновление после Publish/Unpublish из окна «Поделиться».
-  useEffect(() => {
-    return onPublishChanged((d) => {
-      if (d.projectId !== projectId) return;
-      setIsPublic(d.isPublic);
-      setSlug(d.publicSlug);
-    });
-  }, [projectId]);
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const load = (): void => {
+      projectRepository
+        .getProjectSite(projectId)
+        .then((s) => {
+          if (cancelled) return;
+          if (s?.slug) {
+            setSlug(s.slug);
+            if (timer) {
+              clearInterval(timer);
+              timer = null;
+            }
+          }
+        })
+        .catch(() => {
+          /* нет доступа/результата — просто ждём следующий тик */
+        });
+    };
+    load();
+    timer = setInterval(load, 25000);
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [projectRepository, projectId]);
 
   useEffect(() => {
     setDismissed(dismissedProjects.has(projectId));
@@ -67,9 +76,10 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
   }, [projectId]);
 
   if (dismissed) return null;
-  if (!isPublic || !slug) return null;
+  if (!slug) return null;
 
-  const address = publicBoardDisplayUrl(slug);
+  const address = `${slug}.${window.location.host}`;
+  const url = `https://${slug}.${window.location.host}`;
 
   const close = (): void => {
     // ВАЖНО: пишем в модульный набор — иначе плашка, смонтированная ПОЗЖЕ (окно задачи открыли
@@ -86,16 +96,16 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
         style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
       >
         <span className="truncate">
-          Проект опубликован на <span className="font-medium">{address}</span>
+          Результат проекта опубликован на <span className="font-medium">{address}</span>
         </span>
         <a
-          href={publicBoardUrl(slug)}
+          href={url}
           target="_blank"
           rel="noopener noreferrer"
           className={BTN}
         >
           <Globe className="size-3.5 opacity-80" />
-          Показать сайт
+          Открыть результат
         </a>
       </div>
       <button

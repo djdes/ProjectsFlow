@@ -984,6 +984,12 @@ export function createApp(deps: AppDeps): CreatedApp {
         // отрендерит публичную доску (или «не найдена», если и не доска). В dev SPA нет
         // (Vite-proxy) — тогда next().
         if (!isDev && hasClient) {
+          // ВАЖНО: index.html шлём ТОЛЬКО на навигационные запросы. Запросы ассетов
+          // (/assets/*.js, /favicon.svg, /manifest.webmanifest…) обязаны провалиться в
+          // express.static(clientDist) ниже — иначе браузер получит index.html вместо JS
+          // (Content-Type text/html), ES-модуль не распарсится и SPA не загрузится (белый
+          // экран). Признак ассета — наличие расширения в пути.
+          if (/\.[a-z0-9]+$/i.test(req.path)) return next();
           res.sendFile(resolve(clientDist, 'index.html'));
           return;
         }
