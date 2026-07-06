@@ -39,6 +39,9 @@ export type ProjectAction =
   // Публичная ссылка доски (Publish to web, db/096): опубликовать/снять/сменить indexing.
   // Owner-only — публикация раскрывает содержимое доски анонимам (как set_publish_settings).
   | 'manage_public_link'
+  // Создание/привязка GitHub-репо приложения проекта (self-serve воркер-раннер, db/097).
+  // Owner-only: репо создаётся под аккаунтом владельца его OAuth-токеном.
+  | 'manage_app_repo'
   // file-sync: пуш/ack снепшотов и управление workspace со стороны клиента-владельца.
   | 'manage_file_sync'
   // Мониторинг серверов: просмотр метрик/логов/алертов (все участники) и управление
@@ -93,6 +96,8 @@ const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   // Публичная ссылка доски — только владелец (раскрытие содержимого анонимам). Admin-bypass
   // работает через синтетическую owner-роль (см. requireProjectAccess).
   manage_public_link: 'owner',
+  // App-репо создаётся под аккаунтом владельца — только владелец.
+  manage_app_repo: 'owner',
   // file-sync: клиент-владелец пушит снепшоты / делает ack (editor+). Байтовые операции
   // СО СТОРОНЫ ДИСПЕТЧЕРА гейтятся отдельно через requireDispatcherAccess (не ролью).
   manage_file_sync: 'editor',

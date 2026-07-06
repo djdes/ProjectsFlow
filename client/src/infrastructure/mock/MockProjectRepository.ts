@@ -61,6 +61,7 @@ export class MockProjectRepository implements ProjectRepository {
       publicSlug: null,
       isPublic: false,
       publicIndexing: false,
+      appRepoFullName: null,
       createdAt: new Date(),
     };
     this.projects.unshift(inbox);
@@ -148,6 +149,7 @@ export class MockProjectRepository implements ProjectRepository {
       publicSlug: null,
       isPublic: false,
       publicIndexing: false,
+      appRepoFullName: null,
       createdAt: new Date(),
     };
     // Новые проекты — наверху списка: user видит результат там, где он его ждёт
@@ -204,6 +206,12 @@ export class MockProjectRepository implements ProjectRepository {
   }
   setPublicIndexing(): Promise<never> {
     return Promise.reject(new Error('Mock.setPublicIndexing: not implemented'));
+  }
+  ensureAppRepo(): Promise<never> {
+    return Promise.reject(new Error('Mock.ensureAppRepo: not implemented'));
+  }
+  getProjectSite(): Promise<null> {
+    return Promise.resolve(null);
   }
   getGitTokenDelegation(): Promise<never> {
     return Promise.reject(new Error('Mock.getGitTokenDelegation: not implemented'));

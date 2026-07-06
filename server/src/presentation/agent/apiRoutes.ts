@@ -515,6 +515,9 @@ type ProjectDto = {
   status: Project['status'];
   hasKb: boolean;
   gitRepoUrl: string | null;
+  // GitHub-репо приложения (self-serve воркер-раннер, db/097). NULL = обычный проект;
+  // непустой ⇒ диспетчер после сборки деплоит статику на поддомен (site-artifact).
+  appRepoFullName: string | null;
   // Ralph-диспетчер: какой юзер автономно выполняет задачи. NULL = ручной режим.
   dispatcherUserId: string | null;
   // Мультизадачный воркер: true ⇒ диспетчер может выполнять до N задач этого проекта
@@ -533,6 +536,7 @@ function projectToAgentDto(p: Project, currentUserId?: string): ProjectDto {
     status: p.status,
     hasKb: p.kbKind !== 'none',
     gitRepoUrl: p.gitRepoUrl,
+    appRepoFullName: p.appRepoFullName,
     dispatcherUserId: p.dispatcherUserId,
     multiTaskWorker: p.multiTaskWorker,
   };
@@ -737,6 +741,7 @@ export function agentApiRouter(deps: Deps): Router {
           status: p.status,
           hasKb: p.kbKind !== 'none',
           gitRepoUrl: p.gitRepoUrl,
+          appRepoFullName: p.appRepoFullName,
           dispatcherUserId: p.dispatcherUserId,
           multiTaskWorker: p.multiTaskWorker,
           isMyDispatch: p.dispatcherUserId === me,

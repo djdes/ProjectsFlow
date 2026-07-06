@@ -7,6 +7,8 @@ import type { DeleteProject } from '../../application/project/DeleteProject.js';
 import type { PublishProject } from '../../application/project/PublishProject.js';
 import type { UnpublishProject } from '../../application/project/UnpublishProject.js';
 import type { SetPublicIndexing } from '../../application/project/SetPublicIndexing.js';
+import type { EnsureProjectAppRepo } from '../../application/project/EnsureProjectAppRepo.js';
+import type { GetProjectSite } from '../../application/site/GetProjectSite.js';
 import { publicBoardUrl } from '../../domain/project/publicBoardUrl.js';
 import type { SetProjectDispatcher } from '../../application/project/SetProjectDispatcher.js';
 import type { SetProjectMultiTaskWorker } from '../../application/project/SetProjectMultiTaskWorker.js';
@@ -72,6 +74,8 @@ type Deps = {
   readonly publishProject: PublishProject;
   readonly unpublishProject: UnpublishProject;
   readonly setPublicIndexing: SetPublicIndexing;
+  readonly ensureAppRepo: EnsureProjectAppRepo;
+  readonly getProjectSite: GetProjectSite;
   readonly setProjectDispatcher: SetProjectDispatcher;
   readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
   readonly listDispatcherCandidates: ListDispatcherCandidates;
@@ -383,6 +387,34 @@ export function projectsRouter(deps: Deps): Router {
       await deps.setPublicIndexing.execute({ id, ownerId: req.user!.id, indexing });
       deps.notifyProjectChanged(id);
       res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // === GitHub-репо приложения проекта (self-serve воркер-раннер, M1). Owner-only. ===
+  // Создаёт (или возвращает существующий) репо под аккаунтом владельца. Требует привязанный GitHub.
+  router.post('/:id/app-repo', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const { fullName } = await deps.ensureAppRepo.execute(id, req.user!.id);
+      deps.notifyProjectChanged(id);
+      res.json({ appRepoFullName: fullName });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // === Задеплоенный сайт проекта (self-serve воркер-раннер, db/098). Read (owner/member). ===
+  router.get('/:id/site', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const site = await deps.getProjectSite.execute(id, req.user!.id);
+      res.json({
+        site: site ? { slug: site.slug, publishedAt: site.publishedAt.toISOString() } : null,
+      });
     } catch (e) {
       next(e);
     }

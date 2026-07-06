@@ -64,6 +64,7 @@ function toProject(row: ProjectRow): Project {
     publicSlug: row.publicSlug ?? null,
     isPublic: row.isPublic,
     publicIndexing: row.publicIndexing,
+    appRepoFullName: row.appRepoFullName ?? null,
     createdAt: row.createdAt,
   };
 }

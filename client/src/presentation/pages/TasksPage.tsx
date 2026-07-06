@@ -17,7 +17,9 @@ import { ProjectIconPicker } from '@/presentation/components/project/ProjectIcon
 import { MemberAvatarStack } from '@/presentation/components/project/MemberAvatarStack';
 import { ProjectActionsMenu } from '@/presentation/components/project/ProjectActionsMenu';
 import { ProjectSharePopover } from '@/presentation/components/project/ProjectSharePopover';
+import { ProjectResultLink } from '@/presentation/components/project/ProjectResultLink';
 import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
+import { ProjectWorkerGateBanner } from '@/presentation/components/project/ProjectWorkerGateBanner';
 import { ProjectActivityButton } from '@/presentation/components/project/ProjectActivityButton';
 import { ProjectCover } from '@/presentation/components/project/ProjectCover';
 import { ProjectDescription } from '@/presentation/components/project/ProjectDescription';
@@ -166,6 +168,7 @@ export function TasksPage(): React.ReactElement {
           canInvite={data.role === 'owner' || data.role === 'editor'}
         />
       )}
+      <ProjectResultLink projectId={data.id} />
       <ProjectSharePopover
         project={data}
         members={members}
@@ -226,6 +229,12 @@ export function TasksPage(): React.ReactElement {
           shiftForOverlay: контент центрируется в видимой области, когда открыто окно задачи. */}
       <div className="sticky top-11 z-10">
         <ProjectPublishedBanner projectId={data.id} shiftForOverlay />
+        {/* Липкий гейт «Привяжите GitHub» — пока в колонке «Воркер» есть задача и нет app-репо. */}
+        <ProjectWorkerGateBanner
+          projectId={data.id}
+          appRepoFullName={data.appRepoFullName}
+          shiftForOverlay
+        />
       </div>
 
       {/* #3: обложка проекта — во всю ширину, над заголовком (если задана). */}

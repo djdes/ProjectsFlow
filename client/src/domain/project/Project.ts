@@ -51,5 +51,8 @@ export type Project = {
   readonly publicSlug: string | null;
   readonly isPublic: boolean;
   readonly publicIndexing: boolean;
+  // GitHub-репо приложения проекта (self-serve воркер-раннер). "owner/repo" или null,
+  // если GitHub ещё не привязан / репо не создан. Используется для гейта колонки «Воркер».
+  readonly appRepoFullName: string | null;
   readonly createdAt: Date;
 };

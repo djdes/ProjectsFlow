@@ -63,10 +63,15 @@ import { UpdateProject } from './application/project/UpdateProject.js';
 import { PublishProject } from './application/project/PublishProject.js';
 import { UnpublishProject } from './application/project/UnpublishProject.js';
 import { SetPublicIndexing } from './application/project/SetPublicIndexing.js';
+import { EnsureProjectAppRepo } from './application/project/EnsureProjectAppRepo.js';
 import { GetPublicBoard } from './application/project/GetPublicBoard.js';
 import { GetPublicTaskDetail } from './application/project/GetPublicTaskDetail.js';
 import { GetPublicTaskAccess } from './application/project/GetPublicTaskAccess.js';
 import { GetPublicAttachment } from './application/project/GetPublicAttachment.js';
+import { FileSystemSiteArtifactStorage } from './infrastructure/storage/FileSystemSiteArtifactStorage.js';
+import { DrizzleSiteArtifactRepository } from './infrastructure/repositories/DrizzleSiteArtifactRepository.js';
+import { PublishSiteArtifact } from './application/site/PublishSiteArtifact.js';
+import { GetProjectSite } from './application/site/GetProjectSite.js';
 import { ReorderProjects } from './application/project/ReorderProjects.js';
 import { ToggleProjectFavorite } from './application/project/ToggleProjectFavorite.js';
 import { ReorderFavoriteProjects } from './application/project/ReorderFavoriteProjects.js';
@@ -836,6 +841,16 @@ console.log(`[projectsflow] attachments dir: ${uploadsDir}`);
 const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024; // 100 MB. Любой тип файла (валидация = размер).
 const MAX_COVER_BYTES = 20 * 1024 * 1024; // 20 MB. Обложка проекта — только картинки (jpg/png/webp/gif).
 
+// --- Задеплоенные статические сайты проектов (self-serve воркер-раннер, db/098) ---
+// SITE_ARTIFACTS_DIR в prod — вне tarball'а деплоя (переживает релизы). Поддомен собранного
+// результата: <slug>.<SITE_BASE_DOMAIN>.
+const siteArtifactsDir = resolvePath(process.env['SITE_ARTIFACTS_DIR'] ?? 'site-artifacts');
+const siteArtifactStorage = new FileSystemSiteArtifactStorage(siteArtifactsDir);
+const siteArtifactRepo = new DrizzleSiteArtifactRepository(db);
+const SITE_BASE_DOMAIN = process.env['SITE_BASE_DOMAIN'] ?? 'projectsflow.ru';
+const MAX_SITE_BYTES = 25 * 1024 * 1024; // 25 MB на файл собранного сайта.
+console.log(`[projectsflow] site artifacts dir: ${siteArtifactsDir}`);
+
 // --- file-sync (PF Desktop Companion, миграция db/044) ---
 const syncBlobsDir = resolvePath(process.env['SYNC_BLOBS_DIR'] ?? 'sync-blobs');
 const blobStorage = new FileSystemBlobStorage(syncBlobsDir);
@@ -1305,6 +1320,17 @@ const { app, devProxyUpgrade } = createApp({
     publishProject: new PublishProject({ projects: projectRepo, members: projectMemberRepo }),
     unpublishProject: new UnpublishProject({ projects: projectRepo, members: projectMemberRepo }),
     setPublicIndexing: new SetPublicIndexing({ projects: projectRepo, members: projectMemberRepo }),
+    ensureAppRepo: new EnsureProjectAppRepo({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tokens: githubTokenRepo,
+      api: githubApi,
+    }),
+    getProjectSite: new GetProjectSite({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      sites: siteArtifactRepo,
+    }),
     deleteProject: new DeleteProject({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -1506,6 +1532,18 @@ const { app, devProxyUpgrade } = createApp({
     }),
     projects: projectRepo,
     coverStorage: attachmentStorage,
+  },
+  // Задеплоенные статические сайты проектов (self-serve воркер-раннер, db/098).
+  site: {
+    storage: siteArtifactStorage,
+    baseDomain: SITE_BASE_DOMAIN,
+    maxSiteBytes: MAX_SITE_BYTES,
+    publishSiteArtifact: new PublishSiteArtifact({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      sites: siteArtifactRepo,
+      storage: siteArtifactStorage,
+    }),
   },
   search: {
     searchTasks: new SearchTasks({ search: taskSearchRepo }),

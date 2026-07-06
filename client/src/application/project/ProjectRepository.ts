@@ -128,6 +128,11 @@ export interface ProjectRepository {
   publish(projectId: string): Promise<{ slug: string; url: string }>;
   unpublish(projectId: string): Promise<void>;
   setPublicIndexing(projectId: string, indexing: boolean): Promise<void>;
+  // Создать/привязать GitHub-репо приложения проекта (self-serve воркер-раннер, M1). Owner-only.
+  // Требует привязанный GitHub (иначе сервер вернёт 409 github_not_connected).
+  ensureAppRepo(projectId: string): Promise<{ appRepoFullName: string }>;
+  // Метаданные задеплоенного статического сайта проекта (M3). null — ещё не деплоился.
+  getProjectSite(projectId: string): Promise<{ slug: string; publishedAt: string } | null>;
   // v0.15: per-member opt-in. GET возвращает `mine` (статус caller'а) + `all`
   // (полный список членов, только для owner-а). PUT включает/выключает ОДНУ
   // делегацию: без granterUserId — caller's own, с granterUserId — admin-on-behalf.

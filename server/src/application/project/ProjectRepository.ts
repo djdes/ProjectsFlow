@@ -26,6 +26,8 @@ export type UpdateProjectInput = {
   readonly description?: string | null;
   readonly coverUrl?: string | null;
   readonly coverPosition?: number;
+  // GitHub-репо приложения проекта (db/097). Ставится EnsureProjectAppRepo.
+  readonly appRepoFullName?: string | null;
 };
 
 // Multi-tenancy: проверка доступа НЕ внутри ProjectRepository — она в use-case'ах через

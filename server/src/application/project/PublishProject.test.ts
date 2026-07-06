@@ -29,6 +29,7 @@ function makeProject(over: Partial<Project> = {}): Project {
     publicSlug: null,
     isPublic: false,
     publicIndexing: false,
+    appRepoFullName: null,
     createdAt: new Date('2026-01-01'),
     ...over,
   };

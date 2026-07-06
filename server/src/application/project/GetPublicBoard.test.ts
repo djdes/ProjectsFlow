@@ -13,6 +13,7 @@ function makeProject(over: Partial<Project> = {}): Project {
     dispatcherUserId: null, multiTaskWorker: false, isInbox: false,
     description: 'desc', coverUrl: 'gradient:sky', coverPosition: 50,
     publicSlug: 'cookie-opinion-k3f9q2', isPublic: true, publicIndexing: false,
+    appRepoFullName: null,
     createdAt: new Date('2026-01-01'),
     ...over,
   };

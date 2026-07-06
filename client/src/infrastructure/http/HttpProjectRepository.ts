@@ -61,6 +61,7 @@ type ProjectDto = {
   publicSlug?: string | null;
   isPublic?: boolean;
   publicIndexing?: boolean;
+  appRepoFullName?: string | null;
   createdAt: string;
 };
 
@@ -90,6 +91,7 @@ function fromDto(dto: ProjectDto): Project {
     publicSlug: dto.publicSlug ?? null,
     isPublic: dto.isPublic ?? false,
     publicIndexing: dto.publicIndexing ?? false,
+    appRepoFullName: dto.appRepoFullName ?? null,
     createdAt: new Date(dto.createdAt),
   };
 }
@@ -268,6 +270,17 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async setPublicIndexing(projectId: string, indexing: boolean): Promise<void> {
     await httpClient.patch<void>(`/projects/${projectId}/publish`, { indexing });
+  }
+
+  async ensureAppRepo(projectId: string): Promise<{ appRepoFullName: string }> {
+    return httpClient.post<{ appRepoFullName: string }>(`/projects/${projectId}/app-repo`);
+  }
+
+  async getProjectSite(projectId: string): Promise<{ slug: string; publishedAt: string } | null> {
+    const { site } = await httpClient.get<{ site: { slug: string; publishedAt: string } | null }>(
+      `/projects/${projectId}/site`,
+    );
+    return site;
   }
 
   async getGitTokenDelegation(projectId: string): Promise<GitTokenDelegationStatus> {

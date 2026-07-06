@@ -258,6 +258,8 @@ export const projects = mysqlTable(
     isPublic: boolean('is_public').notNull().default(false),
     publicIndexing: boolean('public_indexing').notNull().default(false),
     publishedAt: timestamp('published_at'),
+    // GitHub-репо приложения проекта (self-serve воркер-раннер, db/097). "owner/repo".
+    appRepoFullName: varchar('app_repo_full_name', { length: 255 }),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -271,6 +273,21 @@ export const projects = mysqlTable(
     // Уникальность + lookup по slug для анонимного публичного роута. См. db/096.
     uniqueIndex('uq_projects_public_slug').on(t.publicSlug),
   ],
+);
+
+// Задеплоенный статический результат проекта (self-serve воркер-раннер, db/098). Одна строка
+// на проект. slug — отдельный поддомен, независимый от public_slug доски. См. spec 2026-07-06.
+export const siteArtifacts = mysqlTable(
+  'site_artifacts',
+  {
+    projectId: char('project_id', { length: 36 }).notNull().primaryKey(),
+    slug: varchar('slug', { length: 64 }).notNull(),
+    fileCount: int('file_count').notNull().default(0),
+    bytes: bigint('bytes', { mode: 'number' }).notNull().default(0),
+    publishedAt: timestamp('published_at').notNull().defaultNow(),
+    createdAt: createdAtCol(),
+  },
+  (t) => [uniqueIndex('uq_site_artifacts_slug').on(t.slug)],
 );
 
 // Пространства (workspaces): верхнеуровневый изолированный контейнер над проектами. См. db/073.

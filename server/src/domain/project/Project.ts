@@ -42,5 +42,8 @@ export type Project = {
   readonly publicSlug: string | null;
   readonly isPublic: boolean;
   readonly publicIndexing: boolean;
+  // GitHub-репо приложения проекта (self-serve воркер-раннер, db/097). "owner/repo" куда
+  // воркер пишет код; NULL = ещё не создан (GitHub не привязан / не инициализировали).
+  readonly appRepoFullName: string | null;
   readonly createdAt: Date;
 };

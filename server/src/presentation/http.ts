@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Express, type Request } from 'express';
@@ -23,6 +23,7 @@ import type { DeleteProject } from '../application/project/DeleteProject.js';
 import type { PublishProject } from '../application/project/PublishProject.js';
 import type { UnpublishProject } from '../application/project/UnpublishProject.js';
 import type { SetPublicIndexing } from '../application/project/SetPublicIndexing.js';
+import type { EnsureProjectAppRepo } from '../application/project/EnsureProjectAppRepo.js';
 import type { GetPublicBoard } from '../application/project/GetPublicBoard.js';
 import type { GetPublicTaskDetail } from '../application/project/GetPublicTaskDetail.js';
 import type { GetPublicTaskAccess } from '../application/project/GetPublicTaskAccess.js';
@@ -209,6 +210,10 @@ import { fileSyncRouter } from './file-sync/routes.js';
 import type { FileSyncService } from '../application/file-sync/FileSyncService.js';
 import { liveAgentRouter } from './live/agentRoutes.js';
 import { liveUserRouter } from './live/routes.js';
+import { siteAgentRouter } from './site/agentRoutes.js';
+import type { PublishSiteArtifact } from '../application/site/PublishSiteArtifact.js';
+import type { GetProjectSite } from '../application/site/GetProjectSite.js';
+import type { SiteArtifactStorage } from '../application/site/SiteArtifactStorage.js';
 import type { LiveService } from '../application/live/LiveService.js';
 import type { LiveEventHub } from '../infrastructure/realtime/LiveEventHub.js';
 import { chatRouter, type ChatRouterDeps } from './chat/routes.js';
@@ -266,6 +271,13 @@ type AppDeps = {
     readonly service: LiveService;
     readonly liveEventHub: LiveEventHub;
   };
+  // Задеплоенные статические сайты проектов (self-serve воркер-раннер, db/098).
+  readonly site: {
+    readonly storage: SiteArtifactStorage;
+    readonly baseDomain: string;
+    readonly maxSiteBytes: number;
+    readonly publishSiteArtifact: PublishSiteArtifact;
+  };
   readonly chat: ChatRouterDeps;
   readonly projects: {
     readonly listProjects: ListProjects;
@@ -276,6 +288,8 @@ type AppDeps = {
     readonly publishProject: PublishProject;
     readonly unpublishProject: UnpublishProject;
     readonly setPublicIndexing: SetPublicIndexing;
+    readonly ensureAppRepo: EnsureProjectAppRepo;
+    readonly getProjectSite: GetProjectSite;
     readonly setProjectDispatcher: SetProjectDispatcher;
     readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
     readonly listDispatcherCandidates: ListDispatcherCandidates;
@@ -851,6 +865,16 @@ export function createApp(deps: AppDeps): CreatedApp {
       authenticate: deps.agent.authenticateAgentToken,
     }),
   );
+  // Приём собранного статического сайта от диспетчера (Bearer agent-token). См. db/098.
+  app.use(
+    '/api/agent',
+    siteAgentRouter({
+      publishSiteArtifact: deps.site.publishSiteArtifact,
+      authenticate: deps.agent.authenticateAgentToken,
+      baseDomain: deps.site.baseDomain,
+      maxSiteBytes: deps.site.maxSiteBytes,
+    }),
+  );
 
   // AI-prompt-improvement (site-side, session-cookie auth): см. spec
   // 2026-05-28-ai-prompt-improvement-design.md. POST /api/ai/prompt-jobs + GET с long-poll.
@@ -932,6 +956,45 @@ export function createApp(deps: AppDeps): CreatedApp {
   // Лендинг — всегда статика (когда landing/dist есть). Лежит ДО SPA-static, чтобы
   // его _astro/* ассеты резолвились первыми (у SPA в /assets/* — не конфликтует, но
   // index.html шлёт лендинговский путь к чанкам).
+  // Host-роутинг: <slug>.<baseDomain> отдаёт задеплоенный статический сайт проекта из
+  // SITE_ARTIFACTS_DIR (self-serve воркер-раннер, db/098). Ставим ДО landing/SPA-статики.
+  // Корневой домен и служебные сабдомены (www/api/app) → обычный роутинг (next()).
+  {
+    const siteBase = deps.site.baseDomain;
+    const RESERVED_SUB = new Set(['www', 'api', 'app']);
+    app.use((req, res, next) => {
+      const host = req.hostname;
+      if (host === siteBase || !host.endsWith(`.${siteBase}`)) return next();
+      const label = host.slice(0, host.length - siteBase.length - 1);
+      if (!label || label.includes('.') || RESERVED_SUB.has(label) || !/^[a-z0-9-]+$/.test(label)) {
+        return next();
+      }
+      let dir: string;
+      try {
+        dir = deps.site.storage.siteDir(label);
+      } catch {
+        return next();
+      }
+      if (!existsSync(dir)) {
+        res
+          .status(404)
+          .type('html')
+          .send('<!doctype html><meta charset="utf-8"><title>Сайт не найден</title><p>Этот сайт ещё не опубликован.</p>');
+        return;
+      }
+      const rel = req.path.replace(/^\/+/, '') || 'index.html';
+      const abs = resolve(dir, rel);
+      const root = resolve(dir);
+      const inside = abs === root || abs.startsWith(root + sep);
+      const target = inside && existsSync(abs) && statSync(abs).isFile() ? abs : resolve(dir, 'index.html');
+      if (!existsSync(target)) {
+        res.status(404).type('html').send('<!doctype html><meta charset="utf-8"><title>Сайт не найден</title>');
+        return;
+      }
+      res.sendFile(target);
+    });
+  }
+
   if (hasLanding) app.use(express.static(landingDist, { index: false }));
   // SPA static — только в prod (в dev статика приходит из Vite).
   if (!isDev && hasClient) app.use(express.static(clientDist, { index: false }));

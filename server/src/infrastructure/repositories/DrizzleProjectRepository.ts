@@ -48,6 +48,7 @@ function toProject(row: ProjectRow): Project {
     publicSlug: row.publicSlug ?? null,
     isPublic: row.isPublic,
     publicIndexing: row.publicIndexing,
+    appRepoFullName: row.appRepoFullName ?? null,
     createdAt: row.createdAt,
   };
 }
@@ -134,7 +135,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
   async update(id: string, patch: UpdateProjectInput): Promise<Project | null> {
     // Собираем set-объект только из реально переданных полей.
     // undefined = поле не указано клиентом (не трогаем), null = очистить.
-    const set: Partial<Pick<ProjectRow, 'name' | 'icon' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker' | 'status' | 'description' | 'coverUrl' | 'coverPosition'>> = {};
+    const set: Partial<Pick<ProjectRow, 'name' | 'icon' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker' | 'status' | 'description' | 'coverUrl' | 'coverPosition' | 'appRepoFullName'>> = {};
     if (patch.name !== undefined) set.name = patch.name;
     if (patch.icon !== undefined) set.icon = patch.icon;
     if (patch.gitRepoUrl !== undefined) set.gitRepoUrl = patch.gitRepoUrl;
@@ -147,6 +148,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
     if (patch.description !== undefined) set.description = patch.description;
     if (patch.coverUrl !== undefined) set.coverUrl = patch.coverUrl;
     if (patch.coverPosition !== undefined) set.coverPosition = patch.coverPosition;
+    if (patch.appRepoFullName !== undefined) set.appRepoFullName = patch.appRepoFullName;
 
     if (Object.keys(set).length > 0) {
       try {
