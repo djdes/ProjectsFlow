@@ -25,6 +25,11 @@ type ViewMode = 'kanban' | 'list';
 const VIEW_STORAGE_KEY = 'inbox.view-mode';
 const HIDE_DONE_STORAGE_KEY = 'inbox.hide-done';
 
+// Full-bleed канбана — те же значения, что и на доске проекта (px-6/14/24): ряд колонок
+// выносится за паддинг страницы, отступы от краёв совпадают с проектами.
+const KANBAN_BLEED_NEG = '-mx-6 sm:-mx-14 lg:-mx-24';
+const KANBAN_BLEED_PAD = 'pl-6 sm:pl-14 lg:pl-24';
+
 function loadViewMode(): ViewMode {
   if (typeof window === 'undefined') return 'kanban';
   const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
@@ -135,8 +140,14 @@ export function InboxPage(): React.ReactElement {
       </div>
 
       {/* Тело страницы: комфортные отступы ПОД строкой крошек. На мобиле крошек нет —
-          даём небольшой верхний отступ, чтобы заголовок не липнул к краю. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-3 pb-3 pt-2 sm:gap-4 sm:px-5 sm:pb-6 sm:pt-1">
+          даём небольшой верхний отступ, чтобы заголовок не липнул к краю. В kanban-режиме
+          отступы по краям — как на доске проекта (px-6/14/24). */}
+      <div
+        className={cn(
+          'flex min-h-0 flex-1 flex-col gap-1.5 pb-3 pt-2 sm:gap-4 sm:pb-6 sm:pt-1',
+          view === 'kanban' ? 'px-6 sm:px-14 lg:px-24' : 'px-3 sm:px-5',
+        )}
+      >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <AnimatedInbox active className="size-5 text-primary" />
@@ -148,7 +159,12 @@ export function InboxPage(): React.ReactElement {
         </div>
       </div>
 
-      <AssignedToMeBlock onChanged={() => setRefetchKey((k) => k + 1)} />
+      <AssignedToMeBlock
+        onChanged={() => setRefetchKey((k) => k + 1)}
+        view={view}
+        bleedNegClass={view === 'kanban' ? KANBAN_BLEED_NEG : ''}
+        bleedPadClass={view === 'kanban' ? KANBAN_BLEED_PAD : ''}
+      />
 
       {/* Мягкое появление списка/доски при входе на страницу — fadeInUp, гейтится
           useMotion(). При выключенных анимациях initial={false} → мгновенно, без
@@ -161,7 +177,14 @@ export function InboxPage(): React.ReactElement {
         animate="visible"
       >
         {view === 'kanban' ? (
-          <KanbanBoard key={refetchKey} projectId={project.id} showCommits={false} hideDone={hideDone} />
+          <KanbanBoard
+            key={refetchKey}
+            projectId={project.id}
+            showCommits={false}
+            hideDone={hideDone}
+            bleedNegClass={KANBAN_BLEED_NEG}
+            bleedPadClass={KANBAN_BLEED_PAD}
+          />
         ) : (
           <TaskListView key={refetchKey} projectId={project.id} showCommits={false} hideDone={hideDone} />
         )}
