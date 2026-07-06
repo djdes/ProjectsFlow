@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { taskVersions, type TaskVersionRow } from '../db/schema.js';
 import type { TaskSnapshot, TaskVersion } from '../../domain/task/TaskVersion.js';
@@ -49,5 +49,14 @@ export class DrizzleTaskVersionRepository implements TaskVersionRepository {
   async getById(id: string): Promise<TaskVersion | null> {
     const rows = await this.db.select().from(taskVersions).where(eq(taskVersions.id, id)).limit(1);
     return rows[0] ? toVersion(rows[0]) : null;
+  }
+
+  async taskIdsWithVersions(taskIds: readonly string[]): Promise<Set<string>> {
+    if (taskIds.length === 0) return new Set();
+    const rows = await this.db
+      .selectDistinct({ taskId: taskVersions.taskId })
+      .from(taskVersions)
+      .where(inArray(taskVersions.taskId, [...taskIds]));
+    return new Set(rows.map((r) => r.taskId));
   }
 }

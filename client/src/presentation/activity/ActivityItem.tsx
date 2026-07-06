@@ -237,8 +237,12 @@ export function ActivityItem({
   const { user } = useCurrentUser();
   const actor = item.actorDisplayName ?? 'Кто-то';
   const isYou = !!user?.id && item.actorUserId === user.id;
+  // Кнопку истории версий показываем ТОЛЬКО когда у задачи реально есть версии (hasVersions
+  // с сервера) — иначе часы-иконка вела бы в пустое окно «Версий пока нет».
   const versionTaskId =
-    onOpenVersions && TASK_KINDS.has(item.kind) ? (item.payload?.taskId ?? null) : null;
+    onOpenVersions && TASK_KINDS.has(item.kind) && item.hasVersions
+      ? (item.payload?.taskId ?? null)
+      : null;
   const taskId = item.payload?.taskId ?? null;
   // Название задачи / блок изменения ведут на страницу задачи (при hl= — с подсветкой поля);
   // имя проекта — на доску проекта. Сам глагол/имя автора остаются обычным текстом (выделяется).

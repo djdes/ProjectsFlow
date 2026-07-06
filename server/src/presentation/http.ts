@@ -82,6 +82,7 @@ import type { DeleteKbDocument } from '../application/kb/DeleteKbDocument.js';
 import type { BulkCreateCredential } from '../application/kb/BulkCreateCredential.js';
 import type { ListTasks } from '../application/task/ListTasks.js';
 import type { AttachmentStorage } from '../application/task/AttachmentStorage.js';
+import type { TaskVersionRepository } from '../application/task/TaskVersionRepository.js';
 import type { ExportTasksDigest } from '../application/task/ExportTasksDigest.js';
 import type { GetDigestSettings } from '../application/digest/GetDigestSettings.js';
 import type { SaveDigestSettings } from '../application/digest/SaveDigestSettings.js';
@@ -337,6 +338,7 @@ type AppDeps = {
     readonly getFeed: GetActivityFeed;
     readonly workspaces: WorkspaceRepository;
     readonly users: UserRepository;
+    readonly taskVersions: TaskVersionRepository;
   };
   readonly invites: {
     readonly getByToken: GetInviteByToken;
@@ -634,6 +636,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       getFeed: deps.activity.getFeed,
       workspaces: deps.activity.workspaces,
       users: deps.activity.users,
+      taskVersions: deps.activity.taskVersions,
     }),
   );
   // Чат пространства — тот же префикс, подпути /:workspaceId/chat/... (не пересекаются с workspaces).

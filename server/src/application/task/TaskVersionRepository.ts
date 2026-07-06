@@ -13,4 +13,6 @@ export interface TaskVersionRepository {
   /** Версии задачи, новые → старые. */
   listForTask(taskId: string): Promise<TaskVersion[]>;
   getById(id: string): Promise<TaskVersion | null>;
+  /** Из переданных taskId — те, у которых есть хотя бы одна версия (для гейта кнопки истории). */
+  taskIdsWithVersions(taskIds: readonly string[]): Promise<Set<string>>;
 }

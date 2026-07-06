@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { GetActivityFeed } from '../../application/activity/GetActivityFeed.js';
 import type { WorkspaceRepository } from '../../application/workspace/WorkspaceRepository.js';
 import type { UserRepository } from '../../application/user/UserRepository.js';
+import type { TaskVersionRepository } from '../../application/task/TaskVersionRepository.js';
 import type { Notification } from '../../domain/notifications/Notification.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requireWorkspaceMember } from '../../application/workspace/workspaceAccess.js';
@@ -11,6 +12,7 @@ type Deps = {
   readonly getFeed: GetActivityFeed;
   readonly workspaces: WorkspaceRepository;
   readonly users: UserRepository;
+  readonly taskVersions: TaskVersionRepository;
 };
 
 const querySchema = z.object({
@@ -56,6 +58,16 @@ export function activityFeedRouter(deps: Deps): Router {
       const users = userIds.size > 0 ? await deps.users.getManyByIds([...userIds]) : [];
       const byId = new Map(users.map((u) => [u.id, u]));
 
+      // Кнопка «История версий» на событии должна появляться ТОЛЬКО если у задачи реально есть
+      // версии (старые задачи до фичи версий их не имеют). Собираем taskId'ы событий и одним
+      // запросом узнаём, у каких из них есть снимки — клиент по hasVersions решает, рисовать ли часы.
+      const taskIds = new Set<string>();
+      for (const it of items) {
+        if (it.type === 'activity' && it.event.payload?.taskId) taskIds.add(it.event.payload.taskId);
+      }
+      const withVersions =
+        taskIds.size > 0 ? await deps.taskVersions.taskIdsWithVersions([...taskIds]) : new Set<string>();
+
       const dto = items.map((it) => {
         if (it.type === 'notification') {
           return {
@@ -78,6 +90,7 @@ export function activityFeedRouter(deps: Deps): Router {
           actorAvatarUrl: actor?.avatarUrl ?? null,
           targetDisplayName: target?.displayName ?? null,
           payload: e.payload,
+          hasVersions: !!e.payload?.taskId && withVersions.has(e.payload.taskId),
         };
       });
 

@@ -23,6 +23,7 @@ type ActivityDto = {
   actorAvatarUrl: string | null;
   targetDisplayName: string | null;
   payload: ActivityPayload | null;
+  hasVersions?: boolean;
 };
 
 type NotificationDto = {
@@ -66,6 +67,7 @@ function fromDto(dto: FeedItemDto): FeedItem {
     actorAvatarUrl: dto.actorAvatarUrl,
     targetDisplayName: dto.targetDisplayName,
     payload: dto.payload,
+    hasVersions: dto.hasVersions ?? false,
   };
   return item;
 }

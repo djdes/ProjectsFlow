@@ -46,6 +46,8 @@ export type ActivityEventItem = {
   readonly actorAvatarUrl: string | null;
   readonly targetDisplayName: string | null;
   readonly payload: ActivityPayload | null;
+  // Есть ли у задачи события хоть одна сохранённая версия — гейт для кнопки «История версий».
+  readonly hasVersions?: boolean;
 };
 
 // Адресное уведомление (делегирование/инвайт/упоминание) — переиспользует существующий тип.

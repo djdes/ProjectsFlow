@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Clock, Loader2, Lock } from 'lucide-react';
+import { Bot, CalendarClock, CircleDot, Clock, Flag, Loader2, Lock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
@@ -7,39 +7,75 @@ import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useUpgradeDialog } from '@/presentation/usage/UpgradeDialogProvider';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
+import { PropertyRow } from './PropertyRow';
+import { RalphModeBadge } from './RalphMode';
+import { PriorityBadge } from './PriorityBadge';
+import { DeadlineBadge } from './DeadlineBadge';
+import { Markdown } from '@/presentation/components/markdown/Markdown';
 import type { TaskStatus } from '@/domain/task/Task';
 import type { TaskSnapshot, TaskVersionsResult } from '@/domain/task/TaskVersion';
 
-const PRIORITY_LABEL: Record<number, string> = { 1: 'Срочный', 2: 'Высокий', 3: 'Средний', 4: 'Низкий' };
+// Цвета статус-пилюли — как в шапке задачи (зеркало STATUS_BADGE_COLOR из TaskDrawer),
+// чтобы превью версии выглядело один-в-один со «своим» окном задачи.
+const STATUS_BADGE_COLOR: Record<TaskStatus, string> = {
+  backlog: 'bg-stone-500/15 text-stone-600 dark:bg-stone-500/20 dark:text-stone-300',
+  manual: 'bg-yellow-500/15 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300',
+  todo: 'bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
+  in_progress: 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400',
+  awaiting_clarification: 'bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
+  done: 'bg-green-500/15 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+};
 
 function fmtDateTime(d: Date): string {
   return d.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-// Превью выбранной версии: заголовок (1-я строка описания) + свойства + тело.
+// Превью выбранной версии — один-в-один как «своё» окно задачи (там, где произошло
+// изменение): крупный заголовок, ряды свойств с иконками (как в окне редактирования) и
+// тело, отрендеренное через Markdown (картинки/чеклисты/форматирование — не сырой текст).
 function VersionPreview({ snapshot }: { snapshot: TaskSnapshot }): React.ReactElement {
   const desc = snapshot.description ?? '';
   const nl = desc.indexOf('\n');
   const title = (nl === -1 ? desc : desc.slice(0, nl)).trim() || 'Без названия';
   const body = nl === -1 ? '' : desc.slice(nl + 1).trim();
-  const rows: Array<[string, string]> = [
-    ['Статус', STATUS_LABEL[snapshot.status as TaskStatus] ?? snapshot.status],
-    ['Приоритет', snapshot.priority != null ? (PRIORITY_LABEL[snapshot.priority] ?? String(snapshot.priority)) : '—'],
-    ['Дедлайн', snapshot.deadline ?? '—'],
-    ['Режим', snapshot.ralphMode],
-  ];
+  const status = snapshot.status as TaskStatus;
   return (
-    <div className="space-y-4">
-      <h3 className="text-xl font-semibold">{title}</h3>
-      <dl className="space-y-1.5">
-        {rows.map(([k, v]) => (
-          <div key={k} className="flex gap-3 text-sm">
-            <dt className="w-24 shrink-0 text-muted-foreground">{k}</dt>
-            <dd className="min-w-0 flex-1">{v}</dd>
-          </div>
-        ))}
-      </dl>
-      {body && <p className="whitespace-pre-wrap border-t pt-3 text-sm leading-relaxed">{body}</p>}
+    <div className="mx-auto max-w-2xl">
+      <h3 className="mb-4 text-[1.75rem] font-bold leading-tight tracking-tight">{title}</h3>
+      <div className="mb-2 space-y-0.5">
+        <PropertyRow icon={CircleDot} label="Статус">
+          <span
+            className={cn(
+              'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium',
+              STATUS_BADGE_COLOR[status] ?? 'bg-muted text-muted-foreground',
+            )}
+          >
+            {STATUS_LABEL[status] ?? snapshot.status}
+          </span>
+        </PropertyRow>
+        <PropertyRow icon={Flag} label="Приоритет">
+          {snapshot.priority != null ? (
+            <PriorityBadge priority={snapshot.priority} />
+          ) : (
+            <span className="text-sm text-muted-foreground/70">Без приоритета</span>
+          )}
+        </PropertyRow>
+        <PropertyRow icon={CalendarClock} label="Дедлайн">
+          {snapshot.deadline ? (
+            <DeadlineBadge deadline={snapshot.deadline} status={status} />
+          ) : (
+            <span className="text-sm text-muted-foreground/70">Без срока</span>
+          )}
+        </PropertyRow>
+        <PropertyRow icon={Bot} label="Режим">
+          <RalphModeBadge mode={snapshot.ralphMode} />
+        </PropertyRow>
+      </div>
+      {body && (
+        <div className="border-t pt-3">
+          <Markdown>{body}</Markdown>
+        </div>
+      )}
     </div>
   );
 }
@@ -112,13 +148,13 @@ export function TaskVersionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[80vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex h-[88vh] w-[95vw] max-w-6xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b px-5 py-3">
           <DialogTitle>История версий</DialogTitle>
         </DialogHeader>
         <div className="flex min-h-0 flex-1">
-          {/* Превью выбранной версии */}
-          <div className="min-w-0 flex-1 overflow-y-auto p-6">
+          {/* Превью выбранной версии — просторная колонка с отступами, как в окне задачи. */}
+          <div className="min-w-0 flex-1 overflow-y-auto px-8 py-8 sm:px-12">
             {loading ? (
               <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" /> Загрузка…

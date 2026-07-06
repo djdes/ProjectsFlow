@@ -1458,6 +1458,7 @@ const { app, devProxyUpgrade } = createApp({
     getFeed: getActivityFeed,
     workspaces: workspaceRepo,
     users: userRepo,
+    taskVersions: taskVersionRepo,
   },
   notifications: {
     list: new ListNotifications({ repo: notificationRepo }),
