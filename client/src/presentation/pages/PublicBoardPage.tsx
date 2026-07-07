@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { splitTitleBody } from '@/lib/taskTitleBody';
+import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
 import {
   Check,
   Copy,
@@ -13,7 +15,6 @@ import {
   Search,
   Share,
   Twitter,
-  X,
 } from 'lucide-react';
 import { coverStyle } from '@/presentation/components/project/coverGallery';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
@@ -235,70 +236,151 @@ function MoreMenu({ onReport }: { onReport: () => void }): React.ReactElement {
   );
 }
 
-// Верхняя полоса публичной доски — реплика Notion: слева иконка+имя (или поиск),
-// справа: Поиск / Поделиться / Дублировать / «…» / CTA-кнопка.
-function PublicTopBar({
+// Модальный поиск по доске (как в Notion): поле → список задач + превью справа.
+function SearchModal({
+  open,
+  onOpenChange,
   board,
-  slug,
-  query,
-  onQuery,
+  onOpenTask,
 }: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
   board: PublicBoard | null;
-  slug: string;
-  query: string;
-  onQuery: (v: string) => void;
+  onOpenTask: (taskId: string) => void;
 }): React.ReactElement {
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [reportOpen, setReportOpen] = useState(false);
-  const searchRef = useRef<HTMLInputElement>(null);
-  const shareUrl = slug ? publicBoardUrl(slug) : window.location.href;
-  const registerHref = `${appOrigin()}/register`;
+  const [q, setQ] = useState('');
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const allTasks = useMemo(() => board?.columns.flatMap((c) => c.tasks) ?? [], [board]);
+  const results = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    return query ? allTasks.filter((t) => (t.description ?? '').toLowerCase().includes(query)) : allTasks;
+  }, [allTasks, q]);
+  const active = results.find((t) => t.id === hoverId) ?? results[0] ?? null;
 
-  const openSearch = (): void => {
-    setSearchOpen(true);
-    setTimeout(() => searchRef.current?.focus(), 0);
-  };
-  const closeSearch = (): void => {
-    setSearchOpen(false);
-    onQuery('');
+  useEffect(() => {
+    if (!open) setQ('');
+  }, [open]);
+
+  const pick = (id: string): void => {
+    onOpenTask(id);
+    onOpenChange(false);
   };
 
   return (
-    <div className="flex h-11 items-center justify-between gap-2 border-b border-black/[0.06] px-3 dark:border-white/[0.06]">
-      {searchOpen ? (
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0">
+        <div className="flex items-center gap-2.5 border-b px-4 py-3">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
-            ref={searchRef}
-            value={query}
-            onChange={(e) => onQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && closeSearch()}
-            placeholder="Поиск по доске…"
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={`Поиск в «${board?.name ?? 'доске'}»…`}
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
           />
-          <TopIconButton label="Закрыть поиск" onClick={closeSearch}>
-            <X className="size-4" />
-          </TopIconButton>
         </div>
-      ) : (
-        <div className="flex min-w-0 items-center gap-1.5">
-          {board?.icon && (
-            <ProjectIconView icon={board.icon} pixelSize={18} className="shrink-0 text-lg leading-none" />
-          )}
-          <span className="truncate text-sm font-medium text-[#37352f]/80 dark:text-blue-100/80">
-            {board?.name ?? ''}
-          </span>
+        <div className="flex h-[min(60vh,26rem)]">
+          <div className="w-full overflow-y-auto border-r p-2 sm:w-1/2">
+            <p className="px-2 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+              Задачи
+            </p>
+            {results.length === 0 ? (
+              <p className="px-2 py-6 text-center text-sm text-muted-foreground">Ничего не найдено</p>
+            ) : (
+              results.map((t) => {
+                const { title } = splitTitleBody(t.description ?? '');
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onMouseEnter={() => setHoverId(t.id)}
+                    onClick={() => pick(t.id)}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+                      active?.id === t.id ? 'bg-accent' : 'hover:bg-accent/60',
+                    )}
+                  >
+                    {t.icon ? (
+                      <ProjectIconView icon={t.icon} pixelSize={16} className="shrink-0 text-base leading-none" />
+                    ) : (
+                      <span className="size-4 shrink-0" />
+                    )}
+                    <span className="min-w-0 flex-1 truncate">{title || 'Без названия'}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+          <div className="hidden w-1/2 p-3 sm:block">
+            {active ? (
+              <button
+                type="button"
+                onClick={() => pick(active.id)}
+                className="block w-full overflow-hidden rounded-lg border text-left transition-shadow hover:shadow-md"
+              >
+                <div
+                  className="h-16 w-full bg-muted"
+                  style={active.cover ? coverStyle(active.cover, active.coverPosition) : undefined}
+                  aria-hidden
+                />
+                <div className="p-3">
+                  {active.icon && (
+                    <ProjectIconView icon={active.icon} pixelSize={22} className="mb-1 text-xl leading-none" />
+                  )}
+                  <p className="font-semibold leading-snug">
+                    {splitTitleBody(active.description ?? '').title || 'Без названия'}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{STATUS_LABEL[active.status]}</p>
+                </div>
+              </button>
+            ) : (
+              <div className="grid h-full place-items-center text-sm text-muted-foreground">Выберите задачу</div>
+            )}
+          </div>
         </div>
-      )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Верхняя полоса публичной доски — реплика Notion: слева иконка+имя,
+// справа: Поиск (модалка) / Поделиться / Дублировать / «…» / CTA-кнопка.
+function PublicTopBar({
+  board,
+  slug,
+  onOpenTask,
+}: {
+  board: PublicBoard | null;
+  slug: string;
+  onOpenTask: (taskId: string) => void;
+}): React.ReactElement {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const shareUrl = slug ? publicBoardUrl(slug) : window.location.href;
+  const registerHref = `${appOrigin()}/register`;
+
+  return (
+    <div className="flex h-11 items-center justify-between gap-2 border-b border-black/[0.06] px-3 dark:border-white/[0.06]">
+      <div className="flex min-w-0 items-center gap-1.5">
+        {board?.icon && (
+          <ProjectIconView icon={board.icon} pixelSize={18} className="shrink-0 text-lg leading-none" />
+        )}
+        <span className="truncate text-sm font-medium text-[#37352f]/80 dark:text-blue-100/80">
+          {board?.name ?? ''}
+        </span>
+      </div>
 
       <div className="flex shrink-0 items-center gap-0.5">
-        {!searchOpen && (
-          <TopIconButton label="Поиск" onClick={openSearch}>
-            <Search className="size-4" />
-          </TopIconButton>
-        )}
+        <TopIconButton label="Поиск" onClick={() => setSearchOpen(true)}>
+          <Search className="size-4" />
+        </TopIconButton>
         <SharePopover board={board} url={shareUrl} />
-        <a href={registerHref} aria-label="Дублировать в свой ProjectsFlow" title="Дублировать в свой ProjectsFlow" className={TOP_ICON_CLS}>
+        <a
+          href={registerHref}
+          aria-label="Дублировать в свой ProjectsFlow"
+          title="Дублировать в свой ProjectsFlow"
+          className={TOP_ICON_CLS}
+        >
           <Copy className="size-4" />
         </a>
         <MoreMenu onReport={() => setReportOpen(true)} />
@@ -310,6 +392,7 @@ function PublicTopBar({
         </a>
       </div>
 
+      <SearchModal open={searchOpen} onOpenChange={setSearchOpen} board={board} onOpenTask={onOpenTask} />
       <ReportDialog open={reportOpen} onOpenChange={setReportOpen} url={shareUrl} />
     </div>
   );
@@ -344,11 +427,9 @@ function useDocumentTitle(title: string | null): void {
 function BoardView({
   board,
   onOpenTask,
-  query,
 }: {
   board: PublicBoard;
   onOpenTask: (taskId: string) => void;
-  query: string;
 }): React.ReactElement {
   return (
     <>
@@ -377,7 +458,7 @@ function BoardView({
 
         {/* Канбан. */}
         <div className="mt-8">
-          <PublicKanban columns={board.columns} onOpenTask={onOpenTask} query={query} />
+          <PublicKanban columns={board.columns} onOpenTask={onOpenTask} />
         </div>
       </div>
     </>
@@ -391,7 +472,6 @@ export function PublicBoardPage(): React.ReactElement {
   const slug = paramSlug ?? boardSlugFromHost() ?? '';
   const { status, board } = usePublicBoard(slug);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [query, setQuery] = useState('');
   const openTaskId = searchParams.get('task');
 
   useRobotsMeta(board ? board.indexing : null);
@@ -407,7 +487,7 @@ export function PublicBoardPage(): React.ReactElement {
   return (
     <div className="min-h-dvh bg-background pb-16">
       {/* Верхняя полоса — реплика публичной страницы Notion. */}
-      <PublicTopBar board={board} slug={slug} query={query} onQuery={setQuery} />
+      <PublicTopBar board={board} slug={slug} onOpenTask={openTask} />
 
       {status === 'loading' && (
         <div className="mx-auto max-w-5xl px-8 py-16">
@@ -431,7 +511,7 @@ export function PublicBoardPage(): React.ReactElement {
         </div>
       )}
 
-      {status === 'ready' && board && <BoardView board={board} onOpenTask={openTask} query={query} />}
+      {status === 'ready' && board && <BoardView board={board} onOpenTask={openTask} />}
 
       {/* Read-only окно задачи (открывается по ?task=<id>, шарится). */}
       {slug && openTaskId && (
