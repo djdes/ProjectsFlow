@@ -99,6 +99,7 @@ import { AiImproveButton } from '@/presentation/components/ai/AiImproveButton';
 import type { MentionMember, RichTextEditorHandle } from '@/presentation/components/editor/RichTextEditor';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
+import { TaskVersionsDialog } from './TaskVersionsDialog';
 
 // Tiptap-редактор грузим лениво — он тяжёлый и не нужен на read-heavy экранах,
 // которые не открывают drawer. Suspense-fallback держит высоту, чтобы layout не прыгал.
@@ -644,6 +645,8 @@ export function TaskDrawer({
   // проявляются ВМЕСТЕ при наведении на любую из них. Небольшая задержка ухода — чтобы переход
   // между зонами (через плашку) не гасил их. См. renderTopHoverControls + TaskHeaderMedia.
   const [topZoneHover, setTopZoneHover] = useState(false);
+  // Окно «История версий» этой задачи (открывается из меню ⋯). Только edit-mode.
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const topZoneTimer = useRef<number | undefined>(undefined);
   const enterTopZone = useCallback((): void => {
     if (topZoneTimer.current) window.clearTimeout(topZoneTimer.current);
@@ -1777,8 +1780,18 @@ export function TaskDrawer({
           >
             <Link2 className="text-muted-foreground" /> Копировать ссылку
           </DropdownMenuItem>
+          {/* История версий — все изменения этой задачи (снимки на create/update/move/restore). */}
+          <DropdownMenuItem onSelect={() => setVersionsOpen(true)}>
+            <Clock className="text-muted-foreground" /> История версий
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <TaskVersionsDialog
+        projectId={task.projectId}
+        taskId={task.id}
+        open={versionsOpen}
+        onOpenChange={setVersionsOpen}
+      />
     </>
   ) : null;
 

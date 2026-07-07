@@ -288,30 +288,35 @@ export function ActivityItem({
         </Tooltip>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <p className="min-w-0 select-text text-sm leading-snug">
+          <div className="flex items-start gap-2">
+            <p className="min-w-0 flex-1 select-text text-sm leading-snug">
               {renderText(item, { openTask: () => openTask(), openProject })}
             </p>
-            {versionTaskId && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenVersions?.(versionTaskId);
-                    }}
-                    aria-label="Посмотреть версию"
-                    className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    <Clock className="size-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="left" className="border-transparent bg-neutral-900 text-white">
-                  Посмотреть версию
-                </TooltipContent>
-              </Tooltip>
-            )}
+            {/* Правый слот ФИКСИРОВАННОЙ ширины под кнопку версии — резервируется всегда, чтобы
+                текст НИКОГДА не доходил до правого края (там кнопка), одинаково у всех сообщений
+                (как в Notion). Кнопка появляется, если у задачи есть версии; иначе слот пустой. */}
+            <div className="flex w-7 shrink-0 justify-end">
+              {versionTaskId && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenVersions?.(versionTaskId);
+                      }}
+                      aria-label="История версий"
+                      className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      <Clock className="size-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left" className="border-transparent bg-neutral-900 text-white">
+                    История версий
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
           </div>
           {/* Время — серым, чуть ниже; hover: точная дата/время до секунды (Notion-style). */}
           <Tooltip>
