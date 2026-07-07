@@ -17,6 +17,12 @@ export function publicBoardDisplayUrl(slug: string): string {
   return `${slug}.${BASE_DOMAIN}`;
 }
 
+// Origin приложения для ссылок «Войти» / «Создать» с публичной доски. На поддомене доски
+// ведём на апекс-домен (там живёт приложение); в dev/на апексе — на текущий origin.
+export function appOrigin(): string {
+  return boardSlugFromHost() ? `https://${BASE_DOMAIN}` : window.location.origin;
+}
+
 // Если текущий хост — поддомен доски (<slug>.projectsflow.ru), вернуть slug; иначе null
 // (апекс-домен / www / api / dev-localhost). На поддомене клиент рендерит публичную доску.
 export function boardSlugFromHost(host: string = window.location.host): string | null {
