@@ -215,13 +215,19 @@ function MoreMenu({ onReport }: { onReport: () => void }): React.ReactElement {
           <MoreHorizontal className="size-4" />
         </TopIconButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuItem onSelect={() => (window.location.href = `${appOrigin()}/login`)}>
-          <LogIn className="size-4" />
-          Войти или зарегистрироваться
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuItem
+          className="whitespace-nowrap"
+          onSelect={() => (window.location.href = `${appOrigin()}/login`)}
+        >
+          <LogIn className="size-4 shrink-0" />
+          Вход или регистрация
         </DropdownMenuItem>
-        <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => onReport()}>
-          <Flag className="size-4" />
+        <DropdownMenuItem
+          className="whitespace-nowrap text-destructive focus:text-destructive"
+          onSelect={() => onReport()}
+        >
+          <Flag className="size-4 shrink-0" />
           Пожаловаться
         </DropdownMenuItem>
       </DropdownMenuContent>
