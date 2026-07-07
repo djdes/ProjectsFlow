@@ -70,15 +70,27 @@ function PublicCard({
 export function PublicKanban({
   columns,
   onOpenTask,
+  query = '',
 }: {
   columns: PublicColumn[];
   onOpenTask: (taskId: string) => void;
+  // Поиск по доске (из верхней полосы): фильтрует карточки по тексту. Пусто = без фильтра.
+  query?: string;
 }): React.ReactElement {
-  const visible = columns.filter((c) => c.tasks.length > 0);
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? columns.map((c) => ({
+        ...c,
+        tasks: c.tasks.filter((t) => (t.description ?? '').toLowerCase().includes(q)),
+      }))
+    : columns;
+  const visible = filtered.filter((c) => c.tasks.length > 0);
 
   if (visible.length === 0) {
     return (
-      <p className="px-1 py-8 text-sm text-muted-foreground">В этом проекте пока нет задач.</p>
+      <p className="px-1 py-8 text-sm text-muted-foreground">
+        {q ? 'Ничего не найдено.' : 'В этом проекте пока нет задач.'}
+      </p>
     );
   }
 

@@ -1,12 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Check, Flag, LogIn, MoreHorizontal, Share2 } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  Facebook,
+  Flag,
+  Linkedin,
+  LogIn,
+  Mail,
+  MessageCircle,
+  MoreHorizontal,
+  Search,
+  Share,
+  Twitter,
+  X,
+} from 'lucide-react';
 import { coverStyle } from '@/presentation/components/project/coverGallery';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { usePublicBoard } from '@/presentation/hooks/usePublicBoard';
 import { appOrigin, boardSlugFromHost, publicBoardUrl } from '@/lib/publicBoardUrl';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,34 +33,52 @@ import type { PublicBoard } from '@/domain/public/PublicBoard';
 import { PublicKanban } from './PublicKanban';
 import { PublicTaskPanel } from './PublicTaskPanel';
 
-// Тихая icon-кнопка верхней полосы публичной доски.
+// Общий класс тихой icon-кнопки/ссылки верхней полосы.
+const TOP_ICON_CLS =
+  'grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.06]';
+
 function TopIconButton({
   label,
   children,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string }): React.ReactElement {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.06]"
-      {...props}
-    >
+    <button type="button" aria-label={label} title={label} className={TOP_ICON_CLS} {...props}>
       {children}
     </button>
   );
 }
 
-// «Поделиться»: копирование ссылки + шеринг в соцсети (как «Share site» в Notion).
-function SharePopover({ url, title }: { url: string; title: string }): React.ReactElement {
+// Мини-превью доски в поповере «Поделиться» (обложка + иконка + имя) — как карточка в Notion.
+function SharePreview({ board }: { board: PublicBoard | null }): React.ReactElement {
+  return (
+    <div className="overflow-hidden rounded-lg border bg-card">
+      <div
+        className="h-12 w-full bg-muted"
+        style={board?.coverUrl ? coverStyle(board.coverUrl, board.coverPosition) : undefined}
+        aria-hidden
+      />
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        {board?.icon && (
+          <ProjectIconView icon={board.icon} pixelSize={18} className="shrink-0 text-lg leading-none" />
+        )}
+        <span className="truncate text-sm font-semibold">{board?.name ?? 'Доска'}</span>
+      </div>
+    </div>
+  );
+}
+
+// «Поделиться» (Share site): превью + копировать ссылку + кружки соцсетей.
+function SharePopover({ board, url }: { board: PublicBoard | null; url: string }): React.ReactElement {
   const [copied, setCopied] = useState(false);
   const enc = encodeURIComponent(url);
-  const encTitle = encodeURIComponent(title);
-  const socials: { label: string; href: string }[] = [
-    { label: 'Telegram', href: `https://t.me/share/url?url=${enc}&text=${encTitle}` },
-    { label: 'WhatsApp', href: `https://wa.me/?text=${encTitle}%20${enc}` },
-    { label: 'VK', href: `https://vk.com/share.php?url=${enc}&title=${encTitle}` },
-    { label: 'X', href: `https://twitter.com/intent/tweet?url=${enc}&text=${encTitle}` },
+  const encTitle = encodeURIComponent(board?.name ?? 'ProjectsFlow');
+  const socials: { label: string; href: string; icon: React.ReactNode }[] = [
+    { label: 'LinkedIn', href: `https://www.linkedin.com/sharing/share-offsite/?url=${enc}`, icon: <Linkedin className="size-4" /> },
+    { label: 'X', href: `https://twitter.com/intent/tweet?url=${enc}&text=${encTitle}`, icon: <Twitter className="size-4" /> },
+    { label: 'WhatsApp', href: `https://wa.me/?text=${encTitle}%20${enc}`, icon: <MessageCircle className="size-4" /> },
+    { label: 'Facebook', href: `https://www.facebook.com/sharer/sharer.php?u=${enc}`, icon: <Facebook className="size-4" /> },
+    { label: 'Почта', href: `mailto:?subject=${encTitle}&body=${enc}`, icon: <Mail className="size-4" /> },
   ];
   const copy = async (): Promise<void> => {
     try {
@@ -52,40 +86,43 @@ function SharePopover({ url, title }: { url: string; title: string }): React.Rea
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      /* clipboard недоступен — ссылка и так видна в поле */
+      /* clipboard недоступен — ссылка видна в поле */
     }
   };
   return (
     <Popover>
       <PopoverTrigger asChild>
         <TopIconButton label="Поделиться">
-          <Share2 className="size-4" />
+          <Share className="size-4" />
         </TopIconButton>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-72 p-3">
-        <p className="mb-2 text-sm font-semibold">Поделиться доской</p>
-        <div className="flex items-center gap-1.5">
+      <PopoverContent align="end" className="w-[22rem] max-w-[92vw] p-4">
+        <p className="mb-3 text-center text-sm font-semibold">Поделиться доской</p>
+        <SharePreview board={board} />
+        <div className="mt-3 flex items-center gap-1.5">
           <input
             readOnly
             value={url}
             onFocus={(e) => e.currentTarget.select()}
-            className="h-8 min-w-0 flex-1 rounded-md border bg-muted/40 px-2 text-xs text-muted-foreground outline-none"
+            className="h-9 min-w-0 flex-1 rounded-md border bg-muted/40 px-2.5 text-xs text-muted-foreground outline-none"
           />
-          <Button size="sm" className="h-8 shrink-0 gap-1" onClick={() => void copy()}>
-            {copied ? <Check className="size-4" /> : null}
+          <Button size="sm" className="h-9 shrink-0 gap-1.5" onClick={() => void copy()}>
+            {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
             {copied ? 'Готово' : 'Копировать'}
           </Button>
         </div>
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
+        <div className="mt-3 flex items-center justify-center gap-2.5">
           {socials.map((s) => (
             <a
               key={s.label}
               href={s.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label={s.label}
+              title={s.label}
+              className="grid size-9 place-items-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
-              {s.label}
+              {s.icon}
             </a>
           ))}
         </div>
@@ -94,12 +131,83 @@ function SharePopover({ url, title }: { url: string; title: string }): React.Rea
   );
 }
 
-// Меню «…»: вход/регистрация + пожаловаться (как в Notion Report page).
-function MoreMenu({ reportUrl }: { reportUrl: string }): React.ReactElement {
-  const loginHref = `${appOrigin()}/login`;
-  const reportHref = `mailto:support@projectsflow.ru?subject=${encodeURIComponent(
-    'Жалоба на публичную доску',
-  )}&body=${encodeURIComponent(`Ссылка на доску: ${reportUrl}\n\nОпишите проблему:`)}`;
+// Диалог «Пожаловаться» — как в Notion: причины-радио + Отмена/Пожаловаться.
+const REPORT_REASONS = [
+  'Фишинг или спам',
+  'Неприемлемый контент',
+  'DMCA — запрос на удаление',
+  'Другое',
+] as const;
+
+function ReportDialog({
+  open,
+  onOpenChange,
+  url,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  url: string;
+}): React.ReactElement {
+  const [reason, setReason] = useState<string | null>(null);
+  const submit = (): void => {
+    if (!reason) return;
+    window.location.href = `mailto:support@projectsflow.ru?subject=${encodeURIComponent(
+      `Жалоба на доску: ${reason}`,
+    )}&body=${encodeURIComponent(`Причина: ${reason}\nСсылка: ${url}\n\nПодробности:`)}`;
+    onOpenChange(false);
+  };
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Почему вы жалуетесь на эту страницу?</DialogTitle>
+        </DialogHeader>
+        <div className="rounded-lg border bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground">
+          Страница размещена на ProjectsFlow. Эта форма — для жалоб на нарушение правил. Это не
+          форма связи с автором страницы.
+        </div>
+        <div className="space-y-1">
+          {REPORT_REASONS.map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setReason(r)}
+              className={cn(
+                'flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-accent',
+                reason === r && 'bg-accent',
+              )}
+            >
+              <span
+                className={cn(
+                  'grid size-4 shrink-0 place-items-center rounded-full border',
+                  reason === r ? 'border-primary' : 'border-muted-foreground/40',
+                )}
+              >
+                {reason === r && <span className="size-2 rounded-full bg-primary" />}
+              </span>
+              {r}
+            </button>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Отмена
+          </Button>
+          <Button
+            disabled={!reason}
+            onClick={submit}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Пожаловаться
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Меню «…»: вход/регистрация + пожаловаться.
+function MoreMenu({ onReport }: { onReport: () => void }): React.ReactElement {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -108,14 +216,11 @@ function MoreMenu({ reportUrl }: { reportUrl: string }): React.ReactElement {
         </TopIconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuItem onSelect={() => (window.location.href = loginHref)}>
+        <DropdownMenuItem onSelect={() => (window.location.href = `${appOrigin()}/login`)}>
           <LogIn className="size-4" />
           Войти или зарегистрироваться
         </DropdownMenuItem>
-        <DropdownMenuItem
-          className="text-destructive focus:text-destructive"
-          onSelect={() => (window.location.href = reportHref)}
-        >
+        <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => onReport()}>
           <Flag className="size-4" />
           Пожаловаться
         </DropdownMenuItem>
@@ -124,27 +229,82 @@ function MoreMenu({ reportUrl }: { reportUrl: string }): React.ReactElement {
   );
 }
 
-// Верхняя полоса публичной доски: слева иконка+имя, справа «Поделиться», «…» и CTA-кнопка.
-function PublicTopBar({ board, slug }: { board: PublicBoard | null; slug: string }): React.ReactElement {
+// Верхняя полоса публичной доски — реплика Notion: слева иконка+имя (или поиск),
+// справа: Поиск / Поделиться / Дублировать / «…» / CTA-кнопка.
+function PublicTopBar({
+  board,
+  slug,
+  query,
+  onQuery,
+}: {
+  board: PublicBoard | null;
+  slug: string;
+  query: string;
+  onQuery: (v: string) => void;
+}): React.ReactElement {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const shareUrl = slug ? publicBoardUrl(slug) : window.location.href;
+  const registerHref = `${appOrigin()}/register`;
+
+  const openSearch = (): void => {
+    setSearchOpen(true);
+    setTimeout(() => searchRef.current?.focus(), 0);
+  };
+  const closeSearch = (): void => {
+    setSearchOpen(false);
+    onQuery('');
+  };
+
   return (
     <div className="flex h-11 items-center justify-between gap-2 border-b border-black/[0.06] px-3 dark:border-white/[0.06]">
-      <div className="flex min-w-0 items-center gap-1.5">
-        {board?.icon && <ProjectIconView icon={board.icon} pixelSize={18} className="text-lg leading-none" />}
-        <span className="truncate text-sm font-medium text-[#37352f]/80 dark:text-blue-100/80">
-          {board?.name ?? ''}
-        </span>
-      </div>
+      {searchOpen ? (
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <Search className="size-4 shrink-0 text-muted-foreground" />
+          <input
+            ref={searchRef}
+            value={query}
+            onChange={(e) => onQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && closeSearch()}
+            placeholder="Поиск по доске…"
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+          />
+          <TopIconButton label="Закрыть поиск" onClick={closeSearch}>
+            <X className="size-4" />
+          </TopIconButton>
+        </div>
+      ) : (
+        <div className="flex min-w-0 items-center gap-1.5">
+          {board?.icon && (
+            <ProjectIconView icon={board.icon} pixelSize={18} className="shrink-0 text-lg leading-none" />
+          )}
+          <span className="truncate text-sm font-medium text-[#37352f]/80 dark:text-blue-100/80">
+            {board?.name ?? ''}
+          </span>
+        </div>
+      )}
+
       <div className="flex shrink-0 items-center gap-0.5">
-        <SharePopover url={shareUrl} title={board?.name ?? 'ProjectsFlow'} />
-        <MoreMenu reportUrl={shareUrl} />
+        {!searchOpen && (
+          <TopIconButton label="Поиск" onClick={openSearch}>
+            <Search className="size-4" />
+          </TopIconButton>
+        )}
+        <SharePopover board={board} url={shareUrl} />
+        <a href={registerHref} aria-label="Дублировать в свой ProjectsFlow" title="Дублировать в свой ProjectsFlow" className={TOP_ICON_CLS}>
+          <Copy className="size-4" />
+        </a>
+        <MoreMenu onReport={() => setReportOpen(true)} />
         <a
-          href={`${appOrigin()}/register`}
-          className="ml-1 rounded-md bg-primary px-3 py-1.5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+          href={registerHref}
+          className="ml-1 rounded-md bg-foreground px-3 py-1.5 text-[13px] font-semibold text-background transition-opacity hover:opacity-90"
         >
-          Создать в&nbsp;ProjectsFlow
+          Попробовать ProjectsFlow
         </a>
       </div>
+
+      <ReportDialog open={reportOpen} onOpenChange={setReportOpen} url={shareUrl} />
     </div>
   );
 }
@@ -178,9 +338,11 @@ function useDocumentTitle(title: string | null): void {
 function BoardView({
   board,
   onOpenTask,
+  query,
 }: {
   board: PublicBoard;
   onOpenTask: (taskId: string) => void;
+  query: string;
 }): React.ReactElement {
   return (
     <>
@@ -209,7 +371,7 @@ function BoardView({
 
         {/* Канбан. */}
         <div className="mt-8">
-          <PublicKanban columns={board.columns} onOpenTask={onOpenTask} />
+          <PublicKanban columns={board.columns} onOpenTask={onOpenTask} query={query} />
         </div>
       </div>
     </>
@@ -223,6 +385,7 @@ export function PublicBoardPage(): React.ReactElement {
   const slug = paramSlug ?? boardSlugFromHost() ?? '';
   const { status, board } = usePublicBoard(slug);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [query, setQuery] = useState('');
   const openTaskId = searchParams.get('task');
 
   useRobotsMeta(board ? board.indexing : null);
@@ -237,8 +400,8 @@ export function PublicBoardPage(): React.ReactElement {
 
   return (
     <div className="min-h-dvh bg-background pb-16">
-      {/* Верхняя полоса: имя доски + «Поделиться»/«…»/CTA (как публичная страница Notion). */}
-      <PublicTopBar board={board} slug={slug} />
+      {/* Верхняя полоса — реплика публичной страницы Notion. */}
+      <PublicTopBar board={board} slug={slug} query={query} onQuery={setQuery} />
 
       {status === 'loading' && (
         <div className="mx-auto max-w-5xl px-8 py-16">
@@ -262,7 +425,7 @@ export function PublicBoardPage(): React.ReactElement {
         </div>
       )}
 
-      {status === 'ready' && board && <BoardView board={board} onOpenTask={openTask} />}
+      {status === 'ready' && board && <BoardView board={board} onOpenTask={openTask} query={query} />}
 
       {/* Read-only окно задачи (открывается по ?task=<id>, шарится). */}
       {slug && openTaskId && (
