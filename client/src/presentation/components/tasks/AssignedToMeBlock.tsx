@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CalendarClock,
+  CalendarDays,
+  CalendarOff,
   Check,
   Flag,
   FolderKanban,
@@ -34,7 +36,7 @@ import {
   DEFAULT_ASSIGNED_GROUPING,
   type AssignedGrouping,
 } from '@/domain/user/UiPrefs';
-import { groupAssignedTasks } from './assignedGrouping';
+import { groupAssignedByTime, groupAssignedTasks } from './assignedGrouping';
 import { ExpandableMarkdown } from './ExpandableMarkdown';
 import { InboxCheckbox } from './InboxCheckbox';
 import { DelegationBadge } from './DelegationBadge';
@@ -164,8 +166,11 @@ export function AssignedToMeBlock({
     });
   };
 
-  // Группировку (проект/дата/дедлайн/приоритет) делает чистый презентационный хелпер.
+  // Группировку (проект/дата/дедлайн/приоритет) для СПИСКА делает чистый хелпер.
   const groups = useMemo(() => groupAssignedTasks(tasks, grouping, new Date()), [tasks, grouping]);
+  // Канбан «Поручено мне» — всегда РОВНО 3 колонки по времени (Без срока / На сегодня /
+  // Будущее), независимо от выбранной группировки. Колонки всегда все три, даже пустые.
+  const kanbanGroups = useMemo(() => groupAssignedByTime(tasks, new Date()), [tasks]);
 
   if (loading) return null;
   const total = tasks.length;
@@ -180,42 +185,48 @@ export function AssignedToMeBlock({
           Поручено мне
           <span className="text-muted-foreground/60">{total}</span>
         </h2>
-        <GroupingMenu value={grouping} onChange={handleGroupingChange} />
+        {/* Группировка — только для списка. В канбане колонки фиксированы по времени, поэтому
+            выпадашка не нужна. */}
+        {view === 'list' && <GroupingMenu value={grouping} onChange={handleGroupingChange} />}
       </div>
 
       {view === 'kanban' ? (
-        // Канбан: каждая группа (проект/Личные/приоритет…) — колонка, карточки = поручения.
-        // Ряд колонок full-bleed'ится за паддинг страницы (как доска проекта), отсюда bleed-классы.
+        // Канбан: РОВНО 3 колонки по времени (Без срока / На сегодня / Будущее), карточки =
+        // поручения. Ряд колонок full-bleed'ится за паддинг страницы (как доска проекта).
         <div className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}>
-          {groups.map((group) => (
+          {kanbanGroups.map((group) => (
             <div
               key={group.key}
               className="flex w-[86vw] max-w-[22rem] shrink-0 snap-start flex-col rounded-xl bg-muted/60 sm:w-72 sm:max-w-none sm:bg-muted/30"
             >
               <div className="flex items-center gap-1.5 px-3 pb-1.5 pt-2.5 text-xs font-medium text-muted-foreground">
-                <GroupIcon mode={grouping} isInbox={group.isInbox} />
+                <TimeBucketIcon bucket={group.key} />
                 <span className="min-w-0 truncate">{group.label}</span>
                 <span className="shrink-0 text-muted-foreground/60">{group.items.length}</span>
               </div>
-              <div className="flex flex-col gap-2 px-2 pb-2">
-                {group.items.map((item) =>
-                  item.delegation.status === 'pending' ? (
-                    <PendingCard
-                      key={item.delegation.id}
-                      item={item}
-                      busy={resolvingIds.has(item.delegation.id)}
-                      onAccept={() => void resolve(item.delegation.id, 'accept')}
-                      onDecline={() => void resolve(item.delegation.id, 'decline')}
-                    />
-                  ) : (
-                    <AcceptedCard
-                      key={item.delegation.id}
-                      item={item}
-                      currentUserId={user?.id ?? null}
-                      onOpen={() => setDrawerTask(item)}
-                      onChanged={handleToggled}
-                    />
-                  ),
+              <div className="flex min-h-[3rem] flex-col gap-2 px-2 pb-2">
+                {group.items.length === 0 ? (
+                  <p className="px-1 py-2 text-xs text-muted-foreground/45">Пусто</p>
+                ) : (
+                  group.items.map((item) =>
+                    item.delegation.status === 'pending' ? (
+                      <PendingCard
+                        key={item.delegation.id}
+                        item={item}
+                        busy={resolvingIds.has(item.delegation.id)}
+                        onAccept={() => void resolve(item.delegation.id, 'accept')}
+                        onDecline={() => void resolve(item.delegation.id, 'decline')}
+                      />
+                    ) : (
+                      <AcceptedCard
+                        key={item.delegation.id}
+                        item={item}
+                        currentUserId={user?.id ?? null}
+                        onOpen={() => setDrawerTask(item)}
+                        onChanged={handleToggled}
+                      />
+                    ),
+                  )
                 )}
               </div>
             </div>
@@ -327,6 +338,13 @@ function GroupIcon({
     );
   }
   if (mode === 'priority') return <Flag className="size-3.5 shrink-0" />;
+  return <CalendarClock className="size-3.5 shrink-0" />;
+}
+
+// Иконка колонки канбана «Поручено мне» по времени: без срока / на сегодня / будущее.
+function TimeBucketIcon({ bucket }: { bucket: string }): React.ReactElement {
+  if (bucket === 'none') return <CalendarOff className="size-3.5 shrink-0" />;
+  if (bucket === 'future') return <CalendarDays className="size-3.5 shrink-0" />;
   return <CalendarClock className="size-3.5 shrink-0" />;
 }
 

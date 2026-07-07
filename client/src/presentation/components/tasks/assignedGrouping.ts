@@ -156,6 +156,42 @@ function groupByDeadline(tasks: readonly AssignedTask[], now: Date): AssignedDis
   );
 }
 
+// Канбан «Поручено мне» по ВРЕМЕНИ: РОВНО 3 колонки, всегда все три (даже пустые — как
+// колонки доски проекта). Бакет по дедлайну: нет дедлайна → «Без срока»; дедлайн сегодня или
+// раньше (включая просроченные) → «На сегодня»; дедлайн позже сегодня → «Будущее». `key` бакета
+// ('none'/'today'/'future') используется в UI для выбора иконки колонки.
+export function groupAssignedByTime(
+  tasks: readonly AssignedTask[],
+  now: Date,
+): AssignedDisplayGroup[] {
+  const today = ymd(startOfDay(now));
+  const bucketOf = (t: AssignedTask): 'none' | 'today' | 'future' => {
+    const d = t.deadline;
+    if (d === null || d === undefined) return 'none';
+    if (d <= today) return 'today';
+    return 'future';
+  };
+  const within = (a: AssignedTask, b: AssignedTask): number =>
+    pendingScore(b) - pendingScore(a) || (a.deadline ?? '').localeCompare(b.deadline ?? '');
+  const byKey = new Map<string, AssignedTask[]>();
+  for (const t of tasks) {
+    const k = bucketOf(t);
+    const arr = byKey.get(k);
+    if (arr) arr.push(t);
+    else byKey.set(k, [t]);
+  }
+  const defs = [
+    { key: 'none', label: 'Без срока' },
+    { key: 'today', label: 'На сегодня' },
+    { key: 'future', label: 'Будущее' },
+  ] as const;
+  return defs.map((d) => {
+    const items = (byKey.get(d.key) ?? []).slice();
+    items.sort(within);
+    return { key: d.key, label: d.label, isInbox: false, items };
+  });
+}
+
 function groupByPriority(tasks: readonly AssignedTask[]): AssignedDisplayGroup[] {
   const bucketOf = (t: AssignedTask): string =>
     t.priority === null || t.priority === undefined ? 'none' : String(t.priority);
