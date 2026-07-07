@@ -16,7 +16,9 @@ import type {
 
 // `repo` scope покрывает чтение/запись private + public репо — нужен для создания
 // private KB-репо. Включает в себя public_repo, отдельно его указывать не надо.
-const SCOPES = 'read:user repo';
+// `workflow` нужен, чтобы класть/править файлы под `.github/workflows/` (build-workflow
+// app-репо, self-serve воркер-раннер) — обычный `repo` в workflow-файлы GitHub не пускает.
+const SCOPES = 'read:user repo workflow';
 
 type DeviceCodeRawResponse = {
   device_code: string;

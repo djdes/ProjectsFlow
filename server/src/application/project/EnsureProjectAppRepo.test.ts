@@ -21,6 +21,7 @@ type Calls = {
   createRepo: string[];
   updates: Array<{ appRepoFullName?: string | null; kbKind?: string }>;
   delegationUpserts: Array<{ projectId: string; granterUserId: string; enabled: boolean }>;
+  putFile: string[];
 };
 
 function makeDeps(opts: {
@@ -29,7 +30,7 @@ function makeDeps(opts: {
   connected: boolean;
   createRepoImpl?: (name: string) => Promise<{ fullName: string; htmlUrl: string }>;
 }) {
-  const calls: Calls = { createRepo: [], updates: [], delegationUpserts: [] };
+  const calls: Calls = { createRepo: [], updates: [], delegationUpserts: [], putFile: [] };
   const projects = {
     async getById(id: string) {
       return opts.project.id === id ? opts.project : null;
@@ -58,6 +59,13 @@ function makeDeps(opts: {
     async getAuthenticatedUser() {
       return { login: 'octocat', id: '1' };
     },
+    async getRepoFile() {
+      return null; // workflow-файла ещё нет → закоммитим
+    },
+    async putRepoFile(input: { path: string }) {
+      calls.putFile.push(input.path);
+      return { sha: 'sha-x' };
+    },
   } as any;
   const delegations = {
     async upsert(input: { projectId: string; granterUserId: string; enabled: boolean }) {
@@ -81,6 +89,8 @@ test('EnsureProjectAppRepo: owner + connected → создаёт репо и с�
   assert.deepEqual(calls.delegationUpserts, [
     { projectId: 'p1', granterUserId: 'owner1', enabled: true },
   ]);
+  // Build-workflow закоммичен в app-репо (гибридная сборка через GitHub Actions).
+  assert.deepEqual(calls.putFile, ['.github/workflows/pf-build-site.yml']);
 });
 
 test('EnsureProjectAppRepo: уже есть app-репо → идемпотентно, без createRepo, но авто-настройка догоняет', async () => {

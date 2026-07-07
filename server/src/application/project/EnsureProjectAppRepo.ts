@@ -1,6 +1,7 @@
 import type { GithubApiClient } from '../github/GithubApiClient.js';
 import type { GithubTokenRepository } from '../github/GithubTokenRepository.js';
 import { GithubNotConnectedError } from '../../domain/github/errors.js';
+import { APP_REPO_WORKFLOW_PATH, APP_REPO_WORKFLOW_YAML } from './appRepoWorkflow.js';
 import type { GitTokenDelegationRepository } from './GitTokenDelegationRepository.js';
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
@@ -115,6 +116,36 @@ export class EnsureProjectAppRepo {
         await this.deps.projects.update(projectId, { kbKind: 'local' });
       } catch {
         /* gate-плашка воркера подсветит отсутствие KB */
+      }
+    }
+
+    // Build-workflow: кладём GitHub Actions workflow в app-репо, чтобы сборка результата шла
+    // в облаке GitHub (гибридная схема — диспетчер забирает готовый dist-артефакт, node_modules
+    // у нас не оседает). Best-effort + идемпотентно: если файл уже есть — не трогаем; если у
+    // owner-токена нет `workflow`-scope (старый коннект GitHub) — тихо пропускаем, publish-site.ps1
+    // откатится на локальную сборку. Owner переподключит GitHub → на следующем прогоне допишется.
+    if (ownerToken) {
+      const slash = fullName.indexOf('/');
+      const owner = fullName.slice(0, slash);
+      const repo = fullName.slice(slash + 1);
+      try {
+        const existing = await this.deps.api.getRepoFile(
+          ownerToken.accessToken,
+          fullName,
+          APP_REPO_WORKFLOW_PATH,
+        );
+        if (!existing) {
+          await this.deps.api.putRepoFile({
+            accessToken: ownerToken.accessToken,
+            owner,
+            repo,
+            path: APP_REPO_WORKFLOW_PATH,
+            content: APP_REPO_WORKFLOW_YAML,
+            message: 'ci: ProjectsFlow build-site workflow',
+          });
+        }
+      } catch {
+        /* нет workflow-scope / прочее — publish-site.ps1 откатится на локальную сборку */
       }
     }
 
