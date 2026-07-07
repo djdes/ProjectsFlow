@@ -376,7 +376,7 @@ function PublicTopBar({
         </TopIconButton>
         <SharePopover board={board} url={shareUrl} />
         <a
-          href={registerHref}
+          href={`${appOrigin()}/duplicate?slug=${encodeURIComponent(slug)}`}
           aria-label="Дублировать в свой ProjectsFlow"
           title="Дублировать в свой ProjectsFlow"
           className={TOP_ICON_CLS}

@@ -12,4 +12,6 @@ export interface PublicBoardRepository {
   getTaskDetail(slug: string, taskId: string): Promise<PublicTaskDetail | null>;
   // Гейт отдельной страницы задачи: projectId + факт членства текущей сессии.
   getTaskAccess(slug: string, taskId: string): Promise<PublicTaskAccess | null>;
+  // Дублировать доску в свой аккаунт (ТРЕБУЕТ сессии). Возвращает id нового проекта.
+  clone(slug: string): Promise<{ projectId: string }>;
 }

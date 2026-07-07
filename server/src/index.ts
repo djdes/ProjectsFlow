@@ -65,6 +65,7 @@ import { UnpublishProject } from './application/project/UnpublishProject.js';
 import { SetPublicIndexing } from './application/project/SetPublicIndexing.js';
 import { EnsureProjectAppRepo } from './application/project/EnsureProjectAppRepo.js';
 import { GetPublicBoard } from './application/project/GetPublicBoard.js';
+import { ClonePublicBoard } from './application/project/ClonePublicBoard.js';
 import { GetPublicTaskDetail } from './application/project/GetPublicTaskDetail.js';
 import { GetPublicTaskAccess } from './application/project/GetPublicTaskAccess.js';
 import { GetPublicAttachment } from './application/project/GetPublicAttachment.js';
@@ -1531,6 +1532,31 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
+    }),
+    clonePublicBoard: new ClonePublicBoard({
+      projects: projectRepo,
+      tasks: taskRepo,
+      createProject: new CreateProject({
+        repo: projectRepo,
+        members: projectMemberRepo,
+        idGen: idGenerator,
+        resolveWorkspaceId,
+        resolveDefaultDispatcher,
+        activityRecorder,
+      }),
+      createTask: new CreateTask({
+        projects: projectRepo,
+        members: projectMemberRepo,
+        tasks: taskRepo,
+        delegations: taskDelegationRepo,
+        users: userRepo,
+        notifications: notificationRepo,
+        email: emailSender,
+        idGen: idGenerator,
+        appUrl: appBaseUrl,
+        activityRecorder,
+        versions: taskVersionRecorder,
+      }),
     }),
     projects: projectRepo,
     coverStorage: attachmentStorage,

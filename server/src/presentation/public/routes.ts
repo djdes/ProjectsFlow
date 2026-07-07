@@ -3,14 +3,20 @@ import type { GetPublicBoard } from '../../application/project/GetPublicBoard.js
 import type { GetPublicTaskDetail } from '../../application/project/GetPublicTaskDetail.js';
 import type { GetPublicTaskAccess } from '../../application/project/GetPublicTaskAccess.js';
 import type { GetPublicAttachment } from '../../application/project/GetPublicAttachment.js';
+import {
+  ClonePublicBoard,
+  ClonePublicBoardNotFoundError,
+} from '../../application/project/ClonePublicBoard.js';
 import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
 import type { AttachmentStorage } from '../../application/task/AttachmentStorage.js';
+import { requireAuth } from '../middleware/requireAuth.js';
 
 type Deps = {
   readonly getPublicBoard: GetPublicBoard;
   readonly getPublicTaskDetail: GetPublicTaskDetail;
   readonly getPublicTaskAccess: GetPublicTaskAccess;
   readonly getPublicAttachment: GetPublicAttachment;
+  readonly clonePublicBoard: ClonePublicBoard;
   readonly projects: ProjectRepository;
   readonly coverStorage: AttachmentStorage;
 };
@@ -152,6 +158,26 @@ export function publicBoardRouter(deps: Deps): Router {
       res.setHeader('Cache-Control', 'public, max-age=3600');
       res.send(result.data.data);
     } catch (e) {
+      next(e);
+    }
+  });
+
+  // Дублировать публичную доску в свой аккаунт (ТРЕБУЕТ авторизации — вызывается с апекс-домена,
+  // где живёт сессия). Создаёт проект-копию + задачи, возвращает id нового проекта.
+  router.post('/:slug/clone', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const slug = req.params.slug;
+      if (typeof slug !== 'string') {
+        res.status(404).json({ error: 'not_found' });
+        return;
+      }
+      const result = await deps.clonePublicBoard.execute(req.user!.id, slug);
+      res.status(201).json(result);
+    } catch (e) {
+      if (e instanceof ClonePublicBoardNotFoundError) {
+        res.status(404).json({ error: 'not_found' });
+        return;
+      }
       next(e);
     }
   });

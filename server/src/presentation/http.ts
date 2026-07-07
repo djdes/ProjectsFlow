@@ -25,6 +25,7 @@ import type { UnpublishProject } from '../application/project/UnpublishProject.j
 import type { SetPublicIndexing } from '../application/project/SetPublicIndexing.js';
 import type { EnsureProjectAppRepo } from '../application/project/EnsureProjectAppRepo.js';
 import type { GetPublicBoard } from '../application/project/GetPublicBoard.js';
+import type { ClonePublicBoard } from '../application/project/ClonePublicBoard.js';
 import type { GetPublicTaskDetail } from '../application/project/GetPublicTaskDetail.js';
 import type { GetPublicTaskAccess } from '../application/project/GetPublicTaskAccess.js';
 import type { GetPublicAttachment } from '../application/project/GetPublicAttachment.js';
@@ -350,6 +351,8 @@ type AppDeps = {
     readonly getPublicTaskDetail: GetPublicTaskDetail;
     readonly getPublicTaskAccess: GetPublicTaskAccess;
     readonly getPublicAttachment: GetPublicAttachment;
+    // Дублировать публичную доску в аккаунт (authed POST /:slug/clone).
+    readonly clonePublicBoard: ClonePublicBoard;
     // Для отдачи обложки-картинки опубликованной доски анониму (lookup проекта по slug).
     readonly projects: ProjectRepository;
     readonly coverStorage: AttachmentStorage;

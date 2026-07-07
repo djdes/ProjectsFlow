@@ -19,6 +19,7 @@ import { DevicePage } from '@/presentation/pages/DevicePage';
 import { InvitePage } from '@/presentation/pages/InvitePage';
 import { PublicBoardPage } from '@/presentation/pages/PublicBoardPage';
 import { PublicTaskGatePage } from '@/presentation/pages/PublicTaskGatePage';
+import { DuplicatePage } from '@/presentation/pages/DuplicatePage';
 import { boardSlugFromHost } from '@/lib/publicBoardUrl';
 import { ProtectedRoute } from '@/presentation/auth/ProtectedRoute';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
@@ -52,6 +53,8 @@ export const router = createBrowserRouter(
     : [
   { path: '/login', element: <LoginPage /> },
   { path: '/register', element: <RegisterPage /> },
+  // /duplicate?slug=… — «Дублировать» с публичной доски: после логина клонирует доску в аккаунт.
+  { path: '/duplicate', element: <DuplicatePage /> },
   // /invite/:token — anon-доступная страница. Внутри сам решает, что показать
   // (preview + accept или редирект на /login через state.from).
   { path: '/invite/:token', element: <InvitePage /> },

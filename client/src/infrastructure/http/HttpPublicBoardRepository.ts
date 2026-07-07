@@ -39,4 +39,11 @@ export class HttpPublicBoardRepository implements PublicBoardRepository {
       `/public/boards/${encodeURIComponent(slug)}/tasks/${encodeURIComponent(taskId)}/access`,
     );
   }
+
+  async clone(slug: string): Promise<{ projectId: string }> {
+    return httpClient.post<{ projectId: string }>(
+      `/public/boards/${encodeURIComponent(slug)}/clone`,
+      {},
+    );
+  }
 }
