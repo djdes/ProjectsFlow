@@ -17,7 +17,11 @@ function makeProject(over: Partial<Project> = {}): Project {
   };
 }
 
-type Calls = { createRepo: string[]; updates: Array<{ appRepoFullName?: string | null }> };
+type Calls = {
+  createRepo: string[];
+  updates: Array<{ appRepoFullName?: string | null; kbKind?: string }>;
+  delegationUpserts: Array<{ projectId: string; granterUserId: string; enabled: boolean }>;
+};
 
 function makeDeps(opts: {
   project: Project;
@@ -25,12 +29,12 @@ function makeDeps(opts: {
   connected: boolean;
   createRepoImpl?: (name: string) => Promise<{ fullName: string; htmlUrl: string }>;
 }) {
-  const calls: Calls = { createRepo: [], updates: [] };
+  const calls: Calls = { createRepo: [], updates: [], delegationUpserts: [] };
   const projects = {
     async getById(id: string) {
       return opts.project.id === id ? opts.project : null;
     },
-    async update(_id: string, patch: { appRepoFullName?: string | null }) {
+    async update(_id: string, patch: { appRepoFullName?: string | null; kbKind?: string }) {
       calls.updates.push(patch);
       return { ...opts.project, ...patch };
     },
@@ -55,7 +59,13 @@ function makeDeps(opts: {
       return { login: 'octocat', id: '1' };
     },
   } as any;
-  return { deps: { projects, members, tokens, api }, calls };
+  const delegations = {
+    async upsert(input: { projectId: string; granterUserId: string; enabled: boolean }) {
+      calls.delegationUpserts.push(input);
+      return { ...input, grantedAt: new Date(), revokedAt: null };
+    },
+  } as any;
+  return { deps: { projects, members, tokens, api, delegations }, calls };
 }
 
 test('EnsureProjectAppRepo: owner + connected → создаёт репо и сохраняет fullName', async () => {
@@ -65,16 +75,35 @@ test('EnsureProjectAppRepo: owner + connected → создаёт репо и с�
   assert.deepEqual(calls.createRepo, ['pf-obuv-lending-p1']);
   assert.deepEqual(calls.updates, [
     { appRepoFullName: 'octocat/pf-obuv-lending-p1', gitRepoUrl: 'https://github.com/octocat/pf-obuv-lending-p1' },
+    { kbKind: 'local' },
+  ]);
+  // Авто-настройка воркера: делегация owner'а включена, локальная KB заведена.
+  assert.deepEqual(calls.delegationUpserts, [
+    { projectId: 'p1', granterUserId: 'owner1', enabled: true },
   ]);
 });
 
-test('EnsureProjectAppRepo: уже есть app-репо → идемпотентно, без createRepo', async () => {
+test('EnsureProjectAppRepo: уже есть app-репо → идемпотентно, без createRepo, но авто-настройка догоняет', async () => {
   const project = makeProject({ appRepoFullName: 'octocat/pf-existing' });
   const { deps, calls } = makeDeps({ project, role: 'owner', connected: true });
   const out = await new EnsureProjectAppRepo(deps).execute('p1', 'owner1');
   assert.equal(out.fullName, 'octocat/pf-existing');
   assert.equal(calls.createRepo.length, 0);
+  // Репо не создаём заново, но недостающие делегацию/KB всё равно доводим (idempotent «догон»).
+  assert.deepEqual(calls.updates, [{ kbKind: 'local' }]);
+  assert.deepEqual(calls.delegationUpserts, [
+    { projectId: 'p1', granterUserId: 'owner1', enabled: true },
+  ]);
+});
+
+test('EnsureProjectAppRepo: KB уже github → локальную не заводим (не перетираем)', async () => {
+  const project = makeProject({ appRepoFullName: 'octocat/pf-existing', kbKind: 'github' });
+  const { deps, calls } = makeDeps({ project, role: 'owner', connected: true });
+  await new EnsureProjectAppRepo(deps).execute('p1', 'owner1');
   assert.equal(calls.updates.length, 0);
+  assert.deepEqual(calls.delegationUpserts, [
+    { projectId: 'p1', granterUserId: 'owner1', enabled: true },
+  ]);
 });
 
 test('EnsureProjectAppRepo: GitHub не привязан → GithubNotConnectedError', async () => {
@@ -98,6 +127,10 @@ test('EnsureProjectAppRepo: имя занято (422) → reuse существу
   assert.equal(out.fullName, 'octocat/pf-obuv-lending-p1');
   assert.deepEqual(calls.updates, [
     { appRepoFullName: 'octocat/pf-obuv-lending-p1', gitRepoUrl: 'https://github.com/octocat/pf-obuv-lending-p1' },
+    { kbKind: 'local' },
+  ]);
+  assert.deepEqual(calls.delegationUpserts, [
+    { projectId: 'p1', granterUserId: 'owner1', enabled: true },
   ]);
 });
 

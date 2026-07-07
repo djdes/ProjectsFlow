@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { Github, Loader2 } from 'lucide-react';
+import { Github, Loader2, Wrench } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { useGithubConnection } from '@/presentation/hooks/GithubConnectionProvider';
 import { ConnectGithubDialog } from '@/presentation/components/github/ConnectGithubDialog';
+import type { KbKind } from '@/domain/project/Project';
 
 type Props = {
   projectId: string;
-  // Из Project — "owner/repo" или null. null = репо приложения ещё не создан → воркер не запустится.
+  // Из Project — "owner/repo" или null. null = репо приложения ещё не создан.
   appRepoFullName: string | null;
+  // Из Project. 'none' = базы знаний нет → диспетчер СКИПАЕТ проект.
+  kbKind: KbKind;
   // Как у ProjectPublishedBanner: центрировать контент в видимой части при открытом окне задачи.
   shiftForOverlay?: boolean;
 };
@@ -17,13 +20,18 @@ type Props = {
 // Задачи, живущие визуально в колонке «Воркер» (todo + активные подстатусы воркера).
 const WORKER_STATUSES = new Set(['todo', 'in_progress', 'awaiting_clarification']);
 
-// Липкий гейт «Привяжите GitHub, чтобы воркер заработал». Показывается, пока в колонке «Воркер»
-// есть задача И у проекта нет app-репо (self-serve воркер-раннер, M1). Гаснет, когда репо создан
-// (GitHub привязан + EnsureProjectAppRepo прошёл) ИЛИ задачу убрали из колонки. Крестика нет —
-// это гейт, не уведомление.
+// Липкий гейт готовности воркера. Показывается, пока в колонке «Воркер» есть задача И воркер
+// настроен НЕ полностью. «Настроен» = три условия (self-serve воркер-раннер):
+//   1) app-репо создан (есть куда писать код),
+//   2) делегация GitHub-токена включена (диспетчер клонирует/пушит приватный репо),
+//   3) заведена база знаний (иначе диспетчер скипает проект).
+// Одна кнопка «Настроить/Донастроить» дожимает всё разом (EnsureProjectAppRepo идемпотентно
+// создаёт репо + включает делегацию + заводит локальную KB). Крестика нет — это гейт, не
+// уведомление: пока не настроено, кидать задачу воркеру бессмысленно.
 export function ProjectWorkerGateBanner({
   projectId,
   appRepoFullName,
+  kbKind,
   shiftForOverlay = false,
 }: Props): React.ReactElement | null {
   const { connection } = useGithubConnection();
@@ -31,45 +39,84 @@ export function ProjectWorkerGateBanner({
   const { tasks } = useTasks(projectId);
   const [connectOpen, setConnectOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Локально гасим сразу после успешного создания репо (Project в провайдере обновится на рефетче).
+  // Локально гасим сразу после успешной настройки (Project в провайдере обновится на рефетче).
   const [done, setDone] = useState(false);
-  // Флаг «после привязки GitHub надо сразу создать репо».
+  // null = ещё не знаем/не грузили (репо нет — делегация неактуальна).
+  const [delegationEnabled, setDelegationEnabled] = useState<boolean | null>(null);
+  // Флаг «после привязки GitHub надо сразу настроить».
   const pendingEnsure = useRef(false);
 
   const hasWorkerTask = tasks.some((t) => WORKER_STATUSES.has(t.status));
 
-  const ensureRepo = async (): Promise<void> => {
+  // Статус делегации подтягиваем, только когда репо уже есть и есть воркер-задача
+  // (без репо гейт и так про GitHub, лишний запрос не нужен).
+  useEffect(() => {
+    if (!appRepoFullName || !hasWorkerTask) {
+      setDelegationEnabled(null);
+      return;
+    }
+    let cancelled = false;
+    projectRepository
+      .getGitTokenDelegation(projectId)
+      .then((s) => {
+        if (!cancelled) setDelegationEnabled(Boolean(s.mine?.enabled) || s.all.some((m) => m.enabled));
+      })
+      .catch(() => {
+        if (!cancelled) setDelegationEnabled(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectRepository, projectId, appRepoFullName, hasWorkerTask]);
+
+  const ensure = async (): Promise<void> => {
     setBusy(true);
     try {
       await projectRepository.ensureAppRepo(projectId);
       setDone(true);
-      toast.success('Репозиторий проекта создан — воркер готов к работе');
+      toast.success('Воркер настроен: репозиторий, делегация и база знаний готовы');
     } catch (e) {
-      toast.error(`Не удалось создать репозиторий: ${(e as Error).message}`);
+      toast.error(`Не удалось настроить воркера: ${(e as Error).message}`);
     } finally {
       setBusy(false);
       pendingEnsure.current = false;
     }
   };
 
-  // После успешной привязки GitHub (connection появился) — если ждали, сразу создаём репо.
+  // После успешной привязки GitHub (connection появился) — если ждали, сразу настраиваем.
   useEffect(() => {
-    if (connection && pendingEnsure.current && !busy && !done && !appRepoFullName) {
-      void ensureRepo();
+    if (connection && pendingEnsure.current && !busy && !done) {
+      void ensure();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connection]);
 
-  if (done || appRepoFullName || !hasWorkerTask) return null;
+  const needRepo = !appRepoFullName;
+  const needKb = kbKind === 'none';
+  // Делегацию флагуем «нужной», только когда ТОЧНО знаем, что выключена (не в null-загрузке).
+  const needDelegation = Boolean(appRepoFullName) && delegationEnabled === false;
+  const somethingMissing = needRepo || needKb || needDelegation;
+
+  if (done || !hasWorkerTask || !somethingMissing) return null;
 
   const onCta = (): void => {
     if (!connection) {
       pendingEnsure.current = true;
       setConnectOpen(true);
     } else {
-      void ensureRepo();
+      void ensure();
     }
   };
+
+  // Текст: без репо — акцент на GitHub; с репо — что именно осталось донастроить.
+  const missingLabels: string[] = [];
+  if (needDelegation) missingLabels.push('включить делегацию GitHub-токена');
+  if (needKb) missingLabels.push('создать базу знаний');
+  const message = needRepo
+    ? 'Чтобы воркер собрал проект, нужен GitHub-репозиторий — привяжите GitHub.'
+    : `Воркер почти готов — осталось: ${missingLabels.join(' и ')}.`;
+  const ctaLabel = needRepo ? (connection ? 'Настроить воркера' : 'Привязать GitHub') : 'Донастроить';
+  const CtaIcon = needRepo ? Github : Wrench;
 
   return (
     <div className="relative flex min-h-[4.375rem] shrink-0 items-stretch border-b border-black/[0.05] bg-[#fff7e6] dark:border-white/[0.06] dark:bg-[#2a2413]">
@@ -77,18 +124,15 @@ export function ProjectWorkerGateBanner({
         className="relative flex flex-1 flex-wrap items-center justify-center gap-x-2.5 gap-y-1 px-10 py-2 text-[13px] leading-tight text-[#7a5c00] dark:text-amber-100"
         style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
       >
-        <span className="truncate">
-          Чтобы воркер собрал проект, нужен GitHub-репозиторий{' '}
-          <span className="font-medium">— привяжите GitHub</span>.
-        </span>
+        <span className="truncate">{message}</span>
         <button
           type="button"
           onClick={onCta}
           disabled={busy}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-amber-500/30 bg-white px-2.5 py-1 text-[13px] font-medium text-[#7a5c00] shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-colors hover:bg-amber-50 disabled:opacity-60 dark:border-amber-300/20 dark:bg-white/10 dark:text-amber-50 dark:hover:bg-white/20"
         >
-          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Github className="size-3.5" />}
-          {connection ? 'Создать репозиторий' : 'Привязать GitHub'}
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <CtaIcon className="size-3.5" />}
+          {ctaLabel}
         </button>
       </div>
 

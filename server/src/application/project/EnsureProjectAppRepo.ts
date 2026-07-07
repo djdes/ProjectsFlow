@@ -1,6 +1,7 @@
 import type { GithubApiClient } from '../github/GithubApiClient.js';
 import type { GithubTokenRepository } from '../github/GithubTokenRepository.js';
 import { GithubNotConnectedError } from '../../domain/github/errors.js';
+import type { GitTokenDelegationRepository } from './GitTokenDelegationRepository.js';
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
 import { requireProjectAccess } from './projectAccess.js';
@@ -10,6 +11,7 @@ type Deps = {
   readonly members: ProjectMemberRepository;
   readonly tokens: GithubTokenRepository;
   readonly api: GithubApiClient;
+  readonly delegations: GitTokenDelegationRepository;
 };
 
 // Транслит кириллицы → латиница, чтобы имя репо было читаемым для русских названий
@@ -44,6 +46,12 @@ function isNameTaken(err: unknown): boolean {
 // будет писать код. Owner-only. Репо создаётся под аккаунтом ВЛАДЕЛЬЦА его OAuth-токеном (как KB),
 // приватный, с авто-README (нужна ветка main для будущего workflow_dispatch). Идемпотентно:
 // если у проекта уже есть app_repo_full_name — возвращаем его; если имя занято (422) — reuse.
+//
+// Кнопка «создать репо» = единая настройка воркера «под ключ»: помимо репо она ещё включает
+// делегацию GitHub-токена owner'у и заводит локальную KB. Без этих двух шагов диспетчер либо
+// скипает проект (нет KB), либо не может клонировать/пушить приватный репо (нет делегации) —
+// и пользователь упирается в неочевидный blocker. Оба шага идемпотентны и best-effort (не роняют
+// создание репо); если что-то не проросло — гейт-плашка воркера в UI подсветит.
 export class EnsureProjectAppRepo {
   constructor(private readonly deps: Deps) {}
 
@@ -55,36 +63,61 @@ export class EnsureProjectAppRepo {
       'manage_app_repo',
     );
 
-    if (project.appRepoFullName) return { fullName: project.appRepoFullName };
+    // Токен owner'а нужен и для создания репо, и как источник делегации (диспетчер пушит им).
+    const ownerToken = await this.deps.tokens.getWithTokenByUserId(project.ownerId);
 
-    const token = await this.deps.tokens.getWithTokenByUserId(project.ownerId);
-    if (!token) throw new GithubNotConnectedError();
+    let fullName = project.appRepoFullName;
+    if (!fullName) {
+      if (!ownerToken) throw new GithubNotConnectedError();
 
-    // Короткий id проекта в имени гарантирует уникальность (два проекта с одинаковым названием
-    // не столкнутся) и делает 422-reuse корректным (422 = повторный прогон ЭТОГО проекта).
-    const repoName = `pf-${slugify(project.name)}-${project.id.slice(0, 8)}`;
-    let fullName: string;
-    try {
-      const result = await this.deps.api.createRepo(token.accessToken, {
-        name: repoName,
-        description: `ProjectsFlow app for ${project.name}`,
-        privateRepo: true,
-        autoInit: true,
+      // Короткий id проекта в имени гарантирует уникальность (два проекта с одинаковым названием
+      // не столкнутся) и делает 422-reuse корректным (422 = повторный прогон ЭТОГО проекта).
+      const repoName = `pf-${slugify(project.name)}-${project.id.slice(0, 8)}`;
+      try {
+        const result = await this.deps.api.createRepo(ownerToken.accessToken, {
+          name: repoName,
+          description: `ProjectsFlow app for ${project.name}`,
+          privateRepo: true,
+          autoInit: true,
+        });
+        fullName = result.fullName;
+      } catch (err) {
+        if (!isNameTaken(err)) throw err;
+        // Имя уже занято у владельца → считаем это тем же app-репо (идемпотентно).
+        const me = await this.deps.api.getAuthenticatedUser(ownerToken.accessToken);
+        fullName = `${me.login}/${repoName}`;
+      }
+
+      // gitRepoUrl проставляем на app-репо (если ещё не задан), чтобы диспетчер клонировал именно
+      // его существующим git-флоу. Не перезатираем уже подключённый пользователем репо.
+      await this.deps.projects.update(projectId, {
+        appRepoFullName: fullName,
+        ...(project.gitRepoUrl ? {} : { gitRepoUrl: `https://github.com/${fullName}` }),
       });
-      fullName = result.fullName;
-    } catch (err) {
-      if (!isNameTaken(err)) throw err;
-      // Имя уже занято у владельца → считаем это тем же app-репо (идемпотентно).
-      const me = await this.deps.api.getAuthenticatedUser(token.accessToken);
-      fullName = `${me.login}/${repoName}`;
     }
 
-    // gitRepoUrl проставляем на app-репо (если ещё не задан), чтобы диспетчер клонировал именно
-    // его существующим git-флоу. Не перезатираем уже подключённый пользователем репо.
-    await this.deps.projects.update(projectId, {
-      appRepoFullName: fullName,
-      ...(project.gitRepoUrl ? {} : { gitRepoUrl: `https://github.com/${fullName}` }),
-    });
+    // Авто-настройка воркера (идемпотентно, best-effort — не роняем создание репо).
+    // Делегация: включаем owner'у, только если у него подключён GitHub (иначе делегировать нечего).
+    if (ownerToken) {
+      try {
+        await this.deps.delegations.upsert({
+          projectId,
+          granterUserId: project.ownerId,
+          enabled: true,
+        });
+      } catch {
+        /* gate-плашка воркера подсветит выключенную делегацию */
+      }
+    }
+    // Локальная KB: только если KB ещё не заведена (не перетираем github-KB).
+    if (project.kbKind === 'none') {
+      try {
+        await this.deps.projects.update(projectId, { kbKind: 'local' });
+      } catch {
+        /* gate-плашка воркера подсветит отсутствие KB */
+      }
+    }
+
     return { fullName };
   }
 }

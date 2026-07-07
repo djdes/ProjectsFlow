@@ -1325,6 +1325,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tokens: githubTokenRepo,
       api: githubApi,
+      delegations: gitTokenDelegationRepo,
     }),
     getProjectSite: new GetProjectSite({
       projects: projectRepo,

@@ -229,10 +229,11 @@ export function TasksPage(): React.ReactElement {
           shiftForOverlay: контент центрируется в видимой области, когда открыто окно задачи. */}
       <div className="sticky top-11 z-10">
         <ProjectPublishedBanner projectId={data.id} shiftForOverlay />
-        {/* Липкий гейт «Привяжите GitHub» — пока в колонке «Воркер» есть задача и нет app-репо. */}
+        {/* Липкий гейт готовности воркера (репо + делегация + KB) — пока в колонке «Воркер» есть задача. */}
         <ProjectWorkerGateBanner
           projectId={data.id}
           appRepoFullName={data.appRepoFullName}
+          kbKind={data.kbKind}
           shiftForOverlay
         />
       </div>
