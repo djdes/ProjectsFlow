@@ -192,6 +192,20 @@ export const telegramTaskMessages = mysqlTable(
 
 export type TelegramTaskMessageRow = typeof telegramTaskMessages.$inferSelect;
 
+// Привязка группового TG-чата к аккаунту-владельцу (см. db/099). Fallback-задачи от участников
+// без своего проекта падают в «Входящие» этого владельца.
+export const telegramGroupOwners = mysqlTable(
+  'telegram_group_owners',
+  {
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).primaryKey(),
+    ownerUserId: char('owner_user_id', { length: 36 }).notNull(),
+    createdAt: createdAtCol(),
+  },
+  (t) => [index('idx_tgo_owner').on(t.ownerUserId)],
+);
+
+export type TelegramGroupOwnerRow = typeof telegramGroupOwners.$inferSelect;
+
 export const sessions = mysqlTable(
   'sessions',
   {

@@ -231,6 +231,7 @@ import { DrizzleTelegramOutboundRepository } from './infrastructure/repositories
 import { DrizzleTelegramRalphQuestionRepository } from './infrastructure/repositories/DrizzleTelegramRalphQuestionRepository.js';
 import { DrizzleTelegramTaskDraftRepository } from './infrastructure/repositories/DrizzleTelegramTaskDraftRepository.js';
 import { DrizzleTelegramTaskMessageRepository } from './infrastructure/repositories/DrizzleTelegramTaskMessageRepository.js';
+import { DrizzleTelegramGroupOwnerRepository } from './infrastructure/repositories/DrizzleTelegramGroupOwnerRepository.js';
 import { TelegramComposerService } from './application/telegram/composer/TelegramComposerService.js';
 import { ConnectTelegramAccount } from './application/telegram/ConnectTelegramAccount.js';
 import { GetTelegramStatus } from './application/telegram/GetTelegramStatus.js';
@@ -650,6 +651,8 @@ const TG_KIND_TO_PREF = {
 // Маппинг task-сообщений бота → задача (db/049). Общий экземпляр: сендеру нужен для
 // reply→комментарий на задачных уведомлениях, конструктору/вебхуку — для тех же reply'ев.
 const telegramTaskMessageRepo = new DrizzleTelegramTaskMessageRepository(db);
+// Привязка групповых чатов к владельцу (db/099) — для гибрид-маршрутизации задач из групп.
+const telegramGroupOwnerRepo = new DrizzleTelegramGroupOwnerRepository(db);
 const sendAgentTelegramNotification = new SendAgentTelegramNotification({
   users: userRepo,
   client: telegramClient,
@@ -802,6 +805,7 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   botUsername: telegramBotUsername,
   ralphQuestionMessages: telegramRalphQuestionRepo,
   taskMessages: telegramTaskMessageRepo,
+  groupOwners: telegramGroupOwnerRepo,
   createComment: createTaskCommentUseCase,
   // Инлайн «Завершить/Отменить» на задачных уведомлениях (nd:/nu: callback).
   moveTask: new MoveTask({

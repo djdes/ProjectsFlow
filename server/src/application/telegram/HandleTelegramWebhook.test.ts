@@ -4,14 +4,22 @@ import { HandleTelegramWebhook, type TelegramUpdate } from './HandleTelegramWebh
 
 // Фокусный тест: гейт групповых чатов (бот реагирует только на обращение к нему).
 // Минимальные in-memory стабы (tsx + node:test).
-function makeHarness() {
-  const composerCalls: { tgUserId: number; chatId: number; text: string }[] = [];
+function makeHarness(opts?: { senderUserId?: string | null; boundOwner?: string | null }) {
+  const composerCalls: { tgUserId: number; chatId: number; text: string; groupCtx: any }[] = [];
   const sent: { chatId: number; text: string }[] = [];
+  const bindCalls: { tgChatId: number; ownerUserId: string }[] = [];
+  const startedCalls: { userId: string; chatId: number }[] = [];
   let ralphLookups = 0;
   let taskLookups = 0;
+  const senderUserId = opts && 'senderUserId' in opts ? (opts.senderUserId ?? null) : null;
+  let boundOwner: string | null = opts?.boundOwner ?? null;
 
   const deps = {
-    users: { async findUserIdByTelegramUserId() { return null; } },
+    users: {
+      async findUserIdByTelegramUserId() { return senderUserId; },
+      async getById(uid: string) { return { id: uid, displayName: 'Владелец' }; },
+      async markTelegramStarted(userId: string, chatId: number) { startedCalls.push({ userId, chatId }); },
+    },
     members: {},
     tasks: {},
     client: {
@@ -24,9 +32,18 @@ function makeHarness() {
     taskMessages: { async findByMessage() { taskLookups += 1; return null; } },
     createComment: {},
     dispatchCommentNotifications: {},
+    groupOwners: {
+      async getOwnerUserId() { return boundOwner; },
+      async bindIfAbsent(tgChatId: number, ownerUserId: string) {
+        bindCalls.push({ tgChatId, ownerUserId });
+        if (boundOwner) return { ownerUserId: boundOwner, created: false };
+        boundOwner = ownerUserId;
+        return { ownerUserId, created: true };
+      },
+    },
     composer: {
-      async startFromMessage(tgUserId: number, chatId: number, text: string) {
-        composerCalls.push({ tgUserId, chatId, text });
+      async startFromMessage(tgUserId: number, chatId: number, text: string, groupCtx?: any) {
+        composerCalls.push({ tgUserId, chatId, text, groupCtx });
       },
       async handleCallback() {},
       async handleInlineQuery() {},
@@ -42,6 +59,8 @@ function makeHarness() {
     h,
     composerCalls,
     sent,
+    bindCalls,
+    startedCalls,
     ralphLookups: () => ralphLookups,
     taskLookups: () => taskLookups,
   };
@@ -51,13 +70,15 @@ function msgUpdate(opts: {
   text: string;
   chatType: string;
   reply?: { is_bot: boolean };
+  from?: { id?: number; first_name?: string; last_name?: string; username?: string };
+  chatTitle?: string;
 }): TelegramUpdate {
   return {
     update_id: 1,
     message: {
       message_id: 10,
-      from: { id: 111, first_name: 'U' },
-      chat: { id: 500, type: opts.chatType },
+      from: { id: 111, first_name: 'U', ...opts.from },
+      chat: { id: 500, type: opts.chatType, ...(opts.chatTitle ? { title: opts.chatTitle } : {}) },
       text: opts.text,
       ...(opts.reply
         ? { reply_to_message: { message_id: 9, from: { id: 999, is_bot: opts.reply.is_bot } } }
@@ -123,6 +144,51 @@ test('личка: упоминание НЕ вырезается (там оно 
   await h.h.execute(msgUpdate({ text: 'позови @ProjectsFlow_Bot', chatType: 'private' }));
   assert.equal(h.composerCalls.length, 1);
   assert.equal(h.composerCalls[0]!.text, 'позови @ProjectsFlow_Bot');
+});
+
+// --- Группа: привязка владельца (/start) + проброс groupCtx в композер ---
+
+test('группа: /start от привязанного → bindIfAbsent, DM-чат НЕ трогаем', async () => {
+  const h = makeHarness({ senderUserId: 'owner1' });
+  await h.h.execute(msgUpdate({ text: '/start@ProjectsFlow_Bot', chatType: 'supergroup' }));
+  assert.equal(h.bindCalls.length, 1);
+  assert.equal(h.bindCalls[0]!.ownerUserId, 'owner1');
+  assert.equal(h.startedCalls.length, 0); // markTelegramStarted НЕ вызван в группе
+  assert.equal(h.composerCalls.length, 0);
+  assert.ok(h.sent.length >= 1);
+});
+
+test('группа: /start от НЕпривязанного → просьба привязать, без bind', async () => {
+  const h = makeHarness({ senderUserId: null });
+  await h.h.execute(msgUpdate({ text: '/start@ProjectsFlow_Bot', chatType: 'group' }));
+  assert.equal(h.bindCalls.length, 0);
+  assert.ok(h.sent[0]!.text.toLowerCase().includes('привяж'));
+});
+
+test('группа: текст задачи → композер получает groupCtx (owner + имя + title)', async () => {
+  const h = makeHarness({ boundOwner: 'owner1' });
+  await h.h.execute(
+    msgUpdate({
+      text: '@ProjectsFlow_Bot купить домен',
+      chatType: 'group',
+      from: { first_name: 'Олег', last_name: 'МрLinux', username: 'oleg' },
+      chatTitle: 'Рабочий чат',
+    }),
+  );
+  assert.equal(h.composerCalls.length, 1);
+  const ctx = h.composerCalls[0]!.groupCtx;
+  assert.ok(ctx, 'groupCtx передан');
+  assert.equal(ctx.ownerUserId, 'owner1');
+  assert.equal(ctx.groupTitle, 'Рабочий чат');
+  assert.ok(ctx.senderName.includes('Олег'));
+  assert.ok(ctx.senderName.includes('oleg')); // @username в подписи
+});
+
+test('личка: композер БЕЗ groupCtx (undefined)', async () => {
+  const h = makeHarness();
+  await h.h.execute(msgUpdate({ text: 'купить кофе', chatType: 'private' }));
+  assert.equal(h.composerCalls.length, 1);
+  assert.equal(h.composerCalls[0]!.groupCtx, undefined);
 });
 
 // --- Инлайн-действия задачных уведомлений (nd/nc/nu) ---

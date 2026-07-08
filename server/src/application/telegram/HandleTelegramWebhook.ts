@@ -1,6 +1,7 @@
 import type { TelegramClient, InlineKeyboardMarkup } from './TelegramClient.js';
 import type { TelegramRalphQuestionRepository } from './TelegramRalphQuestionRepository.js';
 import type { TelegramTaskMessageRepository } from './TelegramTaskMessageRepository.js';
+import type { TelegramGroupOwnerRepository } from './TelegramGroupOwnerRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
@@ -12,6 +13,7 @@ import type { DispatchCommentNotifications } from '../notifications/DispatchComm
 import type {
   TelegramComposerService,
   TelegramCallbackQuery,
+  TelegramGroupContext,
 } from './composer/TelegramComposerService.js';
 import {
   getAllTgPrefsResolved,
@@ -34,8 +36,14 @@ export type TelegramUpdate = {
   readonly update_id: number;
   readonly message?: {
     readonly message_id: number;
-    readonly from?: { readonly id: number; readonly username?: string; readonly first_name?: string };
-    readonly chat: { readonly id: number; readonly type: string };
+    readonly from?: {
+      readonly id: number;
+      readonly username?: string;
+      readonly first_name?: string;
+      readonly last_name?: string;
+    };
+    // title — есть у group/supergroup (для атрибуции задачи-фолбэка).
+    readonly chat: { readonly id: number; readonly type: string; readonly title?: string };
     readonly text?: string;
     // Reply на наше сообщение → ловим как ralph-answer ИЛИ комментарий к задаче. См. spec
     // C:/www/ralph/prompts/telegram-reply-to-ralph-answer.md.
@@ -67,6 +75,8 @@ type Deps = {
   readonly ralphQuestionMessages: TelegramRalphQuestionRepository;
   // Reply→обычный комментарий: маппинг task-сообщений бота → задача (db/049).
   readonly taskMessages: TelegramTaskMessageRepository;
+  // Привязка группового чата к владельцу (db/099) — для гибрид-маршрутизации задач из групп.
+  readonly groupOwners: TelegramGroupOwnerRepository;
   readonly createComment: CreateTaskComment;
   // Инлайн «✅ Завершить» / «↩️ Отменить» на задачных уведомлениях (nd:/nu: callback).
   readonly moveTask: MoveTask;
@@ -129,10 +139,12 @@ export class HandleTelegramWebhook {
     const tgUserId = msg.from.id;
     const chatId = msg.chat.id;
 
+    const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
+
     // В групповых чатах бот реагирует ТОЛЬКО когда к нему обращаются: упоминание
     // @<botUsername> в тексте ИЛИ reply на сообщение самого бота. Иначе молчим — иначе он
     // отвечал бы на каждое сообщение группы. Личка (private) — без ограничений.
-    if (msg.chat.type === 'group' || msg.chat.type === 'supergroup') {
+    if (isGroup) {
       const bu = this.deps.botUsername;
       const repliedToBot = msg.reply_to_message?.from?.is_bot === true;
       const mentioned = bu ? new RegExp('@' + bu + '\\b', 'i').test(text) : false;
@@ -150,7 +162,11 @@ export class HandleTelegramWebhook {
 
     // Routing по первому слову.
     const cmd = text.split(/\s+/, 1)[0]?.toLowerCase() ?? '';
-    if (cmd === '/start') return this.handleStart(tgUserId, chatId, msg.from.first_name);
+    // В группе /start привязывает чат к аккаунту отправителя (а не трогает его личный DM-чат).
+    if (cmd === '/start')
+      return isGroup
+        ? this.handleGroupStart(tgUserId, chatId)
+        : this.handleStart(tgUserId, chatId, msg.from.first_name);
     if (cmd === '/pause') return this.handlePause(tgUserId, chatId);
     if (cmd === '/pending') return this.handlePending(tgUserId, chatId);
     if (cmd === '/tasks') return this.handleTasks(tgUserId, chatId);
@@ -158,7 +174,17 @@ export class HandleTelegramWebhook {
     // Неизвестная slash-команда — не превращаем в задачу.
     if (cmd.startsWith('/')) return this.handleHelp(chatId);
     // Любой прочий текст → черновик задачи (фаза «любой текст = задача»). Без `+проекта`
-    // уходит во «Входящие»; с `+проект`/`@делегат` — конструктор уточнит кнопками.
+    // уходит во «Входящие»; с `+проект`/`@делегат` — конструктор уточнит кнопками. В группе
+    // передаём groupCtx: композер решает — создавать «как отправитель» или уронить в «Входящие»
+    // владельца группы (гибрид-маршрутизация, см. spec telegram-group-multi-user-tasks).
+    if (isGroup) {
+      const groupCtx: TelegramGroupContext = {
+        ownerUserId: await this.deps.groupOwners.getOwnerUserId(chatId),
+        senderName: formatSenderName(msg.from),
+        groupTitle: msg.chat.title ?? null,
+      };
+      return this.deps.composer.startFromMessage(tgUserId, chatId, text, groupCtx);
+    }
     return this.deps.composer.startFromMessage(tgUserId, chatId, text);
   }
 
@@ -457,6 +483,38 @@ export class HandleTelegramWebhook {
         `📝 Чтобы создать задачу, просто напиши мне текст — она уйдёт во «Входящие». ` +
         `Для конкретного проекта: <code>+Проект текст</code>.\n\n` +
         `Все возможности — /help`,
+    );
+  }
+
+  // /start в группе → привязка чата к аккаунту отправителя (first-writer-wins). НЕ трогаем
+  // личный DM-чат владельца (markTelegramStarted): это ЛС-функция, увела бы уведомления в группу.
+  private async handleGroupStart(tgUserId: number, chatId: number): Promise<void> {
+    const userId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
+    if (!userId) {
+      const profileUrl = `${this.deps.appUrl.replace(/\/$/, '')}/profile`;
+      await this.reply(
+        chatId,
+        `👋 Сначала привяжи Telegram: на <a href="${profileUrl}">${profileUrl}</a> нажми «Login with Telegram», затем снова отправь /start здесь.`,
+      );
+      return;
+    }
+    const { ownerUserId, created } = await this.deps.groupOwners.bindIfAbsent(chatId, userId);
+    if (created) {
+      await this.reply(
+        chatId,
+        `✅ Группа привязана к твоему аккаунту. Задачи от участников без своего проекта будут падать в твои «Входящие».`,
+      );
+      return;
+    }
+    if (ownerUserId === userId) {
+      await this.reply(chatId, 'ℹ️ Группа уже привязана к тебе.');
+      return;
+    }
+    const owner = await this.deps.users.getById(ownerUserId).catch(() => null);
+    const name = owner?.displayName ?? 'другому участнику';
+    await this.reply(
+      chatId,
+      `ℹ️ Группа уже привязана к <b>${escapeHtml(name)}</b> — задачи от участников идут в его «Входящие».`,
     );
   }
 
@@ -813,6 +871,22 @@ function excerptShort(text: string | null, limit: number): string {
   const s = stripAllMarkdown(text).replace(/\s+/g, ' ').trim();
   if (s.length === 0) return '(без описания)';
   return s.length <= limit ? s : s.slice(0, limit - 1).trimEnd() + '…';
+}
+
+// Человекочитаемое имя отправителя для атрибуции задачи-фолбэка: «Имя Фамилия (@username)».
+function formatSenderName(from: {
+  readonly first_name?: string;
+  readonly last_name?: string;
+  readonly username?: string;
+}): string {
+  const full = [from.first_name, from.last_name]
+    .filter((s): s is string => !!s && s.trim().length > 0)
+    .join(' ')
+    .trim();
+  if (full && from.username) return `${full} (@${from.username})`;
+  if (full) return full;
+  if (from.username) return `@${from.username}`;
+  return 'участник';
 }
 
 function escapeHtml(s: string): string {

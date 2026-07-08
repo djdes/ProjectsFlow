@@ -7,6 +7,7 @@ import type { TelegramTaskDraft } from '../TelegramTaskDraftRepository.js';
 
 type CreateTaskCall = {
   projectId: string;
+  ownerUserId?: string;
   description: string;
   delegateUserId?: string | null;
   deadline?: string | null;
@@ -58,6 +59,7 @@ function makeHarness(opts?: {
   const accepted: string[] = [];
   const declined: string[] = [];
   const assigned: { taskId: string; projectId: string }[] = [];
+  const inboxUserIds: string[] = [];
 
   const draftsRepo = {
     async create(input: any): Promise<TelegramTaskDraft> {
@@ -155,6 +157,7 @@ function makeHarness(opts?: {
       async execute(input: any) {
         createTaskCalls.push({
           projectId: input.projectId,
+          ownerUserId: input.ownerUserId,
           description: input.description,
           delegateUserId: input.delegateUserId ?? null,
           deadline: input.deadline ?? null,
@@ -168,7 +171,8 @@ function makeHarness(opts?: {
       },
     },
     getOrCreateInbox: {
-      async execute() {
+      async execute(userId?: string) {
+        if (userId) inboxUserIds.push(userId);
         return { id: 'inbox1', name: 'Входящие', isInbox: true } as any;
       },
     },
@@ -240,7 +244,7 @@ function makeHarness(opts?: {
   };
 
   const service = new TelegramComposerService(deps as any);
-  return { service, drafts, createTaskCalls, sent, edits, answers, delegateMessages, accepted, declined, assigned };
+  return { service, drafts, createTaskCalls, sent, edits, answers, delegateMessages, accepted, declined, assigned, inboxUserIds };
 }
 
 function cq(draftIdOrData: string, tgUserId = 111): TelegramCallbackQuery {
@@ -251,6 +255,63 @@ function cq(draftIdOrData: string, tgUserId = 111): TelegramCallbackQuery {
     data: draftIdOrData,
   };
 }
+
+// --- Гибрид-маршрутизация групповых сообщений (groupCtx) ---
+// tgId 111→u1, 222→u2, иначе не привязан. Владельцем групп в тестах ставим u1.
+
+function gctx(ownerUserId: string | null, senderName = 'Отправитель', groupTitle: string | null = null) {
+  return { ownerUserId, senderName, groupTitle };
+}
+
+test('группа: владелец (sender===owner) → флоу «как отправитель», без мгновенного createTask', async () => {
+  const h = makeHarness();
+  await h.service.startFromMessage(111, 500, 'починить сборку', gctx('u1', 'Босс'));
+  assert.equal(h.createTaskCalls.length, 0); // ушли в self/manual флоу — createTask на confirm
+  assert.equal(h.drafts.size, 1);
+  assert.equal([...h.drafts.values()][0]!.creatorUserId, 'u1');
+});
+
+test('группа: коллега без +Проекта при владельце → в «Входящие» ВЛАДЕЛЬЦА с атрибуцией', async () => {
+  const h = makeHarness();
+  await h.service.startFromMessage(222, 500, 'улучшить распознавание накладных', gctx('u1', 'Олег (@oleg)', 'Рабочий чат'));
+  assert.equal(h.createTaskCalls.length, 1);
+  const call = h.createTaskCalls[0]!;
+  assert.equal(call.projectId, 'inbox1');
+  assert.equal(call.ownerUserId, 'u1'); // задача создаётся ОТ ЛИЦА владельца, не отправителя
+  assert.ok(h.inboxUserIds.includes('u1')); // резолвили inbox владельца
+  assert.ok(call.description.includes('улучшить распознавание'));
+  assert.ok(call.description.includes('Олег')); // атрибуция автора
+  assert.equal(h.drafts.size, 0); // без черновика/кнопок
+  assert.ok(h.sent.length >= 1); // подтверждение в группу
+});
+
+test('группа: коллега с +своим проектом → флоу «как отправитель» (черновик от него)', async () => {
+  const h = makeHarness();
+  await h.service.startFromMessage(222, 500, '+Альфа поправить парсинг', gctx('u1', 'Олег'));
+  assert.equal(h.createTaskCalls.length, 0); // self/manual — createTask на confirm
+  assert.equal(h.drafts.size, 1);
+  const d = [...h.drafts.values()][0]!;
+  assert.equal(d.creatorUserId, 'u2'); // действует как отправитель
+  assert.equal(d.projectId, 'p1'); // в свой проект Альфа
+});
+
+test('группа: непривязанный отправитель при владельце → в «Входящие» владельца', async () => {
+  const h = makeHarness();
+  await h.service.startFromMessage(999, 500, 'подготовить отчёт', gctx('u1', 'Гость'));
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.ownerUserId, 'u1');
+  assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1');
+  assert.equal(h.drafts.size, 0);
+});
+
+test('группа: непривязанный + группа без владельца → подсказка про /start, ничего не создаём', async () => {
+  const h = makeHarness();
+  await h.service.startFromMessage(999, 500, 'что-то сделать', gctx(null, 'Гость'));
+  assert.equal(h.createTaskCalls.length, 0);
+  assert.equal(h.drafts.size, 0);
+  assert.ok(h.sent.length >= 1);
+  assert.ok(h.sent[0]!.text.includes('/start'));
+});
 
 test('голый текст → черновик во «Входящие», confirm → createTask в inbox', async () => {
   const h = makeHarness();

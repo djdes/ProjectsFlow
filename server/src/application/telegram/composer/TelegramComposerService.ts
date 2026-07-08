@@ -44,6 +44,15 @@ export type TelegramCallbackQuery = {
   readonly data?: string;
 };
 
+// Контекст группового сообщения для гибрид-маршрутизации (см. spec
+// 2026-07-08-telegram-group-multi-user-tasks-design). ownerUserId — владелец группы (null,
+// если не привязана); senderName/groupTitle — для атрибуции задачи-фолбэка.
+export type TelegramGroupContext = {
+  readonly ownerUserId: string | null;
+  readonly senderName: string;
+  readonly groupTitle: string | null;
+};
+
 type Deps = {
   readonly drafts: TelegramTaskDraftRepository;
   readonly taskMessages: TelegramTaskMessageRepository;
@@ -318,7 +327,24 @@ export class TelegramComposerService {
   // исполнитель/дедлайн); пока AI думает — «Ожидайте, перефразирую…» со спиннером. Если AI
   // недоступен (диспетчер офлайн / job упал / таймаут / битый JSON) — тихий откат на ручной
   // флоу. Все AI-вызовы best-effort: любая ошибка только логируется, бот остаётся рабочим.
-  async startFromMessage(tgUserId: number, chatId: number, rawText: string): Promise<void> {
+  async startFromMessage(
+    tgUserId: number,
+    chatId: number,
+    rawText: string,
+    groupCtx?: TelegramGroupContext,
+  ): Promise<void> {
+    // Групповое сообщение: гибрид-развилка. «Как отправитель» → продолжаем обычным флоу ниже;
+    // «во Входящие владельца» → мгновенная задача от лица владельца; «nudge» → просим привязать.
+    if (groupCtx) {
+      const route = await this.resolveGroupRouting(tgUserId, rawText, groupCtx.ownerUserId);
+      if (route === 'owner-inbox') {
+        // ownerUserId гарантированно задан, когда route === 'owner-inbox'.
+        return this.createInOwnerInbox(groupCtx.ownerUserId as string, chatId, rawText, groupCtx);
+      }
+      if (route === 'nudge') return this.send(chatId, this.bindHintText());
+      // route === 'self' → обычный флоу ниже (отправитель точно привязан).
+    }
+
     const userId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
     if (!userId) {
       await this.send(chatId, this.notLinkedText());
@@ -374,6 +400,69 @@ export class TelegramComposerService {
       console.warn('[tg-composer] AI compose failed → ручной флоу:', err);
       await this.manualFlow(userId, chatId, rawText, waitMsgId ?? undefined);
     }
+  }
+
+  // Гибрид-развилка для группового сообщения. Возвращает:
+  //   'self'        — создавать «как отправитель» (обычный флоу с карточкой/кнопками);
+  //   'owner-inbox' — уронить в «Входящие» владельца группы (владелец задан);
+  //   'nudge'       — некому и не под кем создавать → попросить владельца привязать /start.
+  private async resolveGroupRouting(
+    tgUserId: number,
+    rawText: string,
+    ownerUserId: string | null,
+  ): Promise<'self' | 'owner-inbox' | 'nudge'> {
+    const senderUserId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
+    if (senderUserId) {
+      if (!ownerUserId) return 'self'; // владельца нет — падать некуда, не ломаем текущее
+      if (senderUserId === ownerUserId) return 'self'; // владелец всегда «как отправитель»
+      // Реальный коллаборатор: назван +Проект, участником которого отправитель является.
+      const parsed = parseComposerMessage(rawText);
+      if (parsed.projectQuery) {
+        const hint = await this.resolveProjectHint(senderUserId, parsed);
+        if (hint.projectId) return 'self';
+      }
+      return 'owner-inbox'; // привязан, но для этого пространства «чужой» → в Входящие владельца
+    }
+    // Отправитель не привязан.
+    return ownerUserId ? 'owner-inbox' : 'nudge';
+  }
+
+  // Фолбэк: мгновенно создаём задачу в «Входящих» ВЛАДЕЛЬЦА группы (от его лица), с атрибуцией
+  // автора-отправителя в описании. Без карточки/кнопок — их в группе жал бы не владелец-создатель.
+  private async createInOwnerInbox(
+    ownerUserId: string,
+    chatId: number,
+    rawText: string,
+    groupCtx: TelegramGroupContext,
+  ): Promise<void> {
+    const body = rawText.trim();
+    if (body.length === 0) return;
+    try {
+      const inbox = await this.deps.getOrCreateInbox.execute(ownerUserId);
+      await this.deps.createTask.execute({
+        projectId: inbox.id,
+        ownerUserId,
+        description: this.buildOwnerInboxDescription(body, groupCtx),
+        status: DEFAULT_COLUMN,
+      });
+      await this.send(
+        chatId,
+        `✅ Добавил в «Входящие»: <i>${escapeHtml(excerpt(body))}</i>\n<i>Поставил: ${escapeHtml(groupCtx.senderName)}</i>`,
+      );
+    } catch (err) {
+      console.warn('[tg-composer] owner-inbox create failed:', err);
+      await this.send(chatId, '❌ Не удалось создать задачу. Попробуйте позже.');
+    }
+  }
+
+  // Текст задачи-фолбэка + футер-атрибуция (кто и из какой группы поставил).
+  private buildOwnerInboxDescription(body: string, groupCtx: TelegramGroupContext): string {
+    const grp = groupCtx.groupTitle ? ` · «${groupCtx.groupTitle}»` : '';
+    return `${body}\n\n— 📨 из Telegram${grp}: ${groupCtx.senderName}`;
+  }
+
+  private bindHintText(): string {
+    return '👋 Чтобы задачи от участников попадали в нужный аккаунт, владелец должен один раз отправить здесь /start.';
   }
 
   // Ручной флоу (без AI): парсит `+проект текст @делегат`, ведёт многошаговый выбор кнопками.
