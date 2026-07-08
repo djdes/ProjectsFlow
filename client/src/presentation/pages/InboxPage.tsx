@@ -162,6 +162,7 @@ export function InboxPage(): React.ReactElement {
       <AssignedToMeBlock
         onChanged={() => setRefetchKey((k) => k + 1)}
         view={view}
+        hideDone={hideDone}
         bleedNegClass={view === 'kanban' ? KANBAN_BLEED_NEG : ''}
         bleedPadClass={view === 'kanban' ? KANBAN_BLEED_PAD : ''}
       />

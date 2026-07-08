@@ -53,6 +53,9 @@ type Props = {
   // Режим отображения (как у страницы «Входящие»): 'kanban' — группы становятся колонками
   // канбана (карточки = поручения), 'list' — плоский список с заголовками групп.
   view?: 'kanban' | 'list';
+  // Скрыть выполненные (status='done'). Общий Eye-toggle страницы «Входящие» (persist в
+  // localStorage) действует и на этот блок, и на доску ниже — одна кнопка на страницу.
+  hideDone?: boolean;
   // Full-bleed классы (как у доски проекта): в kanban ряд колонок выносится за паддинг
   // страницы, чтобы отступы от краёв были такими же, как в проектах.
   bleedNegClass?: string;
@@ -67,6 +70,7 @@ type Props = {
 export function AssignedToMeBlock({
   onChanged,
   view = 'list',
+  hideDone = false,
   bleedNegClass = '',
   bleedPadClass = '',
 }: Props): React.ReactElement | null {
@@ -167,16 +171,26 @@ export function AssignedToMeBlock({
     });
   };
 
+  // Фильтр hide-done — ДО группировок и счётчиков (зеркало TaskListView): done-задачи
+  // остаются в data, скрытие только визуальное. Блок из одних выполненных исчезает
+  // целиком (total === 0 → null); вернуть их — тем же Eye-toggle'ом, что и доску ниже.
+  const visibleTasks = useMemo(
+    () => (hideDone ? tasks.filter((t) => t.status !== 'done') : tasks),
+    [tasks, hideDone],
+  );
   // Группировку (проект/дата/дедлайн/приоритет) для СПИСКА делает чистый хелпер.
-  const groups = useMemo(() => groupAssignedTasks(tasks, grouping, new Date()), [tasks, grouping]);
+  const groups = useMemo(
+    () => groupAssignedTasks(visibleTasks, grouping, new Date()),
+    [visibleTasks, grouping],
+  );
   // Канбан «Поручено мне» — всегда РОВНО 3 колонки по времени (Без срока / На сегодня /
   // Будущее), независимо от выбранной группировки. Колонки всегда все три, даже пустые.
-  const kanbanGroups = useMemo(() => groupAssignedByTime(tasks, new Date()), [tasks]);
+  const kanbanGroups = useMemo(() => groupAssignedByTime(visibleTasks, new Date()), [visibleTasks]);
 
   if (loading) return null;
-  const total = tasks.length;
+  const total = visibleTasks.length;
   if (total === 0) return null;
-  const pendingCount = tasks.filter((t) => t.delegation.status === 'pending').length;
+  const pendingCount = visibleTasks.filter((t) => t.delegation.status === 'pending').length;
   // Русская плюрализация: 1/21/31 «ждёт ответа», иначе «ждут ответа» (11 — исключение).
   const pendingWord =
     pendingCount % 10 === 1 && pendingCount % 100 !== 11 ? 'ждёт ответа' : 'ждут ответа';

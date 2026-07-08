@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupAssignedTasks } from './assignedGrouping';
+import { groupAssignedByTime, groupAssignedTasks } from './assignedGrouping';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
 import type { TaskDelegation, TaskDelegationStatus } from '@/domain/task/TaskDelegation';
 import type { TaskPriority } from '@/domain/task/Task';
@@ -136,4 +136,32 @@ test('внутри бакета ожидающие (pending) — выше при
   const groups = groupAssignedTasks([accepted, pending], 'priority', NOW);
   assert.equal(groups[0]?.items[0]?.id, pending.id);
   assert.equal(groups[0]?.items[1]?.id, accepted.id);
+});
+
+test('byTime: всегда ровно 3 колонки (даже пустые), просроченные попадают в «На сегодня»', () => {
+  const overdue = mk({ deadline: '2026-06-01' }); // дедлайн в прошлом
+  const today = mk({ deadline: '2026-06-09' }); // сегодня
+  const noDeadline = mk({ deadline: null });
+  const groups = groupAssignedByTime([overdue, today, noDeadline], NOW);
+  assert.deepEqual(
+    groups.map((g) => ({ key: g.key, label: g.label, count: g.items.length })),
+    [
+      { key: 'none', label: 'Без срока', count: 1 },
+      { key: 'today', label: 'На сегодня', count: 2 },
+      { key: 'future', label: 'Будущее', count: 0 },
+    ],
+  );
+  // Просроченная и сегодняшняя — обе в «На сегодня»; внутри порядок по дедлайну (старее выше).
+  assert.deepEqual(
+    groups[1]?.items.map((t) => t.id),
+    [overdue.id, today.id],
+  );
+});
+
+test('byTime: дедлайн позже сегодня → «Будущее»', () => {
+  const future = mk({ deadline: '2026-06-10' }); // завтра
+  const groups = groupAssignedByTime([future], NOW);
+  assert.equal(groups[2]?.items[0]?.id, future.id);
+  assert.equal(groups[0]?.items.length, 0);
+  assert.equal(groups[1]?.items.length, 0);
 });
