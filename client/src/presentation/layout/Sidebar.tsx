@@ -116,7 +116,12 @@ export function Sidebar({
   ];
   // Клик по вкладке-переключателю (только Главная/Чат). Входящие/Поиск идут через onAction.
   const onRailSelect = (i: number): void => {
-    setRailPersist(RAIL_ORDER[i] ?? 'home');
+    const key = RAIL_ORDER[i] ?? 'home';
+    setRailPersist(key);
+    // «Главная» — не только переключатель нижней области сайдбара: ведёт и на главный
+    // экран («Входящие», route '/') — из глубины проекта домой одним кликом. На мобиле
+    // drawer закроется сам (AppShell закрывает его при смене маршрута).
+    if (key === 'home') navigate('/');
   };
 
   if (collapsed) {
