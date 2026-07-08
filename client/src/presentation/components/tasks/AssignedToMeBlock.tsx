@@ -36,6 +36,7 @@ import {
   DEFAULT_ASSIGNED_GROUPING,
   type AssignedGrouping,
 } from '@/domain/user/UiPrefs';
+import { UserAvatar } from '@/presentation/components/user/UserAvatar';
 import { groupAssignedByTime, groupAssignedTasks } from './assignedGrouping';
 import { ExpandableMarkdown } from './ExpandableMarkdown';
 import { InboxCheckbox } from './InboxCheckbox';
@@ -175,18 +176,41 @@ export function AssignedToMeBlock({
   if (loading) return null;
   const total = tasks.length;
   if (total === 0) return null;
+  const pendingCount = tasks.filter((t) => t.delegation.status === 'pending').length;
+  // Русская плюрализация: 1/21/31 «ждёт ответа», иначе «ждут ответа» (11 — исключение).
+  const pendingWord =
+    pendingCount % 10 === 1 && pendingCount % 100 !== 11 ? 'ждёт ответа' : 'ждут ответа';
 
   return (
-    // Notion-стиль: НЕ карточка-в-рамке, а чистая секция. Заголовок — тихий muted-лейбл
-    // (как разделы Notion), строки ниже — без тяжёлого бордера, разделены hairline-дивайдерами.
-    <section id="assigned-to-me" className="space-y-4">
-      <div className="flex items-center justify-between gap-2 px-0.5">
-        <h2 className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Поручено мне
-          <span className="text-muted-foreground/60">{total}</span>
-        </h2>
+    // Персональная зона, Notion-стиль: НЕ карточка-в-рамке (рамка враждует с full-bleed
+    // канбана). «Это моё» несут три тихих сигнала: identity-шапка (свой аватар + настоящий
+    // заголовок + синяя count-пилюля + подзаголовок-контракт), шёпот-тинт primary на
+    // колонках канбана и hairline-линейка, замыкающая зону перед основной доской.
+    <section id="assigned-to-me" className="space-y-3">
+      <div className="flex items-start justify-between gap-3 px-0.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          {/* size-8 сознательно крупнее аватаров делегаторов в строках/карточках (size-6/7) —
+              иерархия масштабом: это владелец зоны, а не участник треда. */}
+          <UserAvatar
+            displayName={user?.displayName ?? ''}
+            avatarUrl={user?.avatarUrl}
+            className="size-8 text-[11px]"
+          />
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-[15px] font-semibold leading-tight tracking-tight text-foreground">
+              <span className="truncate">Поручено мне</span>
+              <span className="inline-flex h-[1.125rem] min-w-[1.125rem] shrink-0 items-center justify-center rounded-full bg-primary/10 px-1.5 text-[11px] font-medium leading-none tabular-nums text-primary">
+                {total}
+              </span>
+            </h2>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              Задачи от других участников
+              {pendingCount > 0 && ` · ${pendingCount} ${pendingWord}`}
+            </p>
+          </div>
+        </div>
         {/* Группировка — только для списка. В канбане колонки фиксированы по времени, поэтому
-            выпадашка не нужна. */}
+            выпадашка не нужна. items-start прижимает её к строке заголовка. */}
         {view === 'list' && <GroupingMenu value={grouping} onChange={handleGroupingChange} />}
       </div>
 
@@ -197,7 +221,11 @@ export function AssignedToMeBlock({
           {kanbanGroups.map((group) => (
             <div
               key={group.key}
-              className="flex w-[86vw] max-w-[22rem] shrink-0 snap-start flex-col rounded-xl bg-muted/60 sm:w-72 sm:max-w-none sm:bg-muted/30"
+              // Шёпот-тинт primary вместо серого muted — колонки читаются «чуть голубыми»
+              // на фоне серых колонок доски ниже. На мобиле альфа выше (зеркало паттерна
+              // /60→/30), в dark ещё выше — primary тонет на графите. Не поднимать выше
+              // /[0.09]//[0.11] — начинает «светиться».
+              className="flex w-[86vw] max-w-[22rem] shrink-0 snap-start flex-col rounded-xl bg-primary/[0.06] dark:bg-primary/[0.09] sm:w-72 sm:max-w-none sm:bg-primary/[0.04] sm:dark:bg-primary/[0.07]"
             >
               <div className="flex items-center gap-1.5 px-3 pb-1.5 pt-2.5 text-xs font-medium text-muted-foreground">
                 <TimeBucketIcon bucket={group.key} />
@@ -267,6 +295,18 @@ export function AssignedToMeBlock({
           ))}
         </div>
       )}
+
+      {/* Hairline-линейка замыкает персональную зону перед основной доской. В канбане
+          уезжает full-bleed теми же отрицательными маржинами, что и ряд колонок (в list
+          bleedNegClass = '' — линия в ширину читаемой колонки). !mt-* перебивает space-y-3
+          секции: линии нужно больше воздуха сверху, чем шагу шапка→тело. */}
+      <div
+        aria-hidden
+        className={cn(
+          '!mt-5 mb-1 border-t border-border sm:!mt-6 sm:mb-2',
+          view === 'kanban' && bleedNegClass,
+        )}
+      />
 
       <TaskDrawer
         state={drawerTask ? ({ mode: 'edit', task: drawerTask } as TaskDrawerState) : null}
