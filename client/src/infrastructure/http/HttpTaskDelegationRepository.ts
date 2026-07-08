@@ -39,10 +39,17 @@ export class HttpTaskDelegationRepository implements TaskDelegationRepository {
   }
 
   async listAssignedToMe(): Promise<AssignedTask[]> {
-    const { items } = await httpClient.get<{ items: AssignedItemDto[] }>(
-      '/delegations/assigned-to-me',
-    );
-    // Плоский список — группировку (проект/дата/дедлайн/приоритет) делает презентация.
+    return this.fetchAssignedList('/delegations/assigned-to-me');
+  }
+
+  async listDelegatedByMe(): Promise<AssignedTask[]> {
+    return this.fetchAssignedList('/delegations/delegated-by-me');
+  }
+
+  // Общий фетчер assigned-to-me / delegated-by-me — сервер отдаёт одинаковый view-shape.
+  // Плоский список — группировку (проект/дата/дедлайн/приоритет) делает презентация.
+  private async fetchAssignedList(path: string): Promise<AssignedTask[]> {
+    const { items } = await httpClient.get<{ items: AssignedItemDto[] }>(path);
     const out: AssignedTask[] = [];
     for (const it of items) {
       const task = taskFromDto(it.task);

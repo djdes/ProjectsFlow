@@ -139,6 +139,7 @@ import { DeclineTaskDelegation } from './application/task/DeclineTaskDelegation.
 import { WithdrawTaskDelegation } from './application/task/WithdrawTaskDelegation.js';
 import { ListMyPendingDelegations } from './application/task/ListMyPendingDelegations.js';
 import { ListTasksAssignedToMe } from './application/task/ListTasksAssignedToMe.js';
+import { ListTasksDelegatedByMe } from './application/task/ListTasksDelegatedByMe.js';
 import { AssignInboxTaskToProject } from './application/task/AssignInboxTaskToProject.js';
 import { DelegateExistingTask } from './application/task/DelegateExistingTask.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
@@ -1934,6 +1935,13 @@ const { app, devProxyUpgrade } = createApp({
     withdraw: new WithdrawTaskDelegation({ delegations: taskDelegationRepo }),
     listPending: new ListMyPendingDelegations(taskDelegationRepo),
     listAssignedToMe: new ListTasksAssignedToMe({
+      delegations: taskDelegationRepo,
+      tasks: taskRepo,
+      taskCommits: taskCommitRepo,
+      attachments: taskAttachmentRepo,
+      comments: taskCommentRepo,
+    }),
+    listDelegatedByMe: new ListTasksDelegatedByMe({
       delegations: taskDelegationRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,

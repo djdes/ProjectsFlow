@@ -12,12 +12,17 @@ export type AssignedDisplayGroup = {
   readonly items: AssignedTask[];
 };
 
+// Направление делегирования: 'toMe' — задачи, порученные мне; 'byMe' — порученные мной.
+// Влияет только на project-группировку inbox-задач (чьим именем подписывать «Личные»).
+export type DelegationDirection = 'toMe' | 'byMe';
+
 // Чистая функция группировки — вся логика бакетов здесь (тестируется без React/DOM).
 // `now` передаётся явно, чтобы границы дней («сегодня/вчера/неделя») были детерминированы.
 export function groupAssignedTasks(
   tasks: readonly AssignedTask[],
   mode: AssignedGrouping,
   now: Date,
+  direction: DelegationDirection = 'toMe',
 ): AssignedDisplayGroup[] {
   switch (mode) {
     case 'created':
@@ -28,7 +33,7 @@ export function groupAssignedTasks(
       return groupByPriority(tasks);
     case 'project':
     default:
-      return groupByProject(tasks);
+      return groupByProject(tasks, direction);
   }
 }
 
@@ -54,17 +59,30 @@ function ymd(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function groupByProject(tasks: readonly AssignedTask[]): AssignedDisplayGroup[] {
+function groupByProject(
+  tasks: readonly AssignedTask[],
+  direction: DelegationDirection,
+): AssignedDisplayGroup[] {
   const map = new Map<string, AssignedDisplayGroup>();
   for (const t of tasks) {
-    let g = map.get(t.projectId);
+    // Inbox-задачи: в «Для меня» это чужие инбоксы — группа на делегатора («Личные ·
+    // <кто поручил>»); в «Другим» инбокс один (свой), подпись своим именем бессмысленна —
+    // группируем по делегату («Личные · <кому поручено>»), ключ дробится по человеку.
+    const key =
+      t.isInbox && direction === 'byMe'
+        ? `${t.projectId}:${t.delegation.delegateUserId}`
+        : t.projectId;
+    let g = map.get(key);
     if (!g) {
-      // inbox — задача в личном инбоксе делегатора → ярлык по его имени.
       const label = t.isInbox
-        ? `Личные · ${t.delegation.creatorDisplayName}`
+        ? `Личные · ${
+            direction === 'byMe'
+              ? t.delegation.delegateDisplayName
+              : t.delegation.creatorDisplayName
+          }`
         : t.projectName;
-      g = { key: t.projectId, label, isInbox: t.isInbox, items: [] };
-      map.set(t.projectId, g);
+      g = { key, label, isInbox: t.isInbox, items: [] };
+      map.set(key, g);
     }
     g.items.push(t);
   }

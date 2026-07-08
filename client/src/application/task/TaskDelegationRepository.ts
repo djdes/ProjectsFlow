@@ -13,6 +13,10 @@ export interface TaskDelegationRepository {
   // Все поручённые мне задачи (pending+accepted) по всем проектам — плоским списком.
   // Группировку (проект/дата/дедлайн/приоритет) делает презентация (assignedGrouping.ts).
   listAssignedToMe(): Promise<AssignedTask[]>;
+  // Все задачи, которые Я поручил другим (pending+accepted), по всем проектам — вкладка
+  // «Другим». Тот же shape: delegation.delegateUserId/DisplayName — кому поручено.
+  // Фильтрацию по конкретному человеку делает презентация.
+  listDelegatedByMe(): Promise<AssignedTask[]>;
   accept(id: string): Promise<TaskDelegation>;
   decline(id: string): Promise<TaskDelegation>;
   // creator отзывает pending до accept'а.

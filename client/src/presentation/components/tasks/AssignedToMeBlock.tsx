@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarClock,
   CalendarDays,
@@ -11,6 +11,7 @@ import {
   Inbox as InboxIcon,
   ListFilter,
   MessageSquare,
+  Users,
   X,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -37,7 +38,11 @@ import {
   type AssignedGrouping,
 } from '@/domain/user/UiPrefs';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
-import { groupAssignedByTime, groupAssignedTasks } from './assignedGrouping';
+import {
+  groupAssignedByTime,
+  groupAssignedTasks,
+  type DelegationDirection,
+} from './assignedGrouping';
 import { ExpandableMarkdown } from './ExpandableMarkdown';
 import { InboxCheckbox } from './InboxCheckbox';
 import { DelegationBadge } from './DelegationBadge';
@@ -62,11 +67,22 @@ type Props = {
   bleedPadClass?: string;
 };
 
-// Блок «Поручено мне» на главной: задачи, делегированные текущему пользователю, по всем
-// проектам. Группировка переключаемая (проект/дата создания/дедлайн/приоритет) и сохраняется
-// за аккаунтом (users.ui_prefs). Принятые — с чекбоксом «выполнено» (снятие галочки возвращает
-// прежний статус); ожидающие — с кнопками «Принять/Отклонить». Клик по принятой задаче
-// открывает её в TaskDrawer (read-access для inbox-делегата гейтится на сервере).
+// Тип вкладки блока делегирования: «Для меня» (поручено мне) / «Другим» (поручил я).
+// Совпадает с направлением группировки — вкладка и есть направление.
+type DelegationTab = DelegationDirection;
+
+// done-задачи прячутся Eye-toggle'ом страницы; фильтр общий для обеих вкладок.
+const notDone = (t: AssignedTask): boolean => t.status !== 'done';
+
+// Блок делегирования на главной, две вкладки: «Для меня» — задачи, делегированные текущему
+// пользователю по всем проектам; «Другим» — задачи, которые он поручил (по умолчанию все,
+// с фильтром по конкретному человеку — видно, как делегат справляется по всем проектам).
+// Обе вкладки грузятся вместе (счётчики в табах всегда актуальны). Группировка списка
+// переключаемая (проект/дата создания/дедлайн/приоритет) и сохраняется за аккаунтом
+// (users.ui_prefs). «Для меня»: принятые — с чекбоксом «выполнено», ожидающие — с кнопками
+// «Принять/Отклонить». «Другим»: все строки в «принятом» виде — DelegationBadge показывает
+// «ждёт ответа» для pending; чекбокс доступен, если роль делегатора позволяет (canModify
+// с сервера). Клик по задаче открывает TaskDrawer (read-access гейтится на сервере).
 export function AssignedToMeBlock({
   onChanged,
   view = 'list',
@@ -79,16 +95,32 @@ export function AssignedToMeBlock({
   // refresh списка проектов: при accept сервер помечает проект задачи favorite'ом — чтобы
   // секция «Избранное» в сайдбаре сразу его подхватила, перезагружаем список после принятия.
   const { refresh: refreshProjects } = useProjectsContext();
-  const [tasks, setTasks] = useState<AssignedTask[]>([]);
+  const [tasks, setTasks] = useState<AssignedTask[]>([]); // «Для меня»
+  const [byMeTasks, setByMeTasks] = useState<AssignedTask[]>([]); // «Другим»
+  const [tab, setTab] = useState<DelegationTab>('toMe');
+  // Фильтр «Другим» по конкретному делегату (delegateUserId). null = все.
+  const [personFilter, setPersonFilter] = useState<string | null>(null);
   const [grouping, setGrouping] = useState<AssignedGrouping>(DEFAULT_ASSIGNED_GROUPING);
   const [loading, setLoading] = useState(true);
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
   const [drawerTask, setDrawerTask] = useState<AssignedTask | null>(null);
+  // Зеркало hideDone для mount-эффекта: prop не в deps (иначе refetch на каждый
+  // Eye-toggle), а стартовую вкладку надо решать по ВИДИМЫМ спискам — иначе блок
+  // открывался бы на «Для меня», пустой из-за скрытых done-задач. Синхронизация — в
+  // эффекте (запись в ref во время рендера запрещена react-hooks/refs).
+  const hideDoneRef = useRef(hideDone);
+  useEffect(() => {
+    hideDoneRef.current = hideDone;
+  }, [hideDone]);
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
-      const list = await taskDelegationRepository.listAssignedToMe();
-      setTasks(list);
+      const [mine, byMe] = await Promise.all([
+        taskDelegationRepository.listAssignedToMe(),
+        taskDelegationRepository.listDelegatedByMe(),
+      ]);
+      setTasks(mine);
+      setByMeTasks(byMe);
     } catch (e) {
       toast.error(`Не удалось загрузить поручения: ${(e as Error).message}`);
     }
@@ -97,13 +129,24 @@ export function AssignedToMeBlock({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    // Список задач + сохранённую группировку грузим вместе и гейтим первый рендер на оба —
-    // блок не «мигает» дефолтной группировкой перед применением сохранённой.
-    Promise.all([taskDelegationRepository.listAssignedToMe(), userRepository.getUiPrefs()])
-      .then(([list, prefs]) => {
+    // Обе вкладки + сохранённую группировку грузим вместе и гейтим первый рендер на всё —
+    // блок не «мигает» дефолтной группировкой/счётчиками перед применением реальных.
+    Promise.all([
+      taskDelegationRepository.listAssignedToMe(),
+      taskDelegationRepository.listDelegatedByMe(),
+      userRepository.getUiPrefs(),
+    ])
+      .then(([mine, byMe, prefs]) => {
         if (cancelled) return;
-        setTasks(list);
+        setTasks(mine);
+        setByMeTasks(byMe);
         if (prefs.inboxAssignedGrouping) setGrouping(prefs.inboxAssignedGrouping);
+        // Стартовая вкладка: «Для меня» пуста, а «Другим» — нет → открываем «Другим»,
+        // чтобы блок не встречал пустым состоянием при живом контенте рядом. Решаем по
+        // видимым (с учётом hide-done) спискам — тем же, что реально отрисуются.
+        const mineShown = hideDoneRef.current ? mine.filter(notDone) : mine;
+        const byMeShown = hideDoneRef.current ? byMe.filter(notDone) : byMe;
+        if (mineShown.length === 0 && byMeShown.length > 0) setTab('byMe');
       })
       .catch((e: unknown) => {
         if (!cancelled) toast.error(`Не удалось загрузить поручения: ${(e as Error).message}`);
@@ -173,27 +216,69 @@ export function AssignedToMeBlock({
 
   // Фильтр hide-done — ДО группировок и счётчиков (зеркало TaskListView): done-задачи
   // остаются в data, скрытие только визуальное. Блок из одних выполненных исчезает
-  // целиком (total === 0 → null); вернуть их — тем же Eye-toggle'ом, что и доску ниже.
-  const visibleTasks = useMemo(
-    () => (hideDone ? tasks.filter((t) => t.status !== 'done') : tasks),
-    [tasks, hideDone],
+  // целиком; вернуть их — тем же Eye-toggle'ом, что и доску ниже.
+  const toMeVisible = useMemo(() => (hideDone ? tasks.filter(notDone) : tasks), [tasks, hideDone]);
+  const byMeVisibleAll = useMemo(
+    () => (hideDone ? byMeTasks.filter(notDone) : byMeTasks),
+    [byMeTasks, hideDone],
   );
+  // Фильтр по человеку — только вкладка «Другим», поверх hide-done.
+  const byMeVisible = useMemo(
+    () =>
+      personFilter
+        ? byMeVisibleAll.filter((t) => t.delegation.delegateUserId === personFilter)
+        : byMeVisibleAll,
+    [byMeVisibleAll, personFilter],
+  );
+  const visibleTasks = tab === 'toMe' ? toMeVisible : byMeVisible;
+  // Опции фильтра по человеку — уникальные делегаты из СЫРОГО списка «Другим» (не из
+  // отфильтрованного — иначе выбор человека выкидывал бы остальных из меню).
+  const people = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of byMeTasks) map.set(t.delegation.delegateUserId, t.delegation.delegateDisplayName);
+    return [...map.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  }, [byMeTasks]);
+  // Выбранный в фильтре человек исчез из списка (делегации завершились/отозваны) —
+  // сбрасываем фильтр, чтобы вкладка не выглядела пустой без причины.
+  useEffect(() => {
+    if (personFilter && !byMeTasks.some((t) => t.delegation.delegateUserId === personFilter)) {
+      setPersonFilter(null);
+    }
+  }, [byMeTasks, personFilter]);
   // Группировку (проект/дата/дедлайн/приоритет) для СПИСКА делает чистый хелпер.
+  // Направление = активная вкладка: влияет на подпись inbox-групп («Личные · кто/кому»).
   const groups = useMemo(
-    () => groupAssignedTasks(visibleTasks, grouping, new Date()),
-    [visibleTasks, grouping],
+    () => groupAssignedTasks(visibleTasks, grouping, new Date(), tab),
+    [visibleTasks, grouping, tab],
   );
-  // Канбан «Поручено мне» — всегда РОВНО 3 колонки по времени (Без срока / На сегодня /
+  // Канбан блока — всегда РОВНО 3 колонки по времени (Без срока / На сегодня /
   // Будущее), независимо от выбранной группировки. Колонки всегда все три, даже пустые.
   const kanbanGroups = useMemo(() => groupAssignedByTime(visibleTasks, new Date()), [visibleTasks]);
 
   if (loading) return null;
-  const total = visibleTasks.length;
-  if (total === 0) return null;
+  // Блок скрыт, только когда пусто В ОБЕИХ вкладках (с учётом hide-done). Пустая
+  // АКТИВНАЯ вкладка при живой соседней рисует тихий empty-state (табы должны остаться).
+  if (toMeVisible.length === 0 && byMeVisibleAll.length === 0) return null;
   const pendingCount = visibleTasks.filter((t) => t.delegation.status === 'pending').length;
   // Русская плюрализация: 1/21/31 «ждёт ответа», иначе «ждут ответа» (11 — исключение).
   const pendingWord =
     pendingCount % 10 === 1 && pendingCount % 100 !== 11 ? 'ждёт ответа' : 'ждут ответа';
+  const subtitleBase =
+    tab === 'toMe' ? 'Задачи от других участников' : 'Задачи, которые вы поручили';
+  // Пустая видимая вкладка при непустом СЫРОМ списке значит одно: всё выполнено и
+  // скрыто Eye-toggle'ом — говорим об этом честно, а не «ничего не поручено».
+  const emptyText =
+    tab === 'toMe'
+      ? tasks.length > 0
+        ? 'Все поручения выполнены и скрыты («Скрыть выполненные»)'
+        : 'Вам сейчас ничего не поручено'
+      : personFilter
+        ? 'Все поручения этого участника выполнены и скрыты («Скрыть выполненные»)'
+        : byMeTasks.length > 0
+          ? 'Все ваши поручения выполнены и скрыты («Скрыть выполненные»)'
+          : 'Вы пока никому не поручали задачи';
 
   return (
     // Персональная зона, Notion-стиль: НЕ карточка-в-рамке (рамка враждует с full-bleed
@@ -211,24 +296,36 @@ export function AssignedToMeBlock({
             className="size-8 text-[11px]"
           />
           <div className="min-w-0">
-            <h2 className="flex items-center gap-2 text-[15px] font-semibold leading-tight tracking-tight text-foreground">
-              <span className="truncate">Поручено мне</span>
-              <span className="inline-flex h-[1.125rem] min-w-[1.125rem] shrink-0 items-center justify-center rounded-full bg-primary/10 px-1.5 text-[11px] font-medium leading-none tabular-nums text-primary">
-                {total}
-              </span>
-            </h2>
+            {/* -ml-2 гасит внутренний px-2 первого таба — текст «Для меня» встаёт ровно
+                там, где стоял бы обычный заголовок (и подзаголовок под ним). */}
+            <DelegationTabs
+              tab={tab}
+              onChange={setTab}
+              toMeCount={toMeVisible.length}
+              byMeCount={byMeVisibleAll.length}
+            />
             <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              Задачи от других участников
+              {subtitleBase}
               {pendingCount > 0 && ` · ${pendingCount} ${pendingWord}`}
             </p>
           </div>
         </div>
-        {/* Группировка — только для списка. В канбане колонки фиксированы по времени, поэтому
-            выпадашка не нужна. items-start прижимает её к строке заголовка. */}
-        {view === 'list' && <GroupingMenu value={grouping} onChange={handleGroupingChange} />}
+        <div className="flex shrink-0 items-center gap-1">
+          {/* Фильтр по человеку — только «Другим»: посмотреть, как конкретный делегат
+              справляется по всем проектам. По умолчанию — все. */}
+          {tab === 'byMe' && people.length > 0 && (
+            <PersonFilterMenu people={people} value={personFilter} onChange={setPersonFilter} />
+          )}
+          {/* Группировка — только для списка. В канбане колонки фиксированы по времени,
+              поэтому выпадашка не нужна. items-start прижимает контролы к строке табов. */}
+          {view === 'list' && <GroupingMenu value={grouping} onChange={handleGroupingChange} />}
+        </div>
       </div>
 
-      {view === 'kanban' ? (
+      {visibleTasks.length === 0 ? (
+        // Пустая активная вкладка при живой соседней: тихая строка вместо пустых колонок.
+        <p className="px-0.5 py-1 text-sm text-muted-foreground/60">{emptyText}</p>
+      ) : view === 'kanban' ? (
         // Канбан: РОВНО 3 колонки по времени (Без срока / На сегодня / Будущее), карточки =
         // поручения. Ряд колонок full-bleed'ится за паддинг страницы (как доска проекта).
         <div className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}>
@@ -250,8 +347,11 @@ export function AssignedToMeBlock({
                 {group.items.length === 0 ? (
                   <p className="px-1 py-2 text-xs text-muted-foreground/45">Пусто</p>
                 ) : (
+                  // «Принять/Отклонить» — только у входящих pending («Для меня»). В «Другим»
+                  // pending рисуется «принятой» карточкой: DelegationBadge сам покажет
+                  // «ждёт ответа» (amber, перспектива делегатора).
                   group.items.map((item) =>
-                    item.delegation.status === 'pending' ? (
+                    tab === 'toMe' && item.delegation.status === 'pending' ? (
                       <PendingCard
                         key={item.delegation.id}
                         item={item}
@@ -284,9 +384,11 @@ export function AssignedToMeBlock({
                 <span className="text-muted-foreground/60">· {group.items.length}</span>
               </div>
               <ul className="divide-y divide-border/60">
-                {/* Хелпер уже отсортировал: ожидающие (pending) наверх, затем по релевантному ключу. */}
+                {/* Хелпер уже отсортировал: ожидающие (pending) наверх, затем по релевантному
+                    ключу. Кнопки «Принять/Отклонить» — только у входящих pending («Для меня»);
+                    в «Другим» pending рисуется обычной строкой с бейджем «ждёт ответа». */}
                 {group.items.map((item) =>
-                  item.delegation.status === 'pending' ? (
+                  tab === 'toMe' && item.delegation.status === 'pending' ? (
                     <PendingRow
                       key={item.delegation.id}
                       item={item}
@@ -338,6 +440,122 @@ export function AssignedToMeBlock({
   );
 }
 
+// Вкладки блока делегирования: «Для меня» (поручено мне) / «Другим» (поручил я).
+// Тихие текстовые табы в масштабе прежнего заголовка секции: активная — semibold +
+// primary-пилюля счётчика, неактивная — muted с hover.
+function DelegationTabs({
+  tab,
+  onChange,
+  toMeCount,
+  byMeCount,
+}: {
+  tab: DelegationTab;
+  onChange: (t: DelegationTab) => void;
+  toMeCount: number;
+  byMeCount: number;
+}): React.ReactElement {
+  return (
+    // Без role=tablist/tab: полный ARIA-паттерн табов требует roving tabindex и
+    // стрелочной навигации — вместо ложной семантики честные toggle-кнопки (aria-pressed).
+    <div className="-ml-2 flex items-center gap-0.5">
+      <TabButton
+        active={tab === 'toMe'}
+        label="Для меня"
+        count={toMeCount}
+        onClick={() => onChange('toMe')}
+      />
+      <TabButton
+        active={tab === 'byMe'}
+        label="Другим"
+        count={byMeCount}
+        onClick={() => onChange('byMe')}
+      />
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count: number;
+  onClick: () => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[15px] leading-tight tracking-tight transition-colors',
+        active
+          ? 'font-semibold text-foreground'
+          : 'font-medium text-muted-foreground hover:bg-hover hover:text-foreground',
+      )}
+    >
+      <span className="truncate">{label}</span>
+      <span
+        className={cn(
+          'inline-flex h-[1.125rem] min-w-[1.125rem] shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-medium leading-none tabular-nums',
+          active ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
+        )}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+// Фильтр «Другим» по делегату. Radio-меню (как GroupingMenu): «Все» + уникальные люди,
+// которым caller поручал задачи. Пустая строка value = «Все» (radix не любит null).
+function PersonFilterMenu({
+  people,
+  value,
+  onChange,
+}: {
+  people: readonly { readonly id: string; readonly name: string }[];
+  value: string | null;
+  onChange: (v: string | null) => void;
+}): React.ReactElement {
+  const currentName = value ? (people.find((p) => p.id === value)?.name ?? 'Все') : 'Все';
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+          title="Фильтр по участнику"
+        >
+          <Users className="size-3.5" />
+          <span className="hidden sm:inline">Кому:</span>
+          {/* На мобиле — только иконка (320px: два таба + два меню не влезают со словами).
+              Текущий выбор виден в title и в открытом radio-меню. */}
+          <span className="hidden max-w-[8rem] truncate font-medium text-foreground sm:inline">
+            {currentName}
+          </span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[11rem]">
+        <DropdownMenuRadioGroup
+          value={value ?? ''}
+          onValueChange={(v) => onChange(v === '' ? null : v)}
+        >
+          <DropdownMenuRadioItem value="">Все</DropdownMenuRadioItem>
+          {people.map((p) => (
+            <DropdownMenuRadioItem key={p.id} value={p.id}>
+              {p.name}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // Переключатель группировки. Radio-меню; текущий режим отмечен. Сохранение — в handleGroupingChange.
 function GroupingMenu({
   value,
@@ -356,7 +574,11 @@ function GroupingMenu({
         >
           <ListFilter className="size-3.5" />
           <span className="hidden sm:inline">Группировка:</span>
-          <span className="font-medium text-foreground">{ASSIGNED_GROUPING_LABELS[value]}</span>
+          {/* На мобиле — только иконка (см. PersonFilterMenu): текущий режим виден в
+              title и отмечен в radio-меню. */}
+          <span className="hidden max-w-[8rem] truncate font-medium text-foreground sm:inline">
+            {ASSIGNED_GROUPING_LABELS[value]}
+          </span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[11rem]">

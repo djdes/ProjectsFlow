@@ -19,6 +19,8 @@ function mk(overrides: {
   priority?: TaskPriority | null;
   status?: TaskDelegationStatus;
   creator?: string;
+  // Имя делегата (id выводится из имени) — для направления «Другим».
+  delegate?: string;
   position?: number;
 }): AssignedTask {
   seq += 1;
@@ -26,8 +28,8 @@ function mk(overrides: {
   const delegation: TaskDelegation = {
     id: `d-${seq}`,
     taskId: id,
-    delegateUserId: 'me',
-    delegateDisplayName: 'Me',
+    delegateUserId: overrides.delegate ?? 'me',
+    delegateDisplayName: overrides.delegate ?? 'Me',
     creatorUserId: 'creator',
     creatorDisplayName: overrides.creator ?? 'Алиса',
     status: overrides.status ?? 'accepted',
@@ -136,6 +138,21 @@ test('внутри бакета ожидающие (pending) — выше при
   const groups = groupAssignedTasks([accepted, pending], 'priority', NOW);
   assert.equal(groups[0]?.items[0]?.id, pending.id);
   assert.equal(groups[0]?.items[1]?.id, accepted.id);
+});
+
+test('project, направление «Другим»: inbox-группы дробятся по делегату («Личные · кому»)', () => {
+  const tasks = [
+    mk({ projectId: 'inbox', isInbox: true, delegate: 'Боб' }),
+    mk({ projectId: 'inbox', isInbox: true, delegate: 'Вера' }),
+    mk({ projectId: 'p1', projectName: 'Альфа', delegate: 'Боб' }),
+  ];
+  const groups = groupAssignedTasks(tasks, 'project', NOW, 'byMe');
+  assert.deepEqual(
+    groups.map((g) => g.label),
+    ['Личные · Боб', 'Личные · Вера', 'Альфа'],
+  );
+  // Ключи inbox-групп уникальны по человеку (не схлопываются в один projectId).
+  assert.equal(new Set(groups.map((g) => g.key)).size, 3);
 });
 
 test('byTime: всегда ровно 3 колонки (даже пустые), просроченные попадают в «На сегодня»', () => {

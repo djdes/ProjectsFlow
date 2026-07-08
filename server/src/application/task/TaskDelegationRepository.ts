@@ -32,6 +32,13 @@ export type AssignedDelegationRow = {
   readonly delegateRole: ProjectRole | null;
 };
 
+// Строка для вкладки «Другим» (я — делегатор): то же, что AssignedDelegationRow
+// (delegateRole — роль ДЕЛЕГАТА, для фильтра «делегата убрали из проекта»), плюс
+// роль самого caller'а-делегатора — для расчёта canModify в use-case.
+export type DelegatedByRow = AssignedDelegationRow & {
+  readonly creatorRole: ProjectRole | null;
+};
+
 export interface TaskDelegationRepository {
   // Создаёт row со status='pending'. Уникальность активной делегации (=одна pending|accepted
   // на task) проверяется в application через findActiveForTask до insert.
@@ -48,6 +55,10 @@ export interface TaskDelegationRepository {
   // для блока «Поручено мне». Авторизация встроена (фильтр delegate_user_id = userId);
   // taskId извне НЕ принимается (защита от IDOR).
   listAssignedTo(userId: string): Promise<AssignedDelegationRow[]>;
+  // Все активные (pending|accepted) делегации ОТ этого пользователя (он — делегатор), по
+  // всем проектам — для вкладки «Другим». Legacy-строки без delegator_user_id матчатся
+  // через owner проекта (тот же фолбэк, что в toDomain). Авторизация встроена.
+  listDelegatedBy(userId: string): Promise<DelegatedByRow[]>;
   // Активные делегации для набора taskId — для list-tasks join'а.
   listActiveForTasks(
     taskIds: readonly string[],
