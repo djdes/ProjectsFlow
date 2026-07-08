@@ -1,6 +1,5 @@
 import {
   NotCreatorError,
-  NotInboxTaskError,
   TargetProjectIsInboxError,
   TargetProjectNotFoundError,
   TaskNotFoundError,
@@ -28,10 +27,13 @@ type Deps = {
   readonly appUrl: string;
 };
 
-// Перенос inbox-задачи в реальный проект. Только creator (owner inbox-проекта)
-// может выполнить. Активная делегация (если есть) → archived. Делегату — email + in-app
-// notification.
-export class AssignInboxTaskToProject {
+// Перенос задачи в другой проект (бывший AssignInboxTaskToProject, обобщён):
+// - из инбокса — только creator (owner inbox-проекта), как раньше;
+// - из именованного проекта — участник с правом move_task (editor+);
+// - целевой проект — не inbox, caller должен иметь в нём create_task.
+// Активная делегация (если есть) → archived (делегат может не быть участником целевого
+// проекта). Делегату — email + in-app notification.
+export class MoveTaskToProject {
   constructor(private readonly deps: Deps) {}
 
   async execute(
@@ -43,8 +45,18 @@ export class AssignInboxTaskToProject {
     if (!task) throw new TaskNotFoundError(taskId);
 
     const sourceProject = await this.deps.projects.getById(task.projectId);
-    if (!sourceProject?.isInbox) throw new NotInboxTaskError();
-    if (sourceProject.ownerId !== userId) throw new NotCreatorError();
+    if (sourceProject?.isInbox) {
+      // Инбокс: членств там нет — гейт по владельцу.
+      if (sourceProject.ownerId !== userId) throw new NotCreatorError();
+    } else {
+      // Именованный проект: перенос = убрать задачу с доски → право move_task.
+      await requireProjectAccess(this.deps, task.projectId, userId, 'move_task');
+    }
+
+    // Перенос в тот же проект — no-op (UI-селектор может прислать текущий проект).
+    // СТРОГО после гейта источника: иначе ответ с телом задачи был бы IDOR-оракулом
+    // (любой залогиненный получал бы чужую задачу, прислав target = её же проект).
+    if (task.projectId === targetProjectId) return task;
 
     const targetProject = await this.deps.projects.getById(targetProjectId);
     if (!targetProject) throw new TargetProjectNotFoundError(targetProjectId);

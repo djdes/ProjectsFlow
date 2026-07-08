@@ -20,7 +20,7 @@ import type { UpdateTaskComment } from '../../application/task/UpdateTaskComment
 import type { DeleteTaskComment } from '../../application/task/DeleteTaskComment.js';
 import type { RequestRalphCancel } from '../../application/task/RequestRalphCancel.js';
 import type { RevokeRalphCancel } from '../../application/task/RevokeRalphCancel.js';
-import type { AssignInboxTaskToProject } from '../../application/task/AssignInboxTaskToProject.js';
+import type { MoveTaskToProject } from '../../application/task/MoveTaskToProject.js';
 import type { DelegateExistingTask } from '../../application/task/DelegateExistingTask.js';
 import type { ExportTasksDigest } from '../../application/task/ExportTasksDigest.js';
 import type { Task } from '../../domain/task/Task.js';
@@ -69,7 +69,7 @@ type Deps = {
   readonly deleteComment: DeleteTaskComment;
   readonly requestRalphCancel: RequestRalphCancel;
   readonly revokeRalphCancel: RevokeRalphCancel;
-  readonly assignToProject: AssignInboxTaskToProject;
+  readonly assignToProject: MoveTaskToProject;
   readonly delegateExisting: DelegateExistingTask;
   // Экспорт выбранных задач в дайджест (буфер/email/Telegram).
   readonly exportDigest: ExportTasksDigest;
@@ -451,7 +451,8 @@ export function tasksRouter(deps: Deps): Router {
     }
   });
 
-  // POST /:taskId/assign-to-project — перенос inbox-задачи в реальный проект.
+  // POST /:taskId/assign-to-project — перенос задачи в другой проект (из инбокса —
+  // owner, из именованного — move_task; права гейтит use-case по task.projectId).
   // Активная делегация (если есть) → archived; делегат получает email + notification.
   router.post(
     '/:taskId/assign-to-project',

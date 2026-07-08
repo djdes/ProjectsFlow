@@ -113,7 +113,10 @@ export function TaskDetailPage(): React.ReactElement {
       // onSubmit нужен только в create-mode; на странице задача уже существует.
       onSubmit={async () => task}
       onCommitsChange={load}
-      projectName={project?.name}
+      // «…» — как у крошек выше: чип проекта в шапке не мигает плейсхолдером «Проект».
+      projectName={project?.name ?? '…'}
+      // Inbox-задача, открытая страницей, — чип рисует «Входящие» с иконкой инбокса.
+      isInbox={project?.isInbox ?? false}
       isShared={(project?.memberCount ?? 0) > 1}
       aiProjectId={projectId}
       onMove={async (tid, targetStatus) => {

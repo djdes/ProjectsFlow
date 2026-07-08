@@ -140,7 +140,7 @@ import { WithdrawTaskDelegation } from './application/task/WithdrawTaskDelegatio
 import { ListMyPendingDelegations } from './application/task/ListMyPendingDelegations.js';
 import { ListTasksAssignedToMe } from './application/task/ListTasksAssignedToMe.js';
 import { ListTasksDelegatedByMe } from './application/task/ListTasksDelegatedByMe.js';
-import { AssignInboxTaskToProject } from './application/task/AssignInboxTaskToProject.js';
+import { MoveTaskToProject } from './application/task/MoveTaskToProject.js';
 import { DelegateExistingTask } from './application/task/DelegateExistingTask.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
@@ -755,7 +755,7 @@ const telegramComposer = new TelegramComposerService({
     idGen: idGenerator,
     appUrl: appBaseUrl,
   }),
-  assignToProject: new AssignInboxTaskToProject({
+  assignToProject: new MoveTaskToProject({
     tasks: taskRepo,
     projects: projectRepo,
     members: projectMemberRepo,
@@ -1952,7 +1952,7 @@ const { app, devProxyUpgrade } = createApp({
       attachments: taskAttachmentRepo,
       comments: taskCommentRepo,
     }),
-    assignToProject: new AssignInboxTaskToProject({
+    assignToProject: new MoveTaskToProject({
       tasks: taskRepo,
       projects: projectRepo,
       members: projectMemberRepo,

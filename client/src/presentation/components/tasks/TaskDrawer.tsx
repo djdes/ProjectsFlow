@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, GripVertical, Link2, Loader2, Maximize2, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
+import { AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, GripVertical, Inbox as InboxIcon, Loader2, Maximize2, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -69,7 +69,7 @@ import { RalphModeSelect } from './RalphMode';
 import type { RalphMode, TaskStatus } from '@/domain/task/Task';
 import { TASK_STATUSES } from '@/domain/task/Task';
 import { DelegateSelect } from './DelegateSelect';
-import { AssignToProjectSelect } from './AssignToProjectSelect';
+import type { Project } from '@/domain/project/Project';
 import { DelegateTaskButton } from './DelegateTaskButton';
 import { DelegationBadge } from './DelegationBadge';
 import { DeadlinePicker } from './DeadlinePicker';
@@ -606,6 +606,96 @@ function TaskStatusChip({
       </DropdownMenuContent>
       </DropdownMenu>
     </div>
+  );
+}
+
+// Chip-селектор проекта задачи в edit-mode шапки — симметричная пара к статус-пилюле:
+// та же форма (rounded-full, text-xs, py-1), нейтральный тон (проект — «где», статус —
+// «в какой колонке»). Показывает текущий проект (inbox — «Входящие»); выпадашка —
+// перенос в другой проект (сервер: MoveTaskToProject, из именованного — move_task,
+// из инбокса — owner; активная делегация архивируется).
+function TaskProjectChip({
+  task,
+  isInbox,
+  projectName,
+  onMoved,
+}: {
+  task: Task;
+  isInbox: boolean;
+  projectName?: string;
+  onMoved: () => void;
+}): React.ReactElement {
+  const { projectRepository, taskRepository } = useContainer();
+  const [projects, setProjects] = useState<Project[] | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Лениво: список проектов грузим при первом открытии меню, а не на каждый рендер шапки.
+  const load = (): void => {
+    if (projects !== null) return;
+    projectRepository
+      .list()
+      .then((list) => setProjects(list.filter((p) => !p.isInbox)))
+      .catch(() => setProjects([]));
+  };
+
+  const move = async (target: Project): Promise<void> => {
+    if (saving || target.id === task.projectId) return;
+    if (!window.confirm(`Перенести задачу в «${target.name}»?`)) return;
+    setSaving(true);
+    try {
+      await taskRepository.assignToProject(task.projectId, task.id, target.id);
+      toast.success(`Задача перенесена в «${target.name}»`);
+      onMoved();
+    } catch (e) {
+      toast.error(`Не удалось перенести: ${(e as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const label = isInbox ? 'Входящие' : (projectName ?? 'Проект');
+  const LabelIcon = isInbox ? InboxIcon : FolderKanban;
+  return (
+    <DropdownMenu onOpenChange={(open) => open && load()}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          disabled={saving}
+          title="Проект задачи — нажмите, чтобы перенести в другой"
+          className={cn(
+            // min-w-0 (не shrink-0): на узких экранах пилюля сжимается и имя проекта
+            // ужимается truncate'ом — иначе «Поделиться»/⋯ выталкивались бы за экран.
+            'inline-flex min-w-0 max-w-[11rem] items-center gap-1 rounded-full bg-muted py-1 pl-2.5 pr-1.5 text-xs font-medium text-foreground/80 transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50 dark:hover:brightness-110',
+            saving && 'opacity-50',
+          )}
+        >
+          <LabelIcon className="size-3 shrink-0 opacity-60" />
+          <span className="truncate">{label}</span>
+          <ChevronDown className="size-3.5 shrink-0 opacity-50" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[220px]">
+        <div className="px-2 py-1.5 text-xs text-muted-foreground">Перенести в проект</div>
+        {projects === null ? (
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">Загрузка…</div>
+        ) : projects.length === 0 ? (
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">Нет проектов</div>
+        ) : (
+          projects.map((p) => (
+            <DropdownMenuItem
+              key={p.id}
+              disabled={p.id === task.projectId}
+              onClick={() => void move(p)}
+            >
+              <span className="truncate">{p.name}</span>
+              {p.id === task.projectId && (
+                <Check className="ml-auto size-3.5 shrink-0 opacity-60" />
+              )}
+            </DropdownMenuItem>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -1726,10 +1816,37 @@ export function TaskDrawer({
   const bannerProjectId =
     asPage || isInbox ? null : state?.mode === 'edit' ? state.task.projectId : aiProjectId;
 
-  // Правый кластер задачных действий (статус + Поделиться + ⋯). Общий для окна-оверлея
-  // (шапка) и отдельной страницы (строка хлебных крошек) — единый источник.
+  // Правый кластер задачных действий (проект + статус + Поделиться + ⋯). Общий для
+  // окна-оверлея (шапка) и отдельной страницы (строка хлебных крошек) — единый источник.
   const statusShareMore = task ? (
     <>
+      {/* Симметричная пара пилюль: проект («где лежит», выпадашка = перенос в другой
+          проект) + статус («в какой колонке», выпадашка = смена статуса). Интерактивность
+          обеих гейтится одним сигналом onMove: без него (напр. окно из «Поручено мне»,
+          где перенос делегату всё равно запрещён сервером) — статичная пилюля. */}
+      {onMove ? (
+        <TaskProjectChip
+          task={task}
+          isInbox={isInbox}
+          projectName={projectName}
+          onMoved={() => {
+            // Задача уехала в другой проект — текущий контекст (projectId доски/драйвера)
+            // больше не её: перерисовать источники и закрыть окно (handleClose чистит
+            // сохранённый скролл задачи, в отличие от голого onClose).
+            notifyChanged();
+            handleClose();
+          }}
+        />
+      ) : (
+        <span className="inline-flex min-w-0 max-w-[11rem] items-center gap-1 rounded-full bg-muted py-1 px-2.5 text-xs font-medium text-foreground/80">
+          {isInbox ? (
+            <InboxIcon className="size-3 shrink-0 opacity-60" />
+          ) : (
+            <FolderKanban className="size-3 shrink-0 opacity-60" />
+          )}
+          <span className="truncate">{isInbox ? 'Входящие' : (projectName ?? 'Проект')}</span>
+        </span>
+      )}
       {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка) = «передать в другой канбан». */}
       {onMove ? (
         <TaskStatusChip task={task} onMove={onMove} onChanged={() => notifyChanged()} />
@@ -1743,16 +1860,30 @@ export function TaskDrawer({
           {STATUS_LABEL[task.status]}
         </span>
       )}
-      {/* Поделиться + ⋯ (задачные действия) — по правому краю, как в главном окне.
-          «Изменено …» и участники в окне НЕ показываем (по требованию). */}
+      {/* Поделиться = копировать ссылку на задачу (U3): раньше кнопка была без onClick
+          (мёртвая), а «Копировать ссылку» дублировалось в ⋯. Теперь Share копирует, а
+          дубль из меню убран. Async-copy с await+catch — корректный success/failure. */}
       <Button
         variant="ghost"
         size="sm"
         className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
-        aria-label="Поделиться"
+        aria-label="Скопировать ссылку на задачу"
+        onClick={() => {
+          void (async () => {
+            try {
+              await navigator.clipboard.writeText(
+                `${window.location.origin}/projects/${task.projectId}/tasks/${task.id}`,
+              );
+              toast.success('Ссылка на задачу скопирована');
+            } catch {
+              toast.error('Не удалось скопировать ссылку');
+            }
+          })();
+        }}
       >
         <Share2 className="size-4" />
-        <span className="text-sm">Поделиться</span>
+        {/* На телефонах — только иконка: вместе с парой пилюль текст не влезает. */}
+        <span className="hidden text-sm sm:inline">Поделиться</span>
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -1766,20 +1897,6 @@ export function TaskDrawer({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[200px]">
-          <DropdownMenuItem
-            onSelect={() => {
-              try {
-                void navigator.clipboard.writeText(
-                  `${window.location.origin}/projects/${task.projectId}/tasks/${task.id}`,
-                );
-                toast.success('Ссылка на задачу скопирована');
-              } catch {
-                /* clipboard недоступен */
-              }
-            }}
-          >
-            <Link2 className="text-muted-foreground" /> Копировать ссылку
-          </DropdownMenuItem>
           {/* История версий — все изменения этой задачи (снимки на create/update/move/restore). */}
           <DropdownMenuItem onSelect={() => setVersionsOpen(true)}>
             <Clock className="text-muted-foreground" /> История версий
@@ -2052,15 +2169,8 @@ export function TaskDrawer({
                         {!task.delegation && !(canEdit && (isInbox || isShared)) && (
                           <EmptyValue>Никто</EmptyValue>
                         )}
-                        {isInbox && canEdit && (
-                          <AssignToProjectSelect
-                            task={task}
-                            onAssigned={() => {
-                              notifyChanged();
-                              onClose();
-                            }}
-                          />
-                        )}
+                        {/* «Перенести в проект» переехал в шапку — TaskProjectChip
+                            (симметричная пара к статус-пилюле). */}
                       </div>
                     ),
                     deadline: (

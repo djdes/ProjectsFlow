@@ -1,6 +1,21 @@
 import { and, asc, eq, inArray, max, min, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { projects, taskDelegations, tasks, users, type TaskRow } from '../db/schema.js';
+import {
+  projects,
+  taskDelegations,
+  tasks,
+  users,
+  taskComments,
+  taskAttachments,
+  taskCommits,
+  taskVersions,
+  taskProgressEvents,
+  liveSessions,
+  recentTaskViews,
+  telegramTaskMessages,
+  emailActionTokens,
+  type TaskRow,
+} from '../db/schema.js';
 import {
   TASK_STATUSES,
   type RalphMode,
@@ -186,6 +201,27 @@ export class DrizzleTaskRepository implements TaskRepository {
     return affected > 0;
   }
 
+  async deleteWithChildren(taskId: string): Promise<boolean> {
+    let existed = false;
+    await this.db.transaction(async (tx) => {
+      // Child-таблицы задачи (FK на схеме нет — чистим вручную). Порядок не важен.
+      await tx.delete(taskComments).where(eq(taskComments.taskId, taskId));
+      await tx.delete(taskAttachments).where(eq(taskAttachments.taskId, taskId));
+      await tx.delete(taskCommits).where(eq(taskCommits.taskId, taskId));
+      await tx.delete(taskVersions).where(eq(taskVersions.taskId, taskId));
+      await tx.delete(taskDelegations).where(eq(taskDelegations.taskId, taskId));
+      await tx.delete(taskProgressEvents).where(eq(taskProgressEvents.taskId, taskId));
+      await tx.delete(liveSessions).where(eq(liveSessions.taskId, taskId));
+      await tx.delete(recentTaskViews).where(eq(recentTaskViews.taskId, taskId));
+      await tx.delete(telegramTaskMessages).where(eq(telegramTaskMessages.taskId, taskId));
+      await tx.delete(emailActionTokens).where(eq(emailActionTokens.taskId, taskId));
+      const result = await tx.delete(tasks).where(eq(tasks.id, taskId));
+      const affected = (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
+      existed = affected > 0;
+    });
+    return existed;
+  }
+
   async getPositionBounds(
     projectId: string,
     status: TaskStatus,
@@ -221,12 +257,59 @@ export class DrizzleTaskRepository implements TaskRepository {
     return this.getById(taskId);
   }
 
+  async rebalanceColumn(
+    projectId: string,
+    status: TaskStatus,
+    taskId: string,
+  ): Promise<number | null> {
+    const STEP = 1024;
+    let resultPos: number | null = null;
+    await this.db.transaction(async (tx) => {
+      const rows = await tx
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(and(eq(tasks.projectId, projectId), eq(tasks.status, status)))
+        .orderBy(asc(tasks.position), asc(tasks.id));
+      let pos = STEP;
+      for (const r of rows) {
+        await tx.update(tasks).set({ position: pos }).where(eq(tasks.id, r.id));
+        if (r.id === taskId) resultPos = pos;
+        pos += STEP;
+      }
+    });
+    return resultPos;
+  }
+
   async moveToProject(taskId: string, targetProjectId: string): Promise<Task | null> {
     // Снимок status_before_done относился к колонкам старого проекта — чистим при переносе.
-    await this.db
-      .update(tasks)
-      .set({ projectId: targetProjectId, statusBeforeDone: null })
-      .where(eq(tasks.id, taskId));
+    // Вместе с задачей АТОМАРНО перевешиваем task-scoped строки с денормализованным
+    // project_id (версии, лента прогресса, live-сессии, «Недавнее»): иначе (а) чтение
+    // live/версий в новом проекте 404-ит (гейты сверяют session.projectId с URL), (б)
+    // участники СТАРОГО проекта продолжают читать историю уехавшей задачи, (в) удаление
+    // опустевшего старого проекта (deleteCascade чистит эти таблицы по project_id)
+    // молча стирает историю живой задачи.
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(tasks)
+        .set({ projectId: targetProjectId, statusBeforeDone: null })
+        .where(eq(tasks.id, taskId));
+      await tx
+        .update(taskVersions)
+        .set({ projectId: targetProjectId })
+        .where(eq(taskVersions.taskId, taskId));
+      await tx
+        .update(taskProgressEvents)
+        .set({ projectId: targetProjectId })
+        .where(eq(taskProgressEvents.taskId, taskId));
+      await tx
+        .update(liveSessions)
+        .set({ projectId: targetProjectId })
+        .where(eq(liveSessions.taskId, taskId));
+      await tx
+        .update(recentTaskViews)
+        .set({ projectId: targetProjectId })
+        .where(eq(recentTaskViews.taskId, taskId));
+    });
     return this.getById(taskId);
   }
 }

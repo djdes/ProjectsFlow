@@ -20,7 +20,7 @@ import type { CreateTask } from '../../task/CreateTask.js';
 import type { GetOrCreateInbox } from '../../project/GetOrCreateInbox.js';
 import type { AcceptTaskDelegation } from '../../task/AcceptTaskDelegation.js';
 import type { DeclineTaskDelegation } from '../../task/DeclineTaskDelegation.js';
-import type { AssignInboxTaskToProject } from '../../task/AssignInboxTaskToProject.js';
+import type { MoveTaskToProject } from '../../task/MoveTaskToProject.js';
 import { parseComposerMessage } from './parseComposerMessage.js';
 import { fuzzyMatch, greedyProjectPrefix } from './fuzzyMatch.js';
 import { parseComposeSegments, type ParsedComposeSegment } from './parseComposeSegments.js';
@@ -63,7 +63,7 @@ type Deps = {
   readonly getOrCreateInbox: GetOrCreateInbox;
   readonly accept: AcceptTaskDelegation;
   readonly decline: DeclineTaskDelegation;
-  readonly assignToProject: AssignInboxTaskToProject;
+  readonly assignToProject: MoveTaskToProject;
   readonly sendNotification: SendAgentTelegramNotification;
   readonly client: TelegramClient;
   readonly idGen: () => string;
