@@ -139,7 +139,7 @@ import { DeclineTaskDelegation } from './application/task/DeclineTaskDelegation.
 import { WithdrawTaskDelegation } from './application/task/WithdrawTaskDelegation.js';
 import { ListMyPendingDelegations } from './application/task/ListMyPendingDelegations.js';
 import { ListTasksAssignedToMe } from './application/task/ListTasksAssignedToMe.js';
-import { ListTasksDelegatedByMe } from './application/task/ListTasksDelegatedByMe.js';
+import { ListTasksDelegatedToOthers } from './application/task/ListTasksDelegatedToOthers.js';
 import { MoveTaskToProject } from './application/task/MoveTaskToProject.js';
 import { DelegateExistingTask } from './application/task/DelegateExistingTask.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
@@ -1945,7 +1945,7 @@ const { app, devProxyUpgrade } = createApp({
       attachments: taskAttachmentRepo,
       comments: taskCommentRepo,
     }),
-    listDelegatedByMe: new ListTasksDelegatedByMe({
+    listDelegatedToOthers: new ListTasksDelegatedToOthers({
       delegations: taskDelegationRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,

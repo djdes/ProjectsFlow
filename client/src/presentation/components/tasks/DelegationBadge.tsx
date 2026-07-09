@@ -19,7 +19,31 @@ export function DelegationBadge({ delegation, currentUserId }: Props): React.Rea
     return null;
   }
   const isCreator = delegation.creatorUserId === currentUserId;
+  const isDelegate = delegation.delegateUserId === currentUserId;
   const isPending = delegation.status === 'pending';
+
+  // Третье лицо (наблюдатель: вкладка «Другим», доска общего проекта) — показываем обе
+  // стороны «кто → кому»; pending — amber («ждёт ответа»), как в перспективе создателя.
+  if (!isCreator && !isDelegate) {
+    return (
+      <span
+        className={cn(
+          'inline-flex max-w-[200px] items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium',
+          isPending
+            ? 'bg-amber-500/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-400'
+            : 'bg-muted text-muted-foreground',
+        )}
+        title={`${delegation.creatorDisplayName} поручил(а): ${delegation.delegateDisplayName}${
+          isPending ? ' (ждёт ответа)' : ''
+        } · status: ${delegation.status}`}
+      >
+        <Send className="size-2.5 shrink-0" />
+        <span className="min-w-0 truncate">{delegation.creatorDisplayName}</span>
+        <span className="shrink-0 opacity-60">→</span>
+        <span className="min-w-0 truncate">{delegation.delegateDisplayName}</span>
+      </span>
+    );
+  }
 
   const name = isCreator ? delegation.delegateDisplayName : delegation.creatorDisplayName;
   const title = isCreator

@@ -11,8 +11,10 @@ import {
   Inbox as InboxIcon,
   ListFilter,
   MessageSquare,
+  Send,
   Users,
   X,
+  type LucideIcon,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -67,21 +69,23 @@ type Props = {
   bleedPadClass?: string;
 };
 
-// Тип вкладки блока делегирования: «Для меня» (поручено мне) / «Другим» (поручил я).
-// Совпадает с направлением группировки — вкладка и есть направление.
+// Тип вкладки блока делегирования: «Для меня» (поручено мне) / «Другим» (все видимые
+// делегирования кому-то другому). Совпадает с направлением группировки.
 type DelegationTab = DelegationDirection;
 
 // done-задачи прячутся Eye-toggle'ом страницы; фильтр общий для обеих вкладок.
 const notDone = (t: AssignedTask): boolean => t.status !== 'done';
 
 // Блок делегирования на главной, две вкладки: «Для меня» — задачи, делегированные текущему
-// пользователю по всем проектам; «Другим» — задачи, которые он поручил (по умолчанию все,
-// с фильтром по конкретному человеку — видно, как делегат справляется по всем проектам).
-// Обе вкладки грузятся вместе (счётчики в табах всегда актуальны). Группировка списка
-// переключаемая (проект/дата создания/дедлайн/приоритет) и сохраняется за аккаунтом
-// (users.ui_prefs). «Для меня»: принятые — с чекбоксом «выполнено», ожидающие — с кнопками
-// «Принять/Отклонить». «Другим»: все строки в «принятом» виде — DelegationBadge показывает
-// «ждёт ответа» для pending; чекбокс доступен, если роль делегатора позволяет (canModify
+// пользователю по всем проектам; «Другим» — ВСЕ видимые делегирования кому-то другому
+// (в именованных проектах-участниках — от любого любому, напр. «Олег → Ярослав»; в
+// инбоксе — только собственные исходящие), с фильтрами «от кого / кому / проект»
+// (по умолчанию все — видно, кто как справляется по всем проектам). Обе вкладки грузятся
+// вместе (счётчики в табах всегда актуальны). Группировка списка переключаемая
+// (проект/дата создания/дедлайн/приоритет) и сохраняется за аккаунтом (users.ui_prefs).
+// «Для меня»: принятые — с чекбоксом «выполнено», ожидающие — с кнопками «Принять/
+// Отклонить». «Другим»: все строки в «принятом» виде — DelegationBadge показывает
+// направление и «ждёт ответа» для pending; чекбокс доступен по роли caller'а (canModify
 // с сервера). Клик по задаче открывает TaskDrawer (read-access гейтится на сервере).
 export function AssignedToMeBlock({
   onChanged,
@@ -98,8 +102,11 @@ export function AssignedToMeBlock({
   const [tasks, setTasks] = useState<AssignedTask[]>([]); // «Для меня»
   const [byMeTasks, setByMeTasks] = useState<AssignedTask[]>([]); // «Другим»
   const [tab, setTab] = useState<DelegationTab>('toMe');
-  // Фильтр «Другим» по конкретному делегату (delegateUserId). null = все.
-  const [personFilter, setPersonFilter] = useState<string | null>(null);
+  // Фильтры вкладки «Другим»: от кого (creatorUserId) / кому (delegateUserId) /
+  // проект (projectId). null = все (дефолт).
+  const [filterFrom, setFilterFrom] = useState<string | null>(null);
+  const [filterTo, setFilterTo] = useState<string | null>(null);
+  const [filterProject, setFilterProject] = useState<string | null>(null);
   const [grouping, setGrouping] = useState<AssignedGrouping>(DEFAULT_ASSIGNED_GROUPING);
   const [loading, setLoading] = useState(true);
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
@@ -117,7 +124,7 @@ export function AssignedToMeBlock({
     try {
       const [mine, byMe] = await Promise.all([
         taskDelegationRepository.listAssignedToMe(),
-        taskDelegationRepository.listDelegatedByMe(),
+        taskDelegationRepository.listDelegatedToOthers(),
       ]);
       setTasks(mine);
       setByMeTasks(byMe);
@@ -133,7 +140,7 @@ export function AssignedToMeBlock({
     // блок не «мигает» дефолтной группировкой/счётчиками перед применением реальных.
     Promise.all([
       taskDelegationRepository.listAssignedToMe(),
-      taskDelegationRepository.listDelegatedByMe(),
+      taskDelegationRepository.listDelegatedToOthers(),
       userRepository.getUiPrefs(),
     ])
       .then(([mine, byMe, prefs]) => {
@@ -222,31 +229,51 @@ export function AssignedToMeBlock({
     () => (hideDone ? byMeTasks.filter(notDone) : byMeTasks),
     [byMeTasks, hideDone],
   );
-  // Фильтр по человеку — только вкладка «Другим», поверх hide-done.
+  // Фильтры «от кого / кому / проект» — только вкладка «Другим», поверх hide-done.
+  // Предикат вынесен: им же различаем причину пустоты (фильтры vs скрытые done).
+  const matchesByMeFilters = useCallback(
+    (t: AssignedTask): boolean =>
+      (!filterFrom || t.delegation.creatorUserId === filterFrom) &&
+      (!filterTo || t.delegation.delegateUserId === filterTo) &&
+      (!filterProject || t.projectId === filterProject),
+    [filterFrom, filterTo, filterProject],
+  );
   const byMeVisible = useMemo(
-    () =>
-      personFilter
-        ? byMeVisibleAll.filter((t) => t.delegation.delegateUserId === personFilter)
-        : byMeVisibleAll,
-    [byMeVisibleAll, personFilter],
+    () => byMeVisibleAll.filter(matchesByMeFilters),
+    [byMeVisibleAll, matchesByMeFilters],
   );
   const visibleTasks = tab === 'toMe' ? toMeVisible : byMeVisible;
-  // Опции фильтра по человеку — уникальные делегаты из СЫРОГО списка «Другим» (не из
-  // отфильтрованного — иначе выбор человека выкидывал бы остальных из меню).
-  const people = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const t of byMeTasks) map.set(t.delegation.delegateUserId, t.delegation.delegateDisplayName);
-    return [...map.entries()]
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-  }, [byMeTasks]);
-  // Выбранный в фильтре человек исчез из списка (делегации завершились/отозваны) —
-  // сбрасываем фильтр, чтобы вкладка не выглядела пустой без причины.
-  useEffect(() => {
-    if (personFilter && !byMeTasks.some((t) => t.delegation.delegateUserId === personFilter)) {
-      setPersonFilter(null);
+  const anyByMeFilter = filterFrom !== null || filterTo !== null || filterProject !== null;
+  // Опции фильтров — уникальные значения из СЫРОГО списка «Другим» (не из
+  // отфильтрованного — иначе выбор значения выкидывал бы остальные из меню).
+  const filterOptions = useMemo(() => {
+    const from = new Map<string, string>();
+    const to = new Map<string, string>();
+    const projects = new Map<string, string>();
+    for (const t of byMeTasks) {
+      from.set(t.delegation.creatorUserId, t.delegation.creatorDisplayName);
+      to.set(t.delegation.delegateUserId, t.delegation.delegateDisplayName);
+      projects.set(t.projectId, t.isInbox ? 'Личные' : t.projectName);
     }
-  }, [byMeTasks, personFilter]);
+    const toArr = (m: Map<string, string>): { id: string; name: string }[] =>
+      [...m.entries()]
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    return { from: toArr(from), to: toArr(to), projects: toArr(projects) };
+  }, [byMeTasks]);
+  // Выбранное в фильтре значение исчезло из данных (делегации завершились/отозваны) —
+  // сбрасываем этот фильтр, чтобы вкладка не выглядела пустой без причины.
+  useEffect(() => {
+    if (filterFrom && !byMeTasks.some((t) => t.delegation.creatorUserId === filterFrom)) {
+      setFilterFrom(null);
+    }
+    if (filterTo && !byMeTasks.some((t) => t.delegation.delegateUserId === filterTo)) {
+      setFilterTo(null);
+    }
+    if (filterProject && !byMeTasks.some((t) => t.projectId === filterProject)) {
+      setFilterProject(null);
+    }
+  }, [byMeTasks, filterFrom, filterTo, filterProject]);
   // Группировку (проект/дата/дедлайн/приоритет) для СПИСКА делает чистый хелпер.
   // Направление = активная вкладка: влияет на подпись inbox-групп («Личные · кто/кому»).
   const groups = useMemo(
@@ -266,19 +293,22 @@ export function AssignedToMeBlock({
   const pendingWord =
     pendingCount % 10 === 1 && pendingCount % 100 !== 11 ? 'ждёт ответа' : 'ждут ответа';
   const subtitleBase =
-    tab === 'toMe' ? 'Задачи от других участников' : 'Задачи, которые вы поручили';
-  // Пустая видимая вкладка при непустом СЫРОМ списке значит одно: всё выполнено и
-  // скрыто Eye-toggle'ом — говорим об этом честно, а не «ничего не поручено».
+    tab === 'toMe' ? 'Задачи от других участников' : 'Поручения в ваших проектах';
+  // Пустая видимая вкладка: сначала честно про фильтры, затем про скрытые done
+  // (непустой СЫРОЙ список без фильтров = всё выполнено и скрыто Eye-toggle'ом),
+  // и только при реально пустых данных — «ничего нет».
   const emptyText =
     tab === 'toMe'
       ? tasks.length > 0
         ? 'Все поручения выполнены и скрыты («Скрыть выполненные»)'
         : 'Вам сейчас ничего не поручено'
-      : personFilter
-        ? 'Все поручения этого участника выполнены и скрыты («Скрыть выполненные»)'
-        : byMeTasks.length > 0
-          ? 'Все ваши поручения выполнены и скрыты («Скрыть выполненные»)'
-          : 'Вы пока никому не поручали задачи';
+      : byMeTasks.length === 0
+        ? 'Поручений пока нет'
+        : anyByMeFilter && !byMeTasks.some(matchesByMeFilters)
+          ? 'Под выбранные фильтры ничего не попадает'
+          : // Фильтрам (если есть) в СЫРОМ списке что-то соответствует, но видимых нет —
+            // значит, спрятал Eye-toggle, и говорим про него, а не виним фильтры.
+            'Все подходящие поручения выполнены и скрыты («Скрыть выполненные»)';
 
   return (
     // Персональная зона, Notion-стиль: НЕ карточка-в-рамке (рамка враждует с full-bleed
@@ -310,11 +340,38 @@ export function AssignedToMeBlock({
             </p>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {/* Фильтр по человеку — только «Другим»: посмотреть, как конкретный делегат
-              справляется по всем проектам. По умолчанию — все. */}
-          {tab === 'byMe' && people.length > 0 && (
-            <PersonFilterMenu people={people} value={personFilter} onChange={setPersonFilter} />
+        {/* БЕЗ shrink-0 — иначе flex-wrap мёртв (контейнер держит max-content ширину и
+            на 320-375px иконки-фильтры наезжают на табы); теперь кнопки переносятся. */}
+        <div className="flex flex-wrap items-center justify-end gap-1">
+          {/* Фильтры «Другим»: от кого / кому / проект — посмотреть, кто кому поручил и
+              как справляется, по всем проектам. По умолчанию — все. */}
+          {tab === 'byMe' && byMeTasks.length > 0 && (
+            <>
+              <DelegationFilterMenu
+                icon={Send}
+                prefix="От"
+                title="Фильтр: от кого поручено"
+                options={filterOptions.from}
+                value={filterFrom}
+                onChange={setFilterFrom}
+              />
+              <DelegationFilterMenu
+                icon={Users}
+                prefix="Кому"
+                title="Фильтр: кому поручено"
+                options={filterOptions.to}
+                value={filterTo}
+                onChange={setFilterTo}
+              />
+              <DelegationFilterMenu
+                icon={FolderKanban}
+                prefix="Проект"
+                title="Фильтр: проект"
+                options={filterOptions.projects}
+                value={filterProject}
+                onChange={setFilterProject}
+              />
+            </>
           )}
           {/* Группировка — только для списка. В канбане колонки фиксированы по времени,
               поэтому выпадашка не нужна. items-start прижимает контролы к строке табов. */}
@@ -426,6 +483,9 @@ export function AssignedToMeBlock({
 
       <TaskDrawer
         state={drawerTask ? ({ mode: 'edit', task: drawerTask } as TaskDrawerState) : null}
+        // canModify с сервера = editor+ в проекте задачи (свои inbox — true): viewer,
+        // открывший чужую пару из «Другим», получает read-only вместо 403 на каждом save.
+        canEdit={drawerTask?.canModify ?? true}
         onClose={() => {
           setDrawerTask(null);
           void refresh();
@@ -491,7 +551,8 @@ function TabButton({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[15px] leading-tight tracking-tight transition-colors',
+        // min-w-0 — на 320px лейбл таба ужимается truncate'ом, а не вылезает из бокса.
+        'inline-flex min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-[15px] leading-tight tracking-tight transition-colors',
         active
           ? 'font-semibold text-foreground'
           : 'font-medium text-muted-foreground hover:bg-hover hover:text-foreground',
@@ -510,29 +571,40 @@ function TabButton({
   );
 }
 
-// Фильтр «Другим» по делегату. Radio-меню (как GroupingMenu): «Все» + уникальные люди,
-// которым caller поручал задачи. Пустая строка value = «Все» (radix не любит null).
-function PersonFilterMenu({
-  people,
+// Фильтр вкладки «Другим» (от кого / кому / проект). Radio-меню (как GroupingMenu):
+// «Все» + уникальные значения из данных. Пустая строка value = «Все» (radix не любит
+// null). Активный фильтр подсвечен именем значения вместо «Все».
+function DelegationFilterMenu({
+  icon: Icon,
+  prefix,
+  title,
+  options,
   value,
   onChange,
 }: {
-  people: readonly { readonly id: string; readonly name: string }[];
+  icon: LucideIcon;
+  prefix: string;
+  title: string;
+  options: readonly { readonly id: string; readonly name: string }[];
   value: string | null;
   onChange: (v: string | null) => void;
 }): React.ReactElement {
-  const currentName = value ? (people.find((p) => p.id === value)?.name ?? 'Все') : 'Все';
+  const currentName = value ? (options.find((o) => o.id === value)?.name ?? 'Все') : 'Все';
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
-          title="Фильтр по участнику"
+          className={cn(
+            'inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground',
+            // Активный фильтр слегка «нажат» — видно и в icon-only режиме на мобиле.
+            value !== null && 'bg-hover text-foreground',
+          )}
+          title={`${title} · сейчас: ${currentName}`}
         >
-          <Users className="size-3.5" />
-          <span className="hidden sm:inline">Кому:</span>
-          {/* На мобиле — только иконка (320px: два таба + два меню не влезают со словами).
+          <Icon className="size-3.5" />
+          <span className="hidden sm:inline">{prefix}:</span>
+          {/* На мобиле — только иконка (320px: табы + три меню не влезают со словами).
               Текущий выбор виден в title и в открытом radio-меню. */}
           <span className="hidden max-w-[8rem] truncate font-medium text-foreground sm:inline">
             {currentName}
@@ -545,9 +617,9 @@ function PersonFilterMenu({
           onValueChange={(v) => onChange(v === '' ? null : v)}
         >
           <DropdownMenuRadioItem value="">Все</DropdownMenuRadioItem>
-          {people.map((p) => (
-            <DropdownMenuRadioItem key={p.id} value={p.id}>
-              {p.name}
+          {options.map((o) => (
+            <DropdownMenuRadioItem key={o.id} value={o.id}>
+              {o.name}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
@@ -653,8 +725,9 @@ function AcceptedRow({
         lastDoneTaskId={null}
         lastTodoTaskId={null}
         onChanged={onChanged}
+        // Без кастомного disabledTitle: дефолтный «Нет прав менять статус» честен для
+        // обеих вкладок (viewer на чужой паре / вылет из редакторов проекта).
         disabled={!item.canModify}
-        disabledTitle="Вы больше не редактор этого проекта"
       />
       <div className="min-w-0 flex-1">
         {item.description?.trim() ? (
@@ -741,7 +814,6 @@ function AcceptedCard({
           lastTodoTaskId={null}
           onChanged={onChanged}
           disabled={!item.canModify}
-          disabledTitle="Вы больше не редактор этого проекта"
         />
       </div>
       <div className="min-w-0 flex-1">

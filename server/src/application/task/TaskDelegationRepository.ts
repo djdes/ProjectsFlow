@@ -32,11 +32,11 @@ export type AssignedDelegationRow = {
   readonly delegateRole: ProjectRole | null;
 };
 
-// Строка для вкладки «Другим» (я — делегатор): то же, что AssignedDelegationRow
-// (delegateRole — роль ДЕЛЕГАТА, для фильтра «делегата убрали из проекта»), плюс
-// роль самого caller'а-делегатора — для расчёта canModify в use-case.
-export type DelegatedByRow = AssignedDelegationRow & {
-  readonly creatorRole: ProjectRole | null;
+// Строка для вкладки «Другим»: то же, что AssignedDelegationRow (delegateRole — роль
+// ДЕЛЕГАТА, для диагностики «делегата убрали из проекта»), плюс роль самого CALLER'а
+// в проекте задачи — для видимости и расчёта canModify в use-case.
+export type DelegatedToOthersRow = AssignedDelegationRow & {
+  readonly callerRole: ProjectRole | null;
 };
 
 export interface TaskDelegationRepository {
@@ -55,10 +55,13 @@ export interface TaskDelegationRepository {
   // для блока «Поручено мне». Авторизация встроена (фильтр delegate_user_id = userId);
   // taskId извне НЕ принимается (защита от IDOR).
   listAssignedTo(userId: string): Promise<AssignedDelegationRow[]>;
-  // Все активные (pending|accepted) делегации ОТ этого пользователя (он — делегатор), по
-  // всем проектам — для вкладки «Другим». Legacy-строки без delegator_user_id матчатся
-  // через owner проекта (тот же фолбэк, что в toDomain). Авторизация встроена.
-  listDelegatedBy(userId: string): Promise<DelegatedByRow[]>;
+  // Все активные (pending|accepted) делегации «кому-то другому», ВИДИМЫЕ пользователю,
+  // по всем проектам — вкладка «Другим». Видимость: участник именованного проекта видит
+  // все делегирования в нём (от любого любому); inbox-строки — только собственные
+  // (caller = делегатор; legacy-строки без delegator_user_id матчатся через owner
+  // проекта, фолбэк как в toDomain). Строки, где делегат — сам caller, исключены (это
+  // «Для меня»). Авторизация встроена в запрос.
+  listDelegatedToOthers(userId: string): Promise<DelegatedToOthersRow[]>;
   // Активные делегации для набора taskId — для list-tasks join'а.
   listActiveForTasks(
     taskIds: readonly string[],

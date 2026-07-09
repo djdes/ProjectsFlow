@@ -220,6 +220,10 @@ type Props = {
   aiProjectId?: string | null;
   // Колбэк для смены статуса задачи (move). Если передан — статус-бейдж кликабелен.
   onMove?: (taskId: string, targetStatus: TaskStatus) => Promise<void>;
+  // Гейт редактирования содержимого (title/body/свойства/чекбоксы). false — read-only
+  // просмотр (например, viewer открыл чужую пару из вкладки «Другим»); комментарии
+  // этим НЕ гейтятся. Дефолт true — прежнее поведение всех существующих вызовов.
+  canEdit?: boolean;
   // asPage — рендерить как отдельную страницу (не Sheet-оверлей): без модалки,
   // во всю высоту, с хлебными крошками сверху. Используется на /projects/:id/tasks/:taskId.
   asPage?: boolean;
@@ -711,6 +715,7 @@ export function TaskDrawer({
   isShared = false,
   aiProjectId = null,
   onMove,
+  canEdit: canEditProp = true,
   asPage = false,
   breadcrumbs = null,
   onPrev,
@@ -1724,7 +1729,9 @@ export function TaskDrawer({
   const [replyDraft, setReplyDraft] = useState<ReplyDraft | null>(null);
   // Редактируем задачу в ЛЮБОМ статусе, включая done (по требованию: «задача всегда
   // редактируема» — плюсики, свойства, тело и кнопки доступны и для выполненных).
-  const canEdit = !!task;
+  // canEditProp сверху может опустить в read-only (viewer на чужой задаче) — иначе
+  // окно выглядело бы редактируемым, а каждый save падал бы 403-ей.
+  const canEdit = !!task && canEditProp;
 
   // Сохранить медиа-поля (иконка/обложка/положение обложки). Оптимистичный показ живёт в
   // TaskHeaderMedia; здесь только PATCH + оповещение. Ошибка — тост (локальный показ уже стоит).

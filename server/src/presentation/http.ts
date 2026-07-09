@@ -123,7 +123,7 @@ import type { DeclineTaskDelegation } from '../application/task/DeclineTaskDeleg
 import type { WithdrawTaskDelegation } from '../application/task/WithdrawTaskDelegation.js';
 import type { ListMyPendingDelegations } from '../application/task/ListMyPendingDelegations.js';
 import type { ListTasksAssignedToMe } from '../application/task/ListTasksAssignedToMe.js';
-import type { ListTasksDelegatedByMe } from '../application/task/ListTasksDelegatedByMe.js';
+import type { ListTasksDelegatedToOthers } from '../application/task/ListTasksDelegatedToOthers.js';
 import type { MoveTaskToProject } from '../application/task/MoveTaskToProject.js';
 import type { DelegateExistingTask } from '../application/task/DelegateExistingTask.js';
 import type { ListNotifications } from '../application/notifications/ListNotifications.js';
@@ -506,7 +506,7 @@ type AppDeps = {
     readonly withdraw: WithdrawTaskDelegation;
     readonly listPending: ListMyPendingDelegations;
     readonly listAssignedToMe: ListTasksAssignedToMe;
-    readonly listDelegatedByMe: ListTasksDelegatedByMe;
+    readonly listDelegatedToOthers: ListTasksDelegatedToOthers;
     readonly assignToProject: MoveTaskToProject;
     readonly delegateExisting: DelegateExistingTask;
   };

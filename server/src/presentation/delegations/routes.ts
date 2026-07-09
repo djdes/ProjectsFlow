@@ -7,7 +7,7 @@ import type {
   AssignedTaskView,
   ListTasksAssignedToMe,
 } from '../../application/task/ListTasksAssignedToMe.js';
-import type { ListTasksDelegatedByMe } from '../../application/task/ListTasksDelegatedByMe.js';
+import type { ListTasksDelegatedToOthers } from '../../application/task/ListTasksDelegatedToOthers.js';
 import type { TaskDelegation } from '../../domain/task/TaskDelegation.js';
 import type { DelegationWithTaskInfo } from '../../application/task/TaskDelegationRepository.js';
 import { requireAuth } from '../middleware/requireAuth.js';
@@ -19,7 +19,7 @@ type Deps = {
   readonly withdraw: WithdrawTaskDelegation;
   readonly listPending: ListMyPendingDelegations;
   readonly listAssignedToMe: ListTasksAssignedToMe;
-  readonly listDelegatedByMe: ListTasksDelegatedByMe;
+  readonly listDelegatedToOthers: ListTasksDelegatedToOthers;
 };
 
 type DelegationDto = {
@@ -93,11 +93,13 @@ export function delegationsRouter(deps: Deps): Router {
     }
   });
 
-  // GET /api/delegations/delegated-by-me — все активные (pending|accepted) делегации,
-  // СОЗДАННЫЕ caller'ом, по всем проектам — вкладка «Другим». Фильтр по делегату делает клиент.
-  r.get('/delegated-by-me', async (req: Request, res: Response, next: NextFunction) => {
+  // GET /api/delegations/delegated-to-others — все активные (pending|accepted) делегации
+  // «кому-то другому», видимые caller'у: в именованных проектах-участниках — от любого
+  // любому; inbox — только собственные исходящие. Вкладка «Другим»; фильтры (от кого/
+  // кому/проект) делает клиент.
+  r.get('/delegated-to-others', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const items = await deps.listDelegatedByMe.execute(req.user!.id);
+      const items = await deps.listDelegatedToOthers.execute(req.user!.id);
       res.json({ items: items.map(assignedViewToDto) });
     } catch (e) {
       next(e);

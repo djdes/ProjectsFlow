@@ -42,11 +42,11 @@ export class HttpTaskDelegationRepository implements TaskDelegationRepository {
     return this.fetchAssignedList('/delegations/assigned-to-me');
   }
 
-  async listDelegatedByMe(): Promise<AssignedTask[]> {
-    return this.fetchAssignedList('/delegations/delegated-by-me');
+  async listDelegatedToOthers(): Promise<AssignedTask[]> {
+    return this.fetchAssignedList('/delegations/delegated-to-others');
   }
 
-  // Общий фетчер assigned-to-me / delegated-by-me — сервер отдаёт одинаковый view-shape.
+  // Общий фетчер assigned-to-me / delegated-to-others — сервер отдаёт одинаковый view-shape.
   // Плоский список — группировку (проект/дата/дедлайн/приоритет) делает презентация.
   private async fetchAssignedList(path: string): Promise<AssignedTask[]> {
     const { items } = await httpClient.get<{ items: AssignedItemDto[] }>(path);

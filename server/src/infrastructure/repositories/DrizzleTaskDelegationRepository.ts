@@ -1,10 +1,10 @@
-import { aliasedTable, and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { aliasedTable, and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { projects, taskDelegations, tasks, users } from '../db/schema.js';
+import { projectMembers, projects, taskDelegations, tasks, users } from '../db/schema.js';
 import type {
   AssignedDelegationRow,
   CreateDelegationInput,
-  DelegatedByRow,
+  DelegatedToOthersRow,
   DelegationWithTaskInfo,
   TaskDelegationRepository,
 } from '../../application/task/TaskDelegationRepository.js';
@@ -234,15 +234,72 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
     }));
   }
 
-  // Все активные (pending|accepted) делегации ОТ userId (он — делегатор) по всем проектам —
-  // для вкладки «Другим». Зеркало listAssignedTo с обратным фильтром: delegator_user_id =
-  // userId, для legacy-строк (delegator NULL) — фолбэк на owner проекта (как в toDomain).
-  // delegateRole — роль делегата (фильтр «делегата убрали»); creatorRole — роль caller'а
-  // (canModify). Оба — корелированные подзапросы (left join ломает inference).
-  async listDelegatedBy(userId: string): Promise<DelegatedByRow[]> {
+  // Все активные (pending|accepted) делегации «кому-то другому», видимые userId, по всем
+  // проектам — вкладка «Другим». Видимость: (а) участник именованного проекта видит все
+  // делегирования в нём (как на доске проекта); (б) inbox-строки — только где caller сам
+  // делегатор (legacy delegator NULL → фолбэк на owner, как в toDomain). Строки, где
+  // делегат = caller, исключены — они живут во вкладке «Для меня». delegateRole — роль
+  // делегата («делегата убрали из проекта»); callerRole — роль caller'а (видимость +
+  // canModify). Роли — корелированные подзапросы (left join ломает inference).
+  //
+  // Два user-scoped запроса вместо одного OR: EXISTS внутри OR лишал запрос индексного
+  // пути по task_delegations (top-level остались только status и delegate<>? — обе
+  // несаржабельны) и скатывался в full scan, растущий с ГЛОБАЛЬНЫМ объёмом делегаций.
+  // Ветки дизъюнктны по projects.is_inbox — конкат без дедупа.
+  async listDelegatedToOthers(userId: string): Promise<DelegatedToOthersRow[]> {
+    // Проекты caller'а — отдельным индексным запросом (idx_project_members_user);
+    // дальше ветка именованных проектов едет по tasks.project_id IN (...).
+    const memberships = await this.db
+      .select({ projectId: projectMembers.projectId })
+      .from(projectMembers)
+      .where(eq(projectMembers.userId, userId));
+    const memberProjectIds = memberships.map((m) => m.projectId);
+
+    const named =
+      memberProjectIds.length === 0
+        ? []
+        : await this.selectDelegatedToOthers(userId).where(
+            and(
+              inArray(tasks.projectId, memberProjectIds),
+              eq(projects.isInbox, false),
+              inArray(taskDelegations.status, [...ACTIVE_STATUSES]),
+              // Исполнитель — не сам caller (такие строки — вкладка «Для меня»).
+              ne(taskDelegations.delegateUserId, userId),
+            ),
+          );
+
+    // Inbox: только собственные исходящие (caller = делегатор / legacy-owner) — едет по
+    // idx_delegator_status. Делегатор, УДАЛЁННЫЙ из именованного проекта, не виден нигде
+    // (ветка выше требует членства) — иначе утечка read_project-гейта.
+    const inbox = await this.selectDelegatedToOthers(userId).where(
+      and(
+        eq(projects.isInbox, true),
+        inArray(taskDelegations.status, [...ACTIVE_STATUSES]),
+        ne(taskDelegations.delegateUserId, userId),
+        or(
+          eq(taskDelegations.delegatorUserId, userId),
+          and(isNull(taskDelegations.delegatorUserId), eq(projects.ownerId, userId)),
+        ),
+      ),
+    );
+
+    return [...named, ...inbox].map((r) => ({
+      taskId: r.taskId,
+      delegation: toDomain(r),
+      projectId: r.projectId,
+      projectName: r.projectName,
+      isInbox: Boolean(r.isInbox),
+      delegateRole: r.delegateRole ?? null,
+      callerRole: r.callerRole ?? null,
+    }));
+  }
+
+  // Общий select обеих веток listDelegatedToOthers (сборка заново на каждый вызов —
+  // drizzle-билдеры мутабельны, шарить построенный нельзя).
+  private selectDelegatedToOthers(userId: string) {
     const delegateUser = aliasedTable(users, 'delegate_user');
     const ownerUser = aliasedTable(users, 'owner_user');
-    const rows = await this.db
+    return this.db
       .select({
         id: taskDelegations.id,
         taskId: taskDelegations.taskId,
@@ -259,31 +316,12 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
         projectName: projects.name,
         isInbox: projects.isInbox,
         delegateRole: sql<ProjectRole | null>`(SELECT pm.role FROM project_members pm WHERE pm.project_id = ${projects.id} AND pm.user_id = ${taskDelegations.delegateUserId} LIMIT 1)`,
-        creatorRole: sql<ProjectRole | null>`(SELECT pm.role FROM project_members pm WHERE pm.project_id = ${projects.id} AND pm.user_id = ${userId} LIMIT 1)`,
+        callerRole: sql<ProjectRole | null>`(SELECT pm.role FROM project_members pm WHERE pm.project_id = ${projects.id} AND pm.user_id = ${userId} LIMIT 1)`,
       })
       .from(taskDelegations)
       .innerJoin(delegateUser, eq(delegateUser.id, taskDelegations.delegateUserId))
       .innerJoin(tasks, eq(tasks.id, taskDelegations.taskId))
       .innerJoin(projects, eq(projects.id, tasks.projectId))
-      .innerJoin(ownerUser, eq(ownerUser.id, projects.ownerId))
-      .where(
-        and(
-          or(
-            eq(taskDelegations.delegatorUserId, userId),
-            and(isNull(taskDelegations.delegatorUserId), eq(projects.ownerId, userId)),
-          ),
-          inArray(taskDelegations.status, [...ACTIVE_STATUSES]),
-        ),
-      );
-
-    return rows.map((r) => ({
-      taskId: r.taskId,
-      delegation: toDomain(r),
-      projectId: r.projectId,
-      projectName: r.projectName,
-      isInbox: Boolean(r.isInbox),
-      delegateRole: r.delegateRole ?? null,
-      creatorRole: r.creatorRole ?? null,
-    }));
+      .innerJoin(ownerUser, eq(ownerUser.id, projects.ownerId));
   }
 }
