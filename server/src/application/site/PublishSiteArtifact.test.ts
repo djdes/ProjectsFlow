@@ -11,7 +11,7 @@ function makeProject(over: Partial<Project> = {}): Project {
     gitRepoUrl: null, kbRepoFullName: null, kbKind: 'none', financeVisibility: 'owner',
     dispatcherUserId: 'disp1', multiTaskWorker: false, isInbox: false,
     description: null, coverUrl: null, coverPosition: 50,
-    publicSlug: null, isPublic: false, publicIndexing: false, appRepoFullName: 'octocat/pf-x',
+    publicSlug: null, isPublic: false, publicIndexing: false, appRepoFullName: 'octocat/pf-x', siteSlug: null,
     createdAt: new Date('2026-01-01'), ...over,
   };
 }

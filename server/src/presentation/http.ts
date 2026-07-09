@@ -280,6 +280,9 @@ type AppDeps = {
     readonly baseDomain: string;
     readonly maxSiteBytes: number;
     readonly publishSiteArtifact: PublishSiteArtifact;
+    // Lookup проекта по его site_slug (db/100) — для заглушки «сайт в разработке» на
+    // ещё-не-задеплоенном <site_slug>.<baseDomain>. null = слаг не принадлежит проекту.
+    readonly lookupSiteSlug: (slug: string) => Promise<{ id: string; name: string } | null>;
   };
   readonly chat: ChatRouterDeps;
   readonly projects: {
@@ -593,6 +596,44 @@ export type CreatedApp = {
   readonly app: Express;
   readonly devProxyUpgrade: ProxyRequestHandler['upgrade'] | null;
 };
+
+// HTML-заглушка сайта-результата, пока воркер ничего не задеплоил (db/100). Self-contained,
+// без CDN. Экранируем имя проекта. Ссылка «Открыть проект» ведёт на доску в приложении.
+function siteInDevelopmentHtml(projectName: string, projectId: string): string {
+  const esc = (s: string): string =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const name = esc(projectName);
+  return `<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>${name} — сайт в разработке</title>
+<style>
+  :root{color-scheme:light dark}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:24px;
+    font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,sans-serif;
+    background:#f7f7f5;color:#1f2328}
+  @media(prefers-color-scheme:dark){body{background:#191919;color:#e7e7e7}}
+  .card{max-width:520px;width:100%;text-align:center}
+  .badge{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.04em;
+    text-transform:uppercase;color:#2383e2;background:rgba(35,131,226,.12);
+    padding:6px 12px;border-radius:999px;margin-bottom:20px}
+  h1{font-size:26px;margin:0 0 10px;font-weight:700}
+  p{margin:0 auto 8px;color:#6b6f76;max-width:44ch}
+  @media(prefers-color-scheme:dark){p{color:#a0a0a0}}
+  .hint{margin-top:18px;font-size:14px}
+  a.btn{display:inline-block;margin-top:24px;padding:10px 18px;border-radius:8px;
+    background:#2383e2;color:#fff;text-decoration:none;font-weight:500;font-size:14px}
+  a.btn:hover{background:#1a6fc4}
+</style></head>
+<body><div class="card">
+  <div class="badge">Сайт в разработке</div>
+  <h1>${name}</h1>
+  <p>Здесь появится сайт-результат вашего проекта.</p>
+  <p class="hint">Опишите задачу воркеру в проекте — он соберёт сайт и задеплоит его сюда.</p>
+  <a class="btn" href="https://projectsflow.ru/projects/${esc(projectId)}">Открыть проект</a>
+</div></body></html>`;
+}
 
 export function createApp(deps: AppDeps): CreatedApp {
   const app = express();
@@ -971,6 +1012,7 @@ export function createApp(deps: AppDeps): CreatedApp {
     const siteBase = deps.site.baseDomain;
     const RESERVED_SUB = new Set(['www', 'api', 'app']);
     app.use((req, res, next) => {
+      void (async () => {
       const host = req.hostname;
       if (host === siteBase || !host.endsWith(`.${siteBase}`)) return next();
       const label = host.slice(0, host.length - siteBase.length - 1);
@@ -984,17 +1026,24 @@ export function createApp(deps: AppDeps): CreatedApp {
         return next();
       }
       if (!existsSync(dir)) {
-        // Не задеплоенный сайт-slug → это может быть поддомен ПУБЛИЧНОЙ ДОСКИ
-        // (<board-slug>.projectsflow.ru, Notion-style). Отдаём SPA — клиент по hostname
-        // отрендерит публичную доску (или «не найдена», если и не доска). В dev SPA нет
-        // (Vite-proxy) — тогда next().
+        // Не задеплоенный slug. Если это site_slug проекта (db/100) — отдаём HTML-заглушку
+        // «сайт в разработке» (только на навигацию, не на ассеты). Иначе это может быть
+        // поддомен ПУБЛИЧНОЙ ДОСКИ (<board-slug>.projectsflow.ru) → отдаём SPA.
+        const isAssetReq = /\.[a-z0-9]+$/i.test(req.path);
+        if (!isAssetReq) {
+          const proj = await deps.site.lookupSiteSlug(label).catch(() => null);
+          if (proj) {
+            res.status(200).type('html').send(siteInDevelopmentHtml(proj.name, proj.id));
+            return;
+          }
+        }
+        // ВАЖНО: index.html шлём ТОЛЬКО на навигационные запросы. Запросы ассетов
+        // (/assets/*.js, /favicon.svg, /manifest.webmanifest…) обязаны провалиться в
+        // express.static(clientDist) ниже — иначе браузер получит index.html вместо JS
+        // (Content-Type text/html), ES-модуль не распарсится и SPA не загрузится (белый
+        // экран). Признак ассета — наличие расширения в пути.
         if (!isDev && hasClient) {
-          // ВАЖНО: index.html шлём ТОЛЬКО на навигационные запросы. Запросы ассетов
-          // (/assets/*.js, /favicon.svg, /manifest.webmanifest…) обязаны провалиться в
-          // express.static(clientDist) ниже — иначе браузер получит index.html вместо JS
-          // (Content-Type text/html), ES-модуль не распарсится и SPA не загрузится (белый
-          // экран). Признак ассета — наличие расширения в пути.
-          if (/\.[a-z0-9]+$/i.test(req.path)) return next();
+          if (isAssetReq) return next();
           res.sendFile(resolve(clientDist, 'index.html'));
           return;
         }
@@ -1010,6 +1059,7 @@ export function createApp(deps: AppDeps): CreatedApp {
         return;
       }
       res.sendFile(target);
+      })().catch(next);
     });
   }
 

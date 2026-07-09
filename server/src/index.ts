@@ -1577,6 +1577,11 @@ const { app, devProxyUpgrade } = createApp({
       sites: siteArtifactRepo,
       storage: siteArtifactStorage,
     }),
+    // Заглушка «сайт в разработке» на ещё-не-задеплоенном <site_slug>.<baseDomain> (db/100).
+    lookupSiteSlug: async (slug) => {
+      const p = await projectRepo.findBySiteSlug(slug);
+      return p ? { id: p.id, name: p.name } : null;
+    },
   },
   search: {
     searchTasks: new SearchTasks({ search: taskSearchRepo }),

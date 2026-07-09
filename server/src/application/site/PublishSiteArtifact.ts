@@ -29,8 +29,12 @@ export class PublishSiteArtifact {
   ): Promise<{ slug: string; publishedAt: Date }> {
     await requireDispatcherAccess(this.deps, projectId, callerUserId);
 
+    // Слаг сайта — канонический из projects.site_slug (db/100): тот же адрес, что и заглушка,
+    // и что показывают плашка/«Поделиться». Фолбэк (старые данные без site_slug) — существующий
+    // slug деплоя или свежесгенерированный.
+    const project = await this.deps.projects.getById(projectId);
     const existing = await this.deps.sites.getByProject(projectId);
-    const slug = existing?.slug ?? (await this.pickFreshSlug());
+    const slug = project?.siteSlug ?? existing?.slug ?? (await this.pickFreshSlug());
 
     const { fileCount, bytes } = await this.deps.storage.replaceSite(slug, files);
     const row = await this.deps.sites.upsert({ projectId, slug, fileCount, bytes });

@@ -5,6 +5,14 @@ import type { ProjectInvite, ProjectInviteRole } from '@/domain/project/ProjectI
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 import type { KanbanBoardSettings } from '@/domain/kanban/KanbanSettings';
 
+// Сайт-результат проекта (db/100). siteSlug — постоянный адрес <slug>.projectsflow.ru (до
+// деплоя воркером отдаётся заглушка). deployedAt/fileCount — из site_artifacts (null/0 до деплоя).
+export type ProjectSite = {
+  readonly siteSlug: string | null;
+  readonly deployedAt: string | null;
+  readonly fileCount: number;
+};
+
 // v0.15: per-member opt-in. У каждого члена проекта своя независимая делегация.
 // `mine` — статус CALLER-а в этом проекте. `all` — видно только owner'у:
 // полный список членов проекта с их статусами + github-логинами + sort'ом
@@ -131,8 +139,9 @@ export interface ProjectRepository {
   // Создать/привязать GitHub-репо приложения проекта (self-serve воркер-раннер, M1). Owner-only.
   // Требует привязанный GitHub (иначе сервер вернёт 409 github_not_connected).
   ensureAppRepo(projectId: string): Promise<{ appRepoFullName: string }>;
-  // Метаданные задеплоенного статического сайта проекта (M3). null — ещё не деплоился.
-  getProjectSite(projectId: string): Promise<{ slug: string; publishedAt: string } | null>;
+  // Сайт-результат проекта (db/100): siteSlug есть всегда (адрес <slug>.projectsflow.ru; до
+  // деплоя — заглушка), deployedAt/fileCount из site_artifacts (null/0, пока не задеплоен).
+  getProjectSite(projectId: string): Promise<ProjectSite>;
   // v0.15: per-member opt-in. GET возвращает `mine` (статус caller'а) + `all`
   // (полный список членов, только для owner-а). PUT включает/выключает ОДНУ
   // делегацию: без granterUserId — caller's own, с granterUserId — admin-on-behalf.

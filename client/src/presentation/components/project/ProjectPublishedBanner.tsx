@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Globe, X } from 'lucide-react';
 import { useContainer } from '@/infrastructure/di/container';
+import { siteResultUrl, siteResultDisplayUrl } from '@/lib/publicBoardUrl';
 
 type Props = {
   projectId: string;
@@ -31,13 +32,15 @@ const BTN =
 // поллим (воркер до-деплоивает асинхронно), чтобы плашка всплыла сама, без ручного refresh.
 export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: Props): React.ReactElement | null {
   const { projectRepository } = useContainer();
-  const [slug, setSlug] = useState<string | null>(null);
+  // siteSlug есть у каждого проекта (db/100) — плашка показывается ПО УМОЛЧАНИЮ. deployed —
+  // задеплоил ли уже воркер (меняет текст «в разработке» → «результат»).
+  const [site, setSite] = useState<{ slug: string; deployed: boolean } | null>(null);
 
   // Только in-memory: refresh страницы возвращает плашку.
   const [dismissed, setDismissed] = useState(() => dismissedProjects.has(projectId));
 
-  // Фетч результата + лёгкий поллинг, пока его нет (воркер деплоит в фоне). Как только slug
-  // появился — поллинг останавливаем.
+  // Фетч сайта проекта. Пока не задеплоен — лёгкий поллинг, чтобы статус «в разработке» сам
+  // сменился на «результат», когда воркер до-деплоит (без ручного refresh).
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setInterval> | null = null;
@@ -45,17 +48,16 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
       projectRepository
         .getProjectSite(projectId)
         .then((s) => {
-          if (cancelled) return;
-          if (s?.slug) {
-            setSlug(s.slug);
-            if (timer) {
-              clearInterval(timer);
-              timer = null;
-            }
+          if (cancelled || !s.siteSlug) return;
+          const deployed = !!s.deployedAt;
+          setSite({ slug: s.siteSlug, deployed });
+          if (deployed && timer) {
+            clearInterval(timer);
+            timer = null;
           }
         })
         .catch(() => {
-          /* нет доступа/результата — просто ждём следующий тик */
+          /* нет доступа — просто ждём следующий тик */
         });
     };
     load();
@@ -76,10 +78,10 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
   }, [projectId]);
 
   if (dismissed) return null;
-  if (!slug) return null;
+  if (!site) return null;
 
-  const address = `${slug}.${window.location.host}`;
-  const url = `https://${slug}.${window.location.host}`;
+  const address = siteResultDisplayUrl(site.slug);
+  const url = siteResultUrl(site.slug);
 
   const close = (): void => {
     // ВАЖНО: пишем в модульный набор — иначе плашка, смонтированная ПОЗЖЕ (окно задачи открыли
@@ -96,16 +98,13 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
         style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
       >
         <span className="truncate">
-          Результат проекта опубликован на <span className="font-medium">{address}</span>
+          {site.deployed ? 'Результат проекта опубликован на ' : 'Сайт проекта: '}
+          <span className="font-medium">{address}</span>
+          {!site.deployed && <span className="text-[#37352f]/50 dark:text-blue-100/50"> · в разработке</span>}
         </span>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={BTN}
-        >
+        <a href={url} target="_blank" rel="noopener noreferrer" className={BTN}>
           <Globe className="size-3.5 opacity-80" />
-          Открыть результат
+          {site.deployed ? 'Открыть результат' : 'Открыть сайт'}
         </a>
       </div>
       <button

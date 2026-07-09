@@ -10,6 +10,7 @@ import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembers
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { ProjectPublishTab } from './ProjectPublishTab';
+import { ProjectSiteTab } from './ProjectSiteTab';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -166,9 +167,16 @@ function ShareTab({ project, members, canInvite }: Omit<Props, 'isOwner'>): Reac
 
 // Окно «Поделиться» (Notion-style): вкладки Share | Publish. Якорь — кнопка «Поделиться»
 // в шапке проекта. См. spec 2026-07-05-project-public-link-and-share-design.md.
+type ShareTabId = 'share' | 'board' | 'site';
+const TAB_LABEL: Record<ShareTabId, string> = {
+  share: 'Доступ',
+  board: 'Публичная доска',
+  site: 'Сайт проекта',
+};
+
 export function ProjectSharePopover({ project, members, canInvite, isOwner }: Props): React.ReactElement {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<'share' | 'publish'>('share');
+  const [tab, setTab] = useState<ShareTabId>('share');
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -190,19 +198,19 @@ export function ProjectSharePopover({ project, members, canInvite, isOwner }: Pr
         onOpenAutoFocus={(e) => e.preventDefault()}
         className="w-[420px] max-w-[calc(100vw-1rem)] p-0"
       >
-        {/* Табы. */}
+        {/* Табы: Доступ · Публичная доска (канбан) · Сайт проекта (результат). */}
         <div className="flex items-center gap-4 border-b px-4 pt-2.5">
-          {(['share', 'publish'] as const).map((t) => (
+          {(['share', 'board', 'site'] as const).map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => setTab(t)}
               className={cn(
-                'relative pb-2 text-sm transition-colors',
+                'relative whitespace-nowrap pb-2 text-sm transition-colors',
                 tab === t ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              {t === 'share' ? 'Доступ' : 'Публикация'}
+              {TAB_LABEL[t]}
               {tab === t && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-foreground" />}
             </button>
           ))}
@@ -210,8 +218,10 @@ export function ProjectSharePopover({ project, members, canInvite, isOwner }: Pr
 
         {tab === 'share' ? (
           <ShareTab project={project} members={members} canInvite={canInvite} />
-        ) : (
+        ) : tab === 'board' ? (
           <ProjectPublishTab project={project} isOwner={isOwner} />
+        ) : (
+          <ProjectSiteTab projectId={project.id} />
         )}
       </PopoverContent>
     </Popover>

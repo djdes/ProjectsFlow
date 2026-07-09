@@ -25,6 +25,7 @@ function makeMembers(): { repo: ProjectMemberRepository; calls: string[] } {
       isPublic: false,
       publicIndexing: false,
       appRepoFullName: null,
+      siteSlug: null,
       createdAt: new Date('2026-01-01'),
       role: 'owner',
       memberCount: 1,

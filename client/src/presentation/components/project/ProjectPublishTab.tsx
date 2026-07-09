@@ -122,8 +122,8 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
     return (
       <div className="px-4 py-3">
         <div className="text-center">
-          <h3 className="text-base font-semibold text-foreground">Опубликовать в вебе</h3>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">Создать сайт проекта</p>
+          <h3 className="text-base font-semibold text-foreground">Опубликовать доску</h3>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">Публичная страница с канбаном проекта</p>
         </div>
 
         {/* Мини-превью доски (обложка + иконка + имя) — как «окно» на скрине Notion. */}

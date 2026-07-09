@@ -15,6 +15,7 @@ function makeProject(over: Partial<Project> = {}): Project {
     description: null, coverUrl: null, coverPosition: 50,
     publicSlug: 'cookie-opinion-k3f9q2', isPublic: true, publicIndexing: false,
     appRepoFullName: null,
+    siteSlug: null,
     createdAt: new Date('2026-01-01'), ...over,
   };
 }

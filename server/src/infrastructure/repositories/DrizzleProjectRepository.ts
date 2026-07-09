@@ -49,6 +49,7 @@ function toProject(row: ProjectRow): Project {
     isPublic: row.isPublic,
     publicIndexing: row.publicIndexing,
     appRepoFullName: row.appRepoFullName ?? null,
+    siteSlug: row.siteSlug ?? null,
     createdAt: row.createdAt,
   };
 }
@@ -90,6 +91,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
         status: 'active',
         gitRepoUrl: null,
         isInbox: input.isInbox ?? false,
+        siteSlug: input.siteSlug ?? null,
       });
     } catch (err) {
       if (isDuplicateKey(err)) throw new ProjectNameAlreadyExistsError(input.name);
@@ -115,6 +117,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
           status: 'active',
           gitRepoUrl: null,
           isInbox: input.isInbox ?? false,
+          siteSlug: input.siteSlug ?? null,
         });
         await tx.insert(projectMembers).values({
           projectId: input.id,
@@ -167,6 +170,16 @@ export class DrizzleProjectRepository implements ProjectRepository {
       .select()
       .from(projects)
       .where(eq(projects.publicSlug, slug))
+      .limit(1);
+    const row = rows[0];
+    return row ? toProject(row) : null;
+  }
+
+  async findBySiteSlug(slug: string): Promise<Project | null> {
+    const rows = await this.db
+      .select()
+      .from(projects)
+      .where(eq(projects.siteSlug, slug))
       .limit(1);
     const row = rows[0];
     return row ? toProject(row) : null;

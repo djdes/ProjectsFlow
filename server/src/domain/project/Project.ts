@@ -45,5 +45,8 @@ export type Project = {
   // GitHub-репо приложения проекта (self-serve воркер-раннер, db/097). "owner/repo" куда
   // воркер пишет код; NULL = ещё не создан (GitHub не привязан / не инициализировали).
   readonly appRepoFullName: string | null;
+  // Постоянный слаг сайта-результата (db/100): адрес <site_slug>.projectsflow.ru. До деплоя
+  // воркером отдаётся заглушка, после — статика. NULL у inbox-проекта (сайта нет).
+  readonly siteSlug: string | null;
   readonly createdAt: Date;
 };

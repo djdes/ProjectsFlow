@@ -12,7 +12,7 @@ function makeProject(over: Partial<Project> = {}): Project {
     gitRepoUrl: null, kbRepoFullName: null, kbKind: 'none', financeVisibility: 'owner',
     dispatcherUserId: null, multiTaskWorker: false, isInbox: false,
     description: null, coverUrl: null, coverPosition: 50,
-    publicSlug: null, isPublic: false, publicIndexing: false, appRepoFullName: null,
+    publicSlug: null, isPublic: false, publicIndexing: false, appRepoFullName: null, siteSlug: null,
     createdAt: new Date('2026-01-01'), ...over,
   };
 }

@@ -406,14 +406,17 @@ export function projectsRouter(deps: Deps): Router {
     }
   });
 
-  // === Задеплоенный сайт проекта (self-serve воркер-раннер, db/098). Read (owner/member). ===
+  // === Сайт-результат проекта (db/100 + db/098). Read (owner/member). siteSlug есть всегда:
+  // до деплоя воркером по нему отдаётся заглушка, deployedAt=null. После деплоя — статика. ===
   router.get('/:id/site', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const id = req.params.id;
       if (typeof id !== 'string') throw new ProjectNotFoundError();
       const site = await deps.getProjectSite.execute(id, req.user!.id);
       res.json({
-        site: site ? { slug: site.slug, publishedAt: site.publishedAt.toISOString() } : null,
+        siteSlug: site.siteSlug,
+        deployedAt: site.deployedAt ? site.deployedAt.toISOString() : null,
+        fileCount: site.fileCount,
       });
     } catch (e) {
       next(e);

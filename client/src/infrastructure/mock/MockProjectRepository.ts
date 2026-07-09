@@ -210,8 +210,8 @@ export class MockProjectRepository implements ProjectRepository {
   ensureAppRepo(): Promise<never> {
     return Promise.reject(new Error('Mock.ensureAppRepo: not implemented'));
   }
-  getProjectSite(): Promise<null> {
-    return Promise.resolve(null);
+  getProjectSite(): Promise<{ siteSlug: string | null; deployedAt: string | null; fileCount: number }> {
+    return Promise.resolve({ siteSlug: null, deployedAt: null, fileCount: 0 });
   }
   getGitTokenDelegation(): Promise<never> {
     return Promise.reject(new Error('Mock.getGitTokenDelegation: not implemented'));

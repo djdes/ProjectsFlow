@@ -43,6 +43,34 @@ function isNameTaken(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { status?: number }).status === 422;
 }
 
+// Стартовая index.html в app-репо: заготовка сайта-результата + подсказка, что дать воркеру.
+// Воркер соберёт настоящий сайт и заменит её. Self-contained HTML (без CDN).
+function appRepoIndexHtml(projectName: string): string {
+  const name = projectName
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return `<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${name}</title>
+<style>
+  :root{color-scheme:light dark}
+  body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:24px;
+    font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,sans-serif;
+    background:#f7f7f5;color:#1f2328}
+  @media(prefers-color-scheme:dark){body{background:#191919;color:#e7e7e7}}
+  .card{max-width:560px;width:100%;text-align:center}
+  h1{font-size:28px;margin:0 0 12px}
+  p{margin:0 auto 10px;color:#6b6f76;max-width:52ch}
+  @media(prefers-color-scheme:dark){p{color:#a0a0a0}}
+  code{background:rgba(135,131,120,.15);padding:2px 6px;border-radius:4px;font-size:14px}
+</style></head>
+<body><div class="card">
+  <h1>${name}</h1>
+  <p>Это стартовая страница сайта-результата проекта. Воркер соберёт здесь настоящий сайт.</p>
+  <p>Поставьте задачу воркеру в проекте — опишите, какой сайт нужен (страницы, тексты, дизайн).
+     Он запишет код в этот репозиторий и задеплоит результат.</p>
+</div></body></html>`;
+}
+
 // Создать (или вернуть существующий) GitHub-репо приложения проекта — куда self-serve воркер
 // будет писать код. Owner-only. Репо создаётся под аккаунтом ВЛАДЕЛЬЦА его OAuth-токеном (как KB),
 // приватный, с авто-README (нужна ветка main для будущего workflow_dispatch). Идемпотентно:
@@ -146,6 +174,28 @@ export class EnsureProjectAppRepo {
         }
       } catch {
         /* нет workflow-scope / прочее — publish-site.ps1 откатится на локальную сборку */
+      }
+
+      // index.html-заготовка: стартовая страница сайта + подсказка воркеру/пользователю.
+      // Best-effort + идемпотентно (не трогаем, если файл уже есть — воркер мог заменить).
+      try {
+        const existingIndex = await this.deps.api.getRepoFile(
+          ownerToken.accessToken,
+          fullName,
+          'index.html',
+        );
+        if (!existingIndex) {
+          await this.deps.api.putRepoFile({
+            accessToken: ownerToken.accessToken,
+            owner,
+            repo,
+            path: 'index.html',
+            content: appRepoIndexHtml(project.name),
+            message: 'chore: стартовая index.html (ProjectsFlow)',
+          });
+        }
+      } catch {
+        /* best-effort: репо всё равно создан, index.html не критичен */
       }
     }
 

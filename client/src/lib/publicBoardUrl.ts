@@ -17,6 +17,15 @@ export function publicBoardDisplayUrl(slug: string): string {
   return `${slug}.${BASE_DOMAIN}`;
 }
 
+// Сайт-результат проекта (db/100) — тот же формат поддомена <slug>.projectsflow.ru, но отдельный
+// слаг (не путать с доской). До деплоя воркером по нему отдаётся заглушка «в разработке».
+export function siteResultUrl(slug: string): string {
+  return `https://${slug}.${BASE_DOMAIN}`;
+}
+export function siteResultDisplayUrl(slug: string): string {
+  return `${slug}.${BASE_DOMAIN}`;
+}
+
 // Origin приложения для ссылок «Войти» / «Создать» с публичной доски. На поддомене доски
 // ведём на апекс-домен (там живёт приложение); в dev/на апексе — на текущий origin.
 export function appOrigin(): string {

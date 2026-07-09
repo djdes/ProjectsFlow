@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useContainer } from '@/infrastructure/di/container';
+import { siteResultUrl } from '@/lib/publicBoardUrl';
 
-// Ссылка «Результат» в шапке проекта → задеплоенный статический сайт на поддомене
-// (<slug>.<домен>). Появляется только когда воркер уже что-то задеплоил (self-serve
-// воркер-раннер, M3). Ссылка «есть только у владельца» (несекретный, но неиндексируемый slug).
+// Ссылка «Результат» в шапке проекта → ЗАДЕПЛОЕННЫЙ статический сайт-результат на поддомене
+// (<slug>.projectsflow.ru). Показываем только когда воркер уже что-то задеплоил (deployedAt).
+// Адрес сайта (заглушка/результат) всегда доступен в плашке и во вкладке «Сайт проекта».
 export function ProjectResultLink({ projectId }: { projectId: string }): React.ReactElement | null {
   const { projectRepository } = useContainer();
   const [slug, setSlug] = useState<string | null>(null);
@@ -15,7 +16,8 @@ export function ProjectResultLink({ projectId }: { projectId: string }): React.R
     projectRepository
       .getProjectSite(projectId)
       .then((s) => {
-        if (!cancelled) setSlug(s?.slug ?? null);
+        // Кнопка «Результат» — только для реально задеплоенного сайта (deployedAt).
+        if (!cancelled) setSlug(s.deployedAt && s.siteSlug ? s.siteSlug : null);
       })
       .catch(() => {
         if (!cancelled) setSlug(null);
@@ -27,7 +29,7 @@ export function ProjectResultLink({ projectId }: { projectId: string }): React.R
 
   if (!slug) return null;
 
-  const url = `https://${slug}.${window.location.host}`;
+  const url = siteResultUrl(slug);
   return (
     <Button
       asChild

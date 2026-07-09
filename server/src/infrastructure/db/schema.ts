@@ -274,6 +274,9 @@ export const projects = mysqlTable(
     publishedAt: timestamp('published_at'),
     // GitHub-репо приложения проекта (self-serve воркер-раннер, db/097). "owner/repo".
     appRepoFullName: varchar('app_repo_full_name', { length: 255 }),
+    // Постоянный слаг сайта-результата (db/100): <site_slug>.projectsflow.ru. До деплоя —
+    // заглушка, после — статика (site_artifacts). Заводится при создании проекта. NULL у inbox.
+    siteSlug: varchar('site_slug', { length: 64 }),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -286,6 +289,8 @@ export const projects = mysqlTable(
     index('idx_projects_workspace').on(t.workspaceId),
     // Уникальность + lookup по slug для анонимного публичного роута. См. db/096.
     uniqueIndex('uq_projects_public_slug').on(t.publicSlug),
+    // Уникальность + lookup слага сайта для host-роутинга заглушки. См. db/100.
+    uniqueIndex('uq_projects_site_slug').on(t.siteSlug),
   ],
 );
 

@@ -1,5 +1,6 @@
 import type { Project } from '../../domain/project/Project.js';
 import { ProjectNameEmptyError } from '../../domain/project/errors.js';
+import { generatePublicSlug } from '../../domain/project/publicSlug.js';
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
@@ -34,11 +35,15 @@ export class CreateProject {
     // Раньше create() и members.add() шли последовательно — если member.add падал,
     // проект оставался orphan'ом без доступа никому, включая создателя.
     const workspaceId = await this.deps.resolveWorkspaceId(cmd.ownerId);
+    // Слаг сайта-результата (db/100): постоянный адрес <site_slug>.projectsflow.ru. Генерим
+    // уникальный (проверка + retry; коллизия ~недостижима, но не роняем create лишний раз).
+    const siteSlug = await this.pickFreshSiteSlug();
     const project = await this.deps.repo.createWithOwnerMembership({
       id: this.deps.idGen(),
       ownerId: cmd.ownerId,
       name,
       workspaceId,
+      siteSlug,
     });
 
     // Лента действий (best-effort). workspaceId уже известен — без лишнего lookup.
@@ -68,5 +73,15 @@ export class CreateProject {
     }
 
     return project;
+  }
+
+  // Уникальный слаг сайта (retry на коллизию UNIQUE, как pickFreshSlug деплоя). 5 попыток —
+  // с запасом (>50 бит энтропии на slug); дальше берём последний (UNIQUE всё равно защитит).
+  private async pickFreshSiteSlug(): Promise<string> {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const slug = generatePublicSlug();
+      if (!(await this.deps.repo.findBySiteSlug(slug))) return slug;
+    }
+    return generatePublicSlug();
   }
 }

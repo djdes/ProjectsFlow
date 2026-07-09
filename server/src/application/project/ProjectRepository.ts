@@ -8,6 +8,8 @@ export type CreateProjectInput = {
   // Пространство, которому принадлежит проект (обязательно — projects.workspace_id NOT NULL).
   readonly workspaceId: string;
   readonly isInbox?: boolean;
+  // Слаг сайта-результата (db/100). Задаёт CreateProject; inbox не задаёт (сайта нет).
+  readonly siteSlug?: string | null;
 };
 
 // Patch-семантика: undefined = поле не меняется, null = очистить, string = новое значение.
@@ -51,6 +53,8 @@ export interface ProjectRepository {
   // Публичная ссылка доски (Publish to web, db/096).
   // Lookup по public_slug для анонимного роута. null если такого slug нет.
   getBySlug(slug: string): Promise<Project | null>;
+  // Lookup по site_slug (db/100) — для host-роутинга заглушки сайта. null если нет.
+  findBySiteSlug(slug: string): Promise<Project | null>;
   // Опубликовать: проставить public_slug + is_public=1 + published_at (только если ещё NULL,
   // чтобы повторная публикация не сбрасывала дату первой). Возвращает 'slug_taken' если
   // slug занят другим проектом (UNIQUE-конфликт) — PublishProject перегенерирует и повторит.
