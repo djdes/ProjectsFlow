@@ -732,12 +732,19 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     return update(dialog.task.id, { description: input.description, ralphMode: input.ralphMode });
   };
 
+  // Якорь вставки в НАЧАЛО целевой колонки: колонки обрезаны порцией «первых 4 +
+  // Показать ещё», и вставка в конец (null/null → bounds.max) прятала бы карточку в
+  // скрытом хвосте — «задача пропала». afterTaskId = первая карточка → встаём над ней.
+  // «Готово» сортируется по updatedAt — свежеперенесённая всплывает сама, позицию не трогаем.
+  const topAnchorFor = (status: TaskStatus): string | null =>
+    status === 'done' ? null : (grouped[status][0]?.id ?? null);
+
   const handleQuickPromote = async (task: Task): Promise<void> => {
     // «Шаг вперёд» по колонкам: Черновики→Вручную→Воркер→Готово (quickPromoteNext).
     const next = quickPromoteNext(task.status);
     if (!next) return;
     try {
-      await move(task.id, { targetStatus: next, beforeTaskId: null, afterTaskId: null });
+      await move(task.id, { targetStatus: next, beforeTaskId: null, afterTaskId: topAnchorFor(next) });
       toast.success(`Передано: ${STATUS_LABEL[next]}`);
     } catch (err) {
       toast.error(`Не удалось перенести: ${(err as Error).message}`);
@@ -1061,7 +1068,8 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
           await move(taskId, {
             targetStatus,
             beforeTaskId: null,
-            afterTaskId: null,
+            // В начало целевой колонки — в видимую порцию (см. topAnchorFor).
+            afterTaskId: topAnchorFor(targetStatus),
           });
           // Обновляем dialog-state чтобы drawer показывал новый статус сразу.
           setDialog((prev) => {

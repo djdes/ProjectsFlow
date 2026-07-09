@@ -2,6 +2,7 @@ import { Calendar } from 'lucide-react';
 import { splitTitleBody } from '@/lib/taskTitleBody';
 import { coverStyle } from '@/presentation/components/project/coverGallery';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
+import { ColumnPreviewList } from '@/presentation/components/tasks/ColumnPreview';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
 import type { PublicColumn, PublicTask } from '@/domain/public/PublicBoard';
 
@@ -91,9 +92,11 @@ export function PublicKanban({
             <span className="text-[#37352f]/40 dark:text-blue-100/40">{col.tasks.length}</span>
           </header>
           <div className="flex flex-col gap-2">
-            {col.tasks.map((t) => (
-              <PublicCard key={t.id} task={t} onOpen={onOpenTask} />
-            ))}
+            {/* Порциями по 4 + «Показать ещё» — как на внутренних досках. */}
+            <ColumnPreviewList
+              items={col.tasks}
+              renderItem={(t) => <PublicCard key={t.id} task={t} onOpen={onOpenTask} />}
+            />
           </div>
         </section>
       ))}

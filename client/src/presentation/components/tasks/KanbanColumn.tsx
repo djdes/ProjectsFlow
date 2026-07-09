@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { cn } from '@/lib/utils';
 import { KanbanCard } from './KanbanCard';
+import { ColumnMoreButton, useColumnPreview } from './ColumnPreview';
 import { DropIndicatorLine } from './DropIndicatorLine';
 import { TaskComposer } from './TaskComposer';
 import { IconPicker } from '@/presentation/components/project/IconPicker';
@@ -101,9 +102,6 @@ type Props = {
   onEnterSelection?: () => void;
 };
 
-// Сколько done-карточек видно без раскрытия (свежие сверху — это и есть «последние»).
-const DONE_PREVIEW_COUNT = 10;
-
 // Дата-корзина для группировки «Готово»: Сегодня / Вчера / Ранее.
 // updatedAt ≈ момент переноса в done (последнее изменение задачи).
 function doneBucket(d: Date): string {
@@ -159,9 +157,6 @@ export function KanbanColumn({
     id: `column-${status}`,
     data: { type: 'column', status },
   });
-  // «Готово» распухает (десятки карточек) — по умолчанию показываем хвост из
-  // DONE_PREVIEW_COUNT, остальное за кнопкой «Показать все». Прочие колонки — целиком.
-  const [showAllDone, setShowAllDone] = useState(false);
   // Notion-style inline-создание: «+» вверху колонки → карточка с полем названия сразу в
   // потоке (без окна создания). Enter → сохранить задачу И тут же создать пустую НИЖЕ.
   const [inlineCreating, setInlineCreating] = useState(false);
@@ -226,10 +221,6 @@ export function KanbanColumn({
     }
   };
 
-  const collapsible = status === 'done' && !selectionMode && tasks.length > DONE_PREVIEW_COUNT;
-  const visibleTasks = collapsible && !showAllDone ? tasks.slice(0, DONE_PREVIEW_COUNT) : tasks;
-  const hiddenCount = tasks.length - visibleTasks.length;
-
   // Задачи, созданные в текущей inline-сессии (в порядке создания) — рендерим их сверху
   // отдельно, чтобы карточка создания оставалась ПОД ними и не ремаунтилась. Остальные —
   // обычным сортируемым списком. Пока сессии нет (sessionIds пуст) — всё как обычно.
@@ -238,7 +229,16 @@ export function KanbanColumn({
   const sessionTasks = sessionActive
     ? (sessionIds.map((id) => tasks.find((t) => t.id === id)).filter(Boolean) as Task[])
     : [];
-  const listTasks = sessionSet ? visibleTasks.filter((t) => !sessionSet.has(t.id)) : visibleTasks;
+
+  // Любая колонка показывает первые 4 карточки, дальше — «Показать ещё» порциями по 4
+  // (сайт без километрового скролла). Порция считается по списку БЕЗ session-задач:
+  // они всегда целиком рендерятся сверху, иначе счётчик «Показать ещё» завышался бы
+  // (вплоть до фантомной кнопки при Enter-цепочке > 4 карточек). В режиме выделения —
+  // всё целиком: диапазоны и «выбрать всё» должны видеть реальные карточки.
+  const rest = sessionSet ? tasks.filter((t) => !sessionSet.has(t.id)) : tasks;
+  const preview = useColumnPreview(rest.length);
+  const listTasks = selectionMode ? rest : rest.slice(0, preview.shownCount);
+  const hiddenCount = rest.length - listTasks.length;
 
   // Единый рендер карточки (используется и в сессии, и в основном списке).
   const renderCard = (t: Task): React.ReactElement => (
@@ -469,16 +469,8 @@ export function KanbanColumn({
             <DropIndicatorLine key={`drop-end-${status}`} />
           )}
         </AnimatePresence>
-        {collapsible && (
-          <button
-            type="button"
-            onClick={() => setShowAllDone((v) => !v)}
-            className="shrink-0 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            {showAllDone ? 'Свернуть' : `Показать все (${tasks.length})`}
-          </button>
-        )}
-        {hiddenCount > 0 && !showAllDone && (
+        {!selectionMode && <ColumnMoreButton preview={preview} />}
+        {hiddenCount > 0 && (
           <span className="sr-only">{`Скрыто карточек: ${hiddenCount}`}</span>
         )}
         </>

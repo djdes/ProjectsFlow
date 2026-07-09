@@ -45,6 +45,7 @@ import {
   groupAssignedTasks,
   type DelegationDirection,
 } from './assignedGrouping';
+import { ColumnPreviewList } from './ColumnPreview';
 import { ExpandableMarkdown } from './ExpandableMarkdown';
 import { InboxCheckbox } from './InboxCheckbox';
 import { DelegationBadge } from './DelegationBadge';
@@ -404,28 +405,35 @@ export function AssignedToMeBlock({
                 {group.items.length === 0 ? (
                   <p className="px-1 py-2 text-xs text-muted-foreground/45">Пусто</p>
                 ) : (
+                  // Порциями по 4 + «Показать ещё» (общий примитив колонок).
                   // «Принять/Отклонить» — только у входящих pending («Для меня»). В «Другим»
                   // pending рисуется «принятой» карточкой: DelegationBadge сам покажет
                   // «ждёт ответа» (amber, перспектива делегатора).
-                  group.items.map((item) =>
-                    tab === 'toMe' && item.delegation.status === 'pending' ? (
-                      <PendingCard
-                        key={item.delegation.id}
-                        item={item}
-                        busy={resolvingIds.has(item.delegation.id)}
-                        onAccept={() => void resolve(item.delegation.id, 'accept')}
-                        onDecline={() => void resolve(item.delegation.id, 'decline')}
-                      />
-                    ) : (
-                      <AcceptedCard
-                        key={item.delegation.id}
-                        item={item}
-                        currentUserId={user?.id ?? null}
-                        onOpen={() => setDrawerTask(item)}
-                        onChanged={handleToggled}
-                      />
-                    ),
-                  )
+                  <ColumnPreviewList
+                    // key по вкладке+фильтрам: смена датасета ремаунтит список и
+                    // сбрасывает раскрытие «Показать ещё» (не тащим его между вкладками).
+                    key={[tab, filterFrom ?? '', filterTo ?? '', filterProject ?? ''].join('|')}
+                    items={group.items}
+                    renderItem={(item) =>
+                      tab === 'toMe' && item.delegation.status === 'pending' ? (
+                        <PendingCard
+                          key={item.delegation.id}
+                          item={item}
+                          busy={resolvingIds.has(item.delegation.id)}
+                          onAccept={() => void resolve(item.delegation.id, 'accept')}
+                          onDecline={() => void resolve(item.delegation.id, 'decline')}
+                        />
+                      ) : (
+                        <AcceptedCard
+                          key={item.delegation.id}
+                          item={item}
+                          currentUserId={user?.id ?? null}
+                          onOpen={() => setDrawerTask(item)}
+                          onChanged={handleToggled}
+                        />
+                      )
+                    }
+                  />
                 )}
               </div>
             </div>
