@@ -103,7 +103,7 @@ function makeHarness(opts?: {
 
   const client = {
     async sendMessage(input: any) {
-      sent.push({ chatId: input.chatId, text: input.text });
+      sent.push({ chatId: input.chatId, text: input.text, replyMarkup: input.replyMarkup });
       return { kind: 'ok' as const, messageId: 1000 + sent.length };
     },
     async editMessageText(input: any) {
@@ -271,18 +271,12 @@ test('группа: владелец (sender===owner) → флоу «как от
   assert.equal([...h.drafts.values()][0]!.creatorUserId, 'u1');
 });
 
-test('группа: коллега без +Проекта при владельце → в «Входящие» ВЛАДЕЛЬЦА с атрибуцией', async () => {
+test('группа: привязанный коллега (не владелец) → флоу «как отправитель», в СВОё, не к владельцу', async () => {
   const h = makeHarness();
   await h.service.startFromMessage(222, 500, 'улучшить распознавание накладных', gctx('u1', 'Олег (@oleg)', 'Рабочий чат'));
-  assert.equal(h.createTaskCalls.length, 1);
-  const call = h.createTaskCalls[0]!;
-  assert.equal(call.projectId, 'inbox1');
-  assert.equal(call.ownerUserId, 'u1'); // задача создаётся ОТ ЛИЦА владельца, не отправителя
-  assert.ok(h.inboxUserIds.includes('u1')); // резолвили inbox владельца
-  assert.ok(call.description.includes('улучшить распознавание'));
-  assert.ok(call.description.includes('Олег')); // атрибуция автора
-  assert.equal(h.drafts.size, 0); // без черновика/кнопок
-  assert.ok(h.sent.length >= 1); // подтверждение в группу
+  assert.equal(h.createTaskCalls.length, 0); // self/manual — createTask на confirm, НЕ мгновенно к владельцу
+  assert.equal(h.drafts.size, 1);
+  assert.equal([...h.drafts.values()][0]!.creatorUserId, 'u2'); // от своего лица
 });
 
 test('группа: коллега с +своим проектом → флоу «как отправитель» (черновик от него)', async () => {
@@ -295,13 +289,16 @@ test('группа: коллега с +своим проектом → флоу 
   assert.equal(d.projectId, 'p1'); // в свой проект Альфа
 });
 
-test('группа: непривязанный отправитель при владельце → в «Входящие» владельца', async () => {
+test('группа: непривязанный отправитель при владельце → в «Входящие» владельца + кнопка «Привязать»', async () => {
   const h = makeHarness();
   await h.service.startFromMessage(999, 500, 'подготовить отчёт', gctx('u1', 'Гость'));
   assert.equal(h.createTaskCalls.length, 1);
   assert.equal(h.createTaskCalls[0]!.ownerUserId, 'u1');
   assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1');
   assert.equal(h.drafts.size, 0);
+  // предложение привязать аккаунт: url-кнопка на /profile
+  const conf = h.sent[h.sent.length - 1]!;
+  assert.ok(JSON.stringify(conf.replyMarkup ?? '').includes('/profile'));
 });
 
 test('группа: непривязанный + группа без владельца → подсказка про /start, ничего не создаём', async () => {

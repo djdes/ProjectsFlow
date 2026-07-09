@@ -333,10 +333,10 @@ export class TelegramComposerService {
     rawText: string,
     groupCtx?: TelegramGroupContext,
   ): Promise<void> {
-    // Групповое сообщение: гибрид-развилка. «Как отправитель» → продолжаем обычным флоу ниже;
-    // «во Входящие владельца» → мгновенная задача от лица владельца; «nudge» → просим привязать.
+    // Групповое сообщение: каждый привязанный участник работает «как отправитель» (в своё) —
+    // продолжаем обычным флоу ниже. Непривязанный → в «Входящие» владельца (или просьба привязать).
     if (groupCtx) {
-      const route = await this.resolveGroupRouting(tgUserId, rawText, groupCtx.ownerUserId);
+      const route = await this.resolveGroupRouting(tgUserId, groupCtx.ownerUserId);
       if (route === 'owner-inbox') {
         // ownerUserId гарантированно задан, когда route === 'owner-inbox'.
         return this.createInOwnerInbox(groupCtx.ownerUserId as string, chatId, rawText, groupCtx);
@@ -402,33 +402,25 @@ export class TelegramComposerService {
     }
   }
 
-  // Гибрид-развилка для группового сообщения. Возвращает:
-  //   'self'        — создавать «как отправитель» (обычный флоу с карточкой/кнопками);
-  //   'owner-inbox' — уронить в «Входящие» владельца группы (владелец задан);
-  //   'nudge'       — некому и не под кем создавать → попросить владельца привязать /start.
+  // Развилка для группового сообщения. Каждый привязанный участник работает «как отправитель»
+  // (в свои проекты/«Входящие», со своим делегированием) — как в личке. Возвращает:
+  //   'self'        — обычный флоу от лица отправителя (он привязан);
+  //   'owner-inbox' — отправитель НЕ привязан, но группа привязана к владельцу → в его «Входящие»
+  //                   (чтобы запрос не потерялся) + предложение привязать аккаунт;
+  //   'nudge'       — отправитель не привязан и владельца нет → попросить привязать.
   private async resolveGroupRouting(
     tgUserId: number,
-    rawText: string,
     ownerUserId: string | null,
   ): Promise<'self' | 'owner-inbox' | 'nudge'> {
     const senderUserId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
-    if (senderUserId) {
-      if (!ownerUserId) return 'self'; // владельца нет — падать некуда, не ломаем текущее
-      if (senderUserId === ownerUserId) return 'self'; // владелец всегда «как отправитель»
-      // Реальный коллаборатор: назван +Проект, участником которого отправитель является.
-      const parsed = parseComposerMessage(rawText);
-      if (parsed.projectQuery) {
-        const hint = await this.resolveProjectHint(senderUserId, parsed);
-        if (hint.projectId) return 'self';
-      }
-      return 'owner-inbox'; // привязан, но для этого пространства «чужой» → в Входящие владельца
-    }
-    // Отправитель не привязан.
-    return ownerUserId ? 'owner-inbox' : 'nudge';
+    if (senderUserId) return 'self'; // привязан → всегда в своё
+    return ownerUserId ? 'owner-inbox' : 'nudge'; // непривязанный → к владельцу (или просьба привязать)
   }
 
-  // Фолбэк: мгновенно создаём задачу в «Входящих» ВЛАДЕЛЬЦА группы (от его лица), с атрибуцией
-  // автора-отправителя в описании. Без карточки/кнопок — их в группе жал бы не владелец-создатель.
+  // Фолбэк для НЕпривязанного участника: кладём задачу в «Входящие» владельца группы (от его
+  // лица) с атрибуцией автора — чтобы запрос не потерялся. Плюс кнопка «Привязать аккаунт»:
+  // привязавшись, участник в следующий раз получит задачу в СВОИ проекты. Без карточки/кнопок
+  // создания — их в группе жал бы не владелец-создатель.
   private async createInOwnerInbox(
     ownerUserId: string,
     chatId: number,
@@ -445,9 +437,12 @@ export class TelegramComposerService {
         description: this.buildOwnerInboxDescription(body, groupCtx),
         status: DEFAULT_COLUMN,
       });
+      const profileUrl = `${this.deps.appUrl.replace(/\/$/, '')}/profile`;
       await this.send(
         chatId,
-        `✅ Добавил в «Входящие»: <i>${escapeHtml(excerpt(body))}</i>\n<i>Поставил: ${escapeHtml(groupCtx.senderName)}</i>`,
+        `📥 Добавил в «Входящие»: <i>${escapeHtml(excerpt(body))}</i>\n<i>Поставил: ${escapeHtml(groupCtx.senderName)}</i>\n\n` +
+          `🔗 Привяжи аккаунт — и задачи будут падать в твои проекты, а не сюда.`,
+        { inline_keyboard: [[{ text: '🔗 Привязать аккаунт', url: profileUrl }]] },
       );
     } catch (err) {
       console.warn('[tg-composer] owner-inbox create failed:', err);
