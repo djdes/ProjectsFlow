@@ -42,6 +42,9 @@ export function InboxPage(): React.ReactElement {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hideDone, setHideDone] = useState<boolean>(loadHideDone);
+  // Слот в шапке для фильтров/сортировки блока делегирования: сам блок рендерит их сюда через
+  // portal (состояние остаётся в блоке, а визуально контролы стоят в строке с «Входящие»).
+  const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   // refetchKey — простой механизм форсить пересоздание useTasks-хука в KanbanBoard/
   // TaskListView. Меняется при accept/decline/toggle делегирования в AssignedToMeBlock,
   // чтобы список inbox-задач сразу подтянул свежее состояние (acceptance публикует
@@ -115,13 +118,16 @@ export function InboxPage(): React.ReactElement {
             <AnimatedInbox active className="size-5 text-primary" />
             <h1 className="text-xl font-semibold tracking-tight">Входящие</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {/* Сюда блок делегирования порталит свои фильтры (от/кому/проект) + «Сортировка». */}
+            <div ref={setToolbarSlot} className="flex flex-wrap items-center justify-end gap-1" />
             <HideDoneToggle value={hideDone} onChange={handleHideDoneChange} />
           </div>
         </div>
 
         <AssignedToMeBlock
           onChanged={() => setRefetchKey((k) => k + 1)}
+          toolbarSlot={toolbarSlot}
           hideDone={hideDone}
           bleedNegClass={KANBAN_BLEED_NEG}
           bleedPadClass={KANBAN_BLEED_PAD}

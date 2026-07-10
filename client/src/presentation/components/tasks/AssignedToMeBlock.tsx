@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   DndContext,
   DragOverlay,
@@ -90,6 +91,9 @@ type Props = {
   onChanged?: () => void;
   // Режим отображения (как у страницы «Входящие»): 'kanban' — группы становятся колонками
   // канбана (карточки = поручения), 'list' — плоский список с заголовками групп.
+  // DOM-узел в шапке страницы, куда портализуются фильтры (от/кому/проект) + «Сортировка».
+  // null (нет слота) → рендерим их на месте, в шапке блока (фолбэк).
+  toolbarSlot?: HTMLElement | null;
   // Скрыть выполненные (status='done'). Общий Eye-toggle страницы «Входящие» (persist в
   // localStorage) действует и на этот блок, и на доску ниже — одна кнопка на страницу.
   hideDone?: boolean;
@@ -148,6 +152,7 @@ const snapToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transform })
 // с сервера). Клик по задаче открывает TaskDrawer (read-access гейтится на сервере).
 export function AssignedToMeBlock({
   onChanged,
+  toolbarSlot = null,
   hideDone = false,
   bleedNegClass = '',
   bleedPadClass = '',
@@ -582,44 +587,48 @@ export function AssignedToMeBlock({
             </div>
           )}
         </div>
-        {/* БЕЗ shrink-0 — иначе flex-wrap мёртв (контейнер держит max-content ширину и
-            на 320-375px иконки-фильтры наезжают на табы); теперь кнопки переносятся. */}
-        <div className="flex flex-wrap items-center justify-end gap-1">
-          {/* Фильтры «Другим»: от кого / кому / проект — посмотреть, кто кому поручил и
-              как справляется, по всем проектам. По умолчанию — все. */}
-          {tab === 'byMe' && byMeTasks.length > 0 && (
+        {/* Фильтры (от/кому/проект, вкладка «Другим») + «Сортировка». По умолчанию порталятся
+            в шапку страницы (toolbarSlot — строка с «Входящие»); фолбэк — на месте, в шапке блока. */}
+        {(() => {
+          const toolbar = (
             <>
-              <DelegationFilterMenu
-                icon={Send}
-                prefix="От"
-                title="Фильтр: от кого поручено"
-                options={filterOptions.from}
-                value={filterFrom}
-                onChange={setFilterFrom}
-              />
-              <DelegationFilterMenu
-                icon={Users}
-                prefix="Кому"
-                title="Фильтр: кому поручено"
-                options={filterOptions.to}
-                value={filterTo}
-                onChange={setFilterTo}
-              />
-              <DelegationFilterMenu
-                icon={FolderKanban}
-                prefix="Проект"
-                title="Фильтр: проект"
-                options={filterOptions.projects}
-                value={filterProject}
-                onChange={setFilterProject}
-              />
+              {tab === 'byMe' && byMeTasks.length > 0 && (
+                <>
+                  <DelegationFilterMenu
+                    icon={Send}
+                    prefix="От"
+                    title="Фильтр: от кого поручено"
+                    options={filterOptions.from}
+                    value={filterFrom}
+                    onChange={setFilterFrom}
+                  />
+                  <DelegationFilterMenu
+                    icon={Users}
+                    prefix="Кому"
+                    title="Фильтр: кому поручено"
+                    options={filterOptions.to}
+                    value={filterTo}
+                    onChange={setFilterTo}
+                  />
+                  <DelegationFilterMenu
+                    icon={FolderKanban}
+                    prefix="Проект"
+                    title="Фильтр: проект"
+                    options={filterOptions.projects}
+                    value={filterProject}
+                    onChange={setFilterProject}
+                  />
+                </>
+              )}
+              <GroupingMenu value={grouping} onChange={handleGroupingChange} />
             </>
-          )}
-          {/* Группировка — только для списка. В канбане колонки фиксированы по времени,
-              поэтому выпадашка не нужна. items-start прижимает контролы к строке табов. */}
-          {/* Сортировка/группировка — в обоих видах (в канбане выбор переключит на список). */}
-          <GroupingMenu value={grouping} onChange={handleGroupingChange} />
-        </div>
+          );
+          return toolbarSlot ? (
+            createPortal(toolbar, toolbarSlot)
+          ) : (
+            <div className="flex flex-wrap items-center justify-end gap-1">{toolbar}</div>
+          );
+        })()}
       </div>
 
       {visibleTasks.length === 0 ? (
