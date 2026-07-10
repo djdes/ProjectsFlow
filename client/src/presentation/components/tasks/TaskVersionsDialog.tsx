@@ -245,8 +245,18 @@ export function TaskVersionsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[88vh] w-[95vw] max-w-6xl flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="shrink-0 border-b px-5 py-3">
+        {/* Заголовок + основное действие справа сверху (как в Notion Version history):
+            кнопка «Восстановить» здесь, а не внизу — pr-12 чтобы не залезть под крестик (right-4). */}
+        <DialogHeader className="shrink-0 flex-row items-center justify-between gap-3 space-y-0 border-b px-5 py-3 pr-12">
           <DialogTitle>История версий</DialogTitle>
+          <Button
+            size="sm"
+            disabled={!selected || restoring || (selected != null && isLocked(selected.createdAt))}
+            onClick={() => void restore()}
+          >
+            {restoring ? <Loader2 className="size-4 animate-spin" /> : <Clock className="size-4" />}
+            Восстановить
+          </Button>
         </DialogHeader>
         <div className="flex min-h-0 flex-1">
           {/* Превью выбранной версии — просторная колонка с отступами, как в окне задачи. */}
@@ -296,17 +306,6 @@ export function TaskVersionsDialog({
                 </Button>
               </div>
             )}
-            <div className="flex shrink-0 justify-end border-t p-3">
-              <Button
-                size="sm"
-                disabled={!selected || restoring || (selected != null && isLocked(selected.createdAt))}
-                onClick={() => void restore()}
-              >
-                {restoring && <Loader2 className="size-4 animate-spin" />}
-                <Clock className="size-4" />
-                Восстановить
-              </Button>
-            </div>
           </div>
         </div>
       </DialogContent>
