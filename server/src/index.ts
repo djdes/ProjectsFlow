@@ -70,6 +70,11 @@ import { GetPublicTaskDetail } from './application/project/GetPublicTaskDetail.j
 import { GetPublicTaskAccess } from './application/project/GetPublicTaskAccess.js';
 import { GetPublicAttachment } from './application/project/GetPublicAttachment.js';
 import { FileSystemSiteArtifactStorage } from './infrastructure/storage/FileSystemSiteArtifactStorage.js';
+import { DrizzleAppBackendRepository } from './infrastructure/repositories/DrizzleAppBackendRepository.js';
+import { SqliteAppDatabaseStore } from './infrastructure/app-backend/SqliteAppDatabaseStore.js';
+import { AppAuthService } from './application/app-backend/AppAuthService.js';
+import { RunAppQuery } from './application/app-backend/RunAppQuery.js';
+import { appRuntimeRouter } from './presentation/app-runtime/appRuntimeRouter.js';
 import { DrizzleSiteArtifactRepository } from './infrastructure/repositories/DrizzleSiteArtifactRepository.js';
 import { PublishSiteArtifact } from './application/site/PublishSiteArtifact.js';
 import { GetProjectSite } from './application/site/GetProjectSite.js';
@@ -899,6 +904,17 @@ const SITE_BASE_DOMAIN = process.env['SITE_BASE_DOMAIN'] ?? 'projectsflow.ru';
 const MAX_SITE_BYTES = 25 * 1024 * 1024; // 25 MB на файл собранного сайта.
 console.log(`[projectsflow] site artifacts dir: ${siteArtifactsDir}`);
 
+// --- App-backend рантайм (SQLite-per-project, db/102) ---
+// APPS_DATA_DIR в prod — вне tarball'а деплоя (переживает релизы), как site-artifacts.
+// Один SQLite-файл на проект: apps-data/<project_id>.sqlite (квота 100 МБ на проект).
+const appsDataDir = resolvePath(process.env['APPS_DATA_DIR'] ?? 'apps-data');
+const appBackendRepo = new DrizzleAppBackendRepository(db);
+const appDatabaseStore = new SqliteAppDatabaseStore(appsDataDir);
+const appAuthService = new AppAuthService({ appDb: appDatabaseStore, idGen: idGenerator, now });
+const runAppQuery = new RunAppQuery({ appBackends: appBackendRepo, appDb: appDatabaseStore });
+const appRuntime = appRuntimeRouter({ authService: appAuthService, runQuery: runAppQuery });
+console.log(`[projectsflow] apps data dir: ${appsDataDir}`);
+
 // --- file-sync (PF Desktop Companion, миграция db/044) ---
 const syncBlobsDir = resolvePath(process.env['SYNC_BLOBS_DIR'] ?? 'sync-blobs');
 const blobStorage = new FileSystemBlobStorage(syncBlobsDir);
@@ -1628,6 +1644,10 @@ const { app, devProxyUpgrade } = createApp({
       const p = await projectRepo.findBySiteSlug(slug);
       return p ? { id: p.id, name: p.name } : null;
     },
+  },
+  appBackend: {
+    repository: appBackendRepo,
+    runtime: appRuntime,
   },
   search: {
     searchTasks: new SearchTasks({ search: taskSearchRepo }),

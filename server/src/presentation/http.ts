@@ -1,7 +1,8 @@
 import { existsSync, statSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import express, { type Express, type Request } from 'express';
+import express, { type Express, type Request, type RequestHandler } from 'express';
+import type { AppBackendRepository } from '../application/app-backend/AppBackendRepository.js';
 import cookieParser from 'cookie-parser';
 import {
   createProxyMiddleware,
@@ -285,6 +286,13 @@ type AppDeps = {
     // Lookup проекта по его site_slug (db/100) — для заглушки «сайт в разработке» на
     // ещё-не-задеплоенном <site_slug>.<baseDomain>. null = слаг не принадлежит проекту.
     readonly lookupSiteSlug: (slug: string) => Promise<{ id: string; name: string } | null>;
+  };
+  // App-backend рантайм (SQLite-per-project, db/102): CRUD/auth-API для приложений проекта.
+  // `runtime` — предсобранный appRuntimeRouter; диспатчим его вручную на site-поддоменах
+  // (см. блок ниже), только когда у проекта есть активный бэкенд. `repository` — для гейта.
+  readonly appBackend: {
+    readonly repository: AppBackendRepository;
+    readonly runtime: RequestHandler;
   };
   readonly chat: ChatRouterDeps;
   readonly projects: {
@@ -644,6 +652,33 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use(securityHeaders());
   app.use(express.json({ limit: '256kb' }));
   app.use(cookieParser());
+
+  // App-backend рантайм: на site-поддомене <slug>.<baseDomain> запросы /api/auth/* и /api/data/*
+  // обслуживает приложение проекта (Bearer-токены его конечных пользователей), НЕ платформенный
+  // API. Диспатчим ДО csrfOriginGuard/платформенного /api — это отдельный origin с Bearer-авторизацией,
+  // cookie-CSRF-гейт к нему неприменим. Гейт: host — валидный site-поддомен + у проекта активный
+  // бэкенд. Иначе next() → обычный пайплайн (главный домен и доски не затрагиваются).
+  {
+    const siteBase = deps.site.baseDomain;
+    const RESERVED_APP_SUB = new Set(['www', 'api', 'app']);
+    app.use((req, res, next) => {
+      if (!req.path.startsWith('/api/auth/') && !req.path.startsWith('/api/data/')) return next();
+      const host = req.hostname;
+      if (host === siteBase || !host.endsWith(`.${siteBase}`)) return next();
+      const label = host.slice(0, host.length - siteBase.length - 1);
+      if (!label || label.includes('.') || RESERVED_APP_SUB.has(label) || !/^[a-z0-9-]+$/.test(label)) {
+        return next();
+      }
+      void (async () => {
+        const proj = await deps.site.lookupSiteSlug(label).catch(() => null);
+        if (!proj) return next();
+        const backend = await deps.appBackend.repository.getByProject(proj.id).catch(() => null);
+        if (!backend || backend.status !== 'active') return next();
+        (req as Request & { appProjectId?: string }).appProjectId = proj.id;
+        deps.appBackend.runtime(req, res, next);
+      })().catch(next);
+    });
+  }
 
   // CSRF-origin-гейт до любых мутирующих роутов: блокирует cookie-авторизованные
   // POST/PATCH/DELETE, пришедшие не с same-origin (в т.ч. с недоверенных поддоменов).
