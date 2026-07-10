@@ -22,6 +22,10 @@ export type ProjectAction =
   | 'link_commit'
   | 'delegate_task'
   | 'manage_kb'
+  // Чтение секретов/credential'ов проекта в plaintext (S2). Отдельно от read_project:
+  // read-mostly viewer НЕ должен вытягивать пароли/API-ключи. Запись секретов —
+  // manage_kb (editor); чтение теперь тоже editor+ (симметрия).
+  | 'read_secret'
   | 'manage_attachments'
   | 'invite_member'
   | 'remove_member'
@@ -68,6 +72,7 @@ const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   // (иначе примет, но не сможет двигать/выполнять). См. DelegateExistingTask.
   delegate_task: 'editor',
   manage_kb: 'editor',
+  read_secret: 'editor',
   manage_attachments: 'editor',
   // Приглашать новых участников может editor (и owner): помогает командам с горизонтальной
   // структурой расти, не дёргая владельца. Owner-only остаётся для remove_member и
@@ -79,13 +84,14 @@ const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   cancel_agent_job: 'editor',
   // Финансы (зарплаты/расходы/доходы) меняет только владелец.
   manage_finance: 'owner',
-  // Сменить Ralph-диспетчера может любой участник — это routing automation,
-  // не доступ к данным. Admin-bypass позволяет админу менять диспетчера в любом
-  // проекте (даже где он не member) — используется в admin-панели.
-  set_project_dispatcher: 'viewer',
+  // Сменить Ralph-диспетчера — только владелец (S1). Диспетчер получает делегированный
+  // GitHub-токен владельца (см. GetDelegatedGitToken), поэтому «кто диспетчер» решает
+  // именно owner, а не любой участник. Раньше было 'viewer' → viewer мог назначить себя
+  // и вытянуть чужой PAT. Admin-bypass через синтетическую owner-роль сохраняется.
+  set_project_dispatcher: 'owner',
   // Включить/выключить «Мультизадачный воркер» (параллельное выполнение задач проекта).
-  // Любой участник — это routing automation, не доступ к данным. Admin-bypass — в любом проекте.
-  set_multi_task_worker: 'viewer',
+  // Настройка автоматизации — editor+ (viewer как read-mostly её не меняет). Admin-bypass — в любом проекте.
+  set_multi_task_worker: 'editor',
   // Включить/выключить делегацию GitHub-токена. Owner-only (доступ к личному OAuth).
   // Admin может через admin-bypass — НО granter остаётся = project.ownerId
   // (admin делегирует НЕ свой токен; см. SetGitTokenDelegation use-case).

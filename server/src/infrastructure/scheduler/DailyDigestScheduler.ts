@@ -25,6 +25,9 @@ function mskNow(): { hour: number; minute: number; date: string } {
 // и помечает дату. Catch-up: первый тик сразу при старте (на случай рестарта после времени).
 export class DailyDigestScheduler {
   private timer: ReturnType<typeof setInterval> | null = null;
+  // Re-entrancy guard (B5): если tick дольше 60с (медленный SMTP/БД), следующий
+  // interval не должен запуститься поверх — иначе двойная отправка/гонка на markDailySent.
+  private running = false;
 
   constructor(
     private readonly deps: { settings: DigestSettingsRepository; send: SendDailyDigest },
@@ -46,6 +49,16 @@ export class DailyDigestScheduler {
   }
 
   async tick(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+    try {
+      await this.runTick();
+    } finally {
+      this.running = false;
+    }
+  }
+
+  private async runTick(): Promise<void> {
     const now = mskNow();
     const nowMin = now.hour * 60 + now.minute;
     // День недели МSK-даты (0=Вс..6=Сб). new Date(Y,M-1,D) — календарная дата, weekday

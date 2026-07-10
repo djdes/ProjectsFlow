@@ -476,8 +476,8 @@ export type DelegatedGitToken = {
 // Полный «account dump» текущего юзера. Используется `pf_get_my_account`.
 // Пароль — bcrypt-хэш, plaintext физически невозможно вернуть (поле
 // passwordHashed: true как явное пояснение). Plaintext значения agent-токенов
-// тоже невозможны (хранятся как хэш). GitHub OAuth access-token — твой
-// собственный, возвращается plaintext'ом (симметрично pf_get_credential).
+// тоже невозможны (хранятся как хэш). GitHub OAuth access-token здесь НЕ возвращается
+// (S4) — для git-операций используй pf_get_project_git_token (per-project, с аудитом).
 export type MyAccount = {
   user: {
     id: string;
@@ -495,7 +495,7 @@ export type MyAccount = {
         githubUserId: string;
         scopes: string[];
         connectedAt: string;
-        accessToken: string;
+        tokenAvailable: false;
       }
     | { connected: false };
   agentTokens: Array<{

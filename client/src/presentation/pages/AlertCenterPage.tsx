@@ -41,7 +41,11 @@ export function AlertCenterPage(): React.ReactElement {
       monitoringRepository
         .getAlertCenter()
         .then((d) => {
-          if (!cancelled) setData(d);
+          if (!cancelled) {
+            setData(d);
+            // Сброс ошибки при успехе (U6) — иначе красная карточка залипает навсегда.
+            setError(null);
+          }
         })
         .catch((e: Error) => {
           if (!cancelled) setError(e);

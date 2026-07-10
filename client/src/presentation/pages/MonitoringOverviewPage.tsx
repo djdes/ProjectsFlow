@@ -29,7 +29,12 @@ export function MonitoringOverviewPage(): React.ReactElement {
       monitoringRepository
         .getOverview()
         .then((p) => {
-          if (!cancelled) setProjects(p);
+          if (!cancelled) {
+            setProjects(p);
+            // Сбрасываем ошибку при успехе (U6): иначе транзиентный сбой навсегда
+            // оставлял красную карточку поверх живых данных на всех следующих поллах.
+            setError(null);
+          }
         })
         .catch((e: Error) => {
           if (!cancelled) setError(e);

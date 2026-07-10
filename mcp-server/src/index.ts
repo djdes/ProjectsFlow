@@ -35,7 +35,7 @@
 //   - pf_add_income            — добавить доход
 //   - pf_check_repo_usage      — приватная проверка занятости репо
 //   - pf_request_repo_access   — запрос общего доступа к репо
-//   - pf_get_my_account        — профиль юзера + github (OAuth-токен) + agent-токены
+//   - pf_get_my_account        — профиль юзера + github (метаданные, без токена) + agent-токены
 //   - pf_delete_project        — безвозвратное удаление проекта (owner-only)
 //   - pf_list_my_dispatched_projects — проекты, где этот юзер — Ralph-диспетчер
 //   - pf_set_project_dispatcher      — назначить/снять диспетчера (owner-only)
@@ -1095,9 +1095,9 @@ const TOOLS = [
     name: 'pf_get_my_account',
     description:
       "Return the authenticated user's full account data: profile (id, email, displayName, " +
-      'avatarUrl, isAdmin, createdAt), GitHub connection (login, scopes, plaintext OAuth ' +
-      'access_token if connected — symmetrical to pf_get_credential returning plaintext ' +
-      "secrets of the user's own data), and the list of agent-tokens (id, name, prefix, " +
+      'avatarUrl, isAdmin, createdAt), GitHub connection metadata (login, scopes, connectedAt; ' +
+      'the OAuth access_token is NOT returned here — use pf_get_project_git_token for a ' +
+      'per-project, audited git token), and the list of agent-tokens (id, name, prefix, ' +
       'createdAt, lastUsedAt, isCurrent flag for the token that made THIS call). ' +
       'Account PASSWORD is NOT returned: it is stored as a bcrypt hash and is physically ' +
       'irreversible — the response carries `passwordHashed: true` as explicit explanation. ' +

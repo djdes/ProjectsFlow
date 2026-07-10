@@ -204,6 +204,11 @@ function MembersCard({
     }
   };
 
+  // Подтверждение удаления участника (U7): раньше — удаление одним кликом по корзине.
+  const [pendingRemove, setPendingRemove] = useState<{ userId: string; label: string } | null>(
+    null,
+  );
+
   const handleRemove = async (userId: string): Promise<void> => {
     try {
       await remove(userId);
@@ -251,7 +256,12 @@ function MembersCard({
                     </select>
                     <button
                       type="button"
-                      onClick={() => void handleRemove(m.userId)}
+                      onClick={() =>
+                        setPendingRemove({
+                          userId: m.userId,
+                          label: m.displayName ?? m.email ?? 'участника',
+                        })
+                      }
                       aria-label="Удалить участника"
                       title="Удалить"
                       className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
@@ -296,6 +306,38 @@ function MembersCard({
           </form>
         )}
       </CardContent>
+
+      <Dialog open={pendingRemove !== null} onOpenChange={(o) => !o && setPendingRemove(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Удалить участника?</DialogTitle>
+            <DialogDescription>
+              {pendingRemove ? (
+                <>
+                  <span className="font-medium text-foreground">{pendingRemove.label}</span> потеряет
+                  доступ к пространству и его проектам. Действие можно отменить, снова пригласив
+                  участника.
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingRemove(null)}>
+              Отмена
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                const id = pendingRemove?.userId;
+                setPendingRemove(null);
+                if (id) void handleRemove(id);
+              }}
+            >
+              Удалить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

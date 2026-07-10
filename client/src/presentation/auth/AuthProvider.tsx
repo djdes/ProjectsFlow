@@ -45,6 +45,18 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
     };
   }, [authRepository]);
 
+  // Сессия истекла в середине работы (httpClient поймал 401 → событие). Переводим в
+  // anonymous — ProtectedRoute сам уведёт на /login с возвратом на текущий адрес.
+  // Идемпотентно: повторные события ничего не ломают.
+  useEffect(() => {
+    const onExpired = (): void => {
+      setUser(null);
+      setStatus('anonymous');
+    };
+    window.addEventListener('pf:session-expired', onExpired);
+    return () => window.removeEventListener('pf:session-expired', onExpired);
+  }, []);
+
   const adoptUser = useCallback((next: User) => {
     setUser(next);
     setStatus('authenticated');

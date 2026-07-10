@@ -1946,9 +1946,11 @@ export function agentApiRouter(deps: Deps): Router {
               githubUserId: account.github.githubUserId,
               scopes: account.github.scopes,
               connectedAt: account.github.connectedAt.toISOString(),
-              // Plaintext OAuth-токен — твой собственный, по явному запросу.
-              // Используй с тем же scope, что и сайт (GitHub API/git push/clone).
-              accessToken: account.github.accessToken,
+              // Plaintext OAuth-токен здесь БОЛЬШЕ НЕ отдаём (S4): утечка одного
+              // agent-токена не должна мгновенно давать GitHub-PAT со scope repo.
+              // Для git-операций используй per-project `GET .../git-token`
+              // (pf_get_project_git_token) — с аудит-логом и делегацией владельца.
+              tokenAvailable: false,
             }
           : { connected: false },
         agentTokens: account.agentTokens.map((t) => ({

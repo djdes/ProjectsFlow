@@ -37,6 +37,7 @@ import {
 } from '@/domain/task/Task';
 import { DeadlinePicker } from './DeadlinePicker';
 import { RecipientPickerDialog } from './RecipientPickerDialog';
+import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { copyTextFromPromise } from './copyToClipboard';
 import type { DigestChannel, DigestRecipient } from '@/application/task/TaskRepository';
 import type { BulkResult, BulkTaskActions } from '@/presentation/hooks/useBulkTaskActions';
@@ -76,6 +77,8 @@ export function BulkActionBar({
     title: null,
   });
   const [busy, setBusy] = useState(false);
+  // Подтверждение массового удаления через стильный диалог (U7) вместо window.confirm.
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   // Открытый канал отправки (диалог получателей) + индикатор отправки.
   const [exportChannel, setExportChannel] = useState<Exclude<DigestChannel, 'clipboard'> | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -146,7 +149,11 @@ export function BulkActionBar({
 
   const handleDelete = (): void => {
     if (busy) return;
-    if (!window.confirm(`Удалить выбранные задачи (${count})?`)) return;
+    setConfirmDeleteOpen(true);
+  };
+
+  const confirmDelete = (): void => {
+    setConfirmDeleteOpen(false);
     void run('Удалено', () => bulk.remove(selectedIds));
   };
 
@@ -402,6 +409,16 @@ export function BulkActionBar({
         </Button>
         </motion.div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        taskLabel={null}
+        busy={busy}
+        title={`Удалить выбранные задачи (${count})?`}
+        description={`Будет безвозвратно удалено задач: ${count}.`}
+        onConfirm={confirmDelete}
+      />
 
       <RecipientPickerDialog
         open={exportChannel !== null}

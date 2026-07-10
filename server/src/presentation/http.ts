@@ -165,6 +165,8 @@ import type { AckRalphCancel } from '../application/task/AckRalphCancel.js';
 import type { ProjectMemberRepository } from '../application/project/ProjectMemberRepository.js';
 import { sessionFromCookie } from './middleware/sessionFromCookie.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { securityHeaders, csrfOriginGuard } from './middleware/securityHeaders.js';
+import { config } from './config.js';
 import { authRouter } from './auth/routes.js';
 import { emailActionsRouter } from './emailActions/routes.js';
 import type { EmailActionService } from '../application/email-action/EmailActionService.js';
@@ -639,8 +641,15 @@ export function createApp(deps: AppDeps): CreatedApp {
   const app = express();
 
   app.disable('x-powered-by');
+  app.use(securityHeaders());
   app.use(express.json({ limit: '256kb' }));
   app.use(cookieParser());
+
+  // CSRF-origin-гейт до любых мутирующих роутов: блокирует cookie-авторизованные
+  // POST/PATCH/DELETE, пришедшие не с same-origin (в т.ч. с недоверенных поддоменов).
+  // Bearer/agent-запросы не затрагивает — см. csrfOriginGuard. Ставим на /api, чтобы
+  // не мешать статике/SPA-навигации.
+  app.use('/api', csrfOriginGuard(config.session.cookieName));
 
   // Каждый запрос проходит через session-resolver. Не делает auth обязательным —
   // только прикладывает req.user, если cookie валиден.

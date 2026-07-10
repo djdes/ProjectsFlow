@@ -153,7 +153,21 @@ export function KanbanCard({
           // тач long-press ~220мс) съедают drag-жест, так что onClick для drag не выстрелит.
           onEdit(task);
         }}
+        onKeyDown={(e) => {
+          // Клавиатурная активация (U4): карточка — role="button", но без onKeyDown
+          // её нельзя было открыть с клавиатуры (WCAG 2.1.1). Enter/Space = клик.
+          if (preview) return;
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          if (selecting) {
+            onSelectToggle?.(task.id, { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey });
+            return;
+          }
+          onEdit(task);
+        }}
         role="button"
+        // В режиме выделения dnd-attributes (с их tabIndex) сняты — возвращаем фокусируемость.
+        tabIndex={selecting ? 0 : undefined}
         aria-pressed={selecting ? selected : undefined}
         className={cn(
           // НЕ ставим touch-action:none — иначе палец не сможет скроллить колонку/доску
@@ -209,14 +223,16 @@ export function KanbanCard({
             сжимается). Сплошной bg-card маскирует текст под кнопками. */}
         {!selecting && !preview && (
           <div
-            className="pointer-events-none absolute right-1 top-1 z-20 flex items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:opacity-100 dark:ring-white/[0.08]"
+            className="pointer-events-none absolute right-1 top-1 z-20 flex items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:gap-1 max-sm:opacity-100 dark:ring-white/[0.08]"
             {...stopDragProps}
           >
             {onQuickPromote && promoteNext && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="group/promote size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-hover hover:text-foreground sm:size-6"
+                // На тач-экранах увеличиваем hit-area до 36px (U10): визуально компактно
+                // на десктопе (size-6), но пальцем не промахнёшься между «передать»/«удалить».
+                className="group/promote size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-hover hover:text-foreground max-sm:size-9"
                 onClick={(e) => {
                   e.stopPropagation();
                   onQuickPromote(task);
@@ -224,20 +240,20 @@ export function KanbanCard({
                 aria-label={`Передать в «${STATUS_LABEL[promoteNext]}»`}
                 title={`Передать в «${STATUS_LABEL[promoteNext]}»`}
               >
-                <ArrowRight className="size-3 transition-transform duration-150 group-hover/promote:translate-x-0.5" />
+                <ArrowRight className="size-3 transition-transform duration-150 group-hover/promote:translate-x-0.5 max-sm:size-4" />
               </Button>
             )}
             <Button
               variant="ghost"
               size="icon"
-              className="size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive sm:size-6"
+              className="size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive max-sm:size-9"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(task);
               }}
               aria-label="Удалить"
             >
-              <Trash2 className="size-3" />
+              <Trash2 className="size-3 max-sm:size-4" />
             </Button>
           </div>
         )}

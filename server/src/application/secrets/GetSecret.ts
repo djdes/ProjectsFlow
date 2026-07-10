@@ -17,7 +17,7 @@ export class GetSecret {
 
   async execute(projectId: string, userId: string, key: string): Promise<string> {
     if (!KEY_RE.test(key)) throw new SecretKeyInvalidError(key);
-    await requireProjectAccess(this.deps, projectId, userId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, userId, 'read_secret');
     const value = await this.deps.repo.getValue(projectId, key);
     if (value === null) throw new SecretNotFoundError(key);
     return value;

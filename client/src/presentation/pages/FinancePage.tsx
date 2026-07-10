@@ -17,6 +17,7 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { formatRub, rublesToKopecks } from '@/lib/money';
 import type { Employee, ProjectFinance } from '@/domain/finance/types';
+import { HttpError } from '@/lib/HttpError';
 import { useContainer } from '@/infrastructure/di/container';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
@@ -37,12 +38,28 @@ export function FinancePage(): React.ReactElement {
   const [finance, setFinance] = useState<ProjectFinance | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [forbidden, setForbidden] = useState(false);
+  // Оптимистичная видимость финансов (UP2): провайдер проекта не обновляется после
+  // setVisibility, поэтому держим локальный override — кнопка переключается сразу.
+  const [visibilityOverride, setVisibilityOverride] = useState<'owner' | 'members' | null>(null);
+  // Отделяем «нет прав» (403) от сетевой/серверной ошибки (U6): раньше любой сбой
+  // показывал владельцу ложное «Финансы недоступны» без возможности повторить.
+  const [loadError, setLoadError] = useState(false);
 
   const reload = useCallback(() => {
+    setLoadError(false);
     projectFinanceRepository
       .getSummary(pid)
-      .then(setFinance)
-      .catch(() => setForbidden(true));
+      .then((f) => {
+        setFinance(f);
+        setForbidden(false);
+      })
+      .catch((e: unknown) => {
+        if (e instanceof HttpError && e.status === 403) {
+          setForbidden(true);
+        } else {
+          setLoadError(true);
+        }
+      });
   }, [pid, projectFinanceRepository]);
 
   useEffect(() => {
@@ -65,6 +82,22 @@ export function FinancePage(): React.ReactElement {
           </p>
           <Button asChild variant="outline">
             <Link to={`/projects/${pid}`}>К доске</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="grid h-full place-items-center p-6 text-center">
+        <div className="space-y-3">
+          <h1 className="text-2xl font-semibold">Не удалось загрузить</h1>
+          <p className="text-sm text-muted-foreground">
+            Проверьте соединение и попробуйте ещё раз.
+          </p>
+          <Button variant="outline" onClick={reload}>
+            Повторить
           </Button>
         </div>
       </div>
@@ -219,19 +252,34 @@ export function FinancePage(): React.ReactElement {
                 По умолчанию финансы видит только владелец и админ.
               </p>
             </div>
-            <Button
-              variant={project.financeVisibility === 'members' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => {
-                const next = project.financeVisibility === 'members' ? 'owner' : 'members';
-                void projectFinanceRepository
-                  .setVisibility(pid, next)
-                  .then(() => toast.success(next === 'members' ? 'Видно всем участникам' : 'Видно только владельцу'))
-                  .catch((e) => toast.error((e as Error).message));
-              }}
-            >
-              {project.financeVisibility === 'members' ? 'Включено' : 'Выключено'}
-            </Button>
+            {(() => {
+              const visibility = visibilityOverride ?? project.financeVisibility;
+              const isMembers = visibility === 'members';
+              return (
+                <Button
+                  variant={isMembers ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    const prev = visibility;
+                    const next = isMembers ? 'owner' : 'members';
+                    setVisibilityOverride(next); // оптимистично
+                    void projectFinanceRepository
+                      .setVisibility(pid, next)
+                      .then(() =>
+                        toast.success(
+                          next === 'members' ? 'Видно всем участникам' : 'Видно только владельцу',
+                        ),
+                      )
+                      .catch((e) => {
+                        setVisibilityOverride(prev); // откат при ошибке
+                        toast.error((e as Error).message);
+                      });
+                  }}
+                >
+                  {isMembers ? 'Включено' : 'Выключено'}
+                </Button>
+              );
+            })()}
           </CardContent>
         </Card>
       )}

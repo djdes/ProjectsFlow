@@ -23,12 +23,23 @@ export default defineConfig([
       globals: globals.browser,
     },
     settings: {
+      // РЕЗОЛВЕР (A1): без него boundaries не резолвит ни alias `@/`, ни relative-импорты
+      // .ts без расширения — все импорты становились «unknown» и element-types НЕ работал
+      // (правило молча не срабатывало никогда). TS-резолвер читает tsconfig `paths`.
+      'import/resolver': {
+        typescript: { project: './tsconfig.app.json' },
+      },
       // Описываем слои чистой архитектуры.
       // Каждый элемент — слой; "pattern" = пути от ./src,
       // "mode" = "folder" значит "файл считается частью слоя по родительской папке".
+      // ВАЖНО: более специфичный `infrastructure/di` идёт ПЕРЕД `infrastructure/*`,
+      // иначе di-файлы матчатся как обычный infrastructure.
       'boundaries/elements': [
         { type: 'domain', pattern: 'src/domain/*' },
         { type: 'application', pattern: 'src/application/*' },
+        // file-mode: матчит и файлы прямо в di/ (container.tsx), и вложенные. Стоит
+        // ПЕРЕД infrastructure — иначе di-файлы уедут в общий infrastructure-элемент.
+        { type: 'di', pattern: 'src/infrastructure/di/**/*', mode: 'file' },
         { type: 'infrastructure', pattern: 'src/infrastructure/*' },
         { type: 'presentation', pattern: 'src/presentation/*' },
         { type: 'shared', pattern: 'src/lib/*' },
@@ -60,16 +71,21 @@ export default defineConfig([
             { from: 'domain', allow: ['domain'] },
             // application видит только domain
             { from: 'application', allow: ['domain', 'application'] },
-            // infrastructure реализует порты application, может тянуть domain
-            { from: 'infrastructure', allow: ['domain', 'application', 'infrastructure'] },
-            // presentation видит application/domain + shared/ui-kit. НЕ infrastructure напрямую.
-            // Исключение: presentation/hooks/CurrentUserProvider и DI-контейнер живут в infrastructure/di — это сознательное мостовое исключение, разрешаем точечно через no-restricted-imports ниже.
+            // infrastructure реализует порты application, тянет domain + shared (@/lib/HttpError)
+            { from: 'infrastructure', allow: ['domain', 'application', 'infrastructure', 'shared'] },
+            // DI-контейнер — единственный «мост»: собирает моки/http-адаптеры и отдаёт
+            // use-case'ы наружу. Ему можно всё, что реализует порты + shared.
+            { from: 'di', allow: ['domain', 'application', 'infrastructure', 'di', 'shared'] },
+            // presentation видит application/domain + shared/ui-kit + di-мост. НЕ infrastructure/* напрямую.
             {
               from: 'presentation',
-              allow: ['domain', 'application', 'presentation', 'shared', 'ui-kit'],
+              allow: ['domain', 'application', 'presentation', 'shared', 'ui-kit', 'di'],
             },
-            // ui-kit (shadcn) использует shared/lib (cn helper) и React/Radix — внешние пакеты разрешены по умолчанию
-            { from: 'ui-kit', allow: ['shared', 'ui-kit'] },
+            // ui-kit (shadcn) использует shared/lib (cn helper) и React/Radix. Плюс несколько
+            // примитивов потребляют app-провайдеры (Toaster→useTheme, SegmentedControl→useMotion,
+            // auto-grow-textarea→useAutoGrowTextarea) — сознательный shadcn-компромисс, поэтому
+            // presentation в allow. Важные направления (domain/application/infra чистота) остаются строгими.
+            { from: 'ui-kit', allow: ['shared', 'ui-kit', 'presentation'] },
             // shared/lib — листовой слой
             { from: 'shared', allow: ['shared'] },
             // entrypoint собирает всё
@@ -79,6 +95,7 @@ export default defineConfig([
                 'domain',
                 'application',
                 'infrastructure',
+                'di',
                 'presentation',
                 'shared',
                 'ui-kit',

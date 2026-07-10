@@ -33,7 +33,8 @@ export class GetAgentCredential {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, userId: string, slug: string): Promise<ResolvedCredential> {
-    const { project } = await requireProjectAccess(this.deps, projectId, userId, 'read_project');
+    // read_secret (editor+): credential резолвит vault-рефы в plaintext — viewer не должен.
+    const { project } = await requireProjectAccess(this.deps, projectId, userId, 'read_secret');
     if (project.kbKind === 'none') throw new KbNotConnectedError();
 
     const path = `credentials/${slug}.md`;

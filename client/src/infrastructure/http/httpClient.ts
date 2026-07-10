@@ -30,9 +30,32 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
   if (res.status === 204) return undefined as T;
 
   const text = await res.text();
-  const data = text ? (JSON.parse(text) as unknown) : null;
+  // JSON.parse под try/catch: nginx 502/504 отдаёт HTML, а не JSON — без гарда
+  // наверх летел бы SyntaxError вместо HttpError, и все `instanceof HttpError`-ветки
+  // не срабатывали. При провале парса на не-ok — HttpError с реальным статусом.
+  let data: unknown = null;
+  if (text) {
+    try {
+      data = JSON.parse(text) as unknown;
+    } catch {
+      if (!res.ok) {
+        throw new HttpError(res.status, { error: 'non_json_response' });
+      }
+      // 2xx, но тело не JSON — неожиданно; отдаём null (вызывающий разберётся).
+      data = null;
+    }
+  }
 
   if (!res.ok) {
+    // 401 в середине сессии — сообщаем всему приложению одним событием: AuthProvider
+    // переведёт статус в anonymous, ProtectedRoute уведёт на /login с возвратом.
+    if (res.status === 401) {
+      try {
+        window.dispatchEvent(new CustomEvent('pf:session-expired'));
+      } catch {
+        // не-браузерное окружение — событие некому слушать, игнорируем.
+      }
+    }
     const body = (data as HttpErrorBody | null) ?? { error: 'unknown_error' };
     throw new HttpError(res.status, body);
   }

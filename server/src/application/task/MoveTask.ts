@@ -36,6 +36,9 @@ export type MoveTaskCommand = {
 };
 
 const POSITION_STEP = 1024;
+// Порог схлопывания: если зазор между соседними позициями меньше — колонку
+// перенумеровываем, иначе midpoint перестаёт быть различимым (B1).
+const POSITION_COLLAPSE_GAP = 2;
 
 // При снятии галочки восстанавливаем ТОЧНЫЙ прежний статус (требование «запомнить
 // прежний статус»). Фолбэк 'todo' — только если снапшота нет (null/legacy) или он
@@ -80,12 +83,35 @@ export class MoveTask {
     const beforePos = await this.resolvePosition(input.beforeTaskId, input.projectId);
     const afterPos = await this.resolvePosition(input.afterTaskId, input.projectId);
 
-    const newPosition = await this.computePosition(
+    let newPosition = await this.computePosition(
       beforePos,
       afterPos,
       input.projectId,
       targetStatus,
     );
+
+    // B1: защита от схлопывания float-позиций. Если между соседями зазор стал слишком
+    // мал (после десятков вставок в одно место), midpoint (a+b)/2 перестаёт давать
+    // различимую позицию → коллизии и «прыжки» порядка. Перенумеровываем колонку целыми
+    // с равным шагом (атомарно) и пересчитываем позицию из свежих соседей.
+    if (
+      beforePos !== null &&
+      afterPos !== null &&
+      Math.abs(beforePos - afterPos) < POSITION_COLLAPSE_GAP
+    ) {
+      // Сначала сама задача уже должна быть в целевой колонке для перенумерации? Нет —
+      // перенумеровываем существующие карточки колонки, затем ставим задачу между свежими
+      // соседями. Задача переносится следующим update'ом.
+      await this.deps.tasks.rebalanceColumn(input.projectId, targetStatus, input.taskId);
+      const freshBefore = await this.resolvePosition(input.beforeTaskId, input.projectId);
+      const freshAfter = await this.resolvePosition(input.afterTaskId, input.projectId);
+      newPosition = await this.computePosition(
+        freshBefore,
+        freshAfter,
+        input.projectId,
+        targetStatus,
+      );
+    }
 
     const updated = await this.deps.tasks.update(input.taskId, {
       status: targetStatus,

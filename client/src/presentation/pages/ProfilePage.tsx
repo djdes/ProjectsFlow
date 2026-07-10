@@ -13,6 +13,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useUpdateProfile } from '@/presentation/hooks/useUpdateProfile';
@@ -42,6 +50,8 @@ function PersonalDataCard(): React.ReactElement {
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
+  // Подтверждение смены email — это логин-идентификатор (UP4).
+  const [emailConfirmOpen, setEmailConfirmOpen] = useState(false);
 
   const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const file = e.target.files?.[0];
@@ -87,14 +97,26 @@ function PersonalDataCard(): React.ReactElement {
     );
   }
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
-    e.preventDefault();
+  const emailChanged = email.trim() !== user.email;
+  const dirty = displayName.trim() !== user.displayName || emailChanged;
+
+  const doSave = async (): Promise<void> => {
     try {
       await submit({ displayName, email });
       toast.success('Профиль обновлён');
     } catch {
-      toast.error('Не&nbsp;удалось сохранить профиль');
+      toast.error('Не удалось сохранить профиль');
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>): void => {
+    e.preventDefault();
+    // Смена email = смена логина: подтверждаем явно (опечатка → потеря доступа).
+    if (emailChanged) {
+      setEmailConfirmOpen(true);
+      return;
+    }
+    void doSave();
   };
 
   return (
@@ -161,75 +183,60 @@ function PersonalDataCard(): React.ReactElement {
           </div>
 
           <div className="flex justify-end">
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || !dirty}>
               {saving ? 'Сохраняем…' : 'Сохранить'}
             </Button>
           </div>
         </form>
       </CardContent>
+
+      <Dialog open={emailConfirmOpen} onOpenChange={setEmailConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Сменить email для входа?</DialogTitle>
+            <DialogDescription>
+              Вы меняете email входа с{' '}
+              <span className="font-medium text-foreground">{user.email}</span> на{' '}
+              <span className="font-medium text-foreground">{email.trim()}</span>. Убедитесь, что
+              адрес верный — по нему выполняется вход.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailConfirmOpen(false)} disabled={saving}>
+              Отмена
+            </Button>
+            <Button
+              onClick={() => {
+                setEmailConfirmOpen(false);
+                void doSave();
+              }}
+              disabled={saving}
+            >
+              Сменить email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
 
 function SecurityCard(): React.ReactElement {
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [confirm, setConfirm] = useState('');
-
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>): void => {
-    e.preventDefault();
-    toast('Backend для смены пароля будет добавлен в&nbsp;auth-спеке (Spec #3).');
-    setCurrent('');
-    setNext('');
-    setConfirm('');
-  };
-
+  // Честная заглушка (U2): реального backend смены пароля пока нет. Раньше здесь была
+  // рабочая на вид форма с autocomplete="new-password" — менеджеры паролей предлагали
+  // сохранить «новый пароль», который никуда не записывался (потеря доступа). Никаких
+  // полей ввода пароля до появления reset/change-flow.
   return (
     <Card>
       <CardHeader>
         <CardTitle>Безопасность</CardTitle>
-        <CardDescription>
-          В&nbsp;этой спеке пароль не&nbsp;сохраняется — кнопка покажет toast.
-        </CardDescription>
+        <CardDescription>Смена пароля прямо в интерфейсе — скоро.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="currentPassword">Текущий пароль</Label>
-            <Input
-              id="currentPassword"
-              type="password"
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-              autoComplete="current-password"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="newPassword">Новый пароль</Label>
-            <Input
-              id="newPassword"
-              type="password"
-              value={next}
-              onChange={(e) => setNext(e.target.value)}
-              autoComplete="new-password"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Подтверждение</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              autoComplete="new-password"
-            />
-          </div>
-          <div className="flex justify-end">
-            <Button type="submit" variant="outline">
-              Сменить пароль
-            </Button>
-          </div>
-        </form>
+        <p className="text-sm text-muted-foreground">
+          Самостоятельная смена пароля пока недоступна. Если нужно сменить пароль или вы
+          потеряли доступ — напишите в поддержку, поможем восстановить.
+        </p>
       </CardContent>
     </Card>
   );

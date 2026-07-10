@@ -486,8 +486,11 @@ function MobileBottomNav({ onOpenProjects }: { onOpenProjects: () => void }): Re
                 ) : (
                   icon
                 )}
-                {item.key === 'notifications' && (item.badge ?? 0) > 0 && (
-                  <span className="absolute -right-1.5 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-[14px] text-primary-foreground">
+                {/* Бейдж непрочитанного (U5): раньше сверялось с key 'notifications',
+                    которого нет среди вкладок (inbox|projects|chat|profile) — индикатор
+                    не рендерился никогда. Теперь показываем на любой вкладке с badge>0. */}
+                {(item.badge ?? 0) > 0 && (
+                  <span className="absolute -right-1.5 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-4 text-primary-foreground">
                     {(item.badge ?? 0) > 99 ? '99+' : item.badge}
                   </span>
                 )}

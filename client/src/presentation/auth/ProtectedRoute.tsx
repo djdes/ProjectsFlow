@@ -15,7 +15,10 @@ export function ProtectedRoute({ children }: Props): React.ReactElement | null {
   }
 
   if (status === 'anonymous') {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    // Сохраняем полный адрес (путь + query + hash), чтобы дип-линк вида
+    // /admin?tab=support вернулся целиком после логина.
+    const from = location.pathname + location.search + location.hash;
+    return <Navigate to="/login" replace state={{ from }} />;
   }
 
   return <>{children}</>;

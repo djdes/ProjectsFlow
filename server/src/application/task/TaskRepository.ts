@@ -57,8 +57,23 @@ export interface TaskRepository {
   create(input: CreateTaskInput): Promise<Task>;
   update(taskId: string, patch: UpdateTaskPatch): Promise<Task | null>;
   delete(taskId: string): Promise<boolean>;
+  /**
+   * Удалить задачу вместе со ВСЕМИ её child-строками (комментарии, аттачи, коммиты,
+   * версии, делегации, live-сессии/события, telegram-маппинги, email-токены) в одной
+   * транзакции. Без этого удаление задачи оставляло сироты (FK на схеме нет). Возвращает
+   * true, если задача существовала.
+   */
+  deleteWithChildren(taskId: string): Promise<boolean>;
   // Возвращает min/max позицию в колонке — для расчёта новой position при insert "сверху" / "снизу".
   getPositionBounds(projectId: string, status: TaskStatus): Promise<{ min: number; max: number } | null>;
+  /**
+   * Перенумеровать колонку (projectId, status) целыми с равным шагом по текущему
+   * порядку position. Нужно когда float-midpoint между соседями схлопывается (после
+   * ~десятков вставок в одно место) и новую position уже не вставить без коллизии.
+   * Атомарно (одна TX). Возвращает актуальную position указанной задачи после
+   * перенумерации (или null, если её нет в колонке).
+   */
+  rebalanceColumn(projectId: string, status: TaskStatus, taskId: string): Promise<number | null>;
   /**
    * Установить ralph_cancel_requested_at = now() и ralph_cancel_requested_by = userId.
    * Идемпотентно: если уже установлено — оставляем существующие значения. Используется
@@ -73,7 +88,7 @@ export interface TaskRepository {
   clearRalphCancel(taskId: string): Promise<Task | null>;
   /**
    * Перенос задачи в другой проект (только для inbox → реальный). Меняет
-   * tasks.project_id. Используется AssignInboxTaskToProject use-case'ом.
+   * tasks.project_id. Используется MoveTaskToProject use-case'ом.
    * Position не пересчитываем — задача попадает в проект с её текущим position
    * и status (как правило 'todo'/'done'); UI отсортирует.
    */

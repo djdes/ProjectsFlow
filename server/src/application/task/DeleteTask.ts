@@ -26,12 +26,11 @@ export class DeleteTask {
     const task = await this.deps.tasks.getById(taskId);
     if (!task || task.projectId !== projectId) throw new TaskNotFoundError(taskId);
 
-    // Чистим комментарии до удаления задачи — иначе останутся orphan-записи.
-    // (Attachments и task_commits на серверной стороне не каскадятся — это уже отдельная
-    // история; здесь касаемся только новой таблицы.)
-    await this.deps.comments.deleteByTask(taskId);
-
-    const ok = await this.deps.tasks.delete(taskId);
+    // Атомарно: задача + все её child-строки (комментарии, аттачи, коммиты, версии,
+    // делегации, live-сессии/события, telegram-маппинги, email-токены) в одной TX (B2/B3).
+    // Раньше комментарии чистились отдельным запросом, а attachments/commits/versions
+    // оставались сиротами; крэш между шагами оставлял несогласованное состояние.
+    const ok = await this.deps.tasks.deleteWithChildren(taskId);
     if (!ok) throw new TaskNotFoundError(taskId);
 
     // Лента действий (best-effort).

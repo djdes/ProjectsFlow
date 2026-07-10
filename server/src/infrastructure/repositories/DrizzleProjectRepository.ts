@@ -16,6 +16,29 @@ import {
   taskComments,
   taskCommits,
   tasks,
+  // B3: project-scoped таблицы, ранее НЕ входившие в deleteCascade → сироты при удалении.
+  taskDelegations,
+  taskVersions,
+  taskProgressEvents,
+  liveSessions,
+  siteArtifacts,
+  activityEvents,
+  projectViews,
+  recentTaskViews,
+  projectServers,
+  serverSnapshots,
+  serverAlerts,
+  serverAlertRules,
+  commitSyncJobs,
+  aiPromptJobs,
+  monitoringAnalysisJobs,
+  projectAutomation,
+  projectAutomationCriteria,
+  projectDigestSettings,
+  syncWorkspaces,
+  telegramTaskDrafts,
+  telegramTaskMessages,
+  emailActionTokens,
   type ProjectRow,
 } from '../db/schema.js';
 import type { Project, ProjectStatus } from '../../domain/project/Project.js';
@@ -298,12 +321,14 @@ export class DrizzleProjectRepository implements ProjectRepository {
         await tx.delete(taskAttachments).where(inArray(taskAttachments.taskId, taskIds));
         await tx.delete(taskComments).where(inArray(taskComments.taskId, taskIds));
         await tx.delete(taskCommits).where(inArray(taskCommits.taskId, taskIds));
+        // B3: task-scoped без projectId — чистим по taskId, иначе сироты.
+        await tx.delete(taskDelegations).where(inArray(taskDelegations.taskId, taskIds));
       }
 
       // Удаляем сами task'и после очистки их child-таблиц.
       await tx.delete(tasks).where(eq(tasks.projectId, projectId));
 
-      // Прочие project-scoped таблицы. Порядок между ними не важен.
+      // Прочие project-scoped таблицы. FK нет — порядок между ними не важен.
       await tx.delete(kbDocuments).where(eq(kbDocuments.projectId, projectId));
       await tx.delete(secrets).where(eq(secrets.projectId, projectId));
       await tx.delete(projectEmployeeAssignments).where(eq(projectEmployeeAssignments.projectId, projectId));
@@ -319,6 +344,31 @@ export class DrizzleProjectRepository implements ProjectRepository {
       await tx
         .delete(projectGitTokenDelegations)
         .where(eq(projectGitTokenDelegations.projectId, projectId));
+
+      // B3: раньше эти project-scoped таблицы НЕ чистились → сироты (задачи-версии,
+      // live-сессии, события ленты, метрики серверов, job-очереди, автоматизация,
+      // site-артефакты и т.д.). aiUsageLedger НАМЕРЕННО не трогаем — биллинг-история.
+      await tx.delete(taskVersions).where(eq(taskVersions.projectId, projectId));
+      await tx.delete(taskProgressEvents).where(eq(taskProgressEvents.projectId, projectId));
+      await tx.delete(liveSessions).where(eq(liveSessions.projectId, projectId));
+      await tx.delete(siteArtifacts).where(eq(siteArtifacts.projectId, projectId));
+      await tx.delete(activityEvents).where(eq(activityEvents.projectId, projectId));
+      await tx.delete(projectViews).where(eq(projectViews.projectId, projectId));
+      await tx.delete(recentTaskViews).where(eq(recentTaskViews.projectId, projectId));
+      await tx.delete(serverSnapshots).where(eq(serverSnapshots.projectId, projectId));
+      await tx.delete(serverAlerts).where(eq(serverAlerts.projectId, projectId));
+      await tx.delete(serverAlertRules).where(eq(serverAlertRules.projectId, projectId));
+      await tx.delete(projectServers).where(eq(projectServers.projectId, projectId));
+      await tx.delete(commitSyncJobs).where(eq(commitSyncJobs.projectId, projectId));
+      await tx.delete(aiPromptJobs).where(eq(aiPromptJobs.projectId, projectId));
+      await tx.delete(monitoringAnalysisJobs).where(eq(monitoringAnalysisJobs.projectId, projectId));
+      await tx.delete(projectAutomationCriteria).where(eq(projectAutomationCriteria.projectId, projectId));
+      await tx.delete(projectAutomation).where(eq(projectAutomation.projectId, projectId));
+      await tx.delete(projectDigestSettings).where(eq(projectDigestSettings.projectId, projectId));
+      await tx.delete(syncWorkspaces).where(eq(syncWorkspaces.projectId, projectId));
+      await tx.delete(telegramTaskDrafts).where(eq(telegramTaskDrafts.projectId, projectId));
+      await tx.delete(telegramTaskMessages).where(eq(telegramTaskMessages.projectId, projectId));
+      await tx.delete(emailActionTokens).where(eq(emailActionTokens.projectId, projectId));
 
       // Финальный — сам проект.
       await tx.delete(projects).where(eq(projects.id, projectId));

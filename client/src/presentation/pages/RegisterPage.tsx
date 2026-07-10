@@ -1,11 +1,12 @@
-import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { AuthFormCard } from '@/presentation/auth/AuthFormCard';
 import { UserEmailAlreadyExistsError } from '@/domain/user/errors';
+import { goToPostAuthTarget, safeNextTarget } from '@/lib/authRedirect';
 
 type LocationState = { from?: string };
 
@@ -19,10 +20,12 @@ export function RegisterPage(): React.ReactElement {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (status === 'authenticated') {
-    const target = (location.state as LocationState | null)?.from ?? '/';
-    return <Navigate to={target} replace />;
-  }
+  const nextParam = new URLSearchParams(location.search).get('next');
+  const target = safeNextTarget(nextParam) ?? (location.state as LocationState | null)?.from ?? '/';
+
+  useEffect(() => {
+    if (status === 'authenticated') goToPostAuthTarget(target, navigate);
+  }, [status, target, navigate]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -34,8 +37,7 @@ export function RegisterPage(): React.ReactElement {
     setError(null);
     try {
       await register({ email, displayName, password });
-      const target = (location.state as LocationState | null)?.from ?? '/';
-      navigate(target, { replace: true });
+      goToPostAuthTarget(target, navigate);
     } catch (err) {
       if (err instanceof UserEmailAlreadyExistsError) {
         setError('Email уже занят');
@@ -46,6 +48,10 @@ export function RegisterPage(): React.ReactElement {
       setSubmitting(false);
     }
   };
+
+  if (status === 'authenticated') {
+    return <div className="grid h-dvh place-items-center bg-background" />;
+  }
 
   return (
     <AuthFormCard
@@ -94,7 +100,11 @@ export function RegisterPage(): React.ReactElement {
           />
           <p className="text-xs text-muted-foreground">Минимум 8 символов.</p>
         </div>
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {error && (
+          <p role="alert" className="text-xs text-destructive">
+            {error}
+          </p>
+        )}
         <Button type="submit" className="w-full" disabled={submitting}>
           {submitting ? 'Создаём…' : 'Создать аккаунт'}
         </Button>

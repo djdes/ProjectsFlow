@@ -1,11 +1,12 @@
-import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { AuthFormCard } from '@/presentation/auth/AuthFormCard';
 import { InvalidCredentialsError } from '@/domain/user/errors';
+import { goToPostAuthTarget, safeNextTarget } from '@/lib/authRedirect';
 
 type LocationState = { from?: string };
 
@@ -18,12 +19,15 @@ export function LoginPage(): React.ReactElement {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (status === 'authenticated') {
-    // Если был state.from (например, пришёл с /invite/:token) — уважаем его,
-    // иначе на главную.
-    const target = (location.state as LocationState | null)?.from ?? '/';
-    return <Navigate to={target} replace />;
-  }
+  // Цель возврата: ?next= (в т.ч. абсолютный URL с поддомена доски) → state.from → «/».
+  const nextParam = new URLSearchParams(location.search).get('next');
+  const target = safeNextTarget(nextParam) ?? (location.state as LocationState | null)?.from ?? '/';
+
+  // Уже авторизован (например, вернулся на /login) — уводим на цель. Через эффект,
+  // т.к. цель может быть абсолютной (cross-origin), а <Navigate> так не умеет.
+  useEffect(() => {
+    if (status === 'authenticated') goToPostAuthTarget(target, navigate);
+  }, [status, target, navigate]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -31,8 +35,7 @@ export function LoginPage(): React.ReactElement {
     setError(null);
     try {
       await login({ email, password });
-      const target = (location.state as LocationState | null)?.from ?? '/';
-      navigate(target, { replace: true });
+      goToPostAuthTarget(target, navigate);
     } catch (err) {
       if (err instanceof InvalidCredentialsError) {
         setError('Неверный email или пароль');
@@ -43,6 +46,11 @@ export function LoginPage(): React.ReactElement {
       setSubmitting(false);
     }
   };
+
+  // Авторизован — не мигаем формой, пока эффект уводит на цель.
+  if (status === 'authenticated') {
+    return <div className="grid h-dvh place-items-center bg-background" />;
+  }
 
   return (
     <AuthFormCard
@@ -78,10 +86,19 @@ export function LoginPage(): React.ReactElement {
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {error && (
+          <p role="alert" className="text-xs text-destructive">
+            {error}
+          </p>
+        )}
         <Button type="submit" className="w-full" disabled={submitting}>
           {submitting ? 'Входим…' : 'Войти'}
         </Button>
+        {/* Самообслуживаемого сброса пароля пока нет — честная подсказка вместо
+            битой ссылки. Восстановление доступа — через администратора/поддержку. */}
+        <p className="text-center text-xs text-muted-foreground">
+          Забыли пароль? Напишите в поддержку для восстановления доступа.
+        </p>
       </form>
     </AuthFormCard>
   );

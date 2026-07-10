@@ -109,6 +109,15 @@ export function authRouter(deps: Deps): Router {
 
   router.post('/register', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      // Anti-abuse: 5 регистраций на IP за 10 минут — массовое создание users+workspace
+      // без лимита = spam/resource-DoS (s-m3). Лимитим ДО parse, чтобы не тратить работу.
+      if (deps.rateLimiter) {
+        const key = `register:${clientIp(req)}`;
+        if (!deps.rateLimiter.hit(key, 5, 10 * 60 * 1000)) {
+          res.status(429).json({ error: 'too_many_register_attempts' });
+          return;
+        }
+      }
       const body = registerSchema.parse(req.body);
       const { user, session } = await deps.register.execute(body);
       setSessionCookie(res, session);

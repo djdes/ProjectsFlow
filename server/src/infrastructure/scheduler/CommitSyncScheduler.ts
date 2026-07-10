@@ -26,6 +26,8 @@ function mskNow(): { hour: number; minute: number; date: string } {
 // ставит job и помечает дату. Catch-up: первый тик сразу при старте (рестарт после времени).
 export class CommitSyncScheduler {
   private timer: ReturnType<typeof setInterval> | null = null;
+  // Re-entrancy guard (B5): не запускаем tick поверх незавершённого предыдущего.
+  private running = false;
 
   constructor(
     private readonly deps: { automation: AutomationRepository; enqueue: EnqueueCommitSyncJob },
@@ -47,6 +49,16 @@ export class CommitSyncScheduler {
   }
 
   async tick(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+    try {
+      await this.runTick();
+    } finally {
+      this.running = false;
+    }
+  }
+
+  private async runTick(): Promise<void> {
     const now = mskNow();
     const nowMin = now.hour * 60 + now.minute;
     const due = await this.deps.automation.listCommitSyncEnabled();
