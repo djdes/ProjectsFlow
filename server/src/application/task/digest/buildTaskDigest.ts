@@ -278,3 +278,28 @@ export function renderDigestTelegram(m: DigestModel, opts: { maxLen?: number } =
   chunks.push(cur);
   return chunks;
 }
+
+// Богатый рендер для sendRichMessage (Bot API 10.1): заголовки разного размера + таблицы
+// задач по группам (рамки/чередование). ВЫДЕЛЯЕМЫЙ текст, не картинка — тот самый Hermes-вид.
+// Возвращает ОДНУ HTML-строку (Telegram сам парсит её в блоки). Для очень длинных сводок
+// caller делает фоллбэк на renderDigestTelegram, если sendRichMessage вернёт ошибку.
+export function renderDigestRich(m: DigestModel): string {
+  const h: string[] = [
+    `<h2>🗒 Ежедневная сводка · «${escapeHtml(m.projectName)}»</h2>`,
+    `<p>Открытых задач: <b>${m.count}</b></p>`,
+  ];
+  for (const g of m.groups) {
+    h.push(`<h3>${escapeHtml(g.heading)}</h3>`);
+    h.push('<table bordered striped>');
+    h.push('<tr><th>Задача</th><th>Кто</th><th>Дедлайн</th></tr>');
+    for (const it of g.items) {
+      const who = it.assignee ? escapeHtml(it.assignee) : '—';
+      const dl = it.deadline ? escapeHtml(it.deadline) : '—';
+      h.push(
+        `<tr><td><b>${escapeHtml(it.name)}</b></td><td>${who}</td><td>${dl}</td></tr>`,
+      );
+    }
+    h.push('</table>');
+  }
+  return h.join('');
+}

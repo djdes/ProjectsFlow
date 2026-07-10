@@ -15,6 +15,7 @@ import {
   buildDigestModel,
   renderDigestHtml,
   renderDigestMarkdown,
+  renderDigestRich,
   renderDigestTelegram,
 } from '../task/digest/buildTaskDigest.js';
 import { extractImageSrcs, stripFigureLines, toVisibleStatus } from '../../domain/task/digestFormat.js';
@@ -185,21 +186,38 @@ export class SendDailyDigest {
       }
     }
 
-    // Группа — те же сообщения на всю команду.
+    // Группа — на всю команду. Сначала пробуем БОГАТУЮ карточку (Bot API 10.1 sendRichMessage:
+    // заголовки + таблицы, выделяемый текст — Hermes-вид). Фоллбэк на текстовые чанки, если
+    // метод недоступен (старый API) или вернул ошибку (напр. слишком длинно).
     if (
       cfg.channels.includes('telegram') &&
       cfg.tgTargets.includes('group') &&
       settings.telegramGroupChatId !== null
     ) {
-      for (const chunk of tgChunks) {
-        await this.deps.telegramClient
-          .sendMessage({
-            chatId: settings.telegramGroupChatId,
-            text: chunk,
-            parseMode: 'HTML',
-            disableWebPagePreview: true,
-          })
-          .catch((e) => console.warn('[daily-digest] tg group failed', e));
+      const groupChatId = settings.telegramGroupChatId;
+      let richOk = false;
+      if (this.deps.telegramClient.sendRichMessage) {
+        try {
+          const r = await this.deps.telegramClient.sendRichMessage({
+            chatId: groupChatId,
+            html: renderDigestRich(model),
+          });
+          richOk = r.kind === 'ok';
+        } catch (e) {
+          console.warn('[daily-digest] tg group rich failed', e);
+        }
+      }
+      if (!richOk) {
+        for (const chunk of tgChunks) {
+          await this.deps.telegramClient
+            .sendMessage({
+              chatId: groupChatId,
+              text: chunk,
+              parseMode: 'HTML',
+              disableWebPagePreview: true,
+            })
+            .catch((e) => console.warn('[daily-digest] tg group failed', e));
+        }
       }
     }
 
