@@ -28,6 +28,7 @@ export function DelegationBadge({ delegation, currentUserId }: Props): React.Rea
       <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 py-0.5 pl-0.5 pr-2 text-[11px] font-medium text-violet-700 dark:bg-violet-400/15 dark:text-violet-400">
         <UserAvatarHover
           displayName={delegation.delegateDisplayName}
+          avatarUrl={delegation.delegateAvatarUrl}
           subtitle="приглашён(а) в проект — ожидает вступления"
         />
         <UserPlus className="size-2.5 shrink-0" />
@@ -52,10 +53,15 @@ export function DelegationBadge({ delegation, currentUserId }: Props): React.Rea
   if (!isCreator && !isDelegate) {
     return (
       <span className="inline-flex items-center gap-1">
-        <UserAvatarHover displayName={delegation.creatorDisplayName} subtitle="поручил(а)" />
+        <UserAvatarHover
+          displayName={delegation.creatorDisplayName}
+          avatarUrl={delegation.creatorAvatarUrl}
+          subtitle="поручил(а)"
+        />
         {arrow}
         <UserAvatarHover
           displayName={delegation.delegateDisplayName}
+          avatarUrl={delegation.delegateAvatarUrl}
           subtitle={isPending ? 'ждёт ответа' : 'выполняет'}
         />
       </span>
@@ -69,6 +75,7 @@ export function DelegationBadge({ delegation, currentUserId }: Props): React.Rea
         <span className="opacity-70">от</span>
         <UserAvatarHover
           displayName={delegation.creatorDisplayName}
+          avatarUrl={delegation.creatorAvatarUrl}
           subtitle="поручил(а) вам"
         />
       </span>
@@ -81,6 +88,7 @@ export function DelegationBadge({ delegation, currentUserId }: Props): React.Rea
       {arrow}
       <UserAvatarHover
         displayName={delegation.delegateDisplayName}
+        avatarUrl={delegation.delegateAvatarUrl}
         subtitle={isPending ? 'ждёт ответа' : 'принял(а)'}
       />
     </span>

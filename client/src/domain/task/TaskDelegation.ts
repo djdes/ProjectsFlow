@@ -33,8 +33,11 @@ export type TaskDelegation = {
   readonly taskId: string;
   readonly delegateUserId: string;
   readonly delegateDisplayName: string;
+  // Фото делегата/создателя (users.avatar_url). null/undefined = нет фото → рисуем инициалы.
+  readonly delegateAvatarUrl?: string | null;
   readonly creatorUserId: string;
   readonly creatorDisplayName: string;
+  readonly creatorAvatarUrl?: string | null;
   readonly status: TaskDelegationStatus;
   readonly createdAt: Date;
   readonly respondedAt: Date | null;

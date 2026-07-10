@@ -42,8 +42,12 @@ export type TaskDelegation = {
   readonly taskId: string;
   readonly delegateUserId: string;
   readonly delegateDisplayName: string;
+  // Фото делегата/создателя (users.avatar_url) — для аватарок в UI. null = нет фото (рисуем
+  // инициалы). Optional: старые фикстуры/конструкции без аватаров остаются валидны.
+  readonly delegateAvatarUrl?: string | null;
   readonly creatorUserId: string;
   readonly creatorDisplayName: string;
+  readonly creatorAvatarUrl?: string | null;
   readonly status: TaskDelegationStatus;
   readonly createdAt: Date;
   readonly respondedAt: Date | null;

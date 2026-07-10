@@ -28,11 +28,14 @@ type DelegationRowRaw = {
   taskId: string;
   delegateUserId: string;
   delegateDisplayName: string;
+  delegateAvatarUrl: string | null;
   delegatorUserId: string | null;
   revertToUserId: string | null;
   ownerId: string;
   delegatorDisplayName: string | null;
+  delegatorAvatarUrl: string | null;
   ownerDisplayName: string;
+  ownerAvatarUrl: string | null;
   status: TaskDelegationStatus;
   createdAt: Date;
   respondedAt: Date | null;
@@ -44,8 +47,11 @@ function toDomain(r: DelegationRowRaw): TaskDelegation {
     taskId: r.taskId,
     delegateUserId: r.delegateUserId,
     delegateDisplayName: r.delegateDisplayName,
+    delegateAvatarUrl: r.delegateAvatarUrl,
     creatorUserId: r.delegatorUserId ?? r.ownerId,
     creatorDisplayName: r.delegatorDisplayName ?? r.ownerDisplayName,
+    // Создатель = делегатор (или owner-фолбэк для legacy) — аватар берём той же цепочкой.
+    creatorAvatarUrl: r.delegatorUserId ? r.delegatorAvatarUrl : r.ownerAvatarUrl,
     status: r.status,
     createdAt: r.createdAt,
     respondedAt: r.respondedAt,
@@ -53,10 +59,13 @@ function toDomain(r: DelegationRowRaw): TaskDelegation {
   };
 }
 
-// Имя делегатора по delegator_user_id — корелированный подзапрос (без лишнего join'а).
+// Имя/фото делегатора по delegator_user_id — корелированные подзапросы (без лишнего join'а).
 const delegatorNameSql = sql<
   string | null
 >`(SELECT du.display_name FROM users du WHERE du.id = ${taskDelegations.delegatorUserId})`;
+const delegatorAvatarSql = sql<
+  string | null
+>`(SELECT du.avatar_url FROM users du WHERE du.id = ${taskDelegations.delegatorUserId})`;
 
 export class DrizzleTaskDelegationRepository implements TaskDelegationRepository {
   constructor(private readonly db: Database) {}
@@ -121,11 +130,14 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
         taskId: taskDelegations.taskId,
         delegateUserId: taskDelegations.delegateUserId,
         delegateDisplayName: delegateUser.displayName,
+        delegateAvatarUrl: delegateUser.avatarUrl,
         delegatorUserId: taskDelegations.delegatorUserId,
         revertToUserId: taskDelegations.revertToUserId,
         ownerId: projects.ownerId,
         delegatorDisplayName: delegatorNameSql,
+        delegatorAvatarUrl: delegatorAvatarSql,
         ownerDisplayName: ownerUser.displayName,
+        ownerAvatarUrl: ownerUser.avatarUrl,
         status: taskDelegations.status,
         createdAt: taskDelegations.createdAt,
         respondedAt: taskDelegations.respondedAt,
@@ -178,11 +190,14 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
         taskId: taskDelegations.taskId,
         delegateUserId: taskDelegations.delegateUserId,
         delegateDisplayName: delegateUser.displayName,
+        delegateAvatarUrl: delegateUser.avatarUrl,
         delegatorUserId: taskDelegations.delegatorUserId,
         revertToUserId: taskDelegations.revertToUserId,
         ownerId: projects.ownerId,
         delegatorDisplayName: delegatorNameSql,
+        delegatorAvatarUrl: delegatorAvatarSql,
         ownerDisplayName: ownerUser.displayName,
+        ownerAvatarUrl: ownerUser.avatarUrl,
         status: taskDelegations.status,
         createdAt: taskDelegations.createdAt,
         respondedAt: taskDelegations.respondedAt,
@@ -207,11 +222,14 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
         taskId: taskDelegations.taskId,
         delegateUserId: taskDelegations.delegateUserId,
         delegateDisplayName: delegateUser.displayName,
+        delegateAvatarUrl: delegateUser.avatarUrl,
         delegatorUserId: taskDelegations.delegatorUserId,
         revertToUserId: taskDelegations.revertToUserId,
         ownerId: projects.ownerId,
         delegatorDisplayName: delegatorNameSql,
+        delegatorAvatarUrl: delegatorAvatarSql,
         ownerDisplayName: ownerUser.displayName,
+        ownerAvatarUrl: ownerUser.avatarUrl,
         status: taskDelegations.status,
         createdAt: taskDelegations.createdAt,
         respondedAt: taskDelegations.respondedAt,
@@ -313,11 +331,14 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
         taskId: taskDelegations.taskId,
         delegateUserId: taskDelegations.delegateUserId,
         delegateDisplayName: delegateUser.displayName,
+        delegateAvatarUrl: delegateUser.avatarUrl,
         delegatorUserId: taskDelegations.delegatorUserId,
         revertToUserId: taskDelegations.revertToUserId,
         ownerId: projects.ownerId,
         delegatorDisplayName: delegatorNameSql,
+        delegatorAvatarUrl: delegatorAvatarSql,
         ownerDisplayName: ownerUser.displayName,
+        ownerAvatarUrl: ownerUser.avatarUrl,
         status: taskDelegations.status,
         createdAt: taskDelegations.createdAt,
         respondedAt: taskDelegations.respondedAt,

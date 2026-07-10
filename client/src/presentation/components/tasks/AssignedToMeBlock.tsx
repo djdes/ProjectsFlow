@@ -718,14 +718,15 @@ export function AssignedToMeBlock({
         onConfirm={confirmInvite}
       />
     </section>
-    {/* Компактный «комок» под курсором вместо целой карточки: стартует крупнее и
-        полупрозрачно → пружиной сжимается в маленькую пилюлю с названием. Мелкий оверлей =
-        легче целиться в кубик/колонку (+ коллизии по курсору, см. dndCollision). */}
+    {/* Компактный «комок» под курсором вместо целой карточки: стартует крупнее → пружиной
+        сжимается в маленькую пилюлю с названием. ПОЛУПРОЗРАЧНЫЙ (~55%) — сквозь него видно
+        кубик участника/колонку, на которую целишься (запрос: «видно, кому делегирую»). Мелкий
+        оверлей = легче целиться (+ коллизии по курсору, см. dndCollision). */}
     <DragOverlay dropAnimation={null} modifiers={[snapToCursor]}>
       {activeDrag ? (
         <motion.div
-          initial={{ scale: 1.25, opacity: 0.4 }}
-          animate={{ scale: 1, opacity: 1 }}
+          initial={{ scale: 1.25, opacity: 0.3 }}
+          animate={{ scale: 1, opacity: 0.55 }}
           transition={{ type: 'spring', stiffness: 520, damping: 34, mass: 0.6 }}
           className="pointer-events-none flex max-w-[15rem] cursor-grabbing items-center gap-1.5 rounded-full border border-primary/40 bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-lg ring-1 ring-primary/20"
         >
@@ -1271,28 +1272,23 @@ function AcceptedCard({
   // Название проекта — всегда видимая пилюля в правом верхнем углу (инбокс → «Личные»).
   const projectLabel = item.isInbox ? 'Личные' : item.projectName;
   return (
-    <div className="group flex cursor-pointer flex-col" onClick={onOpen}>
-      {/* Название проекта — «вкладка»-ярлык НАД карточкой (вне блока), слева. Не тесним заголовок:
-          вкладка приклеена к верхнему краю (rounded-t + -mb-px, у карточки скошен верх-лево). */}
-      <span
-        className="z-10 -mb-px inline-flex max-w-[80%] items-center gap-1 self-start rounded-t-md border border-b-0 border-black/[0.06] bg-muted/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground dark:border-white/[0.08] dark:bg-muted"
-        title={projectLabel}
-      >
+    <div
+      className={cn(
+        'group flex cursor-pointer flex-col overflow-hidden rounded-lg border border-black/[0.06] bg-card shadow-sm transition-[box-shadow,border-color] duration-150 hover:shadow-md dark:border-white/[0.08]',
+        isDone && 'border-success/20 bg-success/[0.06] hover:border-success/30',
+      )}
+      onClick={onOpen}
+    >
+      {/* Название проекта — полоса-заголовок по центру, во всю ширину карточки (не тесним текст). */}
+      <div className="flex items-center justify-center gap-1 border-b border-black/[0.05] bg-muted/40 px-2 py-1 text-[10px] font-medium text-muted-foreground dark:border-white/[0.06] dark:bg-white/[0.02]">
         {item.isInbox ? (
           <InboxIcon className="size-2.5 shrink-0" />
         ) : (
           <FolderKanban className="size-2.5 shrink-0" />
         )}
         <span className="truncate">{projectLabel}</span>
-      </span>
-      <div
-        className={cn(
-          // Равные отступы сверху/снизу (py-2); плашка параметров всплывает оверлеем поверх низа
-          // при наведении (свой bg перекрывает текст). rounded-tl-none — стык с вкладкой-ярлыком.
-          'relative flex items-start gap-1.5 rounded-lg rounded-tl-none border border-black/[0.06] bg-card px-2 py-2 shadow-sm transition-[box-shadow,border-color,background-color] duration-150 group-hover:shadow-md dark:border-white/[0.08]',
-          isDone && 'border-success/20 bg-success/[0.06] group-hover:border-success/30 group-hover:bg-success/[0.1]',
-        )}
-      >
+      </div>
+      <div className="relative flex items-start gap-1.5 px-2 py-2">
         {/* stopPropagation на pointer-старте — нажатие по чекбоксу не стартует drag карточки. */}
         <div
           onClick={(e) => e.stopPropagation()}
