@@ -213,6 +213,14 @@ export class MockProjectRepository implements ProjectRepository {
   getProjectSite(): Promise<{ siteSlug: string | null; deployedAt: string | null; fileCount: number }> {
     return Promise.resolve({ siteSlug: null, deployedAt: null, fileCount: 0 });
   }
+  getAppBackendStatus(): Promise<{
+    status: 'none' | 'active';
+    usageBytes: number;
+    storageLimitBytes: number;
+    tables: readonly string[];
+  }> {
+    return Promise.resolve({ status: 'none', usageBytes: 0, storageLimitBytes: 0, tables: [] });
+  }
   getGitTokenDelegation(): Promise<never> {
     return Promise.reject(new Error('Mock.getGitTokenDelegation: not implemented'));
   }

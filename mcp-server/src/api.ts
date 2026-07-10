@@ -692,6 +692,17 @@ export class ApiClient {
     );
   }
 
+  // Объявить бэкенд приложения проекту (SQLite-per-project). Возвращает app-ключ ОДИН раз.
+  async declareAppSchema(
+    projectId: string,
+    schema: unknown,
+  ): Promise<{ appKey: string; status: string }> {
+    return this.request<{ appKey: string; status: string }>(
+      `/agent/projects/${encodeURIComponent(projectId)}/app-backend`,
+      { method: 'POST', body: { schema } },
+    );
+  }
+
   async listPendingAiPromptJobs(limit: number): Promise<PendingAiPromptJob[]> {
     const { jobs } = await this.request<{ jobs: PendingAiPromptJob[] }>(
       `/agent/pending-ai-prompt-jobs?limit=${limit}`,

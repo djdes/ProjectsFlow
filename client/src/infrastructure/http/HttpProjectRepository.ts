@@ -11,6 +11,7 @@ import type {
   GitTokenDelegationStatus,
   ProjectRepository,
   ProjectSite,
+  AppBackendStatus,
   SharedMember,
 } from '@/application/project/ProjectRepository';
 import type { UpdateProjectInput } from '@/application/project/ProjectRepository';
@@ -279,6 +280,10 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async getProjectSite(projectId: string): Promise<ProjectSite> {
     return httpClient.get<ProjectSite>(`/projects/${projectId}/site`);
+  }
+
+  async getAppBackendStatus(projectId: string): Promise<AppBackendStatus> {
+    return httpClient.get<AppBackendStatus>(`/projects/${projectId}/app-backend`);
   }
 
   async getGitTokenDelegation(projectId: string): Promise<GitTokenDelegationStatus> {

@@ -5,6 +5,12 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { siteResultUrl, siteResultDisplayUrl } from '@/lib/publicBoardUrl';
+import type { AppBackendStatus } from '@/application/project/ProjectRepository';
+
+// Байты → «X,X МБ» (одна цифра после запятой). Для индикатора usage бэкенда приложения.
+function formatMb(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`.replace('.', ',');
+}
 
 // Вкладка «Сайт проекта» окна «Поделиться»: адрес сайта-РЕЗУЛЬТАТА (<slug>.projectsflow.ru,
 // db/100). Есть у каждого проекта всегда — до деплоя воркером по адресу отдаётся заглушка
@@ -12,6 +18,7 @@ import { siteResultUrl, siteResultDisplayUrl } from '@/lib/publicBoardUrl';
 export function ProjectSiteTab({ projectId }: { projectId: string }): React.ReactElement {
   const { projectRepository } = useContainer();
   const [state, setState] = useState<{ slug: string; deployed: boolean } | null>(null);
+  const [appBackend, setAppBackend] = useState<AppBackendStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,6 +35,15 @@ export function ProjectSiteTab({ projectId }: { projectId: string }): React.Reac
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+    // Статус бэкенда приложения — независимо (не блокирует показ адреса сайта).
+    projectRepository
+      .getAppBackendStatus(projectId)
+      .then((s) => {
+        if (!cancelled) setAppBackend(s);
+      })
+      .catch(() => {
+        if (!cancelled) setAppBackend(null);
       });
     return () => {
       cancelled = true;
@@ -89,6 +105,31 @@ export function ProjectSiteTab({ projectId }: { projectId: string }): React.Reac
           ? 'Любой, у кого есть ссылка, увидит результат.'
           : 'Пока воркер ничего не собрал — по ссылке страница-заглушка. Поставьте задачу воркеру в проекте.'}
       </p>
+
+      {/* Бэкенд приложения (db/102): показываем только когда воркер его завёл. */}
+      {appBackend?.status === 'active' && (
+        <div className="mt-3 rounded-md border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2.5 dark:bg-emerald-500/[0.08]">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[13px] font-medium text-foreground">Бэкенд приложения</span>
+            <span className="shrink-0 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+              {formatMb(appBackend.usageBytes)} / {formatMb(appBackend.storageLimitBytes)}
+            </span>
+          </div>
+          {/* Полоса заполнения квоты. */}
+          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/10">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all"
+              style={{
+                width: `${Math.min(100, appBackend.storageLimitBytes > 0 ? (appBackend.usageBytes / appBackend.storageLimitBytes) * 100 : 0)}%`,
+              }}
+            />
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Вход, пользователи и база данных.
+            {appBackend.tables.length > 0 && ` Таблицы: ${appBackend.tables.join(', ')}.`}
+          </p>
+        </div>
+      )}
 
       <Button type="button" className="mt-3 h-9 w-full gap-1.5" asChild>
         <a href={url} target="_blank" rel="noopener noreferrer">

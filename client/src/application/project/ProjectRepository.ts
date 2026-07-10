@@ -13,6 +13,16 @@ export type ProjectSite = {
   readonly fileCount: number;
 };
 
+// Бэкенд приложения проекта (SQLite-per-project, db/102). status='none' — бэкенд не заведён
+// (обычный статический сайт). status='active' — есть вход/пользователи/база; usageBytes/лимит
+// показываем в UI, tables — объявлённые воркером таблицы.
+export type AppBackendStatus = {
+  readonly status: 'none' | 'active';
+  readonly usageBytes: number;
+  readonly storageLimitBytes: number;
+  readonly tables: readonly string[];
+};
+
 // v0.15: per-member opt-in. У каждого члена проекта своя независимая делегация.
 // `mine` — статус CALLER-а в этом проекте. `all` — видно только owner'у:
 // полный список членов проекта с их статусами + github-логинами + sort'ом
@@ -142,6 +152,8 @@ export interface ProjectRepository {
   // Сайт-результат проекта (db/100): siteSlug есть всегда (адрес <slug>.projectsflow.ru; до
   // деплоя — заглушка), deployedAt/fileCount из site_artifacts (null/0, пока не задеплоен).
   getProjectSite(projectId: string): Promise<ProjectSite>;
+  // Статус бэкенда приложения (db/102): включён ли, usage/лимит, таблицы. Member-доступ (read).
+  getAppBackendStatus(projectId: string): Promise<AppBackendStatus>;
   // v0.15: per-member opt-in. GET возвращает `mine` (статус caller'а) + `all`
   // (полный список членов, только для owner-а). PUT включает/выключает ОДНУ
   // делегацию: без granterUserId — caller's own, с granterUserId — admin-on-behalf.

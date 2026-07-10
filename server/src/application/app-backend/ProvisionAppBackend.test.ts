@@ -2,8 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ProvisionAppBackend } from './ProvisionAppBackend.js';
 import { AppSchemaInvalidError } from '../../domain/app-backend/errors.js';
-import { InsufficientProjectRoleError } from '../../domain/project/errors.js';
-import type { ProjectRole } from '../../domain/project/ProjectMembership.js';
+import { NotAssignedDispatcherError } from '../../domain/file-sync/errors.js';
 
 const validSchema = {
   tables: [
@@ -11,16 +10,18 @@ const validSchema = {
   ],
 };
 
-function makeDeps(role: ProjectRole | null) {
+// Гейт — requireDispatcherAccess: разрешено только project.dispatcherUserId. dispatcher=null →
+// диспетчер не назначен (никто не пройдёт).
+function makeDeps(dispatcherUserId: string | null) {
   const calls = { ensured: [] as Array<{ pid: string; tables: number }>, upserts: [] as any[] };
   const projects = {
     async getById(id: string) {
-      return { id, ownerId: 'owner1' };
+      return { id, dispatcherUserId };
     },
   } as any;
   const members = {
-    async findForProject(pid: string, uid: string) {
-      return role ? { projectId: pid, userId: uid, role, joinedAt: new Date() } : null;
+    async findForProject() {
+      return null;
     },
   } as any;
   const appDb = {
@@ -57,11 +58,11 @@ function makeDeps(role: ProjectRole | null) {
   };
 }
 
-test('ProvisionAppBackend: owner + валидная схема → БД, реестр active, ключ', async () => {
-  const { deps, calls } = makeDeps('owner');
+test('ProvisionAppBackend: диспетчер + валидная схема → БД, реестр active, ключ', async () => {
+  const { deps, calls } = makeDeps('disp1');
   const out = await new ProvisionAppBackend(deps).execute({
     projectId: 'p1',
-    callerUserId: 'owner1',
+    callerUserId: 'disp1',
     rawSchema: validSchema,
   });
   assert.equal(out.appKey, 'KEY123');
@@ -73,12 +74,12 @@ test('ProvisionAppBackend: owner + валидная схема → БД, рее�
 });
 
 test('ProvisionAppBackend: невалидная схема → AppSchemaInvalidError (БД не трогаем)', async () => {
-  const { deps, calls } = makeDeps('owner');
+  const { deps, calls } = makeDeps('disp1');
   await assert.rejects(
     () =>
       new ProvisionAppBackend(deps).execute({
         projectId: 'p1',
-        callerUserId: 'owner1',
+        callerUserId: 'disp1',
         rawSchema: { tables: 'x' },
       }),
     AppSchemaInvalidError,
@@ -86,15 +87,15 @@ test('ProvisionAppBackend: невалидная схема → AppSchemaInvalidE
   assert.equal(calls.ensured.length, 0);
 });
 
-test('ProvisionAppBackend: не-owner → InsufficientProjectRoleError', async () => {
-  const { deps } = makeDeps('editor');
+test('ProvisionAppBackend: не диспетчер → NotAssignedDispatcherError', async () => {
+  const { deps } = makeDeps('disp1');
   await assert.rejects(
     () =>
       new ProvisionAppBackend(deps).execute({
         projectId: 'p1',
-        callerUserId: 'owner1',
+        callerUserId: 'intruder',
         rawSchema: validSchema,
       }),
-    InsufficientProjectRoleError,
+    NotAssignedDispatcherError,
   );
 });

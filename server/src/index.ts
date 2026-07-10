@@ -74,6 +74,8 @@ import { DrizzleAppBackendRepository } from './infrastructure/repositories/Drizz
 import { SqliteAppDatabaseStore } from './infrastructure/app-backend/SqliteAppDatabaseStore.js';
 import { AppAuthService } from './application/app-backend/AppAuthService.js';
 import { RunAppQuery } from './application/app-backend/RunAppQuery.js';
+import { ProvisionAppBackend } from './application/app-backend/ProvisionAppBackend.js';
+import { GetAppBackendStatus } from './application/app-backend/GetAppBackendStatus.js';
 import { appRuntimeRouter } from './presentation/app-runtime/appRuntimeRouter.js';
 import { DrizzleSiteArtifactRepository } from './infrastructure/repositories/DrizzleSiteArtifactRepository.js';
 import { PublishSiteArtifact } from './application/site/PublishSiteArtifact.js';
@@ -204,7 +206,7 @@ import { RequestAgentDeviceCode } from './application/agent/RequestAgentDeviceCo
 import { ApproveAgentDeviceCode } from './application/agent/ApproveAgentDeviceCode.js';
 import { PollAgentDeviceToken } from './application/agent/PollAgentDeviceToken.js';
 import { GetAgentDeviceCodeInfo } from './application/agent/GetAgentDeviceCodeInfo.js';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { ListTasks } from './application/task/ListTasks.js';
 import { ExportTasksDigest } from './application/task/ExportTasksDigest.js';
 import { DrizzleDigestSettingsRepository } from './infrastructure/repositories/DrizzleDigestSettingsRepository.js';
@@ -913,6 +915,21 @@ const appDatabaseStore = new SqliteAppDatabaseStore(appsDataDir);
 const appAuthService = new AppAuthService({ appDb: appDatabaseStore, idGen: idGenerator, now });
 const runAppQuery = new RunAppQuery({ appBackends: appBackendRepo, appDb: appDatabaseStore });
 const appRuntime = appRuntimeRouter({ authService: appAuthService, runQuery: runAppQuery });
+// app-ключ: случайный публичный идентификатор приложения; храним только SHA-256 (как agent-токены).
+const provisionAppBackend = new ProvisionAppBackend({
+  appBackends: appBackendRepo,
+  appDb: appDatabaseStore,
+  projects: projectRepo,
+  members: projectMemberRepo,
+  genKey: () => `pfapp_${randomBytes(24).toString('hex')}`,
+  hashKey: (k) => createHash('sha256').update(k).digest('hex'),
+});
+const getAppBackendStatus = new GetAppBackendStatus({
+  appBackends: appBackendRepo,
+  appDb: appDatabaseStore,
+  projects: projectRepo,
+  members: projectMemberRepo,
+});
 console.log(`[projectsflow] apps data dir: ${appsDataDir}`);
 
 // --- file-sync (PF Desktop Companion, миграция db/044) ---
@@ -1648,6 +1665,8 @@ const { app, devProxyUpgrade } = createApp({
   appBackend: {
     repository: appBackendRepo,
     runtime: appRuntime,
+    provision: provisionAppBackend,
+    getStatus: getAppBackendStatus,
   },
   search: {
     searchTasks: new SearchTasks({ search: taskSearchRepo }),

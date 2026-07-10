@@ -3,6 +3,10 @@ import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Express, type Request, type RequestHandler } from 'express';
 import type { AppBackendRepository } from '../application/app-backend/AppBackendRepository.js';
+import type { ProvisionAppBackend } from '../application/app-backend/ProvisionAppBackend.js';
+import type { GetAppBackendStatus } from '../application/app-backend/GetAppBackendStatus.js';
+import { appBackendAgentRouter } from './app-backend/agentRoutes.js';
+import { appBackendRouter } from './app-backend/routes.js';
 import cookieParser from 'cookie-parser';
 import {
   createProxyMiddleware,
@@ -293,6 +297,8 @@ type AppDeps = {
   readonly appBackend: {
     readonly repository: AppBackendRepository;
     readonly runtime: RequestHandler;
+    readonly provision: ProvisionAppBackend;
+    readonly getStatus: GetAppBackendStatus;
   };
   readonly chat: ChatRouterDeps;
   readonly projects: {
@@ -831,6 +837,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/notifications', notificationsRouter(deps.notifications));
   app.use('/api/recent-task-views', recentTaskViewsRouter(deps.recentTaskViews));
   app.use('/api/projects', projectAnalyticsRouter(deps.projectAnalytics));
+  app.use('/api/projects', appBackendRouter({ getStatus: deps.appBackend.getStatus }));
   // Чат-виджет: обращения в поддержку (POST /api/help/contact-support). Без requireAuth —
   // форма доступна и анонимам с лендинга (см. help/routes.ts).
   app.use('/api', buildHelpRouter(deps.help));
@@ -966,6 +973,15 @@ export function createApp(deps: AppDeps): CreatedApp {
       authenticate: deps.agent.authenticateAgentToken,
       baseDomain: deps.site.baseDomain,
       maxSiteBytes: deps.site.maxSiteBytes,
+    }),
+  );
+
+  // Провижининг бэкенда приложения диспетчером (Bearer agent-token): POST /api/agent/projects/:id/app-backend.
+  app.use(
+    '/api/agent',
+    appBackendAgentRouter({
+      authenticate: deps.agent.authenticateAgentToken,
+      provision: deps.appBackend.provision,
     }),
   );
 

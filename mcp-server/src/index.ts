@@ -543,6 +543,72 @@ const TOOLS = [
     },
   },
   {
+    name: 'pf_declare_app_schema',
+    description:
+      "Declare (or re-declare) the app BACKEND for a project: enables login/users + a database " +
+      "with tables and access rules, so the generated site can be a real app (auth, per-user " +
+      "data), not just static pages. Backend = one SQLite file per project on our server (100 MB " +
+      "quota). Call this from the dispatcher when the generated app needs persistence. The site " +
+      "frontend then talks to `<slug>.projectsflow.ru/api/*` via the @projectsflow/app-client SDK. " +
+      "Returns an appKey ONCE (store it in the project KB — the server keeps only a hash). " +
+      "Idempotent: re-calling updates the schema and rotates the key. Field types: text/int/real/" +
+      "bool/datetime. Table/field names must match ^[a-z][a-z0-9_]*$; names starting with `_` are " +
+      "reserved. Access rules read/write: 'anyone' | 'authenticated' | 'owner' (owner = only the " +
+      "row's creator). id/owner_id/created_at columns are added automatically — do not declare them.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project id (from pf_list_projects)' },
+        schema: {
+          type: 'object',
+          description:
+            "App schema: { tables: [{ name, fields: [{ name, type, required?, unique? }], " +
+            "rules: { read, write } }] }",
+          properties: {
+            tables: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string', description: 'Table name, ^[a-z][a-z0-9_]*$' },
+                  fields: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        name: { type: 'string' },
+                        type: { type: 'string', enum: ['text', 'int', 'real', 'bool', 'datetime'] },
+                        required: { type: 'boolean' },
+                        unique: { type: 'boolean' },
+                      },
+                      required: ['name', 'type'],
+                      additionalProperties: false,
+                    },
+                  },
+                  rules: {
+                    type: 'object',
+                    properties: {
+                      read: { type: 'string', enum: ['anyone', 'authenticated', 'owner'] },
+                      write: { type: 'string', enum: ['anyone', 'authenticated', 'owner'] },
+                    },
+                    required: ['read', 'write'],
+                    additionalProperties: false,
+                  },
+                },
+                required: ['name', 'fields', 'rules'],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ['tables'],
+          additionalProperties: false,
+        },
+      },
+      required: ['projectId', 'schema'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pf_list_pending_ai_prompt_jobs',
     description:
       'List queued AI-prompt-improvement jobs where current user is the dispatcher, oldest first. ' +
@@ -1452,6 +1518,27 @@ const CreateLocalKbInput = z.object({
   projectId: z.string().min(1),
 });
 
+// Схема бэкенда приложения. Валидация здесь мягкая (форма) — строгую проверку (regex имён,
+// зарезервированные `_*`, лимиты) делает сервер (validateAppSchema), возвращая 400 при нарушении.
+const AppFieldZ = z.object({
+  name: z.string().min(1),
+  type: z.enum(['text', 'int', 'real', 'bool', 'datetime']),
+  required: z.boolean().optional(),
+  unique: z.boolean().optional(),
+});
+const AppTableZ = z.object({
+  name: z.string().min(1),
+  fields: z.array(AppFieldZ).min(1),
+  rules: z.object({
+    read: z.enum(['anyone', 'authenticated', 'owner']),
+    write: z.enum(['anyone', 'authenticated', 'owner']),
+  }),
+});
+const DeclareAppSchemaInput = z.object({
+  projectId: z.string().min(1),
+  schema: z.object({ tables: z.array(AppTableZ).min(1) }),
+});
+
 const ListPendingAiPromptJobsInput = z.object({
   limit: z.number().int().min(1).max(50).optional(),
 });
@@ -1754,6 +1841,11 @@ async function main(): Promise<void> {
           const input = CreateLocalKbInput.parse(req.params.arguments ?? {});
           await api.createLocalKb(input.projectId);
           return jsonResult({ ok: true });
+        }
+        case 'pf_declare_app_schema': {
+          const input = DeclareAppSchemaInput.parse(req.params.arguments ?? {});
+          const result = await api.declareAppSchema(input.projectId, input.schema);
+          return jsonResult(result);
         }
         case 'pf_list_pending_ai_prompt_jobs': {
           const input = ListPendingAiPromptJobsInput.parse(req.params.arguments ?? {});
