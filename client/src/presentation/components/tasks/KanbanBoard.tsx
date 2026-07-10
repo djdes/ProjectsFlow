@@ -1099,8 +1099,9 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
 
       {/* Floating quick-add (position: fixed). DOM-позиция значения не имеет —
           важно лишь чтобы компонент был смонтирован. Скрываем во время выделения,
-          чтобы не конкурировать с панелью массовых действий. */}
-      {selectionStatus === null && (
+          чтобы не конкурировать с панелью массовых действий. Во «Входящих» (isInbox)
+          плавающий композер убран — задачи-черновики добавляются кнопкой «+» в колонке. */}
+      {selectionStatus === null && !isInbox && (
         <QuickAddTodo
           projectId={projectId}
           isInbox={isInbox}

@@ -1121,10 +1121,10 @@ function GroupingMenu({
         <button
           type="button"
           className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
-          title="Группировка"
+          title="Сортировка"
         >
           <ListFilter className="size-3.5" />
-          <span className="hidden sm:inline">Группировка:</span>
+          <span className="hidden sm:inline">Сортировка:</span>
           {/* На мобиле — только иконка (см. PersonFilterMenu): текущий режим виден в
               title и отмечен в radio-меню. */}
           <span className="hidden max-w-[8rem] truncate font-medium text-foreground sm:inline">

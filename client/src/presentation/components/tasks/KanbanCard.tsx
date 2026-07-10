@@ -232,7 +232,7 @@ export function KanbanCard({
                 size="icon"
                 // На тач-экранах увеличиваем hit-area до 36px (U10): визуально компактно
                 // на десктопе (size-6), но пальцем не промахнёшься между «передать»/«удалить».
-                className="group/promote size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-hover hover:text-foreground max-sm:size-9"
+                className="group/promote size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-hover hover:text-foreground max-sm:size-8"
                 onClick={(e) => {
                   e.stopPropagation();
                   onQuickPromote(task);
@@ -240,20 +240,20 @@ export function KanbanCard({
                 aria-label={`Передать в «${STATUS_LABEL[promoteNext]}»`}
                 title={`Передать в «${STATUS_LABEL[promoteNext]}»`}
               >
-                <ArrowRight className="size-3 transition-transform duration-150 group-hover/promote:translate-x-0.5 max-sm:size-4" />
+                <ArrowRight className="size-3 transition-transform duration-150 group-hover/promote:translate-x-0.5 max-sm:size-3.5" />
               </Button>
             )}
             <Button
               variant="ghost"
               size="icon"
-              className="size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive max-sm:size-9"
+              className="size-6 shrink-0 cursor-pointer rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive max-sm:size-8"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(task);
               }}
               aria-label="Удалить"
             >
-              <Trash2 className="size-3 max-sm:size-4" />
+              <Trash2 className="size-3 max-sm:size-3.5" />
             </Button>
           </div>
         )}
