@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Columns3, Eye, EyeOff, List as ListIcon } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { fadeInUp } from '@/presentation/components/motion/presets';
 import { AnimatedInbox } from '@/presentation/components/nav/AnimatedNavIcons';
@@ -18,23 +17,14 @@ import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import type { Project } from '@/domain/project/Project';
 import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
-import { TaskListView } from '@/presentation/components/tasks/TaskListView';
 import { AssignedToMeBlock } from '@/presentation/components/tasks/AssignedToMeBlock';
 
-type ViewMode = 'kanban' | 'list';
-const VIEW_STORAGE_KEY = 'inbox.view-mode';
 const HIDE_DONE_STORAGE_KEY = 'inbox.hide-done';
 
 // Full-bleed канбана — те же значения, что и на доске проекта (px-6/14/24): ряд колонок
 // выносится за паддинг страницы, отступы от краёв совпадают с проектами.
 const KANBAN_BLEED_NEG = '-mx-6 sm:-mx-14 lg:-mx-24';
 const KANBAN_BLEED_PAD = 'pl-6 sm:pl-14 lg:pl-24';
-
-function loadViewMode(): ViewMode {
-  if (typeof window === 'undefined') return 'kanban';
-  const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
-  return stored === 'list' ? 'list' : 'kanban';
-}
 
 function loadHideDone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -43,15 +33,14 @@ function loadHideDone(): boolean {
 
 // «Входящие» — задачи без привязки к конкретному проекту. Под капотом обычный проект
 // с флагом isInbox=true; сервер создаёт его лениво при первом GET /api/inbox.
-// Имеет два режима отображения: kanban (drag-drop по статусам) и list (плоский список
-// с группировкой). Выбор юзера сохраняем в localStorage.
+// Отображение — только канбан (drag-drop по статусам); сортировку/группировку блока
+// делегирования выбирают в «Сортировке». Режим списка убран.
 export function InboxPage(): React.ReactElement {
   const { projectRepository } = useContainer();
   const { animations } = useMotion();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<ViewMode>(loadViewMode);
   const [hideDone, setHideDone] = useState<boolean>(loadHideDone);
   // refetchKey — простой механизм форсить пересоздание useTasks-хука в KanbanBoard/
   // TaskListView. Меняется при accept/decline/toggle делегирования в AssignedToMeBlock,
@@ -79,16 +68,6 @@ export function InboxPage(): React.ReactElement {
       cancelled = true;
     };
   }, [projectRepository]);
-
-  const handleViewChange = (next: ViewMode): void => {
-    setView(next);
-    try {
-      window.localStorage.setItem(VIEW_STORAGE_KEY, next);
-    } catch {
-      // localStorage может быть недоступен (private mode, quota); это не критично — просто
-      // preference не переживёт reload.
-    }
-  };
 
   const handleHideDoneChange = (next: boolean): void => {
     setHideDone(next);
@@ -123,62 +102,38 @@ export function InboxPage(): React.ReactElement {
   }
 
   return (
-    <div
-      className={cn(
-        'flex h-full flex-col',
-        // Список — узкая центрированная читаемая колонка (как Todoist). Канбан-доске нужна
-        // вся ширина, поэтому ограничение применяем только в list-режиме.
-        view === 'list' && 'mx-auto w-full max-w-3xl',
-      )}
-    >
-      {/* Хлебные крошки (как у страниц проекта): «<Пространство> ▾ · Входящие» — сегмент
-          пространства раскрывается при наведении для быстрого переключения. Прячем на мобиле.
-          Строка крошек = min-h-11 (44px), вертикально центрирована, прижата к верху — ровно
-          на одной горизонтали со свитчером пространства в сайдбаре (Notion top-alignment). */}
+    <div className="flex h-full flex-col">
+      {/* Хлебные крошки (как у страниц проекта): «<Пространство> ▾ · Входящие». Прячем на мобиле. */}
       <div className="hidden h-11 items-center px-2.5 sm:flex">
         <InboxBreadcrumbs />
       </div>
 
-      {/* Тело страницы: комфортные отступы ПОД строкой крошек. На мобиле крошек нет —
-          даём небольшой верхний отступ, чтобы заголовок не липнул к краю. В kanban-режиме
-          отступы по краям — как на доске проекта (px-6/14/24). */}
-      <div
-        className={cn(
-          'flex min-h-0 flex-1 flex-col gap-1.5 pb-3 pt-2 sm:gap-4 sm:pb-6 sm:pt-1',
-          view === 'kanban' ? 'px-6 sm:px-14 lg:px-24' : 'px-3 sm:px-5',
-        )}
-      >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <AnimatedInbox active className="size-5 text-primary" />
-          <h1 className="text-xl font-semibold tracking-tight">Входящие</h1>
+      {/* Тело страницы: отступы по краям — как на доске проекта (px-6/14/24). Только канбан. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-6 pb-3 pt-2 sm:gap-4 sm:px-14 sm:pb-6 sm:pt-1 lg:px-24">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <AnimatedInbox active className="size-5 text-primary" />
+            <h1 className="text-xl font-semibold tracking-tight">Входящие</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <HideDoneToggle value={hideDone} onChange={handleHideDoneChange} />
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <HideDoneToggle value={hideDone} onChange={handleHideDoneChange} />
-          <ViewToggle value={view} onChange={handleViewChange} />
-        </div>
-      </div>
 
-      <AssignedToMeBlock
-        onChanged={() => setRefetchKey((k) => k + 1)}
-        view={view}
-        onRequestListView={() => handleViewChange('list')}
-        hideDone={hideDone}
-        bleedNegClass={view === 'kanban' ? KANBAN_BLEED_NEG : ''}
-        bleedPadClass={view === 'kanban' ? KANBAN_BLEED_PAD : ''}
-      />
+        <AssignedToMeBlock
+          onChanged={() => setRefetchKey((k) => k + 1)}
+          hideDone={hideDone}
+          bleedNegClass={KANBAN_BLEED_NEG}
+          bleedPadClass={KANBAN_BLEED_PAD}
+        />
 
-      {/* Мягкое появление списка/доски при входе на страницу — fadeInUp, гейтится
-          useMotion(). При выключенных анимациях initial={false} → мгновенно, без
-          сдвига лэйаута. Ключ по view, чтобы переключение канбан↔список тоже мягко вплывало. */}
-      <motion.div
-        key={view}
-        className="flex min-h-0 flex-1 flex-col"
-        variants={fadeInUp}
-        initial={animations ? 'hidden' : false}
-        animate="visible"
-      >
-        {view === 'kanban' ? (
+        {/* Мягкое появление доски при входе — fadeInUp, гейтится useMotion(). */}
+        <motion.div
+          className="flex min-h-0 flex-1 flex-col"
+          variants={fadeInUp}
+          initial={animations ? 'hidden' : false}
+          animate="visible"
+        >
           <KanbanBoard
             key={refetchKey}
             projectId={project.id}
@@ -187,10 +142,7 @@ export function InboxPage(): React.ReactElement {
             bleedNegClass={KANBAN_BLEED_NEG}
             bleedPadClass={KANBAN_BLEED_PAD}
           />
-        ) : (
-          <TaskListView key={refetchKey} projectId={project.id} showCommits={false} hideDone={hideDone} />
-        )}
-      </motion.div>
+        </motion.div>
       </div>
     </div>
   );
@@ -233,22 +185,3 @@ function HideDoneToggle({
   );
 }
 
-function ViewToggle({
-  value,
-  onChange,
-}: {
-  value: ViewMode;
-  onChange: (next: ViewMode) => void;
-}): React.ReactElement {
-  return (
-    <SegmentedControl
-      value={value}
-      onChange={onChange}
-      size="md"
-      options={[
-        { value: 'kanban', label: 'Канбан', icon: <Columns3 className="size-3.5" /> },
-        { value: 'list', label: 'Список', icon: <ListIcon className="size-3.5" /> },
-      ]}
-    />
-  );
-}

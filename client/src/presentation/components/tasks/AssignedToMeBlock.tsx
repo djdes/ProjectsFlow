@@ -74,7 +74,6 @@ import {
   type DelegationDirection,
 } from './assignedGrouping';
 import { ColumnPreviewList } from './ColumnPreview';
-import { ExpandableMarkdown } from './ExpandableMarkdown';
 import { TaskTitleText } from './TaskTitleText';
 import { splitTitleBody } from '@/lib/taskTitleBody';
 import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
@@ -91,10 +90,6 @@ type Props = {
   onChanged?: () => void;
   // Режим отображения (как у страницы «Входящие»): 'kanban' — группы становятся колонками
   // канбана (карточки = поручения), 'list' — плоский список с заголовками групп.
-  view?: 'kanban' | 'list';
-  // Переключить страницу в list-вид. Меню сортировки/группировки показываем в обоих видах, но
-  // группировка рендерится списком — при выборе из канбана просим страницу перейти в список.
-  onRequestListView?: () => void;
   // Скрыть выполненные (status='done'). Общий Eye-toggle страницы «Входящие» (persist в
   // localStorage) действует и на этот блок, и на доску ниже — одна кнопка на страницу.
   hideDone?: boolean;
@@ -153,8 +148,6 @@ const snapToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transform })
 // с сервера). Клик по задаче открывает TaskDrawer (read-access гейтится на сервере).
 export function AssignedToMeBlock({
   onChanged,
-  view = 'list',
-  onRequestListView,
   hideDone = false,
   bleedNegClass = '',
   bleedPadClass = '',
@@ -237,11 +230,8 @@ export function AssignedToMeBlock({
   }, [taskDelegationRepository, userRepository, refresh]);
 
   const handleGroupingChange = (next: AssignedGrouping): void => {
-    // Оптимистично: группировка применяется мгновенно, сохранение летит в фоне.
+    // Оптимистично: сортировка применяется мгновенно, сохранение летит в фоне.
     setGrouping(next);
-    // Группировка рендерится списком — из канбана (фикс. колонки по времени) переходим в список,
-    // иначе выбор был бы «немым».
-    if (view === 'kanban') onRequestListView?.();
     void userRepository.setUiPrefs({ inboxAssignedGrouping: next }).catch((e: unknown) => {
       toast.error(`Не удалось сохранить группировку: ${(e as Error).message}`);
     });
@@ -548,7 +538,7 @@ export function AssignedToMeBlock({
           {/* Кубики людей пространства — ПРАВЕЕ вкладок (цель drag-делегирования). Компактные
               аватары; при наведении перетаскиваемой задачи кубик раскрывается в «Делегировать:
               <имя>». Ряд горизонтально скроллится на узких экранах, не тесня фильтры справа. */}
-          {view === 'kanban' && members.length > 0 && (
+          {members.length > 0 && (
             <div className="flex min-w-0 items-center gap-1 overflow-x-auto pl-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {members.map((m) => (
                 <UserCube key={m.id} member={m} dragging={activeDrag !== null} />
@@ -599,10 +589,10 @@ export function AssignedToMeBlock({
       {visibleTasks.length === 0 ? (
         // Пустая активная вкладка при живой соседней: тихая строка вместо пустых колонок.
         <p className="px-0.5 py-1 text-sm text-muted-foreground/60">{emptyText}</p>
-      ) : view === 'kanban' ? (
-        // Канбан: РОВНО 3 колонки по времени (Без срока / На сегодня / Будущее), карточки =
-        // поручения. Ряд колонок full-bleed'ится за паддинг страницы (как доска проекта).
-        // Drag'ом карточку кидают между колонками → меняется дедлайн (см. handleDragEnd).
+      ) : grouping === 'deadline' ? (
+        // Сортировка «по дедлайну» = 3 колонки по времени (Без срока / На сегодня / Будущее).
+        // Drag между колонками меняет дедлайн; drag на аватар участника — делегирует. Ряд
+        // колонок full-bleed'ится за паддинг страницы (как доска проекта).
         <div className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}>
           {kanbanGroups.map((group) => (
             // Дроп-зона (drag-срок/делегирование) + пагинация «первые 4 + Показать ещё» +
@@ -643,42 +633,44 @@ export function AssignedToMeBlock({
           ))}
         </div>
       ) : (
-        <div className="space-y-5">
+        // Прочие сортировки (проект / дата создания / приоритет): БОРДЕР-БЛОКИ — каждая группа
+        // = карточка с заголовком-ярлыком и задачами ВНУТРИ (задачи одного проекта объединены в
+        // один блок). Карточки перетаскиваемы → делегирование на аватар участника работает и тут.
+        <div className="flex flex-col gap-3">
           {groups.map((group) => (
-            <div key={group.key} className="space-y-1.5">
-              {/* Заголовок-ярлык группы (проект / дата / дедлайн / приоритет): выделенная полоса
-                  с иконкой, названием и счётчиком — задачи идут «внутри» под ним. */}
-              <div className="flex items-center gap-1.5 rounded-md border border-black/[0.05] bg-muted/50 px-2 py-1 text-xs font-semibold text-foreground/80 dark:border-white/[0.06] dark:bg-white/[0.04]">
+            <div
+              key={group.key}
+              className="overflow-hidden rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02]"
+            >
+              <div className="flex items-center gap-1.5 border-b border-black/[0.06] bg-muted/50 px-2.5 py-1.5 text-xs font-semibold text-foreground/80 dark:border-white/[0.06] dark:bg-white/[0.04]">
                 <GroupIcon mode={grouping} isInbox={group.isInbox} />
                 <span className="truncate">{group.label}</span>
                 <span className="ml-auto shrink-0 rounded-full bg-background px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
                   {group.items.length}
                 </span>
               </div>
-              <ul className="divide-y divide-border/60">
-                {/* Хелпер уже отсортировал: ожидающие (pending) наверх, затем по релевантному
-                    ключу. Кнопки «Принять/Отклонить» — только у входящих pending («Для меня»);
-                    в «Другим» pending рисуется обычной строкой с бейджем «ждёт ответа». */}
-                {group.items.map((item) =>
-                  tab === 'toMe' && isAwaitingResponse(item) ? (
-                    <PendingRow
-                      key={item.delegation.id}
-                      item={item}
-                      busy={resolvingIds.has(item.delegation.id)}
-                      onAccept={() => void resolve(item.delegation.id, 'accept')}
-                      onDecline={() => void resolve(item.delegation.id, 'decline')}
-                    />
-                  ) : (
-                    <AcceptedRow
-                      key={item.delegation.id}
-                      item={item}
-                      currentUserId={user?.id ?? null}
-                      onOpen={() => setDrawerTask(item)}
-                      onChanged={handleToggled}
-                    />
-                  ),
-                )}
-              </ul>
+              <div className="flex flex-col gap-1.5 p-1.5">
+                {group.items.map((item) => (
+                  <DraggableTask key={item.id} item={item} disabled={!item.canModify}>
+                    {tab === 'toMe' && isAwaitingResponse(item) ? (
+                      <PendingCard
+                        item={item}
+                        busy={resolvingIds.has(item.delegation.id)}
+                        onAccept={() => void resolve(item.delegation.id, 'accept')}
+                        onDecline={() => void resolve(item.delegation.id, 'decline')}
+                      />
+                    ) : (
+                      <AcceptedCard
+                        item={item}
+                        currentUserId={user?.id ?? null}
+                        onOpen={() => setDrawerTask(item)}
+                        onChanged={handleToggled}
+                        showCreatedAt={grouping === 'created'}
+                      />
+                    )}
+                  </DraggableTask>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -692,7 +684,9 @@ export function AssignedToMeBlock({
         aria-hidden
         className={cn(
           '!mt-5 mb-1 border-t border-border sm:!mt-6 sm:mb-2',
-          view === 'kanban' && bleedNegClass,
+          // Full-bleed линия только когда показаны время-колонки (deadline); у бордер-блоков
+          // ширина читаемой колонки.
+          grouping === 'deadline' && bleedNegClass,
         )}
       />
 
@@ -1175,95 +1169,6 @@ function TimeBucketIcon({ bucket }: { bucket: string }): React.ReactElement {
   return <CalendarClock className="size-3.5 shrink-0" />;
 }
 
-// Принятая задача — ведёт себя как обычная строка: чекбокс «выполнено» (снятие
-// восстанавливает прежний статус), клик открывает drawer.
-function AcceptedRow({
-  item,
-  currentUserId,
-  onOpen,
-  onChanged,
-}: {
-  item: AssignedTask;
-  currentUserId: string | null;
-  onOpen: () => void;
-  onChanged: () => void;
-}): React.ReactElement {
-  const isDone = item.status === 'done';
-  return (
-    <li
-      className={cn(
-        'group flex cursor-pointer items-center gap-3 rounded-md px-2.5 py-3 transition-colors hover:bg-hover',
-        // Done-строка: мягкая зелёная заливка (НЕ серый/НЕ opacity), как в TaskListView/
-        // KanbanCard — спокойный Notion-маркер готовности; текст остаётся полноцветным.
-        isDone && 'bg-success/[0.08] hover:bg-success/[0.12]',
-      )}
-      onClick={onOpen}
-    >
-      <InboxCheckbox
-        task={item}
-        lastDoneTaskId={null}
-        lastTodoTaskId={null}
-        onChanged={onChanged}
-        // Без кастомного disabledTitle: дефолтный «Нет прав менять статус» честен для
-        // обеих вкладок (viewer на чужой паре / вылет из редакторов проекта).
-        disabled={!item.canModify}
-      />
-      <div className="min-w-0 flex-1">
-        {item.description?.trim() ? (
-          // Done-текст остаётся полноцветным (Notion: готовая задача не «гасится»).
-          <ExpandableMarkdown>
-            {item.description}
-          </ExpandableMarkdown>
-        ) : (
-          <p className="text-sm leading-snug text-muted-foreground">—</p>
-        )}
-        <AssignedMetaBadges item={item} currentUserId={currentUserId} />
-      </div>
-    </li>
-  );
-}
-
-// Кластер мета-бейджей поручения (делегирование, коммиты/вложения/комменты, режим, приоритет,
-// дедлайн) — общий для строки списка (AcceptedRow) и карточки канбана (AcceptedCard).
-function AssignedMetaBadges({
-  item,
-  currentUserId,
-}: {
-  item: AssignedTask;
-  currentUserId: string | null;
-}): React.ReactElement {
-  return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-      {currentUserId && (
-        <DelegationBadge delegation={item.delegation} currentUserId={currentUserId} />
-      )}
-      {(item.commitCount ?? 0) > 0 && (
-        <span className="flex items-center gap-1 rounded-full bg-blue-500/15 px-1.5 py-0.5 text-blue-600 dark:bg-blue-400/15 dark:text-blue-400">
-          <GitCommit className="size-2.5" />
-          {item.commitCount}
-        </span>
-      )}
-      {(item.attachmentCount ?? 0) > 0 && (
-        <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-emerald-600 dark:bg-emerald-400/15 dark:text-emerald-400">
-          <ImageIcon className="size-2.5" />
-          {item.attachmentCount}
-        </span>
-      )}
-      {(item.commentCount ?? 0) > 0 && (
-        <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-violet-600 dark:bg-violet-400/15 dark:text-violet-400">
-          <MessageSquare className="size-2.5" />
-          {item.commentCount}
-        </span>
-      )}
-      <RalphModeBadge mode={item.ralphMode} />
-      {item.priority !== null && item.priority !== undefined && (
-        <PriorityBadge priority={item.priority} />
-      )}
-      {item.deadline && <DeadlineBadge deadline={item.deadline} status={item.status} />}
-    </div>
-  );
-}
-
 // === Карточки канбана (колонка = группа) ===
 // Принятая задача-карточка: чекбокс «выполнено» + описание + мета-бейджи, клик открывает drawer.
 function AcceptedCard({
@@ -1271,11 +1176,14 @@ function AcceptedCard({
   currentUserId,
   onOpen,
   onChanged,
+  showCreatedAt = false,
 }: {
   item: AssignedTask;
   currentUserId: string | null;
   onOpen: () => void;
   onChanged: () => void;
+  // При сортировке «по дате создания» показываем дату создания в мета-строке (по наведению).
+  showCreatedAt?: boolean;
 }): React.ReactElement {
   const isDone = item.status === 'done';
   // Заголовок/тело как на досках проектов: 1-я строка plain, тело компактным markdown, всё в
@@ -1339,6 +1247,13 @@ function AcceptedCard({
       {/* Параметры (делегация/коммиты/вложения/комменты/приоритет/СРОК) — как на досках: локальная
           плашка снизу-слева, всплывает при наведении (запрос 4). Срок показываем ВСЕГДА (запрос 5). */}
       <div className="pointer-events-none absolute bottom-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-hidden rounded-md bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100 dark:ring-white/[0.08]">
+        {/* Дата создания — при сортировке «по дате создания» (запрос: показывать её по наведению). */}
+        {showCreatedAt && (
+          <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+            <CalendarDays className="size-3" />
+            {new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(item.createdAt)}
+          </span>
+        )}
         {currentUserId && (
           <DelegationBadge delegation={item.delegation} currentUserId={currentUserId} />
         )}
@@ -1440,66 +1355,3 @@ function PendingCard({
   );
 }
 
-// Ожидающая задача — не открывается; кнопки «Принять/Отклонить».
-function PendingRow({
-  item,
-  busy,
-  onAccept,
-  onDecline,
-}: {
-  item: AssignedTask;
-  busy: boolean;
-  onAccept: () => void;
-  onDecline: () => void;
-}): React.ReactElement {
-  const isInvite = item.delegation.status === 'pending_invite';
-  return (
-    // Вертикально: сверху «<аватар> Имя поручил вам: «описание»», снизу — кнопки.
-    // Так на узких экранах ничего не сжимается и кнопки ложатся ровно под текстом.
-    // Тонкая акцент-полоска слева маркирует «ожидает ответа», но спокойно (без насыщенной заливки).
-    <li className="flex flex-col gap-3 rounded-md border-l-2 border-primary/40 bg-hover/60 px-3 py-3">
-      <div className="flex items-start gap-2.5">
-        <Avatar className="size-7 shrink-0">
-          <AvatarFallback
-            className={cn('text-[10px]', avatarColor(item.delegation.creatorDisplayName))}
-          >
-            {getInitials(item.delegation.creatorDisplayName)}
-          </AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm leading-snug">
-            <span className="font-medium">{item.delegation.creatorDisplayName}</span>{' '}
-            {isInvite && !item.isInbox
-              ? `зовёт в проект «${item.projectName}» и поручает:`
-              : 'поручил вам:'}
-          </p>
-          <p className="line-clamp-2 text-xs text-muted-foreground">
-            «{item.description || '(без описания)'}»
-          </p>
-        </div>
-      </div>
-      {/* Кнопки под текстом, с отступом слева под аватар (size-7 + gap-2.5 = 2.375rem). */}
-      <div className="flex gap-1.5 pl-[2.375rem]">
-        <Button
-          size="sm"
-          className="h-7 gap-1 bg-success text-white hover:bg-success/90"
-          disabled={busy}
-          onClick={onAccept}
-        >
-          <Check className="size-3.5" />
-          {isInvite && !item.isInbox ? 'Вступить' : 'Принять'}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 gap-1 text-muted-foreground"
-          disabled={busy}
-          onClick={onDecline}
-        >
-          <X className="size-3.5" />
-          Отклонить
-        </Button>
-      </div>
-    </li>
-  );
-}

@@ -8,7 +8,9 @@
 export const ASSIGNED_GROUPINGS = ['project', 'created', 'deadline', 'priority'] as const;
 export type AssignedGrouping = (typeof ASSIGNED_GROUPINGS)[number];
 
-export const DEFAULT_ASSIGNED_GROUPING: AssignedGrouping = 'project';
+// Дефолт — «дедлайн»: блок делегирования открывается 3 колонками по времени (Без срока/
+// Сегодня/Будущее) с drag-переносом; проект/дата/приоритет — опциональные бордер-блоки.
+export const DEFAULT_ASSIGNED_GROUPING: AssignedGrouping = 'deadline';
 
 // Человекочитаемые подписи режимов — для дропдауна. Кириллица (пользовательские строки).
 export const ASSIGNED_GROUPING_LABELS: Record<AssignedGrouping, string> = {
