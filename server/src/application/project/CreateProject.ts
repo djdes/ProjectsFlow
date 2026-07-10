@@ -23,6 +23,9 @@ type Deps = {
   // тогда проект остаётся без диспетчера (ручной режим). Best-effort: если
   // резолвер бросит ошибку — НЕ роняем создание проекта, просто пропускаем.
   readonly resolveDefaultDispatcher?: () => Promise<string | null>;
+  // Гарантировать строку настроек автоматизации новому проекту (дефолты ВКЛ, db/101) — чтобы
+  // планировщики (commit-sync/EOD/daily-plan) видели его. Best-effort, опционально.
+  readonly ensureAutomationRow?: (projectId: string) => Promise<void>;
 };
 
 export class CreateProject {
@@ -54,6 +57,15 @@ export class CreateProject {
       payload: { projectName: name },
       workspaceId,
     });
+
+    // Дефолт-строка автоматизации (db/101: автоматизации ВКЛ). Best-effort — не роняем create.
+    if (this.deps.ensureAutomationRow) {
+      try {
+        await this.deps.ensureAutomationRow(project.id);
+      } catch (e) {
+        console.warn('[CreateProject] ensureAutomationRow failed:', e);
+      }
+    }
 
     // Auto-default Ralph-диспетчера на дежурного admin'а (с активным agent-токеном).
     // Best-effort: ошибка резолвера или update'а НЕ роняет создание проекта — проект уже

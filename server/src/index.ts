@@ -179,6 +179,8 @@ import { ConfirmCloseProposal } from './application/close-proposal/ConfirmCloseP
 import { DismissCloseProposal } from './application/close-proposal/DismissCloseProposal.js';
 import { CommitSyncJobCleanup } from './application/commit-sync/CommitSyncJobCleanup.js';
 import { CommitSyncScheduler } from './infrastructure/scheduler/CommitSyncScheduler.js';
+import { EodReminderScheduler } from './infrastructure/scheduler/EodReminderScheduler.js';
+import { SendEodReminder } from './application/eod/SendEodReminder.js';
 import { DrizzleAutomationRepository } from './infrastructure/repositories/DrizzleAutomationRepository.js';
 import { GetAutomationConfig } from './application/automation/GetAutomationConfig.js';
 import { SaveAutomationConfig } from './application/automation/SaveAutomationConfig.js';
@@ -1363,6 +1365,7 @@ const { app, devProxyUpgrade } = createApp({
       resolveWorkspaceId,
       resolveDefaultDispatcher,
       activityRecorder,
+      ensureAutomationRow: (id) => automationRepo.ensureDefaultRow(id),
     }),
     updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo, activity: activityRecorder }),
     publishProject: new PublishProject({ projects: projectRepo, members: projectMemberRepo }),
@@ -1590,6 +1593,7 @@ const { app, devProxyUpgrade } = createApp({
         resolveWorkspaceId,
         resolveDefaultDispatcher,
         activityRecorder,
+        ensureAutomationRow: (id) => automationRepo.ensureDefaultRow(id),
       }),
       createTask: new CreateTask({
         projects: projectRepo,
@@ -2067,6 +2071,7 @@ const { app, devProxyUpgrade } = createApp({
         resolveWorkspaceId,
         resolveDefaultDispatcher,
         activityRecorder,
+        ensureAutomationRow: (id) => automationRepo.ensureDefaultRow(id),
       }),
       updateProject: new UpdateProject({ projects: projectRepo, members: projectMemberRepo, activity: activityRecorder }),
       tokens: githubTokenRepo,
@@ -2361,6 +2366,23 @@ const commitSyncScheduler = new CommitSyncScheduler({
   enqueue: enqueueCommitSyncJob,
 });
 commitSyncScheduler.start();
+
+// EOD-напоминание (db/101, Фаза 2): тик раз в минуту шлёт «актуализируй перед уходом» участникам
+// проектов с включённым eod_reminder в их МSK-время + тимбилдинг-нудж в группу. Без раннера.
+const eodReminderScheduler = new EodReminderScheduler({
+  automation: automationRepo,
+  send: new SendEodReminder({
+    projects: projectRepo,
+    members: projectMemberRepo,
+    tasks: taskRepo,
+    delegations: taskDelegationRepo,
+    tgSend: sendAgentTelegramNotification,
+    appUrl: appBaseUrl,
+    telegramClient,
+    getGroupChatId: async (id) => (await digestSettingsRepo.getByProject(id)).telegramGroupChatId,
+  }),
+});
+eodReminderScheduler.start();
 
 const server = app.listen(config.port, () => {
   console.log(

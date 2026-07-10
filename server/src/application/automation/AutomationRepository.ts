@@ -84,4 +84,22 @@ export type AutomationRepository = {
   >;
   // Пометить commit-sync прогон выполненным сегодня (МSK-дата 'YYYY-MM-DD').
   markCommitSyncRun(projectId: string, dateMsk: string): Promise<void>;
+
+  // Гарантировать наличие строки настроек у проекта (insert-if-not-exists). Дефолты БД (db/101):
+  // автоматизации ВКЛ. Вызывается при создании проекта — чтобы планировщики (commit-sync/EOD/
+  // daily-plan) видели новый проект без ручной настройки.
+  ensureDefaultRow(projectId: string): Promise<void>;
+
+  // --- EOD-напоминание (db/101, Фаза 2) ---
+  // Проекты с включённым eod_reminder — для EodReminderScheduler. lastRunOn — МSK-дата анти-дубля.
+  listEodReminderEnabled(): Promise<
+    ReadonlyArray<{
+      readonly projectId: string;
+      readonly hour: number;
+      readonly minute: number;
+      readonly lastRunOn: string | null;
+    }>
+  >;
+  // Пометить EOD-прогон выполненным сегодня (МSK-дата 'YYYY-MM-DD').
+  markEodReminderRun(projectId: string, dateMsk: string): Promise<void>;
 };

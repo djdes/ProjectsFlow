@@ -173,6 +173,46 @@ export class DrizzleAutomationRepository implements AutomationRepository {
       .where(eq(projectAutomation.projectId, projectId));
   }
 
+  async ensureDefaultRow(projectId: string): Promise<void> {
+    // Insert-if-not-exists: остальные колонки берут дефолты БД (db/101 — автоматизации ВКЛ).
+    await this.db
+      .insert(projectAutomation)
+      .values({ projectId })
+      .onDuplicateKeyUpdate({ set: { projectId } });
+  }
+
+  async listEodReminderEnabled(): Promise<
+    ReadonlyArray<{
+      projectId: string;
+      hour: number;
+      minute: number;
+      lastRunOn: string | null;
+    }>
+  > {
+    const rows = await this.db
+      .select({
+        projectId: projectAutomation.projectId,
+        hour: projectAutomation.eodReminderHour,
+        minute: projectAutomation.eodReminderMinute,
+        lastRunOn: projectAutomation.eodReminderLastRunOn,
+      })
+      .from(projectAutomation)
+      .where(eq(projectAutomation.eodReminderEnabled, true));
+    return rows.map((r) => ({
+      projectId: r.projectId,
+      hour: r.hour,
+      minute: r.minute,
+      lastRunOn: r.lastRunOn ?? null,
+    }));
+  }
+
+  async markEodReminderRun(projectId: string, dateMsk: string): Promise<void> {
+    await this.db
+      .update(projectAutomation)
+      .set({ eodReminderLastRunOn: dateMsk })
+      .where(eq(projectAutomation.projectId, projectId));
+  }
+
   async recordTaskCreated(projectId: string, nextIdx: number): Promise<AutomationRunState> {
     await this.db
       .update(projectAutomation)
