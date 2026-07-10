@@ -34,6 +34,25 @@ export function taskCompletedKeyboard(taskId: string): InlineKeyboardMarkup {
   };
 }
 
+// Клавиатура предложения закрыть задачу (db/101). callback_data 'pd:'/'px:' (proposal
+// done/dismiss) + UUID(36) = 39 байт ≤ 64. Префиксы не пересекаются с nd/nc/nu/bt/tp/…
+// — роутинг в HandleTelegramWebhook разводит их. Подтвердить может любой участник.
+export function closeProposalKeyboard(proposalId: string): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: '✅ Закрыть', callback_data: `pd:${proposalId}` },
+        { text: '✕ Не она', callback_data: `px:${proposalId}` },
+      ],
+    ],
+  };
+}
+
+// Клавиатура предложения после разрешения — пусто (кнопки убираем правкой сообщения).
+export function closeProposalResolvedKeyboard(): InlineKeyboardMarkup {
+  return { inline_keyboard: [] };
+}
+
 // Клавиатура для задачи, которая УЖЕ завершена на момент уведомления (напр. статус сменился
 // на «Готово»): «Завершить» бессмысленно → показываем «Посмотреть» (bt:t: — тот же browse-роут,
 // что и в композере). «Комментировать» остаётся.

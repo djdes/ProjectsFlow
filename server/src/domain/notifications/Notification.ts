@@ -137,6 +137,20 @@ export type SupportTicketPayload = {
   readonly submitterDisplayName: string | null;
 };
 
+// Предложение закрыть задачу (commit-sync в режиме propose, db/101). Прилетает участникам
+// проекта; клиент показывает карточку с кнопками «Закрыть»/«Не она» (confirm/dismiss).
+// Подтвердить может любой участник (viewer+) — осознанное послабление, как в TG-пути.
+export type CloseProposalPayload = {
+  readonly type: 'close_proposal';
+  readonly proposalId: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly taskId: string;
+  readonly taskExcerpt: string;
+  readonly commitSha: string;
+  readonly reason: string | null;
+};
+
 export type NotificationPayload =
   | CommentMentionPayload
   | ProjectInvitePayload
@@ -147,7 +161,8 @@ export type NotificationPayload =
   | ServerAlertPayload
   | DailyDigestPayload
   | ChatMentionPayload
-  | SupportTicketPayload;
+  | SupportTicketPayload
+  | CloseProposalPayload;
 
 export type Notification = {
   readonly id: string;

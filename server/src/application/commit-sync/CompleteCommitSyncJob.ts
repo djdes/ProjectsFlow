@@ -9,6 +9,7 @@ import type { TaskRepository } from '../task/TaskRepository.js';
 import type { LinkCommit } from '../task/LinkCommit.js';
 import type { CommitSyncJobRepository } from './CommitSyncJobRepository.js';
 import type { RecordUsage } from '../usage/RecordUsage.js';
+import type { CreateCloseProposals } from '../close-proposal/CreateCloseProposals.js';
 
 const MAX_ERROR = 500;
 const MAX_MATCHES = 500;
@@ -20,6 +21,9 @@ type Deps = {
   readonly linkCommit?: LinkCommit;
   // Метеринг расхода ИИ (best-effort) — списываем с подписки диспетчера.
   readonly recordUsage?: RecordUsage;
+  // Ветка action='propose' (db/101): вместо авто-перемещения создаём предложения закрыть.
+  // Если не задан — propose-прогон завершается без предложений (только сводка).
+  readonly createProposals?: CreateCloseProposals;
 };
 
 export type CompleteCommitSyncJobInput = {
@@ -71,6 +75,14 @@ export class CompleteCommitSyncJob {
     }
 
     const matches = (input.matches ?? []).slice(0, MAX_MATCHES);
+
+    // Ветка propose (db/101): НЕ двигаем задачи, а создаём предложения закрыть (human-in-the-loop).
+    // Подтвердить сможет любой участник (TG-кнопка / in-app).
+    if (job.action === 'propose') {
+      await this.runProposeBranch(job, input, matches);
+      return;
+    }
+
     const commitTimes = parseCommitsJson(job.commitsJson);
     const now = new Date();
     const threshold = job.thresholdHours;
@@ -129,6 +141,45 @@ export class CompleteCommitSyncJob {
       status: 'succeeded',
       matchesJson: JSON.stringify(matches),
       resultSummary,
+      error: null,
+      costUsd: input.costUsd ?? null,
+      tokensIn: input.tokensIn ?? null,
+      tokensOut: input.tokensOut ?? null,
+    });
+    this.meterUsage(job, input);
+  }
+
+  // Ветка propose (db/101): создаём предложения закрыть по совпадениям (через
+  // CreateCloseProposals — там комментарий + TG-личка с кнопками + in-app), job → succeeded
+  // со сводкой. Best-effort: сбой создания предложений не валит complete.
+  private async runProposeBranch(
+    job: CommitSyncJob,
+    input: CompleteCommitSyncJobInput,
+    matches: ReadonlyArray<CommitSyncMatch>,
+  ): Promise<void> {
+    let created = 0;
+    if (this.deps.createProposals && matches.length > 0) {
+      try {
+        const r = await this.deps.createProposals.execute({
+          projectId: job.projectId,
+          dispatcherUserId: job.dispatcherUserId,
+          sourceJobId: job.id,
+          matches: matches.map((m) => ({
+            taskId: m.taskId,
+            commitSha: m.commitSha,
+            reason: m.reason,
+          })),
+        });
+        created = r.created;
+      } catch (e) {
+        console.warn('[commit-sync] propose branch failed', job.id, e);
+      }
+    }
+    await this.deps.commitSyncJobs.complete({
+      id: input.jobId,
+      status: 'succeeded',
+      matchesJson: JSON.stringify(matches),
+      resultSummary: `Совпадений: ${matches.length}. Предложено закрыть: ${created}.`,
       error: null,
       costUsd: input.costUsd ?? null,
       tokensIn: input.tokensIn ?? null,
