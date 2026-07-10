@@ -1,8 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  DndContext,
+  DragOverlay,
+  MouseSensor,
+  TouchSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import {
   CalendarClock,
   CalendarDays,
   CalendarOff,
+  CalendarRange,
   Check,
   Flag,
   FolderKanban,
@@ -18,6 +31,7 @@ import {
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,11 +55,18 @@ import {
 } from '@/domain/user/UiPrefs';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
 import {
+  endOfMonthYmd,
+  endOfWeekYmd,
   groupAssignedByTime,
   groupAssignedTasks,
+  startOfDay,
+  ymd,
   type DelegationDirection,
 } from './assignedGrouping';
 import { ExpandableMarkdown } from './ExpandableMarkdown';
+import { TaskTitleText } from './TaskTitleText';
+import { splitTitleBody } from '@/lib/taskTitleBody';
+import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import { InboxCheckbox } from './InboxCheckbox';
 import { DelegationBadge } from './DelegationBadge';
 import { PriorityBadge } from './PriorityBadge';
@@ -284,6 +305,63 @@ export function AssignedToMeBlock({
   // Будущее), независимо от выбранной группировки. Колонки всегда все три, даже пустые.
   const kanbanGroups = useMemo(() => groupAssignedByTime(visibleTasks, new Date()), [visibleTasks]);
 
+  // === Drag'ом между временными колонками меняем ДЕДЛАЙН (не статус). ===
+  // Карточку тащит только тот, у кого есть права (`canModify`). 8px-порог у мыши — клик по
+  // карточке (открыть drawer) и чекбоксу не превращается в драг. Touch с задержкой 220 мс —
+  // на мобиле скролл ленты колонок остаётся, драг стартует по долгому тапу.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+  );
+  const [activeDrag, setActiveDrag] = useState<AssignedTask | null>(null);
+  // Дроп в «Будущее» не применяет срок сразу — открывает всплывашку выбора (неделя / конец
+  // месяца / конкретный день). null = закрыта.
+  const [futureDrop, setFutureDrop] = useState<AssignedTask | null>(null);
+
+  // Оптимистично проставить дедлайн задаче в обоих списках («Для меня» / «Другим»).
+  const patchDeadlineLocal = useCallback((id: string, deadline: string | null): void => {
+    const patch = (arr: AssignedTask[]): AssignedTask[] =>
+      arr.map((t) => (t.id === id ? { ...t, deadline } : t));
+    setTasks(patch);
+    setByMeTasks(patch);
+  }, []);
+
+  const applyDeadline = useCallback(
+    async (item: AssignedTask, deadline: string | null): Promise<void> => {
+      const prev = item.deadline ?? null;
+      if (prev === deadline) return;
+      patchDeadlineLocal(item.id, deadline); // оптимистично — карточка сразу переезжает
+      try {
+        await taskRepository.update(item.projectId, item.id, { deadline });
+      } catch (e) {
+        patchDeadlineLocal(item.id, prev); // откат при ошибке
+        toast.error(`Не удалось изменить срок: ${(e as Error).message}`);
+      }
+    },
+    [patchDeadlineLocal, taskRepository],
+  );
+
+  const handleDragStart = (e: DragStartEvent): void => {
+    const it = e.active.data.current?.item as AssignedTask | undefined;
+    if (it) setActiveDrag(it);
+  };
+  const handleDragEnd = (e: DragEndEvent): void => {
+    setActiveDrag(null);
+    const over = e.over;
+    const data = over?.data.current as { type?: string; bucket?: string } | undefined;
+    if (!over || data?.type !== 'bucket') return;
+    const item = e.active.data.current?.item as AssignedTask | undefined;
+    if (!item) return;
+    const bucket = data.bucket;
+    // Дроп в свою же колонку — no-op (не дёргаем сервер и не открываем зря всплывашку).
+    const today = ymd(startOfDay(new Date()));
+    const cur = item.deadline == null ? 'none' : item.deadline <= today ? 'today' : 'future';
+    if (cur === bucket) return;
+    if (bucket === 'none') void applyDeadline(item, null);
+    else if (bucket === 'today') void applyDeadline(item, today);
+    else if (bucket === 'future') setFutureDrop(item); // всплывашка выбора срока
+  };
+
   if (loading) return null;
   // Блок скрыт, только когда пусто В ОБЕИХ вкладках (с учётом hide-done). Пустая
   // АКТИВНАЯ вкладка при живой соседней рисует тихий empty-state (табы должны остаться).
@@ -385,52 +463,54 @@ export function AssignedToMeBlock({
       ) : view === 'kanban' ? (
         // Канбан: РОВНО 3 колонки по времени (Без срока / На сегодня / Будущее), карточки =
         // поручения. Ряд колонок full-bleed'ится за паддинг страницы (как доска проекта).
-        <div className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}>
-          {kanbanGroups.map((group) => (
-            <div
-              key={group.key}
-              // Шёпот-тинт primary вместо серого muted — колонки читаются «чуть голубыми»
-              // на фоне серых колонок доски ниже. На мобиле альфа выше (зеркало паттерна
-              // /60→/30), в dark ещё выше — primary тонет на графите. Не поднимать выше
-              // /[0.09]//[0.11] — начинает «светиться».
-              className="flex w-[86vw] max-w-[22rem] shrink-0 snap-start flex-col rounded-xl bg-primary/[0.06] dark:bg-primary/[0.09] sm:w-72 sm:max-w-none sm:bg-primary/[0.04] sm:dark:bg-primary/[0.07]"
-            >
-              <div className="flex items-center gap-1.5 px-3 pb-1.5 pt-2.5 text-xs font-medium text-muted-foreground">
-                <TimeBucketIcon bucket={group.key} />
-                <span className="min-w-0 truncate">{group.label}</span>
-                <span className="shrink-0 text-muted-foreground/60">{group.items.length}</span>
-              </div>
-              <div className="flex min-h-[3rem] flex-col gap-2 px-2 pb-2">
+        // Drag'ом карточку кидают между колонками → меняется дедлайн (см. handleDragEnd).
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <div className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}>
+            {kanbanGroups.map((group) => (
+              <TimeBucketColumn key={group.key} bucket={group.key} label={group.label} count={group.items.length}>
                 {group.items.length === 0 ? (
                   <p className="px-1 py-2 text-xs text-muted-foreground/45">Пусто</p>
                 ) : (
                   // «Принять/Отклонить» — только у входящих pending («Для меня»). В «Другим»
                   // pending рисуется «принятой» карточкой: DelegationBadge сам покажет
                   // «ждёт ответа» (amber, перспектива делегатора).
-                  group.items.map((item) =>
-                    tab === 'toMe' && item.delegation.status === 'pending' ? (
-                      <PendingCard
-                        key={item.delegation.id}
-                        item={item}
-                        busy={resolvingIds.has(item.delegation.id)}
-                        onAccept={() => void resolve(item.delegation.id, 'accept')}
-                        onDecline={() => void resolve(item.delegation.id, 'decline')}
-                      />
-                    ) : (
-                      <AcceptedCard
-                        key={item.delegation.id}
-                        item={item}
-                        currentUserId={user?.id ?? null}
-                        onOpen={() => setDrawerTask(item)}
-                        onChanged={handleToggled}
-                      />
-                    ),
-                  )
+                  group.items.map((item) => (
+                    <DraggableTask key={item.id} item={item} disabled={!item.canModify}>
+                      {tab === 'toMe' && item.delegation.status === 'pending' ? (
+                        <PendingCard
+                          item={item}
+                          busy={resolvingIds.has(item.delegation.id)}
+                          onAccept={() => void resolve(item.delegation.id, 'accept')}
+                          onDecline={() => void resolve(item.delegation.id, 'decline')}
+                        />
+                      ) : (
+                        <AcceptedCard
+                          item={item}
+                          currentUserId={user?.id ?? null}
+                          onOpen={() => setDrawerTask(item)}
+                          onChanged={handleToggled}
+                        />
+                      )}
+                    </DraggableTask>
+                  ))
                 )}
+              </TimeBucketColumn>
+            ))}
+          </div>
+          {/* Копия таскаемой карточки под курсором — как на доске проекта. */}
+          <DragOverlay dropAnimation={null}>
+            {activeDrag ? (
+              <div className="w-[86vw] max-w-[22rem] rotate-1 opacity-90 sm:w-72 sm:max-w-none">
+                <AcceptedCard
+                  item={activeDrag}
+                  currentUserId={user?.id ?? null}
+                  onOpen={() => {}}
+                  onChanged={() => {}}
+                />
               </div>
-            </div>
-          ))}
-        </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       ) : (
         <div className="space-y-6">
           {groups.map((group) => (
@@ -496,7 +576,151 @@ export function AssignedToMeBlock({
         isInbox={drawerTask?.isInbox ?? false}
         aiProjectId={drawerTask && !drawerTask.isInbox ? drawerTask.projectId : null}
       />
+
+      {/* Дроп в колонку «Будущее» → выбор конкретного срока (неделя / конец месяца / день). */}
+      <FutureDeadlineDialog
+        item={futureDrop}
+        onClose={() => setFutureDrop(null)}
+        onPick={(deadline) => {
+          const it = futureDrop;
+          setFutureDrop(null);
+          if (it) void applyDeadline(it, deadline);
+        }}
+      />
     </section>
+  );
+}
+
+// Колонка канбана «по времени» = drop-зона. При наведении таскаемой карточки колонка
+// подсвечивается (ring), сигналя, что дроп сменит срок на этот бакет.
+function TimeBucketColumn({
+  bucket,
+  label,
+  count,
+  children,
+}: {
+  bucket: string;
+  label: string;
+  count: number;
+  children: React.ReactNode;
+}): React.ReactElement {
+  const { setNodeRef, isOver } = useDroppable({ id: `bucket-${bucket}`, data: { type: 'bucket', bucket } });
+  return (
+    <div
+      ref={setNodeRef}
+      // Шёпот-тинт primary вместо серого muted — колонки читаются «чуть голубыми» на фоне
+      // серых колонок доски ниже. На мобиле альфа выше, в dark ещё выше. Не поднимать выше
+      // /[0.09]//[0.11] — начинает «светиться».
+      className={cn(
+        'flex w-[86vw] max-w-[22rem] shrink-0 snap-start flex-col rounded-xl bg-primary/[0.06] transition-shadow dark:bg-primary/[0.09] sm:w-72 sm:max-w-none sm:bg-primary/[0.04] sm:dark:bg-primary/[0.07]',
+        isOver && 'ring-2 ring-inset ring-primary/50',
+      )}
+    >
+      <div className="flex items-center gap-1.5 px-3 pb-1.5 pt-2.5 text-xs font-medium text-muted-foreground">
+        <TimeBucketIcon bucket={bucket} />
+        <span className="min-w-0 truncate">{label}</span>
+        <span className="shrink-0 text-muted-foreground/60">{count}</span>
+      </div>
+      <div className="flex min-h-[3rem] flex-col gap-2 px-2 pb-2">{children}</div>
+    </div>
+  );
+}
+
+// Обёртка-«ручка» drag'а вокруг карточки поручения. Клик (без сдвига ≥8px) проходит внутрь —
+// открывается drawer / тогается чекбокс; долгий тап на мобиле стартует драг (см. sensors).
+// disabled — нет прав менять задачу (canModify=false): карточка не таскается.
+function DraggableTask({
+  item,
+  disabled,
+  children,
+}: {
+  item: AssignedTask;
+  disabled: boolean;
+  children: React.ReactNode;
+}): React.ReactElement {
+  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
+    id: item.id,
+    data: { type: 'task', item },
+    disabled,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={cn(!disabled && 'cursor-grab active:cursor-grabbing', isDragging && 'opacity-30')}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Всплывашка выбора срока при дропе в «Будущее»: неделя / до конца месяца / конкретный день.
+// Отмена (закрытие) — ничего не меняем, карточка остаётся где была.
+function FutureDeadlineDialog({
+  item,
+  onClose,
+  onPick,
+}: {
+  item: AssignedTask | null;
+  onClose: () => void;
+  onPick: (deadline: string) => void;
+}): React.ReactElement {
+  const dateRef = useRef<HTMLInputElement>(null);
+  const now = new Date();
+  const openNativePicker = (): void => {
+    const inp = dateRef.current;
+    if (!inp) return;
+    if (typeof inp.showPicker === 'function') {
+      try {
+        inp.showPicker();
+      } catch {
+        inp.focus();
+      }
+    } else {
+      inp.focus();
+    }
+  };
+  return (
+    <Dialog open={item !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-xs gap-3 p-5">
+        <DialogHeader>
+          <DialogTitle className="text-base">Срок на будущее</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-1.5">
+          <Button
+            variant="outline"
+            className="justify-start gap-2"
+            onClick={() => onPick(endOfWeekYmd(now))}
+          >
+            <CalendarClock className="size-4" />
+            До конца недели
+          </Button>
+          <Button
+            variant="outline"
+            className="justify-start gap-2"
+            onClick={() => onPick(endOfMonthYmd(now))}
+          >
+            <CalendarRange className="size-4" />
+            До конца месяца
+          </Button>
+          <Button variant="outline" className="justify-start gap-2" onClick={openNativePicker}>
+            <CalendarDays className="size-4" />
+            Выбрать день…
+          </Button>
+          <input
+            ref={dateRef}
+            type="date"
+            // Минимум — завтра: колонка «Будущее» = дедлайн строго позже сегодня.
+            min={ymd(startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)))}
+            onChange={(e) => e.target.value && onPick(e.target.value)}
+            className="sr-only"
+            tabIndex={-1}
+            aria-label="Выбрать день срока"
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -799,15 +1023,23 @@ function AcceptedCard({
   onChanged: () => void;
 }): React.ReactElement {
   const isDone = item.status === 'done';
+  // Заголовок/тело как на досках проектов: 1-я строка plain, тело компактным markdown, всё в
+  // line-clamp-4 — видно только название (запросы 3, 4).
+  const { title, body } = splitTitleBody(item.description ?? '');
   return (
     <div
       className={cn(
-        'group relative flex cursor-pointer items-start gap-1.5 rounded-lg border border-black/[0.06] bg-card px-2 py-1.5 shadow-sm transition-[box-shadow,border-color,background-color] duration-150 hover:shadow-md dark:border-white/[0.08]',
+        'group relative flex cursor-pointer items-start gap-1.5 rounded-lg border border-black/[0.06] bg-card px-2 pb-6 pt-1.5 shadow-sm transition-[box-shadow,border-color,background-color] duration-150 hover:shadow-md dark:border-white/[0.08]',
         isDone && 'border-success/20 bg-success/[0.06] hover:border-success/30 hover:bg-success/[0.1]',
       )}
       onClick={onOpen}
     >
-      <div onClick={(e) => e.stopPropagation()}>
+      {/* stopPropagation на pointer-старте — нажатие по чекбоксу не стартует drag карточки. */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
         <InboxCheckbox
           task={item}
           lastDoneTaskId={null}
@@ -818,11 +1050,56 @@ function AcceptedCard({
       </div>
       <div className="min-w-0 flex-1">
         {item.description?.trim() ? (
-          <ExpandableMarkdown>{item.description}</ExpandableMarkdown>
+          <div className="line-clamp-4 text-sm leading-snug">
+            <TaskTitleText title={title} />
+            {body.trim() && (
+              <Markdown
+                className={cn(
+                  MARKDOWN_COMPACT,
+                  '[&_h1]:font-normal [&_h2]:font-normal [&_h3]:font-normal [&_strong]:font-normal [&_b]:font-normal',
+                )}
+              >
+                {body}
+              </Markdown>
+            )}
+          </div>
         ) : (
           <p className="text-sm leading-snug text-muted-foreground">—</p>
         )}
-        <AssignedMetaBadges item={item} currentUserId={currentUserId} />
+      </div>
+      {/* Параметры (делегация/коммиты/вложения/комменты/приоритет/СРОК) — как на досках: локальная
+          плашка снизу-слева, всплывает при наведении (запрос 4). Срок показываем ВСЕГДА (запрос 5). */}
+      <div className="pointer-events-none absolute bottom-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-hidden rounded-md bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100 dark:ring-white/[0.08]">
+        {currentUserId && (
+          <DelegationBadge delegation={item.delegation} currentUserId={currentUserId} />
+        )}
+        {(item.commitCount ?? 0) > 0 && (
+          <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-blue-600 dark:text-blue-400">
+            <GitCommit className="size-3" />
+            {item.commitCount}
+          </span>
+        )}
+        {(item.attachmentCount ?? 0) > 0 && (
+          <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-emerald-600 dark:text-emerald-400">
+            <ImageIcon className="size-3" />
+            {item.attachmentCount}
+          </span>
+        )}
+        {(item.commentCount ?? 0) > 0 && (
+          <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-violet-600 dark:text-violet-400">
+            <MessageSquare className="size-3" />
+            {item.commentCount}
+          </span>
+        )}
+        <RalphModeBadge mode={item.ralphMode} />
+        {item.priority !== null && item.priority !== undefined && (
+          <PriorityBadge priority={item.priority} />
+        )}
+        {item.deadline ? (
+          <DeadlineBadge deadline={item.deadline} status={item.status} />
+        ) : (
+          <span className="whitespace-nowrap text-muted-foreground/50">без срока</span>
+        )}
       </div>
     </div>
   );
@@ -852,12 +1129,16 @@ function PendingCard({
           <p className="text-xs leading-snug">
             <span className="font-medium">{item.delegation.creatorDisplayName}</span> поручил вам:
           </p>
-          <p className="mt-0.5 line-clamp-3 text-xs text-muted-foreground">
-            «{item.description || '(без описания)'}»
-          </p>
+          <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+            <TaskTitleText title={splitTitleBody(item.description ?? '').title} className="text-xs" />
+          </div>
         </div>
       </div>
-      <div className="flex gap-1.5">
+      <div
+        className="flex gap-1.5"
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
         <Button
           size="sm"
           className="h-7 flex-1 gap-1 bg-success text-white hover:bg-success/90"
