@@ -1,0 +1,14 @@
+{
+  "name": "@projectsflow/app-client",
+  "version": "0.1.0",
+  "description": "Тонкий клиент к App Runtime приложения ProjectsFlow (auth + data). ESM, без зависимостей.",
+  "type": "module",
+  "main": "index.js",
+  "exports": "./index.js",
+  "files": ["index.js"],
+  "scripts": {
+    "test": "node --test index.test.mjs"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
