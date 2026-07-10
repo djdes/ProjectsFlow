@@ -25,4 +25,7 @@ export interface AppDatabaseStore {
   findOne(projectId: string, table: string, where: WhereClause): Row | null;
   update(projectId: string, table: string, id: string, values: Row): number;
   remove(projectId: string, table: string, id: string): number;
+  // Удаление по произвольному равенству (напр. сессии по token_hash). Пустой where → 0 (никогда
+  // не удаляем всю таблицу).
+  removeWhere(projectId: string, table: string, where: WhereClause): number;
 }

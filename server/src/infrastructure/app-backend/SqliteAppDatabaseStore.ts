@@ -139,8 +139,12 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
     const givenKeys = Object.keys(values);
     this.assertCols(allowed, givenKeys);
 
-    const id = typeof values.id === 'string' && values.id ? values.id : this.idGen();
-    const row: Row = { ...values, id };
+    const row: Row = { ...values };
+    // id/created_at добавляем ТОЛЬКО если у таблицы есть такие колонки (у `_sessions` id нет).
+    const hasId = allowed.has('id');
+    if (hasId && !(typeof values.id === 'string' && values.id)) {
+      row.id = this.idGen();
+    }
     if (allowed.has('created_at') && !('created_at' in values)) {
       row.created_at = new Date().toISOString();
     }
@@ -149,7 +153,10 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
     const placeholders = finalCols.map(() => '?').join(', ');
     const params = finalCols.map((k) => normalizeValue(row[k]));
     conn.db.prepare(`INSERT INTO "${table}" (${quoted}) VALUES (${placeholders})`).run(...params);
-    return this.findOne(projectId, table, { id }) ?? row;
+    if (hasId && typeof row.id === 'string') {
+      return this.findOne(projectId, table, { id: row.id }) ?? row;
+    }
+    return row;
   }
 
   select(projectId: string, table: string, opts: SelectOpts = {}): Row[] {
@@ -192,6 +199,15 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
     const conn = this.open(projectId);
     this.allowedCols(conn, table);
     const res = conn.db.prepare(`DELETE FROM "${table}" WHERE "id" = ?`).run(id);
+    return res.changes;
+  }
+
+  removeWhere(projectId: string, table: string, where: WhereClause): number {
+    const conn = this.open(projectId);
+    const allowed = this.allowedCols(conn, table);
+    const { clause, params } = buildWhere(allowed, where);
+    if (!clause) return 0; // без WHERE не удаляем всю таблицу
+    const res = conn.db.prepare(`DELETE FROM "${table}"${clause}`).run(...params);
     return res.changes;
   }
 }
