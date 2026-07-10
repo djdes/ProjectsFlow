@@ -4,13 +4,19 @@ import {
   DragOverlay,
   MouseSensor,
   TouchSensor,
+  pointerWithin,
+  rectIntersection,
   useDraggable,
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
+  type Modifier,
 } from '@dnd-kit/core';
+import { getEventCoordinates } from '@dnd-kit/utilities';
+import { motion } from 'motion/react';
 import {
   CalendarClock,
   CalendarDays,
@@ -20,6 +26,7 @@ import {
   Flag,
   FolderKanban,
   GitCommit,
+  GripVertical,
   ImageIcon,
   Inbox as InboxIcon,
   ListFilter,
@@ -105,6 +112,29 @@ const notDone = (t: AssignedTask): boolean => t.status !== 'done';
 // карточкой с кнопками действия, а не «принятой».
 const isAwaitingResponse = (t: AssignedTask): boolean =>
   t.delegation.status === 'pending' || t.delegation.status === 'pending_invite';
+
+// Коллизии по КУРСОРУ (pointerWithin) — целиться в мелкие кубики людей и колонки проще, чем
+// «прямоугольником» всей карточки (дефолтный rectIntersection часто мазал мимо → «тяжело
+// попасть»). Фолбэк на rectIntersection, когда курсор в зазоре между целями.
+const dndCollision: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length > 0 ? hits : rectIntersection(args);
+};
+
+// Центрируем «комок»-оверлей на курсоре (аналог snapCenterToCursor из @dnd-kit/modifiers,
+// который не установлен) — маленькая пилюля едет ровно под курсором, а не с отступом.
+const snapToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transform }) => {
+  if (draggingNodeRect && activatorEvent) {
+    const coords = getEventCoordinates(activatorEvent);
+    if (!coords) return transform;
+    return {
+      ...transform,
+      x: transform.x + coords.x - draggingNodeRect.left - draggingNodeRect.width / 2,
+      y: transform.y + coords.y - draggingNodeRect.top - draggingNodeRect.height / 2,
+    };
+  }
+  return transform;
+};
 
 // Блок делегирования на главной, две вкладки: «Для меня» — задачи, делегированные текущему
 // пользователю по всем проектам; «Другим» — ВСЕ видимые делегирования кому-то другому
@@ -473,7 +503,12 @@ export function AssignedToMeBlock({
   return (
     // Один DndContext на всю зону: и временные колонки (drag → срок), и кубики людей
     // (drag → делегирование) — общие drop-цели одного перетаскивания карточки.
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={dndCollision}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
     {/* Персональная зона, Notion-стиль: НЕ карточка-в-рамке (рамка враждует с full-bleed
         канбана). «Это моё» несут три тихих сигнала: identity-шапка (свой аватар + настоящий
         заголовок + синяя count-пилюля + подзаголовок-контракт), шёпот-тинт primary на
@@ -502,6 +537,16 @@ export function AssignedToMeBlock({
               {pendingCount > 0 && ` · ${pendingCount} ${pendingWord}`}
             </p>
           </div>
+          {/* Кубики людей пространства — ПРАВЕЕ вкладок (цель drag-делегирования). Компактные
+              аватары; при наведении перетаскиваемой задачи кубик раскрывается в «Делегировать:
+              <имя>». Ряд горизонтально скроллится на узких экранах, не тесня фильтры справа. */}
+          {view === 'kanban' && members.length > 0 && (
+            <div className="flex min-w-0 items-center gap-1 overflow-x-auto pl-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {members.map((m) => (
+                <UserCube key={m.id} member={m} dragging={activeDrag !== null} />
+              ))}
+            </div>
+          )}
         </div>
         {/* БЕЗ shrink-0 — иначе flex-wrap мёртв (контейнер держит max-content ширину и
             на 320-375px иконки-фильтры наезжают на табы); теперь кнопки переносятся. */}
@@ -541,20 +586,6 @@ export function AssignedToMeBlock({
           {view === 'list' && <GroupingMenu value={grouping} onChange={handleGroupingChange} />}
         </div>
       </div>
-
-      {/* Кубики людей пространства — цель drag-делегирования. Показываем в канбане, когда
-          есть с кем шарить. Во время перетаскивания карточки (activeDrag) кубик расширяется
-          и подсказывает «Делегировать: <имя>». Ряд горизонтально скроллится на узких экранах. */}
-      {view === 'kanban' && members.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto px-0.5 pb-0.5">
-          <span className="shrink-0 pr-0.5 text-[11px] text-muted-foreground/60">
-            {activeDrag ? 'Делегировать →' : 'Люди'}
-          </span>
-          {members.map((m) => (
-            <UserCube key={m.id} member={m} dragging={activeDrag !== null} />
-          ))}
-        </div>
-      )}
 
       {visibleTasks.length === 0 ? (
         // Пустая активная вкладка при живой соседней: тихая строка вместо пустых колонок.
@@ -686,17 +717,22 @@ export function AssignedToMeBlock({
         onConfirm={confirmInvite}
       />
     </section>
-    {/* Копия таскаемой карточки под курсором — общая для колонок и кубиков. */}
-    <DragOverlay dropAnimation={null}>
+    {/* Компактный «комок» под курсором вместо целой карточки: стартует крупнее и
+        полупрозрачно → пружиной сжимается в маленькую пилюлю с названием. Мелкий оверлей =
+        легче целиться в кубик/колонку (+ коллизии по курсору, см. dndCollision). */}
+    <DragOverlay dropAnimation={null} modifiers={[snapToCursor]}>
       {activeDrag ? (
-        <div className="w-[86vw] max-w-[22rem] rotate-1 opacity-90 sm:w-72 sm:max-w-none">
-          <AcceptedCard
-            item={activeDrag}
-            currentUserId={user?.id ?? null}
-            onOpen={() => {}}
-            onChanged={() => {}}
-          />
-        </div>
+        <motion.div
+          initial={{ scale: 1.25, opacity: 0.4 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 520, damping: 34, mass: 0.6 }}
+          className="pointer-events-none flex max-w-[15rem] cursor-grabbing items-center gap-1.5 rounded-full border border-primary/40 bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-lg ring-1 ring-primary/20"
+        >
+          <GripVertical className="size-3.5 shrink-0 text-muted-foreground/60" />
+          <span className="truncate">
+            {splitTitleBody(activeDrag.description ?? '').title || 'Задача'}
+          </span>
+        </motion.div>
       ) : null}
     </DragOverlay>
     </DndContext>
@@ -767,34 +803,40 @@ function DraggableTask({
   );
 }
 
-// Кубик участника пространства = drop-цель делегирования. Компактный (аватар + ник);
-// во время перетаскивания карточки подсвечивается как цель, а под курсором расширяется
-// в «Делегировать: <имя>».
+// Кубик участника пространства = drop-цель делегирования. По умолчанию — компактный аватар
+// (ник в тултипе). Во время перетаскивания задачи все кубики слегка подсвечиваются как цели,
+// а тот, что под курсором, ПЛАВНО раскрывается в пилюлю «Делегировать: <имя>» (запрос 1c).
 function UserCube({ member, dragging }: { member: SharedMember; dragging: boolean }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id: `user-${member.id}`, data: { type: 'user', member } });
+  const expanded = dragging && isOver;
   return (
     <div
       ref={setNodeRef}
       title={`Делегировать: ${member.displayName}`}
       className={cn(
-        'flex shrink-0 items-center gap-1 rounded-full border py-0.5 pl-0.5 pr-2 text-[11px] transition-all',
+        'flex shrink-0 items-center rounded-full border text-[11px] transition-all duration-200 ease-out',
+        expanded ? 'gap-1.5 py-0.5 pl-0.5 pr-2.5' : 'gap-0 p-0.5',
         dragging
           ? isOver
-            ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/40'
-            : 'border-primary/30 bg-primary/[0.05] text-foreground'
-          : 'border-transparent bg-muted/60 text-muted-foreground',
+            ? 'scale-105 border-primary bg-primary/10 text-primary ring-2 ring-primary/50'
+            : 'border-primary/25 bg-primary/[0.04] text-foreground'
+          : 'border-transparent bg-muted/50 text-muted-foreground hover:bg-muted',
       )}
     >
       <UserAvatar
         displayName={member.displayName}
         avatarUrl={member.avatarUrl}
-        className="size-5 text-[9px]"
+        className="size-6 shrink-0 text-[10px]"
       />
-      {isOver && dragging ? (
-        <span className="whitespace-nowrap font-medium">Делегировать: {member.displayName}</span>
-      ) : (
-        <span className="max-w-[6rem] truncate">{member.displayName}</span>
-      )}
+      {/* Имя всегда в DOM, но схлопнуто в 0 ширины — плавно раскрывается под курсором. */}
+      <span
+        className={cn(
+          'overflow-hidden whitespace-nowrap font-medium transition-all duration-200 ease-out',
+          expanded ? 'max-w-[11rem] opacity-100' : 'max-w-0 opacity-0',
+        )}
+      >
+        Делегировать: {member.displayName}
+      </span>
     </div>
   );
 }
@@ -1223,10 +1265,14 @@ function AcceptedCard({
   // Заголовок/тело как на досках проектов: 1-я строка plain, тело компактным markdown, всё в
   // line-clamp-4 — видно только название (запросы 3, 4).
   const { title, body } = splitTitleBody(item.description ?? '');
+  // Название проекта — всегда видимая пилюля в правом верхнем углу (инбокс → «Личные»).
+  const projectLabel = item.isInbox ? 'Личные' : item.projectName;
   return (
     <div
       className={cn(
-        'group relative flex cursor-pointer items-start gap-1.5 rounded-lg border border-black/[0.06] bg-card px-2 pb-6 pt-1.5 shadow-sm transition-[box-shadow,border-color,background-color] duration-150 hover:shadow-md dark:border-white/[0.08]',
+        // Равные отступы сверху/снизу (py-2) — без «пустоты» снизу; плашка параметров
+        // всплывает оверлеем поверх низа при наведении (свой bg перекрывает текст).
+        'group relative flex cursor-pointer items-start gap-1.5 rounded-lg border border-black/[0.06] bg-card px-2 py-2 shadow-sm transition-[box-shadow,border-color,background-color] duration-150 hover:shadow-md dark:border-white/[0.08]',
         isDone && 'border-success/20 bg-success/[0.06] hover:border-success/30 hover:bg-success/[0.1]',
       )}
       onClick={onOpen}
@@ -1245,7 +1291,20 @@ function AcceptedCard({
           disabled={!item.canModify}
         />
       </div>
-      <div className="min-w-0 flex-1">
+      {/* Название проекта — тихая пилюля справа-сверху, всегда видна. Заголовок обтекает её
+          слева (правый отступ pr-[30%]), поэтому она НЕ закрывает текст. */}
+      <span
+        className="pointer-events-none absolute right-1.5 top-1.5 z-10 flex max-w-[30%] items-center gap-1 truncate rounded-md bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground dark:bg-muted"
+        title={projectLabel}
+      >
+        {item.isInbox ? (
+          <InboxIcon className="size-2.5 shrink-0" />
+        ) : (
+          <FolderKanban className="size-2.5 shrink-0" />
+        )}
+        <span className="truncate">{projectLabel}</span>
+      </span>
+      <div className="min-w-0 flex-1 pr-[30%]">
         {item.description?.trim() ? (
           <div className="line-clamp-4 text-sm leading-snug">
             <TaskTitleText title={title} />

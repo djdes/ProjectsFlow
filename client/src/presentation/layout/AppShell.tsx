@@ -37,7 +37,7 @@ import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnre
 import { InstallAppPrompt } from '@/presentation/components/pwa/InstallAppPrompt';
 import { HelpWidget } from '@/presentation/components/help/HelpWidget';
 import { useSidebarWidth, SIDEBAR_COMPACT_WIDTH } from '@/presentation/hooks/useSidebarWidth';
-import { RightPanelProvider } from './rightPanelContext';
+import { RightPanelProvider, RightPanelWidthProvider } from './rightPanelContext';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
 import { SidebarCollapsedContext } from './sidebarCollapsedContext';
 import { SidebarResizingContext } from './sidebarResizingContext';
@@ -182,6 +182,7 @@ export function AppShell(): React.ReactElement {
         <AddTaskDialogProvider>
         <GlobalSearchProvider>
         <RightPanelProvider value={setRightPanelWidth}>
+        <RightPanelWidthProvider value={rightPanelWidth}>
         {isDesktop ? (
           <div
             className={cn(
@@ -322,6 +323,7 @@ export function AppShell(): React.ReactElement {
         <HelpWidget />
         {/* Висящий баннер при низком/исчерпанном лимите — снизу по центру, клик → окно usage. */}
         <UsageBanner />
+        </RightPanelWidthProvider>
         </RightPanelProvider>
         </GlobalSearchProvider>
         </AddTaskDialogProvider>
