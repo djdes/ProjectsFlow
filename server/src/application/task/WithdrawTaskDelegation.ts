@@ -9,8 +9,10 @@ type Deps = {
   readonly delegations: TaskDelegationRepository;
 };
 
-// Создатель отзывает pending-делегирование до accept'а. Status pending → withdrawn.
-// Уведомление делегату не шлём — он ещё не действовал, всё незаметно.
+// Создатель отзывает делегирование и ЗАБИРАЕТ задачу обратно себе. Работает для pending (отмена
+// до accept'а) И для accepted («reclaim» — забрать уже принятую задачу): в обоих случаях активная
+// делегация закрывается (status → withdrawn), задача возвращается к создателю. pending_invite тоже
+// можно отозвать (приглашение+делегирование ещё не принято). Терминальные статусы — 409.
 export class WithdrawTaskDelegation {
   constructor(private readonly deps: Deps) {}
 
@@ -18,8 +20,12 @@ export class WithdrawTaskDelegation {
     const existing = await this.deps.delegations.getById(delegationId);
     if (!existing) throw new DelegationNotFoundError(delegationId);
     if (existing.creatorUserId !== userId) throw new NotCreatorError();
-    if (existing.status !== 'pending') {
-      throw new DelegationWrongStateError(existing.status, 'pending');
+    if (
+      existing.status !== 'pending' &&
+      existing.status !== 'accepted' &&
+      existing.status !== 'pending_invite'
+    ) {
+      throw new DelegationWrongStateError(existing.status, 'pending|accepted|pending_invite');
     }
     await this.deps.delegations.setStatus(delegationId, 'withdrawn');
   }

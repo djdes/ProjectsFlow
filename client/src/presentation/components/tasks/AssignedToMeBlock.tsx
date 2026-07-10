@@ -426,6 +426,32 @@ export function AssignedToMeBlock({
     [taskRepository, refresh, onChanged],
   );
 
+  // Забрать задачу обратно себе (drop карточки на СВОЮ аватарку). Работает для задач, которые
+  // делегировал я (вкладка «Другим») — закрываем активную делегацию (withdraw, сервер разрешает
+  // и для accepted). Если задача уже назначена мне или делегировал не я — тихий тост.
+  const reclaimToSelf = useCallback(
+    async (item: AssignedTask): Promise<void> => {
+      if (!user) return;
+      if (item.delegation.delegateUserId === user.id) {
+        toast.info('Задача уже назначена вам');
+        return;
+      }
+      if (item.delegation.creatorUserId !== user.id) {
+        toast.error('Забрать себе можно только задачу, которую делегировали вы');
+        return;
+      }
+      try {
+        await taskDelegationRepository.withdraw(item.delegation.id);
+        toast.success('Задача возвращена вам');
+        await refresh();
+        onChanged?.();
+      } catch (e) {
+        toast.error(`Не удалось забрать: ${(e as Error).message}`);
+      }
+    },
+    [user, taskDelegationRepository, refresh, onChanged],
+  );
+
   // Подтвердил приглашение → создаём делегацию pending_invite (человек получит «Вступить/
   // Отклонить» во «Входящих»). Оптимизма нет — просто refresh (в «Другим» появится карточка
   // со статусом «ожидает вступления»).
@@ -457,9 +483,10 @@ export function AssignedToMeBlock({
       | undefined;
     const item = e.active.data.current?.item as AssignedTask | undefined;
     if (!over || !item || !data) return;
-    // Дроп на кубик человека → переназначить делегата.
+    // Дроп на кубик человека → переназначить делегата. Дроп на СВОЙ кубик → забрать себе.
     if (data.type === 'user' && data.member) {
-      void reassignTo(item, data.member);
+      if (user && data.member.id === user.id) void reclaimToSelf(item);
+      else void reassignTo(item, data.member);
       return;
     }
     if (data.type !== 'bucket') return;
@@ -538,8 +565,17 @@ export function AssignedToMeBlock({
           {/* Кубики людей пространства — ПРАВЕЕ вкладок (цель drag-делегирования). Компактные
               аватары; при наведении перетаскиваемой задачи кубик раскрывается в «Делегировать:
               <имя>». Ряд горизонтально скроллится на узких экранах, не тесня фильтры справа. */}
-          {members.length > 0 && (
+          {(user || members.length > 0) && (
             <div className="flex min-w-0 items-center gap-1 overflow-x-auto pl-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {/* «Мой» кубик — drop сюда забирает задачу обратно себе (см. reclaimToSelf). */}
+              {user && (
+                <UserCube
+                  key="__me"
+                  member={{ id: user.id, displayName: user.displayName, email: '', avatarUrl: user.avatarUrl }}
+                  dragging={activeDrag !== null}
+                  isSelf
+                />
+              )}
               {members.map((m) => (
                 <UserCube key={m.id} member={m} dragging={activeDrag !== null} />
               ))}
@@ -815,8 +851,18 @@ function DraggableTask({
 // понятно, кто это); при наведении (не во время drag) ава раскрывается в карточку «ава + имя»
 // (UserAvatarHover). Во время перетаскивания задачи кубики подсвечиваются как цели, а тот, что
 // под курсором, ПЛАВНО выделяется (scale + ring) и подписывается «Делегировать».
-function UserCube({ member, dragging }: { member: SharedMember; dragging: boolean }): React.ReactElement {
+function UserCube({
+  member,
+  dragging,
+  isSelf = false,
+}: {
+  member: SharedMember;
+  dragging: boolean;
+  // «Мой» кубик — drop забирает задачу себе, а не делегирует (подписи/акцент отличаются).
+  isSelf?: boolean;
+}): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id: `user-${member.id}`, data: { type: 'user', member } });
+  const overLabel = isSelf ? 'Забрать себе' : 'Делегировать';
   return (
     <div
       ref={setNodeRef}
@@ -840,12 +886,16 @@ function UserCube({ member, dragging }: { member: SharedMember; dragging: boolea
         <UserAvatarHover
           displayName={member.displayName}
           avatarUrl={member.avatarUrl}
-          subtitle="участник пространства · перетащите сюда задачу, чтобы делегировать"
+          subtitle={
+            isSelf
+              ? 'перетащите сюда задачу, чтобы забрать её себе'
+              : 'участник пространства · перетащите сюда задачу, чтобы делегировать'
+          }
           triggerClassName="size-6 text-[10px]"
         />
       )}
       <span className="max-w-[7rem] truncate font-medium">
-        {dragging && isOver ? 'Делегировать' : member.displayName}
+        {dragging && isOver ? overLabel : isSelf ? 'Я' : member.displayName}
       </span>
     </div>
   );
