@@ -27,8 +27,10 @@ type DelegationDto = {
   taskId: string;
   delegateUserId: string;
   delegateDisplayName: string;
+  delegateAvatarUrl: string | null;
   creatorUserId: string;
   creatorDisplayName: string;
+  creatorAvatarUrl: string | null;
   status: string;
   createdAt: string;
   respondedAt: string | null;
@@ -40,8 +42,10 @@ function toDto(d: TaskDelegation): DelegationDto {
     taskId: d.taskId,
     delegateUserId: d.delegateUserId,
     delegateDisplayName: d.delegateDisplayName,
+    delegateAvatarUrl: d.delegateAvatarUrl ?? null,
     creatorUserId: d.creatorUserId,
     creatorDisplayName: d.creatorDisplayName,
+    creatorAvatarUrl: d.creatorAvatarUrl ?? null,
     status: d.status,
     createdAt: d.createdAt.toISOString(),
     respondedAt: d.respondedAt ? d.respondedAt.toISOString() : null,

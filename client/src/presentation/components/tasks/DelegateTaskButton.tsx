@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, Check, Loader2 } from 'lucide-react';
+import { ChevronDown, Check, Loader2, ArrowRight } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
@@ -88,15 +88,27 @@ export function DelegateTaskButton({
   const isSelfAssigned = !delegatedTo;
   const meName = user?.displayName ?? 'Я';
   const meAvatar = user?.avatarUrl ?? null;
+  // Создатель (неизменный): из делегации, либо — если делегации нет — задача «моя», отдельного
+  // создателя не показываем (single-ава), чтобы не приписать чужую задачу себе.
+  const creator = task.delegation
+    ? { name: task.delegation.creatorDisplayName, avatarUrl: task.delegation.creatorAvatarUrl ?? null }
+    : null;
+  const assignee = delegatedTo ?? { name: meName, avatarUrl: meAvatar };
 
   const inPropertyRow = (className ?? '').includes('justify-start');
 
-  // Не-создатель — только чтение текущего ответственного.
+  // Не-создатель — только чтение: создатель → ответственный (стрелка, если делегировано).
   if (!isCreator) {
     return (
       <span className={cn('inline-flex min-h-7 items-center gap-1.5 text-sm text-foreground', className)}>
-        <MiniAvatar name={delegatedTo?.name ?? meName} avatarUrl={delegatedTo?.avatarUrl ?? meAvatar} />
-        {delegatedTo?.name ?? meName}
+        {creator && (
+          <>
+            <MiniAvatar name={creator.name} avatarUrl={creator.avatarUrl} />
+            <ArrowRight className="size-3 shrink-0 text-muted-foreground/60" />
+          </>
+        )}
+        <MiniAvatar name={assignee.name} avatarUrl={assignee.avatarUrl} />
+        <span className="min-w-0 truncate">{assignee.name}</span>
       </span>
     );
   }
@@ -130,9 +142,6 @@ export function DelegateTaskButton({
     }
   };
 
-  const currentName = delegatedTo?.name ?? meName;
-  const currentAvatar = delegatedTo?.avatarUrl ?? meAvatar;
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -145,14 +154,23 @@ export function DelegateTaskButton({
             inPropertyRow ? 'text-foreground hover:text-foreground' : META_CHIP_CLASS,
             className,
           )}
-          title="Ответственный за задачу"
+          title="Ответственный за задачу (создатель → ответственный). Нажмите, чтобы изменить."
         >
           {submitting ? (
             <Loader2 className="size-3.5 shrink-0 animate-spin" />
           ) : (
-            <MiniAvatar name={currentName} avatarUrl={currentAvatar} />
+            <>
+              {/* Создатель (неизменный) → стрелка → ответственный (меняется по клику). */}
+              {creator && (
+                <>
+                  <MiniAvatar name={creator.name} avatarUrl={creator.avatarUrl} />
+                  <ArrowRight className="size-3 shrink-0 text-muted-foreground/60" />
+                </>
+              )}
+              <MiniAvatar name={assignee.name} avatarUrl={assignee.avatarUrl} />
+            </>
           )}
-          <span className="min-w-0 truncate">{currentName}</span>
+          <span className="min-w-0 truncate">{assignee.name}</span>
           <ChevronDown className="size-3 shrink-0 opacity-60" />
         </Button>
       </DropdownMenuTrigger>

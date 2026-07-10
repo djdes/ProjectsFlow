@@ -120,8 +120,10 @@ type TaskDelegationDto = {
   taskId: string;
   delegateUserId: string;
   delegateDisplayName: string;
+  delegateAvatarUrl: string | null;
   creatorUserId: string;
   creatorDisplayName: string;
+  creatorAvatarUrl: string | null;
   status: string;
   createdAt: string;
   respondedAt: string | null;
@@ -160,8 +162,10 @@ export function toDto(t: Task | TaskWithCounts): TaskDto {
           taskId: t.delegation.taskId,
           delegateUserId: t.delegation.delegateUserId,
           delegateDisplayName: t.delegation.delegateDisplayName,
+          delegateAvatarUrl: t.delegation.delegateAvatarUrl ?? null,
           creatorUserId: t.delegation.creatorUserId,
           creatorDisplayName: t.delegation.creatorDisplayName,
+          creatorAvatarUrl: t.delegation.creatorAvatarUrl ?? null,
           status: t.delegation.status,
           createdAt: t.delegation.createdAt.toISOString(),
           respondedAt: t.delegation.respondedAt

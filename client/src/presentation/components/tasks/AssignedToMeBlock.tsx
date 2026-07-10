@@ -157,8 +157,7 @@ export function AssignedToMeBlock({
   bleedNegClass = '',
   bleedPadClass = '',
 }: Props): React.ReactElement | null {
-  const { taskDelegationRepository, taskRepository, userRepository, projectRepository } =
-    useContainer();
+  const { taskDelegationRepository, taskRepository, projectRepository } = useContainer();
   const { user } = useCurrentUser();
   // refresh списка проектов: при accept сервер помечает проект задачи favorite'ом — чтобы
   // секция «Избранное» в сайдбаре сразу его подхватила, перезагружаем список после принятия.
@@ -205,13 +204,12 @@ export function AssignedToMeBlock({
     Promise.all([
       taskDelegationRepository.listAssignedToMe(),
       taskDelegationRepository.listDelegatedToOthers(),
-      userRepository.getUiPrefs(),
     ])
-      .then(([mine, byMe, prefs]) => {
+      .then(([mine, byMe]) => {
         if (cancelled) return;
         setTasks(mine);
         setByMeTasks(byMe);
-        if (prefs.inboxAssignedGrouping) setGrouping(prefs.inboxAssignedGrouping);
+        // Сортировка НЕ грузится из prefs — каждый заход стартует с дефолта (дедлайн). Точка 4.
         // Стартовая вкладка: «Для меня» пуста, а «Другим» — нет → открываем «Другим»,
         // чтобы блок не встречал пустым состоянием при живом контенте рядом. Решаем по
         // видимым (с учётом hide-done) спискам — тем же, что реально отрисуются.
@@ -232,14 +230,11 @@ export function AssignedToMeBlock({
       cancelled = true;
       window.removeEventListener('focus', onFocus);
     };
-  }, [taskDelegationRepository, userRepository, refresh]);
+  }, [taskDelegationRepository, refresh]);
 
   const handleGroupingChange = (next: AssignedGrouping): void => {
-    // Оптимистично: сортировка применяется мгновенно, сохранение летит в фоне.
+    // Сортировка — session-only (не персистим): каждый заход стартует с дефолта (дедлайн, точка 4).
     setGrouping(next);
-    void userRepository.setUiPrefs({ inboxAssignedGrouping: next }).catch((e: unknown) => {
-      toast.error(`Не удалось сохранить группировку: ${(e as Error).message}`);
-    });
   };
 
   const resolve = async (delegationId: string, action: 'accept' | 'decline'): Promise<void> => {
@@ -711,6 +706,7 @@ export function AssignedToMeBlock({
                         onOpen={() => setDrawerTask(item)}
                         onChanged={handleToggled}
                         showCreatedAt={grouping === 'created'}
+                        hideProjectLabel={grouping === 'project'}
                       />
                     )}
                   </DraggableTask>
@@ -1235,6 +1231,7 @@ function AcceptedCard({
   onOpen,
   onChanged,
   showCreatedAt = false,
+  hideProjectLabel = false,
 }: {
   item: AssignedTask;
   currentUserId: string | null;
@@ -1242,6 +1239,8 @@ function AcceptedCard({
   onChanged: () => void;
   // При сортировке «по дате создания» показываем дату создания в мета-строке (по наведению).
   showCreatedAt?: boolean;
+  // При сортировке «по проекту» колонка уже названа проектом — ярлык на карточке не нужен.
+  hideProjectLabel?: boolean;
 }): React.ReactElement {
   const isDone = item.status === 'done';
   // Заголовок/тело как на досках проектов: 1-я строка plain, тело компактным markdown, всё в
@@ -1257,15 +1256,17 @@ function AcceptedCard({
       )}
       onClick={onOpen}
     >
-      {/* Название проекта — полоса-заголовок по центру, во всю ширину карточки (не тесним текст). */}
-      <div className="flex items-center justify-center gap-1 border-b border-black/[0.05] bg-muted/40 px-2 py-1 text-[10px] font-medium text-muted-foreground dark:border-white/[0.06] dark:bg-white/[0.02]">
-        {item.isInbox ? (
-          <InboxIcon className="size-2.5 shrink-0" />
-        ) : (
-          <FolderKanban className="size-2.5 shrink-0" />
-        )}
-        <span className="truncate">{projectLabel}</span>
-      </div>
+      {/* Название проекта — полоса-заголовок. Скрываем при сортировке по проекту (колонка = проект). */}
+      {!hideProjectLabel && (
+        <div className="flex items-center justify-center gap-1 border-b border-black/[0.05] bg-muted/40 px-2 py-1 text-[10px] font-medium text-muted-foreground dark:border-white/[0.06] dark:bg-white/[0.02]">
+          {item.isInbox ? (
+            <InboxIcon className="size-2.5 shrink-0" />
+          ) : (
+            <FolderKanban className="size-2.5 shrink-0" />
+          )}
+          <span className="truncate">{projectLabel}</span>
+        </div>
+      )}
       <div className="relative flex items-start gap-1.5 px-2 py-2">
         {/* Чекбокс — hover-оверлей слева-сверху (как на досках): в покое скрыт, текст на всю
             ширину; при наведении наслаивается на начало текста. На тач всегда виден. */}

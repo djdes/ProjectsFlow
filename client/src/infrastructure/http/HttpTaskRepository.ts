@@ -25,8 +25,10 @@ type DelegationDto = {
   taskId: string;
   delegateUserId: string;
   delegateDisplayName: string;
+  delegateAvatarUrl?: string | null;
   creatorUserId: string;
   creatorDisplayName: string;
+  creatorAvatarUrl?: string | null;
   status: import('@/domain/task/TaskDelegation').TaskDelegationStatus;
   createdAt: string;
   respondedAt: string | null;
