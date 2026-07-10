@@ -944,12 +944,15 @@ export const taskDelegations = mysqlTable(
     // Кто делегировал. NULL только у legacy/осиротевших строк (db/054 бэкфилл +
     // db/056 FK ON DELETE SET NULL). НЕ .notNull() — иначе ломаются чтения legacy-NULL.
     delegatorUserId: char('delegator_user_id', { length: 36 }),
+    // Кому вернуть ответственность, если приглашённый отклонит вступление (db/101).
+    revertToUserId: char('revert_to_user_id', { length: 36 }),
     status: mysqlEnum('status', [
       'pending',
       'accepted',
       'declined',
       'withdrawn',
       'archived',
+      'pending_invite',
     ])
       .notNull()
       .default('pending'),

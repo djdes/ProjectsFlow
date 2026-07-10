@@ -41,7 +41,11 @@ export class ListTasksAssignedToMe {
     const rows = await this.deps.delegations.listAssignedTo(userId);
     // Отбрасываем строки именованных проектов, где делегата уже убрали из проекта
     // (delegateRole === null && !isInbox). Inbox-строки оставляем (там role всегда null).
-    const visible = rows.filter((r) => r.isInbox || r.delegateRole !== null);
+    // pending_invite (приглашение+делегирование) оставляем всегда — делегат ещё НЕ участник
+    // проекта (role null — это норма), он должен увидеть карточку и принять/отклонить.
+    const visible = rows.filter(
+      (r) => r.isInbox || r.delegateRole !== null || r.delegation.status === 'pending_invite',
+    );
 
     const ids = visible.map((r) => r.taskId);
     const [taskList, commitCounts, attachmentCounts, commentCounts] = await Promise.all([

@@ -150,6 +150,16 @@ export interface TaskRepository {
   // Для inbox delegateUserId — из shared-members caller'а; для реального проекта — участник
   // с ролью editor+. Задача должна быть без активной делегации (иначе AlreadyDelegatedError).
   delegate(projectId: string, taskId: string, delegateUserId: string): Promise<Task>;
+  // Переназначить ответственного за уже делегированную задачу (drag на кубик человека
+  // во «Входящих»). Прежняя активная делегация архивируется, создаётся новая pending.
+  // Область «Максимально»: может делегатор ИЛИ текущий делегат («передать дальше»).
+  // Новый делегат не в проекте → сервер вернёт delegate_not_project_member /
+  // delegate_not_in_shared_members (клиент открывает флоу приглашения).
+  reassign(projectId: string, taskId: string, delegateUserId: string): Promise<Task>;
+  // Пригласить человека в проект И делегировать ему задачу (drag на кубик не-участника,
+  // после подтверждения). Создаёт делегацию pending_invite; приглашённый принимает
+  // (вступает + берёт задачу) или отклоняет (ответственный откатывается).
+  inviteDelegate(projectId: string, taskId: string, delegateUserId: string): Promise<Task>;
   // Экспорт выбранных задач в дайджест: вернуть текст (буфер) и/или отправить
   // на email / в Telegram. Сервер рендерит из авторитетных данных.
   digest(projectId: string, input: TaskDigestInput): Promise<TaskDigestResult>;

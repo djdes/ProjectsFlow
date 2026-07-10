@@ -17,6 +17,7 @@ function pendingDelegation() {
     status: 'pending' as const,
     createdAt: new Date(0),
     respondedAt: null,
+    revertToUserId: null,
   };
 }
 

@@ -20,22 +20,30 @@ function todayIso(): string {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// Русская плюрализация «день/дня/дней» по числу.
+function ruDays(n: number): string {
+  const a = Math.abs(n) % 100;
+  const b = a % 10;
+  if (a > 10 && a < 20) return 'дней';
+  if (b === 1) return 'день';
+  if (b >= 2 && b <= 4) return 'дня';
+  return 'дней';
+}
+
+// Срок ВСЕГДА относительно (по всему сайту): сегодня / завтра / вчера / через N дней / N дней назад.
+// Абсолютную дату больше не показываем — «через 20 дней» вместо «31 июл».
 function formatDeadline(deadline: string): string {
   // Парсим 'YYYY-MM-DD' как локальную дату (без UTC-сдвига): new Date(y, m-1, d).
   const [y, m, d] = deadline.split('-').map(Number);
   if (!y || !m || !d) return deadline;
   const date = new Date(y, m - 1, d);
-
-  const today = todayIso();
-  if (deadline === today) return 'сегодня';
-  // diff в днях в локальном TZ — округляем через iso-сравнение, не через timestamp
-  // (DST не сдвинет).
+  // diff в днях в локальном TZ (полночь-к-полночи) — без дрейфа через timestamp/DST.
   const diff = Math.round((date.getTime() - new Date().setHours(0, 0, 0, 0)) / DAY_MS);
+  if (diff === 0) return 'сегодня';
   if (diff === 1) return 'завтра';
   if (diff === -1) return 'вчера';
-  if (diff > 1 && diff <= 7) return `через ${diff} дн`;
-  if (diff < -1 && diff >= -7) return `${Math.abs(diff)} дн назад`;
-  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  if (diff > 0) return `через ${diff} ${ruDays(diff)}`;
+  return `${-diff} ${ruDays(diff)} назад`;
 }
 
 // Бейдж со сроком: иконка часов + дата (relative для близких / Intl для дальних).

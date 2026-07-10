@@ -37,26 +37,41 @@ export function groupAssignedTasks(
   }
 }
 
-// pending (ожидают «Принять») всегда поднимаются над принятыми — требуют действия.
+// pending / pending_invite (ожидают «Принять»/«Вступить») всегда поднимаются над
+// принятыми — требуют действия.
 function pendingScore(t: AssignedTask): number {
-  return t.delegation.status === 'pending' ? 1 : 0;
+  return t.delegation.status === 'pending' || t.delegation.status === 'pending_invite' ? 1 : 0;
 }
 
-function startOfDay(d: Date): Date {
+export function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-function addDays(d: Date, n: number): Date {
+export function addDays(d: Date, n: number): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 }
 
 // Локальная дата YYYY-MM-DD — для лексикографического (= хронологического) сравнения
 // со строковыми task.deadline.
-function ymd(d: Date): string {
+export function ymd(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+// Конец текущей недели (воскресенье) как YYYY-MM-DD. Если сегодня уже вс — следующее вс,
+// чтобы дата осталась в будущем (для перетаскивания в колонку «Будущее»).
+export function endOfWeekYmd(now: Date): string {
+  const sod = startOfDay(now);
+  const dow = sod.getDay(); // 0=вс … 6=сб
+  const daysToSunday = dow === 0 ? 7 : 7 - dow;
+  return ymd(addDays(sod, daysToSunday));
+}
+
+// Последний день текущего месяца как YYYY-MM-DD.
+export function endOfMonthYmd(now: Date): string {
+  return ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 }
 
 function groupByProject(
