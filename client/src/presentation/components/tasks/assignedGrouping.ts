@@ -37,9 +37,10 @@ export function groupAssignedTasks(
   }
 }
 
-// pending (ожидают «Принять») всегда поднимаются над принятыми — требуют действия.
+// pending / pending_invite (ожидают «Принять»/«Вступить») всегда поднимаются над
+// принятыми — требуют действия.
 function pendingScore(t: AssignedTask): number {
-  return t.delegation.status === 'pending' ? 1 : 0;
+  return t.delegation.status === 'pending' || t.delegation.status === 'pending_invite' ? 1 : 0;
 }
 
 export function startOfDay(d: Date): Date {

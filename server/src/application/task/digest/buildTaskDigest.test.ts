@@ -138,7 +138,7 @@ test('buildDigestModel: inbox links + assignee + attachments', () => {
       delegation: {
         id: 'd1', taskId: 't1', delegateUserId: 'u2', delegateDisplayName: 'Анна',
         creatorUserId: 'u1', creatorDisplayName: 'Я', status: 'pending',
-        createdAt: new Date('2026-06-01T00:00:00Z'), respondedAt: null,
+        createdAt: new Date('2026-06-01T00:00:00Z'), respondedAt: null, revertToUserId: null,
       },
     }),
   ];
@@ -213,7 +213,7 @@ test('renderDigestTelegram: исполнитель в мете; без деле�
       id: 't1', description: 'Задача', priority: 1,
       delegation: {
         id: 'd', taskId: 't1', delegateUserId: 'u', delegateDisplayName: 'Борис',
-        creatorUserId: 'c', creatorDisplayName: 'Я', status: 'pending', createdAt: new Date(), respondedAt: null,
+        creatorUserId: 'c', creatorDisplayName: 'Я', status: 'pending', createdAt: new Date(), respondedAt: null, revertToUserId: null,
       },
     }),
     task({ id: 't2', description: 'Ничья', priority: 1 }),

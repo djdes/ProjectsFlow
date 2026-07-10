@@ -21,8 +21,9 @@ type Deps = {
   readonly idGen: () => string;
 };
 
-// Делегат принимает делегирование. Status pending → accepted.
-// Уведомляем создателя in-app (без email — статус виден в UI сразу).
+// Делегат принимает делегирование. Status pending → accepted, ЛИБО pending_invite →
+// accepted (тогда ещё и вступает в проект: приглашение+делегирование одним действием,
+// db/101). Уведомляем создателя in-app (без email — статус виден в UI сразу).
 export class AcceptTaskDelegation {
   constructor(private readonly deps: Deps) {}
 
@@ -30,9 +31,11 @@ export class AcceptTaskDelegation {
     const existing = await this.deps.delegations.getById(delegationId);
     if (!existing) throw new DelegationNotFoundError(delegationId);
     if (existing.delegateUserId !== userId) throw new NotDelegateError();
-    if (existing.status !== 'pending') {
+    // Принять можно из pending (обычная делегация) или pending_invite (приглашение+задача).
+    if (existing.status !== 'pending' && existing.status !== 'pending_invite') {
       throw new DelegationWrongStateError(existing.status, 'pending');
     }
+    const wasInvite = existing.status === 'pending_invite';
 
     const updated = await this.deps.delegations.setStatus(delegationId, 'accepted');
     if (!updated) throw new DelegationNotFoundError(delegationId);
@@ -46,11 +49,25 @@ export class AcceptTaskDelegation {
       if (task) {
         const project = await this.deps.projects.getById(task.projectId);
         if (project && !project.isInbox) {
+          // Приглашение (pending_invite): делегат ещё НЕ участник — вступаем в проект
+          // (editor) с копией дефолтных notification-prefs, затем favorite. Idempotent.
+          if (wasInvite) {
+            const membership = await this.deps.members.findForProject(project.id, userId);
+            if (!membership) {
+              await this.deps.members.add({ projectId: project.id, userId, role: 'editor' });
+              try {
+                const prefs = await this.deps.users.getDefaultNotificationPrefs(userId);
+                if (prefs) await this.deps.members.setNotificationPrefs(project.id, userId, prefs);
+              } catch (e: unknown) {
+                console.error('[delegation:accept] copy notif prefs failed:', e);
+              }
+            }
+          }
           await this.deps.members.setFavorite(project.id, userId, true);
         }
       }
     } catch (err: unknown) {
-      console.error('[delegation:accept] auto-favorite failed:', err);
+      console.error('[delegation:accept] join/auto-favorite failed:', err);
     }
 
     void this.notifyResolved(updated).catch((err: unknown) => {

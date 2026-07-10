@@ -156,6 +156,10 @@ export interface TaskRepository {
   // Новый делегат не в проекте → сервер вернёт delegate_not_project_member /
   // delegate_not_in_shared_members (клиент открывает флоу приглашения).
   reassign(projectId: string, taskId: string, delegateUserId: string): Promise<Task>;
+  // Пригласить человека в проект И делегировать ему задачу (drag на кубик не-участника,
+  // после подтверждения). Создаёт делегацию pending_invite; приглашённый принимает
+  // (вступает + берёт задачу) или отклоняет (ответственный откатывается).
+  inviteDelegate(projectId: string, taskId: string, delegateUserId: string): Promise<Task>;
   // Экспорт выбранных задач в дайджест: вернуть текст (буфер) и/или отправить
   // на email / в Telegram. Сервер рендерит из авторитетных данных.
   digest(projectId: string, input: TaskDigestInput): Promise<TaskDigestResult>;

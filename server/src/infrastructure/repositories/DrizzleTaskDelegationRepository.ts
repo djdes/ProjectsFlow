@@ -15,7 +15,9 @@ import type {
 import type { ProjectRole } from '../../domain/project/ProjectMembership.js';
 
 const TASK_EXCERPT_LEN = 120;
-const ACTIVE_STATUSES: readonly TaskDelegationStatus[] = ['pending', 'accepted'];
+// pending_invite тоже занимает активный слот задачи (ждёт вступления приглашённого) —
+// зеркало ACTIVE_DELEGATION_STATUSES в домене.
+const ACTIVE_STATUSES: readonly TaskDelegationStatus[] = ['pending', 'accepted', 'pending_invite'];
 
 // Сырой ряд join'а. Делегатор = delegator_user_id (persisted, db/054; для legacy-строк
 // backfill = owner проекта), фолбэк-id — projects.owner_id. Имя делегатора берём
@@ -27,6 +29,7 @@ type DelegationRowRaw = {
   delegateUserId: string;
   delegateDisplayName: string;
   delegatorUserId: string | null;
+  revertToUserId: string | null;
   ownerId: string;
   delegatorDisplayName: string | null;
   ownerDisplayName: string;
@@ -46,6 +49,7 @@ function toDomain(r: DelegationRowRaw): TaskDelegation {
     status: r.status,
     createdAt: r.createdAt,
     respondedAt: r.respondedAt,
+    revertToUserId: r.revertToUserId,
   };
 }
 
@@ -68,7 +72,8 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
       taskId: input.taskId,
       delegateUserId: input.delegateUserId,
       delegatorUserId: input.delegatorUserId,
-      status: 'pending',
+      revertToUserId: input.revertToUserId ?? null,
+      status: input.status ?? 'pending',
     });
     const created = await this.getById(input.id);
     if (!created) {
@@ -117,6 +122,7 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
         delegateUserId: taskDelegations.delegateUserId,
         delegateDisplayName: delegateUser.displayName,
         delegatorUserId: taskDelegations.delegatorUserId,
+        revertToUserId: taskDelegations.revertToUserId,
         ownerId: projects.ownerId,
         delegatorDisplayName: delegatorNameSql,
         ownerDisplayName: ownerUser.displayName,
@@ -173,6 +179,7 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
         delegateUserId: taskDelegations.delegateUserId,
         delegateDisplayName: delegateUser.displayName,
         delegatorUserId: taskDelegations.delegatorUserId,
+        revertToUserId: taskDelegations.revertToUserId,
         ownerId: projects.ownerId,
         delegatorDisplayName: delegatorNameSql,
         ownerDisplayName: ownerUser.displayName,
@@ -201,6 +208,7 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
         delegateUserId: taskDelegations.delegateUserId,
         delegateDisplayName: delegateUser.displayName,
         delegatorUserId: taskDelegations.delegatorUserId,
+        revertToUserId: taskDelegations.revertToUserId,
         ownerId: projects.ownerId,
         delegatorDisplayName: delegatorNameSql,
         ownerDisplayName: ownerUser.displayName,
@@ -306,6 +314,7 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
         delegateUserId: taskDelegations.delegateUserId,
         delegateDisplayName: delegateUser.displayName,
         delegatorUserId: taskDelegations.delegatorUserId,
+        revertToUserId: taskDelegations.revertToUserId,
         ownerId: projects.ownerId,
         delegatorDisplayName: delegatorNameSql,
         ownerDisplayName: ownerUser.displayName,

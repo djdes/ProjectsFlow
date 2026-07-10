@@ -1,4 +1,4 @@
-import { Hourglass, Send, UserCheck } from 'lucide-react';
+import { Hourglass, Send, UserCheck, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TaskDelegation } from '@/domain/task/TaskDelegation';
 
@@ -15,8 +15,26 @@ type Props = {
 // Только активные статусы (pending/accepted) — terminal'ы из этого badge'а не рисуются
 // (карточка уже без delegation в этом случае, бэк присылает null).
 export function DelegationBadge({ delegation, currentUserId }: Props): React.ReactElement | null {
-  if (delegation.status !== 'pending' && delegation.status !== 'accepted') {
+  if (
+    delegation.status !== 'pending' &&
+    delegation.status !== 'accepted' &&
+    delegation.status !== 'pending_invite'
+  ) {
     return null;
+  }
+  // pending_invite — приглашение в проект + делегирование ждёт ответа. Отдельный
+  // фиолетовый бейдж «ожидает вступления» (со стороны наблюдателя/делегатора).
+  if (delegation.status === 'pending_invite') {
+    return (
+      <span
+        className="inline-flex max-w-[220px] items-center gap-1 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-medium text-violet-700 dark:bg-violet-400/15 dark:text-violet-400"
+        title={`${delegation.delegateDisplayName} приглашён(а) в проект — ожидает вступления`}
+      >
+        <UserPlus className="size-2.5 shrink-0" />
+        <span className="min-w-0 truncate">{delegation.delegateDisplayName}</span>
+        <span className="shrink-0 opacity-70">· ожидает вступления</span>
+      </span>
+    );
   }
   const isCreator = delegation.creatorUserId === currentUserId;
   const isDelegate = delegation.delegateUserId === currentUserId;

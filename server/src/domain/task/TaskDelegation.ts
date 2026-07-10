@@ -14,7 +14,10 @@ export type TaskDelegationStatus =
   | 'accepted'
   | 'declined'
   | 'withdrawn'
-  | 'archived';
+  | 'archived'
+  // Приглашение+делегирование не-участнику проекта (db/101): человек ещё не в проекте,
+  // задача ждёт его accept (вступит + примет) или decline (откат ответственного).
+  | 'pending_invite';
 
 export const TASK_DELEGATION_STATUSES: readonly TaskDelegationStatus[] = [
   'pending',
@@ -22,13 +25,16 @@ export const TASK_DELEGATION_STATUSES: readonly TaskDelegationStatus[] = [
   'declined',
   'withdrawn',
   'archived',
+  'pending_invite',
 ];
 
 // Активные = занимают слот «одна делегация на задачу». pending — ждёт ответа,
-// accepted — делегат принял и работает. Остальные — терминальные.
+// accepted — делегат принял и работает, pending_invite — ждёт вступления в проект.
+// Остальные — терминальные.
 export const ACTIVE_DELEGATION_STATUSES: readonly TaskDelegationStatus[] = [
   'pending',
   'accepted',
+  'pending_invite',
 ];
 
 export type TaskDelegation = {
@@ -41,4 +47,6 @@ export type TaskDelegation = {
   readonly status: TaskDelegationStatus;
   readonly createdAt: Date;
   readonly respondedAt: Date | null;
+  // Кому вернуть ответственность при отказе от вступления (только для pending_invite).
+  readonly revertToUserId: string | null;
 };

@@ -143,6 +143,7 @@ import { ListTasksDelegatedToOthers } from './application/task/ListTasksDelegate
 import { MoveTaskToProject } from './application/task/MoveTaskToProject.js';
 import { DelegateExistingTask } from './application/task/DelegateExistingTask.js';
 import { ReassignTaskDelegation } from './application/task/ReassignTaskDelegation.js';
+import { InviteAndDelegateTask } from './application/task/InviteAndDelegateTask.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
 import { DrizzleAiPromptJobRepository } from './infrastructure/repositories/DrizzleAiPromptJobRepository.js';
@@ -750,6 +751,7 @@ const telegramComposer = new TelegramComposerService({
   decline: new DeclineTaskDelegation({
     delegations: taskDelegationRepo,
     tasks: taskRepo,
+    projects: projectRepo,
     users: userRepo,
     notifications: notificationRepo,
     email: emailSender,
@@ -1936,6 +1938,7 @@ const { app, devProxyUpgrade } = createApp({
     decline: new DeclineTaskDelegation({
       delegations: taskDelegationRepo,
       tasks: taskRepo,
+      projects: projectRepo,
       users: userRepo,
       notifications: notificationRepo,
       email: emailSender,
@@ -1981,6 +1984,17 @@ const { app, devProxyUpgrade } = createApp({
       appUrl: appBaseUrl,
     }),
     reassignDelegation: new ReassignTaskDelegation({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      delegations: taskDelegationRepo,
+      users: userRepo,
+      notifications: notificationRepo,
+      email: emailSender,
+      idGen: idGenerator,
+      appUrl: appBaseUrl,
+    }),
+    inviteAndDelegate: new InviteAndDelegateTask({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,

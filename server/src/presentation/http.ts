@@ -127,6 +127,7 @@ import type { ListTasksDelegatedToOthers } from '../application/task/ListTasksDe
 import type { MoveTaskToProject } from '../application/task/MoveTaskToProject.js';
 import type { DelegateExistingTask } from '../application/task/DelegateExistingTask.js';
 import type { ReassignTaskDelegation } from '../application/task/ReassignTaskDelegation.js';
+import type { InviteAndDelegateTask } from '../application/task/InviteAndDelegateTask.js';
 import type { ListNotifications } from '../application/notifications/ListNotifications.js';
 import type { CountUnreadNotifications } from '../application/notifications/CountUnreadNotifications.js';
 import type { MarkNotificationRead } from '../application/notifications/MarkNotificationRead.js';
@@ -514,6 +515,7 @@ type AppDeps = {
     readonly assignToProject: MoveTaskToProject;
     readonly delegateExisting: DelegateExistingTask;
     readonly reassignDelegation: ReassignTaskDelegation;
+    readonly inviteAndDelegate: InviteAndDelegateTask;
   };
   readonly agent: {
     readonly createAgentToken: CreateAgentToken;
@@ -716,6 +718,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       assignToProject: deps.delegations.assignToProject,
       delegateExisting: deps.delegations.delegateExisting,
       reassignDelegation: deps.delegations.reassignDelegation,
+      inviteAndDelegate: deps.delegations.inviteAndDelegate,
     }),
   );
   // LIVE-вкладка (cookie requireAuth + requireProjectAccess внутри): read + SSE /stream.

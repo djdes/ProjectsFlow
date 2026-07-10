@@ -23,6 +23,7 @@ import type { RevokeRalphCancel } from '../../application/task/RevokeRalphCancel
 import type { MoveTaskToProject } from '../../application/task/MoveTaskToProject.js';
 import type { DelegateExistingTask } from '../../application/task/DelegateExistingTask.js';
 import type { ReassignTaskDelegation } from '../../application/task/ReassignTaskDelegation.js';
+import type { InviteAndDelegateTask } from '../../application/task/InviteAndDelegateTask.js';
 import type { ExportTasksDigest } from '../../application/task/ExportTasksDigest.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
@@ -73,6 +74,7 @@ type Deps = {
   readonly assignToProject: MoveTaskToProject;
   readonly delegateExisting: DelegateExistingTask;
   readonly reassignDelegation: ReassignTaskDelegation;
+  readonly inviteAndDelegate: InviteAndDelegateTask;
   // Экспорт выбранных задач в дайджест (буфер/email/Telegram).
   readonly exportDigest: ExportTasksDigest;
   readonly maxAttachmentBytes: number;
@@ -514,6 +516,33 @@ export function tasksRouter(deps: Deps): Router {
         const taskId = req.params['taskId'] as string;
         const body = delegateTaskSchema.parse(req.body);
         const delegation = await deps.reassignDelegation.execute(
+          taskId,
+          body.delegateUserId,
+          req.user!.id,
+        );
+        const task = await deps.tasks.getById(taskId);
+        if (!task) {
+          res.status(404).json({ error: 'task_not_found' });
+          return;
+        }
+        deps.notifyTaskChanged(req.params['projectId'] as string);
+        res.json({ task: toDto({ ...task, delegation }) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // POST /:taskId/invite-delegate — пригласить человека в проект И делегировать задачу
+  // (drop на кубик не-участника → подтверждение). Создаёт делегацию pending_invite;
+  // приглашённый принимает/отклоняет во «Входящих». См. InviteAndDelegateTask.
+  router.post(
+    '/:taskId/invite-delegate',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const taskId = req.params['taskId'] as string;
+        const body = delegateTaskSchema.parse(req.body);
+        const delegation = await deps.inviteAndDelegate.execute(
           taskId,
           body.delegateUserId,
           req.user!.id,

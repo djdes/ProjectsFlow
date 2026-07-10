@@ -9,7 +9,9 @@ export type TaskDelegationStatus =
   | 'accepted'
   | 'declined'
   | 'withdrawn'
-  | 'archived';
+  | 'archived'
+  // Приглашение+делегирование не-участнику проекта (db/101): ждёт вступления делегата.
+  | 'pending_invite';
 
 export const TASK_DELEGATION_STATUSES: readonly TaskDelegationStatus[] = [
   'pending',
@@ -17,11 +19,13 @@ export const TASK_DELEGATION_STATUSES: readonly TaskDelegationStatus[] = [
   'declined',
   'withdrawn',
   'archived',
+  'pending_invite',
 ];
 
 export const ACTIVE_DELEGATION_STATUSES: readonly TaskDelegationStatus[] = [
   'pending',
   'accepted',
+  'pending_invite',
 ];
 
 export type TaskDelegation = {
