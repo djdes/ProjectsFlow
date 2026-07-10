@@ -8,8 +8,14 @@ import type { TaskRepository } from '../task/TaskRepository.js';
 import type { CreateTaskComment } from '../task/CreateTaskComment.js';
 import type { MoveTask } from '../task/MoveTask.js';
 import type { MaybeReopenForClarification } from '../task/MaybeReopenForClarification.js';
-import { taskActionKeyboard, taskCompletedKeyboard } from './taskActionKeyboard.js';
+import {
+  taskActionKeyboard,
+  taskCompletedKeyboard,
+  closeProposalResolvedKeyboard,
+} from './taskActionKeyboard.js';
 import type { DispatchCommentNotifications } from '../notifications/DispatchCommentNotifications.js';
+import type { ConfirmCloseProposal } from '../close-proposal/ConfirmCloseProposal.js';
+import type { DismissCloseProposal } from '../close-proposal/DismissCloseProposal.js';
 import type {
   TelegramComposerService,
   TelegramCallbackQuery,
@@ -80,6 +86,9 @@ type Deps = {
   readonly createComment: CreateTaskComment;
   // Инлайн «✅ Завершить» / «↩️ Отменить» на задачных уведомлениях (nd:/nu: callback).
   readonly moveTask: MoveTask;
+  // Инлайн «✅ Закрыть» / «✕ Не она» на предложениях закрыть (pd:/px: callback, db/101).
+  readonly confirmCloseProposal: ConfirmCloseProposal;
+  readonly dismissCloseProposal: DismissCloseProposal;
   // Рассылка email+TG участникам по комментарию (как HTTP-роут). Best-effort.
   readonly dispatchCommentNotifications: DispatchCommentNotifications;
   // Конструктор задач (+проект текст @делегат) + обработка кнопок конструктора/делегирования.
@@ -120,6 +129,9 @@ export class HandleTelegramWebhook {
       if (data.startsWith('nd:')) return this.handleTaskDone(cq, data.slice(3));
       if (data.startsWith('nc:')) return this.handleTaskCommentPrompt(cq, data.slice(3));
       if (data.startsWith('nu:')) return this.handleTaskUndo(cq, data.slice(3));
+      // Предложения закрыть (db/101): pd: подтвердить, px: отклонить.
+      if (data.startsWith('pd:')) return this.handleCloseProposalConfirm(cq, data.slice(3));
+      if (data.startsWith('px:')) return this.handleCloseProposalDismiss(cq, data.slice(3));
       if (data.startsWith('bt:')) return this.handleBrowseCallback(cq);
       return this.deps.composer.handleCallback(cq);
     }
@@ -423,6 +435,89 @@ export class HandleTelegramWebhook {
     if (messageId !== null) await this.renderTaskCard(chatId, messageId, task, taskId);
     this.deps.notifyStatusChanged(task.projectId, taskId, 'done', target, userId);
     this.deps.notifyTaskChanged(task.projectId);
+  }
+
+  // «✅ Закрыть» на предложении (db/101): подтверждает закрытие. Любой участник (viewer+).
+  private async handleCloseProposalConfirm(
+    cq: TelegramCallbackQuery,
+    proposalId: string,
+  ): Promise<void> {
+    const chatId = cq.message?.chat.id ?? cq.from.id;
+    const messageId = cq.message?.message_id ?? null;
+    const userId = await this.deps.users.findUserIdByTelegramUserId(cq.from.id);
+    if (!userId) {
+      await this.answerNeedsLink(cq.id);
+      return;
+    }
+    let result;
+    try {
+      result = await this.deps.confirmCloseProposal.execute({ proposalId, userId });
+    } catch (err) {
+      console.warn('[tg-webhook] close-proposal confirm failed:', err);
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Предложение не найдено.', showAlert: true });
+      return;
+    }
+    if (result.status === 'not_member') {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Нет доступа к проекту.', showAlert: true });
+      return;
+    }
+    const name = (await this.deps.users.getById(userId).catch(() => null))?.displayName ?? null;
+    const who = name ? ` · ${escapeHtml(name)}` : '';
+    await this.deps.client.answerCallbackQuery(cq.id, {
+      text: result.status === 'confirmed' ? '✅ Закрыто' : 'Уже обработано',
+    });
+    if (messageId !== null) {
+      await this.deps.client
+        .editMessageText({
+          chatId,
+          messageId,
+          text: `✅ <b>Задача закрыта</b>${who}`,
+          parseMode: 'HTML',
+          disableWebPagePreview: true,
+          replyMarkup: closeProposalResolvedKeyboard(),
+        })
+        .catch(() => {});
+    }
+    if (result.status === 'confirmed') this.deps.notifyTaskChanged(result.proposal.projectId);
+  }
+
+  // «✕ Не она» на предложении (db/101): отклоняет. Задача остаётся, повторно не предлагаем.
+  private async handleCloseProposalDismiss(
+    cq: TelegramCallbackQuery,
+    proposalId: string,
+  ): Promise<void> {
+    const chatId = cq.message?.chat.id ?? cq.from.id;
+    const messageId = cq.message?.message_id ?? null;
+    const userId = await this.deps.users.findUserIdByTelegramUserId(cq.from.id);
+    if (!userId) {
+      await this.answerNeedsLink(cq.id);
+      return;
+    }
+    let result;
+    try {
+      result = await this.deps.dismissCloseProposal.execute({ proposalId, userId });
+    } catch (err) {
+      console.warn('[tg-webhook] close-proposal dismiss failed:', err);
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Предложение не найдено.', showAlert: true });
+      return;
+    }
+    if (result.status === 'not_member') {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Нет доступа к проекту.', showAlert: true });
+      return;
+    }
+    await this.deps.client.answerCallbackQuery(cq.id, { text: '✕ Оставлено открытым' });
+    if (messageId !== null) {
+      await this.deps.client
+        .editMessageText({
+          chatId,
+          messageId,
+          text: '✕ <b>Оставлено открытым</b> — задача не закрыта.',
+          parseMode: 'HTML',
+          disableWebPagePreview: true,
+          replyMarkup: closeProposalResolvedKeyboard(),
+        })
+        .catch(() => {});
+    }
   }
 
   // «💬 Комментировать»: шлём force-reply приглашение, привязанное к задаче. Ответ юзера

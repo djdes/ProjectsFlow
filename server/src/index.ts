@@ -173,6 +173,10 @@ import { EnqueueCommitSyncJob } from './application/commit-sync/EnqueueCommitSyn
 import { ListPendingCommitSyncJobs } from './application/commit-sync/ListPendingCommitSyncJobs.js';
 import { ClaimCommitSyncJob } from './application/commit-sync/ClaimCommitSyncJob.js';
 import { CompleteCommitSyncJob } from './application/commit-sync/CompleteCommitSyncJob.js';
+import { DrizzleCloseProposalRepository } from './infrastructure/repositories/DrizzleCloseProposalRepository.js';
+import { CreateCloseProposals } from './application/close-proposal/CreateCloseProposals.js';
+import { ConfirmCloseProposal } from './application/close-proposal/ConfirmCloseProposal.js';
+import { DismissCloseProposal } from './application/close-proposal/DismissCloseProposal.js';
 import { CommitSyncJobCleanup } from './application/commit-sync/CommitSyncJobCleanup.js';
 import { CommitSyncScheduler } from './infrastructure/scheduler/CommitSyncScheduler.js';
 import { DrizzleAutomationRepository } from './infrastructure/repositories/DrizzleAutomationRepository.js';
@@ -795,6 +799,39 @@ const dispatchCommentNotifications = new DispatchCommentNotifications({
   appUrl: appBaseUrl,
 });
 // Собирается после composer + dispatchCommentNotifications — зависит от обоих.
+// --- Предложения закрыть задачу (db/101, EOD Фаза 1) ---
+const closeProposalRepo = new DrizzleCloseProposalRepository(db);
+const createCloseProposals = new CreateCloseProposals({
+  closeProposals: closeProposalRepo,
+  createComment: createTaskCommentUseCase,
+  notifications: notificationRepo,
+  members: projectMemberRepo,
+  projects: projectRepo,
+  tasks: taskRepo,
+  tgSend: sendAgentTelegramNotification,
+  idGen: idGenerator,
+  appUrl: appBaseUrl,
+});
+const confirmCloseProposal = new ConfirmCloseProposal({
+  closeProposals: closeProposalRepo,
+  members: projectMemberRepo,
+  tasks: taskRepo,
+  linkCommit: new LinkCommit({
+    projects: projectRepo,
+    members: projectMemberRepo,
+    tasks: taskRepo,
+    taskCommits: taskCommitRepo,
+    tokens: githubTokenRepo,
+    api: githubApi,
+    delegations: gitTokenDelegationRepo,
+    users: userRepo,
+  }),
+});
+const dismissCloseProposal = new DismissCloseProposal({
+  closeProposals: closeProposalRepo,
+  members: projectMemberRepo,
+});
+
 const handleTelegramWebhook = new HandleTelegramWebhook({
   users: userRepo,
   members: projectMemberRepo,
@@ -815,6 +852,9 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
     delegations: taskDelegationRepo,
     activityRecorder,
   }),
+  // Инлайн «✅ Закрыть» / «✕ Не она» на предложениях закрыть (pd:/px:, db/101).
+  confirmCloseProposal,
+  dismissCloseProposal,
   dispatchCommentNotifications,
   composer: telegramComposer,
   maybeReopenForClarification,
@@ -1124,6 +1164,8 @@ const completeCommitSyncJob = new CompleteCommitSyncJob({
   commitSyncJobs: commitSyncJobRepo,
   tasks: taskRepo,
   recordUsage,
+  // Ветка action='propose' (db/101): создаём предложения закрыть вместо авто-перемещения.
+  createProposals: createCloseProposals,
   // Привязка совпавшего коммита к карточке (best-effort, сбой не валит move).
   linkCommit: new LinkCommit({
     projects: projectRepo,
