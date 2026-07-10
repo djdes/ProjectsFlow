@@ -84,6 +84,7 @@ import { PriorityBadge } from './PriorityBadge';
 import { DeadlineBadge } from './DeadlineBadge';
 import { RalphModeBadge } from './RalphMode';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
+import type { UnifiedDndRef } from './unifiedDndTypes';
 
 type Props = {
   // Колбэк после accept/decline/toggle — InboxPage перефетчит доску ниже (принятые
@@ -101,6 +102,9 @@ type Props = {
   // страницы, чтобы отступы от краёв были такими же, как в проектах.
   bleedNegClass?: string;
   bleedPadClass?: string;
+  // Единый DnD «Входящих» (#5): если задан — блок НЕ рендерит свой DndContext/DragOverlay
+  // (их даёт InboxUnifiedDnd на странице), а регистрирует свои хендлеры в этом реестре.
+  externalDnd?: UnifiedDndRef | null;
 };
 
 // Тип вкладки блока делегирования: «Для меня» (поручено мне) / «Другим» (все видимые
@@ -119,14 +123,15 @@ const isAwaitingResponse = (t: AssignedTask): boolean =>
 // Коллизии по КУРСОРУ (pointerWithin) — целиться в мелкие кубики людей и колонки проще, чем
 // «прямоугольником» всей карточки (дефолтный rectIntersection часто мазал мимо → «тяжело
 // попасть»). Фолбэк на rectIntersection, когда курсор в зазоре между целями.
-const dndCollision: CollisionDetection = (args) => {
+// Экспорт (и snapToCursor ниже) — для InboxUnifiedDnd (общий контекст «Входящих»).
+export const dndCollision: CollisionDetection = (args) => {
   const hits = pointerWithin(args);
   return hits.length > 0 ? hits : rectIntersection(args);
 };
 
 // Центрируем «комок»-оверлей на курсоре (аналог snapCenterToCursor из @dnd-kit/modifiers,
 // который не установлен) — маленькая пилюля едет ровно под курсором, а не с отступом.
-const snapToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transform }) => {
+export const snapToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transform }) => {
   if (draggingNodeRect && activatorEvent) {
     const coords = getEventCoordinates(activatorEvent);
     if (!coords) return transform;
@@ -156,6 +161,7 @@ export function AssignedToMeBlock({
   hideDone = false,
   bleedNegClass = '',
   bleedPadClass = '',
+  externalDnd = null,
 }: Props): React.ReactElement | null {
   const { taskDelegationRepository, taskRepository, projectRepository } = useContainer();
   const { user } = useCurrentUser();
@@ -352,6 +358,10 @@ export function AssignedToMeBlock({
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
   );
   const [activeDrag, setActiveDrag] = useState<AssignedTask | null>(null);
+  // Идёт ЛЮБОЙ drag общего контекста (в external-режиме — и карточки доски снизу):
+  // кубики людей подсвечиваются как цели для обоих происхождений. activeDrag при этом
+  // остаётся только для СВОИХ карточек (оверлей-пилюля и родная end-логика).
+  const [dragActive, setDragActive] = useState(false);
   // Дроп в «Будущее» не применяет срок сразу — открывает всплывашку выбора (неделя / конец
   // месяца / конкретный день). null = закрыта.
   const [futureDrop, setFutureDrop] = useState<AssignedTask | null>(null);
@@ -472,11 +482,13 @@ export function AssignedToMeBlock({
   );
 
   const handleDragStart = (e: DragStartEvent): void => {
+    setDragActive(true);
     const it = e.active.data.current?.item as AssignedTask | undefined;
     if (it) setActiveDrag(it);
   };
   const handleDragEnd = (e: DragEndEvent): void => {
     setActiveDrag(null);
+    setDragActive(false);
     const over = e.over;
     const data = over?.data.current as
       | { type?: string; bucket?: string; member?: SharedMember }
@@ -498,6 +510,31 @@ export function AssignedToMeBlock({
     else if (data.bucket === 'today') void applyDeadline(item, today);
     else if (data.bucket === 'future') setFutureDrop(item); // всплывашка выбора срока
   };
+  // Отмена drag'а (Esc/потеря захвата): гасим оверлей и подсветку кубиков.
+  const handleDragCancel = (): void => {
+    setActiveDrag(null);
+    setDragActive(false);
+  };
+
+  // === Единый DnD «Входящих» (#5): регистрация в реестре общего контекста. ===
+  // Без deps — пере-запись каждый рендер, чтобы замыкания хендлеров видели свежий стейт.
+  useEffect(() => {
+    if (!externalDnd) return;
+    externalDnd.current.block = {
+      onDragStart: handleDragStart,
+      onDragEnd: handleDragEnd,
+      onDragCancel: handleDragCancel,
+      refresh,
+    };
+  });
+  // Снятие регистрации — только на unmount (реестр в ref у InboxPage переживает ремаунты).
+  useEffect(() => {
+    if (!externalDnd) return;
+    const registry = externalDnd.current;
+    return () => {
+      registry.block = null;
+    };
+  }, [externalDnd]);
 
   if (loading) return null;
   // Блок скрыт, только когда пусто В ОБЕИХ вкладках (с учётом hide-done). Пустая
@@ -525,19 +562,12 @@ export function AssignedToMeBlock({
             // значит, спрятал Eye-toggle, и говорим про него, а не виним фильтры.
             'Все подходящие поручения выполнены и скрыты («Скрыть выполненные»)';
 
-  return (
-    // Один DndContext на всю зону: и временные колонки (drag → срок), и кубики людей
-    // (drag → делегирование) — общие drop-цели одного перетаскивания карточки.
-    <DndContext
-      sensors={sensors}
-      collisionDetection={dndCollision}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-    {/* Персональная зона, Notion-стиль: НЕ карточка-в-рамке (рамка враждует с full-bleed
-        канбана). «Это моё» несут три тихих сигнала: identity-шапка (свой аватар + настоящий
-        заголовок + синяя count-пилюля + подзаголовок-контракт), шёпот-тинт primary на
-        колонках канбана и hairline-линейка, замыкающая зону перед основной доской. */}
+  // Тело блока — общее для обоих режимов.
+  // Персональная зона, Notion-стиль: НЕ карточка-в-рамке (рамка враждует с full-bleed
+  // канбана). «Это моё» несут три тихих сигнала: identity-шапка (свой аватар + настоящий
+  // заголовок + синяя count-пилюля + подзаголовок-контракт), шёпот-тинт primary на
+  // колонках канбана и hairline-линейка, замыкающая зону перед основной доской.
+  const body = (
     <section id="assigned-to-me" className="space-y-3">
       <div className="flex items-start justify-between gap-3 px-0.5">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -572,12 +602,12 @@ export function AssignedToMeBlock({
                 <UserCube
                   key="__me"
                   member={{ id: user.id, displayName: user.displayName, email: '', avatarUrl: user.avatarUrl }}
-                  dragging={activeDrag !== null}
+                  dragging={dragActive}
                   isSelf
                 />
               )}
               {members.map((m) => (
-                <UserCube key={m.id} member={m} dragging={activeDrag !== null} />
+                <UserCube key={m.id} member={m} dragging={dragActive} />
               ))}
             </div>
           )}
@@ -748,7 +778,7 @@ export function AssignedToMeBlock({
 
       {/* Дроп в колонку «Будущее» → выбор конкретного срока (неделя / конец месяца / день). */}
       <FutureDeadlineDialog
-        item={futureDrop}
+        open={futureDrop !== null}
         onClose={() => setFutureDrop(null)}
         onPick={(deadline) => {
           const it = futureDrop;
@@ -764,26 +794,48 @@ export function AssignedToMeBlock({
         onConfirm={confirmInvite}
       />
     </section>
-    {/* Компактный «комок» под курсором вместо целой карточки: стартует крупнее → пружиной
-        сжимается в маленькую пилюлю с названием. ПОЛУПРОЗРАЧНЫЙ (~55%) — сквозь него видно
-        кубик участника/колонку, на которую целишься (запрос: «видно, кому делегирую»). Мелкий
-        оверлей = легче целиться (+ коллизии по курсору, см. dndCollision). */}
+  );
+
+  // External-режим (инбокс): DndContext и DragOverlay рендерит InboxUnifiedDnd на странице
+  // (хендлеры зарегистрированы эффектом выше), блок отдаёт только тело.
+  if (externalDnd) return body;
+
+  return (
+    // Один DndContext на всю зону: и временные колонки (drag → срок), и кубики людей
+    // (drag → делегирование) — общие drop-цели одного перетаскивания карточки.
+    <DndContext
+      sensors={sensors}
+      collisionDetection={dndCollision}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+    {body}
     <DragOverlay dropAnimation={null} modifiers={[snapToCursor]}>
-      {activeDrag ? (
-        <motion.div
-          initial={{ scale: 1.25, opacity: 0.3 }}
-          animate={{ scale: 1, opacity: 0.55 }}
-          transition={{ type: 'spring', stiffness: 520, damping: 34, mass: 0.6 }}
-          className="pointer-events-none flex max-w-[15rem] cursor-grabbing items-center gap-1.5 rounded-full border border-primary/40 bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-lg ring-1 ring-primary/20"
-        >
-          <GripVertical className="size-3.5 shrink-0 text-muted-foreground/60" />
-          <span className="truncate">
-            {splitTitleBody(activeDrag.description ?? '').title || 'Задача'}
-          </span>
-        </motion.div>
-      ) : null}
+      {activeDrag ? <AssignedDragPill item={activeDrag} /> : null}
     </DragOverlay>
     </DndContext>
+  );
+}
+
+// Оверлей перетаскивания карточки поручения. Компактный «комок» под курсором вместо целой
+// карточки: стартует крупнее → пружиной сжимается в маленькую пилюлю с названием.
+// ПОЛУПРОЗРАЧНЫЙ (~55%) — сквозь него видно кубик участника/колонку, на которую целишься
+// (запрос: «видно, кому делегирую»). Мелкий оверлей = легче целиться (+ коллизии по курсору,
+// см. dndCollision). Экспорт — его же рендерит InboxUnifiedDnd в общем контексте.
+export function AssignedDragPill({ item }: { item: AssignedTask }): React.ReactElement {
+  return (
+    <motion.div
+      initial={{ scale: 1.25, opacity: 0.3 }}
+      animate={{ scale: 1, opacity: 0.55 }}
+      transition={{ type: 'spring', stiffness: 520, damping: 34, mass: 0.6 }}
+      className="pointer-events-none flex max-w-[15rem] cursor-grabbing items-center gap-1.5 rounded-full border border-primary/40 bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-lg ring-1 ring-primary/20"
+    >
+      <GripVertical className="size-3.5 shrink-0 text-muted-foreground/60" />
+      <span className="truncate">
+        {splitTitleBody(item.description ?? '').title || 'Задача'}
+      </span>
+    </motion.div>
   );
 }
 
@@ -834,8 +886,11 @@ function DraggableTask({
   disabled: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
+  // id с префиксом: в едином контексте «Входящих» та же задача может одновременно висеть
+  // карточкой на доске снизу (useSortable с голым task.id) — двум draggable нельзя делить id.
+  // Хендлеры блока id не используют (читают data.item), так что префикс безопасен всегда.
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
-    id: item.id,
+    id: `assigned-${item.id}`,
     data: { type: 'task', item },
     disabled,
   });
@@ -906,13 +961,14 @@ function UserCube({
 }
 
 // Всплывашка выбора срока при дропе в «Будущее»: неделя / до конца месяца / конкретный день.
-// Отмена (закрытие) — ничего не меняем, карточка остаётся где была.
-function FutureDeadlineDialog({
-  item,
+// Отмена (закрытие) — ничего не меняем, карточка остаётся где была. От задачи ей ничего не
+// нужно (только open/onPick) — переиспользуется InboxUnifiedDnd'ом и для задач доски.
+export function FutureDeadlineDialog({
+  open,
   onClose,
   onPick,
 }: {
-  item: AssignedTask | null;
+  open: boolean;
   onClose: () => void;
   onPick: (deadline: string) => void;
 }): React.ReactElement {
@@ -932,7 +988,7 @@ function FutureDeadlineDialog({
     }
   };
   return (
-    <Dialog open={item !== null} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xs gap-3 p-5">
         <DialogHeader>
           <DialogTitle className="text-base">Срок на будущее</DialogTitle>

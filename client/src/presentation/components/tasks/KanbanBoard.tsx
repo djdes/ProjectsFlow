@@ -78,6 +78,7 @@ import {
   resolveColumnLabel,
   type VisibleKanbanStatus,
 } from '@/domain/kanban/KanbanSettings';
+import type { UnifiedDndRef } from './unifiedDndTypes';
 
 type Props = {
   projectId: string;
@@ -98,6 +99,10 @@ type Props = {
   // Значения зависят от паддинга страницы, поэтому передаются снаружи. По умолчанию — без bleed.
   bleedNegClass?: string;
   bleedPadClass?: string;
+  // Единый DnD «Входящих» (#5): если задан — доска НЕ рендерит свой DndContext/DragOverlay
+  // (их даёт InboxUnifiedDnd на странице), а регистрирует свои хендлеры и операции в этом
+  // реестре. null/undefined (доски проектов) — прежнее поведение без изменений.
+  externalDnd?: UnifiedDndRef | null;
 };
 
 // Локальная ISO-дата 'YYYY-MM-DD' (без UTC-сдвига) — для сравнения с deadline.
@@ -169,13 +174,15 @@ function toVisibleStatus(status: TaskStatus): TaskStatus {
 
 // Длительность drop-анимации в ms. Используется и dnd-kit'ом для position-lerp'а оверлея,
 // и motion'ом для exit-анимации rotate/scale у обёртки preview — они должны быть равны.
-const DROP_DURATION_MS = 320;
-const DROP_EASING_BEZIER = [0.32, 0.72, 0, 1] as const; // Apple smooth-spring, без длинного хвоста
+// Экспорт (и ниже DROP_ANIMATION/MEASURING_CONFIG) — для InboxUnifiedDnd: в общем DnD-режиме
+// инбокса оверлей доски-карточки рендерит родитель теми же константами.
+export const DROP_DURATION_MS = 320;
+export const DROP_EASING_BEZIER = [0.32, 0.72, 0, 1] as const; // Apple smooth-spring, без длинного хвоста
 
 // Drop-анимация: «приземление» карточки в новый слот.
 // opacity у active === стартовое значение source-card (см. KanbanCard: isDragging → opacity-30),
 // затем side-effect плавно возвращает к 1.
-const DROP_ANIMATION: DropAnimation = {
+export const DROP_ANIMATION: DropAnimation = {
   duration: DROP_DURATION_MS,
   easing: `cubic-bezier(${DROP_EASING_BEZIER.join(', ')})`,
   sideEffects: defaultDropAnimationSideEffects({
@@ -187,7 +194,7 @@ const DROP_ANIMATION: DropAnimation = {
 
 // Always-measuring: dnd-kit перемеряет контейнеры при каждом drag-кадре, не только при
 // стартe. Это убирает рывки когда карточки в reflow меняют свои размеры/позиции.
-const MEASURING_CONFIG = {
+export const MEASURING_CONFIG = {
   droppable: { strategy: MeasuringStrategy.Always },
 };
 
@@ -218,7 +225,7 @@ function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStat
   return out;
 }
 
-export function KanbanBoard({ projectId, showCommits = true, projectName, hideDone = false, memberCount, onOpenAutomation, bleedNegClass = '', bleedPadClass = '' }: Props): React.ReactElement {
+export function KanbanBoard({ projectId, showCommits = true, projectName, hideDone = false, memberCount, onOpenAutomation, bleedNegClass = '', bleedPadClass = '', externalDnd = null }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const { user } = useCurrentUser();
   const { projectRepository } = useContainer();
@@ -769,6 +776,36 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     }
   };
 
+  // Отмена drag'а (Esc/потеря захвата): гасим индикатор и оверлей сразу, без drop-анимации.
+  // Вынесено из JSX: в external-режиме этот же хендлер регистрируется в общем контексте.
+  const handleDragCancel = (): void => {
+    setDropTarget(null);
+    setPreviewPhase('settled');
+    setActiveId(null);
+  };
+
+  // === Единый DnD «Входящих» (#5): регистрация в реестре общего контекста. ===
+  // Без deps — пере-запись каждый рендер, чтобы замыкания хендлеров видели свежие tasks/grouped.
+  useEffect(() => {
+    if (!externalDnd) return;
+    externalDnd.current.board = {
+      onDragStart: handleDragStart,
+      onDragOver: handleDragOver,
+      onDragEnd: handleDragEnd,
+      onDragCancel: handleDragCancel,
+      updateTask: update,
+      refetch,
+    };
+  });
+  // Снятие регистрации — только на unmount (реестр в ref у InboxPage переживает ремаунты доски).
+  useEffect(() => {
+    if (!externalDnd) return;
+    const registry = externalDnd.current;
+    return () => {
+      registry.board = null;
+    };
+  }, [externalDnd]);
+
   // Удаление через стильный диалог (не нативный confirm): handleDelete лишь открывает
   // окно, реальное удаление — в confirmDelete по кнопке «Удалить».
   const handleDelete = (task: Task): void => {
@@ -926,18 +963,12 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         </div>
       )}
 
-      <DndContext
-        sensors={sensors}
-        measuring={MEASURING_CONFIG}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-        onDragCancel={() => {
-          setDropTarget(null);
-          setPreviewPhase('settled');
-          setActiveId(null);
-        }}
-      >
+      {/* External-режим (инбокс): DndContext и DragOverlay рендерит InboxUnifiedDnd на
+          странице, доска отдаёт только тело (хендлеры зарегистрированы эффектом выше).
+          Own-режим (доски проектов) — собственный контекст, поведение прежнее. */}
+      {(() => {
+        const boardBody = (
+          <>
         {/* На мобиле колонки занимают почти всю ширину и «прилипают» при свайпе
             (snap), на десктопе — обычный горизонтальный ряд. Drag между колонками
             работает в обоих режимах: все колонки в DOM, просто проскроллены.
@@ -1049,6 +1080,19 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         {/* Закреплённый снизу вьюпорта горизонтальный скролл доски (см. компонент).
             bleedNegClass — во всю ширину окна (по краям обложки/плашки), как ряд колонок. */}
         <SyncedStickyScrollbar targetRef={boardScrollRef} className={bleedNegClass} />
+          </>
+        );
+        if (externalDnd) return boardBody;
+        return (
+          <DndContext
+            sensors={sensors}
+            measuring={MEASURING_CONFIG}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+          >
+            {boardBody}
         <DragOverlay dropAnimation={DROP_ANIMATION}>
           {activeTask ? (
             // Tilt + scale живут на motion-обёртке, а не на CSS карточки — иначе оверлей
@@ -1075,7 +1119,9 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
             </motion.div>
           ) : null}
         </DragOverlay>
-      </DndContext>
+          </DndContext>
+        );
+      })()}
 
       <TaskDrawer
         state={dialog}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,8 @@ import { useContainer } from '@/infrastructure/di/container';
 import type { Project } from '@/domain/project/Project';
 import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
 import { AssignedToMeBlock } from '@/presentation/components/tasks/AssignedToMeBlock';
+import { InboxUnifiedDnd } from '@/presentation/components/tasks/InboxUnifiedDnd';
+import type { UnifiedDndRegistry } from '@/presentation/components/tasks/unifiedDndTypes';
 
 const HIDE_DONE_STORAGE_KEY = 'inbox.hide-done';
 
@@ -50,6 +52,10 @@ export function InboxPage(): React.ReactElement {
   // чтобы список inbox-задач сразу подтянул свежее состояние (acceptance публикует
   // SSE, но проще пересоздать board без задержки).
   const [refetchKey, setRefetchKey] = useState(0);
+  // Реестр единого DnD (#5): доска и блок делегирования регистрируют сюда свои хендлеры,
+  // InboxUnifiedDnd диспетчеризует. Ref (не state) — стабильная ссылка переживает ремаунты
+  // KanbanBoard по refetchKey и не дёргает лишние рендеры.
+  const dndRegistry = useRef<UnifiedDndRegistry>({ board: null, block: null });
 
   useEffect(() => {
     let cancelled = false;
@@ -125,30 +131,36 @@ export function InboxPage(): React.ReactElement {
           </div>
         </div>
 
-        <AssignedToMeBlock
-          onChanged={() => setRefetchKey((k) => k + 1)}
-          toolbarSlot={toolbarSlot}
-          hideDone={hideDone}
-          bleedNegClass={KANBAN_BLEED_NEG}
-          bleedPadClass={KANBAN_BLEED_PAD}
-        />
-
-        {/* Мягкое появление доски при входе — fadeInUp, гейтится useMotion(). */}
-        <motion.div
-          className="flex min-h-0 flex-1 flex-col"
-          variants={fadeInUp}
-          initial={animations ? 'hidden' : false}
-          animate="visible"
-        >
-          <KanbanBoard
-            key={refetchKey}
-            projectId={project.id}
-            showCommits={false}
+        {/* Единый DnD (#5): один DndContext на блок делегирования И доску — карточку доски
+            можно тащить в время-колонки (срок) и на кубики людей (делегировать). */}
+        <InboxUnifiedDnd registry={dndRegistry} projectId={project.id}>
+          <AssignedToMeBlock
+            onChanged={() => setRefetchKey((k) => k + 1)}
+            toolbarSlot={toolbarSlot}
             hideDone={hideDone}
             bleedNegClass={KANBAN_BLEED_NEG}
             bleedPadClass={KANBAN_BLEED_PAD}
+            externalDnd={dndRegistry}
           />
-        </motion.div>
+
+          {/* Мягкое появление доски при входе — fadeInUp, гейтится useMotion(). */}
+          <motion.div
+            className="flex min-h-0 flex-1 flex-col"
+            variants={fadeInUp}
+            initial={animations ? 'hidden' : false}
+            animate="visible"
+          >
+            <KanbanBoard
+              key={refetchKey}
+              projectId={project.id}
+              showCommits={false}
+              hideDone={hideDone}
+              bleedNegClass={KANBAN_BLEED_NEG}
+              bleedPadClass={KANBAN_BLEED_PAD}
+              externalDnd={dndRegistry}
+            />
+          </motion.div>
+        </InboxUnifiedDnd>
       </div>
     </div>
   );
