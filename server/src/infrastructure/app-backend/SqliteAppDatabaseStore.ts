@@ -1,7 +1,19 @@
-import Database from 'better-sqlite3';
+import type DatabaseNS from 'better-sqlite3';
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
+
+// better-sqlite3 — НАТИВНЫЙ модуль. Грузим ЛЕНИВО (createRequire), а не статическим import:
+// если на сервере не встал/несовместим prebuilt-бинарник, падает только app-backend (5xx на его
+// эндпоинтах), а не весь сервер при загрузке (иначе pm2 крутил бы crash-loop → 502 на всю платформу).
+type SqliteCtor = typeof import('better-sqlite3');
+const requireCjs = createRequire(import.meta.url);
+let ctorCache: SqliteCtor | undefined;
+function sqliteCtor(): SqliteCtor {
+  if (!ctorCache) ctorCache = requireCjs('better-sqlite3') as SqliteCtor;
+  return ctorCache;
+}
 import type { AppFieldType, AppSchema } from '../../domain/app-backend/AppSchema.js';
 import type {
   AppDatabaseStore,
@@ -23,7 +35,7 @@ const SQLITE_TYPE: Record<AppFieldType, string> = {
 };
 
 type Conn = {
-  db: Database.Database;
+  db: DatabaseNS.Database;
   // table → множество допустимых имён колонок (белый список идентификаторов).
   columns: Map<string, Set<string>>;
 };
@@ -60,7 +72,7 @@ export class SqliteAppDatabaseStore implements AppDatabaseStore {
   private open(projectId: string): Conn {
     const existing = this.conns.get(projectId);
     if (existing) return existing;
-    const db = new Database(this.filePath(projectId));
+    const db = new (sqliteCtor())(this.filePath(projectId));
     db.pragma('journal_mode = WAL');
     const conn: Conn = { db, columns: new Map() };
     this.conns.set(projectId, conn);
