@@ -61,6 +61,7 @@ import {
   type AssignedGrouping,
 } from '@/domain/user/UiPrefs';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
+import { UserAvatarHover } from '@/presentation/components/user/UserAvatarHover';
 import type { SharedMember } from '@/application/project/ProjectRepository';
 import { HttpError } from '@/lib/HttpError';
 import {
@@ -803,19 +804,17 @@ function DraggableTask({
   );
 }
 
-// Кубик участника пространства = drop-цель делегирования. По умолчанию — компактный аватар
-// (ник в тултипе). Во время перетаскивания задачи все кубики слегка подсвечиваются как цели,
-// а тот, что под курсором, ПЛАВНО раскрывается в пилюлю «Делегировать: <имя>» (запрос 1c).
+// Кубик участника пространства = drop-цель делегирования. Показывает аву + ник (чтобы было
+// понятно, кто это); при наведении (не во время drag) ава раскрывается в карточку «ава + имя»
+// (UserAvatarHover). Во время перетаскивания задачи кубики подсвечиваются как цели, а тот, что
+// под курсором, ПЛАВНО выделяется (scale + ring) и подписывается «Делегировать».
 function UserCube({ member, dragging }: { member: SharedMember; dragging: boolean }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id: `user-${member.id}`, data: { type: 'user', member } });
-  const expanded = dragging && isOver;
   return (
     <div
       ref={setNodeRef}
-      title={`Делегировать: ${member.displayName}`}
       className={cn(
-        'flex shrink-0 items-center rounded-full border text-[11px] transition-all duration-200 ease-out',
-        expanded ? 'gap-1.5 py-0.5 pl-0.5 pr-2.5' : 'gap-0 p-0.5',
+        'flex shrink-0 items-center gap-1 rounded-full border py-0.5 pl-0.5 pr-2 text-[11px] transition-all duration-200 ease-out',
         dragging
           ? isOver
             ? 'scale-105 border-primary bg-primary/10 text-primary ring-2 ring-primary/50'
@@ -823,19 +822,23 @@ function UserCube({ member, dragging }: { member: SharedMember; dragging: boolea
           : 'border-transparent bg-muted/50 text-muted-foreground hover:bg-muted',
       )}
     >
-      <UserAvatar
-        displayName={member.displayName}
-        avatarUrl={member.avatarUrl}
-        className="size-6 shrink-0 text-[10px]"
-      />
-      {/* Имя всегда в DOM, но схлопнуто в 0 ширины — плавно раскрывается под курсором. */}
-      <span
-        className={cn(
-          'overflow-hidden whitespace-nowrap font-medium transition-all duration-200 ease-out',
-          expanded ? 'max-w-[11rem] opacity-100' : 'max-w-0 opacity-0',
-        )}
-      >
-        Делегировать: {member.displayName}
+      {dragging ? (
+        // Во время drag — без hover-тултипа (чтобы не мешал прицеливанию), просто ава.
+        <UserAvatar
+          displayName={member.displayName}
+          avatarUrl={member.avatarUrl}
+          className="size-6 shrink-0 text-[10px]"
+        />
+      ) : (
+        <UserAvatarHover
+          displayName={member.displayName}
+          avatarUrl={member.avatarUrl}
+          subtitle="участник пространства · перетащите сюда задачу, чтобы делегировать"
+          triggerClassName="size-6 text-[10px]"
+        />
+      )}
+      <span className="max-w-[7rem] truncate font-medium">
+        {dragging && isOver ? 'Делегировать' : member.displayName}
       </span>
     </div>
   );
@@ -1268,33 +1271,11 @@ function AcceptedCard({
   // Название проекта — всегда видимая пилюля в правом верхнем углу (инбокс → «Личные»).
   const projectLabel = item.isInbox ? 'Личные' : item.projectName;
   return (
-    <div
-      className={cn(
-        // Равные отступы сверху/снизу (py-2) — без «пустоты» снизу; плашка параметров
-        // всплывает оверлеем поверх низа при наведении (свой bg перекрывает текст).
-        'group relative flex cursor-pointer items-start gap-1.5 rounded-lg border border-black/[0.06] bg-card px-2 py-2 shadow-sm transition-[box-shadow,border-color,background-color] duration-150 hover:shadow-md dark:border-white/[0.08]',
-        isDone && 'border-success/20 bg-success/[0.06] hover:border-success/30 hover:bg-success/[0.1]',
-      )}
-      onClick={onOpen}
-    >
-      {/* stopPropagation на pointer-старте — нажатие по чекбоксу не стартует drag карточки. */}
-      <div
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-        onTouchStart={(e) => e.stopPropagation()}
-      >
-        <InboxCheckbox
-          task={item}
-          lastDoneTaskId={null}
-          lastTodoTaskId={null}
-          onChanged={onChanged}
-          disabled={!item.canModify}
-        />
-      </div>
-      {/* Название проекта — тихая пилюля справа-сверху, всегда видна. Заголовок обтекает её
-          слева (правый отступ pr-[30%]), поэтому она НЕ закрывает текст. */}
+    <div className="group flex cursor-pointer flex-col" onClick={onOpen}>
+      {/* Название проекта — «вкладка»-ярлык НАД карточкой (вне блока), слева. Не тесним заголовок:
+          вкладка приклеена к верхнему краю (rounded-t + -mb-px, у карточки скошен верх-лево). */}
       <span
-        className="pointer-events-none absolute right-1.5 top-1.5 z-10 flex max-w-[30%] items-center gap-1 truncate rounded-md bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground dark:bg-muted"
+        className="z-10 -mb-px inline-flex max-w-[80%] items-center gap-1 self-start rounded-t-md border border-b-0 border-black/[0.06] bg-muted/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground dark:border-white/[0.08] dark:bg-muted"
         title={projectLabel}
       >
         {item.isInbox ? (
@@ -1304,7 +1285,29 @@ function AcceptedCard({
         )}
         <span className="truncate">{projectLabel}</span>
       </span>
-      <div className="min-w-0 flex-1 pr-[30%]">
+      <div
+        className={cn(
+          // Равные отступы сверху/снизу (py-2); плашка параметров всплывает оверлеем поверх низа
+          // при наведении (свой bg перекрывает текст). rounded-tl-none — стык с вкладкой-ярлыком.
+          'relative flex items-start gap-1.5 rounded-lg rounded-tl-none border border-black/[0.06] bg-card px-2 py-2 shadow-sm transition-[box-shadow,border-color,background-color] duration-150 group-hover:shadow-md dark:border-white/[0.08]',
+          isDone && 'border-success/20 bg-success/[0.06] group-hover:border-success/30 group-hover:bg-success/[0.1]',
+        )}
+      >
+        {/* stopPropagation на pointer-старте — нажатие по чекбоксу не стартует drag карточки. */}
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+        >
+          <InboxCheckbox
+            task={item}
+            lastDoneTaskId={null}
+            lastTodoTaskId={null}
+            onChanged={onChanged}
+            disabled={!item.canModify}
+          />
+        </div>
+        <div className="min-w-0 flex-1">
         {item.description?.trim() ? (
           <div className="line-clamp-4 text-sm leading-snug">
             <TaskTitleText title={title} />
@@ -1356,6 +1359,7 @@ function AcceptedCard({
         ) : (
           <span className="whitespace-nowrap text-muted-foreground/50">без срока</span>
         )}
+        </div>
       </div>
     </div>
   );

@@ -30,8 +30,9 @@ function ruDays(n: number): string {
   return 'дней';
 }
 
-// Срок ВСЕГДА относительно (по всему сайту): сегодня / завтра / вчера / через N дней / N дней назад.
-// Абсолютную дату больше не показываем — «через 20 дней» вместо «31 июл».
+// Срок компактно: сегодня / завтра / вчера / «N дней». БЕЗ «через/назад» — направление читается
+// цветом бейджа (красный = просрочено, серый = впереди), см. DeadlineBadge. Абсолютную дату не
+// показываем (полная дата — в title-тултипе).
 function formatDeadline(deadline: string): string {
   // Парсим 'YYYY-MM-DD' как локальную дату (без UTC-сдвига): new Date(y, m-1, d).
   const [y, m, d] = deadline.split('-').map(Number);
@@ -42,8 +43,7 @@ function formatDeadline(deadline: string): string {
   if (diff === 0) return 'сегодня';
   if (diff === 1) return 'завтра';
   if (diff === -1) return 'вчера';
-  if (diff > 0) return `через ${diff} ${ruDays(diff)}`;
-  return `${-diff} ${ruDays(diff)} назад`;
+  return `${Math.abs(diff)} ${ruDays(diff)}`;
 }
 
 // Бейдж со сроком: иконка часов + дата (relative для близких / Intl для дальних).
