@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bot, CalendarClock, CircleDot, Clock, Flag, Loader2, Lock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -30,50 +30,140 @@ function fmtDateTime(d: Date): string {
   return d.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-// Превью выбранной версии — один-в-один как «своё» окно задачи (там, где произошло
-// изменение): крупный заголовок, ряды свойств с иконками (как в окне редактирования) и
-// тело, отрендеренное через Markdown (картинки/чеклисты/форматирование — не сырой текст).
-function VersionPreview({ snapshot }: { snapshot: TaskSnapshot }): React.ReactElement {
+// Пословный diff (LCS): что в newText добавилось/изменилось относительно oldText. Возвращает
+// части нового текста с флагом added — их подсвечиваем синим («видно, что именно поменялось»).
+type DiffPart = { readonly text: string; readonly added: boolean };
+function wordDiff(oldText: string, newText: string): DiffPart[] {
+  const a = oldText.split(/(\s+)/);
+  const b = newText.split(/(\s+)/);
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0));
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      dp[i]![j] = a[i] === b[j] ? dp[i + 1]![j + 1]! + 1 : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
+    }
+  }
+  const parts: DiffPart[] = [];
+  let i = 0;
+  let j = 0;
+  while (j < n) {
+    if (i < m && a[i] === b[j]) {
+      parts.push({ text: b[j]!, added: false });
+      i++;
+      j++;
+    } else if (i < m && dp[i + 1]![j]! >= dp[i]![j + 1]!) {
+      i++; // слово было в старой версии, в новой нет — не показываем (мы рисуем НОВЫЙ текст)
+    } else {
+      parts.push({ text: b[j]!, added: true });
+      j++;
+    }
+  }
+  return parts;
+}
+
+// Текст с синей подсветкой добавленного/изменённого относительно предыдущей версии.
+function DiffText({ oldText, newText }: { oldText: string; newText: string }): React.ReactElement {
+  const parts = useMemo(() => wordDiff(oldText, newText), [oldText, newText]);
+  return (
+    <>
+      {parts.map((p, idx) =>
+        p.added ? (
+          <span
+            key={idx}
+            className="rounded bg-blue-500/20 text-blue-700 dark:bg-blue-400/25 dark:text-blue-100"
+          >
+            {p.text}
+          </span>
+        ) : (
+          <span key={idx}>{p.text}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+// Обёртка значения свойства: синее кольцо, если оно изменилось относительно предыдущей версии.
+function ChangedMark({ changed, children }: { changed: boolean; children: React.ReactNode }): React.ReactElement {
+  return (
+    <span className={cn('inline-flex items-center rounded', changed && 'ring-2 ring-blue-500/50 ring-offset-1 ring-offset-background')}>
+      {children}
+    </span>
+  );
+}
+
+// Превью выбранной версии — как «своё» окно задачи. Если есть предыдущая версия (prev),
+// подсвечиваем синим что именно поменялось: слова заголовка/тела (пословный diff) + кольцо
+// вокруг изменённых свойств (статус/приоритет/срок/режим). У самой первой версии diff'а нет.
+function VersionPreview({
+  snapshot,
+  prev,
+}: {
+  snapshot: TaskSnapshot;
+  prev: TaskSnapshot | null;
+}): React.ReactElement {
   const desc = snapshot.description ?? '';
   const nl = desc.indexOf('\n');
   const title = (nl === -1 ? desc : desc.slice(0, nl)).trim() || 'Без названия';
   const body = nl === -1 ? '' : desc.slice(nl + 1).trim();
   const status = snapshot.status as TaskStatus;
+
+  const prevDesc = prev?.description ?? '';
+  const prevNl = prevDesc.indexOf('\n');
+  const prevTitle = (prevNl === -1 ? prevDesc : prevDesc.slice(0, prevNl)).trim();
+  const prevBody = prevNl === -1 ? '' : prevDesc.slice(prevNl + 1).trim();
+
   return (
     <div className="mx-auto max-w-2xl">
-      <h3 className="mb-4 text-[1.75rem] font-bold leading-tight tracking-tight">{title}</h3>
+      <h3 className="mb-4 text-[1.75rem] font-bold leading-tight tracking-tight">
+        {prev ? <DiffText oldText={prevTitle} newText={title} /> : title}
+      </h3>
       <div className="mb-2 space-y-0.5">
         <PropertyRow icon={CircleDot} label="Статус">
-          <span
-            className={cn(
-              'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium',
-              STATUS_BADGE_COLOR[status] ?? 'bg-muted text-muted-foreground',
-            )}
-          >
-            {STATUS_LABEL[status] ?? snapshot.status}
-          </span>
+          <ChangedMark changed={!!prev && prev.status !== snapshot.status}>
+            <span
+              className={cn(
+                'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium',
+                STATUS_BADGE_COLOR[status] ?? 'bg-muted text-muted-foreground',
+              )}
+            >
+              {STATUS_LABEL[status] ?? snapshot.status}
+            </span>
+          </ChangedMark>
         </PropertyRow>
         <PropertyRow icon={Flag} label="Приоритет">
-          {snapshot.priority != null ? (
-            <PriorityBadge priority={snapshot.priority} />
-          ) : (
-            <span className="text-sm text-muted-foreground/70">Без приоритета</span>
-          )}
+          <ChangedMark changed={!!prev && prev.priority !== snapshot.priority}>
+            {snapshot.priority != null ? (
+              <PriorityBadge priority={snapshot.priority} />
+            ) : (
+              <span className="text-sm text-muted-foreground/70">Без приоритета</span>
+            )}
+          </ChangedMark>
         </PropertyRow>
         <PropertyRow icon={CalendarClock} label="Дедлайн">
-          {snapshot.deadline ? (
-            <DeadlineBadge deadline={snapshot.deadline} status={status} />
-          ) : (
-            <span className="text-sm text-muted-foreground/70">Без срока</span>
-          )}
+          <ChangedMark changed={!!prev && prev.deadline !== snapshot.deadline}>
+            {snapshot.deadline ? (
+              <DeadlineBadge deadline={snapshot.deadline} status={status} />
+            ) : (
+              <span className="text-sm text-muted-foreground/70">Без срока</span>
+            )}
+          </ChangedMark>
         </PropertyRow>
         <PropertyRow icon={Bot} label="Режим">
-          <RalphModeBadge mode={snapshot.ralphMode} />
+          <ChangedMark changed={!!prev && prev.ralphMode !== snapshot.ralphMode}>
+            <RalphModeBadge mode={snapshot.ralphMode} />
+          </ChangedMark>
         </PropertyRow>
       </div>
-      {body && (
+      {(body || prevBody) && (
         <div className="border-t pt-3">
-          <Markdown>{body}</Markdown>
+          {prev ? (
+            <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/90">
+              <DiffText oldText={prevBody} newText={body} />
+            </p>
+          ) : (
+            <Markdown>{body}</Markdown>
+          )}
         </div>
       )}
     </div>
@@ -130,6 +220,12 @@ export function TaskVersionsDialog({
     [data],
   );
   const selected = data?.versions.find((v) => v.id === selectedId) ?? null;
+  // Версии отсортированы новыми-сверху → предыдущая версия выбранной = следующая в списке.
+  const selectedIndex = data ? data.versions.findIndex((v) => v.id === selectedId) : -1;
+  const prevSnapshot =
+    data && selectedIndex >= 0 && selectedIndex + 1 < data.versions.length
+      ? data.versions[selectedIndex + 1]!.snapshot
+      : null;
   const hasLocked = !!data && data.versions.some((v) => isLocked(v.createdAt));
 
   const restore = async (): Promise<void> => {
@@ -160,7 +256,7 @@ export function TaskVersionsDialog({
                 <Loader2 className="size-4 animate-spin" /> Загрузка…
               </div>
             ) : selected ? (
-              <VersionPreview snapshot={selected.snapshot} />
+              <VersionPreview snapshot={selected.snapshot} prev={prevSnapshot} />
             ) : (
               <p className="py-10 text-sm text-muted-foreground">Версий пока нет.</p>
             )}

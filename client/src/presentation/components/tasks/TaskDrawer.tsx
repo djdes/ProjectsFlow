@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, GripVertical, Inbox as InboxIcon, Loader2, Maximize2, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
+import { AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, GripVertical, Loader2, Maximize2, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -29,6 +29,9 @@ import {
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -613,27 +616,20 @@ function TaskStatusChip({
   );
 }
 
-// Chip-селектор проекта задачи в edit-mode шапки — симметричная пара к статус-пилюле:
-// та же форма (rounded-full, text-xs, py-1), нейтральный тон (проект — «где», статус —
-// «в какой колонке»). Показывает текущий проект (inbox — «Входящие»); выпадашка —
-// перенос в другой проект (сервер: MoveTaskToProject, из именованного — move_task,
-// из инбокса — owner; активная делегация архивируется).
-function TaskProjectChip({
+// Подменю «Перенести в проект» внутри ⋯-меню задачи (раньше было отдельной пилюлей в шапке —
+// теперь убрано в меню, чтобы не загромождать кластер кнопок). Сервер: MoveTaskToProject
+// (из именованного — move_task, из инбокса — owner; активная делегация архивируется).
+function MoveToProjectSubmenu({
   task,
-  isInbox,
-  projectName,
   onMoved,
 }: {
   task: Task;
-  isInbox: boolean;
-  projectName?: string;
   onMoved: () => void;
 }): React.ReactElement {
   const { projectRepository, taskRepository } = useContainer();
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Лениво: список проектов грузим при первом открытии меню, а не на каждый рендер шапки.
   const load = (): void => {
     if (projects !== null) return;
     projectRepository
@@ -657,49 +653,26 @@ function TaskProjectChip({
     }
   };
 
-  const label = isInbox ? 'Входящие' : (projectName ?? 'Проект');
-  const LabelIcon = isInbox ? InboxIcon : FolderKanban;
   return (
-    <DropdownMenu onOpenChange={(open) => open && load()}>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          disabled={saving}
-          title="Проект задачи — нажмите, чтобы перенести в другой"
-          className={cn(
-            // min-w-0 (не shrink-0): на узких экранах пилюля сжимается и имя проекта
-            // ужимается truncate'ом — иначе «Поделиться»/⋯ выталкивались бы за экран.
-            'inline-flex min-w-0 max-w-[11rem] items-center gap-1 rounded-full bg-muted py-1 pl-2.5 pr-1.5 text-xs font-medium text-foreground/80 transition-[filter,transform] hover:brightness-95 active:scale-[0.97] disabled:opacity-50 dark:hover:brightness-110',
-            saving && 'opacity-50',
-          )}
-        >
-          <LabelIcon className="size-3 shrink-0 opacity-60" />
-          <span className="truncate">{label}</span>
-          <ChevronDown className="size-3.5 shrink-0 opacity-50" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[220px]">
-        <div className="px-2 py-1.5 text-xs text-muted-foreground">Перенести в проект</div>
+    <DropdownMenuSub onOpenChange={(open) => open && load()}>
+      <DropdownMenuSubTrigger>
+        <FolderKanban className="text-muted-foreground" /> Перенести в проект
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="max-h-72 min-w-[220px] overflow-y-auto">
         {projects === null ? (
           <div className="px-2 py-1.5 text-xs text-muted-foreground">Загрузка…</div>
         ) : projects.length === 0 ? (
           <div className="px-2 py-1.5 text-xs text-muted-foreground">Нет проектов</div>
         ) : (
           projects.map((p) => (
-            <DropdownMenuItem
-              key={p.id}
-              disabled={p.id === task.projectId}
-              onClick={() => void move(p)}
-            >
+            <DropdownMenuItem key={p.id} disabled={p.id === task.projectId || saving} onClick={() => void move(p)}>
               <span className="truncate">{p.name}</span>
-              {p.id === task.projectId && (
-                <Check className="ml-auto size-3.5 shrink-0 opacity-60" />
-              )}
+              {p.id === task.projectId && <Check className="ml-auto size-3.5 shrink-0 opacity-60" />}
             </DropdownMenuItem>
           ))
         )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   );
 }
 
@@ -1827,33 +1800,8 @@ export function TaskDrawer({
   // окна-оверлея (шапка) и отдельной страницы (строка хлебных крошек) — единый источник.
   const statusShareMore = task ? (
     <>
-      {/* Симметричная пара пилюль: проект («где лежит», выпадашка = перенос в другой
-          проект) + статус («в какой колонке», выпадашка = смена статуса). Интерактивность
-          обеих гейтится одним сигналом onMove: без него (напр. окно из «Поручено мне»,
-          где перенос делегату всё равно запрещён сервером) — статичная пилюля. */}
-      {onMove ? (
-        <TaskProjectChip
-          task={task}
-          isInbox={isInbox}
-          projectName={projectName}
-          onMoved={() => {
-            // Задача уехала в другой проект — текущий контекст (projectId доски/драйвера)
-            // больше не её: перерисовать источники и закрыть окно (handleClose чистит
-            // сохранённый скролл задачи, в отличие от голого onClose).
-            notifyChanged();
-            handleClose();
-          }}
-        />
-      ) : (
-        <span className="inline-flex min-w-0 max-w-[11rem] items-center gap-1 rounded-full bg-muted py-1 px-2.5 text-xs font-medium text-foreground/80">
-          {isInbox ? (
-            <InboxIcon className="size-3 shrink-0 opacity-60" />
-          ) : (
-            <FolderKanban className="size-3 shrink-0 opacity-60" />
-          )}
-          <span className="truncate">{isInbox ? 'Входящие' : (projectName ?? 'Проект')}</span>
-        </span>
-      )}
+      {/* Проект-пилюля убрана из шапки (загромождала кластер) — «Перенести в проект» теперь
+          в ⋯-меню (MoveToProjectSubmenu). В шапке остаётся только статус + Поделиться + ⋯. */}
       {/* Статус — единая сплит-пилюля (шаг вперёд + выпадашка) = «передать в другой канбан». */}
       {onMove ? (
         <TaskStatusChip task={task} onMove={onMove} onChanged={() => notifyChanged()} />
@@ -1904,6 +1852,16 @@ export function TaskDrawer({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[200px]">
+          {/* Перенос задачи в другой проект — переехал сюда из шапки. */}
+          {onMove && (
+            <MoveToProjectSubmenu
+              task={task}
+              onMoved={() => {
+                notifyChanged();
+                handleClose();
+              }}
+            />
+          )}
           {/* История версий — все изменения этой задачи (снимки на create/update/move/restore). */}
           <DropdownMenuItem onSelect={() => setVersionsOpen(true)}>
             <Clock className="text-muted-foreground" /> История версий
