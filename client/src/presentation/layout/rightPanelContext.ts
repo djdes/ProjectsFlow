@@ -11,3 +11,14 @@ export const RightPanelProvider = RightPanelContext.Provider;
 export function useSetRightPanelWidth(): (width: number) => void {
   return useContext(RightPanelContext);
 }
+
+// Текущая ширина открытой правой панели (px). Читают элементы, которые сами `fixed` к
+// вьюпорту и не наследуют marginRight главного окна (напр. плавающий композер) — чтобы
+// не заезжать под панель. 0 — панель закрыта.
+const RightPanelWidthContext = createContext<number>(0);
+
+export const RightPanelWidthProvider = RightPanelWidthContext.Provider;
+
+export function useRightPanelWidth(): number {
+  return useContext(RightPanelWidthContext);
+}

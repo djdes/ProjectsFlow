@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
 import { SIDEBAR_WIDTH, SIDEBAR_RESTORE_MARGIN } from '@/presentation/hooks/useResizableWidth';
+import { useSetRightPanelWidth } from '@/presentation/layout/rightPanelContext';
+import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
@@ -84,9 +86,17 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
     }
   }, [open]);
 
-  // По требованию: при открытии окна активности главное окно НЕ меняется (не сужается,
-  // описание не переверстывается) — окно просто открывается поверх. Поэтому ширину в
-  // AppShell НЕ публикуем (в отличие от drawer'а задачи).
+  // Notion-split (как у окна задачи): публикуем ширину панели → главный <main> сужается на
+  // marginRight, его вертикальный скролл уезжает влево к линии ресайза, а окно активности/
+  // аналитики становится правой панелью со своим скроллом (две независимые полосы). 0 — закрыто.
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const setRightPanelWidth = useSetRightPanelWidth();
+  useEffect(() => {
+    // Только десктоп: на мобиле панель — полноэкранный оверлей, marginRight не применяется.
+    setRightPanelWidth(open && isDesktop ? panelWidth : 0);
+    return () => setRightPanelWidth(0);
+  }, [setRightPanelWidth, open, isDesktop, panelWidth]);
+
   const onHandlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLElement>): void => {
       e.preventDefault();

@@ -810,7 +810,10 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     // растёт по контенту, а скроллится вся страница (родительский <main overflow-y-auto>).
     // Провайдер «идёт ресайз» = тяга сайдбара ИЛИ реколонка доски по любой причине.
     <SidebarResizingContext.Provider value={parentResizing || boardResizing}>
-    <div className="flex flex-col">
+    {/* flex-[1_0_auto]: доска заполняет свободную высоту тела страницы при коротком контенте
+        (тогда flex-1-спейсер ниже проталкивает закреплённый скролл к самому низу) И растёт по
+        контенту при длинном (страница скроллится, sticky-скролл прилипает к низу вьюпорта). */}
+    <div className="flex flex-[1_0_auto] flex-col">
       {confettiKey > 0 && <ConfettiBurst key={confettiKey} onDone={() => setConfettiKey(0)} />}
 
       {/* Тихий ряд фильтров: поиск по проекту + приоритет + срок (+ делегат в совместных). */}
@@ -1020,6 +1023,9 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
             onShow={(status) => setHidden(status, false)}
           />
         </div>
+        {/* Спейсер: при коротком контенте забирает свободную высоту и проталкивает
+            закреплённый скролл к самому низу; при длинном — схлопывается в 0. */}
+        <div className="min-h-0 flex-1" aria-hidden />
         {/* Закреплённый снизу вьюпорта горизонтальный скролл доски (см. компонент).
             bleedNegClass — во всю ширину окна (по краям обложки/плашки), как ряд колонок. */}
         <SyncedStickyScrollbar targetRef={boardScrollRef} className={bleedNegClass} />
