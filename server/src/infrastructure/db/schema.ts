@@ -1094,6 +1094,38 @@ export type CommitSyncJobRow = typeof commitSyncJobs.$inferSelect;
 export type NewCommitSyncJobRow = typeof commitSyncJobs.$inferInsert;
 
 // ============================================================================
+// task_close_proposals — миграция db/101. Предложения закрыть задачу (commit-sync в
+// режиме action='propose'). Идемпотентность подтверждения + аудит + in-app карточка.
+// UNIQUE(task_id, commit_sha) — анти-дубль при повторных прогонах и при дубле кнопок.
+// ============================================================================
+export const taskCloseProposals = mysqlTable(
+  'task_close_proposals',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    taskId: char('task_id', { length: 36 }).notNull(),
+    commitSha: varchar('commit_sha', { length: 64 }).notNull(),
+    reason: varchar('reason', { length: 1000 }),
+    sourceJobId: char('source_job_id', { length: 36 }),
+    status: mysqlEnum('status', ['open', 'confirmed', 'dismissed', 'expired'])
+      .notNull()
+      .default('open'),
+    resolvedBy: char('resolved_by', { length: 36 }),
+    resolvedAt: timestamp('resolved_at'),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_tcp_task_commit').on(t.taskId, t.commitSha),
+    index('idx_tcp_project_status').on(t.projectId, t.status, t.createdAt),
+    index('idx_tcp_task').on(t.taskId),
+  ],
+);
+
+export type TaskCloseProposalRow = typeof taskCloseProposals.$inferSelect;
+export type NewTaskCloseProposalRow = typeof taskCloseProposals.$inferInsert;
+
+// ============================================================================
 // ai_usage_ledger — миграция db/082. Append-only журнал расхода ИИ в USD. user_id =
 // dispatcher_user_id прогона (профиль, чей диспетчер выполнял работу) — один юзер = один
 // бюджет на все источники. cost_usd авторитетен (репортит раннер). Скользящие окна
