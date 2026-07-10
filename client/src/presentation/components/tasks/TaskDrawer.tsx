@@ -1747,15 +1747,14 @@ export function TaskDrawer({
   // В asPage — всегда одна центрированная колонка (Notion-style страница), без split.
   const isSplit = asPage ? false : isSplitRaw;
 
-  // Notion-split: публикуем ширину окна → главный <main> сужается на marginRight, его
-  // вертикальный скролл уезжает влево к линии ресайза, а окно задачи становится правой
-  // панелью со своим скроллом (две независимые полосы, а не оверлей поверх). Оверлей (0)
-  // остаётся, только когда split-режим выключен (мобила/asPage/center-peek) или закрыто.
+  // E1: окно задачи — ОВЕРЛЕЙ поверх страницы. Ширину в главный <main> больше НЕ публикуем
+  // (всегда 0), поэтому страница не сужается и крошки/обложка не «дёргаются» при ресайзе окна.
+  // Само окно остаётся resizable (contentStyle width ниже), просто не двигает страницу под собой.
   const setRightPanelWidth = useSetRightPanelWidth();
   React.useEffect(() => {
-    setRightPanelWidth(resizeEnabled && state !== null ? width : 0);
+    setRightPanelWidth(0);
     return () => setRightPanelWidth(0);
-  }, [setRightPanelWidth, resizeEnabled, state, width]);
+  }, [setRightPanelWidth]);
 
   // Сигналим главному окну, что окно задачи открыто/закрыто — чтобы оно спрятало свои
   // верхние действия (Изменено/Поделиться/⋯): они уже есть в шапке окна (overlay сверху).
