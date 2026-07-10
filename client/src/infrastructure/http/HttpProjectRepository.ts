@@ -468,6 +468,7 @@ export class HttpProjectRepository implements ProjectRepository {
         targetDisplayName: string | null;
         payload: ActivityPayload | null;
         createdAt: string;
+        hasVersions?: boolean;
       }>;
     }>(`/projects/${projectId}/activity?limit=${limit}`);
     return {

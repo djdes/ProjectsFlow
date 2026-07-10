@@ -1577,6 +1577,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       activity: activityRepo,
       users: userRepo,
+      taskVersions: taskVersionRepo,
     }),
   },
   help: {

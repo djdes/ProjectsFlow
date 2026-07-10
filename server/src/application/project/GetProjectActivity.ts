@@ -1,6 +1,7 @@
 import { requireProjectAccess, type ProjectAccessDeps } from './projectAccess.js';
 import type { ActivityRepository } from '../activity/ActivityRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
+import type { TaskVersionRepository } from '../task/TaskVersionRepository.js';
 import type { ActivityKind, ActivityPayload } from '../../domain/activity/ActivityEvent.js';
 
 export type ProjectActivityItem = {
@@ -13,6 +14,8 @@ export type ProjectActivityItem = {
   readonly targetDisplayName: string | null;
   readonly payload: ActivityPayload | null;
   readonly createdAt: Date;
+  // true, если у задачи события есть ≥1 снимок версии — клиент рисует часы-кнопку «История версий».
+  readonly hasVersions: boolean;
 };
 
 // Сводка для hover-тултипа кнопки активности: когда/кем создан + когда/кем последний раз менялся.
@@ -31,6 +34,7 @@ export type ProjectActivityResult = {
 type Deps = ProjectAccessDeps & {
   readonly activity: ActivityRepository;
   readonly users: UserRepository;
+  readonly taskVersions: TaskVersionRepository;
 };
 
 // Активность конкретного проекта (окно активности): список событий с резолвом имён +
@@ -56,6 +60,15 @@ export class GetProjectActivity {
     const users = ids.size > 0 ? await this.deps.users.getManyByIds([...ids]) : [];
     const byId = new Map(users.map((u) => [u.id, u]));
 
+    // Кнопка «История версий» на событии — только если у задачи реально есть снимки. Собираем
+    // taskId'ы событий и одним запросом узнаём, у каких есть версии (как в workspace-ленте).
+    const taskIds = new Set<string>();
+    for (const e of events) {
+      if (e.payload?.taskId) taskIds.add(e.payload.taskId);
+    }
+    const withVersions =
+      taskIds.size > 0 ? await this.deps.taskVersions.taskIdsWithVersions([...taskIds]) : new Set<string>();
+
     const items: ProjectActivityItem[] = events.map((e) => {
       const actor = e.actorUserId ? byId.get(e.actorUserId) : null;
       const target = e.payload?.targetUserId ? byId.get(e.payload.targetUserId) : null;
@@ -69,6 +82,7 @@ export class GetProjectActivity {
         targetDisplayName: target?.displayName ?? null,
         payload: e.payload,
         createdAt: e.createdAt,
+        hasVersions: !!e.payload?.taskId && withVersions.has(e.payload.taskId),
       };
     });
 
