@@ -8,6 +8,7 @@ import {
   type EditMessageTextInput,
   type SendMessageInput,
   type SendMessageResult,
+  type SendRichMessageInput,
   type TelegramBotCommand,
   type TelegramChatInfo,
   type TelegramClient,
@@ -105,6 +106,41 @@ export class HttpTelegramClient implements TelegramClient {
       kind: 'error',
       description: body?.description ?? `HTTP ${res.status}`,
     };
+  }
+
+  // Bot API 10.1 sendRichMessage: rich_message.html → нативная богатая вёрстка (заголовки,
+  // таблицы с рамками, вложенные списки), выделяемый текст. Зеркало sendMessage по обработке
+  // статусов. Если API старее и метода нет — вернётся error, caller делает фоллбэк.
+  async sendRichMessage(input: SendRichMessageInput): Promise<SendMessageResult> {
+    let res: Awaited<ReturnType<typeof this.tgFetch>>;
+    try {
+      res = await this.tgFetch('/sendRichMessage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: input.chatId,
+          rich_message: { html: input.html },
+          reply_markup: input.replyMarkup,
+        }),
+      });
+    } catch (err) {
+      return { kind: 'error', description: (err as Error).message };
+    }
+
+    const body = (await res.json().catch(() => null)) as TgResponse<{
+      message_id: number;
+    }> | null;
+
+    if (res.ok && body?.ok && body.result) {
+      return { kind: 'ok', messageId: body.result.message_id };
+    }
+    if (res.status === 403) {
+      return { kind: 'forbidden', description: body?.description ?? 'forbidden' };
+    }
+    if (res.status === 429) {
+      return { kind: 'rate_limited', retryAfter: body?.parameters?.retry_after ?? 1 };
+    }
+    return { kind: 'error', description: body?.description ?? `HTTP ${res.status}` };
   }
 
   // Редактирование текста+кнопок ранее отправленного сообщения. Best-effort: ошибки

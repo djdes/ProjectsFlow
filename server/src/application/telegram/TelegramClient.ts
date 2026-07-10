@@ -32,6 +32,15 @@ export type SendMessageInput = {
   readonly replyMarkup?: unknown;
 };
 
+// Bot API 10.1 sendRichMessage: «богатая» нативная вёрстка (заголовки h1..h6, таблицы
+// с рамками/чередованием, вложенные списки, b/i, blockquote, pre) — ВЫДЕЛЯЕМЫЙ текст, не
+// картинка. На вход идёт HTML-строка (Telegram сам парсит её в блоки). Так печатает Hermes.
+export type SendRichMessageInput = {
+  readonly chatId: number;
+  readonly html: string;
+  readonly replyMarkup?: unknown;
+};
+
 export type EditMessageTextInput = {
   readonly chatId: number;
   readonly messageId: number;
@@ -119,6 +128,10 @@ export type TelegramUpdate = {
 export interface TelegramClient {
   // Возвращает дискриминированный результат — caller сам решает что логировать/повторять.
   sendMessage(input: SendMessageInput): Promise<SendMessageResult>;
+  // Bot API 10.1 sendRichMessage — нативная «богатая» вёрстка HTML-строкой (rich_message.html).
+  // Тот же дискриминированный результат. Опционально (тестовые фейки/старые API могут не иметь;
+  // caller делает фоллбэк на sendMessage при отсутствии/ошибке метода).
+  sendRichMessage?(input: SendRichMessageInput): Promise<SendMessageResult>;
   // Редактирование ранее отправленного сообщения (текст + inline-кнопки). Best-effort —
   // используется конструктором чтобы превратить карточку в «✅ Создано» и убрать кнопки.
   editMessageText(input: EditMessageTextInput): Promise<void>;
