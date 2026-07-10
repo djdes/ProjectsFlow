@@ -2120,23 +2120,21 @@ export function TaskDrawer({
                   const propValues: Record<TaskPropertyKey, React.ReactNode> = {
                     assignee: (
                       <div className="flex min-h-7 flex-wrap items-center gap-1.5">
-                        {task.delegation && currentUser?.id && (
-                          <DelegationBadge delegation={task.delegation} currentUserId={currentUser.id} />
-                        )}
-                        {canEdit && (isInbox || isShared) ? (
+                        {/* Ответственный — всегда: селектор (можно менять/выбрать себя), а для
+                            read-only — текущий ответственный (делегат или «Я»). */}
+                        {canEdit ? (
                           <DelegateTaskButton
                             task={task}
                             currentUserId={currentUser?.id ?? null}
                             onChanged={() => notifyChanged()}
-                            projectId={isShared ? task.projectId : undefined}
+                            projectId={isInbox ? undefined : task.projectId}
                             className={PROPERTY_VALUE_CLASS}
                           />
-                        ) : null}
-                        {!task.delegation && !(canEdit && (isInbox || isShared)) && (
-                          <EmptyValue>Никто</EmptyValue>
+                        ) : task.delegation && currentUser?.id ? (
+                          <DelegationBadge delegation={task.delegation} currentUserId={currentUser.id} />
+                        ) : (
+                          <EmptyValue>Я</EmptyValue>
                         )}
-                        {/* «Перенести в проект» переехал в шапку — TaskProjectChip
-                            (симметричная пара к статус-пилюле). */}
                       </div>
                     ),
                     deadline: (
@@ -2183,8 +2181,8 @@ export function TaskDrawer({
                     ),
                   };
                   const propVisible: Record<TaskPropertyKey, boolean> = {
-                    // Ответственный — только когда есть кого назначить (см. task 6a).
-                    assignee: isInbox || isShared || !!task.delegation,
+                    // Ответственный — показываем ВСЕГДА (даже solo-проект: доступен только «Я»).
+                    assignee: true,
                     deadline: true,
                     priority: true,
                     mode: true,

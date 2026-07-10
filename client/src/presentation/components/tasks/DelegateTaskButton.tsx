@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, Loader2, UserPlus, X } from 'lucide-react';
+import { ChevronDown, Check, Loader2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
@@ -13,6 +13,7 @@ import {
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
+import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { META_CHIP_CLASS } from './MetaChip';
 import type { SharedMember } from '@/application/project/ProjectRepository';
 import type { Task } from '@/domain/task/Task';
@@ -20,36 +21,44 @@ import type { Task } from '@/domain/task/Task';
 type Props = {
   task: Task;
   currentUserId: string | null;
-  // Колбэк после delegate/withdraw — родитель refetch'ит данные.
+  // Колбэк после смены ответственного — родитель refetch'ит данные.
   onChanged: () => void;
-  // Если передан — грузим участников конкретного проекта (listMembers) вместо
-  // глобального listSharedMembers. Для совместных (не inbox) проектов.
+  // Если передан — грузим участников этого проекта (listMembers). Иначе (inbox) —
+  // глобальный listSharedMembers.
   projectId?: string;
   // Доп. классы на кнопку — для выравнивания значения в ряду свойств (PROPERTY_VALUE_CLASS).
   className?: string;
 };
 
-// Кнопка делегирования для существующей inbox-задачи. Три состояния:
-//  - нет активной делегации + caller=creator → dropdown с DelegateSelect.
-//  - pending + caller=creator → кнопка «Отозвать» (withdraw).
-//  - accepted ИЛИ caller≠creator → не рендерим (DelegationBadge сам покажет статус).
-export function DelegateTaskButton({ task, currentUserId, onChanged, projectId, className }: Props): React.ReactElement | null {
+// Селектор ОТВЕТСТВЕННОГО за задачу. Показывается всегда (даже когда в проекте нет других
+// участников — тогда доступен только «Я»). Текущий ответственный = делегат активной делегации,
+// либо «Я» (создатель), если делегации нет. Выбор:
+//  - «Я» → забрать задачу себе (закрыть активную делегацию, reclaim). Если уже я — no-op.
+//  - участник → делегировать (нет делегации) или переназначить (есть активная).
+// Модель без «self-delegation» в БД: «ответственный = я» — это просто отсутствие активной
+// делегации, так что бэк не нужен (withdraw/delegate/reassign уже есть). Не-создатель видит
+// ответственного только для чтения (менять делегацию может лишь создатель).
+export function DelegateTaskButton({
+  task,
+  currentUserId,
+  onChanged,
+  projectId,
+  className,
+}: Props): React.ReactElement | null {
   const { projectRepository, taskRepository, taskDelegationRepository } = useContainer();
+  const { user } = useCurrentUser();
   const [members, setMembers] = useState<SharedMember[] | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Подгружаем members только если мы — creator и есть смысл показывать dropdown.
-  const isCreator = currentUserId !== null && task.delegation
-    ? task.delegation.creatorUserId === currentUserId
-    : true; // без delegation: caller — owner inbox (= creator), потому что иначе он бы не видел задачу
+  const isCreator =
+    currentUserId !== null && task.delegation
+      ? task.delegation.creatorUserId === currentUserId
+      : true; // без delegation caller — владелец задачи (= создатель), иначе он бы её не видел
 
-  const noActiveDelegation = !task.delegation;
-  const isPendingByMe = task.delegation?.status === 'pending' && isCreator;
-
+  // Участников грузим ВСЕГДА (селектор виден всегда). Себя исключаем — «Я» отдельным пунктом.
   useEffect(() => {
-    if (!noActiveDelegation) return;
     let cancelled = false;
-    const loadMembers = projectId
+    const load = projectId
       ? projectRepository.listMembers(projectId).then((list) =>
           list
             .filter((m) => m.userId !== currentUserId)
@@ -61,7 +70,7 @@ export function DelegateTaskButton({ task, currentUserId, onChanged, projectId, 
             })),
         )
       : projectRepository.listSharedMembers();
-    loadMembers
+    load
       .then((list) => {
         if (!cancelled) setMembers(list);
       })
@@ -71,62 +80,58 @@ export function DelegateTaskButton({ task, currentUserId, onChanged, projectId, 
     return () => {
       cancelled = true;
     };
-  }, [projectRepository, noActiveDelegation, projectId, currentUserId]);
+  }, [projectRepository, projectId, currentUserId]);
 
-  if (!isCreator) return null;
+  const delegatedTo = task.delegation
+    ? { name: task.delegation.delegateDisplayName, avatarUrl: task.delegation.delegateAvatarUrl ?? null }
+    : null;
+  const isSelfAssigned = !delegatedTo;
+  const meName = user?.displayName ?? 'Я';
+  const meAvatar = user?.avatarUrl ?? null;
 
-  const handleDelegate = async (delegateUserId: string): Promise<void> => {
-    if (submitting) return;
-    setSubmitting(true);
-    try {
-      await taskRepository.delegate(task.projectId, task.id, delegateUserId);
-      toast.success('Задача делегирована');
-      onChanged();
-    } catch (e) {
-      toast.error(`Не удалось: ${(e as Error).message}`);
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const inPropertyRow = (className ?? '').includes('justify-start');
 
-  const handleWithdraw = async (): Promise<void> => {
-    if (!task.delegation || submitting) return;
-    if (!window.confirm('Отозвать делегирование?')) return;
-    setSubmitting(true);
-    try {
-      await taskDelegationRepository.withdraw(task.delegation.id);
-      toast.success('Делегирование отозвано');
-      onChanged();
-    } catch (e) {
-      toast.error(`Не удалось: ${(e as Error).message}`);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (isPendingByMe) {
+  // Не-создатель — только чтение текущего ответственного.
+  if (!isCreator) {
     return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        disabled={submitting}
-        className={cn(META_CHIP_CLASS, 'hover:text-destructive', className)}
-        onClick={() => void handleWithdraw()}
-        title="Отозвать делегирование (пока делегат не ответил)"
-      >
-        {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
-        Отозвать
-      </Button>
+      <span className={cn('inline-flex min-h-7 items-center gap-1.5 text-sm text-foreground', className)}>
+        <MiniAvatar name={delegatedTo?.name ?? meName} avatarUrl={delegatedTo?.avatarUrl ?? meAvatar} />
+        {delegatedTo?.name ?? meName}
+      </span>
     );
   }
 
-  if (!noActiveDelegation) return null;
+  const select = async (target: SharedMember | 'self'): Promise<void> => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      if (target === 'self') {
+        // Забрать себе: закрываем активную делегацию (reclaim). Уже я — тихо ничего не делаем.
+        if (task.delegation) {
+          await taskDelegationRepository.withdraw(task.delegation.id);
+          toast.success('Ответственный — вы');
+          onChanged();
+        }
+      } else if (task.delegation) {
+        if (task.delegation.delegateUserId !== target.id) {
+          await taskRepository.reassign(task.projectId, task.id, target.id);
+          toast.success(`Ответственный — ${target.displayName}`);
+          onChanged();
+        }
+      } else {
+        await taskRepository.delegate(task.projectId, task.id, target.id);
+        toast.success(`Ответственный — ${target.displayName}`);
+        onChanged();
+      }
+    } catch (e) {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-  // Ряд свойств задачи передаёт PROPERTY_VALUE_CLASS (justify-start) — там кнопка
-  // текстовая, без иконок: «Выбрать ответственного…», единый шрифт с остальными
-  // свойствами. В композерах/диалогах — исторический chip-вид.
-  const inPropertyRow = (className ?? '').includes('justify-start');
+  const currentName = delegatedTo?.name ?? meName;
+  const currentAvatar = delegatedTo?.avatarUrl ?? meAvatar;
 
   return (
     <DropdownMenu>
@@ -137,51 +142,66 @@ export function DelegateTaskButton({ task, currentUserId, onChanged, projectId, 
           size="sm"
           disabled={submitting}
           className={cn(
-            inPropertyRow ? 'text-muted-foreground hover:text-foreground' : META_CHIP_CLASS,
+            inPropertyRow ? 'text-foreground hover:text-foreground' : META_CHIP_CLASS,
             className,
           )}
-          title="Назначить ответственного — делегировать участнику проекта"
+          title="Ответственный за задачу"
         >
           {submitting ? (
-            <Loader2 className="size-3.5 animate-spin" />
+            <Loader2 className="size-3.5 shrink-0 animate-spin" />
           ) : (
-            !inPropertyRow && <UserPlus className="size-3.5" />
+            <MiniAvatar name={currentName} avatarUrl={currentAvatar} />
           )}
-          {inPropertyRow ? 'Выбрать ответственного…' : 'ответственный'}
-          {!inPropertyRow && <ChevronDown className="size-3 opacity-60" />}
+          <span className="min-w-0 truncate">{currentName}</span>
+          <ChevronDown className="size-3 shrink-0 opacity-60" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[240px]">
-        {(members ?? []).length > 0 ? (
+        {/* «Я» — всегда доступен (забрать задачу себе). */}
+        <DropdownMenuItem onClick={() => void select('self')} className="gap-2">
+          <MiniAvatar name={meName} avatarUrl={meAvatar} />
+          <span className="min-w-0 truncate">{meName}</span>
+          <span className="ml-1 shrink-0 text-[10px] text-muted-foreground">(вы)</span>
+          {isSelfAssigned && <Check className="ml-auto size-3.5 shrink-0 text-primary" />}
+        </DropdownMenuItem>
+        {members === null ? (
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">Загрузка…</div>
+        ) : members.length > 0 ? (
           <>
-            <div className="px-2 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Выберите участника
-            </div>
             <DropdownMenuSeparator />
-            {(members ?? []).map((m) => (
-              <DropdownMenuItem
-                key={m.id}
-                onClick={() => void handleDelegate(m.id)}
-                className="gap-2"
-              >
-                <Avatar className="size-5 shrink-0">
-                  {m.avatarUrl && <AvatarImage src={m.avatarUrl} alt={m.displayName} />}
-                  <AvatarFallback className={cn('text-[9px]', avatarColor(m.displayName))}>
-                    {getInitials(m.displayName)}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="min-w-0 truncate">{m.displayName}</span>
-                <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{m.email}</span>
-              </DropdownMenuItem>
-            ))}
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Делегировать участнику
+            </div>
+            {members.map((m) => {
+              const active = task.delegation?.delegateUserId === m.id;
+              return (
+                <DropdownMenuItem key={m.id} onClick={() => void select(m)} className="gap-2">
+                  <MiniAvatar name={m.displayName} avatarUrl={m.avatarUrl} />
+                  <span className="min-w-0 truncate">{m.displayName}</span>
+                  <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{m.email}</span>
+                  {active && <Check className="size-3.5 shrink-0 text-primary" />}
+                </DropdownMenuItem>
+              );
+            })}
           </>
         ) : (
           <div className="px-2 py-1.5 text-xs text-muted-foreground">
-            Нет общих участников.<br />
-            Пригласите кого-то в проект — потом сможете делегировать.
+            В проекте пока нет других участников — задача за вами. Пригласите кого-то, чтобы делегировать.
           </div>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+// Компактный аватар 20px — фото или цветные инициалы (детерминированный цвет по имени).
+function MiniAvatar({ name, avatarUrl }: { name: string; avatarUrl: string | null }): React.ReactElement {
+  return (
+    <Avatar className="size-5 shrink-0 rounded-[25%]">
+      {avatarUrl && <AvatarImage src={avatarUrl} alt={name} className="object-cover" />}
+      <AvatarFallback className={cn('rounded-[25%] text-[9px] font-semibold', avatarColor(name))}>
+        {getInitials(name)}
+      </AvatarFallback>
+    </Avatar>
   );
 }
