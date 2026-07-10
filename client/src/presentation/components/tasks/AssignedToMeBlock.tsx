@@ -678,14 +678,14 @@ export function AssignedToMeBlock({
           ))}
         </div>
       ) : (
-        // Прочие сортировки (проект / дата создания / приоритет): БОРДЕР-БЛОКИ — каждая группа
-        // = карточка с заголовком-ярлыком и задачами ВНУТРИ (задачи одного проекта объединены в
-        // один блок). Карточки перетаскиваемы → делегирование на аватар участника работает и тут.
-        <div className="flex flex-col gap-3">
+        // Прочие сортировки (проект / дата создания / приоритет): горизонтальные КОЛОНКИ-канбаны —
+        // каждая группа = колонка-бордер с заголовком-ярлыком и задачами внутри (задачи одного
+        // проекта в одной колонке). Всегда канбан, никаких списков. Ряд full-bleed за паддинг.
+        <div className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}>
           {groups.map((group) => (
             <div
               key={group.key}
-              className="overflow-hidden rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02]"
+              className="flex w-[86vw] max-w-[22rem] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02] sm:w-72 sm:max-w-none"
             >
               <div className="flex items-center gap-1.5 border-b border-black/[0.06] bg-muted/50 px-2.5 py-1.5 text-xs font-semibold text-foreground/80 dark:border-white/[0.06] dark:bg-white/[0.04]">
                 <GroupIcon mode={grouping} isInbox={group.isInbox} />
@@ -729,9 +729,8 @@ export function AssignedToMeBlock({
         aria-hidden
         className={cn(
           '!mt-5 mb-1 border-t border-border sm:!mt-6 sm:mb-2',
-          // Full-bleed линия только когда показаны время-колонки (deadline); у бордер-блоков
-          // ширина читаемой колонки.
-          grouping === 'deadline' && bleedNegClass,
+          // Ряд колонок (при любой сортировке) full-bleed'ится за паддинг — линия тоже.
+          bleedNegClass,
         )}
       />
 

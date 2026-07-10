@@ -68,7 +68,6 @@ import {
 } from './selection/selectionReducer';
 import { KanbanHiddenColumnsMenu } from './KanbanHiddenColumnsMenu';
 import { KANBAN_COLOR_CLASSES } from './kanbanColors';
-import { QuickAddTodo } from './QuickAddTodo';
 import { STATUS_LABEL, quickPromoteNext } from './statusLabels';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import { useKanbanSettings } from '@/presentation/hooks/useKanbanSettings';
@@ -1097,19 +1096,8 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         busy={deleting}
       />
 
-      {/* Floating quick-add (position: fixed). DOM-позиция значения не имеет —
-          важно лишь чтобы компонент был смонтирован. Скрываем во время выделения,
-          чтобы не конкурировать с панелью массовых действий. Во «Входящих» (isInbox)
-          плавающий композер убран — задачи-черновики добавляются кнопкой «+» в колонке. */}
-      {selectionStatus === null && !isInbox && (
-        <QuickAddTodo
-          projectId={projectId}
-          isInbox={isInbox}
-          isShared={isShared}
-          aiProjectId={isInbox ? null : projectId}
-          onCreate={(input) => create({ ...input, status: input.status ?? 'todo' })}
-        />
-      )}
+      {/* Плавающий quick-add убран ВЕЗДЕ (и на досках проектов, и в инбоксе) по запросу —
+          задачи добавляются кнопкой «+»/«Создать задачу» в колонке. */}
 
       {/* Панель массовых действий — поверх доски, когда выбрана хотя бы одна задача. */}
       {selectionStatus !== null && selectedIds.size > 0 && (
