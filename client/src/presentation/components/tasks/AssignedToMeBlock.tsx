@@ -54,6 +54,8 @@ import {
   type AssignedGrouping,
 } from '@/domain/user/UiPrefs';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
+import type { SharedMember } from '@/application/project/ProjectRepository';
+import { HttpError } from '@/lib/HttpError';
 import {
   endOfMonthYmd,
   endOfWeekYmd,
@@ -115,7 +117,8 @@ export function AssignedToMeBlock({
   bleedNegClass = '',
   bleedPadClass = '',
 }: Props): React.ReactElement | null {
-  const { taskDelegationRepository, taskRepository, userRepository } = useContainer();
+  const { taskDelegationRepository, taskRepository, userRepository, projectRepository } =
+    useContainer();
   const { user } = useCurrentUser();
   // refresh списка проектов: при accept сервер помечает проект задачи favorite'ом — чтобы
   // секция «Избранное» в сайдбаре сразу его подхватила, перезагружаем список после принятия.
@@ -341,6 +344,49 @@ export function AssignedToMeBlock({
     [patchDeadlineLocal, taskRepository],
   );
 
+  // Кубики людей: все участники проектов пространства (shared-members) — цель для
+  // drag-делегирования. Грузим один раз; себя список уже не содержит (сервер исключает).
+  const [members, setMembers] = useState<SharedMember[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    projectRepository
+      .listSharedMembers()
+      .then((m) => {
+        if (!cancelled) setMembers(m);
+      })
+      .catch(() => {
+        /* тихо: кубики просто не покажем, drag-срок и остальное работают */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectRepository]);
+
+  // Переназначить ответственного (drop карточки на кубик человека). Участник проекта →
+  // просто меняем делегата. Не-участник проекта → сервер вернёт delegate_not_*; пока
+  // сообщаем об этом (полный флоу приглашения в проект — отдельная Фаза 3). После успеха —
+  // refresh (карточка может уйти из «Для меня», сменить делегата в «Другим»).
+  const reassignTo = useCallback(
+    async (item: AssignedTask, member: SharedMember): Promise<void> => {
+      if (member.id === item.delegation.delegateUserId) return; // уже на нём
+      try {
+        await taskRepository.reassign(item.projectId, item.id, member.id);
+        toast.success(`Переназначено: ${member.displayName}`);
+        await refresh();
+        onChanged?.();
+      } catch (e) {
+        const code = e instanceof HttpError ? e.body.error : '';
+        if (code === 'delegate_not_project_member' || code === 'delegate_not_in_shared_members') {
+          const where = item.isInbox ? 'общих проектах' : `проекте «${item.projectName}»`;
+          toast.error(`${member.displayName} не в ${where} — сначала добавьте его в проект`);
+        } else {
+          toast.error(`Не удалось переназначить: ${(e as Error).message}`);
+        }
+      }
+    },
+    [taskRepository, refresh, onChanged],
+  );
+
   const handleDragStart = (e: DragStartEvent): void => {
     const it = e.active.data.current?.item as AssignedTask | undefined;
     if (it) setActiveDrag(it);
@@ -348,18 +394,24 @@ export function AssignedToMeBlock({
   const handleDragEnd = (e: DragEndEvent): void => {
     setActiveDrag(null);
     const over = e.over;
-    const data = over?.data.current as { type?: string; bucket?: string } | undefined;
-    if (!over || data?.type !== 'bucket') return;
+    const data = over?.data.current as
+      | { type?: string; bucket?: string; member?: SharedMember }
+      | undefined;
     const item = e.active.data.current?.item as AssignedTask | undefined;
-    if (!item) return;
-    const bucket = data.bucket;
+    if (!over || !item || !data) return;
+    // Дроп на кубик человека → переназначить делегата.
+    if (data.type === 'user' && data.member) {
+      void reassignTo(item, data.member);
+      return;
+    }
+    if (data.type !== 'bucket') return;
     // Дроп в свою же колонку — no-op (не дёргаем сервер и не открываем зря всплывашку).
     const today = ymd(startOfDay(new Date()));
     const cur = item.deadline == null ? 'none' : item.deadline <= today ? 'today' : 'future';
-    if (cur === bucket) return;
-    if (bucket === 'none') void applyDeadline(item, null);
-    else if (bucket === 'today') void applyDeadline(item, today);
-    else if (bucket === 'future') setFutureDrop(item); // всплывашка выбора срока
+    if (cur === data.bucket) return;
+    if (data.bucket === 'none') void applyDeadline(item, null);
+    else if (data.bucket === 'today') void applyDeadline(item, today);
+    else if (data.bucket === 'future') setFutureDrop(item); // всплывашка выбора срока
   };
 
   if (loading) return null;
@@ -389,10 +441,13 @@ export function AssignedToMeBlock({
             'Все подходящие поручения выполнены и скрыты («Скрыть выполненные»)';
 
   return (
-    // Персональная зона, Notion-стиль: НЕ карточка-в-рамке (рамка враждует с full-bleed
-    // канбана). «Это моё» несут три тихих сигнала: identity-шапка (свой аватар + настоящий
-    // заголовок + синяя count-пилюля + подзаголовок-контракт), шёпот-тинт primary на
-    // колонках канбана и hairline-линейка, замыкающая зону перед основной доской.
+    // Один DndContext на всю зону: и временные колонки (drag → срок), и кубики людей
+    // (drag → делегирование) — общие drop-цели одного перетаскивания карточки.
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    {/* Персональная зона, Notion-стиль: НЕ карточка-в-рамке (рамка враждует с full-bleed
+        канбана). «Это моё» несут три тихих сигнала: identity-шапка (свой аватар + настоящий
+        заголовок + синяя count-пилюля + подзаголовок-контракт), шёпот-тинт primary на
+        колонках канбана и hairline-линейка, замыкающая зону перед основной доской. */}
     <section id="assigned-to-me" className="space-y-3">
       <div className="flex items-start justify-between gap-3 px-0.5">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -457,6 +512,20 @@ export function AssignedToMeBlock({
         </div>
       </div>
 
+      {/* Кубики людей пространства — цель drag-делегирования. Показываем в канбане, когда
+          есть с кем шарить. Во время перетаскивания карточки (activeDrag) кубик расширяется
+          и подсказывает «Делегировать: <имя>». Ряд горизонтально скроллится на узких экранах. */}
+      {view === 'kanban' && members.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto px-0.5 pb-0.5">
+          <span className="shrink-0 pr-0.5 text-[11px] text-muted-foreground/60">
+            {activeDrag ? 'Делегировать →' : 'Люди'}
+          </span>
+          {members.map((m) => (
+            <UserCube key={m.id} member={m} dragging={activeDrag !== null} />
+          ))}
+        </div>
+      )}
+
       {visibleTasks.length === 0 ? (
         // Пустая активная вкладка при живой соседней: тихая строка вместо пустых колонок.
         <p className="px-0.5 py-1 text-sm text-muted-foreground/60">{emptyText}</p>
@@ -464,53 +533,38 @@ export function AssignedToMeBlock({
         // Канбан: РОВНО 3 колонки по времени (Без срока / На сегодня / Будущее), карточки =
         // поручения. Ряд колонок full-bleed'ится за паддинг страницы (как доска проекта).
         // Drag'ом карточку кидают между колонками → меняется дедлайн (см. handleDragEnd).
-        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}>
-            {kanbanGroups.map((group) => (
-              <TimeBucketColumn key={group.key} bucket={group.key} label={group.label} count={group.items.length}>
-                {group.items.length === 0 ? (
-                  <p className="px-1 py-2 text-xs text-muted-foreground/45">Пусто</p>
-                ) : (
-                  // «Принять/Отклонить» — только у входящих pending («Для меня»). В «Другим»
-                  // pending рисуется «принятой» карточкой: DelegationBadge сам покажет
-                  // «ждёт ответа» (amber, перспектива делегатора).
-                  group.items.map((item) => (
-                    <DraggableTask key={item.id} item={item} disabled={!item.canModify}>
-                      {tab === 'toMe' && item.delegation.status === 'pending' ? (
-                        <PendingCard
-                          item={item}
-                          busy={resolvingIds.has(item.delegation.id)}
-                          onAccept={() => void resolve(item.delegation.id, 'accept')}
-                          onDecline={() => void resolve(item.delegation.id, 'decline')}
-                        />
-                      ) : (
-                        <AcceptedCard
-                          item={item}
-                          currentUserId={user?.id ?? null}
-                          onOpen={() => setDrawerTask(item)}
-                          onChanged={handleToggled}
-                        />
-                      )}
-                    </DraggableTask>
-                  ))
-                )}
-              </TimeBucketColumn>
-            ))}
-          </div>
-          {/* Копия таскаемой карточки под курсором — как на доске проекта. */}
-          <DragOverlay dropAnimation={null}>
-            {activeDrag ? (
-              <div className="w-[86vw] max-w-[22rem] rotate-1 opacity-90 sm:w-72 sm:max-w-none">
-                <AcceptedCard
-                  item={activeDrag}
-                  currentUserId={user?.id ?? null}
-                  onOpen={() => {}}
-                  onChanged={() => {}}
-                />
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+        <div className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}>
+          {kanbanGroups.map((group) => (
+            <TimeBucketColumn key={group.key} bucket={group.key} label={group.label} count={group.items.length}>
+              {group.items.length === 0 ? (
+                <p className="px-1 py-2 text-xs text-muted-foreground/45">Пусто</p>
+              ) : (
+                // «Принять/Отклонить» — только у входящих pending («Для меня»). В «Другим»
+                // pending рисуется «принятой» карточкой: DelegationBadge сам покажет
+                // «ждёт ответа» (amber, перспектива делегатора).
+                group.items.map((item) => (
+                  <DraggableTask key={item.id} item={item} disabled={!item.canModify}>
+                    {tab === 'toMe' && item.delegation.status === 'pending' ? (
+                      <PendingCard
+                        item={item}
+                        busy={resolvingIds.has(item.delegation.id)}
+                        onAccept={() => void resolve(item.delegation.id, 'accept')}
+                        onDecline={() => void resolve(item.delegation.id, 'decline')}
+                      />
+                    ) : (
+                      <AcceptedCard
+                        item={item}
+                        currentUserId={user?.id ?? null}
+                        onOpen={() => setDrawerTask(item)}
+                        onChanged={handleToggled}
+                      />
+                    )}
+                  </DraggableTask>
+                ))
+              )}
+            </TimeBucketColumn>
+          ))}
+        </div>
       ) : (
         <div className="space-y-6">
           {groups.map((group) => (
@@ -588,6 +642,20 @@ export function AssignedToMeBlock({
         }}
       />
     </section>
+    {/* Копия таскаемой карточки под курсором — общая для колонок и кубиков. */}
+    <DragOverlay dropAnimation={null}>
+      {activeDrag ? (
+        <div className="w-[86vw] max-w-[22rem] rotate-1 opacity-90 sm:w-72 sm:max-w-none">
+          <AcceptedCard
+            item={activeDrag}
+            currentUserId={user?.id ?? null}
+            onOpen={() => {}}
+            onChanged={() => {}}
+          />
+        </div>
+      ) : null}
+    </DragOverlay>
+    </DndContext>
   );
 }
 
@@ -651,6 +719,38 @@ function DraggableTask({
       className={cn(!disabled && 'cursor-grab active:cursor-grabbing', isDragging && 'opacity-30')}
     >
       {children}
+    </div>
+  );
+}
+
+// Кубик участника пространства = drop-цель делегирования. Компактный (аватар + ник);
+// во время перетаскивания карточки подсвечивается как цель, а под курсором расширяется
+// в «Делегировать: <имя>».
+function UserCube({ member, dragging }: { member: SharedMember; dragging: boolean }): React.ReactElement {
+  const { setNodeRef, isOver } = useDroppable({ id: `user-${member.id}`, data: { type: 'user', member } });
+  return (
+    <div
+      ref={setNodeRef}
+      title={`Делегировать: ${member.displayName}`}
+      className={cn(
+        'flex shrink-0 items-center gap-1 rounded-full border py-0.5 pl-0.5 pr-2 text-[11px] transition-all',
+        dragging
+          ? isOver
+            ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/40'
+            : 'border-primary/30 bg-primary/[0.05] text-foreground'
+          : 'border-transparent bg-muted/60 text-muted-foreground',
+      )}
+    >
+      <UserAvatar
+        displayName={member.displayName}
+        avatarUrl={member.avatarUrl}
+        className="size-5 text-[9px]"
+      />
+      {isOver && dragging ? (
+        <span className="whitespace-nowrap font-medium">Делегировать: {member.displayName}</span>
+      ) : (
+        <span className="max-w-[6rem] truncate">{member.displayName}</span>
+      )}
     </div>
   );
 }

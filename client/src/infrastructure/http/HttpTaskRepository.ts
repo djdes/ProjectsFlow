@@ -400,6 +400,14 @@ export class HttpTaskRepository implements TaskRepository {
     return fromDto(task);
   }
 
+  async reassign(projectId: string, taskId: string, delegateUserId: string): Promise<Task> {
+    const { task } = await httpClient.post<{ task: TaskDto }>(
+      `/projects/${projectId}/tasks/${taskId}/reassign`,
+      { delegateUserId },
+    );
+    return fromDto(task);
+  }
+
   async digest(projectId: string, input: TaskDigestInput): Promise<TaskDigestResult> {
     return httpClient.post<TaskDigestResult>(`/projects/${projectId}/tasks/digest`, input);
   }

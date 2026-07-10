@@ -69,6 +69,11 @@ import {
   DelegationNotFoundError,
   DelegationWrongStateError,
   NotDelegateError,
+  SelfDelegationError,
+  NotCreatorError,
+  AlreadyDelegatedError,
+  DelegateNotInSharedMembersError,
+  DelegateNotProjectMemberError,
 } from '../../domain/task/errors.js';
 import { TaskNotActiveError } from '../../application/task/RequestRalphCancel.js';
 import { RalphCancelNotRequestedByYouError } from '../../application/task/RevokeRalphCancel.js';
@@ -428,6 +433,29 @@ export function errorHandler(
       error: 'delegation_wrong_state',
       message: 'Это делегирование уже обработано (принято, отклонено или отозвано).',
     });
+    return;
+  }
+  // --- Делегирование задач (create/reassign) ---
+  if (err instanceof SelfDelegationError) {
+    res.status(400).json({ error: 'self_delegation', message: err.message });
+    return;
+  }
+  if (err instanceof NotCreatorError) {
+    res.status(403).json({ error: 'not_creator', message: err.message });
+    return;
+  }
+  if (err instanceof AlreadyDelegatedError) {
+    res.status(409).json({ error: 'already_delegated', message: err.message });
+    return;
+  }
+  // Оба «не тот участник» отдают отдельные коды — клиент по ним открывает флоу
+  // приглашения человека в проект (drag-делегирование во «Входящих»).
+  if (err instanceof DelegateNotInSharedMembersError) {
+    res.status(403).json({ error: 'delegate_not_in_shared_members', message: err.message });
+    return;
+  }
+  if (err instanceof DelegateNotProjectMemberError) {
+    res.status(403).json({ error: 'delegate_not_project_member', message: err.message });
     return;
   }
   if (err instanceof RalphCancelNotRequestedByYouError) {
