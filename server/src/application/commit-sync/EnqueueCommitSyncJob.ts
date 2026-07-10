@@ -68,6 +68,7 @@ export class EnqueueCommitSyncJob {
       // чтобы commit-sync не был бесплатным расходом подписки.
       createdBy: project.ownerId,
       dispatcherUserId,
+      action: config.commitSyncAction,
       thresholdHours: config.commitSyncThresholdHours,
       context,
       commitsJson: JSON.stringify(commitSnapshot),

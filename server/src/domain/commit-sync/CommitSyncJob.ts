@@ -12,6 +12,11 @@ export const COMMIT_SYNC_STATUSES: readonly CommitSyncStatus[] = [
   'cancelled',
 ];
 
+// Что делать с совпадениями коммит↔задача при complete (db/101):
+//   'propose' — создать предложение закрыть (human-in-the-loop, дефолт);
+//   'auto'    — прежнее поведение (двигать по порогу возраста коммита).
+export type CommitSyncAction = 'propose' | 'auto';
+
 // Одно совпадение от воркера: коммит commitSha по смыслу относится к задаче taskId.
 // reason — короткое обоснование (для лога/сводки). Без решения о статусе — это серверное.
 export type CommitSyncMatch = {
@@ -28,6 +33,8 @@ export type CommitSyncJob = {
   readonly createdBy: string | null;
   readonly dispatcherUserId: string;
   readonly status: CommitSyncStatus;
+  // Снимок действия из настроек на момент enqueue (propose|auto).
+  readonly action: CommitSyncAction;
   // Снапшот порога (часы) на момент enqueue — авторитетен при применении.
   readonly thresholdHours: number;
   readonly context: string | null;

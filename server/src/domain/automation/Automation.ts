@@ -56,5 +56,14 @@ export type AutomationConfig = {
   readonly commitSyncMinute: number;
   readonly commitSyncThresholdHours: number;
   readonly commitSyncLastRunOn: string | null;
+  // EOD/BOD-автоматизации (db/101). commitSyncAction — что делать с совпадениями commit-sync
+  // ('propose' — предложить закрыть, дефолт; 'auto' — авто-перемещение по порогу). eodReminder* —
+  // напоминание «актуализируй перед уходом» (17:20). dailyPlan — секция «с чего начать» в дайджесте.
+  readonly commitSyncAction: 'propose' | 'auto';
+  readonly eodReminderEnabled: boolean;
+  readonly eodReminderHour: number;
+  readonly eodReminderMinute: number;
+  readonly eodReminderLastRunOn: string | null;
+  readonly dailyPlanEnabled: boolean;
   readonly criteria: ReadonlyArray<AutomationCriterion>;
 };

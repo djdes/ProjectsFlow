@@ -1,10 +1,16 @@
-import type { CommitSyncJob, CommitSyncStatus } from '../../domain/commit-sync/CommitSyncJob.js';
+import type {
+  CommitSyncAction,
+  CommitSyncJob,
+  CommitSyncStatus,
+} from '../../domain/commit-sync/CommitSyncJob.js';
 
 export type NewCommitSyncJobInput = {
   readonly projectId: string;
   // Инициатор (владелец проекта) — на его тариф метерим/гейтим (db/089).
   readonly createdBy: string | null;
   readonly dispatcherUserId: string;
+  // Снимок действия из настроек (propose|auto).
+  readonly action: CommitSyncAction;
   readonly thresholdHours: number;
   readonly context: string | null;
   readonly commitsJson: string | null;

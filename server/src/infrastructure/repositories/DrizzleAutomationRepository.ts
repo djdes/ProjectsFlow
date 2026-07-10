@@ -230,5 +230,11 @@ function rowToConfigBase(row: ProjectAutomationRow): Omit<AutomationConfig, 'cri
     commitSyncMinute: row.commitSyncMinute,
     commitSyncThresholdHours: row.commitSyncThresholdHours,
     commitSyncLastRunOn: row.commitSyncLastRunOn ?? null,
+    commitSyncAction: row.commitSyncAction,
+    eodReminderEnabled: row.eodReminderEnabled,
+    eodReminderHour: row.eodReminderHour,
+    eodReminderMinute: row.eodReminderMinute,
+    eodReminderLastRunOn: row.eodReminderLastRunOn ?? null,
+    dailyPlanEnabled: row.dailyPlanEnabled,
   };
 }

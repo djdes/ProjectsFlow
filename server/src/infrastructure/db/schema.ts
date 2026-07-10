@@ -1066,6 +1066,9 @@ export const commitSyncJobs = mysqlTable(
     status: mysqlEnum('status', ['queued', 'running', 'succeeded', 'failed', 'cancelled'])
       .notNull()
       .default('queued'),
+    // Снимок действия из настроек на момент enqueue (db/101): 'propose' — создать предложение
+    // закрыть; 'auto' — прежнее авто-перемещение по порогу возраста.
+    action: mysqlEnum('action', ['propose', 'auto']).notNull().default('propose'),
     thresholdHours: int('threshold_hours').notNull(),
     context: mediumtext('context'),
     commitsJson: mediumtext('commits_json'),
@@ -1158,12 +1161,23 @@ export const projectAutomation = mysqlTable('project_automation', {
   tasksCreated: int('tasks_created').notNull().default(0),
   lastTaskAt: timestamp('last_task_at'),
   nextCriterionIdx: int('next_criterion_idx').notNull().default(0),
-  // Ежедневная авто-обработка статусов задач по коммитам (db/072).
-  commitSyncEnabled: boolean('commit_sync_enabled').notNull().default(false),
-  commitSyncHour: tinyint('commit_sync_hour').notNull().default(3),
+  // Ежедневная авто-обработка статусов задач по коммитам (db/072). Дефолты обновлены в db/101:
+  // ВКЛ по умолчанию @ 17:00 (ритуал «предложить закрыть»).
+  commitSyncEnabled: boolean('commit_sync_enabled').notNull().default(true),
+  commitSyncHour: tinyint('commit_sync_hour').notNull().default(17),
   commitSyncMinute: tinyint('commit_sync_minute').notNull().default(0),
   commitSyncThresholdHours: int('commit_sync_threshold_hours').notNull().default(70),
   commitSyncLastRunOn: date('commit_sync_last_run_on', { mode: 'string' }),
+  // EOD/BOD-автоматизации (db/101).
+  // Действие commit-sync: предложить закрыть (дефолт) vs авто-перемещение по порогу.
+  commitSyncAction: mysqlEnum('commit_sync_action', ['propose', 'auto']).notNull().default('propose'),
+  // Фаза 2: напоминание «актуализируй перед уходом» (17:20, ВКЛ по умолчанию).
+  eodReminderEnabled: boolean('eod_reminder_enabled').notNull().default(true),
+  eodReminderHour: tinyint('eod_reminder_hour').notNull().default(17),
+  eodReminderMinute: tinyint('eod_reminder_minute').notNull().default(20),
+  eodReminderLastRunOn: date('eod_reminder_last_run_on', { mode: 'string' }),
+  // Фаза 3: секция «с чего начать» в дневном дайджесте (ВКЛ по умолчанию).
+  dailyPlanEnabled: boolean('daily_plan_enabled').notNull().default(true),
   createdAt: createdAtCol(),
   updatedAt: updatedAtCol(),
 });

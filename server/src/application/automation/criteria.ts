@@ -130,11 +130,19 @@ export function defaultAutomationConfig(projectId: string): AutomationConfig {
     tasksCreated: 0,
     lastTaskAt: null,
     nextCriterionIdx: 0,
-    commitSyncEnabled: false,
-    commitSyncHour: 3,
+    // EOD/BOD (db/101): ВКЛ по умолчанию, ритуальное время. Применяется к проектам без строки
+    // project_automation (напр. только что созданным до дефолт-строки).
+    commitSyncEnabled: true,
+    commitSyncHour: 17,
     commitSyncMinute: 0,
     commitSyncThresholdHours: 70,
     commitSyncLastRunOn: null,
+    commitSyncAction: 'propose',
+    eodReminderEnabled: true,
+    eodReminderHour: 17,
+    eodReminderMinute: 20,
+    eodReminderLastRunOn: null,
+    dailyPlanEnabled: true,
     criteria: mergeCriteriaWithDefaults([]),
   };
 }
