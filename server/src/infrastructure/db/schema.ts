@@ -309,6 +309,19 @@ export const siteArtifacts = mysqlTable(
   (t) => [uniqueIndex('uq_site_artifacts_slug').on(t.slug)],
 );
 
+// Реестр бэкендов пользовательских приложений (self-serve app backend, db/102). Одна строка на
+// проект; сами данные приложения — в per-project SQLite-файле. schema_json — объявленная схема.
+export const appBackends = mysqlTable('app_backends', {
+  projectId: char('project_id', { length: 36 }).notNull().primaryKey(),
+  status: mysqlEnum('status', ['none', 'active']).notNull().default('none'),
+  schemaJson: mediumtext('schema_json'),
+  appKeyHash: varchar('app_key_hash', { length: 255 }),
+  usageBytes: bigint('usage_bytes', { mode: 'number' }).notNull().default(0),
+  storageLimitBytes: bigint('storage_limit_bytes', { mode: 'number' }).notNull().default(104857600),
+  createdAt: createdAtCol(),
+  updatedAt: updatedAtCol(),
+});
+
 // Пространства (workspaces): верхнеуровневый изолированный контейнер над проектами. См. db/073.
 export const workspaces = mysqlTable(
   'workspaces',
