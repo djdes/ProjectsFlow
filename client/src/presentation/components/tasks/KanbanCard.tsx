@@ -272,7 +272,14 @@ export function KanbanCard({
         ) : (
           showCheckbox &&
           !preview && (
-            <div className="pt-0.5" {...stopDragProps}>
+            // Чекбокс-«кружок» — hover-оверлей в ЛЕВОМ ВЕРХНЕМ углу (симметрично действиям
+            // справа-сверху и мете снизу): в покое скрыт, текст занимает всю ширину; при
+            // наведении плавно наслаивается на начало текста. На тач всегда виден (max-sm).
+            // rounded-full bg-card маскирует символ под кружком.
+            <div
+              className="pointer-events-none absolute left-1 top-1 z-20 rounded-full bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:opacity-100 dark:ring-white/[0.08]"
+              {...stopDragProps}
+            >
               <InboxCheckbox
                 task={task}
                 lastDoneTaskId={lastDoneTaskId}

@@ -92,6 +92,9 @@ type Props = {
   // Режим отображения (как у страницы «Входящие»): 'kanban' — группы становятся колонками
   // канбана (карточки = поручения), 'list' — плоский список с заголовками групп.
   view?: 'kanban' | 'list';
+  // Переключить страницу в list-вид. Меню сортировки/группировки показываем в обоих видах, но
+  // группировка рендерится списком — при выборе из канбана просим страницу перейти в список.
+  onRequestListView?: () => void;
   // Скрыть выполненные (status='done'). Общий Eye-toggle страницы «Входящие» (persist в
   // localStorage) действует и на этот блок, и на доску ниже — одна кнопка на страницу.
   hideDone?: boolean;
@@ -151,6 +154,7 @@ const snapToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transform })
 export function AssignedToMeBlock({
   onChanged,
   view = 'list',
+  onRequestListView,
   hideDone = false,
   bleedNegClass = '',
   bleedPadClass = '',
@@ -235,6 +239,9 @@ export function AssignedToMeBlock({
   const handleGroupingChange = (next: AssignedGrouping): void => {
     // Оптимистично: группировка применяется мгновенно, сохранение летит в фоне.
     setGrouping(next);
+    // Группировка рендерится списком — из канбана (фикс. колонки по времени) переходим в список,
+    // иначе выбор был бы «немым».
+    if (view === 'kanban') onRequestListView?.();
     void userRepository.setUiPrefs({ inboxAssignedGrouping: next }).catch((e: unknown) => {
       toast.error(`Не удалось сохранить группировку: ${(e as Error).message}`);
     });
@@ -584,7 +591,8 @@ export function AssignedToMeBlock({
           )}
           {/* Группировка — только для списка. В канбане колонки фиксированы по времени,
               поэтому выпадашка не нужна. items-start прижимает контролы к строке табов. */}
-          {view === 'list' && <GroupingMenu value={grouping} onChange={handleGroupingChange} />}
+          {/* Сортировка/группировка — в обоих видах (в канбане выбор переключит на список). */}
+          <GroupingMenu value={grouping} onChange={handleGroupingChange} />
         </div>
       </div>
 
@@ -635,13 +643,17 @@ export function AssignedToMeBlock({
           ))}
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {groups.map((group) => (
             <div key={group.key} className="space-y-1.5">
-              <div className="flex items-center gap-1.5 px-0.5 pb-0.5 text-xs font-medium text-muted-foreground">
+              {/* Заголовок-ярлык группы (проект / дата / дедлайн / приоритет): выделенная полоса
+                  с иконкой, названием и счётчиком — задачи идут «внутри» под ним. */}
+              <div className="flex items-center gap-1.5 rounded-md border border-black/[0.05] bg-muted/50 px-2 py-1 text-xs font-semibold text-foreground/80 dark:border-white/[0.06] dark:bg-white/[0.04]">
                 <GroupIcon mode={grouping} isInbox={group.isInbox} />
                 <span className="truncate">{group.label}</span>
-                <span className="text-muted-foreground/60">· {group.items.length}</span>
+                <span className="ml-auto shrink-0 rounded-full bg-background px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+                  {group.items.length}
+                </span>
               </div>
               <ul className="divide-y divide-border/60">
                 {/* Хелпер уже отсортировал: ожидающие (pending) наверх, затем по релевантному
@@ -1289,8 +1301,10 @@ function AcceptedCard({
         <span className="truncate">{projectLabel}</span>
       </div>
       <div className="relative flex items-start gap-1.5 px-2 py-2">
-        {/* stopPropagation на pointer-старте — нажатие по чекбоксу не стартует drag карточки. */}
+        {/* Чекбокс — hover-оверлей слева-сверху (как на досках): в покое скрыт, текст на всю
+            ширину; при наведении наслаивается на начало текста. На тач всегда виден. */}
         <div
+          className="pointer-events-none absolute left-1 top-1 z-20 rounded-full bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:opacity-100 dark:ring-white/[0.08]"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
