@@ -459,6 +459,21 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   const { order: doneOrder, toggle: toggleDoneOrder } = useDoneSortOrder();
   const grouped = useMemo(() => groupByStatus(tasks, doneOrder), [tasks, doneOrder]);
   const activeTask = activeId ? tasks.find((t) => t.id === activeId) ?? null : null;
+  // Открытая в drawer'е задача — её карточку подсвечиваем синим бордером (E4).
+  const openTaskId = dialog?.mode === 'edit' ? dialog.task.id : null;
+  // Только что перемещённая drag'ом карточка остаётся выделенной синим, пока юзер куда-нибудь
+  // не кликнет (E4). Сбрасываем по следующему pointerdown и при старте нового drag'а.
+  const [recentlyMovedId, setRecentlyMovedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!recentlyMovedId) return;
+    const clear = (): void => setRecentlyMovedId(null);
+    // setTimeout(0) — не ловим тот pointerup/click, что завершил сам drop.
+    const t = window.setTimeout(() => document.addEventListener('pointerdown', clear, { once: true }), 0);
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener('pointerdown', clear);
+    };
+  }, [recentlyMovedId]);
 
   // === Фильтры доски (клиентские, поверх grouped — drag-математика остаётся на полном списке) ===
   const [filterQuery, setFilterQuery] = useState('');
@@ -597,6 +612,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
       dropTimerRef.current = null;
     }
     setActiveId(String(e.active.id));
+    setRecentlyMovedId(null);
     setDropTarget(null);
     setPreviewPhase('lifted');
   };
@@ -699,12 +715,15 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
       if (currentIndex === insertIndex || currentIndex === insertIndex - 1) return;
     }
 
+    const movedId = activeTask.id;
     try {
-      await move(activeTask.id, {
+      await move(movedId, {
         targetStatus,
         beforeTaskId: beforeTask?.id ?? null,
         afterTaskId: afterTask?.id ?? null,
       });
+      // Перемещённая карточка остаётся выделенной синим до следующего клика (E4).
+      setRecentlyMovedId(movedId);
       // Микро-праздник: дотащили в «Готово» (не реордер внутри done).
       if (targetStatus === 'done' && activeTask.status !== 'done') {
         setConfettiKey((k) => k + 1);
@@ -958,6 +977,8 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
                 lastTodoTaskId={lastTodoTaskId}
                 currentUserId={user?.id ?? null}
                 activeId={activeId}
+                openTaskId={openTaskId}
+                recentlyMovedId={recentlyMovedId}
                 dropTarget={dropTarget?.status === status ? dropTarget : null}
                 liveTaskIds={liveTaskIds}
                 colorClasses={KANBAN_COLOR_CLASSES[color]}

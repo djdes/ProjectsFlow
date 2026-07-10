@@ -1823,7 +1823,7 @@ export function TaskDrawer({
       <Button
         variant="ghost"
         size="sm"
-        className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+        className="h-8 shrink-0 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
         aria-label="Скопировать ссылку на задачу"
         onClick={() => {
           void (async () => {
@@ -1847,7 +1847,7 @@ export function TaskDrawer({
           <Button
             variant="ghost"
             size="icon"
-            className="size-8 text-muted-foreground hover:text-foreground"
+            className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
             aria-label="Ещё"
           >
             <MoreHorizontal className="size-4" />

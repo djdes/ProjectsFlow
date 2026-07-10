@@ -46,6 +46,10 @@ type Props = {
   currentUserId?: string | null;
   // У задачи активна LIVE-сессия воркера — рисуем пульсирующую 🔴 точку в углу карточки.
   liveRunning?: boolean;
+  // E4: карточка открыта в drawer'е (слегка синяя + синий бордер) / только что перемещена
+  // drag'ом (выделена синим, держится до клика в стороне).
+  open?: boolean;
+  recentlyMoved?: boolean;
   // Режим мультивыделения активен для колонки этой карточки. Тогда drag/drawer
   // отключены, клик тогает выбор, слева — круглый чекбокс.
   selectionMode?: boolean;
@@ -74,6 +78,8 @@ export function KanbanCard({
   lastTodoTaskId = null,
   currentUserId = null,
   liveRunning = false,
+  open = false,
+  recentlyMoved = false,
   selectionMode = false,
   selected = false,
   onSelectToggle,
@@ -193,6 +199,10 @@ export function KanbanCard({
           !preview && task.status === 'todo' && 'ring-1 ring-amber-400/40 dark:ring-amber-300/20',
           // Подсветка выбранной карточки в режиме выделения.
           selecting && selected && 'border-primary ring-2 ring-primary/60',
+          // E4: открыта в drawer'е — слегка синяя заливка + синий бордер (как в Notion).
+          open && !preview && 'border-primary/60 bg-primary/[0.04] dark:bg-primary/[0.08]',
+          // E4: только что перемещена drag'ом — выделена синим (держится до клика в стороне).
+          recentlyMoved && !preview && 'border-primary ring-2 ring-primary/60',
           preview
             ? // Карточка в DragOverlay: «приподнятый» вид — мощная тень, ring, выраженная
               // граница. Tilt/scale делаем НЕ здесь, а на motion-обёртке в KanbanBoard —

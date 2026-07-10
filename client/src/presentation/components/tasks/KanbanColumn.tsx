@@ -62,6 +62,9 @@ type Props = {
   currentUserId?: string | null;
   // Drop indicator: id перетаскиваемой карточки (null = нет активного drag'а).
   activeId?: string | null;
+  // E4: id открытой в drawer'е задачи (синий бордер) и только что перемещённой (синее выделение).
+  openTaskId?: string | null;
+  recentlyMovedId?: string | null;
   // Drop target для этой колонки (null = курсор не над этой колонкой).
   dropTarget?: { status: TaskStatus; overId: string } | null;
   // taskId'ы с активной LIVE-сессией воркера — карточка рисует 🔴 точку.
@@ -130,6 +133,8 @@ export function KanbanColumn({
   lastTodoTaskId = null,
   currentUserId = null,
   activeId = null,
+  openTaskId = null,
+  recentlyMovedId = null,
   dropTarget = null,
   liveTaskIds,
   colorClasses,
@@ -254,6 +259,8 @@ export function KanbanColumn({
       lastTodoTaskId={lastTodoTaskId}
       currentUserId={currentUserId}
       liveRunning={liveTaskIds?.has(t.id) ?? false}
+      open={t.id === openTaskId}
+      recentlyMoved={t.id === recentlyMovedId}
       selectionMode={selectionMode}
       selected={selectedIds?.has(t.id) ?? false}
       onSelectToggle={onSelectToggle}
