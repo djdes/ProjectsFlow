@@ -49,7 +49,10 @@ export class SendEodReminder {
     if (!project) return;
 
     const members = await this.deps.members.listByProject(projectId);
-    if (members.length === 0) return;
+    // EOD-ритуал осмыслен только для КОМАНДНЫХ проектов (2+ участника): «актуализируй перед
+    // уходом / помоги другим» в соло-проекте (владелец один) — бессмысленный самоспам, особенно
+    // при «вкл на всех» (владелец в десятках соло-песочниц). Соло-проекты молчат.
+    if (members.length <= 1) return;
 
     const allTasks = await this.deps.tasks.listByProject(projectId);
     const openTasks = allTasks.filter((t) => OPEN_STATUSES.has(t.status));
