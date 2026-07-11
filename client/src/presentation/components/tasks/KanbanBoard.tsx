@@ -20,7 +20,6 @@ import {
   ArrowUpNarrowWide,
   Bot,
   CalendarClock,
-  ChevronDown,
   Flag,
   Plus,
   Search,
@@ -35,6 +34,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { toast } from '@/components/ui/sonner';
 import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { TASK_STATUSES, TASK_PRIORITIES } from '@/domain/task/Task';
@@ -113,7 +118,9 @@ function localIsoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-// Тихий dropdown-фильтр доски: иконка + текущий лейбл; активное состояние подсвечено.
+// Тихий dropdown-фильтр доски: ТОЛЬКО иконка (Notion-стиль, компактный тулбар). Название
+// фильтра и текущее значение — в тултипе; активный фильтр подсвечен акцентом и помечен
+// точкой-индикатором (текст ушёл в тултип, поэтому «включённость» несёт точка).
 function FilterDropdown({
   icon,
   label,
@@ -122,6 +129,7 @@ function FilterDropdown({
   onSelect,
 }: {
   icon: React.ReactNode;
+  // Ярлык фильтра / текущее значение — в aria-label и тултипе (в самой кнопке текста нет).
   label: string;
   active: boolean;
   options: ReadonlyArray<{ key: string; label: string; dotClass?: string }>;
@@ -129,16 +137,24 @@ function FilterDropdown({
 }): React.ReactElement {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={cnFilterTrigger(active)}
-        >
-          {icon}
-          {label}
-          <ChevronDown className="size-3 opacity-60" />
-        </button>
-      </DropdownMenuTrigger>
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <button type="button" aria-label={label} className={cnFilterTrigger(active)}>
+                {icon}
+                {active && (
+                  <span
+                    aria-hidden
+                    className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-primary ring-2 ring-background"
+                  />
+                )}
+              </button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <DropdownMenuContent align="start" className="min-w-[180px]">
         {options.map((o) => (
           <DropdownMenuItem key={o.key} onClick={() => onSelect(o.key)} className="gap-2">
@@ -153,9 +169,9 @@ function FilterDropdown({
 
 function cnFilterTrigger(active: boolean): string {
   return [
-    'inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs transition-colors',
+    'relative inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors',
     active
-      ? 'bg-primary/10 font-medium text-primary'
+      ? 'bg-primary/10 text-primary'
       : 'text-muted-foreground hover:bg-accent hover:text-foreground',
   ].join(' ');
 }
