@@ -4,7 +4,9 @@ import {
   CircleDot,
   Copy,
   Flag,
+  Link as LinkIcon,
   Maximize2,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -112,10 +114,12 @@ export const VIEW_COLUMN_LABELS: Record<ViewColumn, string> = {
   assignee: 'Ответственный',
 };
 
-// Контекстное меню задачи (строка таблицы/списка, чип календаря) — Notion-style:
-// Открыть / Статус ▸ / Приоритет ▸ / Срок ▸ / Дублировать / Удалить.
+// Контекстное меню задачи (строка таблицы/списка, чип календаря) — копия Notion-меню
+// страницы: Открыть / Изменить свойство ▸ / Скопировать ссылку / Дублировать /
+// Удалить + футер «Изменено …».
 export function taskMenuEntries(
   task: Task,
+  projectId: string,
   h: {
     onOpen: () => void;
     onStatus: (s: TaskStatus) => void;
@@ -126,59 +130,75 @@ export function taskMenuEntries(
   },
 ): MenuEntry[] {
   const today = ymd(startOfDay(new Date()));
+  const statusSub: MenuEntry = {
+    kind: 'sub',
+    label: 'Статус',
+    icon: CircleDot,
+    items: VISIBLE_KANBAN_STATUSES.map((s) => ({
+      kind: 'item' as const,
+      label: STATUS_LABEL[s],
+      dotClass: STATUS_DOT[s],
+      checked: task.status === s,
+      onSelect: () => h.onStatus(s),
+    })),
+  };
+  const prioritySub: MenuEntry = {
+    kind: 'sub',
+    label: 'Приоритет',
+    icon: Flag,
+    items: [
+      ...TASK_PRIORITIES.map((p) => ({
+        kind: 'item' as const,
+        label: PRIORITY_META[p].label,
+        dotClass: PRIORITY_META[p].dotColor,
+        checked: task.priority === p,
+        onSelect: () => h.onPriority(p),
+      })),
+      { kind: 'separator' as const },
+      { kind: 'item' as const, label: 'Без приоритета', muted: true, onSelect: () => h.onPriority(null) },
+    ],
+  };
+  const deadlineSub: MenuEntry = {
+    kind: 'sub',
+    label: 'Срок',
+    icon: CalendarDays,
+    items: [
+      { kind: 'item', label: 'Сегодня', onSelect: () => h.onDeadline(today) },
+      {
+        kind: 'item',
+        label: 'Завтра',
+        onSelect: () => h.onDeadline(ymd(addDays(startOfDay(new Date()), 1))),
+      },
+      ...(task.deadline
+        ? ([
+            { kind: 'separator' },
+            { kind: 'item', label: 'Убрать срок', muted: true, onSelect: () => h.onDeadline(null) },
+          ] as MenuEntry[])
+        : []),
+    ],
+  };
+  const copyLink = (): void => {
+    const url = `${window.location.origin}/projects/${projectId}/tasks/${task.id}`;
+    void navigator.clipboard.writeText(url).catch(() => undefined);
+  };
+  const edited = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(
+    task.updatedAt,
+  );
   return [
     { kind: 'item', label: 'Открыть', icon: Maximize2, onSelect: h.onOpen },
     { kind: 'separator' },
     {
       kind: 'sub',
-      label: 'Статус',
-      icon: CircleDot,
-      items: VISIBLE_KANBAN_STATUSES.map((s) => ({
-        kind: 'item' as const,
-        label: STATUS_LABEL[s],
-        dotClass: STATUS_DOT[s],
-        checked: task.status === s,
-        onSelect: () => h.onStatus(s),
-      })),
-    },
-    {
-      kind: 'sub',
-      label: 'Приоритет',
-      icon: Flag,
-      items: [
-        ...TASK_PRIORITIES.map((p) => ({
-          kind: 'item' as const,
-          label: PRIORITY_META[p].label,
-          dotClass: PRIORITY_META[p].dotColor,
-          checked: task.priority === p,
-          onSelect: () => h.onPriority(p),
-        })),
-        { kind: 'separator' as const },
-        { kind: 'item' as const, label: 'Без приоритета', muted: true, onSelect: () => h.onPriority(null) },
-      ],
-    },
-    {
-      kind: 'sub',
-      label: 'Срок',
-      icon: CalendarDays,
-      items: [
-        { kind: 'item', label: 'Сегодня', onSelect: () => h.onDeadline(today) },
-        {
-          kind: 'item',
-          label: 'Завтра',
-          onSelect: () => h.onDeadline(ymd(addDays(startOfDay(new Date()), 1))),
-        },
-        ...(task.deadline
-          ? ([
-              { kind: 'separator' },
-              { kind: 'item', label: 'Убрать срок', muted: true, onSelect: () => h.onDeadline(null) },
-            ] as MenuEntry[])
-          : []),
-      ],
+      label: 'Изменить свойство',
+      icon: Pencil,
+      items: [statusSub, prioritySub, deadlineSub],
     },
     { kind: 'separator' },
+    { kind: 'item', label: 'Скопировать ссылку', icon: LinkIcon, onSelect: copyLink },
     { kind: 'item', label: 'Дублировать', icon: Copy, onSelect: h.onDuplicate },
     { kind: 'item', label: 'Удалить', icon: Trash2, destructive: true, onSelect: h.onDelete },
+    { kind: 'separator' },
+    { kind: 'label', label: `Изменено ${edited}` },
   ];
 }
 

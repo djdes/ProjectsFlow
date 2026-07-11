@@ -38,7 +38,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -147,7 +146,7 @@ export function ProjectBoardViews({
   });
   const [renameTarget, setRenameTarget] = useState<BoardView | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BoardView | null>(null);
-  const [panel, setPanel] = useState<'new' | 'settings' | null>(null);
+  const [panel, setPanel] = useState<'settings' | null>(null);
   // Фильтры/сортировка — пер-вью, живут в памяти вкладки (смена вью не сбрасывает).
   const [perView, setPerView] = useState<Record<string, PerViewState>>({});
   const [searchOpen, setSearchOpen] = useState(false);
@@ -284,6 +283,8 @@ export function ProjectBoardViews({
       .catch(() => toast.error('Не удалось скопировать ссылку'));
   };
 
+  const allViewsSorted = views ?? [];
+
   // Overflow вкладок: первые N видимы; активная из хвоста подменяет последнюю видимую.
   const { visibleViews, hiddenViews } = useMemo(() => {
     const allViews = views ?? [];
@@ -345,9 +346,45 @@ export function ProjectBoardViews({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      {/* Строка вкладок + тулбар вью (Notion-style). */}
+      {/* Строка вкладок + тулбар вью (Notion-style). На узком экране (как в Notion)
+          ряд вкладок сворачивается в одну кнопку «Активная вью ⌄» с дропдауном. */}
       <div className="flex items-center gap-0.5 pb-1">
-        <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Компактный переключатель вью (узкий экран). */}
+        <div className="flex min-w-0 flex-1 items-center md:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex min-w-0 items-center gap-1.5 rounded-md bg-accent py-1 pl-2 pr-1.5 text-[13px] font-medium text-foreground"
+              >
+                {(() => {
+                  const Icon = VIEW_TYPE_ICONS[activeType];
+                  return <Icon className="size-3.5 shrink-0" />;
+                })()}
+                <span className="max-w-[10rem] truncate">
+                  {activeId === DEFAULT_VIEW_ID ? 'Доска' : (active?.name ?? 'Доска')}
+                </span>
+                <ChevronDown className="size-3 shrink-0 opacity-60" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[13rem]">
+              <DropdownMenuItem className="gap-2" onClick={() => selectView(DEFAULT_VIEW_ID)}>
+                <LayoutGrid className="size-4" />
+                Доска
+              </DropdownMenuItem>
+              {allViewsSorted.map((v) => {
+                const Icon = VIEW_TYPE_ICONS[v.type];
+                return (
+                  <DropdownMenuItem key={v.id} className="gap-2" onClick={() => selectView(v.id)}>
+                    <Icon className="size-4" />
+                    <span className="min-w-0 flex-1 truncate">{v.name}</span>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] md:flex [&::-webkit-scrollbar]:hidden">
           <ViewTab
             icon={VIEW_TYPE_ICONS.kanban}
             name="Доска"
@@ -390,20 +427,46 @@ export function ProjectBoardViews({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <button
-            type="button"
-            aria-label="Новая вью"
-            title="Новая вью"
-            onClick={() => setPanel('new')}
-            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <Plus className="size-4" />
-          </button>
+          {/* «+» — попап «Начать с нуля» (Notion Start from scratch): клик по типу сразу
+              создаёт вью с именем типа. */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label="Новая вью"
+                title="Новая вью"
+                className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Plus className="size-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-72 p-3">
+              <p className="pb-2 text-xs font-medium text-muted-foreground">Начать с нуля</p>
+              <div className="grid grid-cols-4 gap-1">
+                {BOARD_VIEW_TYPES.map((t) => {
+                  const Icon = VIEW_TYPE_ICONS[t];
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => void handleCreate(BOARD_VIEW_TYPE_LABELS[t], t)}
+                      className="flex flex-col items-center gap-1.5 rounded-lg px-1 py-2.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      <Icon className="size-5" />
+                      {BOARD_VIEW_TYPE_LABELS[t]}
+                    </button>
+                  );
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
-        {/* Тулбар вью — только для табличного/списочного/календарного (у канбана свой). */}
+        {/* Тулбар вью — только для табличного/списочного/календарного (у канбана свой).
+            На узком экране (как в Notion) остаются только настройки и «Создать». */}
         {!isKanban && (
           <div className="flex shrink-0 items-center gap-0.5">
+            <div className="hidden items-center gap-0.5 md:flex">
             <FilterMenu filters={state.filters} onChange={setFilters} active={filtersActive} />
             <SortMenu sort={state.sort} onChange={setSort} />
             {onOpenAutomation && (
@@ -441,6 +504,7 @@ export function ProjectBoardViews({
                 <Search className="size-4" />
               </ToolbarIcon>
             )}
+            </div>
             {active && (
               <ToolbarIcon label="Настройки вью" onClick={() => setPanel('settings')}>
                 <Settings2 className="size-4" />
@@ -560,6 +624,7 @@ export function ProjectBoardViews({
           projectName={projectName}
           memberCount={memberCount}
           filters={state.filters}
+          onFiltersChange={setFilters}
           sort={state.sort}
           onSortChange={setSort}
           hiddenCols={state.hidden}
@@ -586,11 +651,6 @@ export function ProjectBoardViews({
           createRequest={createReq}
         />
       )}
-
-      {/* Правая панель: создание вью. */}
-      <SidePanel open={panel === 'new'} onClose={() => setPanel(null)} title="Новая вью">
-        <NewViewPanel onCreate={handleCreate} />
-      </SidePanel>
 
       {/* Настройки вью — карточка под тулбаром справа (Notion View settings). */}
       {panel === 'settings' && active && (
@@ -856,7 +916,8 @@ function FilterMenu({
   );
 }
 
-// Меню «Сортировка»: выбор свойства (повторный клик по chip меняет направление).
+// «Сортировка» — попап с поиском свойств (Notion Sort by…): клик выбирает по
+// возрастанию, повторный — меняет направление.
 function SortMenu({
   sort,
   onChange,
@@ -864,9 +925,17 @@ function SortMenu({
   sort: ViewSort | null;
   onChange: (s: ViewSort | null) => void;
 }): React.ReactElement {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    if (!open) setSearch('');
+  }, [open]);
+  const keys = (Object.keys(VIEW_SORT_LABELS) as ViewSortKey[]).filter((k) =>
+    VIEW_SORT_LABELS[k].toLocaleLowerCase('ru').includes(search.trim().toLocaleLowerCase('ru')),
+  );
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
         <button
           type="button"
           aria-label="Сортировка"
@@ -878,38 +947,59 @@ function SortMenu({
         >
           <ArrowUpDown className="size-4" />
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[12rem]">
-        <p className="px-2 py-1.5 text-xs text-muted-foreground">Сортировать по…</p>
-        {(Object.keys(VIEW_SORT_LABELS) as ViewSortKey[]).map((k) => (
-          <DropdownMenuItem
-            key={k}
-            className="gap-2"
-            onClick={() =>
-              onChange(
-                sort?.key === k ? { key: k, dir: sort.dir === 'asc' ? 'desc' : 'asc' } : { key: k, dir: 'asc' },
-              )
-            }
-          >
-            {VIEW_SORT_LABELS[k]}
-            {sort?.key === k &&
-              (sort.dir === 'asc' ? (
-                <ArrowUp className="ml-auto size-3.5" />
-              ) : (
-                <ArrowDown className="ml-auto size-3.5" />
-              ))}
-          </DropdownMenuItem>
-        ))}
-        {sort && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-muted-foreground" onClick={() => onChange(null)}>
-              Убрать сортировку
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-1.5">
+        <div className="flex flex-col gap-1">
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Сортировать по…"
+            aria-label="Сортировать по"
+            className="w-full rounded-md border border-primary/60 bg-background px-2.5 py-1.5 text-sm outline-none ring-2 ring-primary/20"
+          />
+          <div className="flex flex-col">
+            {keys.map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() =>
+                  onChange(
+                    sort?.key === k
+                      ? { key: k, dir: sort.dir === 'asc' ? 'desc' : 'asc' }
+                      : { key: k, dir: 'asc' },
+                  )
+                }
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+              >
+                {VIEW_SORT_LABELS[k]}
+                {sort?.key === k &&
+                  (sort.dir === 'asc' ? (
+                    <ArrowUp className="ml-auto size-3.5" />
+                  ) : (
+                    <ArrowDown className="ml-auto size-3.5" />
+                  ))}
+              </button>
+            ))}
+            {keys.length === 0 && (
+              <p className="px-2 py-1.5 text-sm text-muted-foreground">Ничего не найдено</p>
+            )}
+          </div>
+          {sort && (
+            <div className="border-t pt-1">
+              <button
+                type="button"
+                onClick={() => onChange(null)}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent"
+              >
+                <X className="size-3.5" />
+                Убрать сортировку
+              </button>
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -1111,110 +1201,6 @@ function TabRenameInput({
       aria-label="Название вью"
       className="w-full rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus:border-foreground/30"
     />
-  );
-}
-
-// Правая выезжающая панель (Notion side panel): прозрачный оверлей, клик вне закрывает.
-function SidePanel({
-  open,
-  onClose,
-  title,
-  children,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  children: React.ReactNode;
-}): React.ReactElement | null {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-  if (!open) return null;
-  return (
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden />
-      <div className="fixed inset-y-0 right-0 z-50 flex w-[21rem] max-w-[92vw] flex-col border-l bg-card shadow-2xl duration-200 animate-in slide-in-from-right-4 fade-in">
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <p className="text-sm font-semibold">{title}</p>
-          <button
-            type="button"
-            aria-label="Закрыть панель"
-            onClick={onClose}
-            className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
-      </div>
-    </>
-  );
-}
-
-// Содержимое панели «Новая вью»: имя + сетка типов + «Готово» (Notion New view panel).
-function NewViewPanel({
-  onCreate,
-}: {
-  onCreate: (name: string, type: BoardViewType) => Promise<void>;
-}): React.ReactElement {
-  const [type, setType] = useState<BoardViewType>('table');
-  const [name, setName] = useState('');
-  const [touched, setTouched] = useState(false);
-  const effectiveName = (touched && name.trim()) || BOARD_VIEW_TYPE_LABELS[type];
-
-  return (
-    <div className="flex flex-col gap-3">
-      <input
-        autoFocus
-        value={touched ? name : ''}
-        onChange={(e) => {
-          setTouched(true);
-          setName(e.target.value);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            void onCreate(effectiveName, type);
-          }
-        }}
-        maxLength={64}
-        placeholder={BOARD_VIEW_TYPE_LABELS[type]}
-        aria-label="Название вью"
-        className="w-full rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-foreground/30"
-      />
-      <div>
-        <p className="pb-1.5 text-xs font-medium text-muted-foreground">Вид</p>
-        <div className="grid grid-cols-2 gap-1.5">
-          {BOARD_VIEW_TYPES.map((t) => {
-            const Icon = VIEW_TYPE_ICONS[t];
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setType(t)}
-                className={cn(
-                  'flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-xs transition-colors',
-                  type === t
-                    ? 'border-primary/50 bg-primary/5 text-foreground ring-1 ring-primary/30'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                )}
-              >
-                <Icon className="size-5" />
-                {BOARD_VIEW_TYPE_LABELS[t]}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <Button size="sm" className="w-full" onClick={() => void onCreate(effectiveName, type)}>
-        Готово
-      </Button>
-    </div>
   );
 }
 
@@ -1499,4 +1485,3 @@ function PanelRow({
     </button>
   );
 }
-

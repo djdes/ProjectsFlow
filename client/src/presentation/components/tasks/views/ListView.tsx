@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FileText, Plus } from 'lucide-react';
+import { FileText, GripVertical, Pencil, Plus } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { splitTitleBody } from '@/lib/taskTitleBody';
 import { cn } from '@/lib/utils';
 import { TASK_PRIORITIES } from '@/domain/task/Task';
 import { VISIBLE_KANBAN_STATUSES } from '@/domain/kanban/KanbanSettings';
@@ -32,7 +38,7 @@ import {
   type ViewFilters,
   type ViewSort,
 } from './viewShared';
-import { ContextEntries } from './menuEntries';
+import { ContextEntries, DropdownEntries } from './menuEntries';
 
 type Props = {
   projectId: string;
@@ -80,6 +86,51 @@ export function ListView({
     });
   };
 
+  // Inline-переименование (карандаш при hover — Notion list): меняем title-часть описания.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const startEdit = (task: (typeof rows)[number]): void => {
+    setEditingId(task.id);
+    setEditValue(taskTitle(task));
+  };
+  const commitEdit = (task: (typeof rows)[number]): void => {
+    const title = editValue.trim();
+    setEditingId(null);
+    if (!title || title === taskTitle(task)) return;
+    const { body } = splitTitleBody(task.description ?? '');
+    void update(task.id, { description: body ? `${title}\n${body}` : title }).catch((e: unknown) =>
+      toast.error(`Не удалось: ${(e as Error).message}`),
+    );
+  };
+
+  const menuFor = (task: (typeof rows)[number]) =>
+    taskMenuEntries(task, projectId, {
+      onOpen: () => setDrawer({ mode: 'edit', task }),
+      onStatus: (s) =>
+        void move(task.id, { targetStatus: s, beforeTaskId: null, afterTaskId: null }).catch(
+          (e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`),
+        ),
+      onPriority: (p) =>
+        void update(task.id, { priority: p }).catch((e: unknown) =>
+          toast.error(`Не удалось: ${(e as Error).message}`),
+        ),
+      onDeadline: (d) =>
+        void update(task.id, { deadline: d }).catch((e: unknown) =>
+          toast.error(`Не удалось: ${(e as Error).message}`),
+        ),
+      onDuplicate: () =>
+        void create({
+          description: task.description ?? '',
+          status: task.status,
+          deadline: task.deadline ?? undefined,
+          priority: task.priority ?? undefined,
+        }).catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`)),
+      onDelete: () =>
+        void remove(task.id)
+          .then(() => toast.success('Задача удалена'))
+          .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`)),
+    });
+
   if (loading) return <div className="h-64 animate-pulse rounded-xl bg-muted/60" />;
   if (error) return <p className="text-sm text-destructive">{error}</p>;
 
@@ -96,10 +147,10 @@ export function ListView({
             )}
             onClick={() => setDrawer({ mode: 'edit', task })}
           >
-            {/* Hover-контролы в левом поле (Notion): «+» и чекбокс. */}
+            {/* Hover-контролы в левом поле (Notion): «+», «⋮⋮» (меню) и чекбокс. */}
             <div
               className={cn(
-                'absolute -left-12 top-1/2 flex -translate-y-1/2 items-center gap-0.5 transition-opacity',
+                'absolute -left-14 top-1/2 flex -translate-y-1/2 items-center gap-0 transition-opacity',
                 selected.size > 0 || selected.has(task.id)
                   ? 'opacity-100'
                   : 'opacity-0 group-hover:opacity-100',
@@ -115,12 +166,27 @@ export function ListView({
               >
                 <Plus className="size-3.5" />
               </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Меню задачи"
+                    title="Меню задачи"
+                    className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    <GripVertical className="size-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-[12rem]">
+                  <DropdownEntries entries={menuFor(task)} />
+                </DropdownMenuContent>
+              </DropdownMenu>
               <input
                 type="checkbox"
                 checked={selected.has(task.id)}
                 onChange={() => toggleSelected(task.id)}
                 aria-label="Выбрать задачу"
-                className="size-3.5 cursor-pointer accent-primary"
+                className="ml-0.5 size-3.5 cursor-pointer accent-primary"
               />
             </div>
             {task.icon ? (
@@ -130,14 +196,52 @@ export function ListView({
             ) : (
               <FileText className="size-4 shrink-0 text-muted-foreground/60" />
             )}
-            <span
-              className={cn(
-                'min-w-0 flex-1 truncate text-sm font-medium',
-                task.status === 'done' && 'text-muted-foreground line-through decoration-muted-foreground/40',
-              )}
-            >
-              {taskTitle(task)}
-            </span>
+            {editingId === task.id ? (
+              <input
+                autoFocus
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onBlur={() => commitEdit(task)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitEdit(task);
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setEditingId(null);
+                  }
+                }}
+                aria-label="Название задачи"
+                className="min-w-0 flex-1 rounded-md border bg-background px-1.5 py-0.5 text-sm font-medium outline-none ring-2 ring-primary/20"
+              />
+            ) : (
+              <>
+                <span
+                  className={cn(
+                    'min-w-0 truncate text-sm font-medium',
+                    task.status === 'done' &&
+                      'text-muted-foreground line-through decoration-muted-foreground/40',
+                  )}
+                >
+                  {taskTitle(task)}
+                </span>
+                {/* Карандаш при hover — переименовать прямо в списке (Notion). */}
+                <button
+                  type="button"
+                  aria-label="Переименовать"
+                  title="Переименовать"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(task);
+                  }}
+                  className="grid size-5 shrink-0 place-items-center rounded border bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover:opacity-100"
+                >
+                  <Pencil className="size-3" />
+                </button>
+                <span className="min-w-0 flex-1" />
+              </>
+            )}
             {/* Тихие свойства справа: срок / приоритет / статус / ответственный. */}
             <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
               {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
@@ -165,34 +269,7 @@ export function ListView({
             </ContextMenuTrigger>
             {/* Правый клик по строке — контекстное меню задачи (Notion-style). */}
             <ContextMenuContent className="min-w-[12rem]">
-              <ContextEntries
-                entries={taskMenuEntries(task, {
-                  onOpen: () => setDrawer({ mode: 'edit', task }),
-                  onStatus: (s) =>
-                    void move(task.id, { targetStatus: s, beforeTaskId: null, afterTaskId: null }).catch(
-                      (e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`),
-                    ),
-                  onPriority: (p) =>
-                    void update(task.id, { priority: p }).catch((e: unknown) =>
-                      toast.error(`Не удалось: ${(e as Error).message}`),
-                    ),
-                  onDeadline: (d) =>
-                    void update(task.id, { deadline: d }).catch((e: unknown) =>
-                      toast.error(`Не удалось: ${(e as Error).message}`),
-                    ),
-                  onDuplicate: () =>
-                    void create({
-                      description: task.description ?? '',
-                      status: task.status,
-                      deadline: task.deadline ?? undefined,
-                      priority: task.priority ?? undefined,
-                    }).catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`)),
-                  onDelete: () =>
-                    void remove(task.id)
-                      .then(() => toast.success('Задача удалена'))
-                      .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`)),
-                })}
-              />
+              <ContextEntries entries={menuFor(task)} />
             </ContextMenuContent>
           </ContextMenu>
         ))}

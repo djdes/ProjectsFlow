@@ -9,7 +9,9 @@ import {
   EyeOff,
   FileText,
   Flag,
-  Maximize2,
+  GripVertical,
+  ListFilter,
+  PanelRight,
   Plus,
   Trash2,
   User,
@@ -65,6 +67,7 @@ type Props = {
   projectName?: string;
   memberCount?: number;
   filters: ViewFilters;
+  onFiltersChange: (patch: Partial<ViewFilters>) => void;
   sort: ViewSort | null;
   onSortChange: (s: ViewSort | null) => void;
   hiddenCols: ViewColumn[];
@@ -98,6 +101,7 @@ export function TableView({
   projectName,
   memberCount,
   filters,
+  onFiltersChange,
   sort,
   onSortChange,
   hiddenCols,
@@ -122,6 +126,53 @@ export function TableView({
     () => ALL_COLUMNS.filter((c) => !hiddenCols.includes(c)),
     [hiddenCols],
   );
+
+  // Подменю «Фильтр» в меню заголовка колонки (чекбоксы значений — как в Notion).
+  const filterEntriesFor = (col: ViewColumn): MenuEntry[] | undefined => {
+    if (col === 'status') {
+      return VISIBLE_KANBAN_STATUSES.map((s) => ({
+        kind: 'item' as const,
+        label: STATUS_LABEL[s],
+        dotClass: STATUS_DOT[s],
+        checked: filters.statuses.includes(s),
+        onSelect: () =>
+          onFiltersChange({
+            statuses: filters.statuses.includes(s)
+              ? filters.statuses.filter((x) => x !== s)
+              : [...filters.statuses, s],
+          }),
+      }));
+    }
+    if (col === 'priority') {
+      return TASK_PRIORITIES.map((p) => ({
+        kind: 'item' as const,
+        label: PRIORITY_META[p].label,
+        dotClass: PRIORITY_META[p].dotColor,
+        checked: filters.priorities.includes(p),
+        onSelect: () =>
+          onFiltersChange({
+            priorities: filters.priorities.includes(p)
+              ? filters.priorities.filter((x) => x !== p)
+              : [...filters.priorities, p],
+          }),
+      }));
+    }
+    if (col === 'deadline') {
+      return (
+        [
+          ['has', 'Есть срок'],
+          ['none', 'Без срока'],
+          ['overdue', 'Просрочено'],
+        ] as const
+      ).map(([d, label]) => ({
+        kind: 'item' as const,
+        label,
+        checked: filters.due === d,
+        onSelect: () => onFiltersChange({ due: filters.due === d ? null : d }),
+      }));
+    }
+    return undefined;
+  };
   const gridStyle = useMemo(
     () => ({
       gridTemplateColumns: ['minmax(0,1fr)', ...visibleCols.map((c) => COLUMN_WIDTH[c])].join(' '),
@@ -210,6 +261,7 @@ export function TableView({
                 sort={sort}
                 onSortChange={onSortChange}
                 onHide={() => onToggleCol(c)}
+                filterEntries={filterEntriesFor(c)}
               />
             ))}
             {/* «+» в конце шапки (Notion add property): вернуть скрытые свойства. */}
@@ -426,6 +478,7 @@ function HeaderCell({
   sort,
   onSortChange,
   onHide,
+  filterEntries,
   first = false,
 }: {
   label: string;
@@ -434,10 +487,17 @@ function HeaderCell({
   sort: ViewSort | null;
   onSortChange: (s: ViewSort | null) => void;
   onHide?: () => void;
+  filterEntries?: MenuEntry[];
   first?: boolean;
 }): React.ReactElement {
   const sorted = sortKey !== null && sort?.key === sortKey ? sort.dir : null;
   const entries: MenuEntry[] = [
+    ...(filterEntries
+      ? ([
+          { kind: 'sub', label: 'Фильтр', icon: ListFilter, items: filterEntries },
+          { kind: 'separator' },
+        ] as MenuEntry[])
+      : []),
     ...(sortKey !== null
       ? ([
           {
@@ -646,6 +706,15 @@ function TableRow({
     }
   };
 
+  const menuEntries = taskMenuEntries(task, projectId, {
+    onOpen,
+    onStatus,
+    onPriority,
+    onDeadline,
+    onDuplicate,
+    onDelete,
+  });
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -656,10 +725,10 @@ function TableRow({
             selected && 'bg-primary/5',
           )}
         >
-      {/* Hover-контролы в левом поле: «+» (новая задача в той же колонке) и чекбокс. */}
+      {/* Hover-контролы в левом поле (Notion): «+», «⋮⋮» (меню задачи) и чекбокс. */}
       <div
         className={cn(
-          'absolute -left-12 top-1/2 flex -translate-y-1/2 items-center gap-0.5 transition-opacity',
+          'absolute -left-14 top-1/2 flex -translate-y-1/2 items-center gap-0 transition-opacity',
           selected || anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
         )}
       >
@@ -672,13 +741,28 @@ function TableRow({
         >
           <Plus className="size-3.5" />
         </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Меню задачи"
+              title="Меню задачи"
+              className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <GripVertical className="size-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[12rem]">
+            <DropdownEntries entries={menuEntries} />
+          </DropdownMenuContent>
+        </DropdownMenu>
         <input
           type="checkbox"
           checked={selected}
           onChange={onToggleSelected}
           onClick={(e) => e.stopPropagation()}
           aria-label="Выбрать задачу"
-          className="size-3.5 cursor-pointer accent-primary"
+          className="ml-0.5 size-3.5 cursor-pointer accent-primary"
         />
       </div>
 
@@ -701,9 +785,9 @@ function TableRow({
         <button
           type="button"
           onClick={onOpen}
-          className="ml-auto hidden shrink-0 items-center gap-1 rounded-md border bg-card px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground group-hover:inline-flex"
+          className="ml-auto hidden shrink-0 items-center gap-1 rounded-md border bg-card px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground group-hover:inline-flex"
         >
-          <Maximize2 className="size-3" />
+          <PanelRight className="size-3" />
           Открыть
         </button>
       </div>
@@ -713,16 +797,7 @@ function TableRow({
       </ContextMenuTrigger>
       {/* Правый клик по строке — контекстное меню задачи (Notion-style). */}
       <ContextMenuContent className="min-w-[12rem]">
-        <ContextEntries
-          entries={taskMenuEntries(task, {
-            onOpen,
-            onStatus,
-            onPriority,
-            onDeadline,
-            onDuplicate,
-            onDelete,
-          })}
-        />
+        <ContextEntries entries={menuEntries} />
       </ContextMenuContent>
     </ContextMenu>
   );

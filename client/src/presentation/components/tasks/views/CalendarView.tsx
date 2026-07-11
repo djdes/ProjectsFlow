@@ -111,7 +111,7 @@ export function CalendarView({
 
   // Контекстное меню чипа задачи (правая кнопка) — как у строк таблицы/списка.
   const menuFor = (task: Task): MenuEntry[] =>
-    taskMenuEntries(task, {
+    taskMenuEntries(task, projectId, {
       onOpen: () => setDrawer({ mode: 'edit', task }),
       onStatus: (s) =>
         void move(task.id, { targetStatus: s, beforeTaskId: null, afterTaskId: null }).catch(
