@@ -144,6 +144,7 @@ import { DrizzleTaskDelegationRepository } from './infrastructure/repositories/D
 import { AcceptTaskDelegation } from './application/task/AcceptTaskDelegation.js';
 import { DeclineTaskDelegation } from './application/task/DeclineTaskDelegation.js';
 import { WithdrawTaskDelegation } from './application/task/WithdrawTaskDelegation.js';
+import { RelinquishTaskDelegation } from './application/task/RelinquishTaskDelegation.js';
 import { ListMyPendingDelegations } from './application/task/ListMyPendingDelegations.js';
 import { ListTasksAssignedToMe } from './application/task/ListTasksAssignedToMe.js';
 import { ListTasksDelegatedToOthers } from './application/task/ListTasksDelegatedToOthers.js';
@@ -2032,6 +2033,7 @@ const { app, devProxyUpgrade } = createApp({
       appUrl: appBaseUrl,
     }),
     withdraw: new WithdrawTaskDelegation({ delegations: taskDelegationRepo }),
+    relinquish: new RelinquishTaskDelegation({ delegations: taskDelegationRepo }),
     listPending: new ListMyPendingDelegations(taskDelegationRepo),
     listAssignedToMe: new ListTasksAssignedToMe({
       delegations: taskDelegationRepo,

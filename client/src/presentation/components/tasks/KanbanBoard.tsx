@@ -794,6 +794,11 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
       onDragEnd: handleDragEnd,
       onDragCancel: handleDragCancel,
       updateTask: update,
+      // Дроп пилюли блока на колонку: в НАЧАЛО видимой порции (как «Перенести» из TaskDrawer),
+      // иначе карточка утонула бы в скрытом хвосте «Показать ещё».
+      moveTask: async (taskId, targetStatus) => {
+        await move(taskId, { targetStatus, beforeTaskId: null, afterTaskId: topAnchorFor(targetStatus) });
+      },
       refetch,
     };
   });

@@ -1,6 +1,6 @@
 import type { MutableRefObject } from 'react';
 import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
-import type { Task, TaskPriority } from '@/domain/task/Task';
+import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 
 // === Контракт единого DnD «Входящих» (#5) ===
 // Во «Входящих» доска (KanbanBoard) и блок делегирования (AssignedToMeBlock) живут в ОДНОМ
@@ -24,6 +24,9 @@ export type BoardDndApi = {
     taskId: string,
     input: { deadline?: string | null; priority?: TaskPriority | null },
   ): Promise<Task>;
+  // Перенос задачи в колонку доски (дроп пилюли блока: снять делегацию + статус).
+  // Кладёт в НАЧАЛО видимой порции колонки (как «Перенести» из TaskDrawer).
+  moveTask(taskId: string, targetStatus: TaskStatus): Promise<void>;
   refetch(): Promise<void>;
 };
 

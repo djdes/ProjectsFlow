@@ -2,6 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import type { AcceptTaskDelegation } from '../../application/task/AcceptTaskDelegation.js';
 import type { DeclineTaskDelegation } from '../../application/task/DeclineTaskDelegation.js';
 import type { WithdrawTaskDelegation } from '../../application/task/WithdrawTaskDelegation.js';
+import type { RelinquishTaskDelegation } from '../../application/task/RelinquishTaskDelegation.js';
 import type { ListMyPendingDelegations } from '../../application/task/ListMyPendingDelegations.js';
 import type {
   AssignedTaskView,
@@ -17,6 +18,7 @@ type Deps = {
   readonly accept: AcceptTaskDelegation;
   readonly decline: DeclineTaskDelegation;
   readonly withdraw: WithdrawTaskDelegation;
+  readonly relinquish: RelinquishTaskDelegation;
   readonly listPending: ListMyPendingDelegations;
   readonly listAssignedToMe: ListTasksAssignedToMe;
   readonly listDelegatedToOthers: ListTasksDelegatedToOthers;
@@ -134,6 +136,17 @@ export function delegationsRouter(deps: Deps): Router {
   r.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
       await deps.withdraw.execute(req.params['id'] as string, req.user!.id);
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // POST /api/delegations/:id/relinquish — ДЕЛЕГАТ складывает с себя активную делегацию
+  // (drag карточки из блока делегирования на нижнюю доску «Входящих»).
+  r.post('/:id/relinquish', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await deps.relinquish.execute(req.params['id'] as string, req.user!.id);
       res.status(204).end();
     } catch (e) {
       next(e);

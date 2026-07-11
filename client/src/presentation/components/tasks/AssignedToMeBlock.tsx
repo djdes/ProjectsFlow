@@ -19,7 +19,6 @@ import {
 import { getEventCoordinates } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
 import {
-  Ban,
   CalendarClock,
   CalendarDays,
   CalendarOff,
@@ -27,6 +26,7 @@ import {
   Check,
   Flag,
   FolderKanban,
+  Hand,
   GitCommit,
   GripVertical,
   ImageIcon,
@@ -743,7 +743,17 @@ export function AssignedToMeBlock({
               hint="Бросьте сюда, чтобы выбрать проект из списка"
             />
           )}
-          {boardDragActive && grouping === 'created' && <PhantomInfoColumn />}
+          {/* «По дате создания»: в колонки нельзя (дату не изменить), но фантом принимает
+              дроп — задача поручается вам и сама встаёт в колонку по своей дате. */}
+          {boardDragActive && grouping === 'created' && (
+            <PhantomDropColumn
+              id="phantom-created"
+              kind="created"
+              icon={Hand}
+              label="Забрать себе"
+              hint="В колонки нельзя — дата создания не меняется. Бросьте сюда: задача будет поручена вам и встанет по своей дате"
+            />
+          )}
           {boardDragActive && phantomPriorityNeeded && (
             <PhantomDropColumn
               id="phantom-priority"
@@ -976,7 +986,7 @@ function PhantomDropColumn({
   hint,
 }: {
   id: string;
-  kind: 'project' | 'priority';
+  kind: 'project' | 'priority' | 'created';
   icon: LucideIcon;
   label: string;
   hint: string;
@@ -993,20 +1003,6 @@ function PhantomDropColumn({
       <Icon className={cn('size-5', isOver ? 'text-primary' : 'text-primary/60')} />
       <span className="text-xs font-medium text-foreground/80">{label}</span>
       <span className="text-[10px] leading-tight text-muted-foreground/70">{hint}</span>
-    </div>
-  );
-}
-
-// Инфо-колонка сортировки «по дате создания»: объясняет, почему дроп с доски невозможен
-// (дату создания не изменить). НЕ drop-цель — просто подсказка на время drag'а.
-function PhantomInfoColumn(): React.ReactElement {
-  return (
-    <div className="flex w-40 shrink-0 snap-start flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border bg-muted/30 px-3 py-4 text-center opacity-80 sm:w-44">
-      <Ban className="size-5 text-muted-foreground/60" />
-      <span className="text-xs font-medium text-muted-foreground">Сюда нельзя</span>
-      <span className="text-[10px] leading-tight text-muted-foreground/70">
-        Дата создания не меняется — используйте другую сортировку
-      </span>
     </div>
   );
 }

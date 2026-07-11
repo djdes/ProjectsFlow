@@ -82,4 +82,7 @@ export class HttpTaskDelegationRepository implements TaskDelegationRepository {
   async withdraw(id: string): Promise<void> {
     await httpClient.delete<void>(`/delegations/${id}`);
   }
+  async relinquish(id: string): Promise<void> {
+    await httpClient.post<void>(`/delegations/${id}/relinquish`, {});
+  }
 }

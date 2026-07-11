@@ -22,4 +22,7 @@ export interface TaskDelegationRepository {
   decline(id: string): Promise<TaskDelegation>;
   // creator отзывает pending до accept'а.
   withdraw(id: string): Promise<void>;
+  // ДЕЛЕГАТ складывает с себя активную (pending|accepted|pending_invite) делегацию —
+  // drag карточки из блока делегирования на нижнюю доску «Входящих».
+  relinquish(id: string): Promise<void>;
 }
