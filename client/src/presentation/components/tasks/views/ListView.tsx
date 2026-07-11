@@ -639,8 +639,12 @@ function ListRow({
           </span>
         </div>
       </ContextMenuTrigger>
-      {/* Правый клик по строке — контекстное меню задачи (Notion-style). */}
-      <ContextMenuContent className="min-w-[12rem]">
+      {/* Правый клик по строке — контекстное меню задачи (Notion-style).
+          onCloseAutoFocus preventDefault: не красть фокус у inline-инпутов. */}
+      <ContextMenuContent
+        className="min-w-[12rem]"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
         <ContextEntries entries={menu} />
       </ContextMenuContent>
     </ContextMenu>

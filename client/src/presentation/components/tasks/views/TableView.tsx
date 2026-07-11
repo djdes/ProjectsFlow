@@ -1335,8 +1335,13 @@ function TableRow({
       <div className="border-l" aria-hidden />
         </div>
       </ContextMenuTrigger>
-      {/* Правый клик по строке — контекстное меню задачи (Notion-style). */}
-      <ContextMenuContent className="min-w-[12rem]">
+      {/* Правый клик по строке — контекстное меню задачи (Notion-style).
+          onCloseAutoFocus preventDefault: возврат фокуса крал бы фокус у inline-инпутов
+          (вставка подзадачи/переименование), открытых из пункта меню. */}
+      <ContextMenuContent
+        className="min-w-[12rem]"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
         <ContextEntries entries={menuEntries} />
       </ContextMenuContent>
     </ContextMenu>

@@ -645,7 +645,10 @@ function TaskChip({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{chip}</ContextMenuTrigger>
-      <ContextMenuContent className="min-w-[12rem]">
+      <ContextMenuContent
+        className="min-w-[12rem]"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
         <ContextEntries entries={menu} />
       </ContextMenuContent>
     </ContextMenu>
