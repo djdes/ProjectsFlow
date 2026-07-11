@@ -44,6 +44,7 @@ export type TaskDto = Omit<
   | 'ralphCancelRequestedByDisplayName'
   | 'delegation'
   | 'deadline'
+  | 'startDate'
   | 'priority'
   | 'statusBeforeDone'
   | 'icon'
@@ -69,6 +70,8 @@ export type TaskDto = Omit<
   delegation?: DelegationDto | null;
   // Optional — старый backend без db/041 не присылает.
   deadline?: string | null;
+  // Optional — старый backend без db/106 не присылает.
+  startDate?: string | null;
   priority?: import('@/domain/task/Task').TaskPriority | null;
 };
 
@@ -104,6 +107,7 @@ export function fromDto(dto: TaskDto): Task {
     ralphCancelRequestedBy: dto.ralphCancelRequestedBy ?? null,
     ralphCancelRequestedByDisplayName: dto.ralphCancelRequestedByDisplayName ?? null,
     deadline: dto.deadline ?? null,
+    startDate: dto.startDate ?? null,
     priority: dto.priority ?? null,
     delegation: dto.delegation
       ? {

@@ -61,6 +61,7 @@ function toTask(row: TaskRowJoined): Task {
     // Drizzle с mysql2 возвращает DATE-колонку как string 'YYYY-MM-DD' (см. drizzle docs).
     // Cast не нужен — TypeScript $inferSelect уже даёт string | null.
     deadline: row.deadline ?? null,
+    startDate: row.startDate ?? null,
     // tinyint 1..4 — на проводе number. Cast в TaskPriority безопасен (валидация в zod
     // на write-path; на read возможно увидим число вне диапазона если кто-то сделал
     // ручной UPDATE — но это edge-case).
@@ -96,6 +97,7 @@ export class DrizzleTaskRepository implements TaskRepository {
         ralphCancelRequestedAt: tasks.ralphCancelRequestedAt,
         ralphCancelRequestedBy: tasks.ralphCancelRequestedBy,
         deadline: tasks.deadline,
+        startDate: tasks.startDate,
         priority: tasks.priority,
         createdAt: tasks.createdAt,
         updatedAt: tasks.updatedAt,
@@ -155,6 +157,7 @@ export class DrizzleTaskRepository implements TaskRepository {
       // Не выставляем если undefined — пусть отработает SQL DEFAULT.
       ...(input.ralphMode !== undefined ? { ralphMode: input.ralphMode } : {}),
       ...(input.deadline !== undefined ? { deadline: input.deadline } : {}),
+      ...(input.startDate !== undefined ? { startDate: input.startDate } : {}),
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
     });
     const created = await this.getById(input.id);
@@ -175,6 +178,7 @@ export class DrizzleTaskRepository implements TaskRepository {
         | 'position'
         | 'ralphMode'
         | 'deadline'
+        | 'startDate'
         | 'priority'
       >
     > = {};
@@ -187,6 +191,7 @@ export class DrizzleTaskRepository implements TaskRepository {
     if (patch.position !== undefined) set.position = patch.position;
     if (patch.ralphMode !== undefined) set.ralphMode = patch.ralphMode;
     if (patch.deadline !== undefined) set.deadline = patch.deadline;
+    if (patch.startDate !== undefined) set.startDate = patch.startDate;
     if (patch.priority !== undefined) set.priority = patch.priority;
 
     if (Object.keys(set).length > 0) {

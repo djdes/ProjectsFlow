@@ -22,6 +22,7 @@ export type UseTasks = State & {
     ralphMode?: RalphMode;
     delegateUserId?: string | null;
     deadline?: string | null;
+    startDate?: string | null;
     priority?: TaskPriority | null;
   }) => Promise<Task>;
   update: (
@@ -33,6 +34,7 @@ export type UseTasks = State & {
       coverPosition?: number;
       ralphMode?: RalphMode;
       deadline?: string | null;
+      startDate?: string | null;
       priority?: TaskPriority | null;
     },
   ) => Promise<Task>;

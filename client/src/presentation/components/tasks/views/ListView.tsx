@@ -174,6 +174,10 @@ export function ListView({
         void update(task.id, { deadline: d }).catch((e: unknown) =>
           toast.error(`Не удалось: ${(e as Error).message}`),
         ),
+      onStartDate: (d) =>
+        void update(task.id, { startDate: d }).catch((e: unknown) =>
+          toast.error(`Не удалось: ${(e as Error).message}`),
+        ),
       onDuplicate: () =>
         void create({
           description: task.description ?? '',

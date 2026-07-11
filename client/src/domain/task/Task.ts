@@ -86,6 +86,9 @@ export type Task = {
   readonly ralphCancelRequestedByDisplayName: string | null;
   // Срок выполнения. ISO-string 'YYYY-MM-DD' (без времени). null = не задан. См. db/041.
   readonly deadline: string | null;
+  // Дата начала работ (db/106): диапазон startDate → deadline (Notion date range).
+  // null = событие одного дня (только deadline).
+  readonly startDate: string | null;
   // Приоритет 1..4 (1=urgent, 4=low). null = без приоритета. См. db/041.
   readonly priority: TaskPriority | null;
   // Активная (pending|accepted) делегация — null если задача не делегирована.

@@ -50,6 +50,8 @@ export const createTaskSchema = z.object({
   // Сервер дополнительно валидирует: не self, в shared-members caller'а, проект isInbox.
   delegateUserId: z.string().uuid().nullable().optional(),
   deadline: deadlineSchema.optional(),
+  // Дата начала (диапазон startDate → deadline). Тот же формат/семантика, что deadline.
+  startDate: deadlineSchema.optional(),
   priority: prioritySchema.optional(),
 });
 
@@ -61,6 +63,7 @@ export const updateTaskSchema = z
     coverPosition: coverPositionSchema.optional(),
     ralphMode: ralphModeSchema.optional(),
     deadline: deadlineSchema.optional(),
+    startDate: deadlineSchema.optional(),
     priority: prioritySchema.optional(),
   })
   .refine((o) => Object.keys(o).length > 0, { message: 'Нечего обновлять' });

@@ -40,6 +40,8 @@ export type UpdateTaskCommand = {
   readonly ralphMode?: RalphMode;
   // null = очистить deadline; undefined = не менять.
   readonly deadline?: string | null;
+  // null = очистить дату начала; undefined = не менять.
+  readonly startDate?: string | null;
   // null = убрать приоритет; undefined = не менять.
   readonly priority?: TaskPriority | null;
 };
@@ -70,6 +72,7 @@ export class UpdateTask {
     if (input.coverPosition !== undefined) patch.coverPosition = input.coverPosition;
     if (input.ralphMode !== undefined) patch.ralphMode = input.ralphMode;
     if (input.deadline !== undefined) patch.deadline = input.deadline;
+    if (input.startDate !== undefined) patch.startDate = input.startDate;
     if (input.priority !== undefined) patch.priority = input.priority;
 
     const updated = await this.deps.tasks.update(input.taskId, patch);

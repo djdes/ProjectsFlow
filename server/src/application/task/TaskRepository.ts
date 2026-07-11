@@ -18,6 +18,8 @@ export type CreateTaskInput = {
   readonly ralphMode?: RalphMode;
   // Срок выполнения (ISO 'YYYY-MM-DD'). null = без deadline.
   readonly deadline?: string | null;
+  // Дата начала (диапазон startDate → deadline). null = событие одного дня.
+  readonly startDate?: string | null;
   // Приоритет 1..4 (1=urgent, 4=low). null = без приоритета.
   readonly priority?: TaskPriority | null;
 };
@@ -37,6 +39,8 @@ export type UpdateTaskPatch = {
   readonly ralphMode?: RalphMode;
   // null = очистить deadline. undefined = не менять.
   readonly deadline?: string | null;
+  // null = очистить дату начала. undefined = не менять.
+  readonly startDate?: string | null;
   // null = убрать приоритет. undefined = не менять.
   readonly priority?: TaskPriority | null;
 };

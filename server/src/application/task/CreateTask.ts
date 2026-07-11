@@ -58,6 +58,8 @@ export type CreateTaskCommand = {
   readonly delegateUserId?: string | null;
   // Срок выполнения. ISO 'YYYY-MM-DD'. null/undefined — без deadline.
   readonly deadline?: string | null;
+  // Дата начала (диапазон startDate → deadline). null/undefined — событие одного дня.
+  readonly startDate?: string | null;
   // Приоритет 1..4. null/undefined — без приоритета.
   readonly priority?: TaskPriority | null;
   // true — атрибутировать создателя (created_by) НЕ на actor'а (ownerUserId), а на владельца
@@ -114,6 +116,7 @@ export class CreateTask {
       position,
       ralphMode: input.ralphMode,
       deadline: input.deadline ?? null,
+      startDate: input.startDate ?? null,
       priority: input.priority ?? null,
     });
 

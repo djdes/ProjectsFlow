@@ -592,6 +592,11 @@ export function TableView({
                     toast.error(`Не удалось: ${(e as Error).message}`),
                   )
                 }
+                onStartDate={(d) =>
+                  void update(task.id, { startDate: d }).catch((e: unknown) =>
+                    toast.error(`Не удалось: ${(e as Error).message}`),
+                  )
+                }
                 onDuplicate={() =>
                   void create({
                     description: task.description ?? '',
@@ -949,6 +954,7 @@ function TableRow({
   onStatus,
   onPriority,
   onDeadline,
+  onStartDate,
   onDuplicate,
   onDelete,
   currentUserId,
@@ -979,6 +985,7 @@ function TableRow({
   onStatus: (s: TaskStatus) => void;
   onPriority: (p: TaskPriority | null) => void;
   onDeadline: (d: string | null) => void;
+  onStartDate: (d: string | null) => void;
   onDuplicate: () => void;
   onDelete: () => void;
   currentUserId: string | null;
@@ -1109,6 +1116,7 @@ function TableRow({
     onStatus,
     onPriority,
     onDeadline,
+    onStartDate,
     onDuplicate,
     onDelete,
   });

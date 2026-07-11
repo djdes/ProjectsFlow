@@ -309,6 +309,7 @@ export function tasksRouter(deps: Deps): Router {
         ralphMode: body.ralphMode,
         delegateUserId: body.delegateUserId ?? null,
         deadline: body.deadline ?? null,
+        startDate: body.startDate ?? null,
         priority: body.priority ?? null,
       });
       deps.notifyTaskChanged(projectId);
@@ -357,6 +358,7 @@ export function tasksRouter(deps: Deps): Router {
         coverPosition: body.coverPosition,
         ralphMode: body.ralphMode,
         deadline: body.deadline,
+        startDate: body.startDate,
         priority: body.priority,
       });
       deps.notifyTaskChanged(projectId);

@@ -50,6 +50,22 @@ type Props = {
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
+// 'YYYY-MM-DD' → локальная дата (без TZ-сдвигов new Date(string)).
+function parseYmd(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y!, (m ?? 1) - 1, d ?? 1);
+}
+
+// Сдвиг date-строки на delta дней.
+function shiftYmd(s: string, delta: number): string {
+  return ymd(addDays(parseYmd(s), delta));
+}
+
+// Дней между двумя date-строками (b - a).
+function diffDays(a: string, b: string): number {
+  return Math.round((parseYmd(b).getTime() - parseYmd(a).getTime()) / 86400000);
+}
+
 // Сетка месяца: 6 недель с понедельника (полные ряды — соседние месяцы приглушены).
 function buildMonthGrid(monthStart: Date): Date[] {
   const first = new Date(monthStart.getFullYear(), monthStart.getMonth(), 1);
@@ -101,15 +117,40 @@ export function CalendarView({
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
   );
 
+  // Сегменты полос (Notion date range): задача с startDate < deadline занимает каждый
+  // день диапазона; seg определяет скругление краёв и где рисовать текст.
   const byDay = useMemo(() => {
-    const map = new Map<string, Task[]>();
+    const map = new Map<string, { task: Task; seg: 'single' | 'start' | 'mid' | 'end' }[]>();
+    const push = (day: string, item: { task: Task; seg: 'single' | 'start' | 'mid' | 'end' }): void => {
+      const arr = map.get(day);
+      if (arr) arr.push(item);
+      else map.set(day, [item]);
+    };
     for (const t of tasks) {
       if (!t.deadline) continue;
-      const arr = map.get(t.deadline);
-      if (arr) arr.push(t);
-      else map.set(t.deadline, [t]);
+      if (t.startDate && t.startDate < t.deadline) {
+        let d = parseYmd(t.startDate);
+        const end = parseYmd(t.deadline);
+        // Safety-cap 90 дней — битые данные не должны вешать рендер.
+        for (let i = 0; i < 90 && d <= end; i++, d = addDays(d, 1)) {
+          const key = ymd(d);
+          push(key, {
+            task: t,
+            seg: key === t.startDate ? 'start' : key === t.deadline ? 'end' : 'mid',
+          });
+        }
+      } else {
+        push(t.deadline, { task: t, seg: 'single' });
+      }
     }
-    for (const arr of map.values()) arr.sort((a, b) => a.position - b.position);
+    for (const arr of map.values())
+      arr.sort(
+        (a, b) =>
+          // Полосы выше одиночных (стабильные «дорожки»), внутри — по id/позиции.
+          Number(a.seg === 'single') - Number(b.seg === 'single') ||
+          a.task.id.localeCompare(b.task.id) ||
+          a.task.position - b.task.position,
+      );
     return map;
   }, [tasks]);
   const noDate = useMemo(() => tasks.filter((t) => !t.deadline), [tasks]);
@@ -140,6 +181,10 @@ export function CalendarView({
         void update(task.id, { deadline: d }).catch((e: unknown) =>
           toast.error(`Не удалось: ${(e as Error).message}`),
         ),
+      onStartDate: (d) =>
+        void update(task.id, { startDate: d }).catch((e: unknown) =>
+          toast.error(`Не удалось: ${(e as Error).message}`),
+        ),
       onDuplicate: () =>
         void create({
           description: task.description ?? '',
@@ -155,12 +200,49 @@ export function CalendarView({
 
   const handleDragEnd = (e: DragEndEvent): void => {
     setActiveDrag(null);
-    const task = e.active.data.current?.task as Task | undefined;
+    const data = e.active.data.current as
+      | { type?: string; task?: Task; fromDay?: string }
+      | undefined;
+    const task = data?.task;
     const day = e.over?.data.current?.day as string | undefined;
-    if (!task || !day || task.deadline === day) return;
-    void update(task.id, { deadline: day }).catch((err: unknown) =>
-      toast.error(`Не удалось перенести срок: ${(err as Error).message}`),
-    );
+    if (!task || !day) return;
+    const fail = (err: unknown): void => {
+      toast.error(`Не удалось: ${(err as Error).message}`);
+    };
+    // Resize краями полосы (Notion): левая ручка — дата начала, правая — срок.
+    if (data?.type === 'resize-start') {
+      if (task.deadline && day > task.deadline) {
+        void update(task.id, { startDate: task.deadline, deadline: day }).catch(fail);
+      } else if (day === task.deadline) {
+        void update(task.id, { startDate: null }).catch(fail);
+      } else {
+        void update(task.id, { startDate: day }).catch(fail);
+      }
+      return;
+    }
+    if (data?.type === 'resize-end') {
+      if (task.startDate && day < task.startDate) {
+        void update(task.id, { startDate: day, deadline: task.startDate }).catch(fail);
+      } else if (day === task.startDate) {
+        void update(task.id, { startDate: null, deadline: day }).catch(fail);
+      } else {
+        void update(task.id, { deadline: day }).catch(fail);
+      }
+      return;
+    }
+    // Перенос: диапазон сдвигается целиком (delta от дня, за который тянули).
+    if (task.startDate && task.deadline && task.startDate < task.deadline) {
+      const from = data?.fromDay ?? task.deadline;
+      const delta = diffDays(from, day);
+      if (delta === 0) return;
+      void update(task.id, {
+        startDate: shiftYmd(task.startDate, delta),
+        deadline: shiftYmd(task.deadline, delta),
+      }).catch(fail);
+      return;
+    }
+    if (task.deadline === day) return;
+    void update(task.id, { deadline: day }).catch(fail);
   };
 
   if (loading) return <div className="h-72 animate-pulse rounded-xl bg-muted/60" />;
@@ -378,6 +460,8 @@ function ViewTaskDrawerWithDeadline({
   );
 }
 
+type DayItem = { task: Task; seg: 'single' | 'start' | 'mid' | 'end' };
+
 function DayCell({
   day,
   inMonth,
@@ -393,7 +477,7 @@ function DayCell({
   inMonth: boolean;
   isToday: boolean;
   tall?: boolean;
-  tasks: Task[];
+  tasks: DayItem[];
   dragging: boolean;
   onOpen: (t: Task) => void;
   onCreate: () => void;
@@ -435,8 +519,16 @@ function DayCell({
         </span>
       </div>
       <div className="mt-0.5 flex flex-col gap-0.5">
-        {tasks.slice(0, MAX_CHIPS).map((t) => (
-          <TaskChip key={t.id} task={t} onOpen={() => onOpen(t)} menu={menuFor(t)} />
+        {tasks.slice(0, MAX_CHIPS).map(({ task: t, seg }) => (
+          <TaskChip
+            key={t.id}
+            task={t}
+            seg={seg}
+            fromDay={key}
+            showLabel={seg === 'single' || seg === 'start' || day.getDay() === 1}
+            onOpen={() => onOpen(t)}
+            menu={menuFor(t)}
+          />
         ))}
         {hidden > 0 && (
           <Popover>
@@ -450,8 +542,8 @@ function DayCell({
             </PopoverTrigger>
             <PopoverContent align="start" className="max-h-72 w-64 overflow-y-auto p-1.5">
               <div className="flex flex-col gap-0.5">
-                {tasks.map((t) => (
-                  <TaskChip key={t.id} task={t} onOpen={() => onOpen(t)} menu={menuFor(t)} />
+                {tasks.map(({ task: t }) => (
+                  <TaskChip key={t.id} task={t} fromDay={key} onOpen={() => onOpen(t)} menu={menuFor(t)} />
                 ))}
               </div>
             </PopoverContent>
@@ -462,42 +554,91 @@ function DayCell({
   );
 }
 
-// Чип задачи: draggable (перенос дедлайна) + клик открывает окно (порог 6px разводит их);
-// правая кнопка — контекстное меню задачи.
+// Ручка resize на краю полосы (Notion): drag на день меняет дату начала/срок.
+function EdgeHandle({
+  task,
+  side,
+}: {
+  task: Task;
+  side: 'resize-start' | 'resize-end';
+}): React.ReactElement {
+  const { setNodeRef, listeners, attributes } = useDraggable({
+    id: `${task.id}::${side}`,
+    data: { type: side, task },
+  });
+  return (
+    <span
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      role="separator"
+      aria-label={side === 'resize-start' ? 'Изменить дату начала' : 'Изменить срок'}
+      onClick={(e) => e.stopPropagation()}
+      className={cn(
+        'absolute top-0 z-10 h-full w-1.5 cursor-ew-resize rounded opacity-0 transition-opacity group-hover/chip:opacity-100 hover:bg-primary/50',
+        side === 'resize-start' ? 'left-0' : 'right-0',
+      )}
+    />
+  );
+}
+
+// Чип задачи: draggable (перенос дедлайна/сдвиг диапазона) + клик открывает окно
+// (порог 6px разводит их); правая кнопка — меню; края полосы тянутся (resize).
 function TaskChip({
   task,
+  seg = 'single',
+  fromDay,
+  showLabel = true,
   onOpen,
   menu,
 }: {
   task: Task;
+  seg?: 'single' | 'start' | 'mid' | 'end';
+  fromDay?: string;
+  showLabel?: boolean;
   onOpen: () => void;
   menu?: MenuEntry[];
 }): React.ReactElement {
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
-    id: task.id,
-    data: { type: 'task', task },
+    id: fromDay ? `${task.id}@${fromDay}` : task.id,
+    data: { type: 'move', task, fromDay },
   });
   const chip = (
-    <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      onClick={onOpen}
-      className={cn(
-        'flex cursor-pointer items-center gap-1 rounded-md border bg-card px-1.5 py-0.5 text-xs shadow-sm transition-colors hover:bg-accent',
-        isDragging && 'opacity-30',
-        task.status === 'done' && 'text-muted-foreground line-through decoration-muted-foreground/40',
-      )}
-    >
-      <span className={cn('size-1.5 shrink-0 rounded-full', STATUS_DOT[task.status])} />
-      {task.icon ? (
-        <span className="grid size-3.5 shrink-0 place-items-center overflow-hidden">
-          <ProjectIconView icon={task.icon} pixelSize={12} className="text-[11px]" />
-        </span>
-      ) : (
-        <FileText className="size-3 shrink-0 text-muted-foreground/50" />
-      )}
-      <span className="min-w-0 truncate">{taskTitle(task)}</span>
+    <div className="group/chip relative">
+      <div
+        ref={setNodeRef}
+        {...listeners}
+        {...attributes}
+        onClick={onOpen}
+        className={cn(
+          'flex cursor-pointer items-center gap-1 border bg-card px-1.5 py-0.5 text-xs shadow-sm transition-colors hover:bg-accent',
+          // Сегменты полосы (Notion date range): скругление только на краях диапазона.
+          seg === 'single' && 'rounded-md',
+          seg === 'start' && '-mr-1 rounded-l-md rounded-r-none border-r-0',
+          seg === 'mid' && '-mx-1 rounded-none border-x-0',
+          seg === 'end' && '-ml-1 rounded-l-none rounded-r-md border-l-0',
+          isDragging && 'opacity-30',
+          task.status === 'done' && 'text-muted-foreground line-through decoration-muted-foreground/40',
+        )}
+      >
+        {showLabel ? (
+          <>
+            <span className={cn('size-1.5 shrink-0 rounded-full', STATUS_DOT[task.status])} />
+            {task.icon ? (
+              <span className="grid size-3.5 shrink-0 place-items-center overflow-hidden">
+                <ProjectIconView icon={task.icon} pixelSize={12} className="text-[11px]" />
+              </span>
+            ) : (
+              <FileText className="size-3 shrink-0 text-muted-foreground/50" />
+            )}
+            <span className="min-w-0 truncate">{taskTitle(task)}</span>
+          </>
+        ) : (
+          <span className="h-4 min-w-0 flex-1" aria-hidden />
+        )}
+      </div>
+      {(seg === 'single' || seg === 'start') && <EdgeHandle task={task} side="resize-start" />}
+      {(seg === 'single' || seg === 'end') && <EdgeHandle task={task} side="resize-end" />}
     </div>
   );
   if (!menu) return chip;

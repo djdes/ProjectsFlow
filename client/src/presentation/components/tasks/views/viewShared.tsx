@@ -142,6 +142,7 @@ export function taskMenuEntries(
     onStatus: (s: TaskStatus) => void;
     onPriority: (p: TaskPriority | null) => void;
     onDeadline: (d: string | null) => void;
+    onStartDate: (d: string | null) => void;
     onDuplicate: () => void;
     onDelete: () => void;
   },
@@ -194,6 +195,31 @@ export function taskMenuEntries(
         : []),
     ],
   };
+  // Дата начала (db/106): диапазон startDate → deadline рисуется полосой в календаре.
+  const startDateSub: MenuEntry = {
+    kind: 'sub',
+    label: 'Дата начала',
+    icon: CalendarDays,
+    items: [
+      { kind: 'item', label: 'Сегодня', onSelect: () => h.onStartDate(today) },
+      {
+        kind: 'item',
+        label: 'Завтра',
+        onSelect: () => h.onStartDate(ymd(addDays(startOfDay(new Date()), 1))),
+      },
+      ...(task.startDate
+        ? ([
+            { kind: 'separator' },
+            {
+              kind: 'item',
+              label: 'Убрать дату начала',
+              muted: true,
+              onSelect: () => h.onStartDate(null),
+            },
+          ] as MenuEntry[])
+        : []),
+    ],
+  };
   const copyLink = (): void => {
     const url = `${window.location.origin}/projects/${projectId}/tasks/${task.id}`;
     void navigator.clipboard.writeText(url).catch(() => undefined);
@@ -208,7 +234,7 @@ export function taskMenuEntries(
       kind: 'sub',
       label: 'Изменить свойство',
       icon: Pencil,
-      items: [statusSub, prioritySub, deadlineSub],
+      items: [statusSub, prioritySub, deadlineSub, startDateSub],
     },
     { kind: 'separator' },
     { kind: 'item', label: 'Скопировать ссылку', icon: LinkIcon, onSelect: copyLink },

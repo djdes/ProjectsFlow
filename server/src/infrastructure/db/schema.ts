@@ -628,6 +628,8 @@ export const tasks = mysqlTable(
     // mode:'string' — Drizzle отдаёт ISO 'YYYY-MM-DD' напрямую (без TZ-shenanigans
     // которые случились бы с Date). Domain хранит string, парсит в Date только UI.
     deadline: date('deadline', { mode: 'string' }),
+    // Дата начала работ (db/106): диапазон start_date → deadline (Notion date range).
+    startDate: date('start_date', { mode: 'string' }),
     // Приоритет 1..4 (1=urgent, 4=low — стиль Todoist). NULL = без приоритета. См. db/041.
     priority: tinyint('priority', { unsigned: true }),
     createdAt: createdAtCol(),
