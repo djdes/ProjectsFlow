@@ -29,6 +29,7 @@ import type { ViewCreateRequest } from './ProjectBoardViews';
 import {
   NewTaskRow,
   STATUS_DOT,
+  STATUS_PILL,
   ViewTaskDrawer,
   applyViewSort,
   hasActiveFilters,
@@ -150,7 +151,7 @@ export function ListView({
             {/* Hover-контролы в левом поле (Notion): «+», «⋮⋮» (меню) и чекбокс. */}
             <div
               className={cn(
-                'absolute -left-14 top-1/2 flex -translate-y-1/2 items-center gap-0 transition-opacity',
+                'absolute -left-14 top-1/2 flex -translate-y-1/2 items-center gap-0 transition-opacity duration-100',
                 selected.size > 0 || selected.has(task.id)
                   ? 'opacity-100'
                   : 'opacity-0 group-hover:opacity-100',
@@ -253,7 +254,12 @@ export function ListView({
                     {PRIORITY_META[task.priority].label}
                   </span>
                 )}
-              <span className="flex items-center gap-1 whitespace-nowrap rounded-full bg-muted px-1.5 py-0.5">
+              <span
+                className={cn(
+                  'flex items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5',
+                  STATUS_PILL[task.status],
+                )}
+              >
                 <span className={cn('size-1.5 rounded-full', STATUS_DOT[task.status])} />
                 {STATUS_LABEL[task.status]}
               </span>

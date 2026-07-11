@@ -307,6 +307,44 @@ export function ProjectBoardViews({
   const requestCreate = (status: TaskStatus): void =>
     setCreateReq((prev) => ({ seq: (prev?.seq ?? 0) + 1, status }));
 
+  // Меню дефолтной вкладки «Доска» (виртуальная, в БД не хранится) — то же окно, что у
+  // остальных вью (Notion: все вкладки равнозначны). «Показывать как» другой тип создаёт
+  // новую вью этого типа; дублирование создаёт канбан-вью.
+  const defaultTabMenuEntries = (): MenuEntry[] => [
+    {
+      kind: 'sub',
+      label: 'Показывать как',
+      icon: VIEW_TYPE_ICONS.kanban,
+      items: BOARD_VIEW_TYPES.map((t) => ({
+        kind: 'item' as const,
+        label: BOARD_VIEW_TYPE_LABELS[t],
+        icon: VIEW_TYPE_ICONS[t],
+        checked: t === 'kanban',
+        onSelect: () => {
+          if (t !== 'kanban') void handleCreate(BOARD_VIEW_TYPE_LABELS[t], t);
+        },
+      })),
+    },
+    {
+      kind: 'item',
+      label: 'Скопировать ссылку',
+      icon: LinkIcon,
+      onSelect: () => {
+        const url = `${window.location.origin}${window.location.pathname}?view=${DEFAULT_VIEW_ID}`;
+        void navigator.clipboard
+          .writeText(url)
+          .then(() => toast.success('Ссылка на вью скопирована'))
+          .catch(() => toast.error('Не удалось скопировать ссылку'));
+      },
+    },
+    {
+      kind: 'item',
+      label: 'Дублировать вью',
+      icon: Copy,
+      onSelect: () => void handleCreate('Доска (копия)', 'kanban'),
+    },
+  ];
+
   // Единая спека меню вкладки — рендерится и в дропдаун (клик по активной вкладке),
   // и в контекстное меню (правая кнопка мыши по любой вкладке), как в Notion.
   const tabMenuEntries = (v: BoardView): MenuEntry[] => [
@@ -390,6 +428,7 @@ export function ProjectBoardViews({
             name="Доска"
             active={activeId === DEFAULT_VIEW_ID}
             onSelect={() => selectView(DEFAULT_VIEW_ID)}
+            menu={defaultTabMenuEntries()}
           />
           {visibleViews.map((v) => (
             <ViewTab
@@ -606,7 +645,10 @@ export function ProjectBoardViews({
         </div>
       )}
 
-      {/* Активный вид. key по вью — смена вкладки пересоздаёт вид (свой useTasks/стейт). */}
+      {/* Активный вид. key по вью — смена вкладки пересоздаёт вид (свой useTasks/стейт).
+          Панель «Настройки вью» — В ПОТОКЕ справа (Notion): контент поджимается. */}
+      <div className="flex min-h-0 flex-1 items-start gap-4">
+      <div className="min-w-0 flex-1">
       {isKanban ? (
         <KanbanBoard
           key={`${projectId}:${activeId}`}
@@ -652,29 +694,27 @@ export function ProjectBoardViews({
         />
       )}
 
-      {/* Настройки вью — карточка под тулбаром справа (Notion View settings). */}
+      </div>
       {panel === 'settings' && active && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setPanel(null)} aria-hidden />
-          <div className="absolute right-0 top-9 z-40 w-80 max-w-[92vw] rounded-lg border bg-card shadow-xl duration-150 animate-in fade-in slide-in-from-top-1">
-            <ViewSettingsCard
-              view={active}
-              onClose={() => setPanel(null)}
-              onRename={(name) => void handleUpdate(active, { name })}
-              onType={(type) => void handleUpdate(active, { type })}
-              onCopyLink={() => copyViewLink(active)}
-              onDuplicate={() => void handleDuplicate(active)}
-              onDelete={() => setDeleteTarget(active)}
-              hidden={state.hidden}
-              onToggleColumn={active.type === 'table' ? toggleColumn : undefined}
-              filters={state.filters}
-              onFilters={setFilters}
-              sort={state.sort}
-              onSort={setSort}
-            />
-          </div>
-        </>
+        <aside className="sticky top-2 w-72 shrink-0 border-l pl-3 duration-150 animate-in fade-in slide-in-from-right-1 max-md:hidden">
+          <ViewSettingsCard
+            view={active}
+            onClose={() => setPanel(null)}
+            onRename={(name) => void handleUpdate(active, { name })}
+            onType={(type) => void handleUpdate(active, { type })}
+            onCopyLink={() => copyViewLink(active)}
+            onDuplicate={() => void handleDuplicate(active)}
+            onDelete={() => setDeleteTarget(active)}
+            hidden={state.hidden}
+            onToggleColumn={active.type === 'table' ? toggleColumn : undefined}
+            filters={state.filters}
+            onFilters={setFilters}
+            sort={state.sort}
+            onSort={setSort}
+          />
+        </aside>
       )}
+      </div>
 
       {/* Подтверждение удаления вью (задачи не трогаются — удаляется только представление). */}
       <Dialog open={deleteTarget !== null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
@@ -1269,8 +1309,8 @@ function ViewSettingsCard({
   );
 
   return (
-    <div className="flex max-h-[70vh] flex-col">
-      <div className="flex items-center justify-between border-b px-3 py-2">
+    <div className="flex flex-col">
+      <div className="flex items-center justify-between px-2 py-1.5">
         <p className="text-sm font-semibold">Настройки вью</p>
         <button
           type="button"

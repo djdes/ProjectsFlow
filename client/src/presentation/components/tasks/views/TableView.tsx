@@ -11,6 +11,7 @@ import {
   Flag,
   GripVertical,
   ListFilter,
+  MessageSquare,
   PanelRight,
   Plus,
   Trash2,
@@ -47,7 +48,9 @@ import { ymd, startOfDay, addDays } from '../assignedGrouping';
 import type { ViewCreateRequest } from './ProjectBoardViews';
 import {
   NewTaskRow,
+  PRIORITY_PILL,
   STATUS_DOT,
+  STATUS_PILL,
   VIEW_COLUMN_LABELS,
   ViewTaskDrawer,
   applyViewSort,
@@ -173,9 +176,15 @@ export function TableView({
     }
     return undefined;
   };
+  // Хвост-филлер справа (Notion): разделитель после последней колонки, границы строк
+  // продолжаются до края.
   const gridStyle = useMemo(
     () => ({
-      gridTemplateColumns: ['minmax(0,1fr)', ...visibleCols.map((c) => COLUMN_WIDTH[c])].join(' '),
+      gridTemplateColumns: [
+        'minmax(16rem,1fr)',
+        ...visibleCols.map((c) => COLUMN_WIDTH[c]),
+        'minmax(2rem,10rem)',
+      ].join(' '),
     }),
     [visibleCols],
   );
@@ -227,7 +236,7 @@ export function TableView({
           {/* Шапка таблицы: иконка типа свойства + название; клик по заголовку —
               меню колонки (сортировка ↑↓, скрыть свойство), как в Notion. */}
           <div
-            className="group/head relative grid border-b text-xs text-muted-foreground"
+            className="group/head relative grid border-b border-t text-xs text-muted-foreground"
             style={gridStyle}
           >
             <div className="absolute -left-8 top-1/2 -translate-y-1/2">
@@ -264,6 +273,7 @@ export function TableView({
                 filterEntries={filterEntriesFor(c)}
               />
             ))}
+            <div className="border-l" aria-hidden />
             {/* «+» в конце шапки (Notion add property): вернуть скрытые свойства. */}
             {hiddenCols.length > 0 && (
               <DropdownMenu>
@@ -612,7 +622,7 @@ function TableRow({
   // Клик по «пустому» месту ячейки — выделение синей рамкой (Notion cell selection).
   const cellProps = (col: ViewColumn): { className: string; onMouseDown: (e: React.MouseEvent) => void } => ({
     className: cn(
-      'relative border-l px-1 py-1',
+      'relative border-l px-1 py-0.5',
       selCell === `${task.id}:${col}` &&
         'ring-2 ring-inset ring-primary/70 after:pointer-events-none after:absolute after:-bottom-[3px] after:-right-[3px] after:size-1.5 after:rounded-[1px] after:bg-primary',
     ),
@@ -631,10 +641,18 @@ function TableRow({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md px-1.5 text-xs text-foreground/90 transition-colors hover:bg-accent"
+                  className="group/cellbtn inline-flex h-6 max-w-full items-center gap-1 rounded-md px-1 text-xs transition-colors hover:bg-accent"
                 >
-                  <span className={cn('size-2 shrink-0 rounded-full', STATUS_DOT[task.status])} />
-                  <span className="truncate">{STATUS_LABEL[task.status]}</span>
+                  {/* Значение статуса — цветная пилюля (Notion select pill). */}
+                  <span
+                    className={cn(
+                      'inline-flex max-w-full items-center gap-1.5 rounded-full px-2 py-0.5',
+                      STATUS_PILL[task.status],
+                    )}
+                  >
+                    <span className={cn('size-2 shrink-0 rounded-full', STATUS_DOT[task.status])} />
+                    <span className="truncate">{STATUS_LABEL[task.status]}</span>
+                  </span>
                   <ChevronDown className="size-3 shrink-0 opacity-0 group-hover:opacity-60" />
                 </button>
               </DropdownMenuTrigger>
@@ -656,17 +674,22 @@ function TableRow({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md px-1.5 text-xs transition-colors hover:bg-accent"
+                  className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md px-1 text-xs transition-colors hover:bg-accent"
                 >
                   {task.priority !== null && task.priority !== undefined ? (
-                    <>
+                    <span
+                      className={cn(
+                        'inline-flex max-w-full items-center gap-1.5 rounded-full px-2 py-0.5',
+                        PRIORITY_PILL[task.priority],
+                      )}
+                    >
                       <span
                         className={cn('size-2 shrink-0 rounded-full', PRIORITY_META[task.priority].dotColor)}
                       />
                       <span className="truncate">{PRIORITY_META[task.priority].label}</span>
-                    </>
+                    </span>
                   ) : (
-                    <span className="text-muted-foreground/60">—</span>
+                    <span className="px-0.5 text-muted-foreground/60">—</span>
                   )}
                 </button>
               </DropdownMenuTrigger>
@@ -728,7 +751,7 @@ function TableRow({
       {/* Hover-контролы в левом поле (Notion): «+», «⋮⋮» (меню задачи) и чекбокс. */}
       <div
         className={cn(
-          'absolute -left-14 top-1/2 flex -translate-y-1/2 items-center gap-0 transition-opacity',
+          'absolute -left-14 top-1/2 flex -translate-y-1/2 items-center gap-0 transition-opacity duration-100',
           selected || anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
         )}
       >
@@ -767,7 +790,7 @@ function TableRow({
       </div>
 
       {/* Название: иконка + заголовок + hover-кнопка «Открыть» (Notion OPEN). */}
-      <div className="flex min-w-0 items-center gap-1.5 px-2 py-1.5">
+      <div className="flex min-w-0 items-center gap-1.5 px-2 py-1">
         {task.icon ? (
           <span className="grid size-4 shrink-0 place-items-center overflow-hidden">
             <ProjectIconView icon={task.icon} pixelSize={15} className="text-sm" />
@@ -790,9 +813,21 @@ function TableRow({
           <PanelRight className="size-3" />
           Открыть
         </button>
+        {/* Комментарий (Notion: hover-иконка Comment справа от названия) — открывает окно
+            задачи, тред там. */}
+        <button
+          type="button"
+          aria-label="Комментарий"
+          title="Комментарий"
+          onClick={onOpen}
+          className="hidden shrink-0 rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground group-hover:inline-flex"
+        >
+          <MessageSquare className="size-3.5" />
+        </button>
       </div>
 
       {visibleCols.map(cellFor)}
+      <div className="border-l" aria-hidden />
         </div>
       </ContextMenuTrigger>
       {/* Правый клик по строке — контекстное меню задачи (Notion-style). */}
