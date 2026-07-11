@@ -629,6 +629,7 @@ export function projectsRouter(deps: Deps): Router {
     name: v.name,
     type: v.type,
     sortOrder: v.sortOrder,
+    config: v.config,
     createdAt: v.createdAt.toISOString(),
   });
   // Гейт мутаций: участник и не viewer. Возвращает membership или null (ответ уже отправлен).
@@ -708,15 +709,18 @@ export function projectsRouter(deps: Deps): Router {
         if (!(await requireViewEditor(id, req.user!.id, res))) return;
         const existing = await deps.boardViews.getById(viewId);
         if (!existing || existing.projectId !== id) throw new ProjectNotFoundError();
-        // «Имя (копия)» с обрезкой под лимит колонки.
+        // «Имя (копия)» с обрезкой под лимит колонки. Конфиг (фильтры/колонки/…) копируется.
         const name = `${existing.name} (копия)`.slice(0, 64);
-        const view = await deps.boardViews.create({
+        let view = await deps.boardViews.create({
           id: randomUUID(),
           projectId: id,
           name,
           type: existing.type,
           createdBy: req.user!.id,
         });
+        if (existing.config) {
+          view = (await deps.boardViews.update(view.id, { config: existing.config })) ?? view;
+        }
         deps.notifyProjectChanged(id);
         res.status(201).json({ view: viewToDto(view) });
       } catch (e) {

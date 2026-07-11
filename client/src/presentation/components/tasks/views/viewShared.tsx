@@ -234,10 +234,172 @@ export const VIEW_CALC_LABELS: Record<ViewCalc, string> = {
 export type TableViewState = {
   readonly colWidths: Partial<Record<'title' | ViewColumn, number>>;
   readonly wrapTitle: boolean;
+  readonly freezeTitle: boolean;
   readonly calc: Partial<Record<ViewColumn, ViewCalc>>;
 };
 
-export const EMPTY_TABLE_STATE: TableViewState = { colWidths: {}, wrapTitle: false, calc: {} };
+export const EMPTY_TABLE_STATE: TableViewState = {
+  colWidths: {},
+  wrapTitle: false,
+  freezeTitle: false,
+  calc: {},
+};
+
+// ---- Группировка, условные цвета, режим календаря (Notion) ----
+
+export type ViewGrouping = 'status' | 'priority' | 'assignee';
+
+export const VIEW_GROUPING_LABELS: Record<ViewGrouping, string> = {
+  status: 'Статус',
+  priority: 'Приоритет',
+  assignee: 'Ответственный',
+};
+
+// Условный цвет строки (Notion Conditional color): «если свойство = значение → цвет».
+export type ViewColorRule = {
+  readonly prop: 'status' | 'priority';
+  readonly value: string; // TaskStatus или String(TaskPriority)
+  readonly color: ViewRuleColor;
+};
+
+export type ViewRuleColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink' | 'gray';
+
+export const RULE_COLOR_LABELS: Record<ViewRuleColor, string> = {
+  red: 'Красный',
+  orange: 'Оранжевый',
+  yellow: 'Жёлтый',
+  green: 'Зелёный',
+  blue: 'Синий',
+  purple: 'Фиолетовый',
+  pink: 'Розовый',
+  gray: 'Серый',
+};
+
+// Фон строки по правилу (светлая/тёмная тема).
+export const RULE_COLOR_ROW: Record<ViewRuleColor, string> = {
+  red: 'bg-red-50 dark:bg-red-500/10',
+  orange: 'bg-orange-50 dark:bg-orange-500/10',
+  yellow: 'bg-yellow-50 dark:bg-yellow-500/10',
+  green: 'bg-emerald-50 dark:bg-emerald-500/10',
+  blue: 'bg-blue-50 dark:bg-blue-500/10',
+  purple: 'bg-purple-50 dark:bg-purple-500/10',
+  pink: 'bg-pink-50 dark:bg-pink-500/10',
+  gray: 'bg-muted/60',
+};
+
+// Точка-превью цвета в меню.
+export const RULE_COLOR_DOT: Record<ViewRuleColor, string> = {
+  red: 'bg-red-400',
+  orange: 'bg-orange-400',
+  yellow: 'bg-yellow-400',
+  green: 'bg-emerald-400',
+  blue: 'bg-blue-400',
+  purple: 'bg-purple-400',
+  pink: 'bg-pink-400',
+  gray: 'bg-muted-foreground/50',
+};
+
+export function rowColorFor(task: Task, rules: readonly ViewColorRule[]): string | null {
+  for (const r of rules) {
+    if (r.prop === 'status' && task.status === r.value) return RULE_COLOR_ROW[r.color];
+    if (r.prop === 'priority' && String(task.priority ?? '') === r.value)
+      return RULE_COLOR_ROW[r.color];
+  }
+  return null;
+}
+
+// Ключ группы задачи при активной группировке.
+export function groupKeyFor(task: Task, grouping: ViewGrouping): string {
+  switch (grouping) {
+    case 'status':
+      return task.status;
+    case 'priority':
+      return String(task.priority ?? 'none');
+    case 'assignee':
+      return task.delegation?.delegateUserId ?? 'none';
+  }
+}
+
+export function groupLabelFor(key: string, grouping: ViewGrouping, sample?: Task): string {
+  switch (grouping) {
+    case 'status':
+      return STATUS_LABEL[key as TaskStatus] ?? key;
+    case 'priority':
+      return key === 'none' ? 'Без приоритета' : PRIORITY_META[Number(key) as TaskPriority].label;
+    case 'assignee':
+      return key === 'none'
+        ? 'Без ответственного'
+        : (sample?.delegation?.delegateDisplayName ?? 'Участник');
+  }
+}
+
+// ---- Пер-вью конфиг (board_views.config, db/105): весь стейт вью на сервере ----
+
+export type ViewConfig = {
+  filters?: ViewFilters;
+  sort?: ViewSort | null;
+  hidden?: ViewColumn[];
+  table?: TableViewState;
+  grouping?: ViewGrouping | null;
+  colorRules?: ViewColorRule[];
+  calendarMode?: 'month' | 'week';
+};
+
+export type PerViewState = {
+  filters: ViewFilters;
+  sort: ViewSort | null;
+  hidden: ViewColumn[];
+  table: TableViewState;
+  grouping: ViewGrouping | null;
+  colorRules: ViewColorRule[];
+  calendarMode: 'month' | 'week';
+};
+
+export const EMPTY_PER_VIEW_STATE: PerViewState = {
+  filters: EMPTY_VIEW_FILTERS,
+  sort: null,
+  hidden: [],
+  table: EMPTY_TABLE_STATE,
+  grouping: null,
+  colorRules: [],
+  calendarMode: 'month',
+};
+
+export function perViewToConfig(s: PerViewState): ViewConfig {
+  return {
+    filters: s.filters,
+    sort: s.sort,
+    hidden: s.hidden,
+    table: s.table,
+    grouping: s.grouping,
+    colorRules: s.colorRules,
+    calendarMode: s.calendarMode,
+  };
+}
+
+// Прозрачный JSON с сервера → состояние с дефолтами (мягкая валидация форм).
+export function perViewFromConfig(c: unknown): PerViewState {
+  const cfg = (c ?? {}) as ViewConfig;
+  return {
+    filters: {
+      query: '',
+      statuses: Array.isArray(cfg.filters?.statuses) ? cfg.filters.statuses : [],
+      priorities: Array.isArray(cfg.filters?.priorities) ? cfg.filters.priorities : [],
+      due: cfg.filters?.due ?? null,
+    },
+    sort: cfg.sort && typeof cfg.sort === 'object' ? cfg.sort : null,
+    hidden: Array.isArray(cfg.hidden) ? cfg.hidden : [],
+    table: {
+      colWidths: cfg.table?.colWidths && typeof cfg.table.colWidths === 'object' ? cfg.table.colWidths : {},
+      wrapTitle: Boolean(cfg.table?.wrapTitle),
+      freezeTitle: Boolean(cfg.table?.freezeTitle),
+      calc: cfg.table?.calc && typeof cfg.table.calc === 'object' ? cfg.table.calc : {},
+    },
+    grouping: cfg.grouping ?? null,
+    colorRules: Array.isArray(cfg.colorRules) ? cfg.colorRules : [],
+    calendarMode: cfg.calendarMode === 'week' ? 'week' : 'month',
+  };
+}
 
 export type ViewSortKey = 'title' | 'status' | 'priority' | 'deadline' | 'created';
 export type ViewSort = { readonly key: ViewSortKey; readonly dir: 'asc' | 'desc' };

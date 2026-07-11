@@ -5,6 +5,7 @@ import {
   ArrowUpDown,
   Calendar,
   CalendarDays,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -17,8 +18,10 @@ import {
   Link as LinkIcon,
   List,
   ListFilter,
+  Paintbrush,
   Pencil,
   Plus,
+  Rows3,
   Search,
   Settings2,
   Table as TableIcon,
@@ -49,6 +52,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { TaskPriority, TaskStatus } from '@/domain/task/Task';
+// (TaskStatus используется в редакторе условного цвета)
 import { TASK_PRIORITIES } from '@/domain/task/Task';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { VISIBLE_KANBAN_STATUSES } from '@/domain/kanban/KanbanSettings';
@@ -66,16 +70,24 @@ import { TableView } from './TableView';
 import { ListView } from './ListView';
 import { CalendarView } from './CalendarView';
 import {
-  EMPTY_TABLE_STATE,
-  EMPTY_VIEW_FILTERS,
+  EMPTY_PER_VIEW_STATE,
+  RULE_COLOR_DOT,
+  RULE_COLOR_LABELS,
   STATUS_DOT,
   VIEW_COLUMN_LABELS,
+  VIEW_GROUPING_LABELS,
   VIEW_SORT_LABELS,
   hasActiveFilters,
+  perViewFromConfig,
+  perViewToConfig,
+  type PerViewState,
   type TableViewState,
+  type ViewColorRule,
   type ViewColumn,
   type ViewDueFilter,
   type ViewFilters,
+  type ViewGrouping,
+  type ViewRuleColor,
   type ViewSort,
   type ViewSortKey,
 } from './viewShared';
@@ -114,12 +126,6 @@ const DUE_FILTER_LABELS: Record<ViewDueFilter, string> = {
 // Запрос «создать задачу» из тулбара: seq растёт, вид ловит изменение и открывает окно.
 export type ViewCreateRequest = { readonly seq: number; readonly status: TaskStatus };
 
-type PerViewState = {
-  filters: ViewFilters;
-  sort: ViewSort | null;
-  hidden: ViewColumn[];
-  table: TableViewState;
-};
 
 // === Вью доски проекта (Notion-style) ===
 // Строка вкладок: «Доска» (неявный канбан) + пользовательские вью из БД, overflow — «N ещё…»,
@@ -227,17 +233,59 @@ export function ProjectBoardViews({
   const activeType: BoardViewType = active?.type ?? 'kanban';
   const isKanban = activeId === DEFAULT_VIEW_ID || activeType === 'kanban';
 
-  const state: PerViewState = perView[activeId] ?? {
-    filters: EMPTY_VIEW_FILTERS,
-    sort: null,
-    hidden: [],
-    table: EMPTY_TABLE_STATE,
-  };
+  const state: PerViewState = perView[activeId] ?? EMPTY_PER_VIEW_STATE;
   const setTableState = (patch: Partial<TableViewState>): void =>
     setPerView((prev) => ({
       ...prev,
       [activeId]: { ...state, table: { ...state.table, ...patch } },
     }));
+  const setGrouping = (grouping: ViewGrouping | null): void =>
+    setPerView((prev) => ({ ...prev, [activeId]: { ...state, grouping } }));
+  const setColorRules = (colorRules: ViewColorRule[]): void =>
+    setPerView((prev) => ({ ...prev, [activeId]: { ...state, colorRules } }));
+  const setCalendarMode = (calendarMode: 'month' | 'week'): void =>
+    setPerView((prev) => ({ ...prev, [activeId]: { ...state, calendarMode } }));
+
+  // Гидратация пер-вью состояния из серверного config (только впервые увиденные вью —
+  // локальные несохранённые правки не затираем).
+  useEffect(() => {
+    if (!views) return;
+    setPerView((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const v of views) {
+        if (!(v.id in next) && v.config) {
+          next[v.id] = perViewFromConfig(v.config);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [views]);
+
+  // Автосохранение конфига активной вью на сервер (debounce; query не сохраняем).
+  const lastSavedRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    if (activeId === DEFAULT_VIEW_ID) return;
+    if (!views?.some((v) => v.id === activeId)) return;
+    const st = perView[activeId];
+    if (!st) return;
+    const config = perViewToConfig({ ...st, filters: { ...st.filters, query: '' } });
+    const json = JSON.stringify(config);
+    const baseline =
+      lastSavedRef.current[activeId] ??
+      JSON.stringify(
+        perViewToConfig(perViewFromConfig(views.find((v) => v.id === activeId)?.config ?? null)),
+      );
+    if (json === baseline) return;
+    const t = window.setTimeout(() => {
+      lastSavedRef.current[activeId] = json;
+      void boardViewRepository
+        .update(projectId, activeId, { config: config as Record<string, unknown> })
+        .catch(() => undefined);
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, [perView, activeId, views, boardViewRepository, projectId]);
   const setFilters = (patch: Partial<ViewFilters>): void =>
     setPerView((prev) => ({
       ...prev,
@@ -716,6 +764,8 @@ export function ProjectBoardViews({
           onToggleCol={toggleColumn}
           tableState={state.table}
           onTableState={setTableState}
+          grouping={state.grouping}
+          colorRules={state.colorRules}
           createRequest={createReq}
         />
       ) : activeType === 'list' ? (
@@ -726,6 +776,8 @@ export function ProjectBoardViews({
           memberCount={memberCount}
           filters={state.filters}
           sort={state.sort}
+          grouping={state.grouping}
+          colorRules={state.colorRules}
           createRequest={createReq}
         />
       ) : (
@@ -735,6 +787,8 @@ export function ProjectBoardViews({
           projectName={projectName}
           memberCount={memberCount}
           filters={state.filters}
+          mode={state.calendarMode}
+          onModeChange={setCalendarMode}
           createRequest={createReq}
         />
       )}
@@ -756,6 +810,10 @@ export function ProjectBoardViews({
             onFilters={setFilters}
             sort={state.sort}
             onSort={setSort}
+            grouping={state.grouping}
+            onGrouping={setGrouping}
+            colorRules={state.colorRules}
+            onColorRules={setColorRules}
           />
         </aside>
       )}
@@ -1334,8 +1392,8 @@ function TabRenameInput({
 }
 
 // Карточка «Настройки вью» (Notion View settings): строки-пункты со значением и «›»,
-// drill-down в подстраницы Вид / Свойства / Фильтр / Сортировка с «‹ Назад».
-type SettingsPage = 'root' | 'layout' | 'props' | 'filter' | 'sort';
+// drill-down в подстраницы Вид / Свойства / Фильтр / Сортировка / Группировка / Цвет.
+type SettingsPage = 'root' | 'layout' | 'props' | 'filter' | 'sort' | 'group' | 'color';
 
 function ViewSettingsCard({
   view,
@@ -1351,6 +1409,10 @@ function ViewSettingsCard({
   onFilters,
   sort,
   onSort,
+  grouping,
+  onGrouping,
+  colorRules,
+  onColorRules,
 }: {
   view: BoardView;
   onClose: () => void;
@@ -1365,6 +1427,10 @@ function ViewSettingsCard({
   onFilters: (patch: Partial<ViewFilters>) => void;
   sort: ViewSort | null;
   onSort: (s: ViewSort | null) => void;
+  grouping: ViewGrouping | null;
+  onGrouping: (g: ViewGrouping | null) => void;
+  colorRules: ViewColorRule[];
+  onColorRules: (rules: ViewColorRule[]) => void;
 }): React.ReactElement {
   const [page, setPage] = useState<SettingsPage>('root');
   const [name, setName] = useState(view.name);
@@ -1459,6 +1525,20 @@ function ViewSettingsCard({
               value={sort ? VIEW_SORT_LABELS[sort.key] : undefined}
               onClick={() => setPage('sort')}
             />
+            {view.type !== 'calendar' && (
+              <NavRow
+                icon={Rows3}
+                label="Группировка"
+                value={grouping ? VIEW_GROUPING_LABELS[grouping] : 'Нет'}
+                onClick={() => setPage('group')}
+              />
+            )}
+            <NavRow
+              icon={Paintbrush}
+              label="Условный цвет"
+              value={colorRules.length > 0 ? String(colorRules.length) : undefined}
+              onClick={() => setPage('color')}
+            />
             <PanelRow icon={LinkIcon} label="Скопировать ссылку на вью" onClick={onCopyLink} />
             <div className="my-0.5 border-t" />
             <PanelRow icon={Copy} label="Дублировать вью" onClick={onDuplicate} />
@@ -1523,6 +1603,36 @@ function ViewSettingsCard({
             <FilterPicker filters={filters} onChange={onFilters} />
           </div>
         )}
+        {page === 'group' && (
+          <div className="flex flex-col gap-1">
+            {backHeader('Группировка')}
+            <button
+              type="button"
+              onClick={() => onGrouping(null)}
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+            >
+              Нет
+              {grouping === null && <Check className="ml-auto size-3.5" />}
+            </button>
+            {(Object.keys(VIEW_GROUPING_LABELS) as ViewGrouping[]).map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => onGrouping(g)}
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+              >
+                {VIEW_GROUPING_LABELS[g]}
+                {grouping === g && <Check className="ml-auto size-3.5" />}
+              </button>
+            ))}
+          </div>
+        )}
+        {page === 'color' && (
+          <div className="flex flex-col gap-1">
+            {backHeader('Условный цвет')}
+            <ColorRulesEditor rules={colorRules} onChange={onColorRules} />
+          </div>
+        )}
         {page === 'sort' && (
           <div className="flex flex-col gap-1">
             {backHeader('Сортировка')}
@@ -1556,6 +1666,95 @@ function ViewSettingsCard({
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Редактор правил условного цвета (Notion Conditional color): список правил
+// «Свойство = Значение → Цвет» + конструктор нового правила.
+function ColorRulesEditor({
+  rules,
+  onChange,
+}: {
+  rules: ViewColorRule[];
+  onChange: (rules: ViewColorRule[]) => void;
+}): React.ReactElement {
+  const [draftProp, setDraftProp] = useState<'status' | 'priority'>('status');
+  const valueLabel = (r: { prop: string; value: string }): string =>
+    r.prop === 'status'
+      ? (STATUS_LABEL[r.value as TaskStatus] ?? r.value)
+      : (PRIORITY_META[Number(r.value) as TaskPriority]?.label ?? r.value);
+  return (
+    <div className="flex flex-col gap-1">
+      {rules.map((r, i) => (
+        <div key={i} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm">
+          <span className={cn('size-2.5 shrink-0 rounded-full', RULE_COLOR_DOT[r.color])} />
+          <span className="min-w-0 flex-1 truncate">
+            {r.prop === 'status' ? 'Статус' : 'Приоритет'}: {valueLabel(r)}
+          </span>
+          <button
+            type="button"
+            aria-label="Удалить правило"
+            onClick={() => onChange(rules.filter((_, j) => j !== i))}
+            className="text-muted-foreground/60 hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ))}
+      {rules.length === 0 && (
+        <p className="px-2 py-1 text-xs text-muted-foreground">
+          Правил нет. Строки будут окрашены по первому совпавшему правилу.
+        </p>
+      )}
+      <div className="mt-1 border-t pt-2">
+        <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">Новое правило</p>
+        <div className="flex gap-1 px-2 pb-1.5">
+          {(['status', 'priority'] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setDraftProp(p)}
+              className={cn(
+                'rounded-md border px-2 py-1 text-xs transition-colors',
+                draftProp === p
+                  ? 'border-primary/50 bg-primary/5 text-foreground'
+                  : 'text-muted-foreground hover:bg-accent',
+              )}
+            >
+              {p === 'status' ? 'Статус' : 'Приоритет'}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-col">
+          {(draftProp === 'status'
+            ? VISIBLE_KANBAN_STATUSES.map((s) => ({ value: s as string, label: STATUS_LABEL[s] }))
+            : TASK_PRIORITIES.map((p) => ({ value: String(p), label: PRIORITY_META[p].label }))
+          ).map(({ value, label }) => (
+            <div key={value} className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-accent/50">
+              <span className="min-w-0 flex-1 truncate text-sm">{label}</span>
+              {(Object.keys(RULE_COLOR_DOT) as ViewRuleColor[]).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  aria-label={`${label} → ${RULE_COLOR_LABELS[c]}`}
+                  title={RULE_COLOR_LABELS[c]}
+                  onClick={() =>
+                    onChange([
+                      ...rules.filter((r) => !(r.prop === draftProp && r.value === value)),
+                      { prop: draftProp, value, color: c },
+                    ])
+                  }
+                  className={cn(
+                    'size-4 shrink-0 rounded-full ring-offset-1 transition-transform hover:scale-125',
+                    RULE_COLOR_DOT[c],
+                  )}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

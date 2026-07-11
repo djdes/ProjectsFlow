@@ -108,8 +108,16 @@ export const updateBoardViewSchema = z
   .object({
     name: z.string().trim().min(1, 'Введите название').max(64).optional(),
     type: z.enum(['kanban', 'table', 'list', 'calendar']).optional(),
+    // Пер-вью настройки — прозрачный JSON от клиента; ограничиваем только размер.
+    config: z
+      .record(z.string(), z.unknown())
+      .nullable()
+      .optional()
+      .refine((c) => c === undefined || c === null || JSON.stringify(c).length <= 16384, {
+        message: 'Слишком большой конфиг вью',
+      }),
   })
-  .refine((v) => v.name !== undefined || v.type !== undefined, {
+  .refine((v) => v.name !== undefined || v.type !== undefined || v.config !== undefined, {
     message: 'Нечего обновлять',
   });
 

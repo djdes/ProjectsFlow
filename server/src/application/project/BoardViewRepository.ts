@@ -17,7 +17,7 @@ export interface BoardViewRepository {
   create(input: CreateBoardViewInput): Promise<BoardView>;
   update(
     id: string,
-    patch: { name?: string; type?: BoardViewType },
+    patch: { name?: string; type?: BoardViewType; config?: Record<string, unknown> | null },
   ): Promise<BoardView | null>;
   delete(id: string): Promise<void>;
 }

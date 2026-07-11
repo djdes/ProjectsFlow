@@ -1631,6 +1631,9 @@ export const boardViews = mysqlTable(
     name: varchar('name', { length: 64 }).notNull(),
     type: mysqlEnum('type', ['kanban', 'table', 'list', 'calendar']).notNull(),
     sortOrder: int('sort_order').notNull().default(0),
+    // db/105: пер-вью настройки (фильтры/сортировка/колонки/группировка…) —
+    // структуру знает клиент, сервер валидирует только размер.
+    config: json('config'),
     createdBy: char('created_by', { length: 36 }),
     createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: timestamp('updated_at')

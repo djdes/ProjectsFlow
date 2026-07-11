@@ -17,5 +17,7 @@ export type BoardView = {
   readonly name: string;
   readonly type: BoardViewType;
   readonly sortOrder: number;
+  // Пер-вью настройки (db/105) — прозрачный JSON, структуру знает клиент.
+  readonly config: Record<string, unknown> | null;
   readonly createdAt: Date;
 };

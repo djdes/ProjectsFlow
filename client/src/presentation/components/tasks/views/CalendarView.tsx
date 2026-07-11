@@ -43,6 +43,8 @@ type Props = {
   projectName?: string;
   memberCount?: number;
   filters: ViewFilters;
+  mode: 'month' | 'week';
+  onModeChange: (m: 'month' | 'week') => void;
   createRequest: ViewCreateRequest | null;
 };
 
@@ -56,6 +58,13 @@ function buildMonthGrid(monthStart: Date): Date[] {
   return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
 }
 
+// Неделя (Notion Week view): 7 дней с понедельника недели, содержащей anchor.
+function buildWeekGrid(anchor: Date): Date[] {
+  const dow = (anchor.getDay() + 6) % 7;
+  const start = addDays(startOfDay(anchor), -dow);
+  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+}
+
 // === Календарный вид доски (Notion-style, план board-views-design) ===
 // Сетка месяца, задачи в день дедлайна. Drag чипа на другой день = смена дедлайна;
 // клик — окно задачи; hover-«+» в ячейке — создать задачу с этим сроком;
@@ -65,6 +74,8 @@ export function CalendarView({
   projectName,
   memberCount,
   filters,
+  mode,
+  onModeChange,
   createRequest,
 }: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
@@ -103,11 +114,15 @@ export function CalendarView({
   }, [tasks]);
   const noDate = useMemo(() => tasks.filter((t) => !t.deadline), [tasks]);
 
-  const days = useMemo(() => buildMonthGrid(monthStart), [monthStart]);
-  const todayYmd = ymd(startOfDay(new Date()));
-  const monthLabel = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(
-    monthStart,
+  const days = useMemo(
+    () => (mode === 'week' ? buildWeekGrid(monthStart) : buildMonthGrid(monthStart)),
+    [monthStart, mode],
   );
+  const todayYmd = ymd(startOfDay(new Date()));
+  const monthLabel =
+    mode === 'week'
+      ? `${new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(days[0])} — ${new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(days[6])}`
+      : new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(monthStart);
 
   // Контекстное меню чипа задачи (правая кнопка) — как у строк таблицы/списка.
   const menuFor = (task: Task): MenuEntry[] =>
@@ -157,6 +172,27 @@ export function CalendarView({
       <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
         <p className="text-sm font-semibold capitalize">{monthLabel}</p>
         <div className="flex items-center gap-1">
+          {/* Переключатель Месяц/Неделя (Notion Week view). */}
+          <div className="mr-1 inline-flex overflow-hidden rounded-md border">
+            {(
+              [
+                ['month', 'Месяц'],
+                ['week', 'Неделя'],
+              ] as const
+            ).map(([m, label]) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => onModeChange(m)}
+                className={cn(
+                  'px-2 py-0.5 text-xs transition-colors',
+                  mode === m ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground hover:bg-accent/50',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {noDate.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
@@ -189,9 +225,11 @@ export function CalendarView({
             variant="ghost"
             size="icon"
             className="size-7"
-            aria-label="Предыдущий месяц"
+            aria-label={mode === 'week' ? 'Предыдущая неделя' : 'Предыдущий месяц'}
             onClick={() =>
-              setMonthStart((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))
+              setMonthStart((m) =>
+                mode === 'week' ? addDays(m, -7) : new Date(m.getFullYear(), m.getMonth() - 1, 1),
+              )
             }
           >
             <ChevronLeft className="size-4" />
@@ -202,7 +240,9 @@ export function CalendarView({
             className="h-7 px-2 text-xs"
             onClick={() => {
               const now = new Date();
-              setMonthStart(new Date(now.getFullYear(), now.getMonth(), 1));
+              setMonthStart(
+                mode === 'week' ? startOfDay(now) : new Date(now.getFullYear(), now.getMonth(), 1),
+              );
             }}
           >
             Сегодня
@@ -211,9 +251,11 @@ export function CalendarView({
             variant="ghost"
             size="icon"
             className="size-7"
-            aria-label="Следующий месяц"
+            aria-label={mode === 'week' ? 'Следующая неделя' : 'Следующий месяц'}
             onClick={() =>
-              setMonthStart((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))
+              setMonthStart((m) =>
+                mode === 'week' ? addDays(m, 7) : new Date(m.getFullYear(), m.getMonth() + 1, 1),
+              )
             }
           >
             <ChevronRight className="size-4" />
@@ -236,14 +278,15 @@ export function CalendarView({
             </div>
           ))}
         </div>
-        {/* Сетка 6×7. */}
+        {/* Сетка: месяц 6×7 или одна неделя (высокие ячейки). */}
         <div className="grid grid-cols-7">
           {days.map((day) => (
             <DayCell
               key={ymd(day)}
               day={day}
-              inMonth={day.getMonth() === monthStart.getMonth()}
+              inMonth={mode === 'week' || day.getMonth() === monthStart.getMonth()}
               isToday={ymd(day) === todayYmd}
+              tall={mode === 'week'}
               tasks={byDay.get(ymd(day)) ?? []}
               dragging={activeDrag !== null}
               onOpen={(t) => setDrawer({ mode: 'edit', task: t })}
@@ -339,6 +382,7 @@ function DayCell({
   day,
   inMonth,
   isToday,
+  tall = false,
   tasks,
   dragging,
   onOpen,
@@ -348,6 +392,7 @@ function DayCell({
   day: Date;
   inMonth: boolean;
   isToday: boolean;
+  tall?: boolean;
   tasks: Task[];
   dragging: boolean;
   onOpen: (t: Task) => void;
@@ -356,13 +401,14 @@ function DayCell({
 }): React.ReactElement {
   const key = ymd(day);
   const { setNodeRef, isOver } = useDroppable({ id: `day-${key}`, data: { day: key } });
-  const MAX_CHIPS = 3;
+  const MAX_CHIPS = tall ? 24 : 3;
   const hidden = tasks.length - MAX_CHIPS;
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        'group/cell relative min-h-24 border-b border-r p-1 first:border-l [&:nth-child(7n+1)]:border-l',
+        'group/cell relative border-b border-r p-1 first:border-l [&:nth-child(7n+1)]:border-l',
+        tall ? 'min-h-[24rem]' : 'min-h-24',
         !inMonth && 'bg-muted/20',
         dragging && isOver && 'bg-primary/10 ring-2 ring-inset ring-primary/40',
       )}

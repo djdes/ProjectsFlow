@@ -24,9 +24,10 @@ import {
   ListFilter,
   MessageSquare,
   PanelRight,
-  WrapText,
   Plus,
+  Snowflake,
   User,
+  WrapText,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -67,14 +68,19 @@ import {
   VIEW_COLUMN_LABELS,
   ViewTaskDrawer,
   applyViewSort,
+  groupKeyFor,
+  groupLabelFor,
   hasActiveFilters,
   matchesFilters,
+  rowColorFor,
   taskMenuEntries,
   taskTitle,
   type TableViewState,
   type ViewCalc,
+  type ViewColorRule,
   type ViewColumn,
   type ViewFilters,
+  type ViewGrouping,
   type ViewSort,
   type ViewSortKey,
 } from './viewShared';
@@ -92,6 +98,8 @@ type Props = {
   onToggleCol: (c: ViewColumn) => void;
   tableState: TableViewState;
   onTableState: (patch: Partial<TableViewState>) => void;
+  grouping: ViewGrouping | null;
+  colorRules: ViewColorRule[];
   createRequest: ViewCreateRequest | null;
 };
 
@@ -128,6 +136,8 @@ export function TableView({
   onToggleCol,
   tableState,
   onTableState,
+  grouping,
+  colorRules,
   createRequest,
 }: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
@@ -143,6 +153,28 @@ export function TableView({
     () => applyViewSort(tasks.filter((t) => matchesFilters(t, filters)), sort),
     [tasks, filters, sort],
   );
+
+  // Группировка (Notion Group by): порядок групп — по первому появлению в rows
+  // (rows уже отсортированы по статусу/позиции или пользовательской сортировке).
+  const groups = useMemo(() => {
+    if (!grouping) return null;
+    const map = new Map<string, Task[]>();
+    for (const t of rows) {
+      const key = groupKeyFor(t, grouping);
+      const arr = map.get(key);
+      if (arr) arr.push(t);
+      else map.set(key, [t]);
+    }
+    return [...map.entries()].map(([key, tasks_]) => ({ key, tasks: tasks_ }));
+  }, [rows, grouping]);
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleGroup = (key: string): void =>
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   const visibleCols = useMemo(
     () => ALL_COLUMNS.filter((c) => !hiddenCols.includes(c)),
@@ -413,7 +445,15 @@ export function TableView({
                   checked: tableState.wrapTitle,
                   onSelect: () => onTableState({ wrapTitle: !tableState.wrapTitle }),
                 },
+                {
+                  kind: 'item',
+                  label: 'Закрепить колонку',
+                  icon: Snowflake,
+                  checked: tableState.freezeTitle,
+                  onSelect: () => onTableState({ freezeTitle: !tableState.freezeTitle }),
+                },
               ]}
+              frozen={tableState.freezeTitle}
               onResizeStart={(e) => startResize('title', e)}
               first
             />
@@ -456,7 +496,54 @@ export function TableView({
             )}
           </div>
 
-          {rows.map((task, idx) => (
+          {(grouping && groups
+            ? groups.flatMap((g) => {
+                const sample = g.tasks[0];
+                return [
+                  <div
+                    key={`__group-${g.key}`}
+                    className="flex items-center gap-1.5 px-1 pb-1 pt-3"
+                  >
+                    <button
+                      type="button"
+                      aria-label={collapsedGroups.has(g.key) ? 'Развернуть группу' : 'Свернуть группу'}
+                      onClick={() => toggleGroup(g.key)}
+                      className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      <ChevronDown
+                        className={cn('size-3.5 transition-transform', collapsedGroups.has(g.key) && '-rotate-90')}
+                      />
+                    </button>
+                    <span className="text-sm font-medium">
+                      {groupLabelFor(g.key, grouping, sample)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{g.tasks.length}</span>
+                    {grouping !== 'assignee' && (
+                      <button
+                        type="button"
+                        aria-label="Создать задачу в группе"
+                        title="Создать задачу в группе"
+                        onClick={() =>
+                          setDrawer({
+                            mode: 'create',
+                            status: grouping === 'status' ? (g.key as Task['status']) : 'backlog',
+                          })
+                        }
+                        className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        <Plus className="size-3.5" />
+                      </button>
+                    )}
+                  </div>,
+                  ...(collapsedGroups.has(g.key) ? [] : g.tasks),
+                ];
+              })
+            : rows
+          ).map((item) => {
+            if (!(typeof item === 'object' && 'id' in item)) return item;
+            const task = item as Task;
+            const idx = rows.indexOf(task);
+            return (
             <Fragment key={task.id}>
               {insertAt?.taskId === task.id && insertAt.above && (
                 <InsertRow
@@ -472,6 +559,8 @@ export function TableView({
                 wrapTitle={tableState.wrapTitle}
                 dndEnabled={canReorder}
                 recentlyMoved={recentlyMovedId === task.id}
+                rowColor={rowColorFor(task, colorRules)}
+                frozenTitle={tableState.freezeTitle}
                 editing={editingId === task.id}
                 editValue={editValue}
                 onEditValue={setEditValue}
@@ -528,7 +617,8 @@ export function TableView({
                 />
               )}
             </Fragment>
-          ))}
+            );
+          })}
 
           {rows.length === 0 && (
             <p className="px-2 py-6 text-sm text-muted-foreground">
@@ -610,6 +700,7 @@ function HeaderCell({
   extraEntries,
   onResizeStart,
   first = false,
+  frozen = false,
 }: {
   label: string;
   iconNode: React.ReactNode;
@@ -621,6 +712,7 @@ function HeaderCell({
   extraEntries?: MenuEntry[];
   onResizeStart?: (e: React.MouseEvent) => void;
   first?: boolean;
+  frozen?: boolean;
 }): React.ReactElement {
   const sorted = sortKey !== null && sort?.key === sortKey ? sort.dir : null;
   const entries: MenuEntry[] = [
@@ -667,7 +759,14 @@ function HeaderCell({
       : []),
   ];
   return (
-    <div className={cn('relative flex min-w-0', !first && 'border-l')}>
+    <div
+      className={cn(
+        'relative flex min-w-0',
+        !first && 'border-l',
+        // «Закрепить колонку» (Notion Freeze): липнет при горизонтальном скролле.
+        frozen && 'sticky left-0 z-20 border-r bg-background',
+      )}
+    >
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -832,6 +931,8 @@ function TableRow({
   wrapTitle,
   dndEnabled,
   recentlyMoved,
+  rowColor,
+  frozenTitle,
   editing,
   editValue,
   onEditValue,
@@ -860,6 +961,8 @@ function TableRow({
   wrapTitle: boolean;
   dndEnabled: boolean;
   recentlyMoved: boolean;
+  rowColor: string | null;
+  frozenTitle: boolean;
   editing: boolean;
   editValue: string;
   onEditValue: (v: string) => void;
@@ -1018,6 +1121,8 @@ function TableRow({
           style={gridStyle}
           className={cn(
             'group relative grid border-b transition-colors hover:bg-accent/40',
+            // Условный цвет (Notion Conditional color) — до selected/moved подсветок.
+            rowColor,
             selected && 'bg-primary/5',
             isDragging && 'opacity-40',
             // Синяя линия сверху — сюда вставится перетаскиваемая строка (Notion).
@@ -1086,7 +1191,12 @@ function TableRow({
 
       {/* Название: иконка + заголовок; клик по тексту — inline-правка (Notion: клик по
           ячейке редактирует, открытие — кнопкой «ОТКРЫТЬ»). */}
-      <div className="flex min-w-0 items-center gap-1.5 px-2 py-1">
+      <div
+        className={cn(
+          'flex min-w-0 items-center gap-1.5 px-2 py-1',
+          frozenTitle && 'sticky left-0 z-10 border-r bg-background',
+        )}
+      >
         {task.icon ? (
           <span className="grid size-4 shrink-0 place-items-center overflow-hidden">
             <ProjectIconView icon={task.icon} pixelSize={15} className="text-sm" />

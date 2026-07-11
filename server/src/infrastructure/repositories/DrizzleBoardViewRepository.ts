@@ -14,6 +14,7 @@ function toDomain(row: BoardViewRow): BoardView {
     name: row.name,
     type: row.type as BoardViewType,
     sortOrder: row.sortOrder,
+    config: (row.config as Record<string, unknown> | null) ?? null,
     createdAt: row.createdAt,
   };
 }
@@ -57,11 +58,16 @@ export class DrizzleBoardViewRepository implements BoardViewRepository {
 
   async update(
     id: string,
-    patch: { name?: string; type?: BoardViewType },
+    patch: { name?: string; type?: BoardViewType; config?: Record<string, unknown> | null },
   ): Promise<BoardView | null> {
-    const set: Partial<{ name: string; type: BoardViewType }> = {};
+    const set: Partial<{
+      name: string;
+      type: BoardViewType;
+      config: Record<string, unknown> | null;
+    }> = {};
     if (patch.name !== undefined) set.name = patch.name;
     if (patch.type !== undefined) set.type = patch.type;
+    if (patch.config !== undefined) set.config = patch.config;
     if (Object.keys(set).length > 0) {
       await this.db.update(boardViews).set(set).where(eq(boardViews.id, id));
     }

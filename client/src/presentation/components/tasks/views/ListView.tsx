@@ -10,7 +10,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { FileText, GripVertical, Pencil, Plus } from 'lucide-react';
+import { ChevronDown, FileText, GripVertical, Pencil, Plus } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,11 +42,16 @@ import {
   STATUS_PILL,
   ViewTaskDrawer,
   applyViewSort,
+  groupKeyFor,
+  groupLabelFor,
   hasActiveFilters,
   matchesFilters,
+  rowColorFor,
   taskMenuEntries,
   taskTitle,
+  type ViewColorRule,
   type ViewFilters,
+  type ViewGrouping,
   type ViewSort,
 } from './viewShared';
 import { ContextEntries, DropdownEntries, type MenuEntry } from './menuEntries';
@@ -57,6 +62,8 @@ type Props = {
   memberCount?: number;
   filters: ViewFilters;
   sort: ViewSort | null;
+  grouping: ViewGrouping | null;
+  colorRules: ViewColorRule[];
   createRequest: ViewCreateRequest | null;
 };
 
@@ -70,6 +77,8 @@ export function ListView({
   memberCount,
   filters,
   sort,
+  grouping,
+  colorRules,
   createRequest,
 }: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
@@ -83,6 +92,27 @@ export function ListView({
     () => applyViewSort(tasks.filter((t) => matchesFilters(t, filters)), sort),
     [tasks, filters, sort],
   );
+
+  // Группировка (Notion Group by): порядок групп — по первому появлению в rows.
+  const groups = useMemo(() => {
+    if (!grouping) return null;
+    const map = new Map<string, Task[]>();
+    for (const t of rows) {
+      const key = groupKeyFor(t, grouping);
+      const arr = map.get(key);
+      if (arr) arr.push(t);
+      else map.set(key, [t]);
+    }
+    return [...map.entries()].map(([key, tasks_]) => ({ key, tasks: tasks_ }));
+  }, [rows, grouping]);
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleGroup = (key: string): void =>
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   useEffect(() => {
     if (createRequest) setDrawer({ mode: 'create', status: createRequest.status });
@@ -215,12 +245,54 @@ export function ListView({
         onDragCancel={() => setDragTask(null)}
       >
       <div className="flex flex-col pl-12">
-        {rows.map((task) => (
+        {(grouping && groups
+          ? groups.flatMap((g) => {
+              const sample = g.tasks[0];
+              return [
+                <div key={`__group-${g.key}`} className="flex items-center gap-1.5 px-1 pb-1 pt-3">
+                  <button
+                    type="button"
+                    aria-label={collapsedGroups.has(g.key) ? 'Развернуть группу' : 'Свернуть группу'}
+                    onClick={() => toggleGroup(g.key)}
+                    className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    <ChevronDown
+                      className={cn('size-3.5 transition-transform', collapsedGroups.has(g.key) && '-rotate-90')}
+                    />
+                  </button>
+                  <span className="text-sm font-medium">{groupLabelFor(g.key, grouping, sample)}</span>
+                  <span className="text-xs text-muted-foreground">{g.tasks.length}</span>
+                  {grouping !== 'assignee' && (
+                    <button
+                      type="button"
+                      aria-label="Создать задачу в группе"
+                      title="Создать задачу в группе"
+                      onClick={() =>
+                        setDrawer({
+                          mode: 'create',
+                          status: grouping === 'status' ? (g.key as Task['status']) : 'backlog',
+                        })
+                      }
+                      className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      <Plus className="size-3.5" />
+                    </button>
+                  )}
+                </div>,
+                ...(collapsedGroups.has(g.key) ? [] : g.tasks),
+              ];
+            })
+          : rows
+        ).map((item) => {
+          if (!(typeof item === 'object' && 'id' in item)) return item;
+          const task = item as Task;
+          return (
           <Fragment key={task.id}>
             <ListRow
               task={task}
               dndEnabled={canReorder}
               recentlyMoved={recentlyMovedId === task.id}
+              rowColor={rowColorFor(task, colorRules)}
               selected={selected.has(task.id)}
               anySelected={selected.size > 0}
               editing={editingId === task.id}
@@ -261,7 +333,8 @@ export function ListView({
               </div>
             )}
           </Fragment>
-        ))}
+          );
+        })}
 
         {rows.length === 0 && (
           <p className="px-2 py-6 text-sm text-muted-foreground">
@@ -315,6 +388,7 @@ function ListRow({
   task,
   dndEnabled,
   recentlyMoved,
+  rowColor,
   selected,
   anySelected,
   editing,
@@ -331,6 +405,7 @@ function ListRow({
   task: Task;
   dndEnabled: boolean;
   recentlyMoved: boolean;
+  rowColor: string | null;
   selected: boolean;
   anySelected: boolean;
   editing: boolean;
@@ -360,6 +435,7 @@ function ListRow({
           ref={dropRef}
           className={cn(
             'group relative flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/50',
+            rowColor,
             selected && 'bg-primary/5',
             isDragging && 'opacity-40',
             isOver && 'shadow-[inset_0_2px_0_0_hsl(var(--primary))]',

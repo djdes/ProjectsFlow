@@ -8,6 +8,7 @@ type BoardViewDto = {
   name: string;
   type: BoardViewType;
   sortOrder: number;
+  config?: Record<string, unknown> | null;
   createdAt: string;
 };
 
@@ -18,6 +19,7 @@ function fromDto(dto: BoardViewDto): BoardView {
     name: dto.name,
     type: dto.type,
     sortOrder: dto.sortOrder,
+    config: dto.config ?? null,
     createdAt: new Date(dto.createdAt),
   };
 }
@@ -39,7 +41,7 @@ export class HttpBoardViewRepository implements BoardViewRepository {
   async update(
     projectId: string,
     viewId: string,
-    patch: { name?: string; type?: BoardViewType },
+    patch: { name?: string; type?: BoardViewType; config?: Record<string, unknown> | null },
   ): Promise<BoardView> {
     const res = await httpClient.patch<{ view: BoardViewDto }>(
       `/projects/${projectId}/views/${viewId}`,

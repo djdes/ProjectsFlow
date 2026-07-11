@@ -8,7 +8,7 @@ export interface BoardViewRepository {
   update(
     projectId: string,
     viewId: string,
-    patch: { name?: string; type?: BoardViewType },
+    patch: { name?: string; type?: BoardViewType; config?: Record<string, unknown> | null },
   ): Promise<BoardView>;
   duplicate(projectId: string, viewId: string): Promise<BoardView>;
   remove(projectId: string, viewId: string): Promise<void>;

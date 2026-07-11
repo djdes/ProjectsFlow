@@ -24,5 +24,8 @@ export type BoardView = {
   readonly name: string;
   readonly type: BoardViewType;
   readonly sortOrder: number;
+  // Пер-вью настройки (db/105): фильтры/сортировка/колонки/группировка/цвета.
+  // Domain хранит как прозрачный JSON — типизацию знает presentation-слой.
+  readonly config: Record<string, unknown> | null;
   readonly createdAt: Date;
 };
