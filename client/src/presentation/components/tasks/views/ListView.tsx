@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { FileText, GripVertical, Pencil, Plus } from 'lucide-react';
 import {
   DropdownMenu,
@@ -87,6 +87,21 @@ export function ListView({
     });
   };
 
+  // «+» слева (Notion): inline-строка ввода сразу под текущей.
+  const [insertAfterId, setInsertAfterId] = useState<string | null>(null);
+  const [insertValue, setInsertValue] = useState('');
+  const submitInsert = async (anchor: (typeof rows)[number]): Promise<void> => {
+    const name = insertValue.trim();
+    setInsertAfterId(null);
+    setInsertValue('');
+    if (!name) return;
+    try {
+      await create({ description: name, status: anchor.status, afterTaskId: anchor.id });
+    } catch (e) {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+    }
+  };
+
   // Inline-переименование (карандаш при hover — Notion list): меняем title-часть описания.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -139,7 +154,8 @@ export function ListView({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col pl-12">
         {rows.map((task) => (
-          <ContextMenu key={task.id}>
+          <Fragment key={task.id}>
+          <ContextMenu>
             <ContextMenuTrigger asChild>
           <div
             className={cn(
@@ -160,9 +176,12 @@ export function ListView({
             >
               <button
                 type="button"
-                aria-label="Новая задача"
-                title="Новая задача"
-                onClick={() => setDrawer({ mode: 'create', status: task.status })}
+                aria-label="Добавить задачу ниже"
+                title="Добавить задачу ниже"
+                onClick={() => {
+                  setInsertAfterId(task.id);
+                  setInsertValue('');
+                }}
                 className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
               >
                 <Plus className="size-3.5" />
@@ -278,6 +297,30 @@ export function ListView({
               <ContextEntries entries={menuFor(task)} />
             </ContextMenuContent>
           </ContextMenu>
+          {insertAfterId === task.id && (
+            <div className="flex items-center gap-1.5 rounded-md bg-accent/30 px-2 py-1.5">
+              <FileText className="size-4 shrink-0 text-muted-foreground/40" />
+              <input
+                autoFocus
+                value={insertValue}
+                onChange={(e) => setInsertValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void submitInsert(task);
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setInsertAfterId(null);
+                  }
+                }}
+                onBlur={() => void submitInsert(task)}
+                placeholder="Название задачи…"
+                aria-label="Название новой задачи"
+                className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-muted-foreground/50"
+              />
+            </div>
+          )}
+          </Fragment>
         ))}
 
         {rows.length === 0 && (

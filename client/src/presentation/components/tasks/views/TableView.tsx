@@ -1,4 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  pointerWithin,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
 import {
   ArrowDown,
   ArrowUp,
@@ -233,6 +244,73 @@ export function TableView({
     );
   };
 
+  // «+» слева от строки (Notion): inline-строка ввода СРАЗУ ПОД текущей (Alt+клик — над).
+  const [insertAt, setInsertAt] = useState<{ taskId: string; above: boolean } | null>(null);
+  const submitInsert = async (anchor: Task, above: boolean, title: string): Promise<void> => {
+    const name = title.trim();
+    if (!name) {
+      setInsertAt(null);
+      return;
+    }
+    try {
+      if (above) {
+        const idx = rows.findIndex((t) => t.id === anchor.id);
+        const prev = rows[idx - 1];
+        const created = await create({ description: name, status: anchor.status });
+        await move(created.id, {
+          targetStatus: anchor.status,
+          beforeTaskId: prev && prev.status === anchor.status ? prev.id : null,
+          afterTaskId: anchor.id,
+        });
+      } else {
+        await create({ description: name, status: anchor.status, afterTaskId: anchor.id });
+      }
+    } catch (e) {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+    }
+    setInsertAt(null);
+  };
+
+  // Drag «⋮⋮» — ручной порядок строк (Notion). Активен без пользовательской сортировки.
+  const canReorder = sort === null;
+  const [dragTask, setDragTask] = useState<Task | null>(null);
+  // PointerSensor (не Mouse!): мы гасим pointerdown preventDefault'ом против Radix-меню,
+  // а это отменяет синтезированные mouse-события — MouseSensor не стартовал бы.
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const handleRowDragEnd = (e: DragEndEvent): void => {
+    setDragTask(null);
+    const activeId = String(e.active.id);
+    const overId = e.over ? String(e.over.id) : null;
+    if (!overId || overId === activeId) return;
+    const overIdx = rows.findIndex((t) => t.id === overId);
+    if (overIdx < 0) return;
+    const over = rows[overIdx]!;
+    const prev = rows[overIdx - 1];
+    if (prev?.id === activeId && prev.status === over.status) return; // уже на месте
+    void move(activeId, {
+      targetStatus: over.status,
+      beforeTaskId: prev && prev.status === over.status ? prev.id : null,
+      afterTaskId: over.id,
+    }).catch((err: unknown) => toast.error(`Не удалось: ${(err as Error).message}`));
+  };
+
+  // Shift+клик по чекбоксу — выделение диапазона (Notion).
+  const lastCheckedRef = useRef<number | null>(null);
+  const toggleWithRange = (idx: number, shift: boolean): void => {
+    const id = rows[idx]!.id;
+    if (shift && lastCheckedRef.current !== null) {
+      const [a, b] = [Math.min(lastCheckedRef.current, idx), Math.max(lastCheckedRef.current, idx)];
+      setSelected((prevSel) => {
+        const next = new Set(prevSel);
+        for (let i = a; i <= b; i++) next.add(rows[i]!.id);
+        return next;
+      });
+    } else {
+      toggleSelected(id);
+    }
+    lastCheckedRef.current = idx;
+  };
+
   // «Создать» из тулбара вью: открыть окно новой задачи в выбранной колонке.
   useEffect(() => {
     if (createRequest) setDrawer({ mode: 'create', status: createRequest.status });
@@ -274,6 +352,13 @@ export function TableView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <DndContext
+        sensors={dndSensors}
+        collisionDetection={pointerWithin}
+        onDragStart={(e) => setDragTask(rows.find((t) => t.id === String(e.active.id)) ?? null)}
+        onDragEnd={handleRowDragEnd}
+        onDragCancel={() => setDragTask(null)}
+      >
       <div className="overflow-x-auto">
         {/* Левое «поле» (pl-12): hover-контролы строк живут в нём, как в Notion. */}
         <div className="min-w-[55rem] pl-12 pr-8">
@@ -355,61 +440,77 @@ export function TableView({
             )}
           </div>
 
-          {rows.map((task) => (
-            <TableRow
-              key={task.id}
-              task={task}
-              gridStyle={gridStyle}
-              visibleCols={visibleCols}
-              wrapTitle={tableState.wrapTitle}
-              editing={editingId === task.id}
-              editValue={editValue}
-              onEditValue={setEditValue}
-              onStartEdit={() => {
-                setEditingId(task.id);
-                setEditValue(taskTitle(task));
-              }}
-              onCommitEdit={() => commitEdit(task)}
-              onCancelEdit={() => setEditingId(null)}
-              selected={selected.has(task.id)}
-              anySelected={selected.size > 0}
-              selCell={selCell}
-              onSelCell={setSelCell}
-              onToggleSelected={() => toggleSelected(task.id)}
-              onOpen={() => setDrawer({ mode: 'edit', task })}
-              onCreateBelow={() => setDrawer({ mode: 'create', status: task.status })}
-              onStatus={(s) =>
-                void move(task.id, { targetStatus: s, beforeTaskId: null, afterTaskId: null }).catch(
-                  (e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`),
-                )
-              }
-              onPriority={(p) =>
-                void update(task.id, { priority: p }).catch((e: unknown) =>
-                  toast.error(`Не удалось: ${(e as Error).message}`),
-                )
-              }
-              onDeadline={(d) =>
-                void update(task.id, { deadline: d }).catch((e: unknown) =>
-                  toast.error(`Не удалось: ${(e as Error).message}`),
-                )
-              }
-              onDuplicate={() =>
-                void create({
-                  description: task.description ?? '',
-                  status: task.status,
-                  deadline: task.deadline ?? undefined,
-                  priority: task.priority ?? undefined,
-                }).catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`))
-              }
-              onDelete={() =>
-                void remove(task.id)
-                  .then(() => toast.success('Задача удалена'))
-                  .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`))
-              }
-              currentUserId={user?.id ?? null}
-              projectId={projectId}
-              onChanged={() => void refetch()}
-            />
+          {rows.map((task, idx) => (
+            <Fragment key={task.id}>
+              {insertAt?.taskId === task.id && insertAt.above && (
+                <InsertRow
+                  gridStyle={gridStyle}
+                  onSubmit={(title) => void submitInsert(task, true, title)}
+                  onCancel={() => setInsertAt(null)}
+                />
+              )}
+              <TableRow
+                task={task}
+                gridStyle={gridStyle}
+                visibleCols={visibleCols}
+                wrapTitle={tableState.wrapTitle}
+                dndEnabled={canReorder}
+                editing={editingId === task.id}
+                editValue={editValue}
+                onEditValue={setEditValue}
+                onStartEdit={() => {
+                  setEditingId(task.id);
+                  setEditValue(taskTitle(task));
+                }}
+                onCommitEdit={() => commitEdit(task)}
+                onCancelEdit={() => setEditingId(null)}
+                selected={selected.has(task.id)}
+                anySelected={selected.size > 0}
+                selCell={selCell}
+                onSelCell={setSelCell}
+                onToggleSelected={(shift) => toggleWithRange(idx, shift)}
+                onOpen={() => setDrawer({ mode: 'edit', task })}
+                onCreateBelow={(above) => setInsertAt({ taskId: task.id, above })}
+                onStatus={(s) =>
+                  void move(task.id, { targetStatus: s, beforeTaskId: null, afterTaskId: null }).catch(
+                    (e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`),
+                  )
+                }
+                onPriority={(p) =>
+                  void update(task.id, { priority: p }).catch((e: unknown) =>
+                    toast.error(`Не удалось: ${(e as Error).message}`),
+                  )
+                }
+                onDeadline={(d) =>
+                  void update(task.id, { deadline: d }).catch((e: unknown) =>
+                    toast.error(`Не удалось: ${(e as Error).message}`),
+                  )
+                }
+                onDuplicate={() =>
+                  void create({
+                    description: task.description ?? '',
+                    status: task.status,
+                    deadline: task.deadline ?? undefined,
+                    priority: task.priority ?? undefined,
+                  }).catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`))
+                }
+                onDelete={() =>
+                  void remove(task.id)
+                    .then(() => toast.success('Задача удалена'))
+                    .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`))
+                }
+                currentUserId={user?.id ?? null}
+                projectId={projectId}
+                onChanged={() => void refetch()}
+              />
+              {insertAt?.taskId === task.id && !insertAt.above && (
+                <InsertRow
+                  gridStyle={gridStyle}
+                  onSubmit={(title) => void submitInsert(task, false, title)}
+                  onCancel={() => setInsertAt(null)}
+                />
+              )}
+            </Fragment>
           ))}
 
           {rows.length === 0 && (
@@ -444,6 +545,16 @@ export function TableView({
           </div>
         </div>
       </div>
+
+      {/* Призрак перетаскиваемой строки. */}
+      <DragOverlay dropAnimation={null}>
+        {dragTask ? (
+          <div className="pointer-events-none max-w-[16rem] truncate rounded-md border bg-card px-2 py-1 text-sm font-medium shadow-lg ring-1 ring-primary/20">
+            {taskTitle(dragTask)}
+          </div>
+        ) : null}
+      </DragOverlay>
+      </DndContext>
 
       <ViewTaskDrawer
         state={drawer}
@@ -664,6 +775,45 @@ function HeaderCell({
   );
 }
 
+// Inline-строка вставки новой задачи над/под конкретной строкой (Notion «+»):
+// Enter — создать, Esc/пустой blur — убрать.
+function InsertRow({
+  gridStyle,
+  onSubmit,
+  onCancel,
+}: {
+  gridStyle: React.CSSProperties;
+  onSubmit: (title: string) => void;
+  onCancel: () => void;
+}): React.ReactElement {
+  const [value, setValue] = useState('');
+  return (
+    <div style={gridStyle} className="grid border-b bg-accent/30">
+      <div className="flex items-center gap-1.5 px-2 py-1">
+        <FileText className="size-4 shrink-0 text-muted-foreground/40" />
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onSubmit(value);
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              onCancel();
+            }
+          }}
+          onBlur={() => (value.trim() ? onSubmit(value) : onCancel())}
+          placeholder="Название задачи…"
+          aria-label="Название новой задачи"
+          className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-muted-foreground/50"
+        />
+      </div>
+    </div>
+  );
+}
+
 // Есть ли значение свойства у задачи (для подсчётов «Заполнено/Пусто»).
 function hasValue(task: Task, col: ViewColumn): boolean {
   switch (col) {
@@ -757,6 +907,7 @@ function TableRow({
   gridStyle,
   visibleCols,
   wrapTitle,
+  dndEnabled,
   editing,
   editValue,
   onEditValue,
@@ -783,6 +934,7 @@ function TableRow({
   gridStyle: React.CSSProperties;
   visibleCols: readonly ViewColumn[];
   wrapTitle: boolean;
+  dndEnabled: boolean;
   editing: boolean;
   editValue: string;
   onEditValue: (v: string) => void;
@@ -793,9 +945,9 @@ function TableRow({
   anySelected: boolean;
   selCell: string | null;
   onSelCell: (c: string | null) => void;
-  onToggleSelected: () => void;
+  onToggleSelected: (shift: boolean) => void;
   onOpen: () => void;
-  onCreateBelow: () => void;
+  onCreateBelow: (above: boolean) => void;
   onStatus: (s: TaskStatus) => void;
   onPriority: (p: TaskPriority | null) => void;
   onDeadline: (d: string | null) => void;
@@ -805,6 +957,15 @@ function TableRow({
   projectId: string;
   onChanged: () => void;
 }): React.ReactElement {
+  // Дроп-зона (вставка ПЕРЕД этой строкой — синяя линия сверху) + драг за «⋮⋮».
+  const { setNodeRef: dropRef, isOver } = useDroppable({ id: task.id, disabled: !dndEnabled });
+  const {
+    attributes: dragAttrs,
+    listeners: dragListeners,
+    setNodeRef: dragRef,
+    isDragging,
+  } = useDraggable({ id: task.id, disabled: !dndEnabled });
+  const [gripMenuOpen, setGripMenuOpen] = useState(false);
   // Клик по «пустому» месту ячейки — выделение синей рамкой (Notion cell selection).
   const cellProps = (col: ViewColumn): { className: string; onMouseDown: (e: React.MouseEvent) => void } => ({
     className: cn(
@@ -827,7 +988,7 @@ function TableRow({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="group/cellbtn inline-flex h-6 max-w-full items-center gap-1 rounded-md px-1 text-xs transition-colors hover:bg-accent"
+                  className="flex h-full min-h-6 w-full items-center gap-1 rounded-md px-1 text-xs transition-colors hover:bg-accent"
                 >
                   {/* Значение статуса — цветная пилюля (Notion select pill). */}
                   <span
@@ -860,7 +1021,7 @@ function TableRow({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md px-1 text-xs transition-colors hover:bg-accent"
+                  className="flex h-full min-h-6 w-full items-center gap-1.5 rounded-md px-1 text-xs transition-colors hover:bg-accent"
                 >
                   {task.priority !== null && task.priority !== undefined ? (
                     <span
@@ -908,7 +1069,7 @@ function TableRow({
               currentUserId={currentUserId}
               onChanged={onChanged}
               projectId={projectId}
-              className="h-6 max-w-full justify-start px-1.5 text-xs"
+              className="h-full min-h-6 w-full justify-start px-1.5 text-xs"
             />
           </div>
         );
@@ -928,13 +1089,18 @@ function TableRow({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
+          ref={dropRef}
           style={gridStyle}
           className={cn(
             'group relative grid border-b transition-colors hover:bg-accent/40',
             selected && 'bg-primary/5',
+            isDragging && 'opacity-40',
+            // Синяя линия сверху — сюда вставится перетаскиваемая строка (Notion).
+            isOver && 'shadow-[inset_0_2px_0_0_hsl(var(--primary))]',
           )}
         >
-      {/* Hover-контролы в левом поле (Notion): «+», «⋮⋮» (меню задачи) и чекбокс. */}
+      {/* Hover-контролы в левом поле (Notion): «+» (вставить ниже, Alt — выше),
+          «⋮⋮» (клик — меню, drag — перенос строки) и чекбокс (Shift — диапазон). */}
       <div
         className={cn(
           'absolute -left-14 top-1/2 flex -translate-y-1/2 items-center gap-0 transition-opacity duration-100',
@@ -943,20 +1109,33 @@ function TableRow({
       >
         <button
           type="button"
-          aria-label="Новая задача"
-          title="Новая задача"
-          onClick={onCreateBelow}
+          aria-label="Добавить задачу ниже (Alt — выше)"
+          title="Добавить задачу ниже (Alt — выше)"
+          onClick={(e) => onCreateBelow(e.altKey)}
           className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
         >
           <Plus className="size-3.5" />
         </button>
-        <DropdownMenu>
+        <DropdownMenu open={gripMenuOpen} onOpenChange={setGripMenuOpen}>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              aria-label="Меню задачи"
-              title="Меню задачи"
-              className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+              ref={dragRef}
+              {...dragAttrs}
+              {...dragListeners}
+              aria-label="Меню задачи (drag — перенос)"
+              title="Меню задачи (drag — перенос)"
+              onPointerDown={(e) => {
+                // Гасим pointerdown-открытие Radix (иначе drag открывал бы меню);
+                // dnd-kit слушает свой pointerdown из listeners выше.
+                dragListeners?.onPointerDown?.(e);
+                e.preventDefault();
+              }}
+              onClick={(e) => {
+                if (e.defaultPrevented) return; // click после drag
+                setGripMenuOpen(true);
+              }}
+              className="grid size-5 cursor-grab place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground active:cursor-grabbing"
             >
               <GripVertical className="size-3.5" />
             </button>
@@ -968,8 +1147,11 @@ function TableRow({
         <input
           type="checkbox"
           checked={selected}
-          onChange={onToggleSelected}
-          onClick={(e) => e.stopPropagation()}
+          onChange={() => undefined}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelected(e.shiftKey);
+          }}
           aria-label="Выбрать задачу"
           className="ml-0.5 size-3.5 cursor-pointer accent-primary"
         />
@@ -1075,7 +1257,7 @@ function DeadlineCell({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md px-1.5 text-xs transition-colors hover:bg-accent"
+            className="flex h-full min-h-6 w-full items-center gap-1.5 rounded-md px-1.5 text-xs transition-colors hover:bg-accent"
           >
             {task.deadline ? (
               <DeadlineBadge deadline={task.deadline} status={task.status} />
