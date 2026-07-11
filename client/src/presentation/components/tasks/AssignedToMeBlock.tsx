@@ -24,6 +24,7 @@ import {
   CalendarOff,
   CalendarRange,
   Check,
+  Filter,
   Flag,
   FolderKanban,
   Hand,
@@ -48,6 +49,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
@@ -616,7 +618,10 @@ export function AssignedToMeBlock({
               tab={tab}
               onChange={setTab}
               toMeCount={toMeVisible.length}
-              byMeCount={byMeVisibleAll.length}
+              // #3: бейдж «Другим» = РЕАЛЬНО отрисованный список (с учётом фильтров от/кому/
+              // проект), а не сырой byMeVisibleAll — иначе при активном фильтре число на вкладке
+              // расходилось с количеством видимых карточек («неверное количество»).
+              byMeCount={byMeVisible.length}
             />
             <p className="mt-0.5 truncate text-xs text-muted-foreground">
               {subtitleBase}
@@ -648,33 +653,24 @@ export function AssignedToMeBlock({
         {(() => {
           const toolbar = (
             <>
+              {/* #2: все фильтры «Другим» (От/Кому/Проект) — под одной кнопкой-воронкой с
+                  поповером, чтобы не «летали» тремя меню в шапке. «Сортировка» отдельно (это
+                  группировка, не фильтр). */}
               {tab === 'byMe' && byMeTasks.length > 0 && (
-                <>
-                  <DelegationFilterMenu
-                    icon={Send}
-                    prefix="От"
-                    title="Фильтр: от кого поручено"
-                    options={filterOptions.from}
-                    value={filterFrom}
-                    onChange={setFilterFrom}
-                  />
-                  <DelegationFilterMenu
-                    icon={Users}
-                    prefix="Кому"
-                    title="Фильтр: кому поручено"
-                    options={filterOptions.to}
-                    value={filterTo}
-                    onChange={setFilterTo}
-                  />
-                  <DelegationFilterMenu
-                    icon={FolderKanban}
-                    prefix="Проект"
-                    title="Фильтр: проект"
-                    options={filterOptions.projects}
-                    value={filterProject}
-                    onChange={setFilterProject}
-                  />
-                </>
+                <InboxFilterPopover
+                  options={filterOptions}
+                  from={filterFrom}
+                  to={filterTo}
+                  project={filterProject}
+                  onFrom={setFilterFrom}
+                  onTo={setFilterTo}
+                  onProject={setFilterProject}
+                  onReset={() => {
+                    setFilterFrom(null);
+                    setFilterTo(null);
+                    setFilterProject(null);
+                  }}
+                />
               )}
               <GroupingMenu value={grouping} onChange={handleGroupingChange} />
             </>
@@ -1294,60 +1290,152 @@ function TabButton({
   );
 }
 
-// Фильтр вкладки «Другим» (от кого / кому / проект). Radio-меню (как GroupingMenu):
-// «Все» + уникальные значения из данных. Пустая строка value = «Все» (radix не любит
-// null). Активный фильтр подсвечен именем значения вместо «Все».
-function DelegationFilterMenu({
+// #2: единый поповер фильтров вкладки «Другим». Кнопка-воронка с бейджем числа активных
+// фильтров; внутри — три секции (От кого / Кому / Проект) компактными чипами. Инлайн-чипы
+// (без вложенного DropdownMenu-портала) — выбор не закрывает поповер, всё видно сразу.
+function InboxFilterPopover({
+  options,
+  from,
+  to,
+  project,
+  onFrom,
+  onTo,
+  onProject,
+  onReset,
+}: {
+  options: {
+    from: { id: string; name: string }[];
+    to: { id: string; name: string }[];
+    projects: { id: string; name: string }[];
+  };
+  from: string | null;
+  to: string | null;
+  project: string | null;
+  onFrom: (v: string | null) => void;
+  onTo: (v: string | null) => void;
+  onProject: (v: string | null) => void;
+  onReset: () => void;
+}): React.ReactElement {
+  const activeCount = [from, to, project].filter((v) => v !== null).length;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Фильтры"
+          className={cn(
+            'inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground',
+            activeCount > 0 && 'bg-hover text-foreground',
+          )}
+        >
+          <Filter className="size-3.5" />
+          <span className="hidden sm:inline">Фильтры</span>
+          {activeCount > 0 && (
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary/15 px-1 text-[10px] font-semibold tabular-nums text-primary">
+              {activeCount}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-0">
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-xs font-semibold text-foreground">Фильтры</span>
+          {activeCount > 0 && (
+            <button
+              type="button"
+              onClick={onReset}
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+            >
+              <X className="size-3" />
+              Сбросить
+            </button>
+          )}
+        </div>
+        <div className="max-h-[60vh] overflow-y-auto border-t py-1">
+          <InboxFilterSection
+            icon={Send}
+            label="От кого"
+            options={options.from}
+            value={from}
+            onChange={onFrom}
+          />
+          <InboxFilterSection
+            icon={Users}
+            label="Кому"
+            options={options.to}
+            value={to}
+            onChange={onTo}
+          />
+          <InboxFilterSection
+            icon={FolderKanban}
+            label="Проект"
+            options={options.projects}
+            value={project}
+            onChange={onProject}
+          />
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// Секция поповера фильтров: заголовок + чипы значений («Все» + опции). Активный чип — акцент.
+function InboxFilterSection({
   icon: Icon,
-  prefix,
-  title,
+  label,
   options,
   value,
   onChange,
 }: {
   icon: LucideIcon;
-  prefix: string;
-  title: string;
-  options: readonly { readonly id: string; readonly name: string }[];
+  label: string;
+  options: { id: string; name: string }[];
   value: string | null;
   onChange: (v: string | null) => void;
 }): React.ReactElement {
-  const currentName = value ? (options.find((o) => o.id === value)?.name ?? 'Все') : 'Все';
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            'inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground',
-            // Активный фильтр слегка «нажат» — видно и в icon-only режиме на мобиле.
-            value !== null && 'bg-hover text-foreground',
-          )}
-          title={`${title} · сейчас: ${currentName}`}
-        >
-          <Icon className="size-3.5" />
-          <span className="hidden sm:inline">{prefix}:</span>
-          {/* На мобиле — только иконка (320px: табы + три меню не влезают со словами).
-              Текущий выбор виден в title и в открытом radio-меню. */}
-          <span className="hidden max-w-[8rem] truncate font-medium text-foreground sm:inline">
-            {currentName}
-          </span>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[11rem]">
-        <DropdownMenuRadioGroup
-          value={value ?? ''}
-          onValueChange={(v) => onChange(v === '' ? null : v)}
-        >
-          <DropdownMenuRadioItem value="">Все</DropdownMenuRadioItem>
-          {options.map((o) => (
-            <DropdownMenuRadioItem key={o.id} value={o.id}>
-              {o.name}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div className="px-2 py-1.5">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+        <Icon className="size-3 shrink-0" />
+        {label}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        <FilterChip active={value === null} onClick={() => onChange(null)}>
+          Все
+        </FilterChip>
+        {options.map((o) => (
+          <FilterChip key={o.id} active={value === o.id} onClick={() => onChange(o.id)}>
+            {o.name}
+          </FilterChip>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'max-w-[12rem] truncate rounded-full border px-2 py-0.5 text-[11px] transition-colors',
+        active
+          ? 'border-primary/30 bg-primary/10 font-medium text-primary'
+          : 'border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
