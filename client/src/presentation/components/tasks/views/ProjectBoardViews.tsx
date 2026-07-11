@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -45,12 +45,7 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { TaskPriority, TaskStatus } from '@/domain/task/Task';
@@ -152,6 +147,25 @@ export function ProjectBoardViews({
     }
   });
   const [renameTarget, setRenameTarget] = useState<BoardView | null>(null);
+  // Имя дефолтной вкладки «Доска» (сама вкладка в БД не хранится) — локально на устройстве.
+  const boardNameKey = `pf:board-tab-name:${projectId}`;
+  const [boardName, setBoardName] = useState<string>(() => {
+    try {
+      return localStorage.getItem(boardNameKey) ?? 'Доска';
+    } catch {
+      return 'Доска';
+    }
+  });
+  const [boardRenameOpen, setBoardRenameOpen] = useState(false);
+  const renameBoard = (name: string): void => {
+    setBoardName(name);
+    setBoardRenameOpen(false);
+    try {
+      localStorage.setItem(boardNameKey, name);
+    } catch {
+      /* ignore */
+    }
+  };
   const [deleteTarget, setDeleteTarget] = useState<BoardView | null>(null);
   const [panel, setPanel] = useState<'settings' | null>(null);
   // Фильтры/сортировка — пер-вью, живут в памяти вкладки (смена вью не сбрасывает).
@@ -325,6 +339,14 @@ export function ProjectBoardViews({
   // новую вью этого типа; дублирование создаёт канбан-вью.
   const defaultTabMenuEntries = (): MenuEntry[] => [
     {
+      kind: 'item',
+      label: 'Переименовать',
+      icon: Pencil,
+      // setTimeout: попап нельзя открывать, пока Radix-меню не закрылось полностью —
+      // его dismiss-слой и возврат фокуса тут же закроют попап.
+      onSelect: () => setTimeout(() => setBoardRenameOpen(true), 150),
+    },
+    {
       kind: 'sub',
       label: 'Показывать как',
       icon: VIEW_TYPE_ICONS.kanban,
@@ -361,7 +383,12 @@ export function ProjectBoardViews({
   // Единая спека меню вкладки — рендерится и в дропдаун (клик по активной вкладке),
   // и в контекстное меню (правая кнопка мыши по любой вкладке), как в Notion.
   const tabMenuEntries = (v: BoardView): MenuEntry[] => [
-    { kind: 'item', label: 'Переименовать', icon: Pencil, onSelect: () => setRenameTarget(v) },
+    {
+      kind: 'item',
+      label: 'Переименовать',
+      icon: Pencil,
+      onSelect: () => setTimeout(() => setRenameTarget(v), 150),
+    },
     {
       kind: 'sub',
       label: 'Показывать как',
@@ -413,7 +440,7 @@ export function ProjectBoardViews({
                   return <Icon className="size-3.5 shrink-0" />;
                 })()}
                 <span className="max-w-[10rem] truncate">
-                  {activeId === DEFAULT_VIEW_ID ? 'Доска' : (active?.name ?? 'Доска')}
+                  {activeId === DEFAULT_VIEW_ID ? boardName : (active?.name ?? boardName)}
                 </span>
                 <ChevronDown className="size-3 shrink-0 opacity-60" />
               </button>
@@ -421,7 +448,7 @@ export function ProjectBoardViews({
             <DropdownMenuContent align="start" className="min-w-[13rem]">
               <DropdownMenuItem className="gap-2" onClick={() => selectView(DEFAULT_VIEW_ID)}>
                 <LayoutGrid className="size-4" />
-                Доска
+                {boardName}
               </DropdownMenuItem>
               {allViewsSorted.map((v) => {
                 const Icon = VIEW_TYPE_ICONS[v.type];
@@ -438,10 +465,13 @@ export function ProjectBoardViews({
         <div className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] md:flex [&::-webkit-scrollbar]:hidden">
           <ViewTab
             icon={VIEW_TYPE_ICONS.kanban}
-            name="Доска"
+            name={boardName}
             active={activeId === DEFAULT_VIEW_ID}
             onSelect={() => selectView(DEFAULT_VIEW_ID)}
             menu={defaultTabMenuEntries()}
+            renameOpen={boardRenameOpen}
+            onRenameClose={() => setBoardRenameOpen(false)}
+            onRenameSubmit={renameBoard}
           />
           {visibleViews.map((v) => (
             <ViewTab
@@ -1187,14 +1217,23 @@ function ViewTab({
         {active ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>{btn}</DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[13rem]">
+            {/* onCloseAutoFocus preventDefault: возврат фокуса на вкладку закрывал бы
+                rename-попап (focus-outside dismiss). */}
+            <DropdownMenuContent
+              align="start"
+              className="min-w-[13rem]"
+              onCloseAutoFocus={(e) => e.preventDefault()}
+            >
               <DropdownEntries entries={menu} />
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
           btn
         )}
-        <ContextMenuContent className="min-w-[13rem]">
+        <ContextMenuContent
+          className="min-w-[13rem]"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
           <ContextEntries entries={menu} />
         </ContextMenuContent>
       </ContextMenu>
@@ -1208,15 +1247,51 @@ function ViewTab({
   }
 
   if (!onRenameSubmit) return tab;
+  // Rename-попап — ручной (НЕ Radix Popover): закрывающиеся Dropdown/ContextMenu своими
+  // dismiss-слоями мгновенно убивали Radix-попап, открытый из их пункта меню.
   return (
-    <Popover open={renameOpen} onOpenChange={(o) => !o && onRenameClose?.()}>
-      <PopoverAnchor asChild>
-        <span className="inline-flex shrink-0">{tab}</span>
-      </PopoverAnchor>
-      <PopoverContent align="start" className="w-64 p-1.5" onOpenAutoFocus={(e) => e.preventDefault()}>
-        <TabRenameInput initial={name} onSubmit={onRenameSubmit} onClose={() => onRenameClose?.()} />
-      </PopoverContent>
-    </Popover>
+    <span className="relative inline-flex shrink-0">
+      {tab}
+      {renameOpen && (
+        <TabRenamePopup
+          initial={name}
+          onSubmit={onRenameSubmit}
+          onClose={() => onRenameClose?.()}
+        />
+      )}
+    </span>
+  );
+}
+
+// Ручной попап переименования у вкладки: outside-click закрывает (с задержкой подписки,
+// чтобы не поймать клик, открывший попап).
+function TabRenamePopup({
+  initial,
+  onSubmit,
+  onClose,
+}: {
+  initial: string;
+  onSubmit: (name: string) => void;
+  onClose: () => void;
+}): React.ReactElement {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDown = (e: PointerEvent): void => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const t = window.setTimeout(() => document.addEventListener('pointerdown', onDown), 250);
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener('pointerdown', onDown);
+    };
+  }, [onClose]);
+  return (
+    <div
+      ref={ref}
+      className="absolute left-0 top-full z-50 mt-1 w-64 rounded-md border bg-popover p-1.5 shadow-md duration-150 animate-in fade-in zoom-in-95"
+    >
+      <TabRenameInput initial={initial} onSubmit={onSubmit} onClose={onClose} />
+    </div>
   );
 }
 
@@ -1251,7 +1326,6 @@ function TabRenameInput({
           onClose();
         }
       }}
-      onBlur={submit}
       maxLength={64}
       aria-label="Название вью"
       className="w-full rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus:border-foreground/30"

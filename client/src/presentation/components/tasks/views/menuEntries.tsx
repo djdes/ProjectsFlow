@@ -80,7 +80,7 @@ export function DropdownEntries({ entries }: { entries: MenuEntry[] }): React.Re
               e.destructive && 'text-destructive focus:text-destructive',
               e.muted && 'text-muted-foreground',
             )}
-            onClick={e.onSelect}
+            onSelect={e.onSelect}
           >
             {itemInner(e)}
           </DropdownMenuItem>
@@ -121,7 +121,7 @@ export function ContextEntries({ entries }: { entries: MenuEntry[] }): React.Rea
               e.destructive && 'text-destructive focus:text-destructive',
               e.muted && 'text-muted-foreground',
             )}
-            onClick={e.onSelect}
+            onSelect={e.onSelect}
           >
             {itemInner(e)}
           </ContextMenuItem>

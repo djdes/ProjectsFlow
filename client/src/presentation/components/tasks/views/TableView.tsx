@@ -26,9 +26,7 @@ import {
   PanelRight,
   WrapText,
   Plus,
-  Trash2,
   User,
-  X,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -58,6 +56,7 @@ import { DelegateTaskButton } from '../DelegateTaskButton';
 import { type TaskDrawerState } from '../TaskDrawer';
 import { ymd, startOfDay, addDays } from '../assignedGrouping';
 import type { ViewCreateRequest } from './ProjectBoardViews';
+import { SelectedBar } from './SelectedBar';
 import { splitTitleBody } from '@/lib/taskTitleBody';
 import {
   NewTaskRow,
@@ -274,6 +273,21 @@ export function TableView({
   // Drag «⋮⋮» — ручной порядок строк (Notion). Активен без пользовательской сортировки.
   const canReorder = sort === null;
   const [dragTask, setDragTask] = useState<Task | null>(null);
+
+  // Только что перемещённая строка выделена синим, пока юзер не кликнет (как на канбане).
+  const [recentlyMovedId, setRecentlyMovedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!recentlyMovedId) return;
+    const clear = (): void => setRecentlyMovedId(null);
+    const t = window.setTimeout(
+      () => document.addEventListener('pointerdown', clear, { once: true }),
+      0,
+    );
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener('pointerdown', clear);
+    };
+  }, [recentlyMovedId]);
   // PointerSensor (не Mouse!): мы гасим pointerdown preventDefault'ом против Radix-меню,
   // а это отменяет синтезированные mouse-события — MouseSensor не стартовал бы.
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -291,7 +305,9 @@ export function TableView({
       targetStatus: over.status,
       beforeTaskId: prev && prev.status === over.status ? prev.id : null,
       afterTaskId: over.id,
-    }).catch((err: unknown) => toast.error(`Не удалось: ${(err as Error).message}`));
+    })
+      .then(() => setRecentlyMovedId(activeId))
+      .catch((err: unknown) => toast.error(`Не удалось: ${(err as Error).message}`));
   };
 
   // Shift+клик по чекбоксу — выделение диапазона (Notion).
@@ -455,6 +471,7 @@ export function TableView({
                 visibleCols={visibleCols}
                 wrapTitle={tableState.wrapTitle}
                 dndEnabled={canReorder}
+                recentlyMoved={recentlyMovedId === task.id}
                 editing={editingId === task.id}
                 editValue={editValue}
                 onEditValue={setEditValue}
@@ -576,100 +593,6 @@ export function TableView({
           onDelete={() => void bulk.remove(selectedIds).then(reportBulk('Удаление'))}
         />
       )}
-    </div>
-  );
-}
-
-// Плавающая панель действий над выбранными строками — копия Notion selection toolbar:
-// «N выбрано ✕ | Статус | Приоритет | Срок | 🗑», плавает сверху по центру.
-function SelectedBar({
-  count,
-  onExit,
-  onStatus,
-  onPriority,
-  onDeadline,
-  onDelete,
-}: {
-  count: number;
-  onExit: () => void;
-  onStatus: (s: TaskStatus) => void;
-  onPriority: (p: TaskPriority | null) => void;
-  onDeadline: (d: string | null) => void;
-  onDelete: () => void;
-}): React.ReactElement {
-  const today = ymd(startOfDay(new Date()));
-  return (
-    <div
-      role="toolbar"
-      aria-label="Действия с выбранными задачами"
-      className="fixed left-1/2 top-16 z-40 flex -translate-x-1/2 items-center overflow-hidden rounded-lg border bg-card shadow-lg duration-200 animate-in fade-in slide-in-from-top-2"
-    >
-      <span className="flex items-center gap-1.5 border-r px-2.5 py-1.5 text-xs font-medium text-primary">
-        Выбрано: {count}
-        <button type="button" aria-label="Снять выбор" onClick={onExit}>
-          <X className="size-3.5 opacity-60 hover:opacity-100" />
-        </button>
-      </span>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button type="button" className="border-r px-2.5 py-1.5 text-xs transition-colors hover:bg-accent">
-            Статус
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="center" className="min-w-[11rem]">
-          {VISIBLE_KANBAN_STATUSES.map((s) => (
-            <DropdownMenuItem key={s} className="gap-2" onClick={() => onStatus(s)}>
-              <span className={cn('size-2 rounded-full', STATUS_DOT[s])} />
-              {STATUS_LABEL[s]}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button type="button" className="border-r px-2.5 py-1.5 text-xs transition-colors hover:bg-accent">
-            Приоритет
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="center" className="min-w-[11rem]">
-          {TASK_PRIORITIES.map((p) => (
-            <DropdownMenuItem key={p} className="gap-2" onClick={() => onPriority(p)}>
-              <span className={cn('size-2 rounded-full', PRIORITY_META[p].dotColor)} />
-              {PRIORITY_META[p].label}
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-muted-foreground" onClick={() => onPriority(null)}>
-            Без приоритета
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button type="button" className="border-r px-2.5 py-1.5 text-xs transition-colors hover:bg-accent">
-            Срок
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="center" className="min-w-[11rem]">
-          <DropdownMenuItem onClick={() => onDeadline(today)}>Сегодня</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onDeadline(ymd(addDays(startOfDay(new Date()), 1)))}>
-            Завтра
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-muted-foreground" onClick={() => onDeadline(null)}>
-            Убрать срок
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <button
-        type="button"
-        aria-label="Удалить выбранные"
-        title="Удалить выбранные"
-        onClick={onDelete}
-        className="px-2.5 py-1.5 text-destructive transition-colors hover:bg-destructive/10"
-      >
-        <Trash2 className="size-3.5" />
-      </button>
     </div>
   );
 }
@@ -908,6 +831,7 @@ function TableRow({
   visibleCols,
   wrapTitle,
   dndEnabled,
+  recentlyMoved,
   editing,
   editValue,
   onEditValue,
@@ -935,6 +859,7 @@ function TableRow({
   visibleCols: readonly ViewColumn[];
   wrapTitle: boolean;
   dndEnabled: boolean;
+  recentlyMoved: boolean;
   editing: boolean;
   editValue: string;
   onEditValue: (v: string) => void;
@@ -1097,6 +1022,8 @@ function TableRow({
             isDragging && 'opacity-40',
             // Синяя линия сверху — сюда вставится перетаскиваемая строка (Notion).
             isOver && 'shadow-[inset_0_2px_0_0_hsl(var(--primary))]',
+            // Только что перемещена — синее выделение до клика в стороне (как на канбане).
+            recentlyMoved && 'bg-primary/5 ring-2 ring-inset ring-primary/60',
           )}
         >
       {/* Hover-контролы в левом поле (Notion): «+» (вставить ниже, Alt — выше),
