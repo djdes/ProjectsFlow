@@ -13,6 +13,12 @@ import { STATUS_LABEL } from '../statusLabels';
 import { DeadlineBadge } from '../DeadlineBadge';
 import { BulkActionBar } from '../BulkActionBar';
 import { type TaskDrawerState } from '../TaskDrawer';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { toast } from '@/components/ui/sonner';
 import type { ViewCreateRequest } from './ProjectBoardViews';
 import {
   NewTaskRow,
@@ -20,10 +26,12 @@ import {
   ViewTaskDrawer,
   applyViewSort,
   matchesFilters,
+  taskMenuEntries,
   taskTitle,
   type ViewFilters,
   type ViewSort,
 } from './viewShared';
+import { ContextEntries } from './menuEntries';
 
 type Props = {
   projectId: string;
@@ -78,8 +86,9 @@ export function ListView({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col pl-12">
         {rows.map((task) => (
+          <ContextMenu key={task.id}>
+            <ContextMenuTrigger asChild>
           <div
-            key={task.id}
             className={cn(
               'group relative flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/50',
               selected.has(task.id) && 'bg-primary/5',
@@ -152,6 +161,39 @@ export function ListView({
               )}
             </span>
           </div>
+            </ContextMenuTrigger>
+            {/* Правый клик по строке — контекстное меню задачи (Notion-style). */}
+            <ContextMenuContent className="min-w-[12rem]">
+              <ContextEntries
+                entries={taskMenuEntries(task, {
+                  onOpen: () => setDrawer({ mode: 'edit', task }),
+                  onStatus: (s) =>
+                    void move(task.id, { targetStatus: s, beforeTaskId: null, afterTaskId: null }).catch(
+                      (e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`),
+                    ),
+                  onPriority: (p) =>
+                    void update(task.id, { priority: p }).catch((e: unknown) =>
+                      toast.error(`Не удалось: ${(e as Error).message}`),
+                    ),
+                  onDeadline: (d) =>
+                    void update(task.id, { deadline: d }).catch((e: unknown) =>
+                      toast.error(`Не удалось: ${(e as Error).message}`),
+                    ),
+                  onDuplicate: () =>
+                    void create({
+                      description: task.description ?? '',
+                      status: task.status,
+                      deadline: task.deadline ?? undefined,
+                      priority: task.priority ?? undefined,
+                    }).catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`)),
+                  onDelete: () =>
+                    void remove(task.id)
+                      .then(() => toast.success('Задача удалена'))
+                      .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`)),
+                })}
+              />
+            </ContextMenuContent>
+          </ContextMenu>
         ))}
 
         {rows.length === 0 && (

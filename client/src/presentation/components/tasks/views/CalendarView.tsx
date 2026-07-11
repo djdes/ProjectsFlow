@@ -14,6 +14,11 @@ import {
 import { CalendarOff, ChevronLeft, ChevronRight, FileText, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
@@ -27,9 +32,11 @@ import {
   STATUS_DOT,
   ViewTaskDrawer,
   matchesFilters,
+  taskMenuEntries,
   taskTitle,
   type ViewFilters,
 } from './viewShared';
+import { ContextEntries, type MenuEntry } from './menuEntries';
 
 type Props = {
   projectId: string;
@@ -61,7 +68,7 @@ export function CalendarView({
   createRequest,
 }: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
-  const { tasks: allTasks, loading, error, update } = tasksApi;
+  const { tasks: allTasks, loading, error, update, move, create, remove } = tasksApi;
   const tasks = useMemo(() => allTasks.filter((t) => matchesFilters(t, filters)), [allTasks, filters]);
   const isShared = (memberCount ?? 0) > 1;
   const [monthStart, setMonthStart] = useState<Date>(() => {
@@ -102,6 +109,35 @@ export function CalendarView({
     monthStart,
   );
 
+  // Контекстное меню чипа задачи (правая кнопка) — как у строк таблицы/списка.
+  const menuFor = (task: Task): MenuEntry[] =>
+    taskMenuEntries(task, {
+      onOpen: () => setDrawer({ mode: 'edit', task }),
+      onStatus: (s) =>
+        void move(task.id, { targetStatus: s, beforeTaskId: null, afterTaskId: null }).catch(
+          (e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`),
+        ),
+      onPriority: (p) =>
+        void update(task.id, { priority: p }).catch((e: unknown) =>
+          toast.error(`Не удалось: ${(e as Error).message}`),
+        ),
+      onDeadline: (d) =>
+        void update(task.id, { deadline: d }).catch((e: unknown) =>
+          toast.error(`Не удалось: ${(e as Error).message}`),
+        ),
+      onDuplicate: () =>
+        void create({
+          description: task.description ?? '',
+          status: task.status,
+          deadline: task.deadline ?? undefined,
+          priority: task.priority ?? undefined,
+        }).catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`)),
+      onDelete: () =>
+        void remove(task.id)
+          .then(() => toast.success('Задача удалена'))
+          .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`)),
+    });
+
   const handleDragEnd = (e: DragEndEvent): void => {
     setActiveDrag(null);
     const task = e.active.data.current?.task as Task | undefined;
@@ -138,7 +174,12 @@ export function CalendarView({
                 </p>
                 <div className="flex flex-col gap-0.5">
                   {noDate.map((t) => (
-                    <TaskChip key={t.id} task={t} onOpen={() => setDrawer({ mode: 'edit', task: t })} />
+                    <TaskChip
+                      key={t.id}
+                      task={t}
+                      onOpen={() => setDrawer({ mode: 'edit', task: t })}
+                      menu={menuFor(t)}
+                    />
                   ))}
                 </div>
               </PopoverContent>
@@ -206,6 +247,7 @@ export function CalendarView({
               tasks={byDay.get(ymd(day)) ?? []}
               dragging={activeDrag !== null}
               onOpen={(t) => setDrawer({ mode: 'edit', task: t })}
+              menuFor={menuFor}
               onCreate={() => {
                 setPendingDeadline(ymd(day));
                 setDrawer({ mode: 'create', status: 'backlog' });
@@ -301,6 +343,7 @@ function DayCell({
   dragging,
   onOpen,
   onCreate,
+  menuFor,
 }: {
   day: Date;
   inMonth: boolean;
@@ -309,6 +352,7 @@ function DayCell({
   dragging: boolean;
   onOpen: (t: Task) => void;
   onCreate: () => void;
+  menuFor: (t: Task) => MenuEntry[];
 }): React.ReactElement {
   const key = ymd(day);
   const { setNodeRef, isOver } = useDroppable({ id: `day-${key}`, data: { day: key } });
@@ -346,7 +390,7 @@ function DayCell({
       </div>
       <div className="mt-0.5 flex flex-col gap-0.5">
         {tasks.slice(0, MAX_CHIPS).map((t) => (
-          <TaskChip key={t.id} task={t} onOpen={() => onOpen(t)} />
+          <TaskChip key={t.id} task={t} onOpen={() => onOpen(t)} menu={menuFor(t)} />
         ))}
         {hidden > 0 && (
           <Popover>
@@ -361,7 +405,7 @@ function DayCell({
             <PopoverContent align="start" className="max-h-72 w-64 overflow-y-auto p-1.5">
               <div className="flex flex-col gap-0.5">
                 {tasks.map((t) => (
-                  <TaskChip key={t.id} task={t} onOpen={() => onOpen(t)} />
+                  <TaskChip key={t.id} task={t} onOpen={() => onOpen(t)} menu={menuFor(t)} />
                 ))}
               </div>
             </PopoverContent>
@@ -372,13 +416,22 @@ function DayCell({
   );
 }
 
-// Чип задачи: draggable (перенос дедлайна) + клик открывает окно (порог 6px разводит их).
-function TaskChip({ task, onOpen }: { task: Task; onOpen: () => void }): React.ReactElement {
+// Чип задачи: draggable (перенос дедлайна) + клик открывает окно (порог 6px разводит их);
+// правая кнопка — контекстное меню задачи.
+function TaskChip({
+  task,
+  onOpen,
+  menu,
+}: {
+  task: Task;
+  onOpen: () => void;
+  menu?: MenuEntry[];
+}): React.ReactElement {
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
     id: task.id,
     data: { type: 'task', task },
   });
-  return (
+  const chip = (
     <div
       ref={setNodeRef}
       {...listeners}
@@ -400,5 +453,14 @@ function TaskChip({ task, onOpen }: { task: Task; onOpen: () => void }): React.R
       )}
       <span className="min-w-0 truncate">{taskTitle(task)}</span>
     </div>
+  );
+  if (!menu) return chip;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{chip}</ContextMenuTrigger>
+      <ContextMenuContent className="min-w-[12rem]">
+        <ContextEntries entries={menu} />
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

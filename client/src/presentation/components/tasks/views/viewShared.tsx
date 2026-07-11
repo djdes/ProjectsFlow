@@ -1,11 +1,25 @@
 import { useState, type KeyboardEvent } from 'react';
-import { Plus, Search } from 'lucide-react';
+import {
+  CalendarDays,
+  CircleDot,
+  Copy,
+  Flag,
+  Maximize2,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import { TASK_PRIORITIES } from '@/domain/task/Task';
+import { PRIORITY_META } from '@/domain/task/priorityMeta';
+import { VISIBLE_KANBAN_STATUSES } from '@/domain/kanban/KanbanSettings';
 import type { UseTasks } from '@/presentation/hooks/useTasks';
+import { STATUS_LABEL } from '../statusLabels';
 import { TaskDrawer, type TaskDrawerState } from '../TaskDrawer';
 import { splitTitleBody } from '@/lib/taskTitleBody';
-import { ymd, startOfDay } from '../assignedGrouping';
+import { ymd, startOfDay, addDays } from '../assignedGrouping';
+import type { MenuEntry } from './menuEntries';
 
 // ============ Общие кусочки табличного/списочного/календарного видов доски ============
 // (план board-views-design). Канбан не трогаем — он остаётся в KanbanBoard.
@@ -78,6 +92,86 @@ export function matchesFilters(task: Task, f: ViewFilters): boolean {
       return false;
   }
   return true;
+}
+
+// Скрываемые колонки-свойства табличного вида («Название» не скрывается, как в Notion).
+export type ViewColumn = 'status' | 'priority' | 'deadline' | 'assignee';
+
+export const VIEW_COLUMN_LABELS: Record<ViewColumn, string> = {
+  status: 'Статус',
+  priority: 'Приоритет',
+  deadline: 'Срок',
+  assignee: 'Ответственный',
+};
+
+// Контекстное меню задачи (строка таблицы/списка, чип календаря) — Notion-style:
+// Открыть / Статус ▸ / Приоритет ▸ / Срок ▸ / Дублировать / Удалить.
+export function taskMenuEntries(
+  task: Task,
+  h: {
+    onOpen: () => void;
+    onStatus: (s: TaskStatus) => void;
+    onPriority: (p: TaskPriority | null) => void;
+    onDeadline: (d: string | null) => void;
+    onDuplicate: () => void;
+    onDelete: () => void;
+  },
+): MenuEntry[] {
+  const today = ymd(startOfDay(new Date()));
+  return [
+    { kind: 'item', label: 'Открыть', icon: Maximize2, onSelect: h.onOpen },
+    { kind: 'separator' },
+    {
+      kind: 'sub',
+      label: 'Статус',
+      icon: CircleDot,
+      items: VISIBLE_KANBAN_STATUSES.map((s) => ({
+        kind: 'item' as const,
+        label: STATUS_LABEL[s],
+        dotClass: STATUS_DOT[s],
+        checked: task.status === s,
+        onSelect: () => h.onStatus(s),
+      })),
+    },
+    {
+      kind: 'sub',
+      label: 'Приоритет',
+      icon: Flag,
+      items: [
+        ...TASK_PRIORITIES.map((p) => ({
+          kind: 'item' as const,
+          label: PRIORITY_META[p].label,
+          dotClass: PRIORITY_META[p].dotColor,
+          checked: task.priority === p,
+          onSelect: () => h.onPriority(p),
+        })),
+        { kind: 'separator' as const },
+        { kind: 'item' as const, label: 'Без приоритета', muted: true, onSelect: () => h.onPriority(null) },
+      ],
+    },
+    {
+      kind: 'sub',
+      label: 'Срок',
+      icon: CalendarDays,
+      items: [
+        { kind: 'item', label: 'Сегодня', onSelect: () => h.onDeadline(today) },
+        {
+          kind: 'item',
+          label: 'Завтра',
+          onSelect: () => h.onDeadline(ymd(addDays(startOfDay(new Date()), 1))),
+        },
+        ...(task.deadline
+          ? ([
+              { kind: 'separator' },
+              { kind: 'item', label: 'Убрать срок', muted: true, onSelect: () => h.onDeadline(null) },
+            ] as MenuEntry[])
+          : []),
+      ],
+    },
+    { kind: 'separator' },
+    { kind: 'item', label: 'Дублировать', icon: Copy, onSelect: h.onDuplicate },
+    { kind: 'item', label: 'Удалить', icon: Trash2, destructive: true, onSelect: h.onDelete },
+  ];
 }
 
 export type ViewSortKey = 'title' | 'status' | 'priority' | 'deadline' | 'created';

@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowDown,
+  ArrowUp,
   CalendarClock,
   CalendarDays,
   ChevronDown,
   CircleDot,
+  EyeOff,
   FileText,
   Flag,
   Maximize2,
@@ -19,6 +22,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
@@ -38,13 +46,18 @@ import type { ViewCreateRequest } from './ProjectBoardViews';
 import {
   NewTaskRow,
   STATUS_DOT,
+  VIEW_COLUMN_LABELS,
   ViewTaskDrawer,
   applyViewSort,
   matchesFilters,
+  taskMenuEntries,
   taskTitle,
+  type ViewColumn,
   type ViewFilters,
   type ViewSort,
+  type ViewSortKey,
 } from './viewShared';
+import { ContextEntries, DropdownEntries, type MenuEntry } from './menuEntries';
 
 type Props = {
   projectId: string;
@@ -52,13 +65,27 @@ type Props = {
   memberCount?: number;
   filters: ViewFilters;
   sort: ViewSort | null;
+  onSortChange: (s: ViewSort | null) => void;
+  hiddenCols: ViewColumn[];
+  onToggleCol: (c: ViewColumn) => void;
   createRequest: ViewCreateRequest | null;
 };
 
-// Сетка колонок: Название (тянется) / Статус / Приоритет / Срок / Ответственный.
-const GRID = 'grid grid-cols-[minmax(0,1fr)_8.5rem_8rem_8.5rem_11rem]';
+// Ширины колонок; сетка собирается из видимых (скрытие свойств — как в Notion).
+const COLUMN_WIDTH: Record<ViewColumn, string> = {
+  status: '8.5rem',
+  priority: '8rem',
+  deadline: '8.5rem',
+  assignee: '11rem',
+};
+const ALL_COLUMNS: readonly ViewColumn[] = ['status', 'priority', 'deadline', 'assignee'];
 
-type CellCol = 'status' | 'priority' | 'deadline' | 'assignee';
+// Сортируемое свойство колонки (у «Ответственного» сортировки нет).
+const COLUMN_SORT_KEY: Partial<Record<ViewColumn, ViewSortKey>> = {
+  status: 'status',
+  priority: 'priority',
+  deadline: 'deadline',
+};
 
 // === Табличный вид доски (Notion-style) ===
 // Notion-таблица: слева в «поле» строки при hover — чекбокс и «+»; в ячейке названия при
@@ -71,6 +98,9 @@ export function TableView({
   memberCount,
   filters,
   sort,
+  onSortChange,
+  hiddenCols,
+  onToggleCol,
   createRequest,
 }: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
@@ -85,6 +115,17 @@ export function TableView({
   const rows = useMemo(
     () => applyViewSort(tasks.filter((t) => matchesFilters(t, filters)), sort),
     [tasks, filters, sort],
+  );
+
+  const visibleCols = useMemo(
+    () => ALL_COLUMNS.filter((c) => !hiddenCols.includes(c)),
+    [hiddenCols],
+  );
+  const gridStyle = useMemo(
+    () => ({
+      gridTemplateColumns: ['minmax(0,1fr)', ...visibleCols.map((c) => COLUMN_WIDTH[c])].join(' '),
+    }),
+    [visibleCols],
   );
 
   // «Создать» из тулбара вью: открыть окно новой задачи в выбранной колонке.
@@ -131,8 +172,12 @@ export function TableView({
       <div className="overflow-x-auto">
         {/* Левое «поле» (pl-12): hover-контролы строк живут в нём, как в Notion. */}
         <div className="min-w-[55rem] pl-12">
-          {/* Шапка таблицы: иконка типа свойства + название (Notion header). */}
-          <div className={cn(GRID, 'group/head relative border-b text-xs text-muted-foreground')}>
+          {/* Шапка таблицы: иконка типа свойства + название; клик по заголовку —
+              меню колонки (сортировка ↑↓, скрыть свойство), как в Notion. */}
+          <div
+            className="group/head relative grid border-b text-xs text-muted-foreground"
+            style={gridStyle}
+          >
             <div className="absolute -left-8 top-1/2 -translate-y-1/2">
               <input
                 type="checkbox"
@@ -145,32 +190,35 @@ export function TableView({
                 )}
               />
             </div>
-            <div className="flex items-center gap-1.5 px-2 py-1.5">
-              <span className="font-mono text-[11px] leading-none text-muted-foreground/70">Aa</span>
-              Название
-            </div>
-            <div className="flex items-center gap-1.5 border-l px-2 py-1.5">
-              <CircleDot className="size-3.5 text-muted-foreground/70" />
-              Статус
-            </div>
-            <div className="flex items-center gap-1.5 border-l px-2 py-1.5">
-              <Flag className="size-3.5 text-muted-foreground/70" />
-              Приоритет
-            </div>
-            <div className="flex items-center gap-1.5 border-l px-2 py-1.5">
-              <CalendarDays className="size-3.5 text-muted-foreground/70" />
-              Срок
-            </div>
-            <div className="flex items-center gap-1.5 border-l px-2 py-1.5">
-              <User className="size-3.5 text-muted-foreground/70" />
-              Ответственный
-            </div>
+            <HeaderCell
+              label="Название"
+              iconNode={
+                <span className="font-mono text-[11px] leading-none text-muted-foreground/70">Aa</span>
+              }
+              sortKey="title"
+              sort={sort}
+              onSortChange={onSortChange}
+              first
+            />
+            {visibleCols.map((c) => (
+              <HeaderCell
+                key={c}
+                label={VIEW_COLUMN_LABELS[c]}
+                iconNode={<ColumnIcon col={c} />}
+                sortKey={COLUMN_SORT_KEY[c] ?? null}
+                sort={sort}
+                onSortChange={onSortChange}
+                onHide={() => onToggleCol(c)}
+              />
+            ))}
           </div>
 
           {rows.map((task) => (
             <TableRow
               key={task.id}
               task={task}
+              gridStyle={gridStyle}
+              visibleCols={visibleCols}
               selected={selected.has(task.id)}
               anySelected={selected.size > 0}
               selCell={selCell}
@@ -192,6 +240,19 @@ export function TableView({
                 void update(task.id, { deadline: d }).catch((e: unknown) =>
                   toast.error(`Не удалось: ${(e as Error).message}`),
                 )
+              }
+              onDuplicate={() =>
+                void create({
+                  description: task.description ?? '',
+                  status: task.status,
+                  deadline: task.deadline ?? undefined,
+                  priority: task.priority ?? undefined,
+                }).catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`))
+              }
+              onDelete={() =>
+                void remove(task.id)
+                  .then(() => toast.success('Задача удалена'))
+                  .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`))
               }
               currentUserId={user?.id ?? null}
               projectId={projectId}
@@ -332,8 +393,103 @@ function SelectedBar({
   );
 }
 
+// Заголовок колонки: клик — меню (сортировка ↑↓, скрыть свойство). Стрелка в заголовке
+// показывает активную сортировку по этой колонке.
+function HeaderCell({
+  label,
+  iconNode,
+  sortKey,
+  sort,
+  onSortChange,
+  onHide,
+  first = false,
+}: {
+  label: string;
+  iconNode: React.ReactNode;
+  sortKey: ViewSortKey | null;
+  sort: ViewSort | null;
+  onSortChange: (s: ViewSort | null) => void;
+  onHide?: () => void;
+  first?: boolean;
+}): React.ReactElement {
+  const sorted = sortKey !== null && sort?.key === sortKey ? sort.dir : null;
+  const entries: MenuEntry[] = [
+    ...(sortKey !== null
+      ? ([
+          {
+            kind: 'item',
+            label: 'По возрастанию',
+            icon: ArrowUp,
+            checked: sorted === 'asc',
+            onSelect: () => onSortChange({ key: sortKey, dir: 'asc' }),
+          },
+          {
+            kind: 'item',
+            label: 'По убыванию',
+            icon: ArrowDown,
+            checked: sorted === 'desc',
+            onSelect: () => onSortChange({ key: sortKey, dir: 'desc' }),
+          },
+          ...(sorted !== null
+            ? ([
+                {
+                  kind: 'item',
+                  label: 'Убрать сортировку',
+                  muted: true,
+                  onSelect: () => onSortChange(null),
+                },
+              ] as MenuEntry[])
+            : []),
+        ] as MenuEntry[])
+      : []),
+    ...(onHide
+      ? ([
+          ...(sortKey !== null ? ([{ kind: 'separator' }] as MenuEntry[]) : []),
+          { kind: 'item', label: 'Скрыть в виде', icon: EyeOff, onSelect: onHide },
+        ] as MenuEntry[])
+      : []),
+  ];
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'flex items-center gap-1.5 px-2 py-1.5 text-left transition-colors hover:bg-accent/60',
+            !first && 'border-l',
+          )}
+        >
+          {iconNode}
+          {label}
+          {sorted === 'asc' && <ArrowUp className="size-3" />}
+          {sorted === 'desc' && <ArrowDown className="size-3" />}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-[11rem]">
+        <DropdownEntries entries={entries} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ColumnIcon({ col }: { col: ViewColumn }): React.ReactElement {
+  const cls = 'size-3.5 text-muted-foreground/70';
+  switch (col) {
+    case 'status':
+      return <CircleDot className={cls} />;
+    case 'priority':
+      return <Flag className={cls} />;
+    case 'deadline':
+      return <CalendarDays className={cls} />;
+    case 'assignee':
+      return <User className={cls} />;
+  }
+}
+
 function TableRow({
   task,
+  gridStyle,
+  visibleCols,
   selected,
   anySelected,
   selCell,
@@ -344,11 +500,15 @@ function TableRow({
   onStatus,
   onPriority,
   onDeadline,
+  onDuplicate,
+  onDelete,
   currentUserId,
   projectId,
   onChanged,
 }: {
   task: Task;
+  gridStyle: React.CSSProperties;
+  visibleCols: readonly ViewColumn[];
   selected: boolean;
   anySelected: boolean;
   selCell: string | null;
@@ -359,12 +519,14 @@ function TableRow({
   onStatus: (s: TaskStatus) => void;
   onPriority: (p: TaskPriority | null) => void;
   onDeadline: (d: string | null) => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
   currentUserId: string | null;
   projectId: string;
   onChanged: () => void;
 }): React.ReactElement {
   // Клик по «пустому» месту ячейки — выделение синей рамкой (Notion cell selection).
-  const cellProps = (col: CellCol): { className: string; onMouseDown: (e: React.MouseEvent) => void } => ({
+  const cellProps = (col: ViewColumn): { className: string; onMouseDown: (e: React.MouseEvent) => void } => ({
     className: cn(
       'relative border-l px-1 py-1',
       selCell === `${task.id}:${col}` &&
@@ -376,14 +538,100 @@ function TableRow({
     },
   });
 
+  const cellFor = (col: ViewColumn): React.ReactElement => {
+    switch (col) {
+      case 'status':
+        return (
+          <div key={col} {...cellProps('status')}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md px-1.5 text-xs text-foreground/90 transition-colors hover:bg-accent"
+                >
+                  <span className={cn('size-2 shrink-0 rounded-full', STATUS_DOT[task.status])} />
+                  <span className="truncate">{STATUS_LABEL[task.status]}</span>
+                  <ChevronDown className="size-3 shrink-0 opacity-0 group-hover:opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[10rem]">
+                {VISIBLE_KANBAN_STATUSES.map((s) => (
+                  <DropdownMenuItem key={s} className="gap-2" onClick={() => onStatus(s)}>
+                    <span className={cn('size-2 rounded-full', STATUS_DOT[s])} />
+                    {STATUS_LABEL[s]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        );
+      case 'priority':
+        return (
+          <div key={col} {...cellProps('priority')}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md px-1.5 text-xs transition-colors hover:bg-accent"
+                >
+                  {task.priority !== null && task.priority !== undefined ? (
+                    <>
+                      <span
+                        className={cn('size-2 shrink-0 rounded-full', PRIORITY_META[task.priority].dotColor)}
+                      />
+                      <span className="truncate">{PRIORITY_META[task.priority].label}</span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground/60">—</span>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[10rem]">
+                {TASK_PRIORITIES.map((p) => (
+                  <DropdownMenuItem key={p} className="gap-2" onClick={() => onPriority(p)}>
+                    <span className={cn('size-2 rounded-full', PRIORITY_META[p].dotColor)} />
+                    {PRIORITY_META[p].label}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-muted-foreground" onClick={() => onPriority(null)}>
+                  Без приоритета
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        );
+      case 'deadline':
+        return (
+          <div key={col} {...cellProps('deadline')}>
+            <DeadlineCell task={task} onDeadline={onDeadline} />
+          </div>
+        );
+      case 'assignee':
+        return (
+          <div key={col} {...cellProps('assignee')}>
+            <DelegateTaskButton
+              task={task}
+              currentUserId={currentUserId}
+              onChanged={onChanged}
+              projectId={projectId}
+              className="h-6 max-w-full justify-start px-1.5 text-xs"
+            />
+          </div>
+        );
+    }
+  };
+
   return (
-    <div
-      className={cn(
-        GRID,
-        'group relative border-b transition-colors hover:bg-accent/40',
-        selected && 'bg-primary/5',
-      )}
-    >
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          style={gridStyle}
+          className={cn(
+            'group relative grid border-b transition-colors hover:bg-accent/40',
+            selected && 'bg-primary/5',
+          )}
+        >
       {/* Hover-контролы в левом поле: «+» (новая задача в той же колонке) и чекбокс. */}
       <div
         className={cn(
@@ -436,81 +684,23 @@ function TableRow({
         </button>
       </div>
 
-      {/* Статус. */}
-      <div {...cellProps('status')}>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md px-1.5 text-xs text-foreground/90 transition-colors hover:bg-accent"
-            >
-              <span className={cn('size-2 shrink-0 rounded-full', STATUS_DOT[task.status])} />
-              <span className="truncate">{STATUS_LABEL[task.status]}</span>
-              <ChevronDown className="size-3 shrink-0 opacity-0 group-hover:opacity-60" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-[10rem]">
-            {VISIBLE_KANBAN_STATUSES.map((s) => (
-              <DropdownMenuItem key={s} className="gap-2" onClick={() => onStatus(s)}>
-                <span className={cn('size-2 rounded-full', STATUS_DOT[s])} />
-                {STATUS_LABEL[s]}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* Приоритет. */}
-      <div {...cellProps('priority')}>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md px-1.5 text-xs transition-colors hover:bg-accent"
-            >
-              {task.priority !== null && task.priority !== undefined ? (
-                <>
-                  <span
-                    className={cn('size-2 shrink-0 rounded-full', PRIORITY_META[task.priority].dotColor)}
-                  />
-                  <span className="truncate">{PRIORITY_META[task.priority].label}</span>
-                </>
-              ) : (
-                <span className="text-muted-foreground/60">—</span>
-              )}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-[10rem]">
-            {TASK_PRIORITIES.map((p) => (
-              <DropdownMenuItem key={p} className="gap-2" onClick={() => onPriority(p)}>
-                <span className={cn('size-2 rounded-full', PRIORITY_META[p].dotColor)} />
-                {PRIORITY_META[p].label}
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-muted-foreground" onClick={() => onPriority(null)}>
-              Без приоритета
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* Срок. */}
-      <div {...cellProps('deadline')}>
-        <DeadlineCell task={task} onDeadline={onDeadline} />
-      </div>
-
-      {/* Ответственный — существующий селектор «создатель → исполнитель». */}
-      <div {...cellProps('assignee')}>
-        <DelegateTaskButton
-          task={task}
-          currentUserId={currentUserId}
-          onChanged={onChanged}
-          projectId={projectId}
-          className="h-6 max-w-full justify-start px-1.5 text-xs"
+      {visibleCols.map(cellFor)}
+        </div>
+      </ContextMenuTrigger>
+      {/* Правый клик по строке — контекстное меню задачи (Notion-style). */}
+      <ContextMenuContent className="min-w-[12rem]">
+        <ContextEntries
+          entries={taskMenuEntries(task, {
+            onOpen,
+            onStatus,
+            onPriority,
+            onDeadline,
+            onDuplicate,
+            onDelete,
+          })}
         />
-      </div>
-    </div>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 

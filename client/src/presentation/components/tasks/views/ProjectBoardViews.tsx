@@ -7,6 +7,8 @@ import {
   Check,
   ChevronDown,
   Copy,
+  Eye,
+  EyeOff,
   LayoutGrid,
   Link as LinkIcon,
   List,
@@ -37,6 +39,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { TaskPriority, TaskStatus } from '@/domain/task/Task';
@@ -59,12 +67,15 @@ import { CalendarView } from './CalendarView';
 import {
   EMPTY_VIEW_FILTERS,
   STATUS_DOT,
+  VIEW_COLUMN_LABELS,
   VIEW_SORT_LABELS,
+  type ViewColumn,
   type ViewDueFilter,
   type ViewFilters,
   type ViewSort,
   type ViewSortKey,
 } from './viewShared';
+import { DropdownEntries, ContextEntries, type MenuEntry } from './menuEntries';
 
 export const VIEW_TYPE_ICONS: Record<BoardViewType, LucideIcon> = {
   kanban: LayoutGrid,
@@ -99,7 +110,7 @@ const DUE_FILTER_LABELS: Record<ViewDueFilter, string> = {
 // Запрос «создать задачу» из тулбара: seq растёт, вид ловит изменение и открывает окно.
 export type ViewCreateRequest = { readonly seq: number; readonly status: TaskStatus };
 
-type PerViewState = { filters: ViewFilters; sort: ViewSort | null };
+type PerViewState = { filters: ViewFilters; sort: ViewSort | null; hidden: ViewColumn[] };
 
 // === Вью доски проекта (Notion-style) ===
 // Строка вкладок: «Доска» (неявный канбан) + пользовательские вью из БД, overflow — «N ещё…»,
@@ -188,7 +199,11 @@ export function ProjectBoardViews({
   const activeType: BoardViewType = active?.type ?? 'kanban';
   const isKanban = activeId === DEFAULT_VIEW_ID || activeType === 'kanban';
 
-  const state: PerViewState = perView[activeId] ?? { filters: EMPTY_VIEW_FILTERS, sort: null };
+  const state: PerViewState = perView[activeId] ?? {
+    filters: EMPTY_VIEW_FILTERS,
+    sort: null,
+    hidden: [],
+  };
   const setFilters = (patch: Partial<ViewFilters>): void =>
     setPerView((prev) => ({
       ...prev,
@@ -196,6 +211,16 @@ export function ProjectBoardViews({
     }));
   const setSort = (sort: ViewSort | null): void =>
     setPerView((prev) => ({ ...prev, [activeId]: { ...state, sort } }));
+  const toggleColumn = (col: ViewColumn): void =>
+    setPerView((prev) => ({
+      ...prev,
+      [activeId]: {
+        ...state,
+        hidden: state.hidden.includes(col)
+          ? state.hidden.filter((c) => c !== col)
+          : [...state.hidden, col],
+      },
+    }));
 
   const handleCreate = async (name: string, type: BoardViewType): Promise<void> => {
     try {
@@ -274,55 +299,42 @@ export function ProjectBoardViews({
   const requestCreate = (status: TaskStatus): void =>
     setCreateReq((prev) => ({ seq: (prev?.seq ?? 0) + 1, status }));
 
-  const tabMenu = (v: BoardView): React.ReactNode => (
-    <>
-      <DropdownMenuItem className="gap-2" onClick={() => setRenameTarget(v)}>
-        <Pencil className="size-4" />
-        Переименовать
-      </DropdownMenuItem>
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger className="gap-2">
-          {(() => {
-            const Icon = VIEW_TYPE_ICONS[v.type];
-            return <Icon className="size-4" />;
-          })()}
-          Показывать как
-        </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent className="min-w-[11rem]">
-          {BOARD_VIEW_TYPES.map((t) => {
-            const Icon = VIEW_TYPE_ICONS[t];
-            return (
-              <DropdownMenuItem key={t} className="gap-2" onClick={() => void handleUpdate(v, { type: t })}>
-                <Icon className="size-4" />
-                {BOARD_VIEW_TYPE_LABELS[t]}
-                {v.type === t && <Check className="ml-auto size-3.5" />}
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuSubContent>
-      </DropdownMenuSub>
-      <DropdownMenuItem className="gap-2" onClick={() => setPanel('settings')}>
-        <Settings2 className="size-4" />
-        Настроить вью
-      </DropdownMenuItem>
-      <DropdownMenuItem className="gap-2" onClick={() => copyViewLink(v)}>
-        <LinkIcon className="size-4" />
-        Скопировать ссылку
-      </DropdownMenuItem>
-      <DropdownMenuItem className="gap-2" onClick={() => void handleDuplicate(v)}>
-        <Copy className="size-4" />
-        Дублировать вью
-      </DropdownMenuItem>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem
-        className="gap-2 text-destructive focus:text-destructive"
-        onClick={() => setDeleteTarget(v)}
-      >
-        <Trash2 className="size-4" />
-        Удалить вью
-      </DropdownMenuItem>
-    </>
-  );
+  // Единая спека меню вкладки — рендерится и в дропдаун (клик по активной вкладке),
+  // и в контекстное меню (правая кнопка мыши по любой вкладке), как в Notion.
+  const tabMenuEntries = (v: BoardView): MenuEntry[] => [
+    { kind: 'item', label: 'Переименовать', icon: Pencil, onSelect: () => setRenameTarget(v) },
+    {
+      kind: 'sub',
+      label: 'Показывать как',
+      icon: VIEW_TYPE_ICONS[v.type],
+      items: BOARD_VIEW_TYPES.map((t) => ({
+        kind: 'item' as const,
+        label: BOARD_VIEW_TYPE_LABELS[t],
+        icon: VIEW_TYPE_ICONS[t],
+        checked: v.type === t,
+        onSelect: () => void handleUpdate(v, { type: t }),
+      })),
+    },
+    {
+      kind: 'item',
+      label: 'Настроить вью',
+      icon: Settings2,
+      onSelect: () => {
+        selectView(v.id);
+        setPanel('settings');
+      },
+    },
+    { kind: 'item', label: 'Скопировать ссылку', icon: LinkIcon, onSelect: () => copyViewLink(v) },
+    { kind: 'item', label: 'Дублировать вью', icon: Copy, onSelect: () => void handleDuplicate(v) },
+    { kind: 'separator' },
+    {
+      kind: 'item',
+      label: 'Удалить вью',
+      icon: Trash2,
+      destructive: true,
+      onSelect: () => setDeleteTarget(v),
+    },
+  ];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -342,7 +354,10 @@ export function ProjectBoardViews({
               name={v.name}
               active={activeId === v.id}
               onSelect={() => selectView(v.id)}
-              menu={tabMenu(v)}
+              menu={tabMenuEntries(v)}
+              renameOpen={renameTarget?.id === v.id}
+              onRenameClose={() => setRenameTarget(null)}
+              onRenameSubmit={(name) => void handleUpdate(v, { name })}
             />
           ))}
           {hiddenViews.length > 0 && (
@@ -515,6 +530,9 @@ export function ProjectBoardViews({
           memberCount={memberCount}
           filters={state.filters}
           sort={state.sort}
+          onSortChange={setSort}
+          hiddenCols={state.hidden}
+          onToggleCol={toggleColumn}
           createRequest={createReq}
         />
       ) : activeType === 'list' ? (
@@ -553,16 +571,11 @@ export function ProjectBoardViews({
             onCopyLink={() => copyViewLink(active)}
             onDuplicate={() => void handleDuplicate(active)}
             onDelete={() => setDeleteTarget(active)}
+            hidden={state.hidden}
+            onToggleColumn={active.type === 'table' ? toggleColumn : undefined}
           />
         )}
       </SidePanel>
-
-      {/* Переименование вью. */}
-      <RenameViewDialog
-        view={renameTarget}
-        onClose={() => setRenameTarget(null)}
-        onSubmit={(name) => renameTarget && void handleUpdate(renameTarget, { name })}
-      />
 
       {/* Подтверждение удаления вью (задачи не трогаются — удаляется только представление). */}
       <Dialog open={deleteTarget !== null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
@@ -806,60 +819,136 @@ function FilterChip({ label, onClear }: { label: string; onClear: () => void }):
   );
 }
 
-// Вкладка вью: клик — выбрать; у АКТИВНОЙ пользовательской справа появляется шеврон-меню.
-// Меню НЕ на самой кнопке вкладки: Radix-триггер перехватывает pointerdown и глушит клик —
-// вкладка переставала переключаться (ловилось e2e). У дефолтной «Доски» меню нет.
+// Вкладка вью (Notion-поведение):
+// - клик по НЕАКТИВНОЙ — выбрать (обычная кнопка, НЕ Radix-триггер: он глушит onClick);
+// - клик по АКТИВНОЙ — открыть меню (переключать её не нужно, поэтому триггер безопасен);
+// - ПРАВАЯ кнопка по любой пользовательской вкладке — то же меню (ContextMenu);
+// - «Переименовать» — попап с инпутом прямо у вкладки.
+// У дефолтной «Доски» меню нет (она не хранится в БД).
 function ViewTab({
   icon: Icon,
   name,
   active,
   onSelect,
   menu,
+  renameOpen = false,
+  onRenameClose,
+  onRenameSubmit,
 }: {
   icon: LucideIcon;
   name: string;
   active: boolean;
   onSelect: () => void;
-  menu?: React.ReactNode;
+  menu?: MenuEntry[];
+  renameOpen?: boolean;
+  onRenameClose?: () => void;
+  onRenameSubmit?: (name: string) => void;
 }): React.ReactElement {
-  return (
-    <div
-      className={cn(
-        'inline-flex shrink-0 items-center rounded-md transition-colors',
-        active
-          ? 'bg-accent text-foreground'
-          : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
-      )}
-    >
-      <button
-        type="button"
-        onClick={onSelect}
-        className={cn(
-          'inline-flex items-center gap-1.5 py-1 pl-2 text-[13px] font-medium',
-          active && menu ? 'pr-0.5' : 'pr-2',
+  const tabClass = cn(
+    'inline-flex shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium transition-colors',
+    active
+      ? 'bg-accent text-foreground'
+      : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+  );
+  const inner = (
+    <>
+      <Icon className="size-3.5 shrink-0" />
+      <span className="max-w-[9rem] truncate">{name}</span>
+      {active && menu && <ChevronDown className="size-3 shrink-0 opacity-60" />}
+    </>
+  );
+
+  // ВАЖНО: ContextMenuTrigger asChild должен оборачивать САМУ кнопку (DOM-узел), а не
+  // DropdownMenu Root — Root не рендерит элемент, и onContextMenu-пропсы теряются.
+  let tab: React.ReactElement;
+  if (menu) {
+    const btn = (
+      <ContextMenuTrigger asChild>
+        {active ? (
+          <button type="button" aria-label="Меню вью" title="Меню вью" className={tabClass}>
+            {inner}
+          </button>
+        ) : (
+          <button type="button" onClick={onSelect} className={tabClass}>
+            {inner}
+          </button>
         )}
-      >
-        <Icon className="size-3.5 shrink-0" />
-        <span className="max-w-[9rem] truncate">{name}</span>
+      </ContextMenuTrigger>
+    );
+    tab = (
+      <ContextMenu>
+        {active ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>{btn}</DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[13rem]">
+              <DropdownEntries entries={menu} />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          btn
+        )}
+        <ContextMenuContent className="min-w-[13rem]">
+          <ContextEntries entries={menu} />
+        </ContextMenuContent>
+      </ContextMenu>
+    );
+  } else {
+    tab = (
+      <button type="button" onClick={onSelect} className={tabClass}>
+        {inner}
       </button>
-      {active && menu && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label="Меню вью"
-              title="Меню вью"
-              className="grid h-full place-items-center rounded-r-md py-1 pl-0.5 pr-1.5 text-muted-foreground hover:text-foreground"
-            >
-              <ChevronDown className="size-3" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-[13rem]">
-            {menu}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-    </div>
+    );
+  }
+
+  if (!onRenameSubmit) return tab;
+  return (
+    <Popover open={renameOpen} onOpenChange={(o) => !o && onRenameClose?.()}>
+      <PopoverAnchor asChild>
+        <span className="inline-flex shrink-0">{tab}</span>
+      </PopoverAnchor>
+      <PopoverContent align="start" className="w-64 p-1.5" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <TabRenameInput initial={name} onSubmit={onRenameSubmit} onClose={() => onRenameClose?.()} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// Инпут переименования в попапе у вкладки (Notion Rename): Enter — сохранить, Esc — закрыть.
+function TabRenameInput({
+  initial,
+  onSubmit,
+  onClose,
+}: {
+  initial: string;
+  onSubmit: (name: string) => void;
+  onClose: () => void;
+}): React.ReactElement {
+  const [value, setValue] = useState(initial);
+  const submit = (): void => {
+    const trimmed = value.trim();
+    if (trimmed && trimmed !== initial) onSubmit(trimmed);
+    else onClose();
+  };
+  return (
+    <input
+      autoFocus
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onFocus={(e) => e.target.select()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          submit();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          onClose();
+        }
+      }}
+      onBlur={submit}
+      maxLength={64}
+      aria-label="Название вью"
+      className="w-full rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus:border-foreground/30"
+    />
   );
 }
 
@@ -967,7 +1056,8 @@ function NewViewPanel({
   );
 }
 
-// Содержимое панели «Настройки вью»: имя (live), layout, ссылки/дублировать/удалить.
+// Содержимое панели «Настройки вью»: имя (live), layout, видимость свойств (таблица),
+// ссылки/дублировать/удалить.
 function ViewSettingsPanel({
   view,
   onRename,
@@ -975,6 +1065,8 @@ function ViewSettingsPanel({
   onCopyLink,
   onDuplicate,
   onDelete,
+  hidden,
+  onToggleColumn,
 }: {
   view: BoardView;
   onRename: (name: string) => void;
@@ -982,6 +1074,8 @@ function ViewSettingsPanel({
   onCopyLink: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  hidden: ViewColumn[];
+  onToggleColumn?: (c: ViewColumn) => void;
 }): React.ReactElement {
   const [name, setName] = useState(view.name);
   useEffect(() => setName(view.name), [view.id, view.name]);
@@ -1032,6 +1126,34 @@ function ViewSettingsPanel({
           })}
         </div>
       </div>
+      {onToggleColumn && (
+        <div>
+          <p className="pb-1.5 text-xs font-medium text-muted-foreground">Свойства</p>
+          <div className="flex flex-col gap-0.5">
+            {(Object.keys(VIEW_COLUMN_LABELS) as ViewColumn[]).map((c) => {
+              const isHidden = hidden.includes(c);
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => onToggleColumn(c)}
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground/90 transition-colors hover:bg-accent"
+                >
+                  {VIEW_COLUMN_LABELS[c]}
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {isHidden ? 'Скрыто' : 'Показано'}
+                  </span>
+                  {isHidden ? (
+                    <EyeOff className="size-4 text-muted-foreground/70" />
+                  ) : (
+                    <Eye className="size-4 text-muted-foreground/70" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="flex flex-col gap-0.5 border-t pt-3">
         <PanelRow icon={LinkIcon} label="Скопировать ссылку на вью" onClick={onCopyLink} />
         <PanelRow icon={Copy} label="Дублировать вью" onClick={onDuplicate} />
@@ -1067,50 +1189,3 @@ function PanelRow({
   );
 }
 
-function RenameViewDialog({
-  view,
-  onClose,
-  onSubmit,
-}: {
-  view: BoardView | null;
-  onClose: () => void;
-  onSubmit: (name: string) => void;
-}): React.ReactElement {
-  const [name, setName] = useState('');
-  useEffect(() => {
-    setName(view?.name ?? '');
-  }, [view]);
-  const submit = (): void => {
-    const trimmed = name.trim();
-    if (trimmed) onSubmit(trimmed);
-  };
-  return (
-    <Dialog open={view !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-xs gap-3 p-5">
-        <DialogHeader>
-          <DialogTitle className="text-base">Переименовать вью</DialogTitle>
-        </DialogHeader>
-        <input
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          maxLength={64}
-          aria-label="Название вью"
-          className="w-full rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus:border-foreground/30"
-        />
-        <div className="flex justify-end gap-2 pt-1">
-          <Button variant="ghost" onClick={onClose}>
-            Отмена
-          </Button>
-          <Button onClick={submit}>Сохранить</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
