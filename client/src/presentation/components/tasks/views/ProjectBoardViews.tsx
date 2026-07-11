@@ -71,11 +71,13 @@ import { TableView } from './TableView';
 import { ListView } from './ListView';
 import { CalendarView } from './CalendarView';
 import {
+  EMPTY_TABLE_STATE,
   EMPTY_VIEW_FILTERS,
   STATUS_DOT,
   VIEW_COLUMN_LABELS,
   VIEW_SORT_LABELS,
   hasActiveFilters,
+  type TableViewState,
   type ViewColumn,
   type ViewDueFilter,
   type ViewFilters,
@@ -117,7 +119,12 @@ const DUE_FILTER_LABELS: Record<ViewDueFilter, string> = {
 // Запрос «создать задачу» из тулбара: seq растёт, вид ловит изменение и открывает окно.
 export type ViewCreateRequest = { readonly seq: number; readonly status: TaskStatus };
 
-type PerViewState = { filters: ViewFilters; sort: ViewSort | null; hidden: ViewColumn[] };
+type PerViewState = {
+  filters: ViewFilters;
+  sort: ViewSort | null;
+  hidden: ViewColumn[];
+  table: TableViewState;
+};
 
 // === Вью доски проекта (Notion-style) ===
 // Строка вкладок: «Доска» (неявный канбан) + пользовательские вью из БД, overflow — «N ещё…»,
@@ -210,7 +217,13 @@ export function ProjectBoardViews({
     filters: EMPTY_VIEW_FILTERS,
     sort: null,
     hidden: [],
+    table: EMPTY_TABLE_STATE,
   };
+  const setTableState = (patch: Partial<TableViewState>): void =>
+    setPerView((prev) => ({
+      ...prev,
+      [activeId]: { ...state, table: { ...state.table, ...patch } },
+    }));
   const setFilters = (patch: Partial<ViewFilters>): void =>
     setPerView((prev) => ({
       ...prev,
@@ -671,6 +684,8 @@ export function ProjectBoardViews({
           onSortChange={setSort}
           hiddenCols={state.hidden}
           onToggleCol={toggleColumn}
+          tableState={state.table}
+          onTableState={setTableState}
           createRequest={createReq}
         />
       ) : activeType === 'list' ? (

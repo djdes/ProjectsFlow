@@ -219,6 +219,26 @@ export function taskMenuEntries(
   ];
 }
 
+// ---- Состояние табличного вида (Notion table): ширины колонок, перенос текста,
+// подсчёты под колонками ----
+
+export type ViewCalc = 'count' | 'notEmpty' | 'empty' | 'pctNotEmpty';
+
+export const VIEW_CALC_LABELS: Record<ViewCalc, string> = {
+  count: 'Всего',
+  notEmpty: 'Заполнено',
+  empty: 'Пусто',
+  pctNotEmpty: '% заполнено',
+};
+
+export type TableViewState = {
+  readonly colWidths: Partial<Record<'title' | ViewColumn, number>>;
+  readonly wrapTitle: boolean;
+  readonly calc: Partial<Record<ViewColumn, ViewCalc>>;
+};
+
+export const EMPTY_TABLE_STATE: TableViewState = { colWidths: {}, wrapTitle: false, calc: {} };
+
 export type ViewSortKey = 'title' | 'status' | 'priority' | 'deadline' | 'created';
 export type ViewSort = { readonly key: ViewSortKey; readonly dir: 'asc' | 'desc' };
 

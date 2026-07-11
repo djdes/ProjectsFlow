@@ -13,6 +13,7 @@ import {
   ListFilter,
   MessageSquare,
   PanelRight,
+  WrapText,
   Plus,
   Trash2,
   User,
@@ -46,11 +47,13 @@ import { DelegateTaskButton } from '../DelegateTaskButton';
 import { type TaskDrawerState } from '../TaskDrawer';
 import { ymd, startOfDay, addDays } from '../assignedGrouping';
 import type { ViewCreateRequest } from './ProjectBoardViews';
+import { splitTitleBody } from '@/lib/taskTitleBody';
 import {
   NewTaskRow,
   PRIORITY_PILL,
   STATUS_DOT,
   STATUS_PILL,
+  VIEW_CALC_LABELS,
   VIEW_COLUMN_LABELS,
   ViewTaskDrawer,
   applyViewSort,
@@ -58,6 +61,8 @@ import {
   matchesFilters,
   taskMenuEntries,
   taskTitle,
+  type TableViewState,
+  type ViewCalc,
   type ViewColumn,
   type ViewFilters,
   type ViewSort,
@@ -75,6 +80,8 @@ type Props = {
   onSortChange: (s: ViewSort | null) => void;
   hiddenCols: ViewColumn[];
   onToggleCol: (c: ViewColumn) => void;
+  tableState: TableViewState;
+  onTableState: (patch: Partial<TableViewState>) => void;
   createRequest: ViewCreateRequest | null;
 };
 
@@ -109,6 +116,8 @@ export function TableView({
   onSortChange,
   hiddenCols,
   onToggleCol,
+  tableState,
+  onTableState,
   createRequest,
 }: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
@@ -177,17 +186,52 @@ export function TableView({
     return undefined;
   };
   // Хвост-филлер справа (Notion): разделитель после последней колонки, границы строк
-  // продолжаются до края.
+  // продолжаются до края. Ширины колонок — resize drag'ом за границу заголовка.
   const gridStyle = useMemo(
     () => ({
       gridTemplateColumns: [
-        'minmax(16rem,1fr)',
-        ...visibleCols.map((c) => COLUMN_WIDTH[c]),
+        tableState.colWidths.title ? `${tableState.colWidths.title}px` : 'minmax(16rem,1fr)',
+        ...visibleCols.map((c) =>
+          tableState.colWidths[c] ? `${tableState.colWidths[c]}px` : COLUMN_WIDTH[c],
+        ),
         'minmax(2rem,10rem)',
       ].join(' '),
     }),
-    [visibleCols],
+    [visibleCols, tableState.colWidths],
   );
+
+  // Resize колонки (Notion): mousedown на правой кромке заголовка → drag.
+  const startResize = (key: 'title' | ViewColumn, e: React.MouseEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    const cell = (e.currentTarget as HTMLElement).parentElement;
+    if (!cell) return;
+    const startX = e.clientX;
+    const startW = cell.getBoundingClientRect().width;
+    const onMove = (ev: MouseEvent): void => {
+      const w = Math.round(Math.min(600, Math.max(96, startW + ev.clientX - startX)));
+      onTableState({ colWidths: { ...tableState.colWidths, [key]: w } });
+    };
+    const onUp = (): void => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  // Inline-редактирование названия по клику в ячейку (Notion: клик = правка, открыть — OPEN).
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const commitEdit = (task: Task): void => {
+    const title = editValue.trim();
+    setEditingId(null);
+    if (!title || title === taskTitle(task)) return;
+    const { body } = splitTitleBody(task.description ?? '');
+    void update(task.id, { description: body ? `${title}\n${body}` : title }).catch((e: unknown) =>
+      toast.error(`Не удалось: ${(e as Error).message}`),
+    );
+  };
 
   // «Создать» из тулбара вью: открыть окно новой задачи в выбранной колонке.
   useEffect(() => {
@@ -259,6 +303,17 @@ export function TableView({
               sortKey="title"
               sort={sort}
               onSortChange={onSortChange}
+              extraEntries={[
+                { kind: 'separator' },
+                {
+                  kind: 'item',
+                  label: 'Переносить текст',
+                  icon: WrapText,
+                  checked: tableState.wrapTitle,
+                  onSelect: () => onTableState({ wrapTitle: !tableState.wrapTitle }),
+                },
+              ]}
+              onResizeStart={(e) => startResize('title', e)}
               first
             />
             {visibleCols.map((c) => (
@@ -271,6 +326,7 @@ export function TableView({
                 onSortChange={onSortChange}
                 onHide={() => onToggleCol(c)}
                 filterEntries={filterEntriesFor(c)}
+                onResizeStart={(e) => startResize(c, e)}
               />
             ))}
             <div className="border-l" aria-hidden />
@@ -305,6 +361,16 @@ export function TableView({
               task={task}
               gridStyle={gridStyle}
               visibleCols={visibleCols}
+              wrapTitle={tableState.wrapTitle}
+              editing={editingId === task.id}
+              editValue={editValue}
+              onEditValue={setEditValue}
+              onStartEdit={() => {
+                setEditingId(task.id);
+                setEditValue(taskTitle(task));
+              }}
+              onCommitEdit={() => commitEdit(task)}
+              onCancelEdit={() => setEditingId(null)}
               selected={selected.has(task.id)}
               anySelected={selected.size > 0}
               selCell={selCell}
@@ -357,7 +423,25 @@ export function TableView({
           <div className="border-b py-1">
             <NewTaskRow create={create} />
           </div>
-          <p className="px-2 pt-1.5 text-[11px] text-muted-foreground/60">Всего: {rows.length}</p>
+          {/* Строка подсчётов (Notion Calculate): «Всего» под названием; под каждой
+              колонкой — свой подсчёт по клику (появляется при наведении). */}
+          <div className="group/calc grid" style={gridStyle}>
+            <p className="px-2 pt-1.5 text-[11px] text-muted-foreground/60">
+              Всего: {rows.length}
+            </p>
+            {visibleCols.map((c) => (
+              <CalcCell
+                key={c}
+                col={c}
+                rows={rows}
+                value={tableState.calc[c]}
+                onChange={(v) =>
+                  onTableState({ calc: { ...tableState.calc, [c]: v } })
+                }
+              />
+            ))}
+            <div aria-hidden />
+          </div>
         </div>
       </div>
 
@@ -489,6 +573,8 @@ function HeaderCell({
   onSortChange,
   onHide,
   filterEntries,
+  extraEntries,
+  onResizeStart,
   first = false,
 }: {
   label: string;
@@ -498,6 +584,8 @@ function HeaderCell({
   onSortChange: (s: ViewSort | null) => void;
   onHide?: () => void;
   filterEntries?: MenuEntry[];
+  extraEntries?: MenuEntry[];
+  onResizeStart?: (e: React.MouseEvent) => void;
   first?: boolean;
 }): React.ReactElement {
   const sorted = sortKey !== null && sort?.key === sortKey ? sort.dir : null;
@@ -536,6 +624,7 @@ function HeaderCell({
             : []),
         ] as MenuEntry[])
       : []),
+    ...(extraEntries ?? []),
     ...(onHide
       ? ([
           ...(sortKey !== null ? ([{ kind: 'separator' }] as MenuEntry[]) : []),
@@ -544,25 +633,108 @@ function HeaderCell({
       : []),
   ];
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            'flex items-center gap-1.5 px-2 py-1.5 text-left transition-colors hover:bg-accent/60',
-            !first && 'border-l',
-          )}
-        >
-          {iconNode}
-          {label}
-          {sorted === 'asc' && <ArrowUp className="size-3" />}
-          {sorted === 'desc' && <ArrowDown className="size-3" />}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[11rem]">
-        <DropdownEntries entries={entries} />
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div className={cn('relative flex min-w-0', !first && 'border-l')}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left transition-colors hover:bg-accent/60"
+          >
+            {iconNode}
+            <span className="truncate">{label}</span>
+            {sorted === 'asc' && <ArrowUp className="size-3 shrink-0" />}
+            {sorted === 'desc' && <ArrowDown className="size-3 shrink-0" />}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[11rem]">
+          <DropdownEntries entries={entries} />
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {/* Ручка resize на правой кромке (Notion): drag меняет ширину колонки. */}
+      {onResizeStart && (
+        <div
+          role="separator"
+          aria-label={`Изменить ширину колонки ${label}`}
+          onMouseDown={onResizeStart}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="absolute -right-[3px] top-0 z-10 h-full w-[6px] cursor-col-resize rounded transition-colors hover:bg-primary/40"
+        />
+      )}
+    </div>
+  );
+}
+
+// Есть ли значение свойства у задачи (для подсчётов «Заполнено/Пусто»).
+function hasValue(task: Task, col: ViewColumn): boolean {
+  switch (col) {
+    case 'status':
+      return true;
+    case 'priority':
+      return task.priority !== null && task.priority !== undefined;
+    case 'deadline':
+      return Boolean(task.deadline);
+    case 'assignee':
+      return Boolean(task.delegation);
+  }
+}
+
+// Ячейка подсчёта под колонкой (Notion Calculate): «Подсчёт ⌄» при наведении → меню;
+// выбранный подсчёт показывается всегда.
+function CalcCell({
+  col,
+  rows,
+  value,
+  onChange,
+}: {
+  col: ViewColumn;
+  rows: readonly Task[];
+  value: ViewCalc | undefined;
+  onChange: (v: ViewCalc | undefined) => void;
+}): React.ReactElement {
+  const filled = rows.filter((t) => hasValue(t, col)).length;
+  const text = (v: ViewCalc): string => {
+    switch (v) {
+      case 'count':
+        return `Всего ${rows.length}`;
+      case 'notEmpty':
+        return `Заполнено ${filled}`;
+      case 'empty':
+        return `Пусто ${rows.length - filled}`;
+      case 'pctNotEmpty':
+        return rows.length === 0 ? '—' : `${Math.round((filled / rows.length) * 100)}%`;
+    }
+  };
+  const entries: MenuEntry[] = [
+    { kind: 'item', label: 'Нет', muted: true, onSelect: () => onChange(undefined) },
+    ...(Object.keys(VIEW_CALC_LABELS) as ViewCalc[]).map((v) => ({
+      kind: 'item' as const,
+      label: VIEW_CALC_LABELS[v],
+      checked: value === v,
+      onSelect: () => onChange(v),
+    })),
+  ];
+  return (
+    <div className="flex justify-end border-l border-transparent px-1 pt-0.5">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              'inline-flex items-center gap-1 rounded px-1 text-[11px] transition-opacity hover:bg-accent',
+              value
+                ? 'text-muted-foreground'
+                : 'text-muted-foreground/60 opacity-0 group-hover/calc:opacity-100',
+            )}
+          >
+            {value ? text(value) : 'Подсчёт'}
+            <ChevronDown className="size-3" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[10rem]">
+          <DropdownEntries entries={entries} />
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
@@ -584,6 +756,13 @@ function TableRow({
   task,
   gridStyle,
   visibleCols,
+  wrapTitle,
+  editing,
+  editValue,
+  onEditValue,
+  onStartEdit,
+  onCommitEdit,
+  onCancelEdit,
   selected,
   anySelected,
   selCell,
@@ -603,6 +782,13 @@ function TableRow({
   task: Task;
   gridStyle: React.CSSProperties;
   visibleCols: readonly ViewColumn[];
+  wrapTitle: boolean;
+  editing: boolean;
+  editValue: string;
+  onEditValue: (v: string) => void;
+  onStartEdit: () => void;
+  onCommitEdit: () => void;
+  onCancelEdit: () => void;
   selected: boolean;
   anySelected: boolean;
   selCell: string | null;
@@ -789,7 +975,8 @@ function TableRow({
         />
       </div>
 
-      {/* Название: иконка + заголовок + hover-кнопка «Открыть» (Notion OPEN). */}
+      {/* Название: иконка + заголовок; клик по тексту — inline-правка (Notion: клик по
+          ячейке редактирует, открытие — кнопкой «ОТКРЫТЬ»). */}
       <div className="flex min-w-0 items-center gap-1.5 px-2 py-1">
         {task.icon ? (
           <span className="grid size-4 shrink-0 place-items-center overflow-hidden">
@@ -798,13 +985,36 @@ function TableRow({
         ) : (
           <FileText className="size-4 shrink-0 text-muted-foreground/60" />
         )}
-        <button
-          type="button"
-          onClick={onOpen}
-          className="min-w-0 truncate text-left text-sm font-medium"
-        >
-          {taskTitle(task)}
-        </button>
+        {editing ? (
+          <input
+            autoFocus
+            value={editValue}
+            onChange={(e) => onEditValue(e.target.value)}
+            onBlur={onCommitEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                onCommitEdit();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                onCancelEdit();
+              }
+            }}
+            aria-label="Название задачи"
+            className="min-w-0 flex-1 rounded-md border bg-background px-1.5 py-0.5 text-sm font-medium outline-none ring-2 ring-primary/20"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={onStartEdit}
+            className={cn(
+              'min-w-0 text-left text-sm font-medium',
+              wrapTitle ? 'whitespace-normal break-words' : 'truncate',
+            )}
+          >
+            {taskTitle(task)}
+          </button>
+        )}
         <button
           type="button"
           onClick={onOpen}
