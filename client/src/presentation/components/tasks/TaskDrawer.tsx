@@ -305,6 +305,38 @@ function clearCreateDraft(key: string): void {
   }
 }
 
+// side-peek (немодальный) закрывается кликом по ПУСТОЙ области вне окна, но НЕ по
+// кликабельному элементу (кнопка/ссылка/поле/карточка канбана/DnD) — тогда клик делает
+// своё действие (сменить режим, открыть другую задачу), а окно остаётся. Кликабельность
+// определяем по DOM: нативные интерактивные теги + ARIA-роли + фокусируемость (dnd-kit
+// вешает на карточки role="button" и tabindex, так что они попадают под правило).
+const INTERACTIVE_OUTSIDE_SELECTOR = [
+  'a[href]',
+  'button',
+  'input',
+  'select',
+  'textarea',
+  'label',
+  'summary',
+  '[role="button"]',
+  '[role="link"]',
+  '[role="menuitem"]',
+  '[role="menuitemradio"]',
+  '[role="menuitemcheckbox"]',
+  '[role="tab"]',
+  '[role="checkbox"]',
+  '[role="switch"]',
+  '[role="option"]',
+  '[contenteditable="true"]',
+  '[contenteditable=""]',
+  '[draggable="true"]',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+function isInteractiveOutsideTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(INTERACTIVE_OUTSIDE_SELECTOR) !== null;
+}
+
 // Обёртка содержимого дровера: в обычном режиме — Sheet-оверлей; в asPage —
 // inline-страница во всю высоту с хлебными крошками и центрированной колонкой.
 // Объявлена на уровне модуля (стабильный тип) — иначе пересоздание на каждый рендер
@@ -394,11 +426,24 @@ function DrawerShell({
         // фокусит контент → у левого (единственного видимого) края мелькает чёрный outline.
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
-        // side-peek: немодально (как в Notion) — остальной сайт кликабелен, клик мимо окна НЕ
-        // закрывает его (закрытие только кнопкой/Esc). center-peek: модально — клик мимо закрывает
-        // (даём Radix обработать), поэтому preventDefault только в side-режиме.
-        onInteractOutside={isCenter ? undefined : (e) => e.preventDefault()}
-        onPointerDownOutside={isCenter ? undefined : (e) => e.preventDefault()}
+        // side-peek: немодально (как в Notion) — остальной сайт кликабелен. Клик по ПУСТОЙ
+        // области вне окна закрывает его; клик по кликабельному (кнопка/задача/канбан) —
+        // НЕ закрывает, действие срабатывает, окно остаётся. center-peek: модально —
+        // любой клик мимо закрывает (даём Radix обработать), поэтому фильтр только в side-режиме.
+        onInteractOutside={
+          isCenter
+            ? undefined
+            : (e) => {
+                if (isInteractiveOutsideTarget(e.detail.originalEvent.target)) e.preventDefault();
+              }
+        }
+        onPointerDownOutside={
+          isCenter
+            ? undefined
+            : (e) => {
+                if (isInteractiveOutsideTarget(e.detail.originalEvent.target)) e.preventDefault();
+              }
+        }
         {...dragHandlers}
       >
         {dragOverlay}
