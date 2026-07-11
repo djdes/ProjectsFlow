@@ -30,9 +30,12 @@ type Deps = {
 // Перенос задачи в другой проект (бывший AssignInboxTaskToProject, обобщён):
 // - из инбокса — только creator (owner inbox-проекта), как раньше;
 // - из именованного проекта — участник с правом move_task (editor+);
-// - целевой проект — не inbox, caller должен иметь в нём create_task.
+// - целевой проект: именованный — caller должен иметь в нём create_task; СВОЙ инбокс —
+//   разрешён (drag пилюли делегирования на нижнюю доску «Входящих» забирает задачу проекта
+//   к себе в личные); чужой инбокс — по-прежнему нельзя.
 // Активная делегация (если есть) → archived (делегат может не быть участником целевого
-// проекта). Делегату — email + in-app notification.
+// проекта). Делегату — email + in-app notification (кроме делегат == caller: забрал свою
+// же задачу — сами себя не уведомляем).
 export class MoveTaskToProject {
   constructor(private readonly deps: Deps) {}
 
@@ -60,10 +63,13 @@ export class MoveTaskToProject {
 
     const targetProject = await this.deps.projects.getById(targetProjectId);
     if (!targetProject) throw new TargetProjectNotFoundError(targetProjectId);
-    if (targetProject.isInbox) throw new TargetProjectIsInboxError();
-
-    // Caller должен иметь доступ к целевому проекту (member).
-    await requireProjectAccess(this.deps, targetProjectId, userId, 'create_task');
+    if (targetProject.isInbox) {
+      // В инбоксе членств нет — гейт по владельцу: перенос разрешён только в СВОЙ инбокс.
+      if (targetProject.ownerId !== userId) throw new TargetProjectIsInboxError();
+    } else {
+      // Caller должен иметь доступ к целевому проекту (member).
+      await requireProjectAccess(this.deps, targetProjectId, userId, 'create_task');
+    }
 
     // Атомарно: переезд задачи + archive активной делегации (если была).
     const active = await this.deps.delegations.findActiveForTask(taskId);
@@ -76,7 +82,7 @@ export class MoveTaskToProject {
       await this.deps.delegations.setStatus(active.id, 'archived');
     }
 
-    if (delegateUserId) {
+    if (delegateUserId && delegateUserId !== userId) {
       void this.notifyDelegate(
         moved,
         delegateUserId,

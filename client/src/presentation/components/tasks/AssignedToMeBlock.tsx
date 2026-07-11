@@ -168,7 +168,8 @@ export function AssignedToMeBlock({
   bleedPadClass = '',
   externalDnd = null,
 }: Props): React.ReactElement | null {
-  const { taskDelegationRepository, taskRepository, projectRepository } = useContainer();
+  const { taskDelegationRepository, taskRepository, userRepository, projectRepository } =
+    useContainer();
   const { user } = useCurrentUser();
   // refresh списка проектов: при accept сервер помечает проект задачи favorite'ом — чтобы
   // секция «Избранное» в сайдбаре сразу его подхватила, перезагружаем список после принятия.
@@ -216,12 +217,15 @@ export function AssignedToMeBlock({
     Promise.all([
       taskDelegationRepository.listAssignedToMe(),
       taskDelegationRepository.listDelegatedToOthers(),
+      userRepository.getUiPrefs(),
     ])
-      .then(([mine, byMe]) => {
+      .then(([mine, byMe, prefs]) => {
         if (cancelled) return;
         setTasks(mine);
         setByMeTasks(byMe);
-        // Сортировка НЕ грузится из prefs — каждый заход стартует с дефолта (дедлайн). Точка 4.
+        // Сортировка ПЕРСИСТИТСЯ за аккаунтом (users.ui_prefs) — при перезагрузке та же.
+        // (Была session-only «точка 4» — юзер передумал 2026-07-11.)
+        if (prefs.inboxAssignedGrouping) setGrouping(prefs.inboxAssignedGrouping);
         // Стартовая вкладка: «Для меня» пуста, а «Другим» — нет → открываем «Другим»,
         // чтобы блок не встречал пустым состоянием при живом контенте рядом. Решаем по
         // видимым (с учётом hide-done) спискам — тем же, что реально отрисуются.
@@ -242,11 +246,14 @@ export function AssignedToMeBlock({
       cancelled = true;
       window.removeEventListener('focus', onFocus);
     };
-  }, [taskDelegationRepository, refresh]);
+  }, [taskDelegationRepository, userRepository, refresh]);
 
   const handleGroupingChange = (next: AssignedGrouping): void => {
-    // Сортировка — session-only (не персистим): каждый заход стартует с дефолта (дедлайн, точка 4).
+    // Оптимистично: сортировка применяется мгновенно, сохранение летит в фоне.
     setGrouping(next);
+    void userRepository.setUiPrefs({ inboxAssignedGrouping: next }).catch((e: unknown) => {
+      toast.error(`Не удалось сохранить сортировку: ${(e as Error).message}`);
+    });
   };
 
   const resolve = async (delegationId: string, action: 'accept' | 'decline'): Promise<void> => {

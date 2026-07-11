@@ -221,15 +221,36 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
     await refreshAfterBoardOp(task, await ensureSelfDelegated(task));
   };
 
-  // Дроп пилюли БЛОКА на колонку нижней доски: снять делегацию (моя исходящая → withdraw;
-  // поручена мне → relinquish, новый бэк) и — для задач СВОЕГО инбокса — поставить статус
-  // колонки. Задачи чужих проектов на этой доске не живут: только снятие делегации.
+  // Дроп пилюли БЛОКА на колонку нижней доски — задача переезжает вниз (правило «ровно
+  // один канбан»):
+  // • задача СВОЕГО инбокса → снять делегацию (моя исходящая → withdraw; поручена мне →
+  //   relinquish) + статус колонки;
+  // • задача ИМЕНОВАННОГО проекта → перенос в мой инбокс (assignToProject; сервер сам
+  //   архивирует делегацию, себя не уведомляет) + статус колонки;
+  // • задача ЧУЖОГО инбокса → только relinquish (личное пространство делегатора — вытащить
+  //   из него задачу нельзя, у владельца она остаётся).
   const dropBlockItemOnBoardColumn = async (
     item: AssignedTask,
     status: TaskStatus,
   ): Promise<void> => {
     if (!user) return;
     const d = item.delegation;
+    if (!item.isInbox) {
+      try {
+        await taskRepository.assignToProject(item.projectId, item.id, projectId);
+      } catch (e) {
+        toast.error(`Не удалось перенести во «Входящие»: ${(e as Error).message}`);
+        return;
+      }
+      try {
+        await registry.current.board?.moveTask(item.id, status);
+      } catch (e) {
+        toast.error(`Перенесено, но поставить колонку не удалось: ${(e as Error).message}`);
+      }
+      toast.success(`Перенесено во «Входящие» из «${item.projectName}»`);
+      await afterDelegationChange();
+      return;
+    }
     try {
       if (d.creatorUserId === user.id) await taskDelegationRepository.withdraw(d.id);
       else if (d.delegateUserId === user.id) await taskDelegationRepository.relinquish(d.id);
@@ -241,7 +262,7 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
       toast.error(`Не удалось снять делегацию: ${(e as Error).message}`);
       return;
     }
-    if (item.isInbox && item.projectId === projectId) {
+    if (item.projectId === projectId) {
       try {
         await registry.current.board?.moveTask(item.id, status);
       } catch (e) {
