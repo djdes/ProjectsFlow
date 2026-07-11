@@ -655,30 +655,31 @@ export function AssignedToMeBlock({
               {pendingCount > 0 && ` · ${pendingCount} ${pendingWord}`}
             </p>
           </div>
-          {/* Кубики людей пространства — ПРАВЕЕ вкладок (цель drag-делегирования). Компактные
-              аватары; при наведении перетаскиваемой задачи кубик раскрывается в «Делегировать:
-              <имя>». Ряд горизонтально скроллится на узких экранах, не тесня фильтры справа. */}
-          {(user || members.length > 0) && (
-            <div className="flex min-w-0 items-center gap-1 overflow-x-auto pl-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {/* «Мой» кубик — drop сюда забирает задачу обратно себе (см. reclaimToSelf). */}
-              {user && (
-                <UserCube
-                  key="__me"
-                  member={{ id: user.id, displayName: user.displayName, email: '', avatarUrl: user.avatarUrl }}
-                  dragging={dragActive}
-                  isSelf
-                />
-              )}
-              {members.map((m) => (
-                <UserCube key={m.id} member={m} dragging={dragActive} />
-              ))}
-            </div>
-          )}
         </div>
+        {/* Кубики людей пространства — в ПРАВОМ крае строки с вкладками (цель drag-делегирования).
+            Компактные аватары; при наведении перетаскиваемой задачи кубик раскрывается в
+            «Делегировать: <имя>». Ряд горизонтально скроллится на узких экранах. self-center —
+            вертикально по центру относительно более высокой левой группы (вкладки + подзаголовок). */}
+        {(user || members.length > 0) && (
+          <div className="flex min-w-0 items-center gap-1 self-center overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {/* «Мой» кубик — drop сюда забирает задачу обратно себе (см. reclaimToSelf). */}
+            {user && (
+              <UserCube
+                key="__me"
+                member={{ id: user.id, displayName: user.displayName, email: '', avatarUrl: user.avatarUrl }}
+                dragging={dragActive}
+                isSelf
+              />
+            )}
+            {members.map((m) => (
+              <UserCube key={m.id} member={m} dragging={dragActive} />
+            ))}
+          </div>
+        )}
         {/* Единая кнопка «Фильтры» порталится в шапку страницы (toolbarSlot). Фолбэк (нет
             слота) — рендерим на месте, в шапке блока. Сам портал отдаётся из return ниже. */}
         {!toolbarSlot && (
-          <div className="flex flex-wrap items-center justify-end gap-1">{filtersPopover}</div>
+          <div className="flex flex-wrap items-center justify-end gap-1 self-center">{filtersPopover}</div>
         )}
       </div>
 

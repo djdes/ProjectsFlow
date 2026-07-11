@@ -111,16 +111,15 @@ export function InboxPage(): React.ReactElement {
 
       {/* Тело страницы: отступы по краям — как на доске проекта (px-6/14/24). Только канбан. */}
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-6 pb-3 pt-2 sm:gap-4 sm:px-14 sm:pb-6 sm:pt-1 lg:px-24">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <div className="flex items-center gap-3">
             <AnimatedInbox active className="size-5 text-primary" />
             <h1 className="text-xl font-semibold tracking-tight">Входящие</h1>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
-            {/* Сюда блок делегирования порталит единую кнопку «Фильтры» (сортировка +
-                скрыть-выполненные + фильтры от/кому/проект на вкладке «Другим»). */}
-            <div ref={setToolbarSlot} className="flex flex-wrap items-center justify-end gap-1" />
-          </div>
+          {/* Сюда блок делегирования порталит единую кнопку «Фильтры» (сортировка +
+              скрыть-выполненные + фильтры от/кому/проект на вкладке «Другим») — слева, сразу
+              за заголовком, чтобы не «летала» в одиночестве у правого края. */}
+          <div ref={setToolbarSlot} className="flex flex-wrap items-center gap-1" />
         </div>
 
         {/* Единый DnD (#5): один DndContext на блок делегирования И доску — карточку доски
