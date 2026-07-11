@@ -99,6 +99,15 @@ export const kanbanDefaultColorsSchema = z.record(
   z.enum(KANBAN_COLORS),
 );
 
+// Пользовательские вью доски (Notion-style, db/103).
+export const createBoardViewSchema = z.object({
+  name: z.string().trim().min(1, 'Введите название').max(64),
+  type: z.enum(['kanban', 'table', 'list', 'calendar']),
+});
+export const renameBoardViewSchema = z.object({
+  name: z.string().trim().min(1, 'Введите название').max(64),
+});
+
 // Персональные UI-настройки клиента (профиль). Все поля optional — частичный мерж.
 export const uiPrefsSchema = z.object({
   inboxAssignedGrouping: z.enum(ASSIGNED_GROUPINGS).optional(),

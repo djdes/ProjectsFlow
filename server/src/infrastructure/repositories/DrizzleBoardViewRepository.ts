@@ -1,0 +1,66 @@
+import { asc, eq, sql } from 'drizzle-orm';
+import type { Database } from '../db/index.js';
+import { boardViews, type BoardViewRow } from '../db/schema.js';
+import type { BoardView, BoardViewType } from '../../domain/project/BoardView.js';
+import type {
+  BoardViewRepository,
+  CreateBoardViewInput,
+} from '../../application/project/BoardViewRepository.js';
+
+function toDomain(row: BoardViewRow): BoardView {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    name: row.name,
+    type: row.type as BoardViewType,
+    sortOrder: row.sortOrder,
+    createdAt: row.createdAt,
+  };
+}
+
+export class DrizzleBoardViewRepository implements BoardViewRepository {
+  constructor(private readonly db: Database) {}
+
+  async listForProject(projectId: string): Promise<BoardView[]> {
+    const rows = await this.db
+      .select()
+      .from(boardViews)
+      .where(eq(boardViews.projectId, projectId))
+      .orderBy(asc(boardViews.sortOrder), asc(boardViews.createdAt));
+    return rows.map(toDomain);
+  }
+
+  async getById(id: string): Promise<BoardView | null> {
+    const rows = await this.db.select().from(boardViews).where(eq(boardViews.id, id)).limit(1);
+    return rows[0] ? toDomain(rows[0]) : null;
+  }
+
+  async create(input: CreateBoardViewInput): Promise<BoardView> {
+    // В конец ряда вкладок: MAX(sort_order) по проекту + 1 (у пустого проекта — 1).
+    const maxRows = await this.db
+      .select({ max: sql<number | null>`MAX(${boardViews.sortOrder})` })
+      .from(boardViews)
+      .where(eq(boardViews.projectId, input.projectId));
+    const sortOrder = (maxRows[0]?.max ?? 0) + 1;
+    await this.db.insert(boardViews).values({
+      id: input.id,
+      projectId: input.projectId,
+      name: input.name,
+      type: input.type,
+      sortOrder,
+      createdBy: input.createdBy,
+    });
+    const created = await this.getById(input.id);
+    if (!created) throw new Error('Failed to read back board view after insert');
+    return created;
+  }
+
+  async rename(id: string, name: string): Promise<BoardView | null> {
+    await this.db.update(boardViews).set({ name }).where(eq(boardViews.id, id));
+    return this.getById(id);
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.db.delete(boardViews).where(eq(boardViews.id, id));
+  }
+}

@@ -28,6 +28,7 @@ import { GetActivityFeed } from './application/activity/GetActivityFeed.js';
 import { DrizzleProjectInviteRepository } from './infrastructure/repositories/DrizzleProjectInviteRepository.js';
 import { DrizzleNotificationRepository } from './infrastructure/repositories/DrizzleNotificationRepository.js';
 import { DrizzleRecentTaskViewRepository } from './infrastructure/repositories/DrizzleRecentTaskViewRepository.js';
+import { DrizzleBoardViewRepository } from './infrastructure/repositories/DrizzleBoardViewRepository.js';
 import { DrizzleProjectViewRepository } from './infrastructure/repositories/DrizzleProjectViewRepository.js';
 import { RecordProjectView } from './application/project/RecordProjectView.js';
 import { GetProjectViewsAnalytics } from './application/project/GetProjectViewsAnalytics.js';
@@ -1395,6 +1396,7 @@ const { app, devProxyUpgrade } = createApp({
   projects: {
     listProjects: new ListProjects({ members: projectMemberRepo, resolveActiveWorkspace }),
     getProject: new GetProject({ projects: projectRepo, members: projectMemberRepo }),
+    boardViews: new DrizzleBoardViewRepository(db),
     createProject: new CreateProject({
       repo: projectRepo,
       members: projectMemberRepo,

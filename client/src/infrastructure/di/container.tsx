@@ -25,6 +25,7 @@ import { HttpChatRepository } from '@/infrastructure/http/HttpChatRepository';
 import { HttpWorkspaceRepository } from '@/infrastructure/http/HttpWorkspaceRepository';
 import { HttpActivityRepository } from '@/infrastructure/http/HttpActivityRepository';
 import { HttpRecentTaskViewRepository } from '@/infrastructure/http/HttpRecentTaskViewRepository';
+import { HttpBoardViewRepository } from '@/infrastructure/http/HttpBoardViewRepository';
 import { HttpHelpRepository } from '@/infrastructure/http/HttpHelpRepository';
 import { SubmitSupport } from '@/application/help/SubmitSupport';
 import type { HelpRepository } from '@/application/help/HelpRepository';
@@ -75,6 +76,7 @@ import type { ActivityRepository } from '@/application/activity/ActivityReposito
 import { HttpUsageRepository } from '@/infrastructure/http/HttpUsageRepository';
 import { HttpPublicBoardRepository } from '@/infrastructure/http/HttpPublicBoardRepository';
 import type { PublicBoardRepository } from '@/application/public/PublicBoardRepository';
+import type { BoardViewRepository } from '@/application/project/BoardViewRepository';
 import { GetUsage } from '@/application/usage/GetUsage';
 import { ChangePlan } from '@/application/usage/ChangePlan';
 import type { UsageRepository } from '@/application/usage/UsageRepository';
@@ -128,6 +130,7 @@ type Container = {
   getUsage: GetUsage;
   changePlan: ChangePlan;
   publicBoardRepository: PublicBoardRepository;
+  boardViewRepository: BoardViewRepository;
 };
 
 function buildContainer(): Container {
@@ -160,6 +163,7 @@ function buildContainer(): Container {
   const helpRepo = new HttpHelpRepository();
   const usageRepo = new HttpUsageRepository();
   const publicBoardRepo = new HttpPublicBoardRepository();
+  const boardViewRepo = new HttpBoardViewRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -209,6 +213,7 @@ function buildContainer(): Container {
     getUsage: new GetUsage(usageRepo),
     changePlan: new ChangePlan(usageRepo),
     publicBoardRepository: publicBoardRepo,
+    boardViewRepository: boardViewRepo,
   };
 }
 

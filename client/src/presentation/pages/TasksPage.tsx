@@ -10,7 +10,7 @@ import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { useProject } from '@/presentation/hooks/useProject';
 import { useContainer } from '@/infrastructure/di/container';
 import { useUpdateProject } from '@/presentation/hooks/useUpdateProject';
-import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
+import { ProjectBoardViews } from '@/presentation/components/tasks/views/ProjectBoardViews';
 import { AutomationDialog } from '@/presentation/components/project/AutomationDialog';
 import { EditableProjectTitle } from '@/presentation/components/project/EditableProjectTitle';
 import { ProjectIconPicker } from '@/presentation/components/project/ProjectIconPicker';
@@ -299,7 +299,9 @@ export function TasksPage(): React.ReactElement {
           состояние inline-композера (composingStatus + открытый композер) переживало бы смену
           проекта и «протекало» бы черновиком в storage нового проекта (кнопка «Восстановить»
           вылезала в чужом проекте). Inbox-доска уже монтируется с key (см. InboxPage). */}
-      <KanbanBoard
+      {/* Вью доски (Notion-style): вкладки Доска/Таблица/Список/Календарь + польз. вью.
+          Канбан внутри — тот же KanbanBoard с теми же пропсами (key переживает контейнер). */}
+      <ProjectBoardViews
         key={data.id}
         projectId={data.id}
         projectName={data.name}

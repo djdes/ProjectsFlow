@@ -127,6 +127,7 @@ import type { AcceptTaskDelegation } from '../application/task/AcceptTaskDelegat
 import type { DeclineTaskDelegation } from '../application/task/DeclineTaskDelegation.js';
 import type { WithdrawTaskDelegation } from '../application/task/WithdrawTaskDelegation.js';
 import type { RelinquishTaskDelegation } from '../application/task/RelinquishTaskDelegation.js';
+import type { BoardViewRepository } from '../application/project/BoardViewRepository.js';
 import type { ListMyPendingDelegations } from '../application/task/ListMyPendingDelegations.js';
 import type { ListTasksAssignedToMe } from '../application/task/ListTasksAssignedToMe.js';
 import type { ListTasksDelegatedToOthers } from '../application/task/ListTasksDelegatedToOthers.js';
@@ -330,6 +331,8 @@ type AppDeps = {
     // ProjectRepository.getById — нужен прямой lookup в GET-роуте делегации
     // (без обёртки use-case'а; чтение public-полей).
     readonly projects: ProjectRepository;
+    // Пользовательские вью доски (Notion-style, db/103).
+    readonly boardViews: BoardViewRepository;
     readonly reorderProjects: ReorderProjects;
     readonly toggleProjectFavorite: ToggleProjectFavorite;
     readonly reorderFavoriteProjects: ReorderFavoriteProjects;

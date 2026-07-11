@@ -1619,6 +1619,32 @@ export type RecentTaskViewRow = typeof recentTaskViews.$inferSelect;
 export type NewRecentTaskViewRow = typeof recentTaskViews.$inferInsert;
 
 // ============================================================================
+// board_views — миграция db/103. Пользовательские вью доски проекта (Notion-style):
+// именованные представления задач (kanban/table/list/calendar). Дефолтная «Доска»
+// (канбан) — неявная, здесь только вью, созданные через «+». Общие на проект.
+// ============================================================================
+export const boardViews = mysqlTable(
+  'board_views',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    name: varchar('name', { length: 64 }).notNull(),
+    type: mysqlEnum('type', ['kanban', 'table', 'list', 'calendar']).notNull(),
+    sortOrder: int('sort_order').notNull().default(0),
+    createdBy: char('created_by', { length: 36 }),
+    createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [index('idx_board_views_project').on(t.projectId, t.sortOrder)],
+);
+
+export type BoardViewRow = typeof boardViews.$inferSelect;
+export type NewBoardViewRow = typeof boardViews.$inferInsert;
+
+// ============================================================================
 // project_views — миграция db/090. Просмотры проекта (аналитика: график Views + Viewers).
 // Append-only: каждый заход = строка (клиент троттлит, репозиторий дедупит ~30 мин на
 // (user, project)). Доступ к чтению аналитики — участнику проекта (use-case). См. UI-batch S3.

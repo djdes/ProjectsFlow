@@ -46,11 +46,15 @@ import multer from 'multer';
 import { randomUUID } from 'node:crypto';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requireProjectAccess } from '../../application/project/projectAccess.js';
+import type { BoardViewRepository } from '../../application/project/BoardViewRepository.js';
+import type { BoardView } from '../../domain/project/BoardView.js';
 import type { AttachmentStorage } from '../../application/task/AttachmentStorage.js';
 import {
+  createBoardViewSchema,
   createInviteSchema,
   createProjectSchema,
   kanbanSettingsSchema,
+  renameBoardViewSchema,
   notificationPrefsSchema,
   reorderFavoritesSchema,
   reorderProjectsSchema,
@@ -90,6 +94,8 @@ type Deps = {
   // ProjectRepository — нужен в GET /git-token-delegation чтобы узнать ownerId
   // (определяет видимость `all`-блока) без отдельного use-case'а.
   readonly projects: ProjectRepository;
+  // Пользовательские вью доски (Notion-style, db/103).
+  readonly boardViews: BoardViewRepository;
   readonly reorderProjects: ReorderProjects;
   readonly toggleProjectFavorite: ToggleProjectFavorite;
   readonly reorderFavoriteProjects: ReorderFavoriteProjects;
@@ -612,6 +618,128 @@ export function projectsRouter(deps: Deps): Router {
       }
     },
   );
+
+  // Вью доски (Notion-style, db/103) ---------------------------------------
+  // Read — любой участник проекта; create/rename/duplicate/delete — editor+ (shared-
+  // состояние доски, как kanban-settings). Дефолтная вкладка «Доска» — неявная (клиент),
+  // в БД только пользовательские вью.
+  const viewToDto = (v: BoardView): Record<string, unknown> => ({
+    id: v.id,
+    projectId: v.projectId,
+    name: v.name,
+    type: v.type,
+    sortOrder: v.sortOrder,
+    createdAt: v.createdAt.toISOString(),
+  });
+  // Гейт мутаций: участник и не viewer. Возвращает membership или null (ответ уже отправлен).
+  const requireViewEditor = async (
+    projectId: string,
+    userId: string,
+    res: Response,
+  ): Promise<boolean> => {
+    const membership = await deps.members.findForProject(projectId, userId);
+    if (!membership) throw new ProjectNotFoundError();
+    if (membership.role === 'viewer') {
+      res.status(403).json({ error: 'Недостаточно прав для изменения вью доски' });
+      return false;
+    }
+    return true;
+  };
+
+  router.get('/:id/views', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const membership = await deps.members.findForProject(id, req.user!.id);
+      if (!membership) throw new ProjectNotFoundError();
+      const views = await deps.boardViews.listForProject(id);
+      res.json({ views: views.map(viewToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/:id/views', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      if (!(await requireViewEditor(id, req.user!.id, res))) return;
+      const body = createBoardViewSchema.parse(req.body);
+      const view = await deps.boardViews.create({
+        id: randomUUID(),
+        projectId: id,
+        name: body.name,
+        type: body.type,
+        createdBy: req.user!.id,
+      });
+      deps.notifyProjectChanged(id);
+      res.status(201).json({ view: viewToDto(view) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.patch('/:id/views/:viewId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      const viewId = req.params['viewId'];
+      if (typeof id !== 'string' || typeof viewId !== 'string') throw new ProjectNotFoundError();
+      if (!(await requireViewEditor(id, req.user!.id, res))) return;
+      const body = renameBoardViewSchema.parse(req.body);
+      // Принадлежность вью проекту из URL — иначе id из чужого проекта был бы IDOR.
+      const existing = await deps.boardViews.getById(viewId);
+      if (!existing || existing.projectId !== id) throw new ProjectNotFoundError();
+      const view = await deps.boardViews.rename(viewId, body.name);
+      if (!view) throw new ProjectNotFoundError();
+      deps.notifyProjectChanged(id);
+      res.json({ view: viewToDto(view) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post(
+    '/:id/views/:viewId/duplicate',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params.id;
+        const viewId = req.params['viewId'];
+        if (typeof id !== 'string' || typeof viewId !== 'string') throw new ProjectNotFoundError();
+        if (!(await requireViewEditor(id, req.user!.id, res))) return;
+        const existing = await deps.boardViews.getById(viewId);
+        if (!existing || existing.projectId !== id) throw new ProjectNotFoundError();
+        // «Имя (копия)» с обрезкой под лимит колонки.
+        const name = `${existing.name} (копия)`.slice(0, 64);
+        const view = await deps.boardViews.create({
+          id: randomUUID(),
+          projectId: id,
+          name,
+          type: existing.type,
+          createdBy: req.user!.id,
+        });
+        deps.notifyProjectChanged(id);
+        res.status(201).json({ view: viewToDto(view) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  router.delete('/:id/views/:viewId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      const viewId = req.params['viewId'];
+      if (typeof id !== 'string' || typeof viewId !== 'string') throw new ProjectNotFoundError();
+      if (!(await requireViewEditor(id, req.user!.id, res))) return;
+      const existing = await deps.boardViews.getById(viewId);
+      if (!existing || existing.projectId !== id) throw new ProjectNotFoundError();
+      await deps.boardViews.delete(viewId);
+      deps.notifyProjectChanged(id);
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
 
   // Members ---------------------------------------------------------------
   router.get('/:id/members', async (req: Request, res: Response, next: NextFunction) => {
