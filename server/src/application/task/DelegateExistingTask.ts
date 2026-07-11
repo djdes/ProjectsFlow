@@ -3,7 +3,6 @@ import {
   DelegateNotInSharedMembersError,
   DelegateNotProjectMemberError,
   NotCreatorError,
-  SelfDelegationError,
   TaskNotFoundError,
 } from '../../domain/task/errors.js';
 import { can } from '../../domain/project/permissions.js';
@@ -42,7 +41,11 @@ export class DelegateExistingTask {
     delegateUserId: string,
     creatorUserId: string,
   ): Promise<TaskDelegation> {
-    if (delegateUserId === creatorUserId) throw new SelfDelegationError();
+    // Самоделегирование РАЗРЕШЕНО (в отличие от Create/Reassign/Invite): «назначить себя
+    // ответственным». Нужен drag-переносу инбокс-задачи в проект (задача после переноса
+    // должна появиться в блоке делегирования как «делегировано мне»). Создаётся сразу
+    // accepted — «принять» поручение от самого себя абсурдно; уведомления себе не шлём.
+    const isSelf = delegateUserId === creatorUserId;
 
     const task = await this.deps.tasks.getById(taskId);
     if (!task) throw new TaskNotFoundError(taskId);
@@ -53,19 +56,25 @@ export class DelegateExistingTask {
     if (project.isInbox) {
       // Inbox: делегировать может только владелец инбокса, делегату — любому из общих
       // проектов (он будет видеть задачу как accepted-delegate, не будучи членом инбокса).
+      // Себя в shared-members нет (сервер исключает) — для isSelf проверка пропускается.
       if (project.ownerId !== creatorUserId) throw new NotCreatorError();
-      const shared = await this.deps.members.listSharedUsers(creatorUserId);
-      if (!shared.find((u) => u.id === delegateUserId)) {
-        throw new DelegateNotInSharedMembersError();
+      if (!isSelf) {
+        const shared = await this.deps.members.listSharedUsers(creatorUserId);
+        if (!shared.find((u) => u.id === delegateUserId)) {
+          throw new DelegateNotInSharedMembersError();
+        }
       }
     } else {
       // Именованный проект: делегатор — с правом delegate_task (editor+); делегат —
       // участник-редактор этого проекта, иначе примет, но получит 403 на move/выполнение
       // (requireTaskModifyAccess non-inbox = requireProjectAccess('move_task')).
+      // Для isSelf делегат == делегатор — его право уже проверено requireProjectAccess.
       await requireProjectAccess(this.deps, project.id, creatorUserId, 'delegate_task');
-      const membership = await this.deps.members.findForProject(project.id, delegateUserId);
-      if (!membership || !can(membership.role, 'move_task')) {
-        throw new DelegateNotProjectMemberError();
+      if (!isSelf) {
+        const membership = await this.deps.members.findForProject(project.id, delegateUserId);
+        if (!membership || !can(membership.role, 'move_task')) {
+          throw new DelegateNotProjectMemberError();
+        }
       }
     }
 
@@ -77,11 +86,14 @@ export class DelegateExistingTask {
       taskId,
       delegateUserId,
       delegatorUserId: creatorUserId,
+      ...(isSelf ? { status: 'accepted' as const } : {}),
     });
 
-    void this.notifyDelegated(created, task, creatorUserId).catch((err: unknown) => {
-      console.error('[delegation:existing] notify failed:', err);
-    });
+    if (!isSelf) {
+      void this.notifyDelegated(created, task, creatorUserId).catch((err: unknown) => {
+        console.error('[delegation:existing] notify failed:', err);
+      });
+    }
 
     return created;
   }

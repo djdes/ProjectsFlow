@@ -1,6 +1,6 @@
 import type { MutableRefObject } from 'react';
 import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
-import type { Task } from '@/domain/task/Task';
+import type { Task, TaskPriority } from '@/domain/task/Task';
 
 // === Контракт единого DnD «Входящих» (#5) ===
 // Во «Входящих» доска (KanbanBoard) и блок делегирования (AssignedToMeBlock) живут в ОДНОМ
@@ -18,9 +18,12 @@ export type BoardDndApi = {
   // move-часть — гарантированный no-op (over.id не матчится ни в колонку, ни в задачу).
   onDragEnd(e: DragEndEvent): Promise<void>;
   onDragCancel(): void;
-  // Операции для диспетчера: дроп доски-карточки на время-колонку (дедлайн) и рефетч
-  // после делегирования (бейдж ответственного на карточке).
-  updateTask(taskId: string, input: { deadline?: string | null }): Promise<Task>;
+  // Операции для диспетчера: дроп доски-карточки на время-колонку (дедлайн) / колонку
+  // приоритета, и рефетч после делегирования/переноса (бейдж/список на доске).
+  updateTask(
+    taskId: string,
+    input: { deadline?: string | null; priority?: TaskPriority | null },
+  ): Promise<Task>;
   refetch(): Promise<void>;
 };
 

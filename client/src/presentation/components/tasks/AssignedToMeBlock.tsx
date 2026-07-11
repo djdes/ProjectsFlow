@@ -19,6 +19,7 @@ import {
 import { getEventCoordinates } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
 import {
+  Ban,
   CalendarClock,
   CalendarDays,
   CalendarOff,
@@ -114,6 +115,10 @@ type DelegationTab = DelegationDirection;
 // done-задачи прячутся Eye-toggle'ом страницы; фильтр общий для обеих вкладок.
 const notDone = (t: AssignedTask): boolean => t.status !== 'done';
 
+// Все бакеты сортировки «по приоритету» (ключи groupByPriority): если какие-то из них
+// не видны колонками, при drag'е с доски появляется фантом «Другой приоритет…».
+const PRIORITY_BUCKET_KEYS = ['1', '2', '3', '4', 'none'] as const;
+
 // «Ждёт моего ответа» во вкладке «Для меня»: обычное делегирование (pending) ИЛИ
 // приглашение+делегирование (pending_invite — «Вступить/Отклонить»). Обе рисуются
 // карточкой с кнопками действия, а не «принятой».
@@ -167,7 +172,8 @@ export function AssignedToMeBlock({
   const { user } = useCurrentUser();
   // refresh списка проектов: при accept сервер помечает проект задачи favorite'ом — чтобы
   // секция «Избранное» в сайдбаре сразу его подхватила, перезагружаем список после принятия.
-  const { refresh: refreshProjects } = useProjectsContext();
+  // data — для фантомной колонки «Другой проект…» (условие «видны не все мои проекты»).
+  const { refresh: refreshProjects, data: allProjects } = useProjectsContext();
   const [tasks, setTasks] = useState<AssignedTask[]>([]); // «Для меня»
   const [byMeTasks, setByMeTasks] = useState<AssignedTask[]>([]); // «Другим»
   const [tab, setTab] = useState<DelegationTab>('toMe');
@@ -406,6 +412,24 @@ export function AssignedToMeBlock({
       cancelled = true;
     };
   }, [projectRepository]);
+
+  // === Дроп карточек ДОСКИ в колонки-группы (план inbox-grouped-dnd) ===
+  // Идёт drag именно с нижней доски: общий контекст активен, а карточка не наша.
+  // Этим гейтятся фантомные колонки и подсветка колонок-групп как целей.
+  const boardDragActive = dragActive && activeDrag === null;
+  // Мои проекты — цели переноса (кроме инбокса и архивных). Для условия фантомной
+  // колонки «Другой проект…»: она нужна, только если колонками видны не все проекты.
+  const myProjects = useMemo(
+    () => (allProjects ?? []).filter((p) => !p.isInbox && p.status !== 'archived'),
+    [allProjects],
+  );
+  const phantomProjectNeeded =
+    grouping === 'project' &&
+    myProjects.some((p) => !groups.some((g) => !g.isInbox && g.key === p.id));
+  // «Другой приоритет…» — только если из 5 бакетов (Срочно…Без приоритета) видны не все.
+  const phantomPriorityNeeded =
+    grouping === 'priority' &&
+    PRIORITY_BUCKET_KEYS.some((k) => !groups.some((g) => g.key === k));
 
   // Задача, которую переназначаем не-участнику проекта → всплывашка «пригласить?» (Фаза 3).
   const [inviteFlow, setInviteFlow] = useState<{ item: AssignedTask; member: SharedMember } | null>(
@@ -706,10 +730,45 @@ export function AssignedToMeBlock({
         // Прочие сортировки (проект / дата создания / приоритет): горизонтальные КОЛОНКИ-канбаны —
         // каждая группа = колонка-бордер с заголовком-ярлыком и задачами внутри (задачи одного
         // проекта в одной колонке). Всегда канбан, никаких списков. Ряд full-bleed за паддинг.
+        // Пока тащат карточку С ДОСКИ (boardDragActive) колонки становятся drop-целями по
+        // смыслу сортировки, а первой в ряду появляется фантомная колонка (см. план
+        // inbox-grouped-dnd): «Другой проект…» / инфо «Сюда нельзя» / «Другой приоритет…».
         <div className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}>
-          {groups.map((group) => (
-            <div
+          {boardDragActive && phantomProjectNeeded && (
+            <PhantomDropColumn
+              id="phantom-project"
+              kind="project"
+              icon={FolderKanban}
+              label="Другой проект…"
+              hint="Бросьте сюда, чтобы выбрать проект из списка"
+            />
+          )}
+          {boardDragActive && grouping === 'created' && <PhantomInfoColumn />}
+          {boardDragActive && phantomPriorityNeeded && (
+            <PhantomDropColumn
+              id="phantom-priority"
+              kind="priority"
+              icon={Flag}
+              label="Другой приоритет…"
+              hint="Бросьте сюда, чтобы выбрать приоритет"
+            />
+          )}
+          {groups.map((group) => {
+            // Смысл дропа карточки доски на колонку: project → перенос задачи в проект
+            // («Личные» — не цель, задача и так в инбоксе); priority → смена приоритета;
+            // created — колонки не принимают (дату создания не изменить).
+            const dropData =
+              grouping === 'project' && !group.isInbox
+                ? { type: 'group', grouping: 'project', projectId: group.key }
+                : grouping === 'priority'
+                  ? { type: 'group', grouping: 'priority', priority: group.key }
+                  : null;
+            return (
+            <GroupDropColumn
               key={group.key}
+              id={`group-${grouping}-${group.key}`}
+              data={dropData}
+              highlight={boardDragActive}
               className="flex w-[86vw] max-w-[22rem] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-muted/20 dark:border-white/[0.10] dark:bg-white/[0.02] sm:w-72 sm:max-w-none"
             >
               <div className="flex items-center gap-1.5 border-b border-black/[0.06] bg-muted/50 px-2.5 py-1.5 text-xs font-semibold text-foreground/80 dark:border-white/[0.06] dark:bg-white/[0.04]">
@@ -742,8 +801,9 @@ export function AssignedToMeBlock({
                   </DraggableTask>
                 ))}
               </div>
-            </div>
-          ))}
+            </GroupDropColumn>
+            );
+          })}
         </div>
       )}
 
@@ -870,6 +930,83 @@ function TimeBucketColumn({
         <span className="shrink-0 text-muted-foreground/60">{count}</span>
       </div>
       <div className="flex min-h-[3rem] flex-col gap-2 px-2 pb-2">{children}</div>
+    </div>
+  );
+}
+
+// Колонка-группа (сортировки проект/дата/приоритет) как drop-цель для карточек ДОСКИ
+// (единый DnD, план inbox-grouped-dnd). data=null (created / «Личные») — цель выключена,
+// обычная колонка. Подсветка ring — только пока тащат карточку с доски (highlight).
+function GroupDropColumn({
+  id,
+  data,
+  highlight,
+  className,
+  children,
+}: {
+  id: string;
+  data: Record<string, unknown> | null;
+  highlight: boolean;
+  className: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  const { setNodeRef, isOver } = useDroppable({ id, data: data ?? {}, disabled: data === null });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        className,
+        data !== null && highlight && 'transition-shadow',
+        data !== null && highlight && isOver && 'ring-2 ring-inset ring-primary/50',
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Фантомная drop-колонка: появляется ПЕРВОЙ в ряду, пока тащат карточку с доски.
+// «Другой проект…» / «Другой приоритет…» — дроп открывает соответствующий пикер
+// (диспетчер InboxUnifiedDnd, data {type:'phantom', kind}).
+function PhantomDropColumn({
+  id,
+  kind,
+  icon: Icon,
+  label,
+  hint,
+}: {
+  id: string;
+  kind: 'project' | 'priority';
+  icon: LucideIcon;
+  label: string;
+  hint: string;
+}): React.ReactElement {
+  const { setNodeRef, isOver } = useDroppable({ id, data: { type: 'phantom', kind } });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'flex w-40 shrink-0 snap-start flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-primary/35 bg-primary/[0.04] px-3 py-4 text-center transition-all duration-150 sm:w-44',
+        isOver && 'scale-[1.02] border-primary bg-primary/10 ring-2 ring-primary/40',
+      )}
+    >
+      <Icon className={cn('size-5', isOver ? 'text-primary' : 'text-primary/60')} />
+      <span className="text-xs font-medium text-foreground/80">{label}</span>
+      <span className="text-[10px] leading-tight text-muted-foreground/70">{hint}</span>
+    </div>
+  );
+}
+
+// Инфо-колонка сортировки «по дате создания»: объясняет, почему дроп с доски невозможен
+// (дату создания не изменить). НЕ drop-цель — просто подсказка на время drag'а.
+function PhantomInfoColumn(): React.ReactElement {
+  return (
+    <div className="flex w-40 shrink-0 snap-start flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border bg-muted/30 px-3 py-4 text-center opacity-80 sm:w-44">
+      <Ban className="size-5 text-muted-foreground/60" />
+      <span className="text-xs font-medium text-muted-foreground">Сюда нельзя</span>
+      <span className="text-[10px] leading-tight text-muted-foreground/70">
+        Дата создания не меняется — используйте другую сортировку
+      </span>
     </div>
   );
 }
