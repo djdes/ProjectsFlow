@@ -631,13 +631,14 @@ export function AssignedToMeBlock({
     <section id="assigned-to-me" className="space-y-3">
       <div className="flex items-start justify-between gap-3 px-0.5">
         <div className="flex min-w-0 items-center gap-2.5">
-          {/* size-8 сознательно крупнее аватаров делегаторов в строках/карточках (size-6/7) —
-              иерархия масштабом: это владелец зоны, а не участник треда. */}
-          <UserAvatar
-            displayName={user?.displayName ?? ''}
-            avatarUrl={user?.avatarUrl}
-            className="size-8 text-[11px]"
-          />
+          {/* Своя ава (владелец зоны) — И drop-цель «забрать себе»: перетащи задачу сюда, чтобы
+              вернуть/назначить её себе (участники для делегирования — справа, без себя).
+              size-8 крупнее аватаров в строках/карточках — иерархия масштабом. */}
+          {user ? (
+            <SelfDropAvatar user={user} dragging={dragActive} />
+          ) : (
+            <UserAvatar displayName="" className="size-8 text-[11px]" />
+          )}
           <div className="min-w-0">
             {/* -ml-2 гасит внутренний px-2 первого таба — текст «Для меня» встаёт ровно
                 там, где стоял бы обычный заголовок (и подзаголовок под ним). */}
@@ -660,17 +661,8 @@ export function AssignedToMeBlock({
             Компактные аватары; при наведении перетаскиваемой задачи кубик раскрывается в
             «Делегировать: <имя>». Ряд горизонтально скроллится на узких экранах. self-center —
             вертикально по центру относительно более высокой левой группы (вкладки + подзаголовок). */}
-        {(user || members.length > 0) && (
-          <div className="flex min-w-0 items-center gap-1 self-center overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {/* «Мой» кубик — drop сюда забирает задачу обратно себе (см. reclaimToSelf). */}
-            {user && (
-              <UserCube
-                key="__me"
-                member={{ id: user.id, displayName: user.displayName, email: '', avatarUrl: user.avatarUrl }}
-                dragging={dragActive}
-                isSelf
-              />
-            )}
+        {members.length > 0 && (
+          <div className="flex min-w-0 items-center gap-1.5 self-center overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {members.map((m) => (
               <UserCube key={m.id} member={m} dragging={dragActive} />
             ))}
@@ -943,7 +935,7 @@ function TimeBucketColumn({
       // /[0.09]//[0.11] — начинает «светиться».
       className={cn(
         'flex w-[86vw] max-w-[22rem] shrink-0 snap-start flex-col rounded-xl bg-primary/[0.06] transition-shadow dark:bg-primary/[0.09] sm:w-72 sm:max-w-none sm:bg-primary/[0.04] sm:dark:bg-primary/[0.07]',
-        isOver && 'ring-2 ring-inset ring-primary/50',
+        isOver && 'ring-2 ring-inset ring-primary',
       )}
     >
       <div className="flex items-center gap-1.5 px-3 pb-1.5 pt-2.5 text-xs font-medium text-muted-foreground">
@@ -978,8 +970,15 @@ function GroupDropColumn({
       ref={setNodeRef}
       className={cn(
         className,
-        data !== null && highlight && 'transition-shadow',
-        data !== null && highlight && isOver && 'ring-2 ring-inset ring-primary/50',
+        // Пока тащат карточку с доски: все колонки-цели получают тихий ринг-намёк, а та, что
+        // под курсором, — сплошной ринг + лёгкий тинт. Одно из двух (не оба разом — конфликт
+        // ring-1/ring-2 в CSS решался бы порядком в стайлшите, а не в className).
+        data !== null && highlight && 'transition-all duration-200',
+        data !== null &&
+          highlight &&
+          (isOver
+            ? 'bg-primary/[0.05] ring-2 ring-inset ring-primary'
+            : 'ring-1 ring-inset ring-primary/15'),
       )}
     >
       {children}
@@ -1008,8 +1007,8 @@ function PhantomDropColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex w-40 shrink-0 snap-start flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-primary/35 bg-primary/[0.04] px-3 py-4 text-center transition-all duration-150 sm:w-44',
-        isOver && 'scale-[1.02] border-primary bg-primary/10 ring-2 ring-primary/40',
+        'flex w-40 shrink-0 snap-start flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 bg-primary/[0.03] px-3 py-4 text-center transition-all duration-200 sm:w-44',
+        isOver && 'scale-[1.02] border-primary bg-primary/[0.08]',
       )}
     >
       <Icon className={cn('size-5', isOver ? 'text-primary' : 'text-primary/60')} />
@@ -1051,32 +1050,29 @@ function DraggableTask({
   );
 }
 
-// Кубик участника пространства = drop-цель делегирования. Показывает аву + ник (чтобы было
-// понятно, кто это); при наведении (не во время drag) ава раскрывается в карточку «ава + имя»
-// (UserAvatarHover). Во время перетаскивания задачи кубики подсвечиваются как цели, а тот, что
-// под курсором, ПЛАВНО выделяется (scale + ring) и подписывается «Делегировать».
+// Кубик участника пространства = drop-цель делегирования. В покое — компактная ава + имя
+// (ховер раскрывает карточку UserAvatarHover). Во время drag'а кубик получает тихий
+// primary-ринг (сигнал «сюда можно»), а тот, что под курсором, плавно всплывает: лёгкий
+// scale + сплошной ринг + подпись сменяется на «Делегировать». Себя тут нет — «забрать себе»
+// делается дропом на свою аву слева (SelfDropAvatar).
 function UserCube({
   member,
   dragging,
-  isSelf = false,
 }: {
   member: SharedMember;
   dragging: boolean;
-  // «Мой» кубик — drop забирает задачу себе, а не делегирует (подписи/акцент отличаются).
-  isSelf?: boolean;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id: `user-${member.id}`, data: { type: 'user', member } });
-  const overLabel = isSelf ? 'Забрать себе' : 'Делегировать';
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        'flex shrink-0 items-center gap-1 rounded-full border py-0.5 pl-0.5 pr-2 text-[11px] transition-all duration-200 ease-out',
+        'flex shrink-0 items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2 text-[11px] transition-all duration-200 ease-out',
         dragging
           ? isOver
-            ? 'scale-105 border-primary bg-primary/10 text-primary ring-2 ring-primary/50'
-            : 'border-primary/25 bg-primary/[0.04] text-foreground'
-          : 'border-transparent bg-muted/50 text-muted-foreground hover:bg-muted',
+            ? 'scale-[1.06] bg-primary/10 text-primary shadow-sm ring-2 ring-inset ring-primary'
+            : 'bg-primary/[0.05] text-foreground ring-1 ring-inset ring-primary/20'
+          : 'text-muted-foreground hover:bg-muted',
       )}
     >
       {dragging ? (
@@ -1090,17 +1086,51 @@ function UserCube({
         <UserAvatarHover
           displayName={member.displayName}
           avatarUrl={member.avatarUrl}
-          subtitle={
-            isSelf
-              ? 'перетащите сюда задачу, чтобы забрать её себе'
-              : 'участник пространства · перетащите сюда задачу, чтобы делегировать'
-          }
+          subtitle="участник пространства · перетащите сюда задачу, чтобы делегировать"
           triggerClassName="size-6 text-[10px]"
         />
       )}
       <span className="max-w-[7rem] truncate font-medium">
-        {dragging && isOver ? overLabel : isSelf ? 'Я' : member.displayName}
+        {dragging && isOver ? 'Делегировать' : member.displayName}
       </span>
+    </div>
+  );
+}
+
+// Своя ава = drop-цель «забрать себе» (стоит левее вкладок). В покое — обычная ава; во время
+// drag'а — тихий ринг-сигнал, под курсором всплывает (scale + сплошной ринг) и над ней
+// появляется плавающая подпись «Забрать себе». Дроп сюда идёт по тому же type:'user' с
+// member.id === user.id — и для карточек доски, и блока (см. dropBoardTaskOnUser/handleDragEnd).
+function SelfDropAvatar({
+  user,
+  dragging,
+}: {
+  user: { id: string; displayName: string; avatarUrl?: string | null };
+  dragging: boolean;
+}): React.ReactElement {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `user-${user.id}`,
+    data: {
+      type: 'user',
+      member: { id: user.id, displayName: user.displayName, email: '', avatarUrl: user.avatarUrl ?? null },
+    },
+  });
+  return (
+    <div ref={setNodeRef} className="relative shrink-0">
+      {dragging && isOver && (
+        <span className="pointer-events-none absolute -top-7 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground shadow-md">
+          Забрать себе
+        </span>
+      )}
+      <div
+        className={cn(
+          'rounded-full transition-all duration-200 ease-out',
+          dragging && !isOver && 'ring-2 ring-primary/25 ring-offset-2 ring-offset-background',
+          dragging && isOver && 'scale-110 ring-2 ring-primary ring-offset-2 ring-offset-background',
+        )}
+      >
+        <UserAvatar displayName={user.displayName} avatarUrl={user.avatarUrl} className="size-8 text-[11px]" />
+      </div>
     </div>
   );
 }
