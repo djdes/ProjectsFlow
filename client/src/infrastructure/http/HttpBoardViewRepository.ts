@@ -36,10 +36,14 @@ export class HttpBoardViewRepository implements BoardViewRepository {
     return fromDto(res.view);
   }
 
-  async rename(projectId: string, viewId: string, name: string): Promise<BoardView> {
+  async update(
+    projectId: string,
+    viewId: string,
+    patch: { name?: string; type?: BoardViewType },
+  ): Promise<BoardView> {
     const res = await httpClient.patch<{ view: BoardViewDto }>(
       `/projects/${projectId}/views/${viewId}`,
-      { name },
+      patch,
     );
     return fromDto(res.view);
   }

@@ -5,7 +5,11 @@ import type { BoardView, BoardViewType } from '@/domain/project/BoardView';
 export interface BoardViewRepository {
   list(projectId: string): Promise<BoardView[]>;
   create(projectId: string, name: string, type: BoardViewType): Promise<BoardView>;
-  rename(projectId: string, viewId: string, name: string): Promise<BoardView>;
+  update(
+    projectId: string,
+    viewId: string,
+    patch: { name?: string; type?: BoardViewType },
+  ): Promise<BoardView>;
   duplicate(projectId: string, viewId: string): Promise<BoardView>;
   remove(projectId: string, viewId: string): Promise<void>;
 }

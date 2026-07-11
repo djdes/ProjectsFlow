@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { FileText } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { FileText, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TASK_PRIORITIES } from '@/domain/task/Task';
 import { VISIBLE_KANBAN_STATUSES } from '@/domain/kanban/KanbanSettings';
@@ -13,39 +13,54 @@ import { STATUS_LABEL } from '../statusLabels';
 import { DeadlineBadge } from '../DeadlineBadge';
 import { BulkActionBar } from '../BulkActionBar';
 import { type TaskDrawerState } from '../TaskDrawer';
+import type { ViewCreateRequest } from './ProjectBoardViews';
 import {
   NewTaskRow,
   STATUS_DOT,
-  ViewSearchInput,
   ViewTaskDrawer,
-  matchesQuery,
-  sortBoardTasks,
+  applyViewSort,
+  matchesFilters,
   taskTitle,
+  type ViewFilters,
+  type ViewSort,
 } from './viewShared';
 
 type Props = {
   projectId: string;
   projectName?: string;
   memberCount?: number;
+  filters: ViewFilters;
+  sort: ViewSort | null;
+  createRequest: ViewCreateRequest | null;
 };
 
-// === Списочный вид доски (Notion-style, план board-views-design) ===
-// Плоский вертикальный список: иконка + название, справа тихие чипы (статус/приоритет/
-// срок/ответственный). Клик — окно задачи; чекбоксы — BulkActionBar.
-export function ListView({ projectId, projectName, memberCount }: Props): React.ReactElement {
+// === Списочный вид доски (Notion-style) ===
+// Плоский список: hover-контролы («+» и чекбокс) в левом поле строки, название, справа
+// тихие свойства (срок/приоритет/статус/ответственный). Клик — окно задачи.
+export function ListView({
+  projectId,
+  projectName,
+  memberCount,
+  filters,
+  sort,
+  createRequest,
+}: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
   const { tasks, loading, error, create, update, move, remove, refetch } = tasksApi;
   const { user } = useCurrentUser();
   const isShared = (memberCount ?? 0) > 1;
-  const [query, setQuery] = useState('');
   const [drawer, setDrawer] = useState<TaskDrawerState | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const bulk = useBulkTaskActions({ projectId, update, move, remove, refetch });
 
   const rows = useMemo(
-    () => sortBoardTasks(tasks).filter((t) => matchesQuery(t, query)),
-    [tasks, query],
+    () => applyViewSort(tasks.filter((t) => matchesFilters(t, filters)), sort),
+    [tasks, filters, sort],
   );
+
+  useEffect(() => {
+    if (createRequest) setDrawer({ mode: 'create', status: createRequest.status });
+  }, [createRequest]);
 
   const toggleSelected = (id: string): void => {
     setSelected((prev) => {
@@ -61,31 +76,43 @@ export function ListView({ projectId, projectName, memberCount }: Props): React.
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-1 pb-2">
-        <ViewSearchInput value={query} onChange={setQuery} />
-      </div>
-
-      <div className="flex flex-col">
+      <div className="flex flex-col pl-12">
         {rows.map((task) => (
           <div
             key={task.id}
             className={cn(
-              'group flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/50',
+              'group relative flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/50',
               selected.has(task.id) && 'bg-primary/5',
             )}
             onClick={() => setDrawer({ mode: 'edit', task })}
           >
-            <input
-              type="checkbox"
-              checked={selected.has(task.id)}
-              onChange={() => toggleSelected(task.id)}
-              onClick={(e) => e.stopPropagation()}
-              aria-label="Выбрать задачу"
+            {/* Hover-контролы в левом поле (Notion): «+» и чекбокс. */}
+            <div
               className={cn(
-                'size-3.5 shrink-0 cursor-pointer accent-primary transition-opacity',
-                selected.has(task.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+                'absolute -left-12 top-1/2 flex -translate-y-1/2 items-center gap-0.5 transition-opacity',
+                selected.size > 0 || selected.has(task.id)
+                  ? 'opacity-100'
+                  : 'opacity-0 group-hover:opacity-100',
               )}
-            />
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                aria-label="Новая задача"
+                title="Новая задача"
+                onClick={() => setDrawer({ mode: 'create', status: task.status })}
+                className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Plus className="size-3.5" />
+              </button>
+              <input
+                type="checkbox"
+                checked={selected.has(task.id)}
+                onChange={() => toggleSelected(task.id)}
+                aria-label="Выбрать задачу"
+                className="size-3.5 cursor-pointer accent-primary"
+              />
+            </div>
             {task.icon ? (
               <span className="grid size-4 shrink-0 place-items-center overflow-hidden">
                 <ProjectIconView icon={task.icon} pixelSize={15} className="text-sm" />
@@ -95,13 +122,13 @@ export function ListView({ projectId, projectName, memberCount }: Props): React.
             )}
             <span
               className={cn(
-                'min-w-0 flex-1 truncate text-sm',
+                'min-w-0 flex-1 truncate text-sm font-medium',
                 task.status === 'done' && 'text-muted-foreground line-through decoration-muted-foreground/40',
               )}
             >
               {taskTitle(task)}
             </span>
-            {/* Тихие чипы справа: срок / приоритет / статус / ответственный. */}
+            {/* Тихие свойства справа: срок / приоритет / статус / ответственный. */}
             <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
               {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
               {task.priority !== null &&
@@ -129,13 +156,16 @@ export function ListView({ projectId, projectName, memberCount }: Props): React.
 
         {rows.length === 0 && (
           <p className="px-2 py-6 text-sm text-muted-foreground">
-            {query ? 'Под фильтр ничего не попадает.' : 'Задач пока нет.'}
+            {filters.query || filters.status || filters.priority || filters.due
+              ? 'Под фильтр ничего не попадает.'
+              : 'Задач пока нет.'}
           </p>
         )}
 
         <div className="py-1">
           <NewTaskRow create={create} />
         </div>
+        <p className="px-2 pt-1 text-[11px] text-muted-foreground/60">Всего: {rows.length}</p>
       </div>
 
       <ViewTaskDrawer

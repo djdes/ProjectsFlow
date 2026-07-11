@@ -1,5 +1,17 @@
-import { useMemo, useRef, useState } from 'react';
-import { CalendarClock, ChevronDown, FileText } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  CalendarClock,
+  CalendarDays,
+  ChevronDown,
+  CircleDot,
+  FileText,
+  Flag,
+  Maximize2,
+  Plus,
+  Trash2,
+  User,
+  X,
+} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,51 +26,81 @@ import { TASK_PRIORITIES } from '@/domain/task/Task';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { VISIBLE_KANBAN_STATUSES } from '@/domain/kanban/KanbanSettings';
 import { useTasks } from '@/presentation/hooks/useTasks';
-import { useBulkTaskActions } from '@/presentation/hooks/useBulkTaskActions';
+import { useBulkTaskActions, type BulkResult } from '@/presentation/hooks/useBulkTaskActions';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { STATUS_LABEL } from '../statusLabels';
 import { DeadlineBadge } from '../DeadlineBadge';
 import { DelegateTaskButton } from '../DelegateTaskButton';
-import { BulkActionBar } from '../BulkActionBar';
 import { type TaskDrawerState } from '../TaskDrawer';
 import { ymd, startOfDay, addDays } from '../assignedGrouping';
+import type { ViewCreateRequest } from './ProjectBoardViews';
 import {
   NewTaskRow,
   STATUS_DOT,
-  ViewSearchInput,
   ViewTaskDrawer,
-  matchesQuery,
-  sortBoardTasks,
+  applyViewSort,
+  matchesFilters,
   taskTitle,
+  type ViewFilters,
+  type ViewSort,
 } from './viewShared';
 
 type Props = {
   projectId: string;
   projectName?: string;
   memberCount?: number;
+  filters: ViewFilters;
+  sort: ViewSort | null;
+  createRequest: ViewCreateRequest | null;
 };
 
 // Сетка колонок: Название (тянется) / Статус / Приоритет / Срок / Ответственный.
 const GRID = 'grid grid-cols-[minmax(0,1fr)_8.5rem_8rem_8.5rem_11rem]';
 
-// === Табличный вид доски (Notion-style, план board-views-design) ===
-// Строки задач с вертикальными линиями; статус/приоритет/срок/ответственный редактируются
-// прямо в ячейках; клик по названию открывает окно задачи; чекбоксы → BulkActionBar.
-export function TableView({ projectId, projectName, memberCount }: Props): React.ReactElement {
+type CellCol = 'status' | 'priority' | 'deadline' | 'assignee';
+
+// === Табличный вид доски (Notion-style) ===
+// Notion-таблица: слева в «поле» строки при hover — чекбокс и «+»; в ячейке названия при
+// hover — кнопка «Открыть»; клик по пустому месту ячейки выделяет её синей рамкой (Esc
+// снимает); статус/приоритет/срок/ответственный редактируются прямо в ячейках; выбранные
+// строки — плавающая панель действий сверху.
+export function TableView({
+  projectId,
+  projectName,
+  memberCount,
+  filters,
+  sort,
+  createRequest,
+}: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
   const { tasks, loading, error, create, update, move, remove, refetch } = tasksApi;
   const { user } = useCurrentUser();
   const isShared = (memberCount ?? 0) > 1;
-  const [query, setQuery] = useState('');
   const [drawer, setDrawer] = useState<TaskDrawerState | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const [selCell, setSelCell] = useState<string | null>(null); // `${taskId}:${col}`
   const bulk = useBulkTaskActions({ projectId, update, move, remove, refetch });
 
   const rows = useMemo(
-    () => sortBoardTasks(tasks).filter((t) => matchesQuery(t, query)),
-    [tasks, query],
+    () => applyViewSort(tasks.filter((t) => matchesFilters(t, filters)), sort),
+    [tasks, filters, sort],
   );
+
+  // «Создать» из тулбара вью: открыть окно новой задачи в выбранной колонке.
+  useEffect(() => {
+    if (createRequest) setDrawer({ mode: 'create', status: createRequest.status });
+  }, [createRequest]);
+
+  // Esc снимает выделение ячейки.
+  useEffect(() => {
+    if (!selCell) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setSelCell(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selCell]);
 
   const toggleSelected = (id: string): void => {
     setSelected((prev) => {
@@ -69,24 +111,60 @@ export function TableView({ projectId, projectName, memberCount }: Props): React
     });
   };
 
+  const allSelected = rows.length > 0 && rows.every((t) => selected.has(t.id));
+  const toggleAll = (): void => {
+    setSelected(allSelected ? new Set() : new Set(rows.map((t) => t.id)));
+  };
+
+  const selectedIds = rows.filter((t) => selected.has(t.id)).map((t) => t.id);
+
+  const reportBulk = (label: string) => (res: BulkResult) => {
+    if (res.failed > 0) toast.error(`${label}: ${res.ok} из ${res.ok + res.failed}`);
+    setSelected(new Set());
+  };
+
   if (loading) return <div className="h-64 animate-pulse rounded-xl bg-muted/60" />;
   if (error) return <p className="text-sm text-destructive">{error}</p>;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-1 pb-2">
-        <ViewSearchInput value={query} onChange={setQuery} />
-      </div>
-
       <div className="overflow-x-auto">
-        <div className="min-w-[52rem]">
-          {/* Шапка таблицы. */}
-          <div className={cn(GRID, 'border-b text-xs text-muted-foreground')}>
-            <div className="px-2 py-1.5">Название</div>
-            <div className="border-l px-2 py-1.5">Статус</div>
-            <div className="border-l px-2 py-1.5">Приоритет</div>
-            <div className="border-l px-2 py-1.5">Срок</div>
-            <div className="border-l px-2 py-1.5">Ответственный</div>
+        {/* Левое «поле» (pl-12): hover-контролы строк живут в нём, как в Notion. */}
+        <div className="min-w-[55rem] pl-12">
+          {/* Шапка таблицы: иконка типа свойства + название (Notion header). */}
+          <div className={cn(GRID, 'group/head relative border-b text-xs text-muted-foreground')}>
+            <div className="absolute -left-8 top-1/2 -translate-y-1/2">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                aria-label="Выбрать все"
+                className={cn(
+                  'size-3.5 cursor-pointer accent-primary transition-opacity',
+                  allSelected || selected.size > 0 ? 'opacity-100' : 'opacity-0 group-hover/head:opacity-100',
+                )}
+              />
+            </div>
+            <div className="flex items-center gap-1.5 px-2 py-1.5">
+              <span className="font-mono text-[11px] leading-none text-muted-foreground/70">Aa</span>
+              Название
+            </div>
+            <div className="flex items-center gap-1.5 border-l px-2 py-1.5">
+              <CircleDot className="size-3.5 text-muted-foreground/70" />
+              Статус
+            </div>
+            <div className="flex items-center gap-1.5 border-l px-2 py-1.5">
+              <Flag className="size-3.5 text-muted-foreground/70" />
+              Приоритет
+            </div>
+            <div className="flex items-center gap-1.5 border-l px-2 py-1.5">
+              <CalendarDays className="size-3.5 text-muted-foreground/70" />
+              Срок
+            </div>
+            <div className="flex items-center gap-1.5 border-l px-2 py-1.5">
+              <User className="size-3.5 text-muted-foreground/70" />
+              Ответственный
+            </div>
           </div>
 
           {rows.map((task) => (
@@ -94,8 +172,12 @@ export function TableView({ projectId, projectName, memberCount }: Props): React
               key={task.id}
               task={task}
               selected={selected.has(task.id)}
+              anySelected={selected.size > 0}
+              selCell={selCell}
+              onSelCell={setSelCell}
               onToggleSelected={() => toggleSelected(task.id)}
               onOpen={() => setDrawer({ mode: 'edit', task })}
+              onCreateBelow={() => setDrawer({ mode: 'create', status: task.status })}
               onStatus={(s) =>
                 void move(task.id, { targetStatus: s, beforeTaskId: null, afterTaskId: null }).catch(
                   (e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`),
@@ -119,13 +201,16 @@ export function TableView({ projectId, projectName, memberCount }: Props): React
 
           {rows.length === 0 && (
             <p className="px-2 py-6 text-sm text-muted-foreground">
-              {query ? 'Под фильтр ничего не попадает.' : 'Задач пока нет.'}
+              {filters.query || filters.status || filters.priority || filters.due
+                ? 'Под фильтр ничего не попадает.'
+                : 'Задач пока нет.'}
             </p>
           )}
 
           <div className="border-b py-1">
             <NewTaskRow create={create} />
           </div>
+          <p className="px-2 pt-1.5 text-[11px] text-muted-foreground/60">Всего: {rows.length}</p>
         </div>
       </div>
 
@@ -138,17 +223,111 @@ export function TableView({ projectId, projectName, memberCount }: Props): React
         tasksApi={tasksApi}
       />
 
-      {selected.size > 0 && (
-        <BulkActionBar
-          selectedIds={rows.filter((t) => selected.has(t.id)).map((t) => t.id)}
-          projectId={projectId}
-          isInbox={false}
-          currentUserId={user?.id ?? null}
-          moveTargets={VISIBLE_KANBAN_STATUSES.map((s) => ({ status: s, label: STATUS_LABEL[s] }))}
-          bulk={bulk}
+      {/* Плавающая панель выбранных (Notion «N selected» сверху). */}
+      {selectedIds.length > 0 && (
+        <SelectedBar
+          count={selectedIds.length}
           onExit={() => setSelected(new Set())}
+          onStatus={(s) => void bulk.moveToColumn(selectedIds, s).then(reportBulk('Статус'))}
+          onPriority={(p) => void bulk.setPriority(selectedIds, p).then(reportBulk('Приоритет'))}
+          onDeadline={(d) => void bulk.setDeadline(selectedIds, d).then(reportBulk('Срок'))}
+          onDelete={() => void bulk.remove(selectedIds).then(reportBulk('Удаление'))}
         />
       )}
+    </div>
+  );
+}
+
+// Плавающая панель действий над выбранными строками — копия Notion selection toolbar:
+// «N выбрано ✕ | Статус | Приоритет | Срок | 🗑», плавает сверху по центру.
+function SelectedBar({
+  count,
+  onExit,
+  onStatus,
+  onPriority,
+  onDeadline,
+  onDelete,
+}: {
+  count: number;
+  onExit: () => void;
+  onStatus: (s: TaskStatus) => void;
+  onPriority: (p: TaskPriority | null) => void;
+  onDeadline: (d: string | null) => void;
+  onDelete: () => void;
+}): React.ReactElement {
+  const today = ymd(startOfDay(new Date()));
+  return (
+    <div
+      role="toolbar"
+      aria-label="Действия с выбранными задачами"
+      className="fixed left-1/2 top-16 z-40 flex -translate-x-1/2 items-center overflow-hidden rounded-lg border bg-card shadow-lg duration-200 animate-in fade-in slide-in-from-top-2"
+    >
+      <span className="flex items-center gap-1.5 border-r px-2.5 py-1.5 text-xs font-medium text-primary">
+        Выбрано: {count}
+        <button type="button" aria-label="Снять выбор" onClick={onExit}>
+          <X className="size-3.5 opacity-60 hover:opacity-100" />
+        </button>
+      </span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className="border-r px-2.5 py-1.5 text-xs transition-colors hover:bg-accent">
+            Статус
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="center" className="min-w-[11rem]">
+          {VISIBLE_KANBAN_STATUSES.map((s) => (
+            <DropdownMenuItem key={s} className="gap-2" onClick={() => onStatus(s)}>
+              <span className={cn('size-2 rounded-full', STATUS_DOT[s])} />
+              {STATUS_LABEL[s]}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className="border-r px-2.5 py-1.5 text-xs transition-colors hover:bg-accent">
+            Приоритет
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="center" className="min-w-[11rem]">
+          {TASK_PRIORITIES.map((p) => (
+            <DropdownMenuItem key={p} className="gap-2" onClick={() => onPriority(p)}>
+              <span className={cn('size-2 rounded-full', PRIORITY_META[p].dotColor)} />
+              {PRIORITY_META[p].label}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="text-muted-foreground" onClick={() => onPriority(null)}>
+            Без приоритета
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className="border-r px-2.5 py-1.5 text-xs transition-colors hover:bg-accent">
+            Срок
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="center" className="min-w-[11rem]">
+          <DropdownMenuItem onClick={() => onDeadline(today)}>Сегодня</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onDeadline(ymd(addDays(startOfDay(new Date()), 1)))}>
+            Завтра
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="text-muted-foreground" onClick={() => onDeadline(null)}>
+            Убрать срок
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <button
+        type="button"
+        aria-label="Удалить выбранные"
+        title="Удалить выбранные"
+        onClick={onDelete}
+        className="px-2.5 py-1.5 text-destructive transition-colors hover:bg-destructive/10"
+      >
+        <Trash2 className="size-3.5" />
+      </button>
     </div>
   );
 }
@@ -156,8 +335,12 @@ export function TableView({ projectId, projectName, memberCount }: Props): React
 function TableRow({
   task,
   selected,
+  anySelected,
+  selCell,
+  onSelCell,
   onToggleSelected,
   onOpen,
+  onCreateBelow,
   onStatus,
   onPriority,
   onDeadline,
@@ -167,8 +350,12 @@ function TableRow({
 }: {
   task: Task;
   selected: boolean;
+  anySelected: boolean;
+  selCell: string | null;
+  onSelCell: (c: string | null) => void;
   onToggleSelected: () => void;
   onOpen: () => void;
+  onCreateBelow: () => void;
   onStatus: (s: TaskStatus) => void;
   onPriority: (p: TaskPriority | null) => void;
   onDeadline: (d: string | null) => void;
@@ -176,27 +363,55 @@ function TableRow({
   projectId: string;
   onChanged: () => void;
 }): React.ReactElement {
+  // Клик по «пустому» месту ячейки — выделение синей рамкой (Notion cell selection).
+  const cellProps = (col: CellCol): { className: string; onMouseDown: (e: React.MouseEvent) => void } => ({
+    className: cn(
+      'relative border-l px-1 py-1',
+      selCell === `${task.id}:${col}` &&
+        'ring-2 ring-inset ring-primary/70 after:pointer-events-none after:absolute after:-bottom-[3px] after:-right-[3px] after:size-1.5 after:rounded-[1px] after:bg-primary',
+    ),
+    onMouseDown: (e: React.MouseEvent) => {
+      if ((e.target as HTMLElement).closest('button,input,a')) return;
+      onSelCell(`${task.id}:${col}`);
+    },
+  });
+
   return (
     <div
       className={cn(
         GRID,
-        'group border-b transition-colors hover:bg-accent/40',
+        'group relative border-b transition-colors hover:bg-accent/40',
         selected && 'bg-primary/5',
       )}
     >
-      {/* Название: чекбокс (hover/выбрано) + иконка + заголовок. */}
-      <div className="flex min-w-0 items-center gap-1.5 px-2 py-1.5">
+      {/* Hover-контролы в левом поле: «+» (новая задача в той же колонке) и чекбокс. */}
+      <div
+        className={cn(
+          'absolute -left-12 top-1/2 flex -translate-y-1/2 items-center gap-0.5 transition-opacity',
+          selected || anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+        )}
+      >
+        <button
+          type="button"
+          aria-label="Новая задача"
+          title="Новая задача"
+          onClick={onCreateBelow}
+          className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <Plus className="size-3.5" />
+        </button>
         <input
           type="checkbox"
           checked={selected}
           onChange={onToggleSelected}
           onClick={(e) => e.stopPropagation()}
           aria-label="Выбрать задачу"
-          className={cn(
-            'size-3.5 shrink-0 cursor-pointer accent-primary transition-opacity',
-            selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
-          )}
+          className="size-3.5 cursor-pointer accent-primary"
         />
+      </div>
+
+      {/* Название: иконка + заголовок + hover-кнопка «Открыть» (Notion OPEN). */}
+      <div className="flex min-w-0 items-center gap-1.5 px-2 py-1.5">
         {task.icon ? (
           <span className="grid size-4 shrink-0 place-items-center overflow-hidden">
             <ProjectIconView icon={task.icon} pixelSize={15} className="text-sm" />
@@ -207,14 +422,22 @@ function TableRow({
         <button
           type="button"
           onClick={onOpen}
-          className="min-w-0 truncate text-left text-sm hover:underline"
+          className="min-w-0 truncate text-left text-sm font-medium decoration-muted-foreground/40 underline-offset-2 hover:underline"
         >
           {taskTitle(task)}
+        </button>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="ml-auto hidden shrink-0 items-center gap-1 rounded-md border bg-card px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground group-hover:inline-flex"
+        >
+          <Maximize2 className="size-3" />
+          Открыть
         </button>
       </div>
 
       {/* Статус. */}
-      <div className="border-l px-1 py-1">
+      <div {...cellProps('status')}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -238,7 +461,7 @@ function TableRow({
       </div>
 
       {/* Приоритет. */}
-      <div className="border-l px-1 py-1">
+      <div {...cellProps('priority')}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -273,12 +496,12 @@ function TableRow({
       </div>
 
       {/* Срок. */}
-      <div className="border-l px-1 py-1">
+      <div {...cellProps('deadline')}>
         <DeadlineCell task={task} onDeadline={onDeadline} />
       </div>
 
       {/* Ответственный — существующий селектор «создатель → исполнитель». */}
-      <div className="min-w-0 border-l px-1 py-1">
+      <div {...cellProps('assignee')}>
         <DelegateTaskButton
           task={task}
           currentUserId={currentUserId}

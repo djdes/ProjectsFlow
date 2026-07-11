@@ -15,6 +15,9 @@ export interface BoardViewRepository {
   getById(id: string): Promise<BoardView | null>;
   // sort_order назначается репозиторием: MAX(project) + 1 — новая вью встаёт в конец ряда.
   create(input: CreateBoardViewInput): Promise<BoardView>;
-  rename(id: string, name: string): Promise<BoardView | null>;
+  update(
+    id: string,
+    patch: { name?: string; type?: BoardViewType },
+  ): Promise<BoardView | null>;
   delete(id: string): Promise<void>;
 }

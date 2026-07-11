@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -21,12 +21,22 @@ import { useTasks } from '@/presentation/hooks/useTasks';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { type TaskDrawerState } from '../TaskDrawer';
 import { addDays, startOfDay, ymd } from '../assignedGrouping';
-import { NewTaskRow, STATUS_DOT, ViewTaskDrawer, taskTitle } from './viewShared';
+import type { ViewCreateRequest } from './ProjectBoardViews';
+import {
+  NewTaskRow,
+  STATUS_DOT,
+  ViewTaskDrawer,
+  matchesFilters,
+  taskTitle,
+  type ViewFilters,
+} from './viewShared';
 
 type Props = {
   projectId: string;
   projectName?: string;
   memberCount?: number;
+  filters: ViewFilters;
+  createRequest: ViewCreateRequest | null;
 };
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -43,9 +53,16 @@ function buildMonthGrid(monthStart: Date): Date[] {
 // Сетка месяца, задачи в день дедлайна. Drag чипа на другой день = смена дедлайна;
 // клик — окно задачи; hover-«+» в ячейке — создать задачу с этим сроком;
 // «Без срока (N)» — поповер со списком (оттуда тоже можно тащить на дни).
-export function CalendarView({ projectId, projectName, memberCount }: Props): React.ReactElement {
+export function CalendarView({
+  projectId,
+  projectName,
+  memberCount,
+  filters,
+  createRequest,
+}: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
-  const { tasks, loading, error, update } = tasksApi;
+  const { tasks: allTasks, loading, error, update } = tasksApi;
+  const tasks = useMemo(() => allTasks.filter((t) => matchesFilters(t, filters)), [allTasks, filters]);
   const isShared = (memberCount ?? 0) > 1;
   const [monthStart, setMonthStart] = useState<Date>(() => {
     const now = new Date();
@@ -55,6 +72,11 @@ export function CalendarView({ projectId, projectName, memberCount }: Props): Re
   // Создание из ячейки: дедлайн дня подмешивается при сабмите create-формы drawer'а.
   const [pendingDeadline, setPendingDeadline] = useState<string | null>(null);
   const [activeDrag, setActiveDrag] = useState<Task | null>(null);
+
+  // «Создать» из тулбара вью (срок не задан — попадёт в «Без срока»).
+  useEffect(() => {
+    if (createRequest) setDrawer({ mode: 'create', status: createRequest.status });
+  }, [createRequest]);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -301,16 +323,9 @@ function DayCell({
         dragging && isOver && 'bg-primary/10 ring-2 ring-inset ring-primary/40',
       )}
     >
+      {/* Notion-порядок: «+» слева при hover, число дня — в правом верхнем углу,
+          сегодня — красный кружок. */}
       <div className="flex items-center justify-between">
-        <span
-          className={cn(
-            'inline-flex size-5 items-center justify-center rounded-full text-[11px]',
-            isToday ? 'bg-primary font-semibold text-primary-foreground' : 'text-muted-foreground',
-            !inMonth && !isToday && 'text-muted-foreground/40',
-          )}
-        >
-          {day.getDate()}
-        </span>
         <button
           type="button"
           onClick={onCreate}
@@ -319,6 +334,15 @@ function DayCell({
         >
           <Plus className="size-3.5" />
         </button>
+        <span
+          className={cn(
+            'inline-flex size-5 items-center justify-center rounded-full text-[11px]',
+            isToday ? 'bg-red-500 font-semibold text-white' : 'text-muted-foreground',
+            !inMonth && !isToday && 'text-muted-foreground/40',
+          )}
+        >
+          {day.getDate()}
+        </span>
       </div>
       <div className="mt-0.5 flex flex-col gap-0.5">
         {tasks.slice(0, MAX_CHIPS).map((t) => (

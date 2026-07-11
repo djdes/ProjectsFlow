@@ -104,9 +104,14 @@ export const createBoardViewSchema = z.object({
   name: z.string().trim().min(1, 'Введите название').max(64),
   type: z.enum(['kanban', 'table', 'list', 'calendar']),
 });
-export const renameBoardViewSchema = z.object({
-  name: z.string().trim().min(1, 'Введите название').max(64),
-});
+export const updateBoardViewSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Введите название').max(64).optional(),
+    type: z.enum(['kanban', 'table', 'list', 'calendar']).optional(),
+  })
+  .refine((v) => v.name !== undefined || v.type !== undefined, {
+    message: 'Нечего обновлять',
+  });
 
 // Персональные UI-настройки клиента (профиль). Все поля optional — частичный мерж.
 export const uiPrefsSchema = z.object({

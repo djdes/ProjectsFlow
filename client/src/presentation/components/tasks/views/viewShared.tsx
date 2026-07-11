@@ -1,10 +1,11 @@
 import { useState, type KeyboardEvent } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Task, TaskStatus } from '@/domain/task/Task';
+import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { UseTasks } from '@/presentation/hooks/useTasks';
 import { TaskDrawer, type TaskDrawerState } from '../TaskDrawer';
 import { splitTitleBody } from '@/lib/taskTitleBody';
+import { ymd, startOfDay } from '../assignedGrouping';
 
 // ============ Общие кусочки табличного/списочного/календарного видов доски ============
 // (план board-views-design). Канбан не трогаем — он остаётся в KanbanBoard.
@@ -45,6 +46,78 @@ export function matchesQuery(task: Task, query: string): boolean {
   const q = query.trim().toLocaleLowerCase('ru');
   if (!q) return true;
   return (task.description ?? '').toLocaleLowerCase('ru').includes(q);
+}
+
+// ---- Фильтры и сортировка вью (тулбар в ProjectBoardViews, применение — в видах) ----
+
+export type ViewDueFilter = 'has' | 'none' | 'overdue';
+
+export type ViewFilters = {
+  readonly query: string;
+  readonly status: TaskStatus | null;
+  readonly priority: TaskPriority | null;
+  readonly due: ViewDueFilter | null;
+};
+
+export const EMPTY_VIEW_FILTERS: ViewFilters = {
+  query: '',
+  status: null,
+  priority: null,
+  due: null,
+};
+
+export function matchesFilters(task: Task, f: ViewFilters): boolean {
+  if (!matchesQuery(task, f.query)) return false;
+  if (f.status !== null && task.status !== f.status) return false;
+  if (f.priority !== null && task.priority !== f.priority) return false;
+  if (f.due !== null) {
+    const today = ymd(startOfDay(new Date()));
+    if (f.due === 'has' && !task.deadline) return false;
+    if (f.due === 'none' && task.deadline) return false;
+    if (f.due === 'overdue' && !(task.deadline && task.deadline < today && task.status !== 'done'))
+      return false;
+  }
+  return true;
+}
+
+export type ViewSortKey = 'title' | 'status' | 'priority' | 'deadline' | 'created';
+export type ViewSort = { readonly key: ViewSortKey; readonly dir: 'asc' | 'desc' };
+
+export const VIEW_SORT_LABELS: Record<ViewSortKey, string> = {
+  title: 'Название',
+  status: 'Статус',
+  priority: 'Приоритет',
+  deadline: 'Срок',
+  created: 'Дата создания',
+};
+
+// null-значения (без срока/приоритета) — всегда в конец независимо от направления.
+export function applyViewSort(tasks: readonly Task[], sort: ViewSort | null): Task[] {
+  if (!sort) return sortBoardTasks(tasks);
+  const mul = sort.dir === 'asc' ? 1 : -1;
+  const cmp = (a: Task, b: Task): number => {
+    switch (sort.key) {
+      case 'title':
+        return taskTitle(a).localeCompare(taskTitle(b), 'ru') * mul;
+      case 'status':
+        return (STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status)) * mul;
+      case 'priority': {
+        const pa = a.priority ?? 99;
+        const pb = b.priority ?? 99;
+        if (pa === 99 || pb === 99) return pa - pb;
+        return (pa - pb) * mul;
+      }
+      case 'deadline': {
+        const da = a.deadline ?? '';
+        const db = b.deadline ?? '';
+        if (!da || !db) return (da ? 0 : 1) - (db ? 0 : 1);
+        return da.localeCompare(db) * mul;
+      }
+      case 'created':
+        return (a.createdAt.getTime() - b.createdAt.getTime()) * mul;
+    }
+  };
+  return [...tasks].sort((a, b) => cmp(a, b) || a.position - b.position);
 }
 
 // Тихий текстовый фильтр — тот же вид, что у ряда фильтров канбана.

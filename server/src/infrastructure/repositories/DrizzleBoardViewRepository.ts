@@ -55,8 +55,16 @@ export class DrizzleBoardViewRepository implements BoardViewRepository {
     return created;
   }
 
-  async rename(id: string, name: string): Promise<BoardView | null> {
-    await this.db.update(boardViews).set({ name }).where(eq(boardViews.id, id));
+  async update(
+    id: string,
+    patch: { name?: string; type?: BoardViewType },
+  ): Promise<BoardView | null> {
+    const set: Partial<{ name: string; type: BoardViewType }> = {};
+    if (patch.name !== undefined) set.name = patch.name;
+    if (patch.type !== undefined) set.type = patch.type;
+    if (Object.keys(set).length > 0) {
+      await this.db.update(boardViews).set(set).where(eq(boardViews.id, id));
+    }
     return this.getById(id);
   }
 

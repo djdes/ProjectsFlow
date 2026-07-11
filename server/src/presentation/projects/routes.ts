@@ -54,7 +54,7 @@ import {
   createInviteSchema,
   createProjectSchema,
   kanbanSettingsSchema,
-  renameBoardViewSchema,
+  updateBoardViewSchema,
   notificationPrefsSchema,
   reorderFavoritesSchema,
   reorderProjectsSchema,
@@ -685,11 +685,11 @@ export function projectsRouter(deps: Deps): Router {
       const viewId = req.params['viewId'];
       if (typeof id !== 'string' || typeof viewId !== 'string') throw new ProjectNotFoundError();
       if (!(await requireViewEditor(id, req.user!.id, res))) return;
-      const body = renameBoardViewSchema.parse(req.body);
+      const body = updateBoardViewSchema.parse(req.body);
       // Принадлежность вью проекту из URL — иначе id из чужого проекта был бы IDOR.
       const existing = await deps.boardViews.getById(viewId);
       if (!existing || existing.projectId !== id) throw new ProjectNotFoundError();
-      const view = await deps.boardViews.rename(viewId, body.name);
+      const view = await deps.boardViews.update(viewId, body);
       if (!view) throw new ProjectNotFoundError();
       deps.notifyProjectChanged(id);
       res.json({ view: viewToDto(view) });
