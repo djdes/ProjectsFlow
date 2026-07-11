@@ -310,6 +310,7 @@ export function tasksRouter(deps: Deps): Router {
         delegateUserId: body.delegateUserId ?? null,
         deadline: body.deadline ?? null,
         startDate: body.startDate ?? null,
+        parentTaskId: body.parentTaskId ?? null,
         priority: body.priority ?? null,
       });
       deps.notifyTaskChanged(projectId);

@@ -68,6 +68,7 @@ import {
   VIEW_COLUMN_LABELS,
   ViewTaskDrawer,
   applyViewSort,
+  buildTreeRows,
   groupKeyFor,
   groupLabelFor,
   hasActiveFilters,
@@ -75,6 +76,7 @@ import {
   rowColorFor,
   taskMenuEntries,
   taskTitle,
+  type TreeRow,
   type TableViewState,
   type ViewCalc,
   type ViewColorRule,
@@ -276,15 +278,26 @@ export function TableView({
   };
 
   // «+» слева от строки (Notion): inline-строка ввода СРАЗУ ПОД текущей (Alt+клик — над).
-  const [insertAt, setInsertAt] = useState<{ taskId: string; above: boolean } | null>(null);
-  const submitInsert = async (anchor: Task, above: boolean, title: string): Promise<void> => {
+  // asSub — создание ПОДЗАДАЧИ под якорем (db/107).
+  const [insertAt, setInsertAt] = useState<{ taskId: string; above: boolean; asSub?: boolean } | null>(
+    null,
+  );
+  const submitInsert = async (anchor: Task, above: boolean, title: string, asSub = false): Promise<void> => {
     const name = title.trim();
     if (!name) {
       setInsertAt(null);
       return;
     }
     try {
-      if (above) {
+      if (asSub) {
+        await create({
+          description: name,
+          status: anchor.status,
+          parentTaskId: anchor.id,
+          afterTaskId: anchor.id,
+        });
+        setExpandedTasks((prev) => new Set(prev).add(anchor.id));
+      } else if (above) {
         const idx = rows.findIndex((t) => t.id === anchor.id);
         const prev = rows[idx - 1];
         const created = await create({ description: name, status: anchor.status });
@@ -301,6 +314,16 @@ export function TableView({
     }
     setInsertAt(null);
   };
+
+  // Дерево подзадач (Notion sub-items): активен без группировки; свёрнуто по умолчанию.
+  const [expandedTasks, setExpandedTasks] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleExpand = (id: string): void =>
+    setExpandedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   // Drag «⋮⋮» — ручной порядок строк (Notion). Активен без пользовательской сортировки.
   const canReorder = sort === null;
@@ -497,7 +520,8 @@ export function TableView({
           </div>
 
           {(grouping && groups
-            ? groups.flatMap((g) => {
+            ? // При группировке дерево отключено — плоские строки внутри групп.
+              (groups.flatMap((g) => {
                 const sample = g.tasks[0];
                 return [
                   <div
@@ -535,17 +559,19 @@ export function TableView({
                       </button>
                     )}
                   </div>,
-                  ...(collapsedGroups.has(g.key) ? [] : g.tasks),
+                  ...(collapsedGroups.has(g.key)
+                    ? []
+                    : g.tasks.map((t) => ({ task: t, depth: 0, hasChildren: false }))),
                 ];
-              })
-            : rows
+              }) as (React.ReactElement | TreeRow)[])
+            : buildTreeRows(rows, expandedTasks)
           ).map((item) => {
-            if (!(typeof item === 'object' && 'id' in item)) return item;
-            const task = item as Task;
+            if (!(typeof item === 'object' && 'task' in item)) return item;
+            const { task, depth, hasChildren } = item as TreeRow;
             const idx = rows.indexOf(task);
             return (
             <Fragment key={task.id}>
-              {insertAt?.taskId === task.id && insertAt.above && (
+              {insertAt?.taskId === task.id && insertAt.above && !insertAt.asSub && (
                 <InsertRow
                   gridStyle={gridStyle}
                   onSubmit={(title) => void submitInsert(task, true, title)}
@@ -556,6 +582,10 @@ export function TableView({
                 task={task}
                 gridStyle={gridStyle}
                 visibleCols={visibleCols}
+                depth={depth}
+                hasChildren={hasChildren}
+                expanded={expandedTasks.has(task.id)}
+                onToggleExpand={() => toggleExpand(task.id)}
                 wrapTitle={tableState.wrapTitle}
                 dndEnabled={canReorder}
                 recentlyMoved={recentlyMovedId === task.id}
@@ -577,6 +607,7 @@ export function TableView({
                 onToggleSelected={(shift) => toggleWithRange(idx, shift)}
                 onOpen={() => setDrawer({ mode: 'edit', task })}
                 onCreateBelow={(above) => setInsertAt({ taskId: task.id, above })}
+                onAddSub={() => setInsertAt({ taskId: task.id, above: false, asSub: true })}
                 onStatus={(s) =>
                   void move(task.id, { targetStatus: s, beforeTaskId: null, afterTaskId: null }).catch(
                     (e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`),
@@ -617,7 +648,8 @@ export function TableView({
               {insertAt?.taskId === task.id && !insertAt.above && (
                 <InsertRow
                   gridStyle={gridStyle}
-                  onSubmit={(title) => void submitInsert(task, false, title)}
+                  indent={insertAt.asSub ? (depth + 1) * 20 : depth * 20}
+                  onSubmit={(title) => void submitInsert(task, false, title, insertAt.asSub)}
                   onCancel={() => setInsertAt(null)}
                 />
               )}
@@ -806,17 +838,22 @@ function HeaderCell({
 // Enter — создать, Esc/пустой blur — убрать.
 function InsertRow({
   gridStyle,
+  indent = 0,
   onSubmit,
   onCancel,
 }: {
   gridStyle: React.CSSProperties;
+  indent?: number;
   onSubmit: (title: string) => void;
   onCancel: () => void;
 }): React.ReactElement {
   const [value, setValue] = useState('');
   return (
     <div style={gridStyle} className="grid border-b bg-accent/30">
-      <div className="flex items-center gap-1.5 px-2 py-1">
+      <div
+        className="flex items-center gap-1.5 px-2 py-1"
+        style={indent > 0 ? { paddingLeft: 8 + indent } : undefined}
+      >
         <FileText className="size-4 shrink-0 text-muted-foreground/40" />
         <input
           autoFocus
@@ -933,6 +970,10 @@ function TableRow({
   task,
   gridStyle,
   visibleCols,
+  depth = 0,
+  hasChildren = false,
+  expanded = false,
+  onToggleExpand,
   wrapTitle,
   dndEnabled,
   recentlyMoved,
@@ -951,6 +992,7 @@ function TableRow({
   onToggleSelected,
   onOpen,
   onCreateBelow,
+  onAddSub,
   onStatus,
   onPriority,
   onDeadline,
@@ -964,6 +1006,10 @@ function TableRow({
   task: Task;
   gridStyle: React.CSSProperties;
   visibleCols: readonly ViewColumn[];
+  depth?: number;
+  hasChildren?: boolean;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
   wrapTitle: boolean;
   dndEnabled: boolean;
   recentlyMoved: boolean;
@@ -982,6 +1028,7 @@ function TableRow({
   onToggleSelected: (shift: boolean) => void;
   onOpen: () => void;
   onCreateBelow: (above: boolean) => void;
+  onAddSub: () => void;
   onStatus: (s: TaskStatus) => void;
   onPriority: (p: TaskPriority | null) => void;
   onDeadline: (d: string | null) => void;
@@ -1119,6 +1166,7 @@ function TableRow({
     onStartDate,
     onDuplicate,
     onDelete,
+    onAddSub,
   });
 
   return (
@@ -1198,13 +1246,33 @@ function TableRow({
       </div>
 
       {/* Название: иконка + заголовок; клик по тексту — inline-правка (Notion: клик по
-          ячейке редактирует, открытие — кнопкой «ОТКРЫТЬ»). */}
+          ячейке редактирует, открытие — кнопкой «ОТКРЫТЬ»). Отступ и стрелка — дерево
+          подзадач (Notion sub-items). */}
       <div
         className={cn(
           'flex min-w-0 items-center gap-1.5 px-2 py-1',
           frozenTitle && 'sticky left-0 z-10 border-r bg-background',
         )}
+        style={depth > 0 ? { paddingLeft: 8 + depth * 20 } : undefined}
       >
+        {hasChildren ? (
+          <button
+            type="button"
+            aria-label={expanded ? 'Свернуть подзадачи' : 'Развернуть подзадачи'}
+            title={expanded ? 'Свернуть подзадачи' : 'Развернуть подзадачи'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand?.();
+            }}
+            className="grid size-4 shrink-0 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <ChevronDown
+              className={cn('size-3.5 transition-transform', !expanded && '-rotate-90')}
+            />
+          </button>
+        ) : (
+          depth > 0 && <span className="size-4 shrink-0" aria-hidden />
+        )}
         {task.icon ? (
           <span className="grid size-4 shrink-0 place-items-center overflow-hidden">
             <ProjectIconView icon={task.icon} pixelSize={15} className="text-sm" />

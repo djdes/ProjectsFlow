@@ -54,6 +54,7 @@ function mk(overrides: {
     ralphCancelRequestedByDisplayName: null,
     deadline: overrides.deadline ?? null,
     startDate: null,
+    parentTaskId: null,
     priority: overrides.priority ?? null,
     delegation,
     projectName: overrides.projectName ?? 'Проект 1',

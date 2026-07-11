@@ -52,6 +52,8 @@ export const createTaskSchema = z.object({
   deadline: deadlineSchema.optional(),
   // Дата начала (диапазон startDate → deadline). Тот же формат/семантика, что deadline.
   startDate: deadlineSchema.optional(),
+  // Подзадача (db/107): id родительской задачи того же проекта.
+  parentTaskId: z.string().uuid().nullable().optional(),
   priority: prioritySchema.optional(),
 });
 

@@ -29,6 +29,8 @@ export type CreateTaskInput = {
   readonly deadline?: string | null;
   // Дата начала (диапазон startDate → deadline). null = событие одного дня.
   readonly startDate?: string | null;
+  // Подзадача: id родителя. null/undefined = верхний уровень.
+  readonly parentTaskId?: string | null;
   // Приоритет 1..4 (1=urgent, 4=low). null = без приоритета.
   readonly priority?: TaskPriority | null;
 };

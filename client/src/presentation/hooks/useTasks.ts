@@ -23,6 +23,7 @@ export type UseTasks = State & {
     delegateUserId?: string | null;
     deadline?: string | null;
     startDate?: string | null;
+    parentTaskId?: string | null;
     priority?: TaskPriority | null;
   }) => Promise<Task>;
   update: (

@@ -617,6 +617,8 @@ export const tasks = mysqlTable(
     statusBeforeDone: varchar('status_before_done', { length: 24 }),
     // Float-position для дешёвой вставки между двумя соседями — без массового UPDATE.
     position: double('position').notNull().default(0),
+    // Подзадачи (db/107): родительская задача того же проекта. NULL = верхний уровень.
+    parentTaskId: char('parent_task_id', { length: 36 }),
     // Режим работы Ralph по задаче. См. db/035 и domain RalphMode.
     // VARCHAR (не enum) — forward-compat под новые режимы без миграции схемы Drizzle.
     ralphMode: varchar('ralph_mode', { length: 16 }).notNull().default('normal'),

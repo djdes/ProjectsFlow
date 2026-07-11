@@ -42,6 +42,7 @@ import {
   STATUS_PILL,
   ViewTaskDrawer,
   applyViewSort,
+  buildTreeRows,
   groupKeyFor,
   groupLabelFor,
   hasActiveFilters,
@@ -49,6 +50,7 @@ import {
   rowColorFor,
   taskMenuEntries,
   taskTitle,
+  type TreeRow,
   type ViewColorRule,
   type ViewFilters,
   type ViewGrouping,
@@ -127,20 +129,39 @@ export function ListView({
     });
   };
 
-  // «+» слева (Notion): inline-строка ввода сразу под текущей.
+  // «+» слева (Notion): inline-строка ввода сразу под текущей; asSub — подзадача.
   const [insertAfterId, setInsertAfterId] = useState<string | null>(null);
+  const [insertAsSub, setInsertAsSub] = useState(false);
   const [insertValue, setInsertValue] = useState('');
   const submitInsert = async (anchor: Task): Promise<void> => {
     const name = insertValue.trim();
+    const asSub = insertAsSub;
     setInsertAfterId(null);
+    setInsertAsSub(false);
     setInsertValue('');
     if (!name) return;
     try {
-      await create({ description: name, status: anchor.status, afterTaskId: anchor.id });
+      await create({
+        description: name,
+        status: anchor.status,
+        afterTaskId: anchor.id,
+        ...(asSub ? { parentTaskId: anchor.id } : {}),
+      });
+      if (asSub) setExpandedTasks((prev) => new Set(prev).add(anchor.id));
     } catch (e) {
       toast.error(`Не удалось: ${(e as Error).message}`);
     }
   };
+
+  // Дерево подзадач (Notion sub-items): активен без группировки; свёрнуто по умолчанию.
+  const [expandedTasks, setExpandedTasks] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleExpand = (id: string): void =>
+    setExpandedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   // Inline-переименование (карандаш при hover — Notion list): меняем title-часть описания.
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -178,6 +199,11 @@ export function ListView({
         void update(task.id, { startDate: d }).catch((e: unknown) =>
           toast.error(`Не удалось: ${(e as Error).message}`),
         ),
+      onAddSub: () => {
+        setInsertAfterId(task.id);
+        setInsertAsSub(true);
+        setInsertValue('');
+      },
       onDuplicate: () =>
         void create({
           description: task.description ?? '',
@@ -250,7 +276,7 @@ export function ListView({
       >
       <div className="flex flex-col pl-12">
         {(grouping && groups
-          ? groups.flatMap((g) => {
+          ? (groups.flatMap((g) => {
               const sample = g.tasks[0];
               return [
                 <div key={`__group-${g.key}`} className="flex items-center gap-1.5 px-1 pb-1 pt-3">
@@ -283,17 +309,23 @@ export function ListView({
                     </button>
                   )}
                 </div>,
-                ...(collapsedGroups.has(g.key) ? [] : g.tasks),
+                ...(collapsedGroups.has(g.key)
+                  ? []
+                  : g.tasks.map((t) => ({ task: t, depth: 0, hasChildren: false }))),
               ];
-            })
-          : rows
+            }) as (React.ReactElement | TreeRow)[])
+          : buildTreeRows(rows, expandedTasks)
         ).map((item) => {
-          if (!(typeof item === 'object' && 'id' in item)) return item;
-          const task = item as Task;
+          if (!(typeof item === 'object' && 'task' in item)) return item;
+          const { task, depth, hasChildren } = item as TreeRow;
           return (
           <Fragment key={task.id}>
             <ListRow
               task={task}
+              depth={depth}
+              hasChildren={hasChildren}
+              expanded={expandedTasks.has(task.id)}
+              onToggleExpand={() => toggleExpand(task.id)}
               dndEnabled={canReorder}
               recentlyMoved={recentlyMovedId === task.id}
               rowColor={rowColorFor(task, colorRules)}
@@ -390,6 +422,10 @@ export function ListView({
 // Строка списка: droppable (вставка ПЕРЕД — синяя линия сверху) + drag за «⋮⋮».
 function ListRow({
   task,
+  depth = 0,
+  hasChildren = false,
+  expanded = false,
+  onToggleExpand,
   dndEnabled,
   recentlyMoved,
   rowColor,
@@ -407,6 +443,10 @@ function ListRow({
   menu,
 }: {
   task: Task;
+  depth?: number;
+  hasChildren?: boolean;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
   dndEnabled: boolean;
   recentlyMoved: boolean;
   rowColor: string | null;
@@ -445,8 +485,26 @@ function ListRow({
             isOver && 'shadow-[inset_0_2px_0_0_hsl(var(--primary))]',
             recentlyMoved && 'bg-primary/5 ring-2 ring-inset ring-primary/60',
           )}
+          style={depth > 0 ? { paddingLeft: 8 + depth * 20 } : undefined}
           onClick={onOpen}
         >
+          {/* Стрелка раскрытия подзадач (Notion sub-items). */}
+          {hasChildren ? (
+            <button
+              type="button"
+              aria-label={expanded ? 'Свернуть подзадачи' : 'Развернуть подзадачи'}
+              title={expanded ? 'Свернуть подзадачи' : 'Развернуть подзадачи'}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpand?.();
+              }}
+              className="grid size-4 shrink-0 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <ChevronDown className={cn('size-3.5 transition-transform', !expanded && '-rotate-90')} />
+            </button>
+          ) : (
+            depth > 0 && <span className="size-4 shrink-0" aria-hidden />
+          )}
           {/* Hover-контролы в левом поле (Notion): «+», «⋮⋮» (клик-меню/drag) и чекбокс. */}
           <div
             className={cn(

@@ -62,6 +62,7 @@ function toTask(row: TaskRowJoined): Task {
     // Cast не нужен — TypeScript $inferSelect уже даёт string | null.
     deadline: row.deadline ?? null,
     startDate: row.startDate ?? null,
+    parentTaskId: row.parentTaskId ?? null,
     // tinyint 1..4 — на проводе number. Cast в TaskPriority безопасен (валидация в zod
     // на write-path; на read возможно увидим число вне диапазона если кто-то сделал
     // ручной UPDATE — но это edge-case).
@@ -98,6 +99,7 @@ export class DrizzleTaskRepository implements TaskRepository {
         ralphCancelRequestedBy: tasks.ralphCancelRequestedBy,
         deadline: tasks.deadline,
         startDate: tasks.startDate,
+        parentTaskId: tasks.parentTaskId,
         priority: tasks.priority,
         createdAt: tasks.createdAt,
         updatedAt: tasks.updatedAt,
@@ -158,6 +160,7 @@ export class DrizzleTaskRepository implements TaskRepository {
       ...(input.ralphMode !== undefined ? { ralphMode: input.ralphMode } : {}),
       ...(input.deadline !== undefined ? { deadline: input.deadline } : {}),
       ...(input.startDate !== undefined ? { startDate: input.startDate } : {}),
+      ...(input.parentTaskId !== undefined ? { parentTaskId: input.parentTaskId } : {}),
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
     });
     const created = await this.getById(input.id);
@@ -220,6 +223,8 @@ export class DrizzleTaskRepository implements TaskRepository {
       await tx.delete(recentTaskViews).where(eq(recentTaskViews.taskId, taskId));
       await tx.delete(telegramTaskMessages).where(eq(telegramTaskMessages.taskId, taskId));
       await tx.delete(emailActionTokens).where(eq(emailActionTokens.taskId, taskId));
+      // Подзадачи не удаляем — отвязываем на верхний уровень (db/107).
+      await tx.update(tasks).set({ parentTaskId: null }).where(eq(tasks.parentTaskId, taskId));
       const result = await tx.delete(tasks).where(eq(tasks.id, taskId));
       const affected = (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
       existed = affected > 0;

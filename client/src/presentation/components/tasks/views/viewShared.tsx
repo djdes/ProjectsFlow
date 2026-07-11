@@ -145,6 +145,8 @@ export function taskMenuEntries(
     onStartDate: (d: string | null) => void;
     onDuplicate: () => void;
     onDelete: () => void;
+    // Подзадачи (db/107): inline-создание под родителем. undefined = пункт скрыт.
+    onAddSub?: () => void;
   },
 ): MenuEntry[] {
   const today = ymd(startOfDay(new Date()));
@@ -229,6 +231,11 @@ export function taskMenuEntries(
   );
   return [
     { kind: 'item', label: 'Открыть', icon: Maximize2, onSelect: h.onOpen },
+    ...(h.onAddSub
+      ? ([
+          { kind: 'item', label: 'Добавить подзадачу', icon: Plus, onSelect: h.onAddSub },
+        ] as MenuEntry[])
+      : []),
     { kind: 'separator' },
     {
       kind: 'sub',
@@ -332,6 +339,34 @@ export function rowColorFor(task: Task, rules: readonly ViewColorRule[]): string
       return RULE_COLOR_ROW[r.color];
   }
   return null;
+}
+
+// ---- Подзадачи (Notion sub-items): дерево строк для таблицы/списка ----
+
+export type TreeRow = { task: Task; depth: number; hasChildren: boolean };
+
+// rows приходят уже отсортированными; дети рендерятся под родителем с отступом.
+// Родитель вне списка (отфильтрован/другой стейт) — ребёнок показывается корневым.
+export function buildTreeRows(rows: readonly Task[], expanded: ReadonlySet<string>): TreeRow[] {
+  const ids = new Set(rows.map((t) => t.id));
+  const byParent = new Map<string | null, Task[]>();
+  for (const t of rows) {
+    const parent = t.parentTaskId && ids.has(t.parentTaskId) ? t.parentTaskId : null;
+    const arr = byParent.get(parent);
+    if (arr) arr.push(t);
+    else byParent.set(parent, [t]);
+  }
+  const out: TreeRow[] = [];
+  const walk = (parent: string | null, depth: number): void => {
+    if (depth > 6) return; // safety-cap вложенности
+    for (const t of byParent.get(parent) ?? []) {
+      const hasChildren = byParent.has(t.id);
+      out.push({ task: t, depth, hasChildren });
+      if (hasChildren && expanded.has(t.id)) walk(t.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
 }
 
 // Ключ группы задачи при активной группировке.

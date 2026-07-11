@@ -60,6 +60,8 @@ export type CreateTaskCommand = {
   readonly deadline?: string | null;
   // Дата начала (диапазон startDate → deadline). null/undefined — событие одного дня.
   readonly startDate?: string | null;
+  // Подзадача: id родителя (валидируется: родитель существует и в том же проекте).
+  readonly parentTaskId?: string | null;
   // Приоритет 1..4. null/undefined — без приоритета.
   readonly priority?: TaskPriority | null;
   // true — атрибутировать создателя (created_by) НЕ на actor'а (ownerUserId), а на владельца
@@ -104,6 +106,13 @@ export class CreateTask {
       position = bounds ? bounds.min - POSITION_STEP : POSITION_STEP;
     }
 
+    // Подзадача: родитель должен существовать и быть в том же проекте (db/107).
+    let parentTaskId: string | null = null;
+    if (input.parentTaskId) {
+      const parent = await this.deps.tasks.getById(input.parentTaskId);
+      if (parent && parent.projectId === input.projectId) parentTaskId = parent.id;
+    }
+
     const task = await this.deps.tasks.create({
       id: this.deps.idGen(),
       projectId: input.projectId,
@@ -117,6 +126,7 @@ export class CreateTask {
       ralphMode: input.ralphMode,
       deadline: input.deadline ?? null,
       startDate: input.startDate ?? null,
+      parentTaskId,
       priority: input.priority ?? null,
     });
 
