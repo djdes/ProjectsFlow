@@ -331,6 +331,13 @@ const INTERACTIVE_OUTSIDE_SELECTOR = [
   '[contenteditable=""]',
   '[draggable="true"]',
   '[tabindex]:not([tabindex="-1"])',
+  // Открытые Radix-порталы (меню/списки/поповеры/диалоги) — клик по ним НЕ закрывает окно
+  // (иначе выбор значения в выпадающем меню приоритета/срока «мимо окна» ронял бы дровер).
+  '[role="menu"]',
+  '[role="listbox"]',
+  '[role="dialog"]',
+  '[role="tooltip"]',
+  '[data-radix-popper-content-wrapper]',
 ].join(',');
 
 function isInteractiveOutsideTarget(target: EventTarget | null): boolean {
@@ -426,17 +433,12 @@ function DrawerShell({
         // фокусит контент → у левого (единственного видимого) края мелькает чёрный outline.
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
-        // side-peek: немодально (как в Notion) — остальной сайт кликабелен. Клик по ПУСТОЙ
-        // области вне окна закрывает его; клик по кликабельному (кнопка/задача/канбан) —
-        // НЕ закрывает, действие срабатывает, окно остаётся. center-peek: модально —
+        // side-peek: немодально (как в Notion) — остальной сайт кликабелен. Закрываем ТОЛЬКО
+        // по pointerdown в ПУСТУЮ область вне окна; клик по кликабельному (кнопка/задача/канбан/
+        // открытое меню) — НЕ закрывает, действие срабатывает, окно остаётся. Уход фокуса
+        // (onFocusOutside) НИКОГДА не закрывает: открытие меню приоритета/срока/⋯ переносит
+        // фокус в портал меню, и без этого окно ложно закрывалось. center-peek: модально —
         // любой клик мимо закрывает (даём Radix обработать), поэтому фильтр только в side-режиме.
-        onInteractOutside={
-          isCenter
-            ? undefined
-            : (e) => {
-                if (isInteractiveOutsideTarget(e.detail.originalEvent.target)) e.preventDefault();
-              }
-        }
         onPointerDownOutside={
           isCenter
             ? undefined
@@ -444,6 +446,7 @@ function DrawerShell({
                 if (isInteractiveOutsideTarget(e.detail.originalEvent.target)) e.preventDefault();
               }
         }
+        onFocusOutside={isCenter ? undefined : (e) => e.preventDefault()}
         {...dragHandlers}
       >
         {dragOverlay}
