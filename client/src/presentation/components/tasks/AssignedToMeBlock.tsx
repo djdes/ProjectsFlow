@@ -24,6 +24,8 @@ import {
   CalendarOff,
   CalendarRange,
   Check,
+  Eye,
+  EyeOff,
   Filter,
   Flag,
   FolderKanban,
@@ -42,13 +44,6 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
@@ -98,9 +93,11 @@ type Props = {
   // DOM-узел в шапке страницы, куда портализуются фильтры (от/кому/проект) + «Сортировка».
   // null (нет слота) → рендерим их на месте, в шапке блока (фолбэк).
   toolbarSlot?: HTMLElement | null;
-  // Скрыть выполненные (status='done'). Общий Eye-toggle страницы «Входящие» (persist в
-  // localStorage) действует и на этот блок, и на доску ниже — одна кнопка на страницу.
+  // Скрыть выполненные (status='done'). Действует и на этот блок, и на доску ниже — один
+  // тумблер на страницу (persist в localStorage у InboxPage). Тумблер живёт внутри кнопки
+  // «Фильтры» этого блока, поэтому нужен и сеттер.
   hideDone?: boolean;
+  onHideDoneChange?: (v: boolean) => void;
   // Full-bleed классы (как у доски проекта): в kanban ряд колонок выносится за паддинг
   // страницы, чтобы отступы от краёв были такими же, как в проектах.
   bleedNegClass?: string;
@@ -166,6 +163,7 @@ export function AssignedToMeBlock({
   onChanged,
   toolbarSlot = null,
   hideDone = false,
+  onHideDoneChange,
   bleedNegClass = '',
   bleedPadClass = '',
   externalDnd = null,
@@ -570,9 +568,38 @@ export function AssignedToMeBlock({
   }, [externalDnd]);
 
   if (loading) return null;
-  // Блок скрыт, только когда пусто В ОБЕИХ вкладках (с учётом hide-done). Пустая
-  // АКТИВНАЯ вкладка при живой соседней рисует тихий empty-state (табы должны остаться).
-  if (toMeVisible.length === 0 && byMeVisibleAll.length === 0) return null;
+
+  // #2: единая кнопка «Фильтры» в шапке страницы. Сортировка (когда есть поручения) +
+  // скрыть-выполненные (всегда) + фильтры от/кому/проект (только вкладка «Другим»).
+  const hasAny = toMeVisible.length > 0 || byMeVisibleAll.length > 0;
+  const filtersPopover = (
+    <InboxFiltersPopover
+      showSort={hasAny}
+      showFilters={hasAny && tab === 'byMe' && byMeTasks.length > 0}
+      grouping={grouping}
+      onGroupingChange={handleGroupingChange}
+      hideDone={hideDone}
+      onHideDoneChange={onHideDoneChange}
+      options={filterOptions}
+      from={filterFrom}
+      to={filterTo}
+      project={filterProject}
+      onFrom={setFilterFrom}
+      onTo={setFilterTo}
+      onProject={setFilterProject}
+      onResetFilters={() => {
+        setFilterFrom(null);
+        setFilterTo(null);
+        setFilterProject(null);
+      }}
+    />
+  );
+  const filtersToolbar = toolbarSlot ? createPortal(filtersPopover, toolbarSlot) : null;
+
+  // Блок скрыт, когда пусто В ОБЕИХ вкладках (с учётом hide-done): саму зону не рисуем, но
+  // кнопку «Фильтры» (скрыть-выполненные для доски ниже) в шапке страницы оставляем.
+  if (!hasAny) return filtersToolbar;
+
   const pendingCount = visibleTasks.filter(isAwaitingResponse).length;
   // Русская плюрализация: 1/21/31 «ждёт ответа», иначе «ждут ответа» (11 — исключение).
   const pendingWord =
@@ -648,39 +675,11 @@ export function AssignedToMeBlock({
             </div>
           )}
         </div>
-        {/* Фильтры (от/кому/проект, вкладка «Другим») + «Сортировка». По умолчанию порталятся
-            в шапку страницы (toolbarSlot — строка с «Входящие»); фолбэк — на месте, в шапке блока. */}
-        {(() => {
-          const toolbar = (
-            <>
-              {/* #2: все фильтры «Другим» (От/Кому/Проект) — под одной кнопкой-воронкой с
-                  поповером, чтобы не «летали» тремя меню в шапке. «Сортировка» отдельно (это
-                  группировка, не фильтр). */}
-              {tab === 'byMe' && byMeTasks.length > 0 && (
-                <InboxFilterPopover
-                  options={filterOptions}
-                  from={filterFrom}
-                  to={filterTo}
-                  project={filterProject}
-                  onFrom={setFilterFrom}
-                  onTo={setFilterTo}
-                  onProject={setFilterProject}
-                  onReset={() => {
-                    setFilterFrom(null);
-                    setFilterTo(null);
-                    setFilterProject(null);
-                  }}
-                />
-              )}
-              <GroupingMenu value={grouping} onChange={handleGroupingChange} />
-            </>
-          );
-          return toolbarSlot ? (
-            createPortal(toolbar, toolbarSlot)
-          ) : (
-            <div className="flex flex-wrap items-center justify-end gap-1">{toolbar}</div>
-          );
-        })()}
+        {/* Единая кнопка «Фильтры» порталится в шапку страницы (toolbarSlot). Фолбэк (нет
+            слота) — рендерим на месте, в шапке блока. Сам портал отдаётся из return ниже. */}
+        {!toolbarSlot && (
+          <div className="flex flex-wrap items-center justify-end gap-1">{filtersPopover}</div>
+        )}
       </div>
 
       {visibleTasks.length === 0 ? (
@@ -870,24 +869,33 @@ export function AssignedToMeBlock({
   );
 
   // External-режим (инбокс): DndContext и DragOverlay рендерит InboxUnifiedDnd на странице
-  // (хендлеры зарегистрированы эффектом выше), блок отдаёт только тело.
-  if (externalDnd) return body;
+  // (хендлеры зарегистрированы эффектом выше), блок отдаёт тело + портал кнопки «Фильтры».
+  if (externalDnd)
+    return (
+      <>
+        {filtersToolbar}
+        {body}
+      </>
+    );
 
   return (
     // Один DndContext на всю зону: и временные колонки (drag → срок), и кубики людей
     // (drag → делегирование) — общие drop-цели одного перетаскивания карточки.
-    <DndContext
-      sensors={sensors}
-      collisionDetection={dndCollision}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
-    >
-    {body}
-    <DragOverlay dropAnimation={null} modifiers={[snapToCursor]}>
-      {activeDrag ? <AssignedDragPill item={activeDrag} /> : null}
-    </DragOverlay>
-    </DndContext>
+    <>
+      {filtersToolbar}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={dndCollision}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+      >
+        {body}
+        <DragOverlay dropAnimation={null} modifiers={[snapToCursor]}>
+          {activeDrag ? <AssignedDragPill item={activeDrag} /> : null}
+        </DragOverlay>
+      </DndContext>
+    </>
   );
 }
 
@@ -1290,10 +1298,17 @@ function TabButton({
   );
 }
 
-// #2: единый поповер фильтров вкладки «Другим». Кнопка-воронка с бейджем числа активных
-// фильтров; внутри — три секции (От кого / Кому / Проект) компактными чипами. Инлайн-чипы
-// (без вложенного DropdownMenu-портала) — выбор не закрывает поповер, всё видно сразу.
-function InboxFilterPopover({
+// #2: единая кнопка «Фильтры» «Входящих» — поповер, куда собраны ВСЕ контролы шапки, чтобы
+// не «летали» по строке: сортировка блока (когда есть поручения), тумблер «скрыть выполненные»
+// (всегда — действует и на доску ниже) и фильтры От/Кому/Проект (только вкладка «Другим»).
+// Инлайн-чипы/строки без вложенного DropdownMenu-портала — выбор не закрывает поповер.
+function InboxFiltersPopover({
+  showSort,
+  showFilters,
+  grouping,
+  onGroupingChange,
+  hideDone,
+  onHideDoneChange,
   options,
   from,
   to,
@@ -1301,8 +1316,14 @@ function InboxFilterPopover({
   onFrom,
   onTo,
   onProject,
-  onReset,
+  onResetFilters,
 }: {
+  showSort: boolean;
+  showFilters: boolean;
+  grouping: AssignedGrouping;
+  onGroupingChange: (g: AssignedGrouping) => void;
+  hideDone: boolean;
+  onHideDoneChange?: (v: boolean) => void;
   options: {
     from: { id: string; name: string }[];
     to: { id: string; name: string }[];
@@ -1314,9 +1335,12 @@ function InboxFilterPopover({
   onFrom: (v: string | null) => void;
   onTo: (v: string | null) => void;
   onProject: (v: string | null) => void;
-  onReset: () => void;
+  onResetFilters: () => void;
 }): React.ReactElement {
-  const activeCount = [from, to, project].filter((v) => v !== null).length;
+  const activeFilterCount = showFilters ? [from, to, project].filter((v) => v !== null).length : 0;
+  // Бейдж на кнопке = сколько «нестандартного» включено (фильтры + скрытие выполненных),
+  // чтобы было видно активность, не открывая поповер. Сортировка — выбор, не «активный фильтр».
+  const badgeCount = activeFilterCount + (hideDone ? 1 : 0);
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -1325,57 +1349,119 @@ function InboxFilterPopover({
           aria-label="Фильтры"
           className={cn(
             'inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground',
-            activeCount > 0 && 'bg-hover text-foreground',
+            badgeCount > 0 && 'bg-hover text-foreground',
           )}
         >
           <Filter className="size-3.5" />
           <span className="hidden sm:inline">Фильтры</span>
-          {activeCount > 0 && (
+          {badgeCount > 0 && (
             <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary/15 px-1 text-[10px] font-semibold tabular-nums text-primary">
-              {activeCount}
+              {badgeCount}
             </span>
           )}
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 p-0">
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-xs font-semibold text-foreground">Фильтры</span>
-          {activeCount > 0 && (
-            <button
-              type="button"
-              onClick={onReset}
-              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
-            >
-              <X className="size-3" />
-              Сбросить
-            </button>
+        <div className="max-h-[70vh] overflow-y-auto py-1">
+          {/* Скрыть выполненные — всегда (действует и на доску ниже). */}
+          <div className="px-1">
+            <HideDoneRow value={hideDone} onChange={onHideDoneChange} />
+          </div>
+
+          {/* Сортировка блока «Поручено мне» — когда есть поручения (иначе вкладок нет). */}
+          {showSort && (
+            <div className="mt-1 border-t px-2 pb-1 pt-2">
+              <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                <ListFilter className="size-3 shrink-0" />
+                Сортировка
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {ASSIGNED_GROUPINGS.map((g) => (
+                  <FilterChip key={g} active={grouping === g} onClick={() => onGroupingChange(g)}>
+                    {ASSIGNED_GROUPING_LABELS[g]}
+                  </FilterChip>
+                ))}
+              </div>
+            </div>
           )}
-        </div>
-        <div className="max-h-[60vh] overflow-y-auto border-t py-1">
-          <InboxFilterSection
-            icon={Send}
-            label="От кого"
-            options={options.from}
-            value={from}
-            onChange={onFrom}
-          />
-          <InboxFilterSection
-            icon={Users}
-            label="Кому"
-            options={options.to}
-            value={to}
-            onChange={onTo}
-          />
-          <InboxFilterSection
-            icon={FolderKanban}
-            label="Проект"
-            options={options.projects}
-            value={project}
-            onChange={onProject}
-          />
+
+          {/* Фильтры От/Кому/Проект — только вкладка «Другим». */}
+          {showFilters && (
+            <>
+              <div className="mt-1 flex items-center justify-between border-t px-3 pb-1 pt-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                  Фильтры
+                </span>
+                {activeFilterCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={onResetFilters}
+                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+                  >
+                    <X className="size-3" />
+                    Сбросить
+                  </button>
+                )}
+              </div>
+              <InboxFilterSection
+                icon={Send}
+                label="От кого"
+                options={options.from}
+                value={from}
+                onChange={onFrom}
+              />
+              <InboxFilterSection
+                icon={Users}
+                label="Кому"
+                options={options.to}
+                value={to}
+                onChange={onTo}
+              />
+              <InboxFilterSection
+                icon={FolderKanban}
+                label="Проект"
+                options={options.projects}
+                value={project}
+                onChange={onProject}
+              />
+            </>
+          )}
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+// Строка-тумблер «скрыть/показать выполненные» внутри поповера «Фильтры».
+function HideDoneRow({
+  value,
+  onChange,
+}: {
+  value: boolean;
+  onChange?: (v: boolean) => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange?.(!value)}
+      aria-pressed={value}
+      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
+    >
+      {value ? (
+        <EyeOff className="size-3.5 shrink-0" />
+      ) : (
+        <Eye className="size-3.5 shrink-0" />
+      )}
+      <span className="flex-1 text-left">Скрыть выполненные</span>
+      <span
+        className={cn(
+          'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+          value ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground/70',
+        )}
+      >
+        {value ? 'скрыты' : 'видны'}
+      </span>
+    </button>
   );
 }
 
@@ -1436,47 +1522,6 @@ function FilterChip({
     >
       {children}
     </button>
-  );
-}
-
-// Переключатель группировки. Radio-меню; текущий режим отмечен. Сохранение — в handleGroupingChange.
-function GroupingMenu({
-  value,
-  onChange,
-}: {
-  value: AssignedGrouping;
-  onChange: (g: AssignedGrouping) => void;
-}): React.ReactElement {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
-          title="Сортировка"
-        >
-          <ListFilter className="size-3.5" />
-          <span className="hidden sm:inline">Сортировка:</span>
-          {/* На мобиле — только иконка (см. PersonFilterMenu): текущий режим виден в
-              title и отмечен в radio-меню. */}
-          <span className="hidden max-w-[8rem] truncate font-medium text-foreground sm:inline">
-            {ASSIGNED_GROUPING_LABELS[value]}
-          </span>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[11rem]">
-        <DropdownMenuRadioGroup
-          value={value}
-          onValueChange={(v) => onChange(v as AssignedGrouping)}
-        >
-          {ASSIGNED_GROUPINGS.map((g) => (
-            <DropdownMenuRadioItem key={g} value={g}>
-              {ASSIGNED_GROUPING_LABELS[g]}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 

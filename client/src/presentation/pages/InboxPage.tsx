@@ -1,19 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { fadeInUp } from '@/presentation/components/motion/presets';
 import { AnimatedInbox } from '@/presentation/components/nav/AnimatedNavIcons';
 import { InboxBreadcrumbs } from '@/presentation/layout/InboxBreadcrumbs';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { toast } from '@/components/ui/sonner';
-import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import type { Project } from '@/domain/project/Project';
 import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
@@ -125,9 +117,9 @@ export function InboxPage(): React.ReactElement {
             <h1 className="text-xl font-semibold tracking-tight">Входящие</h1>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
-            {/* Сюда блок делегирования порталит свои фильтры (от/кому/проект) + «Сортировка». */}
+            {/* Сюда блок делегирования порталит единую кнопку «Фильтры» (сортировка +
+                скрыть-выполненные + фильтры от/кому/проект на вкладке «Другим»). */}
             <div ref={setToolbarSlot} className="flex flex-wrap items-center justify-end gap-1" />
-            <HideDoneToggle value={hideDone} onChange={handleHideDoneChange} />
           </div>
         </div>
 
@@ -138,6 +130,7 @@ export function InboxPage(): React.ReactElement {
             onChanged={() => setRefetchKey((k) => k + 1)}
             toolbarSlot={toolbarSlot}
             hideDone={hideDone}
+            onHideDoneChange={handleHideDoneChange}
             bleedNegClass={KANBAN_BLEED_NEG}
             bleedPadClass={KANBAN_BLEED_PAD}
             externalDnd={dndRegistry}
@@ -163,43 +156,6 @@ export function InboxPage(): React.ReactElement {
         </InboxUnifiedDnd>
       </div>
     </div>
-  );
-}
-
-function HideDoneToggle({
-  value,
-  onChange,
-}: {
-  value: boolean;
-  onChange: (v: boolean) => void;
-}): React.ReactElement {
-  const label = value ? 'Показать выполненные' : 'Скрыть выполненные';
-  return (
-    <TooltipProvider delayDuration={300}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={() => onChange(!value)}
-            aria-pressed={value}
-            aria-label={label}
-            className={cn(
-              'group inline-flex size-9 items-center justify-center rounded-lg border bg-card transition active:scale-95 max-sm:size-11',
-              value
-                ? 'border-foreground/30 text-foreground'
-                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-            )}
-          >
-            {value ? (
-              <EyeOff className="size-4 transition-transform group-active:scale-90" />
-            ) : (
-              <Eye className="size-4 transition-transform group-active:scale-90" />
-            )}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
   );
 }
 
