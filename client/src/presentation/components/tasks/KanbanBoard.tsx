@@ -464,7 +464,16 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   );
 
   const { order: doneOrder, toggle: toggleDoneOrder } = useDoneSortOrder();
-  const grouped = useMemo(() => groupByStatus(tasks, doneOrder), [tasks, doneOrder]);
+  // Инбокс: задача живёт РОВНО в одном канбане (без дублей верх/низ). Активно-делегированные
+  // задачи показываются в верхнем блоке делегирования — с нижней доски они скрываются.
+  // Перетащил вверх (делегация появилась) → карточка исчезает снизу; перетащил пилюлю вниз
+  // (делегация снята) → возвращается на доску. undefined = делегации не загружены (не inbox
+  // list-endpoint) — ничего не фильтруем. Доски проектов не трогаем.
+  const boardTasks = useMemo(
+    () => (isInbox ? tasks.filter((t) => !t.delegation) : tasks),
+    [isInbox, tasks],
+  );
+  const grouped = useMemo(() => groupByStatus(boardTasks, doneOrder), [boardTasks, doneOrder]);
   const activeTask = activeId ? tasks.find((t) => t.id === activeId) ?? null : null;
   // Открытая в drawer'е задача — её карточку подсвечиваем синим бордером (E4).
   const openTaskId = dialog?.mode === 'edit' ? dialog.task.id : null;
@@ -607,7 +616,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   // Inbox-чекбокс: при ткании «done» кладём в конец done-колонки; «un-done» — в конец todo.
   // doneOrder влияет на отображение (newest сверху/снизу), но «последний по position»
   // — это для расчёта позиции на сервере; используем хвост по position среди done.
-  const doneByPos = useMemo(() => [...tasks.filter((t) => t.status === 'done')].sort((a, b) => a.position - b.position), [tasks]);
+  const doneByPos = useMemo(() => [...boardTasks.filter((t) => t.status === 'done')].sort((a, b) => a.position - b.position), [boardTasks]);
   const lastDoneTaskId = doneByPos[doneByPos.length - 1]?.id ?? null;
   const lastTodoTaskId = todoTail?.id ?? null;
 
@@ -948,7 +957,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
       </div>
 
       {/* Пустой проект: дружелюбный старт вместо четырёх голых колонок. */}
-      {!loading && tasks.length === 0 && !filterActive && (
+      {!loading && boardTasks.length === 0 && !filterActive && (
         <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-dashed px-4 py-3">
           <p className="text-sm text-muted-foreground">
             Проект пуст — создайте первую задачу{onOpenAutomation ? ' или включите автоматизацию' : ''}.
