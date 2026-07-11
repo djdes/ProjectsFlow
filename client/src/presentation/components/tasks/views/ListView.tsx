@@ -25,6 +25,7 @@ import {
   STATUS_DOT,
   ViewTaskDrawer,
   applyViewSort,
+  hasActiveFilters,
   matchesFilters,
   taskMenuEntries,
   taskTitle,
@@ -198,7 +199,7 @@ export function ListView({
 
         {rows.length === 0 && (
           <p className="px-2 py-6 text-sm text-muted-foreground">
-            {filters.query || filters.status || filters.priority || filters.due
+            {filters.query || hasActiveFilters(filters)
               ? 'Под фильтр ничего не попадает.'
               : 'Задач пока нет.'}
           </p>

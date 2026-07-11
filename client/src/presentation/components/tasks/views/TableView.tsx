@@ -49,6 +49,7 @@ import {
   VIEW_COLUMN_LABELS,
   ViewTaskDrawer,
   applyViewSort,
+  hasActiveFilters,
   matchesFilters,
   taskMenuEntries,
   taskTitle,
@@ -171,7 +172,7 @@ export function TableView({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="overflow-x-auto">
         {/* Левое «поле» (pl-12): hover-контролы строк живут в нём, как в Notion. */}
-        <div className="min-w-[55rem] pl-12">
+        <div className="min-w-[55rem] pl-12 pr-8">
           {/* Шапка таблицы: иконка типа свойства + название; клик по заголовку —
               меню колонки (сортировка ↑↓, скрыть свойство), как в Notion. */}
           <div
@@ -211,6 +212,29 @@ export function TableView({
                 onHide={() => onToggleCol(c)}
               />
             ))}
+            {/* «+» в конце шапки (Notion add property): вернуть скрытые свойства. */}
+            {hiddenCols.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Показать скрытые свойства"
+                    title="Показать скрытые свойства"
+                    className="absolute -right-7 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    <Plus className="size-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[11rem]">
+                  {hiddenCols.map((c) => (
+                    <DropdownMenuItem key={c} className="gap-2" onClick={() => onToggleCol(c)}>
+                      <ColumnIcon col={c} />
+                      {VIEW_COLUMN_LABELS[c]}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
 
           {rows.map((task) => (
@@ -262,7 +286,7 @@ export function TableView({
 
           {rows.length === 0 && (
             <p className="px-2 py-6 text-sm text-muted-foreground">
-              {filters.query || filters.status || filters.priority || filters.due
+              {filters.query || hasActiveFilters(filters)
                 ? 'Под фильтр ничего не попадает.'
                 : 'Задач пока нет.'}
             </p>
@@ -670,7 +694,7 @@ function TableRow({
         <button
           type="button"
           onClick={onOpen}
-          className="min-w-0 truncate text-left text-sm font-medium decoration-muted-foreground/40 underline-offset-2 hover:underline"
+          className="min-w-0 truncate text-left text-sm font-medium"
         >
           {taskTitle(task)}
         </button>

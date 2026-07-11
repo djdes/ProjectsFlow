@@ -66,24 +66,32 @@ export function matchesQuery(task: Task, query: string): boolean {
 
 export type ViewDueFilter = 'has' | 'none' | 'overdue';
 
+// Значения фильтров — мультивыбор чекбоксами, как в Notion (пустой массив = не фильтруем).
 export type ViewFilters = {
   readonly query: string;
-  readonly status: TaskStatus | null;
-  readonly priority: TaskPriority | null;
+  readonly statuses: readonly TaskStatus[];
+  readonly priorities: readonly TaskPriority[];
   readonly due: ViewDueFilter | null;
 };
 
 export const EMPTY_VIEW_FILTERS: ViewFilters = {
   query: '',
-  status: null,
-  priority: null,
+  statuses: [],
+  priorities: [],
   due: null,
 };
 
+export function hasActiveFilters(f: ViewFilters): boolean {
+  return f.statuses.length > 0 || f.priorities.length > 0 || f.due !== null;
+}
+
 export function matchesFilters(task: Task, f: ViewFilters): boolean {
   if (!matchesQuery(task, f.query)) return false;
-  if (f.status !== null && task.status !== f.status) return false;
-  if (f.priority !== null && task.priority !== f.priority) return false;
+  if (f.statuses.length > 0 && !f.statuses.includes(task.status)) return false;
+  if (f.priorities.length > 0) {
+    if (task.priority === null || task.priority === undefined) return false;
+    if (!f.priorities.includes(task.priority)) return false;
+  }
   if (f.due !== null) {
     const today = ymd(startOfDay(new Date()));
     if (f.due === 'has' && !task.deadline) return false;

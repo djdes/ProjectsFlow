@@ -4,11 +4,15 @@ import {
   ArrowUp,
   ArrowUpDown,
   Calendar,
-  Check,
+  CalendarDays,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CircleDot,
   Copy,
   Eye,
   EyeOff,
+  Flag,
   LayoutGrid,
   Link as LinkIcon,
   List,
@@ -20,6 +24,7 @@ import {
   Table as TableIcon,
   Trash2,
   X,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -34,9 +39,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -44,7 +46,12 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { TaskPriority, TaskStatus } from '@/domain/task/Task';
@@ -69,6 +76,7 @@ import {
   STATUS_DOT,
   VIEW_COLUMN_LABELS,
   VIEW_SORT_LABELS,
+  hasActiveFilters,
   type ViewColumn,
   type ViewDueFilter,
   type ViewFilters,
@@ -292,8 +300,7 @@ export function ProjectBoardViews({
     return { visibleViews: visible, hiddenViews: hidden };
   }, [views, activeId]);
 
-  const filtersActive =
-    state.filters.status !== null || state.filters.priority !== null || state.filters.due !== null;
+  const filtersActive = hasActiveFilters(state.filters);
   const chipsVisible = !isKanban && (filtersActive || state.sort !== null);
 
   const requestCreate = (status: TaskStatus): void =>
@@ -337,7 +344,7 @@ export function ProjectBoardViews({
   ];
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       {/* Строка вкладок + тулбар вью (Notion-style). */}
       <div className="flex items-center gap-0.5 pb-1">
         <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -399,6 +406,11 @@ export function ProjectBoardViews({
           <div className="flex shrink-0 items-center gap-0.5">
             <FilterMenu filters={state.filters} onChange={setFilters} active={filtersActive} />
             <SortMenu sort={state.sort} onChange={setSort} />
+            {onOpenAutomation && (
+              <ToolbarIcon label="Автоматизации" onClick={onOpenAutomation}>
+                <Zap className="size-4" />
+              </ToolbarIcon>
+            )}
             {searchOpen ? (
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
@@ -466,7 +478,8 @@ export function ProjectBoardViews({
         )}
       </div>
 
-      {/* Строка активных фильтров/сортировки (chips, Notion-style). */}
+      {/* Строка активных фильтров/сортировки (chips, Notion-style): клик по chip —
+          попап значений (чекбоксы) + «Убрать фильтр»; «+ Фильтр» добавляет следующий. */}
       {chipsVisible && (
         <div className="flex flex-wrap items-center gap-1 pb-2">
           {state.sort && (
@@ -490,24 +503,42 @@ export function ProjectBoardViews({
               />
             </button>
           )}
-          {state.filters.status !== null && (
-            <FilterChip
-              label={`Статус: ${STATUS_LABEL[state.filters.status]}`}
-              onClear={() => setFilters({ status: null })}
+          {state.filters.statuses.length > 0 && (
+            <FilterChipPopover
+              prop="status"
+              label={`Статус: ${
+                state.filters.statuses.length > 2
+                  ? `${state.filters.statuses.length} значения`
+                  : state.filters.statuses.map((s) => STATUS_LABEL[s]).join(', ')
+              }`}
+              filters={state.filters}
+              onChange={setFilters}
+              onClear={() => setFilters({ statuses: [] })}
             />
           )}
-          {state.filters.priority !== null && (
-            <FilterChip
-              label={`Приоритет: ${PRIORITY_META[state.filters.priority].label}`}
-              onClear={() => setFilters({ priority: null })}
+          {state.filters.priorities.length > 0 && (
+            <FilterChipPopover
+              prop="priority"
+              label={`Приоритет: ${
+                state.filters.priorities.length > 2
+                  ? `${state.filters.priorities.length} значения`
+                  : state.filters.priorities.map((p) => PRIORITY_META[p].label).join(', ')
+              }`}
+              filters={state.filters}
+              onChange={setFilters}
+              onClear={() => setFilters({ priorities: [] })}
             />
           )}
           {state.filters.due !== null && (
-            <FilterChip
-              label={DUE_FILTER_LABELS[state.filters.due]}
+            <FilterChipPopover
+              prop="due"
+              label={`Срок: ${DUE_FILTER_LABELS[state.filters.due]}`}
+              filters={state.filters}
+              onChange={setFilters}
               onClear={() => setFilters({ due: null })}
             />
           )}
+          <AddFilterChip filters={state.filters} onChange={setFilters} />
         </div>
       )}
 
@@ -561,21 +592,29 @@ export function ProjectBoardViews({
         <NewViewPanel onCreate={handleCreate} />
       </SidePanel>
 
-      {/* Правая панель: настройки активной вью. */}
-      <SidePanel open={panel === 'settings' && active !== null} onClose={() => setPanel(null)} title="Настройки вью">
-        {active && (
-          <ViewSettingsPanel
-            view={active}
-            onRename={(name) => void handleUpdate(active, { name })}
-            onType={(type) => void handleUpdate(active, { type })}
-            onCopyLink={() => copyViewLink(active)}
-            onDuplicate={() => void handleDuplicate(active)}
-            onDelete={() => setDeleteTarget(active)}
-            hidden={state.hidden}
-            onToggleColumn={active.type === 'table' ? toggleColumn : undefined}
-          />
-        )}
-      </SidePanel>
+      {/* Настройки вью — карточка под тулбаром справа (Notion View settings). */}
+      {panel === 'settings' && active && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setPanel(null)} aria-hidden />
+          <div className="absolute right-0 top-9 z-40 w-80 max-w-[92vw] rounded-lg border bg-card shadow-xl duration-150 animate-in fade-in slide-in-from-top-1">
+            <ViewSettingsCard
+              view={active}
+              onClose={() => setPanel(null)}
+              onRename={(name) => void handleUpdate(active, { name })}
+              onType={(type) => void handleUpdate(active, { type })}
+              onCopyLink={() => copyViewLink(active)}
+              onDuplicate={() => void handleDuplicate(active)}
+              onDelete={() => setDeleteTarget(active)}
+              hidden={state.hidden}
+              onToggleColumn={active.type === 'table' ? toggleColumn : undefined}
+              filters={state.filters}
+              onFilters={setFilters}
+              sort={state.sort}
+              onSort={setSort}
+            />
+          </div>
+        </>
+      )}
 
       {/* Подтверждение удаления вью (задачи не трогаются — удаляется только представление). */}
       <Dialog open={deleteTarget !== null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
@@ -631,7 +670,160 @@ function ToolbarIcon({
   );
 }
 
-// Меню «Фильтр»: свойство → значения (Notion Filter by…).
+// ---- Фильтры (Notion Filter by…): попап с поиском свойств → чекбоксы значений ----
+
+type FilterProp = 'status' | 'priority' | 'due';
+
+const FILTER_PROPS: { key: FilterProp; label: string; icon: LucideIcon }[] = [
+  { key: 'status', label: 'Статус', icon: CircleDot },
+  { key: 'priority', label: 'Приоритет', icon: Flag },
+  { key: 'due', label: 'Срок', icon: CalendarDays },
+];
+
+// Чекбоксы значений свойства (мультивыбор, применяется сразу — как в Notion).
+function FilterValueList({
+  prop,
+  filters,
+  onChange,
+}: {
+  prop: FilterProp;
+  filters: ViewFilters;
+  onChange: (patch: Partial<ViewFilters>) => void;
+}): React.ReactElement {
+  const row = (
+    key: string,
+    label: React.ReactNode,
+    checked: boolean,
+    toggle: () => void,
+  ): React.ReactElement => (
+    <label
+      key={key}
+      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent"
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={toggle}
+        className="size-3.5 cursor-pointer accent-primary"
+      />
+      {label}
+    </label>
+  );
+  if (prop === 'status') {
+    return (
+      <div className="flex flex-col">
+        {VISIBLE_KANBAN_STATUSES.map((s) =>
+          row(
+            s,
+            <span className="flex items-center gap-2">
+              <span className={cn('size-2 rounded-full', STATUS_DOT[s])} />
+              {STATUS_LABEL[s]}
+            </span>,
+            filters.statuses.includes(s),
+            () =>
+              onChange({
+                statuses: filters.statuses.includes(s)
+                  ? filters.statuses.filter((x) => x !== s)
+                  : [...filters.statuses, s],
+              }),
+          ),
+        )}
+      </div>
+    );
+  }
+  if (prop === 'priority') {
+    return (
+      <div className="flex flex-col">
+        {TASK_PRIORITIES.map((p: TaskPriority) =>
+          row(
+            String(p),
+            <span className="flex items-center gap-2">
+              <span className={cn('size-2 rounded-full', PRIORITY_META[p].dotColor)} />
+              {PRIORITY_META[p].label}
+            </span>,
+            filters.priorities.includes(p),
+            () =>
+              onChange({
+                priorities: filters.priorities.includes(p)
+                  ? filters.priorities.filter((x) => x !== p)
+                  : [...filters.priorities, p],
+              }),
+          ),
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col">
+      {(Object.keys(DUE_FILTER_LABELS) as ViewDueFilter[]).map((d) =>
+        row(d, DUE_FILTER_LABELS[d], filters.due === d, () =>
+          onChange({ due: filters.due === d ? null : d }),
+        ),
+      )}
+    </div>
+  );
+}
+
+// Шаг выбора свойства: инпут «Фильтровать по…» + плоский список свойств (Notion).
+function FilterPicker({
+  filters,
+  onChange,
+}: {
+  filters: ViewFilters;
+  onChange: (patch: Partial<ViewFilters>) => void;
+}): React.ReactElement {
+  const [step, setStep] = useState<'pick' | FilterProp>('pick');
+  const [search, setSearch] = useState('');
+  if (step !== 'pick') {
+    const meta = FILTER_PROPS.find((p) => p.key === step)!;
+    return (
+      <div className="flex flex-col gap-1">
+        <button
+          type="button"
+          onClick={() => setStep('pick')}
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <ChevronLeft className="size-3.5" />
+          {meta.label}
+        </button>
+        <FilterValueList prop={step} filters={filters} onChange={onChange} />
+      </div>
+    );
+  }
+  const list = FILTER_PROPS.filter((p) =>
+    p.label.toLocaleLowerCase('ru').includes(search.trim().toLocaleLowerCase('ru')),
+  );
+  return (
+    <div className="flex flex-col gap-1">
+      <input
+        autoFocus
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Фильтровать по…"
+        aria-label="Фильтровать по"
+        className="w-full rounded-md border border-primary/60 bg-background px-2.5 py-1.5 text-sm outline-none ring-2 ring-primary/20"
+      />
+      <div className="flex flex-col">
+        {list.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            onClick={() => setStep(p.key)}
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+          >
+            <p.icon className="size-4 text-muted-foreground/80" />
+            {p.label}
+          </button>
+        ))}
+        {list.length === 0 && (
+          <p className="px-2 py-1.5 text-sm text-muted-foreground">Ничего не найдено</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Кнопка-иконка фильтра в тулбаре → попап FilterPicker.
 function FilterMenu({
   filters,
   onChange,
@@ -641,9 +833,10 @@ function FilterMenu({
   onChange: (patch: Partial<ViewFilters>) => void;
   active: boolean;
 }): React.ReactElement {
+  const [open, setOpen] = useState(false);
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
         <button
           type="button"
           aria-label="Фильтр"
@@ -655,99 +848,11 @@ function FilterMenu({
         >
           <ListFilter className="size-4" />
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[12rem]">
-        <p className="px-2 py-1.5 text-xs text-muted-foreground">Фильтровать по…</p>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger className="gap-2">
-            <span className={cn('size-2 rounded-full', filters.status ? STATUS_DOT[filters.status] : 'bg-muted-foreground/30')} />
-            Статус
-            {filters.status !== null && (
-              <span className="ml-auto text-xs text-muted-foreground">{STATUS_LABEL[filters.status]}</span>
-            )}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-[11rem]">
-            {VISIBLE_KANBAN_STATUSES.map((s) => (
-              <DropdownMenuItem key={s} className="gap-2" onClick={() => onChange({ status: s })}>
-                <span className={cn('size-2 rounded-full', STATUS_DOT[s])} />
-                {STATUS_LABEL[s]}
-                {filters.status === s && <Check className="ml-auto size-3.5" />}
-              </DropdownMenuItem>
-            ))}
-            {filters.status !== null && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-muted-foreground" onClick={() => onChange({ status: null })}>
-                  Сбросить
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger className="gap-2">
-            Приоритет
-            {filters.priority !== null && (
-              <span className="ml-auto text-xs text-muted-foreground">
-                {PRIORITY_META[filters.priority].label}
-              </span>
-            )}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-[11rem]">
-            {TASK_PRIORITIES.map((p: TaskPriority) => (
-              <DropdownMenuItem key={p} className="gap-2" onClick={() => onChange({ priority: p })}>
-                <span className={cn('size-2 rounded-full', PRIORITY_META[p].dotColor)} />
-                {PRIORITY_META[p].label}
-                {filters.priority === p && <Check className="ml-auto size-3.5" />}
-              </DropdownMenuItem>
-            ))}
-            {filters.priority !== null && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-muted-foreground" onClick={() => onChange({ priority: null })}>
-                  Сбросить
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger className="gap-2">
-            Срок
-            {filters.due !== null && (
-              <span className="ml-auto text-xs text-muted-foreground">{DUE_FILTER_LABELS[filters.due]}</span>
-            )}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-[11rem]">
-            {(Object.keys(DUE_FILTER_LABELS) as ViewDueFilter[]).map((d) => (
-              <DropdownMenuItem key={d} onClick={() => onChange({ due: d })}>
-                {DUE_FILTER_LABELS[d]}
-                {filters.due === d && <Check className="ml-auto size-3.5" />}
-              </DropdownMenuItem>
-            ))}
-            {filters.due !== null && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-muted-foreground" onClick={() => onChange({ due: null })}>
-                  Сбросить
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        {active && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-muted-foreground"
-              onClick={() => onChange({ status: null, priority: null, due: null })}
-            >
-              Сбросить все фильтры
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-1.5">
+        <FilterPicker key={open ? 'o' : 'c'} filters={filters} onChange={onChange} />
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -808,14 +913,72 @@ function SortMenu({
   );
 }
 
-function FilterChip({ label, onClear }: { label: string; onClear: () => void }): React.ReactElement {
+// Chip активного фильтра: клик — попап значений (чекбоксы) + «Убрать фильтр» (Notion).
+function FilterChipPopover({
+  prop,
+  label,
+  filters,
+  onChange,
+  onClear,
+}: {
+  prop: FilterProp;
+  label: string;
+  filters: ViewFilters;
+  onChange: (patch: Partial<ViewFilters>) => void;
+  onClear: () => void;
+}): React.ReactElement {
   return (
-    <span className="inline-flex h-6 items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 text-xs text-primary">
-      {label}
-      <button type="button" aria-label={`Убрать фильтр ${label}`} onClick={onClear}>
-        <X className="size-3 opacity-60 hover:opacity-100" />
-      </button>
-    </span>
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-6 items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 text-xs text-primary transition-colors hover:bg-primary/10"
+        >
+          {label}
+          <ChevronDown className="size-3 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-60 p-1.5">
+        <FilterValueList prop={prop} filters={filters} onChange={onChange} />
+        <div className="mt-1 border-t pt-1">
+          <button
+            type="button"
+            onClick={onClear}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
+          >
+            <Trash2 className="size-3.5" />
+            Убрать фильтр
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// «+ Фильтр» в конце chips-строки — добавить ещё один фильтр (Notion «+ Filter»).
+function AddFilterChip({
+  filters,
+  onChange,
+}: {
+  filters: ViewFilters;
+  onChange: (patch: Partial<ViewFilters>) => void;
+}): React.ReactElement {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-6 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <Plus className="size-3" />
+          Фильтр
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-1.5">
+        <FilterPicker key={open ? 'o' : 'c'} filters={filters} onChange={onChange} />
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -854,7 +1017,6 @@ function ViewTab({
     <>
       <Icon className="size-3.5 shrink-0" />
       <span className="max-w-[9rem] truncate">{name}</span>
-      {active && menu && <ChevronDown className="size-3 shrink-0 opacity-60" />}
     </>
   );
 
@@ -1056,10 +1218,13 @@ function NewViewPanel({
   );
 }
 
-// Содержимое панели «Настройки вью»: имя (live), layout, видимость свойств (таблица),
-// ссылки/дублировать/удалить.
-function ViewSettingsPanel({
+// Карточка «Настройки вью» (Notion View settings): строки-пункты со значением и «›»,
+// drill-down в подстраницы Вид / Свойства / Фильтр / Сортировка с «‹ Назад».
+type SettingsPage = 'root' | 'layout' | 'props' | 'filter' | 'sort';
+
+function ViewSettingsCard({
   view,
+  onClose,
   onRename,
   onType,
   onCopyLink,
@@ -1067,8 +1232,13 @@ function ViewSettingsPanel({
   onDelete,
   hidden,
   onToggleColumn,
+  filters,
+  onFilters,
+  sort,
+  onSort,
 }: {
   view: BoardView;
+  onClose: () => void;
   onRename: (name: string) => void;
   onType: (t: BoardViewType) => void;
   onCopyLink: () => void;
@@ -1076,60 +1246,139 @@ function ViewSettingsPanel({
   onDelete: () => void;
   hidden: ViewColumn[];
   onToggleColumn?: (c: ViewColumn) => void;
+  filters: ViewFilters;
+  onFilters: (patch: Partial<ViewFilters>) => void;
+  sort: ViewSort | null;
+  onSort: (s: ViewSort | null) => void;
 }): React.ReactElement {
+  const [page, setPage] = useState<SettingsPage>('root');
   const [name, setName] = useState(view.name);
   useEffect(() => setName(view.name), [view.id, view.name]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
   const commitName = (): void => {
     const trimmed = name.trim();
     if (trimmed && trimmed !== view.name) onRename(trimmed);
   };
+  const TypeIcon = VIEW_TYPE_ICONS[view.type];
+  const filtersCount =
+    (filters.statuses.length > 0 ? 1 : 0) +
+    (filters.priorities.length > 0 ? 1 : 0) +
+    (filters.due !== null ? 1 : 0);
+
+  const backHeader = (title: string): React.ReactElement => (
+    <button
+      type="button"
+      onClick={() => setPage('root')}
+      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-accent"
+    >
+      <ChevronLeft className="size-4 text-muted-foreground" />
+      {title}
+    </button>
+  );
+
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <p className="pb-1.5 text-xs font-medium text-muted-foreground">Название</p>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={commitName}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              commitName();
-            }
-          }}
-          maxLength={64}
-          aria-label="Название вью"
-          className="w-full rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-foreground/30"
-        />
+    <div className="flex max-h-[70vh] flex-col">
+      <div className="flex items-center justify-between border-b px-3 py-2">
+        <p className="text-sm font-semibold">Настройки вью</p>
+        <button
+          type="button"
+          aria-label="Закрыть панель"
+          onClick={onClose}
+          className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <X className="size-4" />
+        </button>
       </div>
-      <div>
-        <p className="pb-1.5 text-xs font-medium text-muted-foreground">Вид</p>
-        <div className="grid grid-cols-2 gap-1.5">
-          {BOARD_VIEW_TYPES.map((t) => {
-            const Icon = VIEW_TYPE_ICONS[t];
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => onType(t)}
-                className={cn(
-                  'flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-xs transition-colors',
-                  view.type === t
-                    ? 'border-primary/50 bg-primary/5 text-foreground ring-1 ring-primary/30'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                )}
-              >
-                <Icon className="size-5" />
-                {BOARD_VIEW_TYPE_LABELS[t]}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      {onToggleColumn && (
-        <div>
-          <p className="pb-1.5 text-xs font-medium text-muted-foreground">Свойства</p>
-          <div className="flex flex-col gap-0.5">
+      <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+        {page === 'root' && (
+          <div className="flex flex-col gap-1">
+            {/* Имя вью с иконкой типа (Notion: инпут сверху панели). */}
+            <div className="flex items-center gap-1.5 px-0.5 pb-1">
+              <span className="grid size-8 shrink-0 place-items-center rounded-md border">
+                <TypeIcon className="size-4 text-muted-foreground" />
+              </span>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={commitName}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitName();
+                  }
+                }}
+                maxLength={64}
+                aria-label="Название вью"
+                className="h-8 w-full rounded-md border bg-background px-2.5 text-sm outline-none focus:border-foreground/30"
+              />
+            </div>
+            <NavRow
+              icon={TypeIcon}
+              label="Вид"
+              value={BOARD_VIEW_TYPE_LABELS[view.type]}
+              onClick={() => setPage('layout')}
+            />
+            {onToggleColumn && (
+              <NavRow
+                icon={Eye}
+                label="Видимость свойств"
+                value={hidden.length > 0 ? `${hidden.length} скрыто` : 'Все'}
+                onClick={() => setPage('props')}
+              />
+            )}
+            <NavRow
+              icon={ListFilter}
+              label="Фильтр"
+              value={filtersCount > 0 ? String(filtersCount) : undefined}
+              onClick={() => setPage('filter')}
+            />
+            <NavRow
+              icon={ArrowUpDown}
+              label="Сортировка"
+              value={sort ? VIEW_SORT_LABELS[sort.key] : undefined}
+              onClick={() => setPage('sort')}
+            />
+            <PanelRow icon={LinkIcon} label="Скопировать ссылку на вью" onClick={onCopyLink} />
+            <div className="my-0.5 border-t" />
+            <PanelRow icon={Copy} label="Дублировать вью" onClick={onDuplicate} />
+            <PanelRow icon={Trash2} label="Удалить вью" onClick={onDelete} destructive />
+          </div>
+        )}
+        {page === 'layout' && (
+          <div className="flex flex-col gap-1.5">
+            {backHeader('Вид')}
+            <div className="grid grid-cols-2 gap-1.5 px-0.5 pb-1">
+              {BOARD_VIEW_TYPES.map((t) => {
+                const Icon = VIEW_TYPE_ICONS[t];
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => onType(t)}
+                    className={cn(
+                      'flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-xs transition-colors',
+                      view.type === t
+                        ? 'border-primary/50 bg-primary/5 text-foreground ring-1 ring-primary/30'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                    )}
+                  >
+                    <Icon className="size-5" />
+                    {BOARD_VIEW_TYPE_LABELS[t]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {page === 'props' && onToggleColumn && (
+          <div className="flex flex-col gap-1">
+            {backHeader('Видимость свойств')}
             {(Object.keys(VIEW_COLUMN_LABELS) as ViewColumn[]).map((c) => {
               const isHidden = hidden.includes(c);
               return (
@@ -1152,14 +1401,76 @@ function ViewSettingsPanel({
               );
             })}
           </div>
-        </div>
-      )}
-      <div className="flex flex-col gap-0.5 border-t pt-3">
-        <PanelRow icon={LinkIcon} label="Скопировать ссылку на вью" onClick={onCopyLink} />
-        <PanelRow icon={Copy} label="Дублировать вью" onClick={onDuplicate} />
-        <PanelRow icon={Trash2} label="Удалить вью" onClick={onDelete} destructive />
+        )}
+        {page === 'filter' && (
+          <div className="flex flex-col gap-1">
+            {backHeader('Фильтр')}
+            <FilterPicker filters={filters} onChange={onFilters} />
+          </div>
+        )}
+        {page === 'sort' && (
+          <div className="flex flex-col gap-1">
+            {backHeader('Сортировка')}
+            {(Object.keys(VIEW_SORT_LABELS) as ViewSortKey[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() =>
+                  onSort(
+                    sort?.key === k
+                      ? { key: k, dir: sort.dir === 'asc' ? 'desc' : 'asc' }
+                      : { key: k, dir: 'asc' },
+                  )
+                }
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+              >
+                {VIEW_SORT_LABELS[k]}
+                {sort?.key === k &&
+                  (sort.dir === 'asc' ? (
+                    <ArrowUp className="ml-auto size-3.5" />
+                  ) : (
+                    <ArrowDown className="ml-auto size-3.5" />
+                  ))}
+              </button>
+            ))}
+            {sort && (
+              <>
+                <div className="my-0.5 border-t" />
+                <PanelRow icon={X} label="Убрать сортировку" onClick={() => onSort(null)} />
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+// Строка-пункт панели со значением справа и шевроном «›» (Notion settings row).
+function NavRow({
+  icon: Icon,
+  label,
+  value,
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value?: string;
+  onClick: () => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground/90 transition-colors hover:bg-accent"
+    >
+      <Icon className="size-4 shrink-0 text-muted-foreground/80" />
+      {label}
+      <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+        {value}
+        <ChevronRight className="size-3.5" />
+      </span>
+    </button>
   );
 }
 
