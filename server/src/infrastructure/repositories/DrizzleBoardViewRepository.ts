@@ -7,6 +7,19 @@ import type {
   CreateBoardViewInput,
 } from '../../application/project/BoardViewRepository.js';
 
+// MariaDB отдаёт JSON-колонку строкой (LONGTEXT-алиас) — drizzle её не парсит.
+function parseJsonCol<T>(v: unknown, fallback: T): T {
+  if (v === null || v === undefined) return fallback;
+  if (typeof v === 'string') {
+    try {
+      return JSON.parse(v) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return v as T;
+}
+
 function toDomain(row: BoardViewRow): BoardView {
   return {
     id: row.id,
@@ -14,7 +27,7 @@ function toDomain(row: BoardViewRow): BoardView {
     name: row.name,
     type: row.type as BoardViewType,
     sortOrder: row.sortOrder,
-    config: (row.config as Record<string, unknown> | null) ?? null,
+    config: parseJsonCol<Record<string, unknown> | null>(row.config, null),
     createdAt: row.createdAt,
   };
 }
