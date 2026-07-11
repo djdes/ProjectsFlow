@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Calendar,
   Check,
+  ChevronDown,
   Copy,
   LayoutGrid,
   List,
@@ -290,8 +291,10 @@ export function ProjectBoardViews({
   );
 }
 
-// Вкладка вью: клик — выбрать; повторный клик по АКТИВНОЙ пользовательской — меню
-// (Notion-паттерн). У дефолтной «Доски» меню нет.
+// Вкладка вью: клик — выбрать; у АКТИВНОЙ пользовательской справа появляется шеврон-меню
+// (Переименовать/Дублировать/Удалить). Меню НЕ на самой кнопке вкладки: Radix-триггер
+// перехватывает pointerdown и глушит клик — вкладка переставала переключаться (баг ловился
+// e2e: клик по неактивной вкладке открывал меню вместо выбора). У дефолтной «Доски» меню нет.
 function ViewTab({
   icon: Icon,
   name,
@@ -305,33 +308,44 @@ function ViewTab({
   onSelect: () => void;
   menu?: React.ReactNode;
 }): React.ReactElement {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const btn = (
-    <button
-      type="button"
-      onClick={() => {
-        if (!active) onSelect();
-        else if (menu) setMenuOpen(true);
-      }}
+  return (
+    <div
       className={cn(
-        'inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[13px] font-medium transition-colors',
+        'inline-flex shrink-0 items-center rounded-md transition-colors',
         active
           ? 'bg-accent text-foreground'
           : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
       )}
     >
-      <Icon className="size-3.5 shrink-0" />
-      <span className="max-w-[9rem] truncate">{name}</span>
-    </button>
-  );
-  if (!menu) return btn;
-  return (
-    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-      <DropdownMenuTrigger asChild>{btn}</DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[12rem]">
-        {menu}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      <button
+        type="button"
+        onClick={onSelect}
+        className={cn(
+          'inline-flex items-center gap-1.5 py-1 pl-2 text-[13px] font-medium',
+          active && menu ? 'pr-0.5' : 'pr-2',
+        )}
+      >
+        <Icon className="size-3.5 shrink-0" />
+        <span className="max-w-[9rem] truncate">{name}</span>
+      </button>
+      {active && menu && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Меню вью"
+              title="Меню вью"
+              className="grid h-full place-items-center rounded-r-md py-1 pl-0.5 pr-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <ChevronDown className="size-3" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[12rem]">
+            {menu}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
   );
 }
 
