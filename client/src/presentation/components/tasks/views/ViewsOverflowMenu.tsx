@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils';
 import type { BoardView, BoardViewType } from '@/domain/project/BoardView';
 import { BOARD_VIEW_TYPES, BOARD_VIEW_TYPE_LABELS } from '@/domain/project/BoardView';
 import { DropdownEntries, type MenuEntry } from './menuEntries';
-import { VIEW_TYPE_ICONS } from './ProjectBoardViews';
+import { VIEW_TYPE_ICONS, ViewIconGlyph, type ViewIconLike } from './ProjectBoardViews';
 
 type Props = {
   views: BoardView[];
@@ -38,6 +38,8 @@ type Props = {
   onReorder: (orderedIds: string[]) => void;
   menuFor: (v: BoardView) => MenuEntry[];
   boardMenu: MenuEntry[];
+  // Иконка вью: кастомное эмодзи из config или иконка типа.
+  iconFor?: (v: BoardView) => ViewIconLike;
   onCreate: (type: BoardViewType) => void;
   label: string;
 };
@@ -45,7 +47,7 @@ type Props = {
 // Ряд вью в списке: drag за ⋮⋮, клик — переключение, «…» при hover — меню вью.
 function ViewRow({
   id,
-  icon: Icon,
+  icon,
   name,
   active,
   menu,
@@ -53,7 +55,7 @@ function ViewRow({
   draggable,
 }: {
   id: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: ViewIconLike;
   name: string;
   active: boolean;
   menu: MenuEntry[];
@@ -91,7 +93,7 @@ function ViewRow({
         onClick={onSelect}
         className="flex min-w-0 flex-1 items-center gap-2 text-left text-[13px]"
       >
-        <Icon className="size-4 shrink-0 text-muted-foreground" />
+        <ViewIconGlyph icon={icon} className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate">{name}</span>
       </button>
       <DropdownMenu>
@@ -121,6 +123,7 @@ export function ViewsOverflowMenu({
   onReorder,
   menuFor,
   boardMenu,
+  iconFor,
   onCreate,
   label,
 }: Props): React.ReactElement {
@@ -270,7 +273,7 @@ export function ViewsOverflowMenu({
                       <ViewRow
                         key={v.id}
                         id={v.id}
-                        icon={VIEW_TYPE_ICONS[v.type]}
+                        icon={iconFor ? iconFor(v) : VIEW_TYPE_ICONS[v.type]}
                         name={v.name}
                         active={activeId === v.id}
                         menu={menuFor(v)}

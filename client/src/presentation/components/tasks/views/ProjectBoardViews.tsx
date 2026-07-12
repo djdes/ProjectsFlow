@@ -106,6 +106,27 @@ export const VIEW_TYPE_ICONS: Record<BoardViewType, LucideIcon> = {
   calendar: Calendar,
 };
 
+// Иконка вью: lucide-иконка типа ИЛИ кастомное эмодзи из config (Notion view icon).
+export type ViewIconLike = LucideIcon | string;
+
+export function ViewIconGlyph({
+  icon,
+  className,
+}: {
+  icon: ViewIconLike;
+  className?: string;
+}): React.ReactElement {
+  if (typeof icon === 'string') {
+    return (
+      <span className={cn('grid place-items-center text-[0.95em] leading-none', className)}>
+        {icon}
+      </span>
+    );
+  }
+  const Icon = icon;
+  return <Icon className={className} />;
+}
+
 type Props = {
   projectId: string;
   projectName?: string;
@@ -274,6 +295,9 @@ export function ProjectBoardViews({
     setPerView((prev) => ({ ...prev, [activeId]: { ...state, colorRules } }));
   const setCalendarMode = (calendarMode: 'month' | 'week'): void =>
     setPerView((prev) => ({ ...prev, [activeId]: { ...state, calendarMode } }));
+  // Кастомная эмодзи-иконка вью (Notion view icon) — живёт в config, синкается как всё.
+  const setViewIcon = (icon: string | null): void =>
+    setPerView((prev) => ({ ...prev, [activeId]: { ...state, icon } }));
 
   // Гидратация пер-вью состояния из серверного config (только впервые увиденные вью —
   // локальные несохранённые правки не затираем).
@@ -584,15 +608,15 @@ export function ProjectBoardViews({
                 <LayoutGrid className="size-4" />
                 {boardName}
               </DropdownMenuItem>
-              {allViewsSorted.map((v) => {
-                const Icon = VIEW_TYPE_ICONS[v.type];
-                return (
-                  <DropdownMenuItem key={v.id} className="gap-2" onClick={() => selectView(v.id)}>
-                    <Icon className="size-4" />
-                    <span className="min-w-0 flex-1 truncate">{v.name}</span>
-                  </DropdownMenuItem>
-                );
-              })}
+              {allViewsSorted.map((v) => (
+                <DropdownMenuItem key={v.id} className="gap-2" onClick={() => selectView(v.id)}>
+                  <ViewIconGlyph
+                    icon={perView[v.id]?.icon ?? VIEW_TYPE_ICONS[v.type]}
+                    className="size-4"
+                  />
+                  <span className="min-w-0 flex-1 truncate">{v.name}</span>
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -610,7 +634,7 @@ export function ProjectBoardViews({
           {visibleViews.map((v) => (
             <ViewTab
               key={v.id}
-              icon={VIEW_TYPE_ICONS[v.type]}
+              icon={perView[v.id]?.icon ?? VIEW_TYPE_ICONS[v.type]}
               name={v.name}
               active={activeId === v.id}
               onSelect={() => selectView(v.id)}
@@ -632,6 +656,7 @@ export function ProjectBoardViews({
               onReorder={handleReorder}
               menuFor={tabMenuEntries}
               boardMenu={defaultTabMenuEntries()}
+              iconFor={(v) => perView[v.id]?.icon ?? VIEW_TYPE_ICONS[v.type]}
               onCreate={(t) => void handleCreate(BOARD_VIEW_TYPE_LABELS[t], t)}
               label={`ещё ${hiddenViews.length}…`}
             />
@@ -917,6 +942,7 @@ export function ProjectBoardViews({
             onTableState={setTableState}
             onGrouping={setGrouping}
             onCalendarMode={setCalendarMode}
+            onIcon={setViewIcon}
             onClose={() => setPanel(null)}
             onRename={(name) => void handleUpdate(active, { name })}
             onType={(type) => void handleUpdate(active, { type })}
@@ -1036,6 +1062,10 @@ function ToggleRow({
 // Панель «Новая вью» (Notion New view): сразу после создания вью — иконка типа + имя
 // (autoFocus), сетка типов (клик меняет тип на лету), настройки ПОД ВЫБРАННЫЙ ТИП
 // (Notion: у Table/Board/Calendar разные), «Источник», «Готово» → полные настройки.
+// Набор эмодзи для пикера иконки вью (Notion Icon → Filter/Remove + сетка).
+const VIEW_EMOJIS =
+  '📋 📌 📊 📈 📅 🗓️ ✅ 📝 🗂️ 📁 🎯 🚀 🔥 ⚡ ⭐ 💡 🧩 🛠️ 🔧 🐛 🧪 🧭 🏷️ 📦 💼 🗃️ 🧱 🖥️ 📱 🌐 🔒 🔑 💬 👥 🕒 ⏳ 🏁 🎨 📣 💰'.split(' ');
+
 function NewViewPanel({
   view,
   projectName,
@@ -1043,6 +1073,7 @@ function NewViewPanel({
   onTableState,
   onGrouping,
   onCalendarMode,
+  onIcon,
   onClose,
   onRename,
   onType,
@@ -1054,6 +1085,7 @@ function NewViewPanel({
   onTableState: (patch: Partial<TableViewState>) => void;
   onGrouping: (g: ViewGrouping | null) => void;
   onCalendarMode: (m: 'month' | 'week') => void;
+  onIcon: (icon: string | null) => void;
   onClose: () => void;
   onRename: (name: string) => void;
   onType: (type: BoardViewType) => void;
@@ -1069,7 +1101,6 @@ function NewViewPanel({
     const trimmed = name.trim();
     if (trimmed && trimmed !== view.name) onRename(trimmed);
   };
-  const TypeIcon = VIEW_TYPE_ICONS[view.type];
   return (
     <div className="rounded-lg border bg-card shadow-sm">
       <div className="flex items-center justify-between px-3 pb-1 pt-2.5">
@@ -1083,11 +1114,53 @@ function NewViewPanel({
           <X className="size-4" />
         </button>
       </div>
-      {/* Имя с иконкой типа слева — как в Notion (квадратик + View name). */}
+      {/* Имя с иконкой слева — как в Notion; клик по квадратику открывает пикер
+          эмодзи-иконки вью (Icon → Remove). */}
       <div className="flex items-center gap-1.5 px-3 pb-1">
-        <span className="grid size-8 shrink-0 place-items-center rounded-md border text-muted-foreground">
-          <TypeIcon className="size-4" />
-        </span>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label="Иконка вью"
+              title="Иконка вью"
+              className="grid size-8 shrink-0 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <ViewIconGlyph
+                icon={state.icon ?? VIEW_TYPE_ICONS[view.type]}
+                className="size-4 text-base"
+              />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-64 p-2">
+            <div className="flex items-center justify-between pb-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Иконка</p>
+              {state.icon && (
+                <button
+                  type="button"
+                  onClick={() => onIcon(null)}
+                  className="rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  Убрать
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-8 gap-0.5">
+              {VIEW_EMOJIS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => onIcon(e)}
+                  className={cn(
+                    'grid size-7 place-items-center rounded text-base transition-colors hover:bg-accent',
+                    state.icon === e && 'bg-accent ring-1 ring-primary/50',
+                  )}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
         <input
           autoFocus
           value={name}
@@ -1592,7 +1665,7 @@ function AddFilterChip({
 // - «Переименовать» — попап с инпутом прямо у вкладки.
 // У дефолтной «Доски» меню нет (она не хранится в БД).
 function ViewTab({
-  icon: Icon,
+  icon,
   name,
   active,
   onSelect,
@@ -1601,7 +1674,7 @@ function ViewTab({
   onRenameClose,
   onRenameSubmit,
 }: {
-  icon: LucideIcon;
+  icon: ViewIconLike;
   name: string;
   active: boolean;
   onSelect: () => void;
@@ -1618,7 +1691,7 @@ function ViewTab({
   );
   const inner = (
     <>
-      <Icon className="size-3.5 shrink-0" />
+      <ViewIconGlyph icon={icon} className="size-3.5 shrink-0" />
       <span className="max-w-[9rem] truncate">{name}</span>
     </>
   );

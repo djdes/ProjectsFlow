@@ -176,7 +176,7 @@ export function TasksPage(): React.ReactElement {
         isOwner={data.role === 'owner'}
       />
       <ProjectActionsMenu
-        projectId={data.id}
+        project={data}
         financeVisible={financeVisible}
         monitoringVisible={monitoringVisible}
         monitoringAlerts={monitoringAlerts}

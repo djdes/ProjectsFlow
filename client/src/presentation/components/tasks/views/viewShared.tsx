@@ -417,6 +417,8 @@ export type ViewConfig = {
   grouping?: ViewGrouping | null;
   colorRules?: ViewColorRule[];
   calendarMode?: 'month' | 'week';
+  // Кастомная эмодзи-иконка вью (Notion view icon); null — иконка типа.
+  icon?: string | null;
 };
 
 export type PerViewState = {
@@ -427,6 +429,7 @@ export type PerViewState = {
   grouping: ViewGrouping | null;
   colorRules: ViewColorRule[];
   calendarMode: 'month' | 'week';
+  icon: string | null;
 };
 
 export const EMPTY_PER_VIEW_STATE: PerViewState = {
@@ -437,6 +440,7 @@ export const EMPTY_PER_VIEW_STATE: PerViewState = {
   grouping: null,
   colorRules: [],
   calendarMode: 'month',
+  icon: null,
 };
 
 export function perViewToConfig(s: PerViewState): ViewConfig {
@@ -448,6 +452,7 @@ export function perViewToConfig(s: PerViewState): ViewConfig {
     grouping: s.grouping,
     colorRules: s.colorRules,
     calendarMode: s.calendarMode,
+    icon: s.icon,
   };
 }
 
@@ -472,6 +477,7 @@ export function perViewFromConfig(c: unknown): PerViewState {
     grouping: cfg.grouping ?? null,
     colorRules: Array.isArray(cfg.colorRules) ? cfg.colorRules : [],
     calendarMode: cfg.calendarMode === 'week' ? 'week' : 'month',
+    icon: typeof cfg.icon === 'string' && cfg.icon ? cfg.icon : null,
   };
 }
 
