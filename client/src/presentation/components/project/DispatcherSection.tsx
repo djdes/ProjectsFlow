@@ -1,17 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Bot, Info, Loader2 } from 'lucide-react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import type { DispatcherCandidate } from '@/application/project/ProjectRepository';
 import type { Project } from '@/domain/project/Project';
+import { OverviewSection } from '@/presentation/components/project/OverviewSection';
 import { GitTokenDelegationBlock } from './GitTokenDelegationBlock';
 
 type Props = {
@@ -87,18 +81,15 @@ export function DispatcherSection({ project, onChanged }: Props): React.ReactEle
     candidates?.find((c) => c.userId === project.dispatcherUserId) ?? null;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Bot className="size-4 text-muted-foreground" />
-          Ralph-диспетчер
-        </CardTitle>
-        <CardDescription>
-          Кто автономно выполняет задачи проекта через MCP-агент в режиме <code>/loop</code>.
-          При создании задачи дежурный Ralph узнаёт о ней при следующем опросе и берёт в работу.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <OverviewSection
+      icon={<Bot className="size-4 text-muted-foreground" />}
+      title="Ralph-диспетчер"
+    >
+      <p className="mb-3 text-sm text-muted-foreground">
+        Кто автономно выполняет задачи проекта через MCP-агент в режиме <code>/loop</code>.
+        При создании задачи дежурный Ralph узнаёт о ней при следующем опросе и берёт в работу.
+      </p>
+      <div className="space-y-3">
         {/* Loading / error */}
         {candidates === null && !loadError && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -228,7 +219,7 @@ export function DispatcherSection({ project, onChanged }: Props): React.ReactEle
           isOwner={project.role === 'owner'}
           currentDispatcherDisplayName={currentDispatcher?.displayName ?? null}
         />
-      </CardContent>
-    </Card>
+      </div>
+    </OverviewSection>
   );
 }

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { ExternalLink, GitCommit, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { GithubCommit } from '@/domain/github/GithubConnection';
 import { useContainer } from '@/infrastructure/di/container';
 import { useGithubConnection } from '@/presentation/hooks/GithubConnectionProvider';
 import { HttpError } from '@/lib/HttpError';
+import { OverviewSection } from '@/presentation/components/project/OverviewSection';
 
 type Props = {
   projectId: string;
@@ -73,17 +73,14 @@ export function RecentCommitsSection({ projectId, gitRepoUrl }: Props): React.Re
 
   if (!isGithubUrl) {
     return (
-      <Card>
-        <CardHeader className="flex-row items-center gap-2 space-y-0">
-          <GitCommit className="size-4 text-muted-foreground" />
-          <CardTitle className="text-base">Последние коммиты</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Отслеживание коммитов работает только для GitHub-репозиториев.
-          </p>
-        </CardContent>
-      </Card>
+      <OverviewSection
+        icon={<GitCommit className="size-4 text-muted-foreground" />}
+        title="Последние коммиты"
+      >
+        <p className="text-sm text-muted-foreground">
+          Отслеживание коммитов работает только для GitHub-репозиториев.
+        </p>
+      </OverviewSection>
     );
   }
 
@@ -91,84 +88,78 @@ export function RecentCommitsSection({ projectId, gitRepoUrl }: Props): React.Re
 
   if (!connection) {
     return (
-      <Card>
-        <CardHeader className="flex-row items-center gap-2 space-y-0">
-          <GitCommit className="size-4 text-muted-foreground" />
-          <CardTitle className="text-base">Последние коммиты</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Подключи GitHub-аккаунт, чтобы видеть коммиты. Кнопка в карточке выше.
-          </p>
-        </CardContent>
-      </Card>
+      <OverviewSection
+        icon={<GitCommit className="size-4 text-muted-foreground" />}
+        title="Последние коммиты"
+      >
+        <p className="text-sm text-muted-foreground">
+          Подключи GitHub-аккаунт, чтобы видеть коммиты. Кнопка в карточке выше.
+        </p>
+      </OverviewSection>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
-        <div className="flex items-center gap-2">
-          <GitCommit className="size-4 text-muted-foreground" />
-          <CardTitle className="text-base">Последние коммиты</CardTitle>
-        </div>
+    <OverviewSection
+      icon={<GitCommit className="size-4 text-muted-foreground" />}
+      title="Последние коммиты"
+      actions={
         <Button variant="ghost" size="sm" onClick={load} disabled={loading} aria-label="Обновить">
           <RefreshCw className={loading ? 'animate-spin' : undefined} />
         </Button>
-      </CardHeader>
-      <CardContent>
-        {loading && commits === null && (
-          <div className="space-y-2">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-10 animate-pulse rounded bg-muted" />
-            ))}
-          </div>
-        )}
+      }
+    >
+      {loading && commits === null && (
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-10 animate-pulse rounded bg-muted" />
+          ))}
+        </div>
+      )}
 
-        {error && <p className="whitespace-pre-line text-sm text-destructive">{error}</p>}
+      {error && <p className="whitespace-pre-line text-sm text-destructive">{error}</p>}
 
-        {!loading && !error && commits !== null && commits.length === 0 && (
-          <p className="text-sm text-muted-foreground">В репозитории нет коммитов.</p>
-        )}
+      {!loading && !error && commits !== null && commits.length === 0 && (
+        <p className="text-sm text-muted-foreground">В репозитории нет коммитов.</p>
+      )}
 
-        {commits !== null && commits.length > 0 && (
-          <ul className="space-y-2">
-            {commits.map((c) => (
-              <li key={c.sha} className="flex items-start gap-3 rounded-md p-2 hover:bg-muted/40">
-                {c.authorAvatarUrl ? (
-                  <img
-                    src={c.authorAvatarUrl}
-                    alt={c.authorName}
-                    className="mt-0.5 size-6 shrink-0 rounded-full"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="mt-0.5 size-6 shrink-0 rounded-full bg-muted" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{c.message.split('\n')[0]}</p>
-                  <p className="text-xs text-muted-foreground">
-                    <span className="font-mono">{shortSha(c.sha)}</span>
-                    <span className="mx-1">·</span>
-                    {c.authorName}
-                    <span className="mx-1">·</span>
-                    {relativeTime(c.committedAt)}
-                  </p>
-                </div>
-                <a
-                  href={c.htmlUrl}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="shrink-0 text-muted-foreground hover:text-foreground"
-                  aria-label="Открыть на GitHub"
-                >
-                  <ExternalLink className="size-4" />
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+      {commits !== null && commits.length > 0 && (
+        <ul className="space-y-2">
+          {commits.map((c) => (
+            <li key={c.sha} className="flex items-start gap-3 rounded-md p-2 hover:bg-muted/40">
+              {c.authorAvatarUrl ? (
+                <img
+                  src={c.authorAvatarUrl}
+                  alt={c.authorName}
+                  className="mt-0.5 size-6 shrink-0 rounded-full"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="mt-0.5 size-6 shrink-0 rounded-full bg-muted" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{c.message.split('\n')[0]}</p>
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-mono">{shortSha(c.sha)}</span>
+                  <span className="mx-1">·</span>
+                  {c.authorName}
+                  <span className="mx-1">·</span>
+                  {relativeTime(c.committedAt)}
+                </p>
+              </div>
+              <a
+                href={c.htmlUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+                aria-label="Открыть на GitHub"
+              >
+                <ExternalLink className="size-4" />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </OverviewSection>
   );
 }

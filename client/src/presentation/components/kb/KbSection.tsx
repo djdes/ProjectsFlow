@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { BookOpen, ExternalLink, AlertTriangle, HardDrive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { OverviewSection } from '@/presentation/components/project/OverviewSection';
 import {
   Dialog,
   DialogContent,
@@ -87,78 +87,74 @@ export function KbSection({ project }: Props): React.ReactElement {
 
   return (
     <>
-      <Card>
-        <CardHeader className="flex-row items-center gap-2 space-y-0">
-          <BookOpen className="size-4 text-muted-foreground" />
-          <CardTitle className="text-base">База знаний</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {hasKb ? (
-            <div className="space-y-3">
-              {project.kbKind === 'github' && project.kbRepoFullName ? (
-                <a
-                  href={`https://github.com/${project.kbRepoFullName}`}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="inline-flex items-center gap-1.5 break-all font-mono text-sm text-primary hover:underline"
-                >
-                  {project.kbRepoFullName}
-                  <ExternalLink className="size-3.5 shrink-0" />
-                </a>
-              ) : (
-                <p className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <HardDrive className="size-4" /> Локальная база (без Git)
-                </p>
-              )}
-              <div className="flex flex-wrap gap-2">
-                <Button asChild size="sm">
-                  <RouterLink to={`/projects/${project.id}/kb`}>Открыть KB</RouterLink>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleDisconnect}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  Отключить
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                База знаний хранит операционные заметки и креды проекта. Можно завести локальную
-                (в ProjectsFlow, без Git) или приватный GitHub-репо.
+      <OverviewSection
+        icon={<BookOpen className="size-4 text-muted-foreground" />}
+        title="База знаний"
+      >
+        {hasKb ? (
+          <div className="space-y-3">
+            {project.kbKind === 'github' && project.kbRepoFullName ? (
+              <a
+                href={`https://github.com/${project.kbRepoFullName}`}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex items-center gap-1.5 break-all font-mono text-sm text-primary hover:underline"
+              >
+                {project.kbRepoFullName}
+                <ExternalLink className="size-3.5 shrink-0" />
+              </a>
+            ) : (
+              <p className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                <HardDrive className="size-4" /> Локальная база (без Git)
               </p>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => void handleInitLocal()} disabled={initingLocal}>
-                  <HardDrive className="size-4" />
-                  {initingLocal ? 'Создаём…' : 'Локальная база (без Git)'}
-                </Button>
-                {githubConnection ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setConfirmInitOpen(true)}
-                      disabled={initializing}
-                    >
-                      {initializing ? 'Создаём…' : 'Создать KB-репо'}
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => setConnectOpen(true)}>
-                      Подключить существующий
-                    </Button>
-                  </>
-                ) : (
-                  <Button asChild variant="ghost" size="sm">
-                    <RouterLink to="/profile">Подключить GitHub для KB-репо</RouterLink>
-                  </Button>
-                )}
-              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button asChild size="sm">
+                <RouterLink to={`/projects/${project.id}/kb`}>Открыть KB</RouterLink>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDisconnect}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                Отключить
+              </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Хранит операционные заметки и креды проекта.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => void handleInitLocal()} disabled={initingLocal}>
+                <HardDrive className="size-4" />
+                {initingLocal ? 'Создаём…' : 'Локальная база (без Git)'}
+              </Button>
+              {githubConnection ? (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfirmInitOpen(true)}
+                    disabled={initializing}
+                  >
+                    {initializing ? 'Создаём…' : 'Создать KB-репо'}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setConnectOpen(true)}>
+                    Подключить существующий
+                  </Button>
+                </>
+              ) : (
+                <Button asChild variant="ghost" size="sm">
+                  <RouterLink to="/profile">Подключить GitHub для KB-репо</RouterLink>
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </OverviewSection>
 
       <ConnectKbDialog
         open={connectOpen}

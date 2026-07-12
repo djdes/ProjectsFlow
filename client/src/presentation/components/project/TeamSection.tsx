@@ -19,6 +19,7 @@ import type { ProjectInvite } from '@/domain/project/ProjectInvite';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { getInitials } from '@/presentation/layout/projectIcons';
+import { OverviewSection } from '@/presentation/components/project/OverviewSection';
 import { InviteDialog } from './InviteDialog';
 
 const ROLE_LABEL: Record<ProjectRole, string> = {
@@ -170,154 +171,158 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
   };
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">Команда</h2>
-        {canInvite && (
+    <OverviewSection
+      title="Команда"
+      actions={
+        canInvite && (
           <Button size="sm" variant="outline" onClick={() => setShowInviteDialog(true)}>
             <UserPlus className="size-4" />
             Пригласить
           </Button>
-        )}
-      </div>
-
-      {loading ? (
-        <div className="space-y-2">
-          <div className="h-10 animate-pulse rounded-md bg-muted" />
-          <div className="h-10 animate-pulse rounded-md bg-muted" />
-        </div>
-      ) : (
-        <ul className="space-y-1">
-          {members.map((m) => (
-            <li
-              key={m.userId}
-              className="group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/40"
-            >
-              <Avatar className="size-8 shrink-0">
-                {m.user.avatarUrl ? (
-                  <AvatarImage src={m.user.avatarUrl} alt={m.user.displayName} />
-                ) : null}
-                <AvatarFallback>{getInitials(m.user.displayName)}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">
-                  {m.user.displayName}
-                  {currentUser?.id === m.userId && (
-                    <span className="ml-1 text-xs text-muted-foreground">(ты)</span>
-                  )}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">{m.user.email}</p>
-              </div>
-              <span
-                className={cn(
-                  'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
-                  ROLE_BADGE_CLASS[m.role],
-                )}
-              >
-                {ROLE_LABEL[m.role]}
-              </span>
-              {/* Меню owner'а: change role + remove + transfer. Editor/viewer не видят. */}
-              {isOwner && m.role !== 'owner' && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-7 opacity-0 transition-opacity group-hover:opacity-100"
-                      aria-label="Действия"
-                    >
-                      <MoreVertical className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuRadioGroup
-                      value={m.role}
-                      onValueChange={(v) =>
-                        void handleRoleChange(m, v as Exclude<ProjectRole, 'owner'>)
-                      }
-                    >
-                      <DropdownMenuRadioItem value="editor">Редактор</DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="viewer">Наблюдатель</DropdownMenuRadioItem>
-                    </DropdownMenuRadioGroup>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onSelect={() => void handleTransfer(m)}>
-                      Передать владение
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => void handleRemoveMember(m)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="size-3.5" />
-                      Удалить
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-              {/* Свой self-exit для non-owner. */}
-              {!isOwner && currentUser?.id === m.userId && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs text-muted-foreground hover:text-destructive"
-                  onClick={() => void handleRemoveMember(m)}
-                >
-                  Выйти
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {canInvite && invites.length > 0 && (
-        <div className="space-y-1.5 pt-2">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            Ожидают принятия
-          </p>
+        )
+      }
+    >
+      <div className="space-y-3">
+        {loading ? (
+          <div className="space-y-2">
+            <div className="h-10 animate-pulse rounded-md bg-muted" />
+            <div className="h-10 animate-pulse rounded-md bg-muted" />
+          </div>
+        ) : (
           <ul className="space-y-1">
-            {invites.map((inv) => (
+            {members.map((m) => (
               <li
-                key={inv.id}
+                key={m.userId}
                 className="group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/40"
               >
-                <div className="min-w-0 flex-1 text-sm">
-                  <p className="truncate">
-                    {inv.email ?? <span className="italic text-muted-foreground">без email</span>}
+                <Avatar className="size-8 shrink-0">
+                  {m.user.avatarUrl ? (
+                    <AvatarImage src={m.user.avatarUrl} alt={m.user.displayName} />
+                  ) : null}
+                  <AvatarFallback>{getInitials(m.user.displayName)}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">
+                    {m.user.displayName}
+                    {currentUser?.id === m.userId && (
+                      <span className="ml-1 text-xs text-muted-foreground">(ты)</span>
+                    )}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {ROLE_LABEL[inv.role]} · истекает{' '}
-                    {inv.expiresAt.toLocaleDateString('ru-RU', {
-                      day: 'numeric',
-                      month: 'short',
-                    })}
-                  </p>
+                  <p className="truncate text-xs text-muted-foreground">{m.user.email}</p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  onClick={() => void handleCopyInvite(inv)}
-                  aria-label="Скопировать ссылку"
-                  title={
-                    inv.url ? 'Скопировать ссылку' : 'Ссылка доступна только в момент создания'
-                  }
+                <span
+                  className={cn(
+                    'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+                    ROLE_BADGE_CLASS[m.role],
+                  )}
                 >
-                  <Copy className="size-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 text-destructive hover:text-destructive"
-                  onClick={() => void handleRevokeInvite(inv)}
-                  aria-label="Отозвать"
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
+                  {ROLE_LABEL[m.role]}
+                </span>
+                {/* Меню owner'а: change role + remove + transfer. Editor/viewer не видят. */}
+                {isOwner && m.role !== 'owner' && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 opacity-0 transition-opacity group-hover:opacity-100"
+                        aria-label="Действия"
+                      >
+                        <MoreVertical className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuRadioGroup
+                        value={m.role}
+                        onValueChange={(v) =>
+                          void handleRoleChange(m, v as Exclude<ProjectRole, 'owner'>)
+                        }
+                      >
+                        <DropdownMenuRadioItem value="editor">Редактор</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="viewer">Наблюдатель</DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => void handleTransfer(m)}>
+                        Передать владение
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => void handleRemoveMember(m)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="size-3.5" />
+                        Удалить
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                {/* Свой self-exit для non-owner. */}
+                {!isOwner && currentUser?.id === m.userId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground hover:text-destructive"
+                    onClick={() => void handleRemoveMember(m)}
+                  >
+                    Выйти
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        )}
+
+        {canInvite && invites.length > 0 && (
+          <div className="space-y-1.5 pt-2">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              Ожидают принятия
+            </p>
+            <ul className="space-y-1">
+              {invites.map((inv) => (
+                <li
+                  key={inv.id}
+                  className="group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/40"
+                >
+                  <div className="min-w-0 flex-1 text-sm">
+                    <p className="truncate">
+                      {inv.email ?? (
+                        <span className="italic text-muted-foreground">без email</span>
+                      )}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {ROLE_LABEL[inv.role]} · истекает{' '}
+                      {inv.expiresAt.toLocaleDateString('ru-RU', {
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    onClick={() => void handleCopyInvite(inv)}
+                    aria-label="Скопировать ссылку"
+                    title={
+                      inv.url ? 'Скопировать ссылку' : 'Ссылка доступна только в момент создания'
+                    }
+                  >
+                    <Copy className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-destructive hover:text-destructive"
+                    onClick={() => void handleRevokeInvite(inv)}
+                    aria-label="Отозвать"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
 
       <InviteDialog
         projectId={project.id}
@@ -325,6 +330,6 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
         onClose={() => setShowInviteDialog(false)}
         onCreated={handleInviteCreated}
       />
-    </section>
+    </OverviewSection>
   );
 }
