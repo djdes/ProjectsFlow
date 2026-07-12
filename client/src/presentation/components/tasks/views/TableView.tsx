@@ -44,6 +44,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { TaskProperty } from '@/domain/task/TaskProperty';
 import { TASK_PRIORITIES } from '@/domain/task/Task';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { VISIBLE_KANBAN_STATUSES } from '@/domain/kanban/KanbanSettings';
@@ -271,6 +272,20 @@ export function TableView({
     }
     return undefined;
   };
+  // Единый ПОРЯДОК колонок (Notion: drag за заголовок): стандартные + кастомные
+  // по сохранённому colOrder; отсутствующие — в конце в дефолтном порядке.
+  const orderedKeys = useMemo<string[]>(() => {
+    const avail: string[] = [
+      ...visibleCols,
+      ...customProps.properties.map((p) => `p:${p.id}`),
+    ];
+    const saved = (tableState.colOrder ?? []).filter((k) => avail.includes(k));
+    const missing = avail.filter((k) => !saved.includes(k));
+    return [...saved, ...missing];
+  }, [visibleCols, customProps.properties, tableState.colOrder]);
+  const propByKey = (k: string): TaskProperty | undefined =>
+    customProps.properties.find((p) => `p:${p.id}` === k);
+
   // Хвост-филлер справа (Notion): разделитель после последней колонки, границы строк
   // продолжаются до края. Ширины колонок — resize drag'ом за границу заголовка.
   const gridStyle = useMemo(
@@ -284,18 +299,73 @@ export function TableView({
         // с длинным неразрывным названием раздувала колонку на тысячи px, и грид
         // строк переставал совпадать с шапкой («клетки исчезли»).
         tableState.colWidths.title ? `${tableState.colWidths.title}px` : '16rem',
-        ...visibleCols.map((c) =>
-          tableState.colWidths[c] ? `${tableState.colWidths[c]}px` : COLUMN_WIDTH[c],
-        ),
-        ...customProps.properties.map((p) =>
-          tableState.colWidths[`p:${p.id}`] ? `${tableState.colWidths[`p:${p.id}`]}px` : '180px',
+        ...orderedKeys.map((k) =>
+          tableState.colWidths[k]
+            ? `${tableState.colWidths[k]}px`
+            : k.startsWith('p:')
+              ? '180px'
+              : COLUMN_WIDTH[k as ViewColumn],
         ),
         // Хвост-филлер до правого края окна (Notion): границы строк тянутся до конца.
         'minmax(3rem,1fr)',
       ].join(' '),
     }),
-    [visibleCols, tableState.colWidths, customProps.properties],
+    [orderedKeys, tableState.colWidths],
   );
+
+  // Drag-перестановка колонок за заголовок (Notion): свой pointer-драг — старт
+  // после 8px, синяя линия-индикатор на границе вставки, click без движения
+  // по-прежнему открывает меню колонки (Radix pointerdown-open гасится).
+  const [colDropIdx, setColDropIdx] = useState<number | null>(null);
+  const colDragRef = useRef<{ key: string; startX: number; moved: boolean } | null>(null);
+  const headGridRef = useRef<HTMLDivElement | null>(null);
+  const startColDrag = (key: string) => (e: React.PointerEvent): void => {
+    if (e.button !== 0) return;
+    colDragRef.current = { key, startX: e.clientX, moved: false };
+    const move = (ev: PointerEvent): void => {
+      const st = colDragRef.current;
+      if (!st) return;
+      if (!st.moved) {
+        if (Math.abs(ev.clientX - st.startX) < 8) return;
+        st.moved = true;
+      }
+      const cells = Array.from(
+        headGridRef.current?.querySelectorAll('[data-colkey]') ?? [],
+      ) as HTMLElement[];
+      let idx = cells.length;
+      for (let i = 0; i < cells.length; i++) {
+        const r = cells[i]!.getBoundingClientRect();
+        if (ev.clientX < r.left + r.width / 2) {
+          idx = i;
+          break;
+        }
+      }
+      setColDropIdx(idx);
+    };
+    const up = (): void => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      const st = colDragRef.current;
+      setColDropIdx((drop) => {
+        if (st?.moved && drop !== null) {
+          const without = orderedKeys.filter((k) => k !== st.key);
+          const beforeCount = orderedKeys.slice(0, drop).filter((k) => k !== st.key).length;
+          const next = [...without];
+          next.splice(beforeCount, 0, st.key);
+          onTableState({ colOrder: next });
+        }
+        return null;
+      });
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  // Клик сразу после drag'а не должен открывать меню колонки.
+  const consumeColDragged = (): boolean => {
+    const moved = colDragRef.current?.moved ?? false;
+    colDragRef.current = null;
+    return moved;
+  };
 
   // Resize колонки (Notion): mousedown на правой кромке заголовка → drag.
   // key: 'title' | ViewColumn | `p:<propertyId>` (кастомные свойства).
@@ -580,7 +650,7 @@ export function TableView({
   }, []);
 
   const colIndexOf = (k: 'title' | ViewColumn): number =>
-    k === 'title' ? 0 : visibleCols.indexOf(k) + 1;
+    k === 'title' ? 0 : orderedKeys.indexOf(k) + 1;
   const cellDown = (row: number, k: 'title' | ViewColumn, rightButton = false): void => {
     // Notion: при существующем диапазоне клик/ПКМ ВНУТРЬ него выбирает все его
     // строки (панель действий сверху); клик/ПКМ МИМО — только строку под курсором.
@@ -766,6 +836,7 @@ export function TableView({
               меню колонки (сортировка ↑↓, скрыть свойство), как в Notion. Границы —
               на ячейках, НЕ на контейнере: зона контролов слева чистая. */}
           <div
+            ref={headGridRef}
             className="group/head relative grid text-sm text-muted-foreground"
             style={gridStyle}
           >
@@ -811,31 +882,48 @@ export function TableView({
               onResizeStart={(e) => startResize('title', e)}
               first
             />
-            {visibleCols.map((c) => (
-              <HeaderCell
-                key={c}
-                label={VIEW_COLUMN_LABELS[c]}
-                iconNode={<ColumnIcon col={c} />}
-                sortKey={COLUMN_SORT_KEY[c] ?? null}
-                sort={sort}
-                onSortChange={onSortChange}
-                onHide={() => onToggleCol(c)}
-                filterEntries={filterEntriesFor(c)}
-                onResizeStart={(e) => startResize(c, e)}
-              />
-            ))}
-            {customProps.properties.map((p) => (
-              <PropertyHeaderCell
-                key={p.id}
-                property={p}
-                onRename={(name) => customProps.renameProperty(p.id, name)}
-                onRemove={() => customProps.removeProperty(p.id)}
-                onDuplicate={() => customProps.duplicateProperty(p)}
-                onInsert={(side) => customProps.insertProperty(p, side)}
-                onChangeType={(t) => customProps.changeType(p.id, t)}
-                onResizeStart={(e) => startResize(`p:${p.id}`, e)}
-              />
-            ))}
+            {/* Колонки в едином порядке orderedKeys (drag за заголовок — Notion). */}
+            {orderedKeys.map((k, i) => {
+              const prop = propByKey(k);
+              const dropSide =
+                colDropIdx === i ? ('left' as const) : colDropIdx === orderedKeys.length && i === orderedKeys.length - 1 ? ('right' as const) : null;
+              if (prop) {
+                return (
+                  <PropertyHeaderCell
+                    key={k}
+                    property={prop}
+                    onRename={(name) => customProps.renameProperty(prop.id, name)}
+                    onRemove={() => customProps.removeProperty(prop.id)}
+                    onDuplicate={() => customProps.duplicateProperty(prop)}
+                    onInsert={(side) => customProps.insertProperty(prop, side)}
+                    onChangeType={(t) => customProps.changeType(prop.id, t)}
+                    onResizeStart={(e) => startResize(k, e)}
+                    colKey={k}
+                    dropSide={dropSide}
+                    onColDragStart={startColDrag(k)}
+                    consumeColDragged={consumeColDragged}
+                  />
+                );
+              }
+              const c = k as ViewColumn;
+              return (
+                <HeaderCell
+                  key={k}
+                  label={VIEW_COLUMN_LABELS[c]}
+                  iconNode={<ColumnIcon col={c} />}
+                  sortKey={COLUMN_SORT_KEY[c] ?? null}
+                  sort={sort}
+                  onSortChange={onSortChange}
+                  onHide={() => onToggleCol(c)}
+                  filterEntries={filterEntriesFor(c)}
+                  onResizeStart={(e) => startResize(c, e)}
+                  colKey={k}
+                  dropSide={dropSide}
+                  onColDragStart={startColDrag(k)}
+                  consumeColDragged={consumeColDragged}
+                />
+              );
+            })}
             <div className="border-b border-l border-t" aria-hidden />
             {/* «+» в конце шапки (Notion add property): попап с именем свойства,
                 «Выбрать тип» с поиском и сеткой типов; сверху — вернуть скрытые. */}
@@ -959,7 +1047,7 @@ export function TableView({
               <TableRow
                 task={task}
                 gridStyle={gridStyle}
-                visibleCols={visibleCols}
+                orderedKeys={orderedKeys}
                 customProps={customProps}
                 depth={depth}
                 hasChildren={hasChildren}
@@ -1096,20 +1184,21 @@ export function TableView({
             <p className="px-2 pt-1.5 text-[11px] text-muted-foreground/60">
               Всего: {rows.length}
             </p>
-            {visibleCols.map((c) => (
-              <CalcCell
-                key={c}
-                col={c}
-                rows={rows}
-                value={tableState.calc[c]}
-                onChange={(v) =>
-                  onTableState({ calc: { ...tableState.calc, [c]: v } })
-                }
-              />
-            ))}
-            {customProps.properties.map((p) => (
-              <div key={p.id} aria-hidden />
-            ))}
+            {orderedKeys.map((k) =>
+              k.startsWith('p:') ? (
+                <div key={k} aria-hidden />
+              ) : (
+                <CalcCell
+                  key={k}
+                  col={k as ViewColumn}
+                  rows={rows}
+                  value={tableState.calc[k as ViewColumn]}
+                  onChange={(v) =>
+                    onTableState({ calc: { ...tableState.calc, [k]: v } })
+                  }
+                />
+              ),
+            )}
             <div aria-hidden />
           </div>
         </div>
@@ -1164,6 +1253,10 @@ function HeaderCell({
   onResizeStart,
   first = false,
   frozen = false,
+  colKey,
+  dropSide = null,
+  onColDragStart,
+  consumeColDragged,
 }: {
   label: string;
   iconNode: React.ReactNode;
@@ -1176,6 +1269,12 @@ function HeaderCell({
   onResizeStart?: (e: React.MouseEvent) => void;
   first?: boolean;
   frozen?: boolean;
+  // Drag-перестановка колонки (Notion): pointerdown стартует трекинг у родителя,
+  // клик без движения открывает меню (consumeColDragged гасит клик после drag'а).
+  colKey?: string;
+  dropSide?: 'left' | 'right' | null;
+  onColDragStart?: (e: React.PointerEvent) => void;
+  consumeColDragged?: () => boolean;
 }): React.ReactElement {
   const sorted = sortKey !== null && sort?.key === sortKey ? sort.dir : null;
   const entries: MenuEntry[] = [
@@ -1225,11 +1324,15 @@ function HeaderCell({
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div
+      data-colkey={colKey}
       className={cn(
         'relative flex min-w-0 border-b border-t',
         !first && 'border-l',
         // «Закрепить колонку» (Notion Freeze): липнет при горизонтальном скролле.
         frozen && 'sticky left-14 z-20 border-r bg-background',
+        // Индикатор вставки при drag-переносе колонки.
+        dropSide === 'left' && 'shadow-[inset_2px_0_0_hsl(var(--primary))]',
+        dropSide === 'right' && 'shadow-[inset_-2px_0_0_hsl(var(--primary))]',
       )}
     >
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -1240,6 +1343,25 @@ function HeaderCell({
               e.preventDefault();
               setMenuOpen(true);
             }}
+            // Drag колонки: pointerdown гасит Radix-открытие на pointerdown,
+            // меню открывает click (если drag'а не было).
+            onPointerDown={
+              onColDragStart
+                ? (e) => {
+                    if (e.button !== 0) return;
+                    onColDragStart(e);
+                    e.preventDefault();
+                  }
+                : undefined
+            }
+            onClick={
+              onColDragStart
+                ? () => {
+                    if (consumeColDragged?.()) return;
+                    setMenuOpen(true);
+                  }
+                : undefined
+            }
             className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left transition-colors hover:bg-accent/60"
           >
             {iconNode}
@@ -1403,7 +1525,7 @@ function ColumnIcon({ col }: { col: ViewColumn }): React.ReactElement {
 function TableRow({
   task,
   gridStyle,
-  visibleCols,
+  orderedKeys,
   depth = 0,
   hasChildren = false,
   expanded = false,
@@ -1445,7 +1567,8 @@ function TableRow({
 }: {
   task: Task;
   gridStyle: React.CSSProperties;
-  visibleCols: readonly ViewColumn[];
+  // Порядок колонок (стандартные + `p:<id>`) — единый с шапкой (drag-reorder).
+  orderedKeys: readonly string[];
   depth?: number;
   hasChildren?: boolean;
   expanded?: boolean;
@@ -1798,16 +1921,22 @@ function TableRow({
         )}
       </div>
 
-      {visibleCols.map(cellFor)}
-      {customProps.properties.map((p) => (
-        <PropertyValueCell
-          key={p.id}
-          property={p}
-          value={customProps.valueFor(task.id, p.id)}
-          onChange={(v) => customProps.setValue(task.id, p.id, v)}
-          onAddOption={(label) => customProps.addOption(p, label)}
-        />
-      ))}
+      {/* Ячейки в едином порядке orderedKeys — совпадает с шапкой (drag-reorder). */}
+      {orderedKeys.map((k) => {
+        const prop = customProps.properties.find((p) => `p:${p.id}` === k);
+        if (prop) {
+          return (
+            <PropertyValueCell
+              key={k}
+              property={prop}
+              value={customProps.valueFor(task.id, prop.id)}
+              onChange={(v) => customProps.setValue(task.id, prop.id, v)}
+              onAddOption={(label) => customProps.addOption(prop, label)}
+            />
+          );
+        }
+        return cellFor(k as ViewColumn);
+      })}
       <div className="border-b border-l" aria-hidden />
         </div>
       </ContextMenuTrigger>

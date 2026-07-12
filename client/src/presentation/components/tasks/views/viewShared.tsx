@@ -298,6 +298,9 @@ export type TableViewState = {
   readonly wrapTitle: boolean;
   readonly freezeTitle: boolean;
   readonly calc: Partial<Record<ViewColumn, ViewCalc>>;
+  // Порядок колонок (drag за заголовок, Notion): ключи ViewColumn | `p:<id>`.
+  // Отсутствие/неполнота — дефолтный порядок (стандартные, затем кастомные).
+  readonly colOrder?: readonly string[];
 };
 
 export const EMPTY_TABLE_STATE: TableViewState = {
@@ -439,6 +442,7 @@ export type ViewConfig = {
     unfreezeTitle?: boolean;
     freezeTitle?: boolean;
     calc?: Partial<Record<ViewColumn, ViewCalc>>;
+    colOrder?: readonly string[];
   };
   grouping?: ViewGrouping | null;
   colorRules?: ViewColorRule[];
@@ -481,6 +485,7 @@ export function perViewToConfig(s: PerViewState): ViewConfig {
       wrapTitle: s.table.wrapTitle,
       unfreezeTitle: !s.table.freezeTitle,
       calc: s.table.calc,
+      ...(s.table.colOrder ? { colOrder: s.table.colOrder } : {}),
     },
     grouping: s.grouping,
     colorRules: s.colorRules,
@@ -507,6 +512,7 @@ export function perViewFromConfig(c: unknown): PerViewState {
       // Notion-дефолт: закреплено, если явно не выключено (unfreezeTitle: true).
       freezeTitle: !(cfg.table?.unfreezeTitle ?? false),
       calc: cfg.table?.calc && typeof cfg.table.calc === 'object' ? cfg.table.calc : {},
+      ...(Array.isArray(cfg.table?.colOrder) ? { colOrder: cfg.table.colOrder } : {}),
     },
     grouping: cfg.grouping ?? null,
     colorRules: Array.isArray(cfg.colorRules) ? cfg.colorRules : [],

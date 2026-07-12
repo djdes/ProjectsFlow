@@ -261,6 +261,10 @@ export function PropertyHeaderCell({
   onInsert,
   onChangeType,
   onResizeStart,
+  colKey,
+  dropSide = null,
+  onColDragStart,
+  consumeColDragged,
 }: {
   property: TaskProperty;
   onRename: (name: string) => void;
@@ -269,6 +273,11 @@ export function PropertyHeaderCell({
   onInsert?: (side: 'left' | 'right') => void;
   onChangeType?: (type: TaskPropertyType) => void;
   onResizeStart?: (e: React.MouseEvent) => void;
+  // Drag-перестановка колонки (Notion) — см. HeaderCell в TableView.
+  colKey?: string;
+  dropSide?: 'left' | 'right' | null;
+  onColDragStart?: (e: React.PointerEvent) => void;
+  consumeColDragged?: () => boolean;
 }): React.ReactElement {
   const [name, setName] = useState(property.name);
   // ПКМ по заголовку открывает то же меню, что и клик (Notion).
@@ -281,7 +290,14 @@ export function PropertyHeaderCell({
     else setName(property.name);
   };
   return (
-    <div className="relative flex min-w-0 border-b border-l border-t">
+    <div
+      data-colkey={colKey}
+      className={cn(
+        'relative flex min-w-0 border-b border-l border-t',
+        dropSide === 'left' && 'shadow-[inset_2px_0_0_hsl(var(--primary))]',
+        dropSide === 'right' && 'shadow-[inset_-2px_0_0_hsl(var(--primary))]',
+      )}
+    >
       <DropdownMenu
         open={menuOpen}
         onOpenChange={(o) => {
@@ -296,6 +312,25 @@ export function PropertyHeaderCell({
               e.preventDefault();
               setMenuOpen(true);
             }}
+            // Drag колонки: pointerdown стартует трекинг (Radix-открытие гасится),
+            // клик без движения открывает меню.
+            onPointerDown={
+              onColDragStart
+                ? (e) => {
+                    if (e.button !== 0) return;
+                    onColDragStart(e);
+                    e.preventDefault();
+                  }
+                : undefined
+            }
+            onClick={
+              onColDragStart
+                ? () => {
+                    if (consumeColDragged?.()) return;
+                    setMenuOpen(true);
+                  }
+                : undefined
+            }
             className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left transition-colors hover:bg-accent/60"
           >
             <Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
