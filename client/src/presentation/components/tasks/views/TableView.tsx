@@ -267,15 +267,19 @@ export function TableView({
         ...visibleCols.map((c) =>
           tableState.colWidths[c] ? `${tableState.colWidths[c]}px` : COLUMN_WIDTH[c],
         ),
-        ...customProps.properties.map(() => '180px'),
-        'minmax(2rem,10rem)',
+        ...customProps.properties.map((p) =>
+          tableState.colWidths[`p:${p.id}`] ? `${tableState.colWidths[`p:${p.id}`]}px` : '180px',
+        ),
+        // Хвост-филлер до правого края окна (Notion): границы строк тянутся до конца.
+        'minmax(3rem,1fr)',
       ].join(' '),
     }),
     [visibleCols, tableState.colWidths, customProps.properties],
   );
 
   // Resize колонки (Notion): mousedown на правой кромке заголовка → drag.
-  const startResize = (key: 'title' | ViewColumn, e: React.MouseEvent): void => {
+  // key: 'title' | ViewColumn | `p:<propertyId>` (кастомные свойства).
+  const startResize = (key: string, e: React.MouseEvent): void => {
     e.preventDefault();
     e.stopPropagation();
     const cell = (e.currentTarget as HTMLElement).parentElement;
@@ -605,8 +609,10 @@ export function TableView({
         <div className={cn('min-w-[55rem]', bleedPadClass ? 'pr-6 sm:pr-14 lg:pl-10 lg:pr-24' : 'pr-8')}>
           {/* Шапка таблицы: иконка типа свойства + название; клик по заголовку —
               меню колонки (сортировка ↑↓, скрыть свойство), как в Notion. */}
+          {/* Границы шапки — на ячейках, НЕ на контейнере: зона контролов слева
+              остаётся чистой (Notion). */}
           <div
-            className="group/head relative grid border-b border-t text-xs text-muted-foreground"
+            className="group/head relative grid text-xs text-muted-foreground"
             style={gridStyle}
           >
             {/* Sticky-gutter шапки: чекбокс «выбрать все» закреплён при гор. скролле. */}
@@ -672,9 +678,11 @@ export function TableView({
                 onRemove={() => customProps.removeProperty(p.id)}
                 onDuplicate={() => customProps.duplicateProperty(p)}
                 onInsert={(side) => customProps.insertProperty(p, side)}
+                onChangeType={(t) => customProps.changeType(p.id, t)}
+                onResizeStart={(e) => startResize(`p:${p.id}`, e)}
               />
             ))}
-            <div className="border-l" aria-hidden />
+            <div className="border-b border-l border-t" aria-hidden />
             {/* «+» в конце шапки (Notion add property): попап с именем свойства,
                 «Выбрать тип» с поиском и сеткой типов; сверху — вернуть скрытые. */}
             <Popover open={addPropOpen} onOpenChange={setAddPropOpen}>
@@ -891,9 +899,12 @@ export function TableView({
             </p>
           )}
 
-          {/* pl-14 — под gutter контролов: «Новая задача» на уровне колонки названия. */}
-          <div className="border-b py-1 pl-14">
-            <NewTaskRow create={create} />
+          {/* pl-14 — под gutter контролов: «Новая задача» на уровне колонки названия,
+              граница — только под контентной частью (Notion). */}
+          <div className="pl-14">
+            <div className="border-b py-1">
+              <NewTaskRow create={create} />
+            </div>
           </div>
           {/* Строка подсчётов (Notion Calculate): «Всего» под названием; под каждой
               колонкой — свой подсчёт по клику (появляется при наведении). */}
@@ -1033,7 +1044,7 @@ function HeaderCell({
   return (
     <div
       className={cn(
-        'relative flex min-w-0',
+        'relative flex min-w-0 border-b border-t',
         !first && 'border-l',
         // «Закрепить колонку» (Notion Freeze): липнет при горизонтальном скролле.
         frozen && 'sticky left-14 z-20 border-r bg-background',
@@ -1089,8 +1100,8 @@ function InsertRow({
   const [value, setValue] = useState('');
   return (
     <div style={gridStyle} className="grid border-b bg-accent/30">
-      {/* Пустая ячейка под sticky-gutter контролов. */}
-      <div aria-hidden />
+      {/* Gutter без фона строки вставки. */}
+      <div className="bg-background" aria-hidden />
       <div
         className="flex items-center gap-1.5 px-2 py-1"
         style={indent > 0 ? { paddingLeft: 8 + indent } : undefined}
@@ -1312,7 +1323,7 @@ function TableRow({
   } => ({
     // Без внутренних отступов: значение-кнопка занимает ВСЮ клетку, hover
     // подсвечивает её от края до края (Notion).
-    className: cn('relative flex border-l', rangeClassFor(rowIdx, col)),
+    className: cn('relative flex border-b border-l', rangeClassFor(rowIdx, col)),
     'data-cell': col,
     onMouseEnter: () => onCellEnter(rowIdx, col),
   });
@@ -1441,7 +1452,8 @@ function TableRow({
             if (key) onCellDown(rowIdx, key as 'title' | ViewColumn);
           }}
           className={cn(
-            'group relative grid border-b transition-colors hover:bg-accent/40',
+            // Границы — на ячейках (см. cellProps/title): зона контролов слева чистая.
+            'group relative grid transition-colors hover:bg-accent/40',
             // Условный цвет (Notion Conditional color) — до selected/moved подсветок.
             rowColor,
             selected && 'bg-primary/5',
@@ -1516,10 +1528,12 @@ function TableRow({
       <div
         data-cell="title"
         className={cn(
-          'relative flex min-w-0 items-center gap-1.5 px-2 py-1',
+          'relative flex min-w-0 items-center gap-1.5 border-b px-2 py-1',
           // Freeze: липнет ПОСЛЕ sticky-gutter'а контролов (3.5rem).
           frozenTitle && 'sticky left-14 z-10 border-r bg-background',
           rangeClassFor(rowIdx, 'title'),
+          // Редактирование: синяя рамка на ВСЮ клетку (Notion), не мини-инпут.
+          editing && 'z-10 bg-background ring-2 ring-inset ring-primary/70',
         )}
         style={depth > 0 ? { paddingLeft: 8 + depth * 20 } : undefined}
         onMouseEnter={() => onCellEnter(rowIdx, 'title')}
@@ -1565,7 +1579,7 @@ function TableRow({
               }
             }}
             aria-label="Название задачи"
-            className="min-w-0 flex-1 rounded-md border bg-background px-1.5 py-0.5 text-sm font-medium outline-none ring-2 ring-primary/20"
+            className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none"
           />
         ) : (
           <button
@@ -1610,7 +1624,7 @@ function TableRow({
           onAddOption={(label) => customProps.addOption(p, label)}
         />
       ))}
-      <div className="border-l" aria-hidden />
+      <div className="border-b border-l" aria-hidden />
         </div>
       </ContextMenuTrigger>
       {/* Правый клик по строке — контекстное меню задачи (Notion-style).

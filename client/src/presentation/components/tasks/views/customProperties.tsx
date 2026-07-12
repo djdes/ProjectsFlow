@@ -7,14 +7,15 @@ import {
   ArrowRightToLine,
   AtSign,
   Calendar,
+  Check,
   CheckSquare,
   ChevronDown,
   Copy,
   Hash,
   Link as LinkIcon,
   List,
-  Pencil,
   Phone,
+  Repeat2,
   Search,
   Tags,
   Trash2,
@@ -25,6 +26,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
@@ -85,6 +89,7 @@ export type UseTaskPropertiesResult = {
   // Notion-меню заголовка: дубликат рядом с исходным; вставка нового «Текст» слева/справа.
   duplicateProperty: (property: TaskProperty) => void;
   insertProperty: (anchor: TaskProperty, side: 'left' | 'right') => void;
+  changeType: (propertyId: string, type: TaskPropertyType) => void;
 };
 
 // Данные свойств проекта: load + SSE-рефетч + оптимистичный setValue.
@@ -145,6 +150,15 @@ export function useTaskProperties(projectId: string): UseTaskPropertiesResult {
   const renameProperty = (propertyId: string, name: string): void => {
     setProperties((prev) => prev.map((p) => (p.id === propertyId ? { ...p, name } : p)));
     taskPropertyRepository.update(projectId, propertyId, { name }).catch((e: unknown) => {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+      void refetch();
+    });
+  };
+
+  // «Изменить тип» (Notion Change type): значения-строки интерпретируются по-новому.
+  const changeType = (propertyId: string, type: TaskPropertyType): void => {
+    setProperties((prev) => prev.map((p) => (p.id === propertyId ? { ...p, type } : p)));
+    taskPropertyRepository.update(projectId, propertyId, { type }).catch((e: unknown) => {
       toast.error(`Не удалось: ${(e as Error).message}`);
       void refetch();
     });
@@ -232,108 +246,142 @@ export function useTaskProperties(projectId: string): UseTaskPropertiesResult {
     removeProperty,
     duplicateProperty,
     insertProperty,
+    changeType,
   };
 }
 
-// Заголовок кастомной колонки: клик = меню как в Notion (Переименовать / Дублировать /
-// Вставить слева/справа / Удалить); переименование — inline-инпут на месте названия.
+// Заголовок кастомной колонки: клик/ПКМ = Notion-меню — инпут имени сверху,
+// «Изменить тип ▸», Дублировать / Вставить слева-справа / Удалить; resize-ручка
+// на правой кромке.
 export function PropertyHeaderCell({
   property,
   onRename,
   onRemove,
   onDuplicate,
   onInsert,
+  onChangeType,
+  onResizeStart,
 }: {
   property: TaskProperty;
   onRename: (name: string) => void;
   onRemove: () => void;
   onDuplicate?: () => void;
   onInsert?: (side: 'left' | 'right') => void;
+  onChangeType?: (type: TaskPropertyType) => void;
+  onResizeStart?: (e: React.MouseEvent) => void;
 }): React.ReactElement {
-  const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(property.name);
   // ПКМ по заголовку открывает то же меню, что и клик (Notion).
   const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => setName(property.name), [property.name]);
   const Icon = PROPERTY_TYPE_ICONS[property.type];
   const commit = (): void => {
-    setRenaming(false);
     const trimmed = name.trim();
     if (trimmed && trimmed !== property.name) onRename(trimmed);
     else setName(property.name);
   };
-  if (renaming) {
-    return (
-      <div className="flex items-center gap-1.5 border-l px-2 py-1.5">
-        <Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
-        <input
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commit();
-            if (e.key === 'Escape') {
-              setName(property.name);
-              setRenaming(false);
-            }
-          }}
-          aria-label="Имя свойства"
-          className="w-full min-w-0 bg-transparent text-xs outline-none"
-        />
-      </div>
-    );
-  }
   return (
-    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setMenuOpen(true);
-          }}
-          className="flex min-w-0 items-center gap-1.5 border-l px-2 py-1.5 text-left transition-colors hover:bg-accent/60"
-        >
-          <Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
-          <span className="truncate">{property.name}</span>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[13rem]">
-        <DropdownMenuItem
-          className="gap-2"
-          onSelect={() => setTimeout(() => setRenaming(true), 150)}
-        >
-          <Pencil className="size-4" />
-          Переименовать
-        </DropdownMenuItem>
-        {onDuplicate && (
-          <DropdownMenuItem className="gap-2" onSelect={onDuplicate}>
-            <Copy className="size-4" />
-            Дублировать свойство
+    <div className="relative flex min-w-0 border-b border-l border-t">
+      <DropdownMenu
+        open={menuOpen}
+        onOpenChange={(o) => {
+          if (!o) commit();
+          setMenuOpen(o);
+        }}
+      >
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setMenuOpen(true);
+            }}
+            className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left transition-colors hover:bg-accent/60"
+          >
+            <Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
+            <span className="truncate">{property.name}</span>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[13rem]">
+          {/* Имя свойства редактируется прямо в меню (Notion). stopPropagation:
+              иначе Radix-typeahead перехватывает буквы. */}
+          <div className="flex items-center gap-1.5 px-1 pb-1.5 pt-0.5">
+            <span className="grid size-7 shrink-0 place-items-center rounded-md border text-muted-foreground">
+              <Icon className="size-3.5" />
+            </span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') {
+                  commit();
+                  setMenuOpen(false);
+                }
+              }}
+              aria-label="Имя свойства"
+              className="h-7 w-full min-w-0 rounded-md bg-accent/60 px-2 text-sm outline-none ring-primary/40 focus:ring-2"
+            />
+          </div>
+          {onChangeType && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="gap-2">
+                <Repeat2 className="size-4 text-muted-foreground" />
+                Изменить тип
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-[11rem]">
+                {TASK_PROPERTY_TYPES.map((t) => {
+                  const TIcon = PROPERTY_TYPE_ICONS[t];
+                  return (
+                    <DropdownMenuItem key={t} className="gap-2" onSelect={() => onChangeType(t)}>
+                      <TIcon className="size-4 text-muted-foreground" />
+                      <span className="min-w-0 flex-1">{TASK_PROPERTY_TYPE_LABELS[t]}</span>
+                      {property.type === t && <Check className="size-3.5 text-primary" />}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
+          {onDuplicate && (
+            <DropdownMenuItem className="gap-2" onSelect={onDuplicate}>
+              <Copy className="size-4" />
+              Дублировать свойство
+            </DropdownMenuItem>
+          )}
+          {onInsert && (
+            <>
+              <DropdownMenuItem className="gap-2" onSelect={() => onInsert('left')}>
+                <ArrowLeftToLine className="size-4" />
+                Вставить слева
+              </DropdownMenuItem>
+              <DropdownMenuItem className="gap-2" onSelect={() => onInsert('right')}>
+                <ArrowRightToLine className="size-4" />
+                Вставить справа
+              </DropdownMenuItem>
+            </>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="gap-2 text-destructive focus:text-destructive"
+            onSelect={onRemove}
+          >
+            <Trash2 className="size-4" />
+            Удалить свойство
           </DropdownMenuItem>
-        )}
-        {onInsert && (
-          <>
-            <DropdownMenuItem className="gap-2" onSelect={() => onInsert('left')}>
-              <ArrowLeftToLine className="size-4" />
-              Вставить слева
-            </DropdownMenuItem>
-            <DropdownMenuItem className="gap-2" onSelect={() => onInsert('right')}>
-              <ArrowRightToLine className="size-4" />
-              Вставить справа
-            </DropdownMenuItem>
-          </>
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="gap-2 text-destructive focus:text-destructive"
-          onSelect={onRemove}
-        >
-          <Trash2 className="size-4" />
-          Удалить свойство
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {/* Ручка resize на правой кромке (Notion). */}
+      {onResizeStart && (
+        <div
+          role="separator"
+          aria-label={`Изменить ширину колонки ${property.name}`}
+          onMouseDown={onResizeStart}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="absolute -right-[3px] top-0 z-10 h-full w-[6px] cursor-col-resize rounded transition-colors hover:bg-primary/40"
+        />
+      )}
+    </div>
   );
 }
 
@@ -477,7 +525,7 @@ export function PropertyValueCell({
               : 'text';
     if (editing) {
       return (
-        <div className="border-l px-2 py-1.5">
+        <div className="border-b border-l px-2 py-1.5">
           <input
             ref={inputRef}
             autoFocus
@@ -505,7 +553,7 @@ export function PropertyValueCell({
           setDraft(value);
           setEditing(true);
         }}
-        className="min-w-0 border-l px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/40"
+        className="min-w-0 border-b border-l px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/40"
       >
         {value ? (
           property.type === 'url' ? (
@@ -522,7 +570,7 @@ export function PropertyValueCell({
 
   if (property.type === 'checkbox') {
     return (
-      <div className="flex items-center border-l px-2 py-1.5">
+      <div className="flex items-center border-b border-l px-2 py-1.5">
         <input
           type="checkbox"
           checked={value === '1'}
@@ -552,7 +600,7 @@ export function PropertyValueCell({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex min-w-0 flex-wrap items-center gap-1 border-l px-2 py-1.5 text-left transition-colors hover:bg-accent/40"
+          className="flex min-w-0 flex-wrap items-center gap-1 border-b border-l px-2 py-1.5 text-left transition-colors hover:bg-accent/40"
         >
           {selectedIds.length === 0 ? (
             <ChevronDown className="size-3.5 text-muted-foreground/0" />

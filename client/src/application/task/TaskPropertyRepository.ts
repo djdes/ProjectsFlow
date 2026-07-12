@@ -16,7 +16,12 @@ export interface TaskPropertyRepository {
   update(
     projectId: string,
     propertyId: string,
-    patch: { name?: string; options?: TaskPropertyOption[]; position?: number },
+    patch: {
+      name?: string;
+      options?: TaskPropertyOption[];
+      position?: number;
+      type?: TaskPropertyType;
+    },
   ): Promise<TaskProperty>;
   remove(projectId: string, propertyId: string): Promise<void>;
   setValue(projectId: string, taskId: string, propertyId: string, value: string): Promise<void>;
