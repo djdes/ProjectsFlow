@@ -63,8 +63,10 @@ export function CreateRepoDialog({
     } catch (e) {
       if (e instanceof HttpError && e.body.error === 'github_repo_name_taken') {
         setError('Репозиторий с таким именем уже существует — поменяй имя.');
+      } else if (e instanceof HttpError && e.body.message) {
+        setError(e.body.message);
       } else {
-        setError((e as Error).message || 'Не удалось создать репозиторий');
+        setError('Не удалось создать репозиторий');
       }
     } finally {
       setSaving(false);
