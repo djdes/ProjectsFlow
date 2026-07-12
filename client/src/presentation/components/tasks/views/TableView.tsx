@@ -456,6 +456,8 @@ export function TableView({
   };
   const cellEnter = (row: number, k: 'title' | ViewColumn): void => {
     if (!selDragging.current) return;
+    // Протяжка не должна выделять текст под курсором.
+    document.getSelection()?.removeAllRanges();
     setSelRange((prev) => (prev ? { a: prev.a, h: { row, col: colIndexOf(k) } } : prev));
   };
   // Стиль ячейки в диапазоне: одиночная — синяя рамка с уголком (как раньше),
@@ -1185,20 +1187,18 @@ function TableRow({
     isDragging,
   } = useDraggable({ id: task.id, disabled: !dndEnabled });
   const [gripMenuOpen, setGripMenuOpen] = useState(false);
-  // Клик по «пустому» месту ячейки — выделение (Notion cell selection); зажатая
-  // кнопка + движение по ячейкам растягивает диапазон как в Excel.
+  // Ячейка помечена data-cell: mousedown ловится capture'ом на строке (см. ниже) —
+  // выделение стартует с ЛЮБОГО места ячейки, включая кнопки-значения (Notion/Excel);
+  // зажатая кнопка + движение по ячейкам растягивает диапазон.
   const cellProps = (
     col: ViewColumn,
   ): {
     className: string;
-    onMouseDown: (e: React.MouseEvent) => void;
+    'data-cell': string;
     onMouseEnter: () => void;
   } => ({
     className: cn('relative border-l px-1 py-0.5', rangeClassFor(rowIdx, col)),
-    onMouseDown: (e: React.MouseEvent) => {
-      if ((e.target as HTMLElement).closest('button,input,a')) return;
-      onCellDown(rowIdx, col);
-    },
+    'data-cell': col,
     onMouseEnter: () => onCellEnter(rowIdx, col),
   });
 
@@ -1317,6 +1317,14 @@ function TableRow({
         <div
           ref={dropRef}
           style={gridStyle}
+          // Capture: якорь Excel-выделения ставится с любого места ячейки (включая
+          // кнопки-значения — Notion выделяет ячейку и при открытии её редактора).
+          onMouseDownCapture={(e) => {
+            if (e.button !== 0) return;
+            const cellEl = (e.target as HTMLElement).closest('[data-cell]');
+            const key = cellEl?.getAttribute('data-cell');
+            if (key) onCellDown(rowIdx, key as 'title' | ViewColumn);
+          }}
           className={cn(
             'group relative grid border-b transition-colors hover:bg-accent/40',
             // Условный цвет (Notion Conditional color) — до selected/moved подсветок.
@@ -1391,16 +1399,13 @@ function TableRow({
           ячейке редактирует, открытие — кнопкой «ОТКРЫТЬ»). Отступ и стрелка — дерево
           подзадач (Notion sub-items). */}
       <div
+        data-cell="title"
         className={cn(
           'relative flex min-w-0 items-center gap-1.5 px-2 py-1',
           frozenTitle && 'sticky left-0 z-10 border-r bg-background',
           rangeClassFor(rowIdx, 'title'),
         )}
         style={depth > 0 ? { paddingLeft: 8 + depth * 20 } : undefined}
-        onMouseDown={(e) => {
-          if ((e.target as HTMLElement).closest('button,input,a')) return;
-          onCellDown(rowIdx, 'title');
-        }}
         onMouseEnter={() => onCellEnter(rowIdx, 'title')}
       >
         {hasChildren ? (
