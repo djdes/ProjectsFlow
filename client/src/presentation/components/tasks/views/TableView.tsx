@@ -462,6 +462,24 @@ export function TableView({
   const colIndexOf = (k: 'title' | ViewColumn): number =>
     k === 'title' ? 0 : visibleCols.indexOf(k) + 1;
   const cellDown = (row: number, k: 'title' | ViewColumn): void => {
+    // Notion: при существующем диапазоне клик ВНУТРЬ него выбирает все его строки
+    // (панель действий сверху); клик МИМО — выбирает только одну строку под курсором.
+    if (selRange) {
+      const [r1, r2] = [Math.min(selRange.a.row, selRange.h.row), Math.max(selRange.a.row, selRange.h.row)];
+      const [c1, c2] = [Math.min(selRange.a.col, selRange.h.col), Math.max(selRange.a.col, selRange.h.col)];
+      const multi = r1 !== r2 || c1 !== c2;
+      if (multi) {
+        const col = colIndexOf(k);
+        const inRect = row >= r1 && row <= r2 && col >= c1 && col <= c2;
+        setSelRange(null);
+        setSelected(
+          inRect
+            ? new Set(rows.slice(r1, r2 + 1).map((t) => t.id))
+            : new Set(rows[row] ? [rows[row].id] : []),
+        );
+        return;
+      }
+    }
     selDragging.current = true;
     const c = { row, col: colIndexOf(k) };
     setSelRange({ a: c, h: c });
