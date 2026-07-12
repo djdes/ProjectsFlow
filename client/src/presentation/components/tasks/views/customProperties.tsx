@@ -538,36 +538,59 @@ export function PropertyHeaderCell({
 // «Выбрать тип» с поиском, сетка типов 2 колонки с иконками.
 export function NewPropertyForm({
   onCreate,
+  fullWidth = false,
 }: {
   onCreate: (type: TaskPropertyType, name?: string) => void;
+  // В полноэкранной панели «Новое свойство» — на всю ширину (не фикс 18rem попапа).
+  fullWidth?: boolean;
 }): React.ReactElement {
   const [name, setName] = useState('');
   const [typeQuery, setTypeQuery] = useState('');
+  // Поиск типа: по умолчанию иконка, по клику раскрывается в поле (Notion Search types).
+  const [searchOpen, setSearchOpen] = useState(false);
   const q = typeQuery.trim().toLowerCase();
   const types = TASK_PROPERTY_TYPES.filter(
     (t) => !q || TASK_PROPERTY_TYPE_LABELS[t].toLowerCase().includes(q),
   );
   return (
-    <div className="w-72">
+    <div className={fullWidth ? 'w-full' : 'w-72'}>
       <input
         autoFocus
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Введите имя свойства…"
         aria-label="Имя свойства"
-        className="mb-1.5 h-8 w-full rounded-md bg-accent/60 px-2 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
+        className="mb-2 h-9 w-full rounded-md border bg-background px-2.5 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
       />
-      <div className="flex items-center justify-between px-1 pb-1">
-        <p className="text-[11px] font-medium text-muted-foreground">Выбрать тип</p>
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-1.5 top-1/2 size-3 -translate-y-1/2 text-muted-foreground/60" />
-          <input
-            value={typeQuery}
-            onChange={(e) => setTypeQuery(e.target.value)}
+      <div className="flex items-center justify-between gap-2 px-0.5 pb-1.5">
+        <p className="shrink-0 text-[11px] font-medium text-muted-foreground">Выбрать тип</p>
+        {/* Иконка-лупа → раскрывается в поле поиска (плавно). Схлопывается на blur,
+            если пусто. */}
+        {searchOpen ? (
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
+            <input
+              autoFocus
+              value={typeQuery}
+              onChange={(e) => setTypeQuery(e.target.value)}
+              onBlur={() => {
+                if (!typeQuery.trim()) setSearchOpen(false);
+              }}
+              placeholder="Поиск типа…"
+              aria-label="Поиск типа"
+              className="h-7 w-full rounded-md border bg-background pl-7 pr-2 text-xs outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
             aria-label="Поиск типа"
-            className="h-6 w-24 rounded bg-accent/60 pl-6 pr-1.5 text-[11px] outline-none placeholder:text-muted-foreground/60"
-          />
-        </div>
+            onClick={() => setSearchOpen(true)}
+            className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Search className="size-3.5" />
+          </button>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-0.5">
         {types.map((t) => {
@@ -577,7 +600,7 @@ export function NewPropertyForm({
               key={t}
               type="button"
               onClick={() => onCreate(t, name)}
-              className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60"
+              className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-accent/60"
             >
               <Icon className="size-4 text-muted-foreground" />
               {TASK_PROPERTY_TYPE_LABELS[t]}

@@ -66,7 +66,9 @@ import {
   type BoardView,
   type BoardViewType,
 } from '@/domain/project/BoardView';
+import { createPortal } from 'react-dom';
 import { useContainer } from '@/infrastructure/di/container';
+import { useSetRightPanelWidth } from '@/presentation/layout/rightPanelContext';
 import { PROJECT_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { STATUS_LABEL } from '../statusLabels';
 import { KanbanBoard } from '../KanbanBoard';
@@ -1051,17 +1053,18 @@ export function ProjectBoardViews({
       )}
 
       </div>
-      {/* Панель «Новое свойство» (Notion New property): по «+» в шапке таблицы —
-          контент плавно поджимается (PanelSlot), панель выезжает справа. */}
+      {/* Панель «Новое свойство» (Notion New property): по «+» в шапке таблицы — вся
+          страница плавно съезжает влево (BoardSidePanel сужает <main>), панель встаёт
+          справа на всю высоту и скроллится сама. */}
       {panel === 'newprop' && (
-        <PanelSlot>
+        <BoardSidePanel>
           <NewPropertyPanel projectId={projectId} onClose={() => setPanel(null)} />
-        </PanelSlot>
+        </BoardSidePanel>
       )}
       {/* Панель «Новое отображение» (Notion): сразу после создания — имя/тип → «Готово»
           открывает полные настройки вью. */}
       {panel === 'newview' && active && (
-        <aside className="sticky top-2 z-40 w-72 shrink-0 rounded-lg border bg-popover p-2 shadow-xl duration-200 animate-in fade-in slide-in-from-right-2 max-md:hidden">
+        <BoardSidePanel>
           <NewViewPanel
             view={active}
             projectName={projectName}
@@ -1075,10 +1078,10 @@ export function ProjectBoardViews({
             onType={(type) => void handleUpdate(active, { type })}
             onDone={() => setPanel('settings')}
           />
-        </aside>
+        </BoardSidePanel>
       )}
       {panel === 'settings' && (active !== null || activeId === DEFAULT_VIEW_ID) && (
-        <aside className="sticky top-2 z-40 w-72 shrink-0 rounded-lg border bg-popover p-2 shadow-xl duration-200 animate-in fade-in slide-in-from-right-2 max-md:hidden">
+        <BoardSidePanel>
           {active ? (
             <ViewSettingsCard
               view={active}
@@ -1140,7 +1143,7 @@ export function ProjectBoardViews({
               onColorRules={setColorRules}
             />
           )}
-        </aside>
+        </BoardSidePanel>
       )}
       </div>
 
@@ -1170,23 +1173,29 @@ export function ProjectBoardViews({
   );
 }
 
-// Слот правой панели с ПЛАВНЫМ раскрытием: ширина 0 → 304px (Notion: контент
-// «съезжает» влево, панель выезжает). Закрытие — мгновенное (панель размонтируется).
-function PanelSlot({ children }: { children: React.ReactNode }): React.ReactElement {
-  const [w, setW] = useState(0);
+// Полноэкранная правая панель (Notion side peek): fixed на всю высоту вьюпорта,
+// СВОЙ скролл. Публикует ширину в rightPanelContext → главный <main> плавно
+// сужается (marginRight, transition), вся страница «съезжает» влево, а панель
+// встаёт ровно в освободившийся справа столбец до самого низа. Скроллится сама
+// панель, страница под ней остаётся на месте — «офигенный эффект» из запроса.
+const SIDE_PANEL_WIDTH = 320;
+function BoardSidePanel({ children }: { children: React.ReactNode }): React.ReactElement | null {
+  const setRightPanelWidth = useSetRightPanelWidth();
   useEffect(() => {
-    const id = requestAnimationFrame(() => setW(304));
-    return () => cancelAnimationFrame(id);
-  }, []);
-  return (
+    setRightPanelWidth(SIDE_PANEL_WIDTH);
+    return () => setRightPanelWidth(0);
+  }, [setRightPanelWidth]);
+  if (typeof document === 'undefined') return null;
+  // Панель — портал в body: fixed на всю высоту вьюпорта. Дочерний контент (шапка +
+  // скроллящееся тело) сам занимает высоту (h-full) и скроллится внутри себя.
+  return createPortal(
     <div
-      style={{ width: w }}
-      className="shrink-0 overflow-hidden transition-[width] duration-300 ease-out max-md:hidden"
+      style={{ width: SIDE_PANEL_WIDTH }}
+      className="fixed inset-y-0 right-0 z-30 flex flex-col overflow-hidden border-l bg-background shadow-[-8px_0_24px_rgba(15,15,15,0.06)] duration-300 animate-in slide-in-from-right-4 max-md:hidden dark:shadow-[-8px_0_24px_rgba(0,0,0,0.4)]"
     >
-      <aside className="sticky top-2 z-40 w-72 rounded-lg border bg-popover p-2 shadow-xl">
-        {children}
-      </aside>
-    </div>
+      {children}
+    </div>,
+    document.body,
   );
 }
 
@@ -1201,8 +1210,8 @@ function NewPropertyPanel({
 }): React.ReactElement {
   const props = useTaskProperties(projectId);
   return (
-    <div className="flex flex-col">
-      <div className="flex items-center justify-between px-1 py-1">
+    <div className="flex h-full flex-col">
+      <div className="flex shrink-0 items-center justify-between border-b px-3 py-2.5">
         <p className="text-sm font-semibold">Новое свойство</p>
         <button
           type="button"
@@ -1213,12 +1222,15 @@ function NewPropertyPanel({
           <X className="size-4" />
         </button>
       </div>
-      <NewPropertyForm
-        onCreate={(t, name) => {
-          props.createProperty(t, name);
-          onClose();
-        }}
-      />
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <NewPropertyForm
+          fullWidth
+          onCreate={(t, name) => {
+            props.createProperty(t, name);
+            onClose();
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -1284,8 +1296,8 @@ function NewViewPanel({
     if (trimmed && trimmed !== view.name) onRename(trimmed);
   };
   return (
-    <div className="rounded-lg border bg-card shadow-sm">
-      <div className="flex items-center justify-between px-3 pb-1 pt-2.5">
+    <div className="flex h-full flex-col overflow-y-auto">
+      <div className="flex shrink-0 items-center justify-between border-b px-3 py-2.5">
         <p className="text-sm font-semibold">Новое отображение</p>
         <button
           type="button"
@@ -2094,8 +2106,8 @@ function ViewSettingsCard({
   );
 
   return (
-    <div className="flex flex-col">
-      <div className="flex items-center justify-between px-2 py-1.5">
+    <div className="flex h-full flex-col">
+      <div className="flex shrink-0 items-center justify-between border-b px-3 py-2.5">
         <p className="text-sm font-semibold">Настройки отображения</p>
         <button
           type="button"
@@ -2106,7 +2118,7 @@ function ViewSettingsCard({
           <X className="size-4" />
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+      <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {page === 'root' && (
           <div className="flex flex-col gap-1">
             {/* Имя вью с иконкой типа (Notion: инпут сверху панели). */}
