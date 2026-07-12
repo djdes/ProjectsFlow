@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -12,7 +12,6 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
 import { FolderKanban } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -28,15 +27,11 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
-import { KanbanCard } from './KanbanCard';
-import {
-  DROP_ANIMATION,
-  DROP_DURATION_MS,
-  DROP_EASING_BEZIER,
-  MEASURING_CONFIG,
-} from './KanbanBoard';
+import { splitTitleBody } from '@/lib/taskTitleBody';
+import { MEASURING_CONFIG } from './KanbanBoard';
 import {
   AssignedDragPill,
+  TaskDragPill,
   FutureDeadlineDialog,
   dndCollision,
   snapToCursor,
@@ -119,11 +114,6 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
   );
 
   const [active, setActive] = useState<ActiveDrag | null>(null);
-  // Фазы оверлея доски-карточки — зеркало KanbanBoard: 'lifted' (наклон) → 'settled'
-  // (лерп к identity синхронно с position-lerp'ом DragOverlay). Держим active до конца
-  // drop-анимации, чтобы motion успел распрямить наклон.
-  const [previewPhase, setPreviewPhase] = useState<'lifted' | 'settled'>('settled');
-  const dropTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Дроп доски-карточки в «Будущее» → попап выбора срока (тот же, что у блока).
   const [futureDrop, setFutureDrop] = useState<Task | null>(null);
   // Дроп доски-карточки на фантомные колонки → пикеры «Другой проект…» / «Другой приоритет…».
@@ -342,14 +332,9 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
 
   const handleDragStart = (e: DragStartEvent): void => {
     // Висящий drop-таймер прошлого перетаскивания — гасим, иначе он обнулит новый active.
-    if (dropTimerRef.current) {
-      clearTimeout(dropTimerRef.current);
-      dropTimerRef.current = null;
-    }
     const info = detectActive(e.active);
     setActive(info);
     if (info?.origin === 'board') {
-      setPreviewPhase('lifted');
       registry.current.board?.onDragStart(e);
     }
     // Блоку — всегда: он подсвечивает кубики-цели и для драгов с доски.
@@ -369,12 +354,8 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
     if (info?.origin === 'board') {
       // Родной settle + move доски (для чужих over-целей move — no-op). Ошибки тостит сама.
       void registry.current.board?.onDragEnd(e);
-      // Зеркало settle для нашего оверлея: наклон → identity, карточку держим до конца анимации.
-      setPreviewPhase('settled');
-      dropTimerRef.current = setTimeout(() => {
-        setActive(null);
-        dropTimerRef.current = null;
-      }, DROP_DURATION_MS);
+      // Пилюля без drop-анимации — прячем сразу (как у блока).
+      setActive(null);
       const overData = e.over?.data.current as OverData | undefined;
       if (overData?.type === 'bucket' && overData.bucket) {
         dropBoardTaskOnBucket(info.task, overData.bucket);
@@ -418,7 +399,6 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
     registry.current.block?.onDragCancel();
     registry.current.board?.onDragCancel();
     setActive(null);
-    setPreviewPhase('settled');
   };
 
   return (
@@ -434,28 +414,11 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
       >
         {children}
         {/* Один оверлей на страницу; вид и drop-анимация зависят от происхождения active. */}
-        <DragOverlay
-          dropAnimation={active?.origin === 'board' ? DROP_ANIMATION : null}
-          modifiers={active?.origin === 'block' ? [snapToCursor] : undefined}
-        >
+        {/* И доска, и блок делегирования тащат ОДИНАКОВО — полупрозрачной однострочной
+            пилюлей (запрос: drag из нижних канбанов тоже прозрачный и в строку). */}
+        <DragOverlay dropAnimation={null} modifiers={[snapToCursor]}>
           {active?.origin === 'board' ? (
-            <motion.div
-              initial={false}
-              animate={
-                previewPhase === 'lifted' ? { rotate: 2, scale: 1.04 } : { rotate: 0, scale: 1 }
-              }
-              transition={{ duration: DROP_DURATION_MS / 1000, ease: DROP_EASING_BEZIER }}
-              style={{ transformOrigin: 'center' }}
-            >
-              {/* showShortId=false: у inbox-задач нет git-репо (как в own-оверлее инбокс-доски). */}
-              <KanbanCard
-                task={active.task}
-                onEdit={() => undefined}
-                onDelete={() => undefined}
-                preview
-                showShortId={false}
-              />
-            </motion.div>
+            <TaskDragPill title={splitTitleBody(active.task.description ?? '').title} />
           ) : active?.origin === 'block' ? (
             <AssignedDragPill item={active.item} />
           ) : null}

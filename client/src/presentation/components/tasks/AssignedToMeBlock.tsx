@@ -898,6 +898,14 @@ export function AssignedToMeBlock({
 // (запрос: «видно, кому делегирую»). Мелкий оверлей = легче целиться (+ коллизии по курсору,
 // см. dndCollision). Экспорт — его же рендерит InboxUnifiedDnd в общем контексте.
 export function AssignedDragPill({ item }: { item: AssignedTask }): React.ReactElement {
+  return <TaskDragPill title={splitTitleBody(item.description ?? '').title || 'Задача'} />;
+}
+
+// Общая drag-пилюля (Notion-style «взял задачу»): полупрозрачная (~55%) однострочная
+// капсула с названием — сквозь неё видно колонку/цель, куда целишься. Используется
+// ВЕЗДЕ, где таскают карточку канбана (доска проекта, инбокс — верхний И нижний блоки),
+// чтобы drag выглядел одинаково: прозрачным и в одну строку.
+export function TaskDragPill({ title }: { title: string }): React.ReactElement {
   return (
     <motion.div
       initial={{ scale: 1.25, opacity: 0.3 }}
@@ -906,9 +914,7 @@ export function AssignedDragPill({ item }: { item: AssignedTask }): React.ReactE
       className="pointer-events-none flex max-w-[15rem] cursor-grabbing items-center gap-1.5 rounded-full border border-primary/40 bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-lg ring-1 ring-primary/20"
     >
       <GripVertical className="size-3.5 shrink-0 text-muted-foreground/60" />
-      <span className="truncate">
-        {splitTitleBody(item.description ?? '').title || 'Задача'}
-      </span>
+      <span className="truncate">{title || 'Задача'}</span>
     </motion.div>
   );
 }

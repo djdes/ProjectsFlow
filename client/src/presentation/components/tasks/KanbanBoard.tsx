@@ -14,7 +14,6 @@ import {
   type DragStartEvent,
   type DropAnimation,
 } from '@dnd-kit/core';
-import { motion } from 'motion/react';
 import {
   ArrowDownNarrowWide,
   ArrowUpNarrowWide,
@@ -56,7 +55,6 @@ import { useBulkTaskActions } from '@/presentation/hooks/useBulkTaskActions';
 import { useDoneSortOrder, type DoneSortOrder } from '@/presentation/hooks/useDoneSortOrder';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { LIVE_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
-import { KanbanCard } from './KanbanCard';
 import { KanbanColumn } from './KanbanColumn';
 import { KanbanColumnMenu } from './KanbanColumnMenu';
 import { WorkerLockOffer } from './WorkerLockOffer';
@@ -84,6 +82,8 @@ import {
   type VisibleKanbanStatus,
 } from '@/domain/kanban/KanbanSettings';
 import type { UnifiedDndRef } from './unifiedDndTypes';
+import { TaskDragPill } from './AssignedToMeBlock';
+import { splitTitleBody } from '@/lib/taskTitleBody';
 
 type Props = {
   projectId: string;
@@ -469,7 +469,6 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   // 'lifted' — карточка приподнята (rotate+scale), 'settled' — лерпит обратно к identity.
   // Меняем на 'settled' в момент drop'а и держим activeId до конца drop-анимации, чтобы
   // motion успел синхронно с position-lerp'ом dnd-kit'а распрямить наклон.
-  const [previewPhase, setPreviewPhase] = useState<'lifted' | 'settled'>('settled');
   const dropTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Мышь — drag почти мгновенный (порог 8px). Тач — drag только после удержания ~220мс
@@ -646,7 +645,6 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     setActiveId(String(e.active.id));
     setRecentlyMovedId(null);
     setDropTarget(null);
-    setPreviewPhase('lifted');
   };
 
   const handleDragOver = (e: DragOverEvent): void => {
@@ -678,11 +676,9 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   };
 
   const handleDragEnd = async (e: DragEndEvent): Promise<void> => {
-    // 1) motion начинает лерпить rotate/scale обратно к identity.
-    setPreviewPhase('settled');
     setDropTarget(null);
-    // 2) activeId держим живым ровно до конца drop-анимации — DragOverlay в это время
-    //    рендерит motion.div, и тот успевает доехать до rotate:0.
+    // activeId держим живым ровно до конца drop-таймера, чтобы source-карточка не
+    // мигнула из opacity-30 в полную до применения move.
     dropTimerRef.current = setTimeout(() => {
       setActiveId(null);
       dropTimerRef.current = null;
@@ -805,7 +801,6 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   // Вынесено из JSX: в external-режиме этот же хендлер регистрируется в общем контексте.
   const handleDragCancel = (): void => {
     setDropTarget(null);
-    setPreviewPhase('settled');
     setActiveId(null);
   };
 
@@ -1123,30 +1118,11 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
             onDragCancel={handleDragCancel}
           >
             {boardBody}
-        <DragOverlay dropAnimation={DROP_ANIMATION}>
+        {/* Drag-оверлей — полупрозрачная однострочная пилюля (как в инбоксе): сквозь
+            неё видно колонку, куда целишься; drag выглядит одинаково по всему сайту. */}
+        <DragOverlay dropAnimation={null}>
           {activeTask ? (
-            // Tilt + scale живут на motion-обёртке, а не на CSS карточки — иначе оверлей
-            // приземляется в позицию, но наклон ещё «висит» (CSS-трансформа запечена
-            // в snapshot DragOverlay). previewPhase переключается на 'settled' в момент
-            // drop'а, motion лерпит rotate/scale к identity синхронно с position-lerp'ом.
-            <motion.div
-              initial={false}
-              animate={
-                previewPhase === 'lifted'
-                  ? { rotate: 2, scale: 1.04 }
-                  : { rotate: 0, scale: 1 }
-              }
-              transition={{ duration: DROP_DURATION_MS / 1000, ease: DROP_EASING_BEZIER }}
-              style={{ transformOrigin: 'center' }}
-            >
-              <KanbanCard
-                task={activeTask}
-                onEdit={() => undefined}
-                onDelete={() => undefined}
-                preview
-                showShortId={showCommits}
-              />
-            </motion.div>
+            <TaskDragPill title={splitTitleBody(activeTask.description ?? '').title} />
           ) : null}
         </DragOverlay>
           </DndContext>

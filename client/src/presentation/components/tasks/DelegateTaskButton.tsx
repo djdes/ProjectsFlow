@@ -159,19 +159,22 @@ export function DelegateTaskButton({
           {submitting ? (
             <Loader2 className="size-3.5 shrink-0 animate-spin" />
           ) : (
-            <>
-              {/* Создатель (неизменный) → стрелка → ответственный (меняется по клику). */}
+            // Аватары — КОМПАКТНЫЙ кластер с тесным gap (иначе Button gap-2 разносит
+            // создателя/стрелку/ответственного, и имя в делегированных строках
+            // начинается заметно правее, чем в обычных — колонка «рваная»).
+            // Стрелка мелкая (size override Button'а обходим через [&>svg]).
+            <span className="flex shrink-0 items-center gap-1 [&>svg]:!size-3">
               {creator && (
                 <>
                   <MiniAvatar name={creator.name} avatarUrl={creator.avatarUrl} />
-                  <ArrowRight className="size-3 shrink-0 text-muted-foreground/60" />
+                  <ArrowRight className="shrink-0 text-muted-foreground/50" />
                 </>
               )}
               <MiniAvatar name={assignee.name} avatarUrl={assignee.avatarUrl} />
-            </>
+            </span>
           )}
-          <span className="min-w-0 truncate">{assignee.name}</span>
-          <ChevronDown className="size-3 shrink-0 opacity-60" />
+          <span className="-ml-1 min-w-0 truncate">{assignee.name}</span>
+          <ChevronDown className="!size-3 shrink-0 opacity-60" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[240px]">

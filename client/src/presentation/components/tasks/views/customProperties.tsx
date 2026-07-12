@@ -847,10 +847,11 @@ export function PropertyValueCell({
     if (editing) {
       return (
         <div className="relative border-b border-l">
-          {/* Notion: редактор раскрывается ПОВЕРХ ячейки — шире её и с тенью,
-              текст растёт вниз не двигая строки. Enter — коммит (Shift+Enter —
+          {/* Notion: редактор раскрывается ПОВЕРХ ячейки РОВНО по её ширине (w-full),
+              текст растёт вниз не двигая строки. Тонкая рамка + мягкая тень как в
+              Notion (не «плавающий» широкий бокс). Enter — коммит (Shift+Enter —
               перенос строки в тексте), Esc — отмена. */}
-          <div className="absolute left-0 top-0 z-30 w-[max(100%,17rem)] overflow-hidden rounded-sm bg-popover shadow-[0_0_0_1px_rgba(15,15,15,0.06),0_3px_6px_rgba(15,15,15,0.12),0_9px_24px_rgba(15,15,15,0.2)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_3px_6px_rgba(0,0,0,0.5)]">
+          <div className="absolute -left-px -top-px z-30 w-[calc(100%+1px)] overflow-hidden rounded-[3px] bg-popover shadow-[0_0_0_1px_rgba(15,15,15,0.12),0_3px_12px_rgba(15,15,15,0.16)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.14),0_3px_12px_rgba(0,0,0,0.5)]">
             {property.type === 'text' ? (
               <textarea
                 autoFocus
