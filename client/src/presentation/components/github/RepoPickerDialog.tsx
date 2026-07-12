@@ -20,6 +20,7 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   projectId: string;
   currentRepoUrl: string | null;
+  onCreateNew?: () => void;
 };
 
 function formatPushed(d: Date | null): string {
@@ -37,6 +38,7 @@ export function RepoPickerDialog({
   onOpenChange,
   projectId,
   currentRepoUrl,
+  onCreateNew,
 }: Props): React.ReactElement {
   const { githubRepository } = useContainer();
   const { submit: updateProject, saving } = useUpdateProject();
@@ -169,7 +171,14 @@ export function RepoPickerDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:justify-between">
+          {onCreateNew ? (
+            <Button type="button" variant="outline" onClick={onCreateNew}>
+              Создать новый
+            </Button>
+          ) : (
+            <span />
+          )}
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
             Закрыть
           </Button>

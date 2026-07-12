@@ -9,6 +9,7 @@ import { useUpdateProject } from '@/presentation/hooks/useUpdateProject';
 import { useGithubConnection } from '@/presentation/hooks/GithubConnectionProvider';
 import { useContainer } from '@/infrastructure/di/container';
 import { RepoPickerDialog } from '@/presentation/components/github/RepoPickerDialog';
+import { CreateRepoDialog } from '@/presentation/components/github/CreateRepoDialog';
 
 type Props = {
   project: Project;
@@ -19,6 +20,8 @@ export function GitRepoSection({ project }: Props): React.ReactElement {
   const { connection, loading: connLoading } = useGithubConnection();
   const { projectRepository } = useContainer();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const canEdit = project.role === 'owner' || project.role === 'editor';
   const [collision, setCollision] = useState<{ projectId: string; projectName: string } | null>(
     null,
   );
@@ -138,10 +141,17 @@ export function GitRepoSection({ project }: Props): React.ReactElement {
               {connLoading ? (
                 <div className="h-9 w-48 animate-pulse rounded bg-muted" />
               ) : connection ? (
-                <Button size="sm" onClick={() => setPickerOpen(true)}>
-                  <Github />
-                  Выбрать из GitHub
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => setPickerOpen(true)}>
+                    <Github />
+                    Выбрать из GitHub
+                  </Button>
+                  {canEdit && (
+                    <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
+                      Создать новый
+                    </Button>
+                  )}
+                </div>
               ) : (
                 <Button asChild variant="outline" size="sm">
                   <RouterLink to="/profile">
@@ -160,6 +170,20 @@ export function GitRepoSection({ project }: Props): React.ReactElement {
         onOpenChange={setPickerOpen}
         projectId={project.id}
         currentRepoUrl={project.gitRepoUrl}
+        onCreateNew={
+          canEdit
+            ? () => {
+                setPickerOpen(false);
+                setCreateOpen(true);
+              }
+            : undefined
+        }
+      />
+      <CreateRepoDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        projectId={project.id}
+        projectName={project.name}
       />
     </>
   );
