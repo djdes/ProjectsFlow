@@ -121,6 +121,18 @@ export const updateBoardViewSchema = z
     message: 'Нечего обновлять',
   });
 
+// Шаблоны задач (Notion Templates, db/108).
+export const createTaskTemplateSchema = z.object({
+  name: z.string().trim().min(1, 'Введите имя шаблона').max(64),
+  description: z.string().trim().min(1, 'Введите описание').max(50000),
+  status: z.enum(VISIBLE_KANBAN_STATUSES).optional(),
+  priority: z
+    .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
+    .nullable()
+    .optional(),
+  icon: z.string().max(200000).nullable().optional(),
+});
+
 // Персональные UI-настройки клиента (профиль). Все поля optional — частичный мерж.
 export const uiPrefsSchema = z.object({
   inboxAssignedGrouping: z.enum(ASSIGNED_GROUPINGS).optional(),

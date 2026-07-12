@@ -47,10 +47,13 @@ import { randomUUID } from 'node:crypto';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requireProjectAccess } from '../../application/project/projectAccess.js';
 import type { BoardViewRepository } from '../../application/project/BoardViewRepository.js';
+import type { TaskTemplateRepository } from '../../application/task/TaskTemplateRepository.js';
+import type { TaskTemplate } from '../../domain/task/TaskTemplate.js';
 import type { BoardView } from '../../domain/project/BoardView.js';
 import type { AttachmentStorage } from '../../application/task/AttachmentStorage.js';
 import {
   createBoardViewSchema,
+  createTaskTemplateSchema,
   createInviteSchema,
   createProjectSchema,
   kanbanSettingsSchema,
@@ -96,6 +99,8 @@ type Deps = {
   readonly projects: ProjectRepository;
   // Пользовательские вью доски (Notion-style, db/103).
   readonly boardViews: BoardViewRepository;
+  // Шаблоны задач (Notion Templates, db/108).
+  readonly taskTemplates: TaskTemplateRepository;
   readonly reorderProjects: ReorderProjects;
   readonly toggleProjectFavorite: ToggleProjectFavorite;
   readonly reorderFavoriteProjects: ReorderFavoriteProjects;
@@ -744,6 +749,76 @@ export function projectsRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  // Шаблоны задач (Notion Templates, db/108) --------------------------------
+  // Read — участник; create/delete — editor+ (реюз requireViewEditor).
+  const templateToDto = (t: TaskTemplate): Record<string, unknown> => ({
+    id: t.id,
+    projectId: t.projectId,
+    name: t.name,
+    description: t.description,
+    status: t.status,
+    priority: t.priority,
+    icon: t.icon,
+    createdAt: t.createdAt.toISOString(),
+  });
+
+  router.get('/:id/templates', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const membership = await deps.members.findForProject(id, req.user!.id);
+      if (!membership) throw new ProjectNotFoundError();
+      const templates = await deps.taskTemplates.listForProject(id);
+      res.json({ templates: templates.map(templateToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/:id/templates', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      if (!(await requireViewEditor(id, req.user!.id, res))) return;
+      const body = createTaskTemplateSchema.parse(req.body);
+      const template = await deps.taskTemplates.create({
+        id: randomUUID(),
+        projectId: id,
+        name: body.name,
+        description: body.description,
+        status: body.status ?? 'backlog',
+        priority: body.priority ?? null,
+        icon: body.icon ?? null,
+        createdBy: req.user!.id,
+      });
+      deps.notifyProjectChanged(id);
+      res.status(201).json({ template: templateToDto(template) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.delete(
+    '/:id/templates/:templateId',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params.id;
+        const templateId = req.params['templateId'];
+        if (typeof id !== 'string' || typeof templateId !== 'string')
+          throw new ProjectNotFoundError();
+        if (!(await requireViewEditor(id, req.user!.id, res))) return;
+        // Принадлежность проекту из URL — иначе IDOR.
+        const existing = await deps.taskTemplates.getById(templateId);
+        if (!existing || existing.projectId !== id) throw new ProjectNotFoundError();
+        await deps.taskTemplates.delete(templateId);
+        deps.notifyProjectChanged(id);
+        res.status(204).end();
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   // Members ---------------------------------------------------------------
   router.get('/:id/members', async (req: Request, res: Response, next: NextFunction) => {

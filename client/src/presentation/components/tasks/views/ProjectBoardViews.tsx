@@ -12,6 +12,7 @@ import {
   CircleDot,
   Copy,
   Eye,
+  FileText,
   EyeOff,
   Flag,
   LayoutGrid,
@@ -41,6 +42,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -52,6 +55,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { TaskTemplate } from '@/domain/task/TaskTemplate';
 // (TaskStatus используется в редакторе условного цвета)
 import { TASK_PRIORITIES } from '@/domain/task/Task';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
@@ -124,7 +128,12 @@ const DUE_FILTER_LABELS: Record<ViewDueFilter, string> = {
 };
 
 // Запрос «создать задачу» из тулбара: seq растёт, вид ловит изменение и открывает окно.
-export type ViewCreateRequest = { readonly seq: number; readonly status: TaskStatus };
+// С template — задача создаётся сразу из шаблона (db/108), без окна (Notion Templates).
+export type ViewCreateRequest = {
+  readonly seq: number;
+  readonly status: TaskStatus;
+  readonly template?: TaskTemplate;
+};
 
 
 // === Вью доски проекта (Notion-style) ===
@@ -140,7 +149,7 @@ export function ProjectBoardViews({
   bleedNegClass = '',
   bleedPadClass = '',
 }: Props): React.ReactElement {
-  const { boardViewRepository } = useContainer();
+  const { boardViewRepository, taskTemplateRepository } = useContainer();
   const storageKey = `pf:board-view:${projectId}`;
   const [views, setViews] = useState<BoardView[] | null>(null);
   const [activeId, setActiveId] = useState<string>(() => {
@@ -179,6 +188,19 @@ export function ProjectBoardViews({
   const [searchOpen, setSearchOpen] = useState(false);
   const [createReq, setCreateReq] = useState<ViewCreateRequest | null>(null);
 
+  // Шаблоны задач (db/108) — пункты в шевроне «Создать ▾» (Notion Templates).
+  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
+  const refetchTemplates = useCallback(async (): Promise<void> => {
+    try {
+      setTemplates(await taskTemplateRepository.list(projectId));
+    } catch {
+      // Тихо: без шаблонов «Создать» работает как обычно.
+    }
+  }, [taskTemplateRepository, projectId]);
+  useEffect(() => {
+    void refetchTemplates();
+  }, [refetchTemplates]);
+
   const refetch = useCallback(async (): Promise<void> => {
     try {
       setViews(await boardViewRepository.list(projectId));
@@ -199,14 +221,17 @@ export function ProjectBoardViews({
       const detail = (e as CustomEvent<{ projectId?: string }>).detail;
       if (detail?.projectId !== projectId) return;
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => void refetch(), 400);
+      timer = setTimeout(() => {
+        void refetch();
+        void refetchTemplates();
+      }, 400);
     };
     window.addEventListener(PROJECT_CHANGED_EVENT, onChanged);
     return () => {
       if (timer) clearTimeout(timer);
       window.removeEventListener(PROJECT_CHANGED_EVENT, onChanged);
     };
-  }, [projectId, refetch]);
+  }, [projectId, refetch, refetchTemplates]);
 
   const selectView = (id: string): void => {
     setActiveId(id);
@@ -379,8 +404,16 @@ export function ProjectBoardViews({
   const filtersActive = hasActiveFilters(state.filters);
   const chipsVisible = !isKanban && (filtersActive || state.sort !== null);
 
-  const requestCreate = (status: TaskStatus): void =>
-    setCreateReq((prev) => ({ seq: (prev?.seq ?? 0) + 1, status }));
+  const requestCreate = (status: TaskStatus, template?: TaskTemplate): void =>
+    setCreateReq((prev) => ({ seq: (prev?.seq ?? 0) + 1, status, template }));
+
+  const removeTemplate = (tpl: TaskTemplate): void => {
+    setTemplates((prev) => prev.filter((t) => t.id !== tpl.id));
+    taskTemplateRepository.remove(projectId, tpl.id).catch((e: unknown) => {
+      toast.error(`Не удалось удалить шаблон: ${(e as Error).message}`);
+      void refetchTemplates();
+    });
+  };
 
   // Меню дефолтной вкладки «Доска» (виртуальная, в БД не хранится) — то же окно, что у
   // остальных вью (Notion: все вкладки равнозначны). «Показывать как» другой тип создаёт
@@ -658,13 +691,45 @@ export function ProjectBoardViews({
                     <ChevronDown className="size-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[11rem]">
+                <DropdownMenuContent align="end" className="min-w-[13rem]">
                   {VISIBLE_KANBAN_STATUSES.map((s) => (
                     <DropdownMenuItem key={s} className="gap-2" onClick={() => requestCreate(s)}>
                       <span className={cn('size-2 rounded-full', STATUS_DOT[s])} />
                       {STATUS_LABEL[s]}
                     </DropdownMenuItem>
                   ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                    Шаблоны
+                  </DropdownMenuLabel>
+                  {templates.length === 0 ? (
+                    <div className="px-2 pb-1.5 text-xs text-muted-foreground">
+                      Нет — «Сохранить как шаблон» в меню задачи
+                    </div>
+                  ) : (
+                    templates.map((t) => (
+                      <DropdownMenuItem
+                        key={t.id}
+                        className="group/tpl gap-2"
+                        onClick={() => requestCreate(t.status, t)}
+                      >
+                        <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                        <button
+                          type="button"
+                          aria-label={`Удалить шаблон «${t.name}»`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            removeTemplate(t);
+                          }}
+                          className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-destructive group-hover/tpl:opacity-100"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </DropdownMenuItem>
+                    ))
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

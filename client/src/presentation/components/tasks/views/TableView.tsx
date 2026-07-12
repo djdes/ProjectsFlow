@@ -47,6 +47,7 @@ import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { TASK_PRIORITIES } from '@/domain/task/Task';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { VISIBLE_KANBAN_STATUSES } from '@/domain/kanban/KanbanSettings';
+import { useContainer } from '@/infrastructure/di/container';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { useBulkTaskActions, type BulkResult } from '@/presentation/hooks/useBulkTaskActions';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
@@ -144,6 +145,7 @@ export function TableView({
 }: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
   const { tasks, loading, error, create, update, move, remove, refetch } = tasksApi;
+  const { taskTemplateRepository } = useContainer();
   const { user } = useCurrentUser();
   const isShared = (memberCount ?? 0) > 1;
   const [drawer, setDrawer] = useState<TaskDrawerState | null>(null);
@@ -383,8 +385,23 @@ export function TableView({
   };
 
   // «Создать» из тулбара вью: открыть окно новой задачи в выбранной колонке.
+  // С шаблоном (db/108) — задача создаётся сразу, без окна (Notion Templates).
   useEffect(() => {
-    if (createRequest) setDrawer({ mode: 'create', status: createRequest.status });
+    if (!createRequest) return;
+    const tpl = createRequest.template;
+    if (tpl) {
+      void create({
+        description: tpl.description || tpl.name,
+        status: tpl.status,
+        priority: tpl.priority,
+        icon: tpl.icon,
+      })
+        .then(() => toast.success(`Создано из шаблона «${tpl.name}»`))
+        .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`));
+    } else {
+      setDrawer({ mode: 'create', status: createRequest.status });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createRequest]);
 
   // Esc снимает выделение ячейки.
@@ -608,6 +625,18 @@ export function TableView({
                 onOpen={() => setDrawer({ mode: 'edit', task })}
                 onCreateBelow={(above) => setInsertAt({ taskId: task.id, above })}
                 onAddSub={() => setInsertAt({ taskId: task.id, above: false, asSub: true })}
+                onSaveTemplate={() =>
+                  void taskTemplateRepository
+                    .create(projectId, {
+                      name: taskTitle(task).slice(0, 64),
+                      description: task.description ?? '',
+                      status: task.status,
+                      priority: task.priority,
+                      icon: task.icon,
+                    })
+                    .then(() => toast.success('Шаблон сохранён — доступен в меню «Создать ▾»'))
+                    .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`))
+                }
                 onStatus={(s) =>
                   void move(task.id, { targetStatus: s, beforeTaskId: null, afterTaskId: null }).catch(
                     (e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`),
@@ -993,6 +1022,7 @@ function TableRow({
   onOpen,
   onCreateBelow,
   onAddSub,
+  onSaveTemplate,
   onStatus,
   onPriority,
   onDeadline,
@@ -1029,6 +1059,7 @@ function TableRow({
   onOpen: () => void;
   onCreateBelow: (above: boolean) => void;
   onAddSub: () => void;
+  onSaveTemplate: () => void;
   onStatus: (s: TaskStatus) => void;
   onPriority: (p: TaskPriority | null) => void;
   onDeadline: (d: string | null) => void;
@@ -1167,6 +1198,7 @@ function TableRow({
     onDuplicate,
     onDelete,
     onAddSub,
+    onSaveTemplate,
   });
 
   return (

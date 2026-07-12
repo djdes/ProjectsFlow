@@ -26,6 +26,7 @@ import { HttpWorkspaceRepository } from '@/infrastructure/http/HttpWorkspaceRepo
 import { HttpActivityRepository } from '@/infrastructure/http/HttpActivityRepository';
 import { HttpRecentTaskViewRepository } from '@/infrastructure/http/HttpRecentTaskViewRepository';
 import { HttpBoardViewRepository } from '@/infrastructure/http/HttpBoardViewRepository';
+import { HttpTaskTemplateRepository } from '@/infrastructure/http/HttpTaskTemplateRepository';
 import { HttpHelpRepository } from '@/infrastructure/http/HttpHelpRepository';
 import { SubmitSupport } from '@/application/help/SubmitSupport';
 import type { HelpRepository } from '@/application/help/HelpRepository';
@@ -77,6 +78,7 @@ import { HttpUsageRepository } from '@/infrastructure/http/HttpUsageRepository';
 import { HttpPublicBoardRepository } from '@/infrastructure/http/HttpPublicBoardRepository';
 import type { PublicBoardRepository } from '@/application/public/PublicBoardRepository';
 import type { BoardViewRepository } from '@/application/project/BoardViewRepository';
+import type { TaskTemplateRepository } from '@/application/task/TaskTemplateRepository';
 import { GetUsage } from '@/application/usage/GetUsage';
 import { ChangePlan } from '@/application/usage/ChangePlan';
 import type { UsageRepository } from '@/application/usage/UsageRepository';
@@ -131,6 +133,7 @@ type Container = {
   changePlan: ChangePlan;
   publicBoardRepository: PublicBoardRepository;
   boardViewRepository: BoardViewRepository;
+  taskTemplateRepository: TaskTemplateRepository;
 };
 
 function buildContainer(): Container {
@@ -164,6 +167,7 @@ function buildContainer(): Container {
   const usageRepo = new HttpUsageRepository();
   const publicBoardRepo = new HttpPublicBoardRepository();
   const boardViewRepo = new HttpBoardViewRepository();
+  const taskTemplateRepo = new HttpTaskTemplateRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -214,6 +218,7 @@ function buildContainer(): Container {
     changePlan: new ChangePlan(usageRepo),
     publicBoardRepository: publicBoardRepo,
     boardViewRepository: boardViewRepo,
+    taskTemplateRepository: taskTemplateRepo,
   };
 }
 

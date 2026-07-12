@@ -1652,6 +1652,32 @@ export type BoardViewRow = typeof boardViews.$inferSelect;
 export type NewBoardViewRow = typeof boardViews.$inferInsert;
 
 // ============================================================================
+// task_templates — миграция db/108. Шаблоны задач проекта (Notion Templates):
+// заготовка (описание/статус/приоритет/иконка) для меню «Создать ▾».
+// ============================================================================
+export const taskTemplates = mysqlTable(
+  'task_templates',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    name: varchar('name', { length: 64 }).notNull(),
+    description: mediumtext('description').notNull(),
+    status: varchar('status', { length: 24 }).notNull().default('backlog'),
+    priority: tinyint('priority', { unsigned: true }),
+    icon: text('icon'),
+    createdBy: char('created_by', { length: 36 }),
+    createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [index('idx_task_templates_project').on(t.projectId)],
+);
+
+export type TaskTemplateRow = typeof taskTemplates.$inferSelect;
+
+// ============================================================================
 // project_views — миграция db/090. Просмотры проекта (аналитика: график Views + Viewers).
 // Append-only: каждый заход = строка (клиент троттлит, репозиторий дедупит ~30 мин на
 // (user, project)). Доступ к чтению аналитики — участнику проекта (use-case). См. UI-batch S3.

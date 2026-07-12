@@ -128,6 +128,7 @@ import type { DeclineTaskDelegation } from '../application/task/DeclineTaskDeleg
 import type { WithdrawTaskDelegation } from '../application/task/WithdrawTaskDelegation.js';
 import type { RelinquishTaskDelegation } from '../application/task/RelinquishTaskDelegation.js';
 import type { BoardViewRepository } from '../application/project/BoardViewRepository.js';
+import type { TaskTemplateRepository } from '../application/task/TaskTemplateRepository.js';
 import type { ListMyPendingDelegations } from '../application/task/ListMyPendingDelegations.js';
 import type { ListTasksAssignedToMe } from '../application/task/ListTasksAssignedToMe.js';
 import type { ListTasksDelegatedToOthers } from '../application/task/ListTasksDelegatedToOthers.js';
@@ -333,6 +334,8 @@ type AppDeps = {
     readonly projects: ProjectRepository;
     // Пользовательские вью доски (Notion-style, db/103).
     readonly boardViews: BoardViewRepository;
+    // Шаблоны задач (Notion Templates, db/108).
+    readonly taskTemplates: TaskTemplateRepository;
     readonly reorderProjects: ReorderProjects;
     readonly toggleProjectFavorite: ToggleProjectFavorite;
     readonly reorderFavoriteProjects: ReorderFavoriteProjects;

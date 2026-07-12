@@ -22,6 +22,7 @@ import {
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
+import { useContainer } from '@/infrastructure/di/container';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { type TaskDrawerState } from '../TaskDrawer';
@@ -96,6 +97,7 @@ export function CalendarView({
 }: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
   const { tasks: allTasks, loading, error, update, move, create, remove } = tasksApi;
+  const { taskTemplateRepository } = useContainer();
   const tasks = useMemo(() => allTasks.filter((t) => matchesFilters(t, filters)), [allTasks, filters]);
   const isShared = (memberCount ?? 0) > 1;
   const [monthStart, setMonthStart] = useState<Date>(() => {
@@ -108,8 +110,23 @@ export function CalendarView({
   const [activeDrag, setActiveDrag] = useState<Task | null>(null);
 
   // «Создать» из тулбара вью (срок не задан — попадёт в «Без срока»).
+  // С шаблоном (db/108) — задача создаётся сразу, без окна.
   useEffect(() => {
-    if (createRequest) setDrawer({ mode: 'create', status: createRequest.status });
+    if (!createRequest) return;
+    const tpl = createRequest.template;
+    if (tpl) {
+      void create({
+        description: tpl.description || tpl.name,
+        status: tpl.status,
+        priority: tpl.priority,
+        icon: tpl.icon,
+      })
+        .then(() => toast.success(`Создано из шаблона «${tpl.name}»`))
+        .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`));
+    } else {
+      setDrawer({ mode: 'create', status: createRequest.status });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createRequest]);
 
   const sensors = useSensors(
@@ -192,6 +209,17 @@ export function CalendarView({
           deadline: task.deadline ?? undefined,
           priority: task.priority ?? undefined,
         }).catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`)),
+      onSaveTemplate: () =>
+        void taskTemplateRepository
+          .create(projectId, {
+            name: taskTitle(task).slice(0, 64),
+            description: task.description ?? '',
+            status: task.status,
+            priority: task.priority,
+            icon: task.icon,
+          })
+          .then(() => toast.success('Шаблон сохранён — доступен в меню «Создать ▾»'))
+          .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`)),
       onDelete: () =>
         void remove(task.id)
           .then(() => toast.success('Задача удалена'))

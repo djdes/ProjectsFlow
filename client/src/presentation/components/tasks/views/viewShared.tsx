@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent } from 'react';
 import {
+  Bookmark,
   CalendarDays,
   CircleDot,
   Copy,
@@ -147,6 +148,8 @@ export function taskMenuEntries(
     onDelete: () => void;
     // Подзадачи (db/107): inline-создание под родителем. undefined = пункт скрыт.
     onAddSub?: () => void;
+    // Шаблоны (db/108): сохранить задачу как шаблон проекта. undefined = пункт скрыт.
+    onSaveTemplate?: () => void;
   },
 ): MenuEntry[] {
   const today = ymd(startOfDay(new Date()));
@@ -246,6 +249,16 @@ export function taskMenuEntries(
     { kind: 'separator' },
     { kind: 'item', label: 'Скопировать ссылку', icon: LinkIcon, onSelect: copyLink },
     { kind: 'item', label: 'Дублировать', icon: Copy, onSelect: h.onDuplicate },
+    ...(h.onSaveTemplate
+      ? ([
+          {
+            kind: 'item',
+            label: 'Сохранить как шаблон',
+            icon: Bookmark,
+            onSelect: h.onSaveTemplate,
+          },
+        ] as MenuEntry[])
+      : []),
     { kind: 'item', label: 'Удалить', icon: Trash2, destructive: true, onSelect: h.onDelete },
     { kind: 'separator' },
     { kind: 'label', label: `Изменено ${edited}` },
