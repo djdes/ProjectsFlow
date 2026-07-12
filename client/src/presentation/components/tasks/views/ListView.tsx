@@ -147,26 +147,40 @@ export function ListView({
   };
 
   // «+» слева (Notion): inline-строка ввода сразу под текущей; asSub — подзадача.
+  // Enter коммитит и открывает ввод следующей ниже (цепочка, как в канбане).
   const [insertAfterId, setInsertAfterId] = useState<string | null>(null);
   const [insertAsSub, setInsertAsSub] = useState(false);
+  const [insertParentId, setInsertParentId] = useState<string | null>(null);
   const [insertValue, setInsertValue] = useState('');
   const submitInsert = async (anchor: Task): Promise<void> => {
     const name = insertValue.trim();
     const asSub = insertAsSub;
-    setInsertAfterId(null);
-    setInsertAsSub(false);
     setInsertValue('');
-    if (!name) return;
+    if (!name) {
+      setInsertAfterId(null);
+      setInsertAsSub(false);
+      setInsertParentId(null);
+      return;
+    }
     try {
-      await create({
+      const parentId = asSub ? (insertParentId ?? anchor.id) : null;
+      const created = await create({
         description: name,
         status: anchor.status,
         afterTaskId: anchor.id,
-        ...(asSub ? { parentTaskId: anchor.id } : {}),
+        ...(parentId ? { parentTaskId: parentId } : {}),
       });
-      if (asSub) setExpandedTasks((prev) => new Set(prev).add(anchor.id));
+      if (parentId) {
+        setExpandedTasks((prev) => new Set(prev).add(parentId));
+        setInsertParentId(parentId);
+      }
+      // Цепочка: следующий ввод — под только что созданной строкой.
+      setInsertAfterId(created.id);
     } catch (e) {
       toast.error(`Не удалось: ${(e as Error).message}`);
+      setInsertAfterId(null);
+      setInsertAsSub(false);
+      setInsertParentId(null);
     }
   };
 

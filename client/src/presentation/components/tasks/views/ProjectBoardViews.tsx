@@ -52,6 +52,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { TaskPriority, TaskStatus } from '@/domain/task/Task';
@@ -911,6 +912,11 @@ export function ProjectBoardViews({
         <aside className="sticky top-2 w-72 shrink-0 border-l pl-3 duration-150 animate-in fade-in slide-in-from-right-1 max-md:hidden">
           <NewViewPanel
             view={active}
+            projectName={projectName}
+            state={state}
+            onTableState={setTableState}
+            onGrouping={setGrouping}
+            onCalendarMode={setCalendarMode}
             onClose={() => setPanel(null)}
             onRename={(name) => void handleUpdate(active, { name })}
             onType={(type) => void handleUpdate(active, { type })}
@@ -1009,16 +1015,45 @@ export function ProjectBoardViews({
   );
 }
 
-// Панель «Новая вью» (Notion New view): сразу после создания вью — имя (autoFocus),
-// сетка типов (клик меняет тип на лету), «Готово» → полные настройки вью.
+// Строка-настройка с тумблером (Notion Show page icon / Wrap all content и т.п.).
+function ToggleRow({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}): React.ReactElement {
+  return (
+    <label className="flex cursor-pointer items-center justify-between rounded-md px-1.5 py-1.5 text-sm transition-colors hover:bg-accent/50">
+      {label}
+      <Switch checked={checked} onCheckedChange={onChange} />
+    </label>
+  );
+}
+
+// Панель «Новая вью» (Notion New view): сразу после создания вью — иконка типа + имя
+// (autoFocus), сетка типов (клик меняет тип на лету), настройки ПОД ВЫБРАННЫЙ ТИП
+// (Notion: у Table/Board/Calendar разные), «Источник», «Готово» → полные настройки.
 function NewViewPanel({
   view,
+  projectName,
+  state,
+  onTableState,
+  onGrouping,
+  onCalendarMode,
   onClose,
   onRename,
   onType,
   onDone,
 }: {
   view: BoardView;
+  projectName?: string;
+  state: PerViewState;
+  onTableState: (patch: Partial<TableViewState>) => void;
+  onGrouping: (g: ViewGrouping | null) => void;
+  onCalendarMode: (m: 'month' | 'week') => void;
   onClose: () => void;
   onRename: (name: string) => void;
   onType: (type: BoardViewType) => void;
@@ -1034,6 +1069,7 @@ function NewViewPanel({
     const trimmed = name.trim();
     if (trimmed && trimmed !== view.name) onRename(trimmed);
   };
+  const TypeIcon = VIEW_TYPE_ICONS[view.type];
   return (
     <div className="rounded-lg border bg-card shadow-sm">
       <div className="flex items-center justify-between px-3 pb-1 pt-2.5">
@@ -1047,7 +1083,11 @@ function NewViewPanel({
           <X className="size-4" />
         </button>
       </div>
-      <div className="px-3 pb-1">
+      {/* Имя с иконкой типа слева — как в Notion (квадратик + View name). */}
+      <div className="flex items-center gap-1.5 px-3 pb-1">
+        <span className="grid size-8 shrink-0 place-items-center rounded-md border text-muted-foreground">
+          <TypeIcon className="size-4" />
+        </span>
         <input
           autoFocus
           value={name}
@@ -1085,7 +1125,88 @@ function NewViewPanel({
           );
         })}
       </div>
-      <div className="px-3 pb-3">
+      {/* Настройки выбранного типа (Notion: per-layout options). */}
+      <div className="border-t px-1.5 py-1.5">
+        {view.type === 'table' && (
+          <>
+            <ToggleRow
+              label="Переносить текст"
+              checked={state.table.wrapTitle}
+              onChange={(v) => onTableState({ wrapTitle: v })}
+            />
+            <ToggleRow
+              label="Закрепить название"
+              checked={state.table.freezeTitle}
+              onChange={(v) => onTableState({ freezeTitle: v })}
+            />
+          </>
+        )}
+        {(view.type === 'table' || view.type === 'list') && (
+          <div className="flex items-center justify-between rounded-md px-1.5 py-1.5 text-sm">
+            Группировка
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  {state.grouping ? VIEW_GROUPING_LABELS[state.grouping] : 'Нет'}
+                  <ChevronRight className="size-3.5 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[10rem]">
+                <DropdownMenuItem onClick={() => onGrouping(null)}>Нет</DropdownMenuItem>
+                {(Object.keys(VIEW_GROUPING_LABELS) as ViewGrouping[]).map((g) => (
+                  <DropdownMenuItem key={g} className="gap-2" onClick={() => onGrouping(g)}>
+                    {VIEW_GROUPING_LABELS[g]}
+                    {state.grouping === g && <Check className="ml-auto size-3.5 text-primary" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+        {view.type === 'calendar' && (
+          <div className="flex items-center justify-between rounded-md px-1.5 py-1.5 text-sm">
+            Режим
+            <div className="inline-flex overflow-hidden rounded-md border">
+              {(
+                [
+                  ['month', 'Месяц'],
+                  ['week', 'Неделя'],
+                ] as const
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => onCalendarMode(m)}
+                  className={cn(
+                    'px-2 py-0.5 text-xs transition-colors',
+                    state.calendarMode === m
+                      ? 'bg-accent font-medium text-foreground'
+                      : 'text-muted-foreground hover:bg-accent/50',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {view.type === 'kanban' && (
+          <p className="px-1.5 py-1.5 text-xs text-muted-foreground">
+            Канбан группируется по статусам доски.
+          </p>
+        )}
+      </div>
+      {/* Источник данных (Notion Source) — задачи этого проекта. */}
+      <div className="border-t px-1.5 py-1.5">
+        <div className="flex items-center justify-between rounded-md px-1.5 py-1.5 text-sm">
+          <span className="text-muted-foreground">Источник</span>
+          <span className="max-w-[10rem] truncate">{projectName ?? 'Проект'}</span>
+        </div>
+      </div>
+      <div className="px-3 pb-3 pt-1">
         <Button className="w-full" onClick={onDone}>
           Готово
         </Button>

@@ -297,10 +297,16 @@ export function TableView({
   };
 
   // «+» слева от строки (Notion): inline-строка ввода СРАЗУ ПОД текущей (Alt+клик — над).
-  // asSub — создание ПОДЗАДАЧИ под якорем (db/107).
-  const [insertAt, setInsertAt] = useState<{ taskId: string; above: boolean; asSub?: boolean } | null>(
-    null,
-  );
+  // asSub — создание ПОДЗАДАЧИ под якорем (db/107); parentId — родитель цепочки
+  // подзадач (следующие сиблинги после Enter).
+  const [insertAt, setInsertAt] = useState<{
+    taskId: string;
+    above: boolean;
+    asSub?: boolean;
+    parentId?: string;
+  } | null>(null);
+  // Enter коммитит строку и СРАЗУ открывает ввод следующей ниже (Notion/канбан);
+  // Esc или пустой ввод закрывают цепочку.
   const submitInsert = async (anchor: Task, above: boolean, title: string, asSub = false): Promise<void> => {
     const name = title.trim();
     if (!name) {
@@ -309,13 +315,15 @@ export function TableView({
     }
     try {
       if (asSub) {
-        await create({
+        const parentId = insertAt?.parentId ?? anchor.id;
+        const created = await create({
           description: name,
           status: anchor.status,
-          parentTaskId: anchor.id,
+          parentTaskId: parentId,
           afterTaskId: anchor.id,
         });
-        setExpandedTasks((prev) => new Set(prev).add(anchor.id));
+        setExpandedTasks((prev) => new Set(prev).add(parentId));
+        setInsertAt({ taskId: created.id, above: false, asSub: true, parentId });
       } else if (above) {
         const idx = rows.findIndex((t) => t.id === anchor.id);
         const prev = rows[idx - 1];
@@ -325,13 +333,15 @@ export function TableView({
           beforeTaskId: prev && prev.status === anchor.status ? prev.id : null,
           afterTaskId: anchor.id,
         });
+        setInsertAt({ taskId: created.id, above: false });
       } else {
-        await create({ description: name, status: anchor.status, afterTaskId: anchor.id });
+        const created = await create({ description: name, status: anchor.status, afterTaskId: anchor.id });
+        setInsertAt({ taskId: created.id, above: false });
       }
     } catch (e) {
       toast.error(`Не удалось: ${(e as Error).message}`);
+      setInsertAt(null);
     }
-    setInsertAt(null);
   };
 
   // Дерево подзадач (Notion sub-items): активен без группировки; свёрнуто по умолчанию.
@@ -771,8 +781,17 @@ export function TableView({
               />
               {insertAt?.taskId === task.id && !insertAt.above && (
                 <InsertRow
+                  // key: после Enter цепочка переезжает под созданную строку — новый
+                  // инстанс с чистым вводом.
+                  key={`ins-${task.id}`}
                   gridStyle={gridStyle}
-                  indent={insertAt.asSub ? (depth + 1) * 20 : depth * 20}
+                  // Цепочка подзадач (parentId задан и якорь — прошлая подзадача):
+                  // следующий сиблинг на том же уровне; первая подзадача — глубже якоря.
+                  indent={
+                    insertAt.asSub && (!insertAt.parentId || insertAt.parentId === task.id)
+                      ? (depth + 1) * 20
+                      : depth * 20
+                  }
                   onSubmit={(title) => void submitInsert(task, false, title, insertAt.asSub)}
                   onCancel={() => setInsertAt(null)}
                 />
