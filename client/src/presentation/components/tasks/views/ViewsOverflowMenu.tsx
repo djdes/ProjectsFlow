@@ -3,6 +3,7 @@
 // «Начать с нуля»). Ручной absolute-попап (TabRenamePopup-паттерн): Radix-меню
 // не дружит с dnd и вложенными меню.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   DndContext,
   PointerSensor,
@@ -128,12 +129,25 @@ export function ViewsOverflowMenu({
   // Drill-down «Начать с нуля» по кнопке «+ Новая вью» (Notion New view).
   const [creating, setCreating] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
+  const popupRef = useRef<HTMLDivElement | null>(null);
+  // Попап — fixed-портал в body: строка вкладок имеет overflow-x-auto и обрезала бы
+  // absolute-потомка. Координаты — от кнопки-триггера в момент открытия.
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const toggleOpen = (): void => {
+    if (!open) {
+      const r = rootRef.current?.getBoundingClientRect();
+      setPos(r ? { left: Math.min(r.left, window.innerWidth - 300), top: r.bottom + 4 } : null);
+    }
+    setOpen((o) => !o);
+  };
 
   // Собственный outside-click с задержкой подписки — паттерн TabRenamePopup.
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent): void => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t) || popupRef.current?.contains(t)) return;
+      setOpen(false);
     };
     const t = setTimeout(() => document.addEventListener('mousedown', close), 250);
     return () => {
@@ -176,7 +190,7 @@ export function ViewsOverflowMenu({
     <span ref={rootRef} className="relative inline-flex shrink-0">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggleOpen}
         className={cn(
           'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[13px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground',
           open && 'bg-accent/60 text-foreground',
@@ -184,8 +198,13 @@ export function ViewsOverflowMenu({
       >
         {label}
       </button>
-      {open && (
-        <div className="absolute left-0 top-8 z-40 w-72 rounded-lg border bg-popover p-1.5 shadow-lg duration-100 animate-in fade-in zoom-in-95">
+      {open &&
+        createPortal(
+          <div
+            ref={popupRef}
+            style={pos ? { left: pos.left, top: pos.top } : undefined}
+            className="fixed z-50 w-72 rounded-lg border bg-popover p-1.5 shadow-lg duration-100 animate-in fade-in zoom-in-95"
+          >
           {creating ? (
             <>
               <p className="px-1.5 pb-1.5 pt-1 text-xs font-medium text-muted-foreground">
@@ -283,8 +302,9 @@ export function ViewsOverflowMenu({
               </div>
             </>
           )}
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </span>
   );
 }
