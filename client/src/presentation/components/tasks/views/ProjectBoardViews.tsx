@@ -292,6 +292,17 @@ export function ProjectBoardViews({
     } catch {
       /* ignore */
     }
+    // Синхронизируем ?view= с активной вкладкой: иначе оставшийся от «Скопировать
+    // ссылку» параметр при перезагрузке перебивал бы localStorage и открывал не ту
+    // вкладку. replaceState — без навигации (activeId ведём в стейте).
+    try {
+      const url = new URL(window.location.href);
+      if (id === DEFAULT_VIEW_ID) url.searchParams.delete('view');
+      else url.searchParams.set('view', id);
+      window.history.replaceState(window.history.state, '', url.toString());
+    } catch {
+      /* ignore */
+    }
   };
 
   // Сохранённая вью удалена (нами или коллегой) → падаем на дефолтную «Доску».

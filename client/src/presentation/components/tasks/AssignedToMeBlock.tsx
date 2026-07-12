@@ -159,6 +159,45 @@ export const snapToCursor: Modifier = ({ activatorEvent, draggingNodeRect, trans
 // Отклонить». «Другим»: все строки в «принятом» виде — DelegationBadge показывает
 // направление и «ждёт ответа» для pending; чекбокс доступен по роли caller'а (canModify
 // с сервера). Клик по задаче открывает TaskDrawer (read-access гейтится на сервере).
+// Горизонтальный скролл ряда канбанов «Входящих»: по умолчанию САМОЕ ЛЕВОЕ (0),
+// позиция переживает перезагрузку (sessionStorage). Запрос: «когда верхние канбаны
+// не вмещаются — не уезжать вправо, старт слева, скролл сохранять при reload».
+function usePersistentScrollLeft(storageKey: string): {
+  setRef: (el: HTMLDivElement | null) => void;
+  onScroll: (e: React.UIEvent<HTMLDivElement>) => void;
+} {
+  const rafRef = useRef<number | null>(null);
+  const setRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (!el) return;
+      let saved = 0;
+      try {
+        const v = Number(sessionStorage.getItem(storageKey));
+        if (Number.isFinite(v) && v > 0) saved = v;
+      } catch {
+        /* ignore */
+      }
+      el.scrollLeft = saved; // явный старт слева (или сохранённая позиция)
+    },
+    [storageKey],
+  );
+  const onScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      const left = e.currentTarget.scrollLeft;
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        try {
+          sessionStorage.setItem(storageKey, String(Math.round(left)));
+        } catch {
+          /* ignore */
+        }
+      });
+    },
+    [storageKey],
+  );
+  return { setRef, onScroll };
+}
+
 export function AssignedToMeBlock({
   onChanged,
   toolbarSlot = null,
@@ -184,6 +223,10 @@ export function AssignedToMeBlock({
   const [filterTo, setFilterTo] = useState<string | null>(null);
   const [filterProject, setFilterProject] = useState<string | null>(null);
   const [grouping, setGrouping] = useState<AssignedGrouping>(DEFAULT_ASSIGNED_GROUPING);
+  // Персист гор. скролла ряда канбанов (по вкладке+группировке): старт слева, reload сохраняет.
+  const { setRef: setHScrollRef, onScroll: onHScroll } = usePersistentScrollLeft(
+    `pf:inbox-hscroll:${tab}:${grouping}`,
+  );
   const [loading, setLoading] = useState(true);
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
   const [drawerTask, setDrawerTask] = useState<AssignedTask | null>(null);
@@ -682,7 +725,11 @@ export function AssignedToMeBlock({
         // Сортировка «по дедлайну» = 3 колонки по времени (Без срока / На сегодня / Будущее).
         // Drag между колонками меняет дедлайн; drag на аватар участника — делегирует. Ряд
         // колонок full-bleed'ится за паддинг страницы (как доска проекта).
-        <div className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}>
+        <div
+          ref={setHScrollRef}
+          onScroll={onHScroll}
+          className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}
+        >
           {kanbanGroups.map((group) => (
             // Дроп-зона (drag-срок/делегирование) + пагинация «первые 4 + Показать ещё» +
             // перетаскиваемые карточки. Все три фичи вместе (мердж main ↔ feat/s2-usage).
@@ -728,7 +775,11 @@ export function AssignedToMeBlock({
         // Пока тащат карточку С ДОСКИ (boardDragActive) колонки становятся drop-целями по
         // смыслу сортировки, а первой в ряду появляется фантомная колонка (см. план
         // inbox-grouped-dnd): «Другой проект…» / инфо «Сюда нельзя» / «Другой приоритет…».
-        <div className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}>
+        <div
+          ref={setHScrollRef}
+          onScroll={onHScroll}
+          className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}
+        >
           {boardDragActive && phantomProjectNeeded && (
             <PhantomDropColumn
               id="phantom-project"
