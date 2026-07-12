@@ -974,8 +974,15 @@ export function TableView({
             className="group/head relative grid text-sm text-muted-foreground"
             style={gridStyle}
           >
-            {/* Sticky-gutter шапки: чекбокс «выбрать все» закреплён при гор. скролле. */}
-            <div className="sticky left-0 z-30 flex items-center justify-end bg-background pr-2.5">
+            {/* Gutter шапки с «выбрать все». Sticky — только когда «Название»
+                закреплено; иначе едет вместе с таблицей (Notion: без freeze таблица
+                скроллится целиком). */}
+            <div
+              className={cn(
+                'flex items-center justify-end bg-background pr-2.5',
+                tableState.freezeTitle && 'sticky left-0 z-30',
+              )}
+            >
               <input
                 type="checkbox"
                 checked={allSelected}
@@ -2087,11 +2094,10 @@ function TableRow({
             recentlyMoved && 'bg-primary/5 ring-2 ring-inset ring-primary/60',
           )}
         >
-      {/* Sticky-gutter (Notion): «+» (вставить ниже, Alt — выше), «⋮⋮» (клик — меню,
-          drag — перенос) и чекбокс (Shift — диапазон) закреплены при гор. скролле.
-          Фон — на ячейке ВСЕГДА (иначе уезжающий текст просвечивает), прозрачность
-          до hover — только на контролах. */}
-      <div className="sticky left-0 z-20 bg-background">
+      {/* Gutter строки (Notion): «+»/«⋮⋮»/чекбокс. Sticky — только при закреплённом
+          «Названии»; иначе едет вместе с таблицей. Фон — на ячейке ВСЕГДА (иначе
+          уезжающий текст просвечивает), прозрачность до hover — только на контролах. */}
+      <div className={cn('bg-background', frozenTitle && 'sticky left-0 z-20')}>
       <div
         className={cn(
           'flex h-full items-center justify-end gap-0 pr-1 transition-opacity duration-100',

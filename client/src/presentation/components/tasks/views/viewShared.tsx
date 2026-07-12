@@ -320,9 +320,10 @@ export type TableViewState = {
 export const EMPTY_TABLE_STATE: TableViewState = {
   colWidths: {},
   wrapTitle: false,
-  // Notion: колонка названия закреплена по умолчанию — текст не режется при
-  // горизонтальном скролле. Выключается в меню «Название» → «Закрепить колонку».
-  freezeTitle: true,
+  // Notion: колонка «Название» НЕ закреплена по умолчанию — таблица скроллится
+  // целиком (первый столбец едет вместе со всеми). Закрепление включается вручную
+  // в меню «Название» → «Закрепить колонку».
+  freezeTitle: false,
   calc: {},
 };
 
@@ -512,7 +513,9 @@ export function perViewToConfig(s: PerViewState): ViewConfig {
     table: {
       colWidths: s.table.colWidths,
       wrapTitle: s.table.wrapTitle,
-      unfreezeTitle: !s.table.freezeTitle,
+      // Прямая сериализация: НЕ закреплено по умолчанию (Notion). Старый ключ
+      // unfreezeTitle больше не пишем — читаем ниже как fallback для старых конфигов.
+      freezeTitle: s.table.freezeTitle,
       calc: s.table.calc,
       ...(s.table.colOrder ? { colOrder: s.table.colOrder } : {}),
     },
@@ -541,8 +544,11 @@ export function perViewFromConfig(c: unknown): PerViewState {
     table: {
       colWidths: cfg.table?.colWidths && typeof cfg.table.colWidths === 'object' ? cfg.table.colWidths : {},
       wrapTitle: Boolean(cfg.table?.wrapTitle),
-      // Notion-дефолт: закреплено, если явно не выключено (unfreezeTitle: true).
-      freezeTitle: !(cfg.table?.unfreezeTitle ?? false),
+      // Notion-дефолт: НЕ закреплено. Явное freezeTitle:true включает; старые конфиги
+      // писали unfreezeTitle — если он есть и false, значит там было закреплено.
+      freezeTitle:
+        cfg.table?.freezeTitle === true ||
+        (cfg.table?.freezeTitle === undefined && cfg.table?.unfreezeTitle === false),
       calc: cfg.table?.calc && typeof cfg.table.calc === 'object' ? cfg.table.calc : {},
       ...(Array.isArray(cfg.table?.colOrder) ? { colOrder: cfg.table.colOrder } : {}),
     },
