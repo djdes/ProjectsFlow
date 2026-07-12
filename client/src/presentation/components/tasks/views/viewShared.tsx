@@ -278,7 +278,8 @@ export const VIEW_CALC_LABELS: Record<ViewCalc, string> = {
 };
 
 export type TableViewState = {
-  readonly colWidths: Partial<Record<'title' | ViewColumn, number>>;
+  // Ключ: 'title' | ViewColumn | `p:<propertyId>` (кастомные свойства db/109).
+  readonly colWidths: Partial<Record<string, number>>;
   readonly wrapTitle: boolean;
   readonly freezeTitle: boolean;
   readonly calc: Partial<Record<ViewColumn, ViewCalc>>;

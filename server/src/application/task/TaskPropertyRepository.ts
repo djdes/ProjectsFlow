@@ -17,6 +17,7 @@ export type UpdateTaskPropertyPatch = {
   readonly name?: string;
   readonly options?: TaskPropertyOption[];
   readonly position?: number;
+  readonly type?: TaskPropertyType;
 };
 
 // Кастомные свойства задач (db/109). Гейты доступа — в роутах (паттерн board_views):

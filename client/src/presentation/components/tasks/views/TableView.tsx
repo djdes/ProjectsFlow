@@ -112,6 +112,10 @@ type Props = {
   grouping: ViewGrouping | null;
   colorRules: ViewColorRule[];
   createRequest: ViewCreateRequest | null;
+  // Full-bleed: горизонтальный скролл таблицы во всю ширину окна (как канбан) —
+  // колонки заезжают в отступы страницы (Notion).
+  bleedNegClass?: string;
+  bleedPadClass?: string;
 };
 
 // Координата ячейки для Excel-выделения: row — индекс в rows, col — 0 (название)
@@ -154,6 +158,8 @@ export function TableView({
   grouping,
   colorRules,
   createRequest,
+  bleedNegClass = '',
+  bleedPadClass = '',
 }: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
   const { tasks, loading, error, create, update, move, remove, refetch } = tasksApi;
@@ -161,6 +167,22 @@ export function TableView({
   // Кастомные свойства (db/109): колонки после стандартных, «+» в шапке создаёт новое.
   const customProps = useTaskProperties(projectId);
   const [addPropOpen, setAddPropOpen] = useState(false);
+
+  // Sticky-шапка колонок: top = высота sticky-стека страницы (крошки + плашки +
+  // строка вкладок); гор. скролл тела транслируется в шапку (refs ниже).
+  const bodyScrollRef = useRef<HTMLDivElement | null>(null);
+  const headScrollRef = useRef<HTMLDivElement | null>(null);
+  const [headerTop, setHeaderTop] = useState(0);
+  useEffect(() => {
+    const els = ['pf-project-crumbs', 'pf-sticky-banners', 'pf-views-tabs-row']
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => el !== null);
+    const measure = (): void => setHeaderTop(els.reduce((s, el) => s + el.offsetHeight, 0));
+    measure();
+    const ro = new ResizeObserver(measure);
+    els.forEach((el) => ro.observe(el));
+    return () => ro.disconnect();
+  }, []);
   const { user } = useCurrentUser();
   const isShared = (memberCount ?? 0) > 1;
   const [drawer, setDrawer] = useState<TaskDrawerState | null>(null);
@@ -254,19 +276,26 @@ export function TableView({
   const gridStyle = useMemo(
     () => ({
       gridTemplateColumns: [
+        // Gutter hover-контролов («+»/⋮⋮/чекбокс) — sticky-колонка, закреплена при
+        // горизонтальном скролле (Notion).
+        '3.5rem',
         tableState.colWidths.title ? `${tableState.colWidths.title}px` : 'minmax(16rem,1fr)',
         ...visibleCols.map((c) =>
           tableState.colWidths[c] ? `${tableState.colWidths[c]}px` : COLUMN_WIDTH[c],
         ),
-        ...customProps.properties.map(() => '180px'),
-        'minmax(2rem,10rem)',
+        ...customProps.properties.map((p) =>
+          tableState.colWidths[`p:${p.id}`] ? `${tableState.colWidths[`p:${p.id}`]}px` : '180px',
+        ),
+        // Хвост-филлер до правого края окна (Notion): границы строк тянутся до конца.
+        'minmax(3rem,1fr)',
       ].join(' '),
     }),
     [visibleCols, tableState.colWidths, customProps.properties],
   );
 
   // Resize колонки (Notion): mousedown на правой кромке заголовка → drag.
-  const startResize = (key: 'title' | ViewColumn, e: React.MouseEvent): void => {
+  // key: 'title' | ViewColumn | `p:<propertyId>` (кастомные свойства).
+  const startResize = (key: string, e: React.MouseEvent): void => {
     e.preventDefault();
     e.stopPropagation();
     const cell = (e.currentTarget as HTMLElement).parentElement;
@@ -297,6 +326,53 @@ export function TableView({
       toast.error(`Не удалось: ${(e as Error).message}`),
     );
   };
+  // Enter в редакторе названия — как в Excel: коммит и выделение клетки ниже.
+  const commitEditAndMoveDown = (task: Task): void => {
+    commitEdit(task);
+    const idx = rows.findIndex((t) => t.id === task.id);
+    if (idx >= 0 && idx + 1 < rows.length) {
+      const c = { row: idx + 1, col: 0 };
+      setSelRange({ a: c, h: c });
+    }
+  };
+
+  // Excel type-to-edit: при единственной выделенной клетке названия печать сразу
+  // начинает ввод (замещая), Enter открывает редактор с текущим значением.
+  useEffect(() => {
+    if (!selRange || editingId) return;
+    const single =
+      selRange.a.row === selRange.h.row && selRange.a.col === selRange.h.col;
+    if (!single || selRange.a.col !== 0) return;
+    const onKey = (e: KeyboardEvent): void => {
+      // По e.target, не activeElement: React флашит эффекты синхронно на keydown,
+      // и Enter из inline-редактора доходит до свежеподписанного слушателя, когда
+      // сам input уже размонтирован (activeElement=body) — target же остаётся INPUT.
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable))
+        return;
+      const el = document.activeElement as HTMLElement | null;
+      if (
+        el &&
+        (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+      )
+        return;
+      const task = rows[selRange.a.row];
+      if (!task) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        setEditingId(task.id);
+        setEditValue(taskTitle(task));
+        return;
+      }
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setEditingId(task.id);
+        setEditValue(e.key);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selRange, rows, editingId]);
 
   // «+» слева от строки (Notion): inline-строка ввода СРАЗУ ПОД текущей (Alt+клик — над).
   // asSub — создание ПОДЗАДАЧИ под якорем (db/107); parentId — родитель цепочки
@@ -461,9 +537,9 @@ export function TableView({
 
   const colIndexOf = (k: 'title' | ViewColumn): number =>
     k === 'title' ? 0 : visibleCols.indexOf(k) + 1;
-  const cellDown = (row: number, k: 'title' | ViewColumn): void => {
-    // Notion: при существующем диапазоне клик ВНУТРЬ него выбирает все его строки
-    // (панель действий сверху); клик МИМО — выбирает только одну строку под курсором.
+  const cellDown = (row: number, k: 'title' | ViewColumn, rightButton = false): void => {
+    // Notion: при существующем диапазоне клик/ПКМ ВНУТРЬ него выбирает все его
+    // строки (панель действий сверху); клик/ПКМ МИМО — только строку под курсором.
     if (selRange) {
       const [r1, r2] = [Math.min(selRange.a.row, selRange.h.row), Math.max(selRange.a.row, selRange.h.row)];
       const [c1, c2] = [Math.min(selRange.a.col, selRange.h.col), Math.max(selRange.a.col, selRange.h.col)];
@@ -479,6 +555,15 @@ export function TableView({
         );
         return;
       }
+    }
+    // ПКМ (вне диапазона): сброс прошлых выбранных и выбор строки под курсором.
+    // Если строка УЖЕ в выборе — выбор сохраняется (действия над несколькими).
+    // Протяжку диапазона ПКМ не начинает.
+    if (rightButton) {
+      const id = rows[row]?.id;
+      setSelRange(null);
+      if (id && !selected.has(id)) setSelected(new Set([id]));
+      return;
     }
     selDragging.current = true;
     const c = { row, col: colIndexOf(k) };
@@ -533,6 +618,8 @@ export function TableView({
   if (loading) return <div className="h-64 animate-pulse rounded-xl bg-muted/60" />;
   if (error) return <p className="text-sm text-destructive">{error}</p>;
 
+  const innerPadClass = bleedPadClass ? 'pr-6 sm:pr-14 lg:pl-10 lg:pr-24' : 'pr-8';
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <DndContext
@@ -542,17 +629,23 @@ export function TableView({
         onDragEnd={handleRowDragEnd}
         onDragCancel={() => setDragTask(null)}
       >
-      <div className="overflow-x-auto">
-        {/* Левое «поле» (pl-14 = 56px): hover-контролы строк (-left-14) живут в нём,
-            как в Notion; меньший паддинг обрезал бы «⋮⋮» краем overflow-контейнера. */}
-        <div className="min-w-[55rem] pl-14 pr-8">
+      {/* Sticky-шапка колонок (Notion): липнет под строкой вкладок при вертикальном
+          скролле; горизонтальный скролл синхронизируется с телом (onScroll ниже). */}
+      <div
+        className={cn('sticky z-20 bg-background', bleedNegClass)}
+        style={{ top: headerTop }}
+      >
+        <div ref={headScrollRef} className="overflow-x-hidden">
+        <div className={cn('min-w-[55rem]', innerPadClass)}>
           {/* Шапка таблицы: иконка типа свойства + название; клик по заголовку —
-              меню колонки (сортировка ↑↓, скрыть свойство), как в Notion. */}
+              меню колонки (сортировка ↑↓, скрыть свойство), как в Notion. Границы —
+              на ячейках, НЕ на контейнере: зона контролов слева чистая. */}
           <div
-            className="group/head relative grid border-b border-t text-xs text-muted-foreground"
+            className="group/head relative grid text-xs text-muted-foreground"
             style={gridStyle}
           >
-            <div className="absolute -left-8 top-1/2 -translate-y-1/2">
+            {/* Sticky-gutter шапки: чекбокс «выбрать все» закреплён при гор. скролле. */}
+            <div className="sticky left-0 z-30 flex items-center justify-end bg-background pr-2.5">
               <input
                 type="checkbox"
                 checked={allSelected}
@@ -614,9 +707,11 @@ export function TableView({
                 onRemove={() => customProps.removeProperty(p.id)}
                 onDuplicate={() => customProps.duplicateProperty(p)}
                 onInsert={(side) => customProps.insertProperty(p, side)}
+                onChangeType={(t) => customProps.changeType(p.id, t)}
+                onResizeStart={(e) => startResize(`p:${p.id}`, e)}
               />
             ))}
-            <div className="border-l" aria-hidden />
+            <div className="border-b border-l border-t" aria-hidden />
             {/* «+» в конце шапки (Notion add property): попап с именем свойства,
                 «Выбрать тип» с поиском и сеткой типов; сверху — вернуть скрытые. */}
             <Popover open={addPropOpen} onOpenChange={setAddPropOpen}>
@@ -661,7 +756,21 @@ export function TableView({
               </PopoverContent>
             </Popover>
           </div>
+        </div>
+        </div>
+      </div>
 
+      {/* Тело таблицы: full-bleed гор. скролл (Notion) — колонки уезжают под края
+          страницы; scrollLeft транслируется в шапку. */}
+      <div
+        ref={bodyScrollRef}
+        onScroll={(e) => {
+          if (headScrollRef.current)
+            headScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+        }}
+        className={cn('overflow-x-auto', bleedNegClass)}
+      >
+        <div className={cn('min-w-[55rem]', innerPadClass)}>
           {(grouping && groups
             ? // При группировке дерево отключено — плоские строки внутри групп.
               (groups.flatMap((g) => {
@@ -743,6 +852,7 @@ export function TableView({
                   setEditValue(taskTitle(task));
                 }}
                 onCommitEdit={() => commitEdit(task)}
+                onCommitEnter={() => commitEditAndMoveDown(task)}
                 onCancelEdit={() => setEditingId(null)}
                 selected={selected.has(task.id)}
                 anySelected={selected.size > 0}
@@ -825,19 +935,25 @@ export function TableView({
           })}
 
           {rows.length === 0 && (
-            <p className="px-2 py-6 text-sm text-muted-foreground">
+            <p className="py-6 pl-14 pr-2 text-sm text-muted-foreground">
               {filters.query || hasActiveFilters(filters)
                 ? 'Под фильтр ничего не попадает.'
                 : 'Задач пока нет.'}
             </p>
           )}
 
-          <div className="border-b py-1">
-            <NewTaskRow create={create} />
+          {/* pl-14 — под gutter контролов: «Новая задача» на уровне колонки названия,
+              граница — только под контентной частью (Notion). */}
+          <div className="pl-14">
+            <div className="border-b py-1">
+              <NewTaskRow create={create} />
+            </div>
           </div>
           {/* Строка подсчётов (Notion Calculate): «Всего» под названием; под каждой
               колонкой — свой подсчёт по клику (появляется при наведении). */}
           <div className="group/calc grid" style={gridStyle}>
+            {/* Пустая ячейка под sticky-gutter контролов. */}
+            <div aria-hidden />
             <p className="px-2 pt-1.5 text-[11px] text-muted-foreground/60">
               Всего: {rows.length}
             </p>
@@ -971,10 +1087,10 @@ function HeaderCell({
   return (
     <div
       className={cn(
-        'relative flex min-w-0',
+        'relative flex min-w-0 border-b border-t',
         !first && 'border-l',
         // «Закрепить колонку» (Notion Freeze): липнет при горизонтальном скролле.
-        frozen && 'sticky left-0 z-20 border-r bg-background',
+        frozen && 'sticky left-14 z-20 border-r bg-background',
       )}
     >
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -1027,6 +1143,8 @@ function InsertRow({
   const [value, setValue] = useState('');
   return (
     <div style={gridStyle} className="grid border-b bg-accent/30">
+      {/* Gutter без фона строки вставки. */}
+      <div className="bg-background" aria-hidden />
       <div
         className="flex items-center gap-1.5 px-2 py-1"
         style={indent > 0 ? { paddingLeft: 8 + indent } : undefined}
@@ -1161,6 +1279,7 @@ function TableRow({
   onEditValue,
   onStartEdit,
   onCommitEdit,
+  onCommitEnter,
   onCancelEdit,
   selected,
   anySelected,
@@ -1201,11 +1320,13 @@ function TableRow({
   onEditValue: (v: string) => void;
   onStartEdit: () => void;
   onCommitEdit: () => void;
+  // Enter — Excel-коммит: выделение переходит на клетку ниже.
+  onCommitEnter: () => void;
   onCancelEdit: () => void;
   selected: boolean;
   anySelected: boolean;
   rowIdx: number;
-  onCellDown: (row: number, col: 'title' | ViewColumn) => void;
+  onCellDown: (row: number, col: 'title' | ViewColumn, rightButton?: boolean) => void;
   onCellEnter: (row: number, col: 'title' | ViewColumn) => void;
   rangeClassFor: (row: number, col: 'title' | ViewColumn) => string | null;
   onToggleSelected: (shift: boolean) => void;
@@ -1243,7 +1364,9 @@ function TableRow({
     'data-cell': string;
     onMouseEnter: () => void;
   } => ({
-    className: cn('relative border-l px-1 py-0.5', rangeClassFor(rowIdx, col)),
+    // Без внутренних отступов: значение-кнопка занимает ВСЮ клетку, hover
+    // подсвечивает её от края до края (Notion).
+    className: cn('relative flex border-b border-l', rangeClassFor(rowIdx, col)),
     'data-cell': col,
     onMouseEnter: () => onCellEnter(rowIdx, col),
   });
@@ -1257,7 +1380,7 @@ function TableRow({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex h-full min-h-6 w-full items-center gap-1 rounded-md px-1 text-xs transition-colors hover:bg-accent"
+                  className="flex h-full min-h-8 w-full items-center gap-1 px-2 text-xs transition-colors hover:bg-accent"
                 >
                   {/* Значение статуса — цветная пилюля (Notion select pill). */}
                   <span
@@ -1290,7 +1413,7 @@ function TableRow({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex h-full min-h-6 w-full items-center gap-1.5 rounded-md px-1 text-xs transition-colors hover:bg-accent"
+                  className="flex h-full min-h-8 w-full items-center gap-1.5 px-2 text-xs transition-colors hover:bg-accent"
                 >
                   {task.priority !== null && task.priority !== undefined ? (
                     <span
@@ -1338,7 +1461,7 @@ function TableRow({
               currentUserId={currentUserId}
               onChanged={onChanged}
               projectId={projectId}
-              className="h-full min-h-6 w-full justify-start px-1.5 text-xs"
+              className="h-full min-h-8 w-full justify-start rounded-none px-2 text-xs hover:bg-accent"
             />
           </div>
         );
@@ -1365,14 +1488,16 @@ function TableRow({
           style={gridStyle}
           // Capture: якорь Excel-выделения ставится с любого места ячейки (включая
           // кнопки-значения — Notion выделяет ячейку и при открытии её редактора).
+          // ПКМ тоже участвует: внутрь диапазона — выбор его строк, мимо — одной.
           onMouseDownCapture={(e) => {
-            if (e.button !== 0) return;
+            if (e.button !== 0 && e.button !== 2) return;
             const cellEl = (e.target as HTMLElement).closest('[data-cell]');
             const key = cellEl?.getAttribute('data-cell');
-            if (key) onCellDown(rowIdx, key as 'title' | ViewColumn);
+            if (key) onCellDown(rowIdx, key as 'title' | ViewColumn, e.button === 2);
           }}
           className={cn(
-            'group relative grid border-b transition-colors hover:bg-accent/40',
+            // Границы — на ячейках (см. cellProps/title): зона контролов слева чистая.
+            'group relative grid transition-colors hover:bg-accent/40',
             // Условный цвет (Notion Conditional color) — до selected/moved подсветок.
             rowColor,
             selected && 'bg-primary/5',
@@ -1383,11 +1508,11 @@ function TableRow({
             recentlyMoved && 'bg-primary/5 ring-2 ring-inset ring-primary/60',
           )}
         >
-      {/* Hover-контролы в левом поле (Notion): «+» (вставить ниже, Alt — выше),
-          «⋮⋮» (клик — меню, drag — перенос строки) и чекбокс (Shift — диапазон). */}
+      {/* Sticky-gutter (Notion): «+» (вставить ниже, Alt — выше), «⋮⋮» (клик — меню,
+          drag — перенос) и чекбокс (Shift — диапазон) закреплены при гор. скролле. */}
       <div
         className={cn(
-          'absolute -left-14 top-1/2 flex -translate-y-1/2 items-center gap-0 transition-opacity duration-100',
+          'sticky left-0 z-20 flex items-center justify-end gap-0 bg-background pr-1 transition-opacity duration-100',
           selected || anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
         )}
       >
@@ -1447,9 +1572,12 @@ function TableRow({
       <div
         data-cell="title"
         className={cn(
-          'relative flex min-w-0 items-center gap-1.5 px-2 py-1',
-          frozenTitle && 'sticky left-0 z-10 border-r bg-background',
+          'relative flex min-w-0 items-center gap-1.5 border-b px-2 py-1',
+          // Freeze: липнет ПОСЛЕ sticky-gutter'а контролов (3.5rem).
+          frozenTitle && 'sticky left-14 z-10 border-r bg-background',
           rangeClassFor(rowIdx, 'title'),
+          // Редактирование: синяя рамка на ВСЮ клетку (Notion), не мини-инпут.
+          editing && 'z-10 bg-background ring-2 ring-inset ring-primary/70',
         )}
         style={depth > 0 ? { paddingLeft: 8 + depth * 20 } : undefined}
         onMouseEnter={() => onCellEnter(rowIdx, 'title')}
@@ -1488,14 +1616,14 @@ function TableRow({
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                onCommitEdit();
+                onCommitEnter();
               } else if (e.key === 'Escape') {
                 e.preventDefault();
                 onCancelEdit();
               }
             }}
             aria-label="Название задачи"
-            className="min-w-0 flex-1 rounded-md border bg-background px-1.5 py-0.5 text-sm font-medium outline-none ring-2 ring-primary/20"
+            className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none"
           />
         ) : (
           <button
@@ -1540,7 +1668,7 @@ function TableRow({
           onAddOption={(label) => customProps.addOption(p, label)}
         />
       ))}
-      <div className="border-l" aria-hidden />
+      <div className="border-b border-l" aria-hidden />
         </div>
       </ContextMenuTrigger>
       {/* Правый клик по строке — контекстное меню задачи (Notion-style).
@@ -1583,7 +1711,7 @@ function DeadlineCell({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex h-full min-h-6 w-full items-center gap-1.5 rounded-md px-1.5 text-xs transition-colors hover:bg-accent"
+            className="flex h-full min-h-8 w-full items-center gap-1.5 px-2 text-xs transition-colors hover:bg-accent"
           >
             {task.deadline ? (
               <DeadlineBadge deadline={task.deadline} status={task.status} />

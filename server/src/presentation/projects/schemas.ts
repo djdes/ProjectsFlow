@@ -175,10 +175,20 @@ export const updateTaskPropertySchema = z
     options: z.array(taskPropertyOptionSchema).max(50).optional(),
     // Порядок колонок (Вставить слева/справа, Дублировать — Notion-меню заголовка).
     position: z.number().int().min(0).max(100000).optional(),
+    // «Изменить тип» (Notion Change type): значения остаются строками, клиент
+    // интерпретирует их по-новому.
+    type: z
+      .enum(['text', 'number', 'select', 'multi_select', 'date', 'checkbox', 'url', 'phone', 'email'])
+      .optional(),
   })
-  .refine((v) => v.name !== undefined || v.options !== undefined || v.position !== undefined, {
-    message: 'Нечего обновлять',
-  });
+  .refine(
+    (v) =>
+      v.name !== undefined ||
+      v.options !== undefined ||
+      v.position !== undefined ||
+      v.type !== undefined,
+    { message: 'Нечего обновлять' },
+  );
 
 export const setTaskPropertyValueSchema = z.object({
   // Кодировка по типу свойства (см. db/109); клиент шлёт уже сериализованную строку.
