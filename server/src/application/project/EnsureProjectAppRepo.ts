@@ -6,6 +6,7 @@ import type { GitTokenDelegationRepository } from './GitTokenDelegationRepositor
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
 import { requireProjectAccess } from './projectAccess.js';
+import { slugifyRepoName } from './slugifyRepoName.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -14,29 +15,6 @@ type Deps = {
   readonly api: GithubApiClient;
   readonly delegations: GitTokenDelegationRepository;
 };
-
-// Транслит кириллицы → латиница, чтобы имя репо было читаемым для русских названий
-// (InitKbRepo этого не делает и превращает «Обувь» в «project»).
-const TRANSLIT: Record<string, string> = {
-  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y',
-  к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f',
-  х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya',
-};
-
-function slugify(name: string): string {
-  const translit = name
-    .toLowerCase()
-    .split('')
-    .map((ch) => (ch in TRANSLIT ? TRANSLIT[ch] : ch))
-    .join('');
-  return (
-    translit
-      .trim()
-      .replace(/[^a-z0-9-]+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '') || 'project'
-  );
-}
 
 // GitHub возвращает 422 когда имя репо уже занято у пользователя.
 function isNameTaken(err: unknown): boolean {
@@ -101,7 +79,7 @@ export class EnsureProjectAppRepo {
 
       // Короткий id проекта в имени гарантирует уникальность (два проекта с одинаковым названием
       // не столкнутся) и делает 422-reuse корректным (422 = повторный прогон ЭТОГО проекта).
-      const repoName = `pf-${slugify(project.name)}-${project.id.slice(0, 8)}`;
+      const repoName = `pf-${slugifyRepoName(project.name)}-${project.id.slice(0, 8)}`;
       try {
         const result = await this.deps.api.createRepo(ownerToken.accessToken, {
           name: repoName,
