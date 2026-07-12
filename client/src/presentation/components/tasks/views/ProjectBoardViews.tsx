@@ -911,6 +911,8 @@ export function ProjectBoardViews({
           projectId={projectId}
           projectName={projectName}
           memberCount={memberCount}
+          bleedNegClass={bleedNegClass}
+          bleedPadClass={bleedPadClass}
           filters={state.filters}
           onFiltersChange={setFilters}
           sort={state.sort}
