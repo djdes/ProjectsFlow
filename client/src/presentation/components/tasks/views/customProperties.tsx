@@ -525,24 +525,63 @@ export function PropertyValueCell({
               : 'text';
     if (editing) {
       return (
-        <div className="border-b border-l px-2 py-1.5">
-          <input
-            ref={inputRef}
-            autoFocus
-            type={inputType}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commit();
-              if (e.key === 'Escape') {
-                setDraft(value);
-                setEditing(false);
-              }
-            }}
-            aria-label={property.name}
-            className="w-full min-w-0 bg-transparent text-sm outline-none"
-          />
+        <div className="relative border-b border-l">
+          {/* Notion: редактор раскрывается ПОВЕРХ ячейки — шире её и с тенью,
+              текст растёт вниз не двигая строки. Enter — коммит (Shift+Enter —
+              перенос строки в тексте), Esc — отмена. */}
+          <div className="absolute left-0 top-0 z-30 w-[max(100%,17rem)] overflow-hidden rounded-sm bg-popover shadow-[0_0_0_1px_rgba(15,15,15,0.06),0_3px_6px_rgba(15,15,15,0.12),0_9px_24px_rgba(15,15,15,0.2)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_3px_6px_rgba(0,0,0,0.5)]">
+            {property.type === 'text' ? (
+              <textarea
+                autoFocus
+                rows={1}
+                value={draft}
+                ref={(el) => {
+                  if (el) {
+                    el.style.height = 'auto';
+                    el.style.height = `${el.scrollHeight}px`;
+                  }
+                }}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${e.target.scrollHeight}px`;
+                }}
+                onBlur={commit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    commit();
+                  }
+                  if (e.key === 'Escape') {
+                    setDraft(value);
+                    setEditing(false);
+                  }
+                }}
+                aria-label={property.name}
+                className="block w-full resize-none bg-transparent px-2.5 py-1.5 text-sm outline-none"
+              />
+            ) : (
+              <input
+                ref={inputRef}
+                autoFocus
+                type={inputType}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={commit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commit();
+                  if (e.key === 'Escape') {
+                    setDraft(value);
+                    setEditing(false);
+                  }
+                }}
+                aria-label={property.name}
+                className="w-full min-w-0 bg-transparent px-2.5 py-1.5 text-sm outline-none"
+              />
+            )}
+          </div>
+          {/* Держит высоту строки под оверлеем. */}
+          <div className="min-h-8" aria-hidden />
         </div>
       );
     }

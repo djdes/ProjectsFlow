@@ -13,7 +13,6 @@ import {
 import {
   ArrowDown,
   ArrowUp,
-  CalendarClock,
   CalendarDays,
   ChevronDown,
   CircleDot,
@@ -644,7 +643,7 @@ export function TableView({
               меню колонки (сортировка ↑↓, скрыть свойство), как в Notion. Границы —
               на ячейках, НЕ на контейнере: зона контролов слева чистая. */}
           <div
-            className="group/head relative grid text-xs text-muted-foreground"
+            className="group/head relative grid text-sm text-muted-foreground"
             style={gridStyle}
           >
             {/* Sticky-gutter шапки: чекбокс «выбрать все» закреплён при гор. скролле. */}
@@ -948,9 +947,10 @@ export function TableView({
 
           {/* pl-14 — под gutter контролов: «Новая задача» на уровне колонки названия,
               граница — только под контентной частью (Notion). */}
+          {/* Notion New page: компактная строка 28px. */}
           <div className="pl-14">
-            <div className="border-b py-1">
-              <NewTaskRow create={create} />
+            <div className="flex h-7 items-center border-b">
+              <NewTaskRow create={create} className="w-full" />
             </div>
           </div>
           {/* Строка подсчётов (Notion Calculate): «Всего» под названием; под каждой
@@ -1384,7 +1384,7 @@ function TableRow({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex h-full min-h-8 w-full items-center gap-1 px-2 text-xs transition-colors hover:bg-accent"
+                  className="flex h-full min-h-8 w-full items-center gap-1 px-2 text-sm transition-colors hover:bg-accent"
                 >
                   {/* Значение статуса — цветная пилюля (Notion select pill). */}
                   <span
@@ -1417,7 +1417,7 @@ function TableRow({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex h-full min-h-8 w-full items-center gap-1.5 px-2 text-xs transition-colors hover:bg-accent"
+                  className="flex h-full min-h-8 w-full items-center gap-1.5 px-2 text-sm transition-colors hover:bg-accent"
                 >
                   {task.priority !== null && task.priority !== undefined ? (
                     <span
@@ -1431,9 +1431,8 @@ function TableRow({
                       />
                       <span className="truncate">{PRIORITY_META[task.priority].label}</span>
                     </span>
-                  ) : (
-                    <span className="px-0.5 text-muted-foreground/60">—</span>
-                  )}
+                  ) : // Пустое значение — чистая ячейка (Notion): значение появляется по клику.
+                  null}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="min-w-[10rem]">
@@ -1465,7 +1464,7 @@ function TableRow({
               currentUserId={currentUserId}
               onChanged={onChanged}
               projectId={projectId}
-              className="h-full min-h-8 w-full justify-start rounded-none px-2 text-xs hover:bg-accent"
+              className="h-full min-h-8 w-full justify-start rounded-none px-2 text-sm hover:bg-accent"
             />
           </div>
         );
@@ -1719,15 +1718,10 @@ function DeadlineCell({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex h-full min-h-8 w-full items-center gap-1.5 px-2 text-xs transition-colors hover:bg-accent"
+            className="flex h-full min-h-8 w-full items-center gap-1.5 px-2 text-sm transition-colors hover:bg-accent"
           >
-            {task.deadline ? (
-              <DeadlineBadge deadline={task.deadline} status={task.status} />
-            ) : (
-              <span className="flex items-center gap-1 text-muted-foreground/60">
-                <CalendarClock className="size-3" />—
-              </span>
-            )}
+            {/* Пустой срок — чистая ячейка (Notion). */}
+            {task.deadline ? <DeadlineBadge deadline={task.deadline} status={task.status} /> : null}
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="min-w-[10rem]">
