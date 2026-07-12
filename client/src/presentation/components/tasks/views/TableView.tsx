@@ -634,7 +634,16 @@ export function TableView({
         className={cn('sticky z-20 bg-background', bleedNegClass)}
         style={{ top: headerTop }}
       >
-        <div ref={headScrollRef} className="overflow-x-hidden">
+        {/* Шапка скроллится и ЮЗЕРОМ (колесо/трекпад над ней), скроллбар скрыт;
+            синхронизация двусторонняя (равные значения не зацикливают onScroll). */}
+        <div
+          ref={headScrollRef}
+          onScroll={(e) => {
+            if (bodyScrollRef.current)
+              bodyScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+          }}
+          className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
         {/* w-max: контейнер (и грид-строки в нём) растягивается на ПОЛНУЮ ширину
             колонок — иначе грид переполняет собственный бокс и sticky-«Название»
             не хватает слака внутри containing block (колонка уезжает при скролле). */}

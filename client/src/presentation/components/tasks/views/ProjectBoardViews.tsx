@@ -141,8 +141,8 @@ type Props = {
 // и не удаляется — это текущая доска проекта как есть.
 const DEFAULT_VIEW_ID = 'default';
 
-// Сколько вкладок показываем в строке; остальные сворачиваются в «N ещё…» (Notion-style).
-const MAX_VISIBLE_TABS = 4;
+// Зазор между вкладками (gap-0.5) — участвует в расчёте, сколько вкладок влезает.
+const TAB_GAP = 2;
 
 const DUE_FILTER_LABELS: Record<ViewDueFilter, string> = {
   has: 'Есть срок',
@@ -455,21 +455,63 @@ export function ProjectBoardViews({
 
   const allViewsSorted = views ?? [];
 
+  // Notion: вкладки занимают ВСЮ доступную ширину до тулбара. Сколько влезает —
+  // меряем по невидимой строке-линейке (реплики вкладок) + ширине контейнера
+  // (ResizeObserver). Влезли все — hover-«+»; нет — «ещё N…» вместо него.
+  const tabsWrapRef = useRef<HTMLDivElement | null>(null);
+  const tabsMeasureRef = useRef<HTMLDivElement | null>(null);
+  const [fitCount, setFitCount] = useState<number>(Number.MAX_SAFE_INTEGER);
+  useEffect(() => {
+    const wrap = tabsWrapRef.current;
+    const meas = tabsMeasureRef.current;
+    if (!wrap || !meas) return;
+    const recompute = (): void => {
+      const avail = wrap.clientWidth;
+      const kids = Array.from(meas.children) as HTMLElement[];
+      // [0] «Доска», [1..n] вью, [n+1] «ещё N…», [n+2] «+»
+      if (kids.length < 3) return;
+      const boardW = kids[0]!.offsetWidth;
+      const moreW = kids[kids.length - 2]!.offsetWidth;
+      const plusW = kids[kids.length - 1]!.offsetWidth;
+      const tabW = kids.slice(1, -2).map((k) => k.offsetWidth);
+      const totalTabs = tabW.reduce((s, w) => s + TAB_GAP + w, 0);
+      let next: number;
+      if (boardW + totalTabs + TAB_GAP + plusW <= avail) {
+        next = tabW.length; // влезают все + «+»
+      } else {
+        let used = boardW;
+        next = 0;
+        for (const w of tabW) {
+          if (used + TAB_GAP + w + TAB_GAP + moreW <= avail) {
+            used += TAB_GAP + w;
+            next += 1;
+          } else break;
+        }
+      }
+      setFitCount((prev) => (prev === next ? prev : next));
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(wrap);
+    ro.observe(meas);
+    return () => ro.disconnect();
+  }, [views, boardName, perView]);
+
   // Overflow вкладок: первые N видимы; активная из хвоста подменяет последнюю видимую.
   const { visibleViews, hiddenViews } = useMemo(() => {
     const allViews = views ?? [];
-    const limit = MAX_VISIBLE_TABS - 1; // минус вкладка «Доска»
+    const limit = Math.max(0, fitCount);
     if (allViews.length <= limit) return { visibleViews: allViews, hiddenViews: [] };
     const visible = allViews.slice(0, limit);
     const hidden = allViews.slice(limit);
     const activeHiddenIdx = hidden.findIndex((v) => v.id === activeId);
-    if (activeHiddenIdx >= 0) {
+    if (activeHiddenIdx >= 0 && visible.length > 0) {
       const swapped = visible[visible.length - 1]!;
       visible[visible.length - 1] = hidden[activeHiddenIdx]!;
       hidden[activeHiddenIdx] = swapped;
     }
     return { visibleViews: visible, hiddenViews: hidden };
-  }, [views, activeId]);
+  }, [views, activeId, fitCount]);
 
   const filtersActive = hasActiveFilters(state.filters);
   const chipsVisible = !isKanban && (filtersActive || state.sort !== null);
@@ -638,7 +680,38 @@ export function ProjectBoardViews({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] md:flex [&::-webkit-scrollbar]:hidden">
+        <div
+          ref={tabsWrapRef}
+          className="relative hidden min-w-0 flex-1 items-center gap-0.5 overflow-hidden md:flex"
+        >
+          {/* Линейка: невидимые реплики ВСЕХ вкладок + «ещё N…» + «+» — по ним
+              считаем, сколько вкладок влезает до тулбара (Notion). */}
+          <div
+            ref={tabsMeasureRef}
+            aria-hidden
+            className="pointer-events-none invisible absolute left-0 top-0 flex items-center whitespace-nowrap"
+          >
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium">
+              <LayoutGrid className="size-3.5 shrink-0" />
+              <span className="max-w-[9rem] truncate">{boardName}</span>
+            </span>
+            {allViewsSorted.map((v) => (
+              <span
+                key={v.id}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium"
+              >
+                <ViewIconGlyph
+                  icon={perView[v.id]?.icon ?? VIEW_TYPE_ICONS[v.type]}
+                  className="size-3.5 shrink-0"
+                />
+                <span className="max-w-[9rem] truncate">{v.name}</span>
+              </span>
+            ))}
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium">
+              ещё {allViewsSorted.length}…
+            </span>
+            <span className="inline-flex size-7 shrink-0" />
+          </div>
           <ViewTab
             icon={VIEW_TYPE_ICONS.kanban}
             name={boardName}

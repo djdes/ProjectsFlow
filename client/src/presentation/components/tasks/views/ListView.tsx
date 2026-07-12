@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -513,12 +513,28 @@ function ListRow({
     isDragging,
   } = useDraggable({ id: task.id, disabled: !dndEnabled });
   const [gripMenuOpen, setGripMenuOpen] = useState(false);
+  // Клик, «отпущенный» сразу после drag'а строки, не должен открывать задачу.
+  const wasDragged = useRef(false);
+  useEffect(() => {
+    if (isDragging) wasDragged.current = true;
+  }, [isDragging]);
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
-          ref={dropRef}
+          // Notion: строку списка можно тащить за ЛЮБОЕ место (не только за «⋮⋮») —
+          // drag стартует после сдвига на 6px (PointerSensor distance), клик остаётся
+          // кликом. Интерактивные элементы внутри строки drag не начинают.
+          ref={(el) => {
+            dropRef(el);
+            dragRef(el);
+          }}
+          onPointerDown={(e) => {
+            const t = e.target as HTMLElement;
+            if (t.closest('button, input, a, [contenteditable="true"]')) return;
+            dragListeners?.onPointerDown?.(e as unknown as React.PointerEvent);
+          }}
           className={cn(
             'group relative flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/50',
             rowColor,
@@ -528,7 +544,13 @@ function ListRow({
             recentlyMoved && 'bg-primary/5 ring-2 ring-inset ring-primary/60',
           )}
           style={depth > 0 ? { paddingLeft: 8 + depth * 20 } : undefined}
-          onClick={onOpen}
+          onClick={() => {
+            if (wasDragged.current) {
+              wasDragged.current = false;
+              return;
+            }
+            onOpen();
+          }}
         >
           {/* Стрелка раскрытия подзадач (Notion sub-items). */}
           {hasChildren ? (
@@ -568,7 +590,6 @@ function ListRow({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  ref={dragRef}
                   {...dragAttrs}
                   {...dragListeners}
                   aria-label="Меню задачи (drag — перенос)"
