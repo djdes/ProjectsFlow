@@ -1,6 +1,11 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, type SortingStrategy } from '@dnd-kit/sortable';
+
+// Notion-style drag: карточки НЕ раздвигаются/не дёргаются при перетаскивании — место
+// дропа показывает только синяя полоска (DropIndicatorLine). Стратегия без сдвигов —
+// возвращает null для всех соседей (dnd-kit не применяет transform реордера).
+const noReflowStrategy: SortingStrategy = () => null;
 import { AnimatePresence } from 'motion/react';
 import { FileText, ListChecks, PanelRight, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -447,10 +452,7 @@ export function KanbanColumn({
           <Fragment key={t.id}>{renderCard(t)}</Fragment>
         ))}
         {inlineCard}
-        <SortableContext
-          items={listTasks.map((t) => t.id)}
-          strategy={verticalListSortingStrategy}
-        >
+        <SortableContext items={listTasks.map((t) => t.id)} strategy={noReflowStrategy}>
           {listTasks.map((t, idx) => (
             <Fragment key={t.id}>
               {/* «Готово» группируем по датам завершения: Сегодня / Вчера / Ранее. */}
