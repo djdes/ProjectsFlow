@@ -37,10 +37,13 @@ const buttonVariants = cva(
         sm: 'h-10 rounded-md px-4 text-sm sm:h-9 sm:px-3 sm:text-xs',
         // mobile 48px → desktop 44px. Самый крупный — для primary-CTA.
         lg: 'h-12 rounded-md px-8 sm:h-11',
-        // Квадратные icon-кнопки: `size-11` (44px) на mobile → `size-10` (40px) desktop.
-        // Используем `size-X` (а не `h-X w-X`) чтобы исключиться из mobile-min-h-правила
-        // в globals.css — иначе ширина бы не растягивалась, кнопка стала бы прямоугольной.
-        icon: 'size-11 sm:size-10',
+        // Квадратные icon-кнопки: `size-10` (40px) desktop → `size-11` (44px) на mobile.
+        // ⚠️ Базовый `size-10` + бамп на `max-sm:` (а НЕ `sm:size-10`): иначе call-site
+        // override вида `size-6` (без префикса) НЕ перебивал бы `sm:size-10` на десктопе,
+        // и ВСЕ переопределённые icon-кнопки сайта раздувались до 40px. Теперь базовый
+        // override выигрывает у базового `size-10`, а mobile-бамп живёт на max-sm.
+        // `size-X` (а не `h-X w-X`) — чтобы исключиться из mobile-min-h-правила globals.css.
+        icon: 'size-10 max-sm:size-11',
       },
     },
     defaultVariants: {
