@@ -90,7 +90,7 @@ test('EnsureProjectAppRepo: owner + connected → создаёт репо и с�
     { projectId: 'p1', granterUserId: 'owner1', enabled: true },
   ]);
   // Build-workflow закоммичен в app-репо (гибридная сборка через GitHub Actions).
-  assert.deepEqual(calls.putFile, ['.github/workflows/pf-build-site.yml']);
+  assert.deepEqual(calls.putFile, ['.github/workflows/pf-build-site.yml', 'index.html']);
 });
 
 test('EnsureProjectAppRepo: уже есть app-репо → идемпотентно, без createRepo, но авто-настройка догоняет', async () => {
