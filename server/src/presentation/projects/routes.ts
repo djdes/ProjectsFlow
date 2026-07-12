@@ -49,11 +49,17 @@ import { requireProjectAccess } from '../../application/project/projectAccess.js
 import type { BoardViewRepository } from '../../application/project/BoardViewRepository.js';
 import type { TaskTemplateRepository } from '../../application/task/TaskTemplateRepository.js';
 import type { TaskTemplate } from '../../domain/task/TaskTemplate.js';
+import type { TaskPropertyRepository } from '../../application/task/TaskPropertyRepository.js';
+import type { TaskProperty } from '../../domain/task/TaskProperty.js';
+import type { TaskRepository } from '../../application/task/TaskRepository.js';
 import type { BoardView } from '../../domain/project/BoardView.js';
 import type { AttachmentStorage } from '../../application/task/AttachmentStorage.js';
 import {
   createBoardViewSchema,
   createTaskTemplateSchema,
+  createTaskPropertySchema,
+  updateTaskPropertySchema,
+  setTaskPropertyValueSchema,
   createInviteSchema,
   createProjectSchema,
   kanbanSettingsSchema,
@@ -101,6 +107,9 @@ type Deps = {
   readonly boardViews: BoardViewRepository;
   // Шаблоны задач (Notion Templates, db/108).
   readonly taskTemplates: TaskTemplateRepository;
+  // Кастомные свойства задач (db/109) + tasks для IDOR-проверки value-роута.
+  readonly taskProperties: TaskPropertyRepository;
+  readonly tasks: TaskRepository;
   readonly reorderProjects: ReorderProjects;
   readonly toggleProjectFavorite: ToggleProjectFavorite;
   readonly reorderFavoriteProjects: ReorderFavoriteProjects;
@@ -812,6 +821,123 @@ export function projectsRouter(deps: Deps): Router {
         const existing = await deps.taskTemplates.getById(templateId);
         if (!existing || existing.projectId !== id) throw new ProjectNotFoundError();
         await deps.taskTemplates.delete(templateId);
+        deps.notifyProjectChanged(id);
+        res.status(204).end();
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Кастомные свойства задач (Notion custom properties, db/109) -------------
+  // Read — участник; мутации — editor+ (реюз requireViewEditor).
+  const propertyToDto = (p: TaskProperty): Record<string, unknown> => ({
+    id: p.id,
+    projectId: p.projectId,
+    name: p.name,
+    type: p.type,
+    options: p.options,
+    position: p.position,
+  });
+
+  router.get('/:id/properties', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const membership = await deps.members.findForProject(id, req.user!.id);
+      if (!membership) throw new ProjectNotFoundError();
+      const properties = await deps.taskProperties.listForProject(id);
+      const values = await deps.taskProperties.listValuesForProject(id);
+      res.json({ properties: properties.map(propertyToDto), values });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/:id/properties', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      if (!(await requireViewEditor(id, req.user!.id, res))) return;
+      const body = createTaskPropertySchema.parse(req.body);
+      const property = await deps.taskProperties.create({
+        id: randomUUID(),
+        projectId: id,
+        name: body.name,
+        type: body.type,
+        options: body.options ?? [],
+      });
+      deps.notifyProjectChanged(id);
+      res.status(201).json({ property: propertyToDto(property) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.patch(
+    '/:id/properties/:propertyId',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params.id;
+        const propertyId = req.params['propertyId'];
+        if (typeof id !== 'string' || typeof propertyId !== 'string')
+          throw new ProjectNotFoundError();
+        if (!(await requireViewEditor(id, req.user!.id, res))) return;
+        // Принадлежность проекту из URL — иначе IDOR.
+        const existing = await deps.taskProperties.getById(propertyId);
+        if (!existing || existing.projectId !== id) throw new ProjectNotFoundError();
+        const body = updateTaskPropertySchema.parse(req.body);
+        const updated = await deps.taskProperties.update(propertyId, body);
+        if (!updated) throw new ProjectNotFoundError();
+        deps.notifyProjectChanged(id);
+        res.json({ property: propertyToDto(updated) });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  router.delete(
+    '/:id/properties/:propertyId',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params.id;
+        const propertyId = req.params['propertyId'];
+        if (typeof id !== 'string' || typeof propertyId !== 'string')
+          throw new ProjectNotFoundError();
+        if (!(await requireViewEditor(id, req.user!.id, res))) return;
+        const existing = await deps.taskProperties.getById(propertyId);
+        if (!existing || existing.projectId !== id) throw new ProjectNotFoundError();
+        await deps.taskProperties.delete(propertyId);
+        deps.notifyProjectChanged(id);
+        res.status(204).end();
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  // Значение свойства у задачи (upsert). Editor+; задача и свойство — из проекта URL.
+  router.put(
+    '/:id/tasks/:taskId/properties/:propertyId',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params.id;
+        const taskId = req.params['taskId'];
+        const propertyId = req.params['propertyId'];
+        if (
+          typeof id !== 'string' ||
+          typeof taskId !== 'string' ||
+          typeof propertyId !== 'string'
+        )
+          throw new ProjectNotFoundError();
+        if (!(await requireViewEditor(id, req.user!.id, res))) return;
+        const property = await deps.taskProperties.getById(propertyId);
+        if (!property || property.projectId !== id) throw new ProjectNotFoundError();
+        const task = await deps.tasks.getById(taskId);
+        if (!task || task.projectId !== id) throw new ProjectNotFoundError();
+        const body = setTaskPropertyValueSchema.parse(req.body);
+        await deps.taskProperties.setValue(taskId, propertyId, body.value);
         deps.notifyProjectChanged(id);
         res.status(204).end();
       } catch (e) {

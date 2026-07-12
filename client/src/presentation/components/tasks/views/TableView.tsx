@@ -49,6 +49,13 @@ import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { VISIBLE_KANBAN_STATUSES } from '@/domain/kanban/KanbanSettings';
 import { useContainer } from '@/infrastructure/di/container';
 import { useTasks } from '@/presentation/hooks/useTasks';
+import {
+  NewPropertyMenuItems,
+  PropertyHeaderCell,
+  PropertyValueCell,
+  useTaskProperties,
+  type UseTaskPropertiesResult,
+} from './customProperties';
 import { useBulkTaskActions, type BulkResult } from '@/presentation/hooks/useBulkTaskActions';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
@@ -146,6 +153,8 @@ export function TableView({
   const tasksApi = useTasks(projectId);
   const { tasks, loading, error, create, update, move, remove, refetch } = tasksApi;
   const { taskTemplateRepository } = useContainer();
+  // Кастомные свойства (db/109): колонки после стандартных, «+» в шапке создаёт новое.
+  const customProps = useTaskProperties(projectId);
   const { user } = useCurrentUser();
   const isShared = (memberCount ?? 0) > 1;
   const [drawer, setDrawer] = useState<TaskDrawerState | null>(null);
@@ -240,10 +249,11 @@ export function TableView({
         ...visibleCols.map((c) =>
           tableState.colWidths[c] ? `${tableState.colWidths[c]}px` : COLUMN_WIDTH[c],
         ),
+        ...customProps.properties.map(() => '180px'),
         'minmax(2rem,10rem)',
       ].join(' '),
     }),
-    [visibleCols, tableState.colWidths],
+    [visibleCols, tableState.colWidths, customProps.properties],
   );
 
   // Resize колонки (Notion): mousedown на правой кромке заголовка → drag.
@@ -510,30 +520,46 @@ export function TableView({
                 onResizeStart={(e) => startResize(c, e)}
               />
             ))}
+            {customProps.properties.map((p) => (
+              <PropertyHeaderCell
+                key={p.id}
+                property={p}
+                onRename={(name) => customProps.renameProperty(p.id, name)}
+                onRemove={() => customProps.removeProperty(p.id)}
+              />
+            ))}
             <div className="border-l" aria-hidden />
-            {/* «+» в конце шапки (Notion add property): вернуть скрытые свойства. */}
-            {hiddenCols.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Показать скрытые свойства"
-                    title="Показать скрытые свойства"
-                    className="absolute -right-7 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
-                  >
-                    <Plus className="size-3.5" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[11rem]">
-                  {hiddenCols.map((c) => (
-                    <DropdownMenuItem key={c} className="gap-2" onClick={() => onToggleCol(c)}>
-                      <ColumnIcon col={c} />
-                      {VIEW_COLUMN_LABELS[c]}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            {/* «+» в конце шапки (Notion add property): вернуть скрытые свойства
+                и создать новое кастомное свойство (db/109). */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Добавить свойство"
+                  title="Добавить свойство"
+                  className="absolute -right-7 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <Plus className="size-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[12rem]">
+                {hiddenCols.length > 0 && (
+                  <>
+                    {hiddenCols.map((c) => (
+                      <DropdownMenuItem key={c} className="gap-2" onClick={() => onToggleCol(c)}>
+                        <ColumnIcon col={c} />
+                        {VIEW_COLUMN_LABELS[c]}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                <p className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                  Новое свойство
+                </p>
+                <NewPropertyMenuItems onCreate={customProps.createProperty} />
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {(grouping && groups
@@ -599,6 +625,7 @@ export function TableView({
                 task={task}
                 gridStyle={gridStyle}
                 visibleCols={visibleCols}
+                customProps={customProps}
                 depth={depth}
                 hasChildren={hasChildren}
                 expanded={expandedTasks.has(task.id)}
@@ -713,6 +740,9 @@ export function TableView({
                   onTableState({ calc: { ...tableState.calc, [c]: v } })
                 }
               />
+            ))}
+            {customProps.properties.map((p) => (
+              <div key={p.id} aria-hidden />
             ))}
             <div aria-hidden />
           </div>
@@ -1032,6 +1062,7 @@ function TableRow({
   currentUserId,
   projectId,
   onChanged,
+  customProps,
 }: {
   task: Task;
   gridStyle: React.CSSProperties;
@@ -1069,6 +1100,7 @@ function TableRow({
   currentUserId: string | null;
   projectId: string;
   onChanged: () => void;
+  customProps: UseTaskPropertiesResult;
 }): React.ReactElement {
   // Дроп-зона (вставка ПЕРЕД этой строкой — синяя линия сверху) + драг за «⋮⋮».
   const { setNodeRef: dropRef, isOver } = useDroppable({ id: task.id, disabled: !dndEnabled });
@@ -1364,6 +1396,15 @@ function TableRow({
       </div>
 
       {visibleCols.map(cellFor)}
+      {customProps.properties.map((p) => (
+        <PropertyValueCell
+          key={p.id}
+          property={p}
+          value={customProps.valueFor(task.id, p.id)}
+          onChange={(v) => customProps.setValue(task.id, p.id, v)}
+          onAddOption={(label) => customProps.addOption(p, label)}
+        />
+      ))}
       <div className="border-l" aria-hidden />
         </div>
       </ContextMenuTrigger>

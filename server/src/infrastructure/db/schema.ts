@@ -1678,6 +1678,50 @@ export const taskTemplates = mysqlTable(
 export type TaskTemplateRow = typeof taskTemplates.$inferSelect;
 
 // ============================================================================
+// task_properties / task_property_values — миграция db/109. Кастомные свойства
+// задач (Notion custom properties): определения пер-проект + значения пер-задача.
+// options/value — строки (JSON/кодировка по типу), парсит репозиторий.
+// ============================================================================
+export const taskProperties = mysqlTable(
+  'task_properties',
+  {
+    id: id(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    name: varchar('name', { length: 64 }).notNull(),
+    type: varchar('type', { length: 16 }).notNull(),
+    options: text('options'),
+    position: int('position').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [index('idx_task_properties_project').on(t.projectId)],
+);
+
+export type TaskPropertyRow = typeof taskProperties.$inferSelect;
+
+export const taskPropertyValues = mysqlTable(
+  'task_property_values',
+  {
+    taskId: char('task_id', { length: 36 }).notNull(),
+    propertyId: char('property_id', { length: 36 }).notNull(),
+    value: text('value'),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    primaryKey({ columns: [t.taskId, t.propertyId] }),
+    index('idx_task_property_values_property').on(t.propertyId),
+  ],
+);
+
+export type TaskPropertyValueRow = typeof taskPropertyValues.$inferSelect;
+
+// ============================================================================
 // project_views — миграция db/090. Просмотры проекта (аналитика: график Views + Viewers).
 // Append-only: каждый заход = строка (клиент троттлит, репозиторий дедупит ~30 мин на
 // (user, project)). Доступ к чтению аналитики — участнику проекта (use-case). См. UI-batch S3.

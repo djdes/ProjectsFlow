@@ -129,6 +129,7 @@ import type { WithdrawTaskDelegation } from '../application/task/WithdrawTaskDel
 import type { RelinquishTaskDelegation } from '../application/task/RelinquishTaskDelegation.js';
 import type { BoardViewRepository } from '../application/project/BoardViewRepository.js';
 import type { TaskTemplateRepository } from '../application/task/TaskTemplateRepository.js';
+import type { TaskPropertyRepository } from '../application/task/TaskPropertyRepository.js';
 import type { ListMyPendingDelegations } from '../application/task/ListMyPendingDelegations.js';
 import type { ListTasksAssignedToMe } from '../application/task/ListTasksAssignedToMe.js';
 import type { ListTasksDelegatedToOthers } from '../application/task/ListTasksDelegatedToOthers.js';
@@ -336,6 +337,9 @@ type AppDeps = {
     readonly boardViews: BoardViewRepository;
     // Шаблоны задач (Notion Templates, db/108).
     readonly taskTemplates: TaskTemplateRepository;
+    // Кастомные свойства задач (db/109) + tasks для IDOR-проверки value-роута.
+    readonly taskProperties: TaskPropertyRepository;
+    readonly tasks: TaskRepository;
     readonly reorderProjects: ReorderProjects;
     readonly toggleProjectFavorite: ToggleProjectFavorite;
     readonly reorderFavoriteProjects: ReorderFavoriteProjects;

@@ -27,6 +27,7 @@ import { HttpActivityRepository } from '@/infrastructure/http/HttpActivityReposi
 import { HttpRecentTaskViewRepository } from '@/infrastructure/http/HttpRecentTaskViewRepository';
 import { HttpBoardViewRepository } from '@/infrastructure/http/HttpBoardViewRepository';
 import { HttpTaskTemplateRepository } from '@/infrastructure/http/HttpTaskTemplateRepository';
+import { HttpTaskPropertyRepository } from '@/infrastructure/http/HttpTaskPropertyRepository';
 import { HttpHelpRepository } from '@/infrastructure/http/HttpHelpRepository';
 import { SubmitSupport } from '@/application/help/SubmitSupport';
 import type { HelpRepository } from '@/application/help/HelpRepository';
@@ -79,6 +80,7 @@ import { HttpPublicBoardRepository } from '@/infrastructure/http/HttpPublicBoard
 import type { PublicBoardRepository } from '@/application/public/PublicBoardRepository';
 import type { BoardViewRepository } from '@/application/project/BoardViewRepository';
 import type { TaskTemplateRepository } from '@/application/task/TaskTemplateRepository';
+import type { TaskPropertyRepository } from '@/application/task/TaskPropertyRepository';
 import { GetUsage } from '@/application/usage/GetUsage';
 import { ChangePlan } from '@/application/usage/ChangePlan';
 import type { UsageRepository } from '@/application/usage/UsageRepository';
@@ -134,6 +136,7 @@ type Container = {
   publicBoardRepository: PublicBoardRepository;
   boardViewRepository: BoardViewRepository;
   taskTemplateRepository: TaskTemplateRepository;
+  taskPropertyRepository: TaskPropertyRepository;
 };
 
 function buildContainer(): Container {
@@ -168,6 +171,7 @@ function buildContainer(): Container {
   const publicBoardRepo = new HttpPublicBoardRepository();
   const boardViewRepo = new HttpBoardViewRepository();
   const taskTemplateRepo = new HttpTaskTemplateRepository();
+  const taskPropertyRepo = new HttpTaskPropertyRepository();
   return {
     listProjects: new ListProjects(projectRepo),
     getProject: new GetProject(projectRepo),
@@ -219,6 +223,7 @@ function buildContainer(): Container {
     publicBoardRepository: publicBoardRepo,
     boardViewRepository: boardViewRepo,
     taskTemplateRepository: taskTemplateRepo,
+    taskPropertyRepository: taskPropertyRepo,
   };
 }
 

@@ -133,6 +133,33 @@ export const createTaskTemplateSchema = z.object({
   icon: z.string().max(200000).nullable().optional(),
 });
 
+// Кастомные свойства задач (Notion custom properties, db/109).
+const taskPropertyOptionSchema = z.object({
+  id: z.string().min(1).max(40),
+  label: z.string().trim().min(1).max(64),
+  color: z.string().trim().min(1).max(24),
+});
+
+export const createTaskPropertySchema = z.object({
+  name: z.string().trim().min(1, 'Введите имя свойства').max(64),
+  type: z.enum(['text', 'number', 'select', 'multi_select', 'date', 'checkbox', 'url']),
+  options: z.array(taskPropertyOptionSchema).max(50).optional(),
+});
+
+export const updateTaskPropertySchema = z
+  .object({
+    name: z.string().trim().min(1).max(64).optional(),
+    options: z.array(taskPropertyOptionSchema).max(50).optional(),
+  })
+  .refine((v) => v.name !== undefined || v.options !== undefined, {
+    message: 'Нечего обновлять',
+  });
+
+export const setTaskPropertyValueSchema = z.object({
+  // Кодировка по типу свойства (см. db/109); клиент шлёт уже сериализованную строку.
+  value: z.string().max(2000),
+});
+
 // Персональные UI-настройки клиента (профиль). Все поля optional — частичный мерж.
 export const uiPrefsSchema = z.object({
   inboxAssignedGrouping: z.enum(ASSIGNED_GROUPINGS).optional(),
