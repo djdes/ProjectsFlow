@@ -2,7 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import type { WorkspaceService } from '../../application/workspace/WorkspaceService.js';
 import type { Workspace, WorkspaceKind } from '../../domain/workspace/Workspace.js';
 import type { WorkspaceListItem } from '../../application/workspace/WorkspaceRepository.js';
-import type { WorkspaceMember } from '../../domain/workspace/WorkspaceMember.js';
+import type { WorkspaceMember, WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
   addMemberSchema,
@@ -19,7 +19,7 @@ type WorkspaceDto = {
   icon: string | null;
   kind: WorkspaceKind;
   ownerUserId: string;
-  role?: 'owner' | 'member';
+  role?: WorkspaceRole;
   projectCount?: number;
   memberCount?: number;
   isCurrent?: boolean;
@@ -46,7 +46,7 @@ function toDto(ws: Workspace | WorkspaceListItem, isCurrent?: boolean): Workspac
 
 function memberToDto(m: WorkspaceMember): {
   userId: string;
-  role: 'owner' | 'member';
+  role: WorkspaceRole;
   displayName: string | null;
   email: string | null;
   avatarUrl: string | null;
@@ -141,7 +141,7 @@ export function workspacesRouter(deps: Deps): Router {
   router.post('/:id/members', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const body = addMemberSchema.parse(req.body);
-      const m = await deps.service.addMember(req.params.id as string, req.user!.id, body.email, body.role ?? 'member');
+      const m = await deps.service.addMember(req.params.id as string, req.user!.id, body.email, body.role ?? 'editor');
       res.status(201).json({ member: memberToDto(m) });
     } catch (e) {
       next(e);

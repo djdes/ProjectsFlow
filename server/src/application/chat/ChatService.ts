@@ -1,5 +1,5 @@
 import type { Workspace, WorkspaceKind } from '../../domain/workspace/Workspace.js';
-import type { WorkspaceMember } from '../../domain/workspace/WorkspaceMember.js';
+import type { WorkspaceMember, WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 import { requireWorkspaceMember } from '../workspace/workspaceAccess.js';
 import type { ChatRepository, ListMessagesQuery } from './ChatRepository.js';
 import type { ChatMessageRecord } from '../../domain/chat/ChatMessage.js';
@@ -63,7 +63,7 @@ export type ChatRoomSummary = {
   readonly name: string;
   readonly kind: WorkspaceKind;
   readonly ownerUserId: string;
-  readonly role: 'owner' | 'member';
+  readonly role: WorkspaceRole;
   readonly memberCount: number;
   readonly unreadCount: number;
   readonly lastMessageSeq: number;

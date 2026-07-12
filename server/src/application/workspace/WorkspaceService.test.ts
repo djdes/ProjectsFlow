@@ -166,7 +166,7 @@ test('create: empty name rejected', async () => {
 test('rename: non-owner rejected', async () => {
   const { service } = makeFakes({
     workspaces: [{ id: 'w1', ownerUserId: 'u1' }],
-    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }, { workspaceId: 'w1', userId: 'u2', role: 'member' }],
+    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }, { workspaceId: 'w1', userId: 'u2', role: 'editor' }],
   });
   await assert.rejects(() => service.rename('w1', 'u2', { name: 'x' }), NotWorkspaceOwnerError);
 });
@@ -184,7 +184,15 @@ test('changeMemberRole: demoting the last owner rejected', async () => {
     workspaces: [{ id: 'w1', ownerUserId: 'u1' }],
     members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
   });
-  await assert.rejects(() => service.changeMemberRole('w1', 'u1', 'u1', 'member'), LastOwnerError);
+  await assert.rejects(() => service.changeMemberRole('w1', 'u1', 'u1', 'editor'), LastOwnerError);
+});
+
+test('changeMemberRole: demoting the last owner to viewer rejected', async () => {
+  const { service } = makeFakes({
+    workspaces: [{ id: 'w1', ownerUserId: 'u1' }],
+    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
+  });
+  await assert.rejects(() => service.changeMemberRole('w1', 'u1', 'u1', 'viewer'), LastOwnerError);
 });
 
 test('addMember: unknown email rejected', async () => {
@@ -193,7 +201,7 @@ test('addMember: unknown email rejected', async () => {
     members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
     users: [{ id: 'u1', email: 'u1@x' }],
   });
-  await assert.rejects(() => service.addMember('w1', 'u1', 'nobody@x', 'member'), UserNotFoundByEmailError);
+  await assert.rejects(() => service.addMember('w1', 'u1', 'nobody@x', 'editor'), UserNotFoundByEmailError);
 });
 
 test('addMember: adds existing user by email', async () => {
@@ -202,9 +210,9 @@ test('addMember: adds existing user by email', async () => {
     members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
     users: [{ id: 'u1', email: 'u1@x' }, { id: 'u2', email: 'u2@x' }],
   });
-  const m = await service.addMember('w1', 'u1', 'u2@x', 'member');
+  const m = await service.addMember('w1', 'u1', 'u2@x', 'editor');
   assert.equal(m.userId, 'u2');
-  assert.equal((await repo.getMembership('w1', 'u2'))?.role, 'member');
+  assert.equal((await repo.getMembership('w1', 'u2'))?.role, 'editor');
 });
 
 test('delete: workspace with projects rejected', async () => {

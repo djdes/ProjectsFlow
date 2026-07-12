@@ -16,11 +16,11 @@ export const setCurrentSchema = z.object({
 
 export const addMemberSchema = z.object({
   email: z.string().email(),
-  role: z.enum(['owner', 'member']).optional(),
+  role: z.enum(['owner', 'editor', 'viewer']).optional(),
 });
 
 export const changeRoleSchema = z.object({
-  role: z.enum(['owner', 'member']),
+  role: z.enum(['owner', 'editor', 'viewer']),
 });
 
 export const moveProjectSchema = z.object({

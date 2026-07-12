@@ -115,7 +115,7 @@ export class WorkspaceService {
     workspaceId: string,
     actorId: string,
     email: string,
-    role: WorkspaceRole = 'member',
+    role: WorkspaceRole = 'editor',
   ): Promise<WorkspaceMember> {
     await requireWorkspaceOwner(this.deps.repo, workspaceId, actorId);
     const user = await this.deps.users.getByEmail(email.trim());
@@ -135,8 +135,8 @@ export class WorkspaceService {
     await requireWorkspaceOwner(this.deps.repo, workspaceId, actorId);
     const target = await this.deps.repo.getMembership(workspaceId, targetUserId);
     if (!target) throw new NotWorkspaceMemberError();
-    // Понижение owner'а до member: нельзя оставить пространство без владельца.
-    if (target.role === 'owner' && role === 'member') {
+    // Понижение owner'а до editor/viewer: нельзя оставить пространство без владельца.
+    if (target.role === 'owner' && role !== 'owner') {
       const owners = await this.deps.repo.countOwners(workspaceId);
       if (owners <= 1) throw new LastOwnerError();
     }
@@ -182,7 +182,7 @@ export class WorkspaceService {
     // Все участники проекта должны стать участниками целевого пространства (идемпотентно).
     const members = await this.deps.projectMembers.listByProject(projectId);
     for (const m of members) {
-      await this.deps.repo.addMember(targetWorkspaceId, m.userId, 'member');
+      await this.deps.repo.addMember(targetWorkspaceId, m.userId, 'editor');
     }
   }
 

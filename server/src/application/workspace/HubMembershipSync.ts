@@ -10,6 +10,8 @@
 // Всё best-effort: синк не должен ломать основной сценарий (вступление/удаление в проекте).
 // Вызывающие оборачивают вызовы в try/catch. Владельца из его собственного хаба не трогаем.
 
+import type { WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
+
 type ProjectsPort = {
   getById(id: string): Promise<{ id: string; ownerId: string } | null>;
 };
@@ -20,7 +22,7 @@ type MembersPort = {
 
 type WorkspacesPort = {
   findDefaultForOwner(ownerUserId: string): Promise<string | null>;
-  addMember(workspaceId: string, userId: string, role: 'owner' | 'member'): Promise<void>;
+  addMember(workspaceId: string, userId: string, role: WorkspaceRole): Promise<void>;
   removeMember(workspaceId: string, userId: string): Promise<void>;
 };
 
@@ -40,7 +42,7 @@ export class HubMembershipSync {
     if (project.ownerId === userId) return; // владелец уже в своём хабе как owner
     const hubId = await this.deps.workspaces.findDefaultForOwner(project.ownerId);
     if (!hubId) return;
-    await this.deps.workspaces.addMember(hubId, userId, 'member'); // идемпотентно
+    await this.deps.workspaces.addMember(hubId, userId, 'editor'); // идемпотентно
   }
 
   /** Юзер вышел из проекта → убрать из хаба владельца, если общих проектов больше нет. */

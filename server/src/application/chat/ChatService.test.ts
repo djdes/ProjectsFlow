@@ -147,7 +147,7 @@ function makeService(seed: Seed) {
 }
 
 test('sendMessage: участник может отправить, событие message_added публикуется', async () => {
-  const { service, events } = makeService({ members: [{ userId: 'u1', role: 'member' }] });
+  const { service, events } = makeService({ members: [{ userId: 'u1', role: 'editor' }] });
   const view = await service.sendMessage(WS, 'u1', { body: 'Привет' });
   assert.equal(view.body, 'Привет');
   assert.equal(view.seq, 1);
@@ -156,18 +156,18 @@ test('sendMessage: участник может отправить, событи�
 });
 
 test('sendMessage: не участник — WorkspaceNotFoundError (не разглашаем)', async () => {
-  const { service } = makeService({ members: [{ userId: 'u1', role: 'member' }] });
+  const { service } = makeService({ members: [{ userId: 'u1', role: 'editor' }] });
   await assert.rejects(() => service.sendMessage(WS, 'stranger', { body: 'hi' }), WorkspaceNotFoundError);
 });
 
 test('sendMessage: пустое тело без вложений — EmptyMessageError', async () => {
-  const { service } = makeService({ members: [{ userId: 'u1', role: 'member' }] });
+  const { service } = makeService({ members: [{ userId: 'u1', role: 'editor' }] });
   await assert.rejects(() => service.sendMessage(WS, 'u1', { body: '   ' }), EmptyMessageError);
 });
 
 test('editMessage: только автор', async () => {
   const { service } = makeService({
-    members: [{ userId: 'u1', role: 'member' }, { userId: 'u2', role: 'member' }],
+    members: [{ userId: 'u1', role: 'editor' }, { userId: 'u2', role: 'editor' }],
   });
   const msg = await service.sendMessage(WS, 'u1', { body: 'mine' });
   await assert.rejects(() => service.editMessage(WS, 'u2', msg.id, 'hacked'), NotMessageAuthorError);
@@ -178,7 +178,7 @@ test('editMessage: только автор', async () => {
 
 test('deleteMessage: чужое удаляет owner, но не обычный member', async () => {
   const { service } = makeService({
-    members: [{ userId: 'author', role: 'member' }, { userId: 'mem', role: 'member' }, { userId: 'own', role: 'owner' }],
+    members: [{ userId: 'author', role: 'editor' }, { userId: 'mem', role: 'editor' }, { userId: 'own', role: 'owner' }],
   });
   const msg = await service.sendMessage(WS, 'author', { body: 'x' });
   await assert.rejects(() => service.deleteMessage(WS, 'mem', msg.id), CannotDeleteMessageError);
@@ -190,7 +190,7 @@ test('deleteMessage: чужое удаляет owner, но не обычный m
 
 test('toggleReaction: агрегат собирается, reaction_changed публикуется', async () => {
   const { service, events } = makeService({
-    members: [{ userId: 'u1', role: 'member' }, { userId: 'u2', role: 'member' }],
+    members: [{ userId: 'u1', role: 'editor' }, { userId: 'u2', role: 'editor' }],
   });
   const msg = await service.sendMessage(WS, 'u1', { body: 'react me' });
   await service.toggleReaction(WS, 'u1', msg.id, '👍', true);
@@ -204,7 +204,7 @@ test('toggleReaction: агрегат собирается, reaction_changed пу
 
 test('unread: считает чужие непрочитанные, markRead обнуляет', async () => {
   const { service } = makeService({
-    members: [{ userId: 'u1', role: 'member' }, { userId: 'u2', role: 'member' }],
+    members: [{ userId: 'u1', role: 'editor' }, { userId: 'u2', role: 'editor' }],
   });
   await service.sendMessage(WS, 'u2', { body: 'a' });
   const m2 = await service.sendMessage(WS, 'u2', { body: 'b' });
@@ -215,7 +215,7 @@ test('unread: считает чужие непрочитанные, markRead о�
 
 test('mentions: @displayName упомянутого попадает в dispatch', async () => {
   const { service, mentioned } = makeService({
-    members: [{ userId: 'u1', role: 'member', displayName: 'Аня' }, { userId: 'u2', role: 'member', displayName: 'Боря' }],
+    members: [{ userId: 'u1', role: 'editor', displayName: 'Аня' }, { userId: 'u2', role: 'editor', displayName: 'Боря' }],
   });
   await service.sendMessage(WS, 'u1', { body: 'привет @Боря смотри' });
   // dispatch — best-effort (void); даём микротаскам отработать.
@@ -224,7 +224,7 @@ test('mentions: @displayName упомянутого попадает в dispatch
 });
 
 test('reply: replyTo превью отдаётся с excerpt', async () => {
-  const { service } = makeService({ members: [{ userId: 'u1', role: 'member', displayName: 'Аня' }] });
+  const { service } = makeService({ members: [{ userId: 'u1', role: 'editor', displayName: 'Аня' }] });
   const first = await service.sendMessage(WS, 'u1', { body: 'исходное' });
   await service.sendMessage(WS, 'u1', { body: 'ответ', replyToId: first.id });
   const list = await service.listMessages(WS, 'u1', {});
@@ -240,7 +240,7 @@ function row(over: Partial<ChatRoomRow> & { workspaceId: string }): ChatRoomRow 
     name: over.workspaceId,
     kind: 'team',
     ownerUserId: 'someone',
-    role: 'member',
+    role: 'editor',
     memberCount: 1,
     messageCount: 0,
     lastMessageSeq: 0,
@@ -272,7 +272,7 @@ test('listRooms: показывает хаб владельца с команд�
   // Дениса, куда его позвали (mc=4). Должен увидеть только хаб Дениса.
   const service = roomsService([
     row({ workspaceId: 'hubYaroslav', kind: 'default', ownerUserId: 'yaroslav', role: 'owner', memberCount: 1 }),
-    row({ workspaceId: 'hubDenis', kind: 'default', ownerUserId: 'denis', role: 'member', memberCount: 4, messageCount: 5, lastMessageSeq: 5 }),
+    row({ workspaceId: 'hubDenis', kind: 'default', ownerUserId: 'denis', role: 'editor', memberCount: 4, messageCount: 5, lastMessageSeq: 5 }),
   ]);
   const rooms = await service.listRooms('yaroslav');
   assert.deepEqual(rooms.map((r) => r.workspaceId), ['hubDenis']);

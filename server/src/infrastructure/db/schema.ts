@@ -348,7 +348,7 @@ export const workspaceMembers = mysqlTable(
   {
     workspaceId: char('workspace_id', { length: 36 }).notNull(),
     userId: char('user_id', { length: 36 }).notNull(),
-    role: mysqlEnum('role', ['owner', 'member']).notNull().default('member'),
+    role: mysqlEnum('role', ['owner', 'editor', 'viewer']).notNull().default('editor'),
     createdAt: createdAtCol(),
   },
   (t) => [
