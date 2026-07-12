@@ -93,7 +93,7 @@ export function RecentCommitsSection({ projectId, gitRepoUrl }: Props): React.Re
         title="Последние коммиты"
       >
         <p className="text-sm text-muted-foreground">
-          Подключи GitHub-аккаунт, чтобы видеть коммиты. Кнопка в карточке выше.
+          Подключи GitHub-аккаунт, чтобы видеть коммиты. Кнопка в секции выше.
         </p>
       </OverviewSection>
     );
