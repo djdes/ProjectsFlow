@@ -324,6 +324,12 @@ export function TableView({
       selRange.a.row === selRange.h.row && selRange.a.col === selRange.h.col;
     if (!single || selRange.a.col !== 0) return;
     const onKey = (e: KeyboardEvent): void => {
+      // По e.target, не activeElement: React флашит эффекты синхронно на keydown,
+      // и Enter из inline-редактора доходит до свежеподписанного слушателя, когда
+      // сам input уже размонтирован (activeElement=body) — target же остаётся INPUT.
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable))
+        return;
       const el = document.activeElement as HTMLElement | null;
       if (
         el &&
