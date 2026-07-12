@@ -540,8 +540,15 @@ export function TableView({
         return;
       }
     }
-    // ПКМ не начинает протяжку диапазона — только контекст-меню строки.
-    if (rightButton) return;
+    // ПКМ (вне диапазона): сброс прошлых выбранных и выбор строки под курсором.
+    // Если строка УЖЕ в выборе — выбор сохраняется (действия над несколькими).
+    // Протяжку диапазона ПКМ не начинает.
+    if (rightButton) {
+      const id = rows[row]?.id;
+      setSelRange(null);
+      if (id && !selected.has(id)) setSelected(new Set([id]));
+      return;
+    }
     selDragging.current = true;
     const c = { row, col: colIndexOf(k) };
     setSelRange({ a: c, h: c });
