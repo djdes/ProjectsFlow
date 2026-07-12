@@ -521,9 +521,9 @@ export function TableView({
 
   const colIndexOf = (k: 'title' | ViewColumn): number =>
     k === 'title' ? 0 : visibleCols.indexOf(k) + 1;
-  const cellDown = (row: number, k: 'title' | ViewColumn): void => {
-    // Notion: при существующем диапазоне клик ВНУТРЬ него выбирает все его строки
-    // (панель действий сверху); клик МИМО — выбирает только одну строку под курсором.
+  const cellDown = (row: number, k: 'title' | ViewColumn, rightButton = false): void => {
+    // Notion: при существующем диапазоне клик/ПКМ ВНУТРЬ него выбирает все его
+    // строки (панель действий сверху); клик/ПКМ МИМО — только строку под курсором.
     if (selRange) {
       const [r1, r2] = [Math.min(selRange.a.row, selRange.h.row), Math.max(selRange.a.row, selRange.h.row)];
       const [c1, c2] = [Math.min(selRange.a.col, selRange.h.col), Math.max(selRange.a.col, selRange.h.col)];
@@ -540,6 +540,8 @@ export function TableView({
         return;
       }
     }
+    // ПКМ не начинает протяжку диапазона — только контекст-меню строки.
+    if (rightButton) return;
     selDragging.current = true;
     const c = { row, col: colIndexOf(k) };
     setSelRange({ a: c, h: c });
@@ -1283,7 +1285,7 @@ function TableRow({
   selected: boolean;
   anySelected: boolean;
   rowIdx: number;
-  onCellDown: (row: number, col: 'title' | ViewColumn) => void;
+  onCellDown: (row: number, col: 'title' | ViewColumn, rightButton?: boolean) => void;
   onCellEnter: (row: number, col: 'title' | ViewColumn) => void;
   rangeClassFor: (row: number, col: 'title' | ViewColumn) => string | null;
   onToggleSelected: (shift: boolean) => void;
@@ -1445,11 +1447,12 @@ function TableRow({
           style={gridStyle}
           // Capture: якорь Excel-выделения ставится с любого места ячейки (включая
           // кнопки-значения — Notion выделяет ячейку и при открытии её редактора).
+          // ПКМ тоже участвует: внутрь диапазона — выбор его строк, мимо — одной.
           onMouseDownCapture={(e) => {
-            if (e.button !== 0) return;
+            if (e.button !== 0 && e.button !== 2) return;
             const cellEl = (e.target as HTMLElement).closest('[data-cell]');
             const key = cellEl?.getAttribute('data-cell');
-            if (key) onCellDown(rowIdx, key as 'title' | ViewColumn);
+            if (key) onCellDown(rowIdx, key as 'title' | ViewColumn, e.button === 2);
           }}
           className={cn(
             // Границы — на ячейках (см. cellProps/title): зона контролов слева чистая.
