@@ -288,7 +288,9 @@ export type TableViewState = {
 export const EMPTY_TABLE_STATE: TableViewState = {
   colWidths: {},
   wrapTitle: false,
-  freezeTitle: false,
+  // Notion: колонка названия закреплена по умолчанию — текст не режется при
+  // горизонтальном скролле. Выключается в меню «Название» → «Закрепить колонку».
+  freezeTitle: true,
   calc: {},
 };
 
@@ -414,7 +416,15 @@ export type ViewConfig = {
   filters?: ViewFilters;
   sort?: ViewSort | null;
   hidden?: ViewColumn[];
-  table?: TableViewState;
+  // table сериализуется с unfreezeTitle (инверсия freezeTitle — см. perViewToConfig);
+  // freezeTitle оставлен для чтения совсем старых конфигов.
+  table?: {
+    colWidths?: Partial<Record<string, number>>;
+    wrapTitle?: boolean;
+    unfreezeTitle?: boolean;
+    freezeTitle?: boolean;
+    calc?: Partial<Record<ViewColumn, ViewCalc>>;
+  };
   grouping?: ViewGrouping | null;
   colorRules?: ViewColorRule[];
   calendarMode?: 'month' | 'week';
@@ -449,7 +459,14 @@ export function perViewToConfig(s: PerViewState): ViewConfig {
     filters: s.filters,
     sort: s.sort,
     hidden: s.hidden,
-    table: s.table,
+    // freeze сериализуем ИНВЕРСИЕЙ (unfreezeTitle): так старые конфиги без ключа
+    // получают Notion-дефолт «закреплено», а явное выключение переживает reload.
+    table: {
+      colWidths: s.table.colWidths,
+      wrapTitle: s.table.wrapTitle,
+      unfreezeTitle: !s.table.freezeTitle,
+      calc: s.table.calc,
+    },
     grouping: s.grouping,
     colorRules: s.colorRules,
     calendarMode: s.calendarMode,
@@ -472,7 +489,8 @@ export function perViewFromConfig(c: unknown): PerViewState {
     table: {
       colWidths: cfg.table?.colWidths && typeof cfg.table.colWidths === 'object' ? cfg.table.colWidths : {},
       wrapTitle: Boolean(cfg.table?.wrapTitle),
-      freezeTitle: Boolean(cfg.table?.freezeTitle),
+      // Notion-дефолт: закреплено, если явно не выключено (unfreezeTitle: true).
+      freezeTitle: !(cfg.table?.unfreezeTitle ?? false),
       calc: cfg.table?.calc && typeof cfg.table.calc === 'object' ? cfg.table.calc : {},
     },
     grouping: cfg.grouping ?? null,
