@@ -165,6 +165,7 @@ export const createTaskPropertySchema = z.object({
     'url',
     'phone',
     'email',
+    'person',
   ]),
   options: z.array(taskPropertyOptionSchema).max(50).optional(),
 });
@@ -178,7 +179,7 @@ export const updateTaskPropertySchema = z
     // «Изменить тип» (Notion Change type): значения остаются строками, клиент
     // интерпретирует их по-новому.
     type: z
-      .enum(['text', 'number', 'select', 'multi_select', 'date', 'checkbox', 'url', 'phone', 'email'])
+      .enum(['text', 'number', 'select', 'multi_select', 'date', 'checkbox', 'url', 'phone', 'email', 'person'])
       .optional(),
   })
   .refine(

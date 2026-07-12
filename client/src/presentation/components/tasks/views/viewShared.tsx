@@ -149,13 +149,15 @@ export function matchesFilters(task: Task, f: ViewFilters): boolean {
 }
 
 // Скрываемые колонки-свойства табличного вида («Название» не скрывается, как в Notion).
-export type ViewColumn = 'status' | 'priority' | 'deadline' | 'assignee';
+export type ViewColumn = 'status' | 'priority' | 'deadline' | 'assignee' | 'created';
 
 export const VIEW_COLUMN_LABELS: Record<ViewColumn, string> = {
   status: 'Статус',
   priority: 'Приоритет',
   deadline: 'Срок',
   assignee: 'Ответственный',
+  // Notion Created time: только чтение, по умолчанию скрыта.
+  created: 'Создано',
 };
 
 // Контекстное меню задачи (строка таблицы/списка, чип календаря) — копия Notion-меню
@@ -455,6 +457,8 @@ export type ViewConfig = {
   sort?: ViewSort | null;
   // Скрытые колонки: ViewColumn | `p:<propertyId>` (кастомные тоже скрываются).
   hidden?: string[];
+  // «Создано» видима (инверсия: отсутствие ключа = скрыта, дефолт Notion).
+  shownCreated?: boolean;
   // table сериализуется с unfreezeTitle (инверсия freezeTitle — см. perViewToConfig);
   // freezeTitle оставлен для чтения совсем старых конфигов.
   table?: {
@@ -486,7 +490,8 @@ export type PerViewState = {
 export const EMPTY_PER_VIEW_STATE: PerViewState = {
   filters: EMPTY_VIEW_FILTERS,
   sort: null,
-  hidden: [],
+  // «Создано» по умолчанию скрыта (Notion Created time) — включается глазком.
+  hidden: ['created'],
   table: EMPTY_TABLE_STATE,
   grouping: null,
   colorRules: [],
@@ -498,7 +503,10 @@ export function perViewToConfig(s: PerViewState): ViewConfig {
   return {
     filters: s.filters,
     sort: s.sort,
-    hidden: s.hidden,
+    // «Создано» сериализуем ИНВЕРСИЕЙ (shownCreated): старые конфиги с hidden:[]
+    // не должны внезапно ПОКАЗАТЬ новую колонку — дефолт «скрыта».
+    hidden: s.hidden.filter((k) => k !== 'created'),
+    shownCreated: !s.hidden.includes('created'),
     // freeze сериализуем ИНВЕРСИЕЙ (unfreezeTitle): так старые конфиги без ключа
     // получают Notion-дефолт «закреплено», а явное выключение переживает reload.
     table: {
@@ -526,7 +534,10 @@ export function perViewFromConfig(c: unknown): PerViewState {
       due: cfg.filters?.due ?? null,
     },
     sort: cfg.sort && typeof cfg.sort === 'object' ? cfg.sort : null,
-    hidden: Array.isArray(cfg.hidden) ? cfg.hidden : [],
+    hidden: [
+      ...(Array.isArray(cfg.hidden) ? cfg.hidden.filter((k) => k !== 'created') : []),
+      ...(cfg.shownCreated === true ? [] : ['created']),
+    ],
     table: {
       colWidths: cfg.table?.colWidths && typeof cfg.table.colWidths === 'object' ? cfg.table.colWidths : {},
       wrapTitle: Boolean(cfg.table?.wrapTitle),

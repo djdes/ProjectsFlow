@@ -16,6 +16,7 @@ import {
   CalendarDays,
   ChevronDown,
   CircleDot,
+  Clock,
   EyeOff,
   FileText,
   Flag,
@@ -140,15 +141,26 @@ const COLUMN_WIDTH: Record<ViewColumn, string> = {
   priority: '8rem',
   deadline: '8.5rem',
   assignee: '11rem',
+  created: '11rem',
 };
-const ALL_COLUMNS: readonly ViewColumn[] = ['status', 'priority', 'deadline', 'assignee'];
+const ALL_COLUMNS: readonly ViewColumn[] = ['status', 'priority', 'deadline', 'assignee', 'created'];
 
 // Сортируемое свойство колонки (у «Ответственного» сортировки нет).
 const COLUMN_SORT_KEY: Partial<Record<ViewColumn, ViewSortKey>> = {
   status: 'status',
   priority: 'priority',
   deadline: 'deadline',
+  created: 'created',
 };
+
+// Формат «Создано» (Notion Created time): «12 июл. 2026 г., 21:41».
+const CREATED_FMT = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
 
 // === Табличный вид доски (Notion-style) ===
 // Notion-таблица: слева в «поле» строки при hover — чекбокс и «+»; в ячейке названия при
@@ -267,6 +279,12 @@ export function TableView({
               return { empty: true, num: 0, str: '' };
             }
           }
+          case 'person':
+            return {
+              empty: false,
+              num: 0,
+              str: customProps.members.find((m) => m.id === raw)?.displayName ?? raw,
+            };
           default:
             return { empty: false, num: 0, str: raw };
         }
@@ -319,21 +337,6 @@ export function TableView({
     [hiddenCols],
   );
 
-  // Все колонки для панели «Видимость свойств» (стандартные + кастомные).
-  const visibilityItems = useMemo(
-    () => [
-      ...ALL_COLUMNS.map((c) => ({
-        key: c as string,
-        label: VIEW_COLUMN_LABELS[c],
-        icon: <ColumnIcon col={c} />,
-      })),
-      ...customProps.properties.map((p) => {
-        const Icon = PROPERTY_TYPE_ICONS[p.type];
-        return { key: `p:${p.id}`, label: p.name, icon: <Icon className="size-3.5" /> };
-      }),
-    ],
-    [customProps.properties],
-  );
 
   // Подменю «Фильтр» в меню заголовка колонки (чекбоксы значений — как в Notion).
   const filterEntriesFor = (col: ViewColumn): MenuEntry[] | undefined => {
@@ -396,6 +399,26 @@ export function TableView({
   }, [visibleCols, customProps.properties, tableState.colOrder, hiddenCols]);
   const propByKey = (k: string): TaskProperty | undefined =>
     customProps.properties.find((p) => `p:${p.id}` === k);
+
+  // Все колонки для панели «Видимость свойств» — в ПОРЯДКЕ таблицы (orderedKeys),
+  // затем скрытые; drag за ⋮⋮ в панели переставляет colOrder.
+  const visibilityItems = useMemo(() => {
+    const itemFor = (k: string): { key: string; label: string; icon: React.ReactNode } => {
+      const prop = customProps.properties.find((p) => `p:${p.id}` === k);
+      if (prop) {
+        const Icon = PROPERTY_TYPE_ICONS[prop.type];
+        return { key: k, label: prop.name, icon: <Icon className="size-3.5" /> };
+      }
+      const c = k as ViewColumn;
+      return { key: k, label: VIEW_COLUMN_LABELS[c], icon: <ColumnIcon col={c} /> };
+    };
+    const all = [
+      ...ALL_COLUMNS.map((c) => c as string),
+      ...customProps.properties.map((p) => `p:${p.id}`),
+    ];
+    const orderedAll = [...orderedKeys, ...all.filter((k) => !orderedKeys.includes(k))];
+    return orderedAll.map(itemFor);
+  }, [orderedKeys, customProps.properties]);
 
   // Хвост-филлер справа (Notion): разделитель после последней колонки, границы строк
   // продолжаются до края. Ширины колонок — resize drag'ом за границу заголовка.
@@ -1049,7 +1072,14 @@ export function TableView({
                                 onToggle: () => togglePropFilter(''),
                               },
                             ]
-                          : undefined
+                          : prop.type === 'person'
+                            ? customProps.members.map((m) => ({
+                                id: m.id,
+                                label: m.displayName,
+                                checked: selectedVals.includes(m.id),
+                                onToggle: () => togglePropFilter(m.id),
+                              }))
+                            : undefined
                     }
                     grouped={grouping === propKey}
                     onToggleGroup={
@@ -1135,6 +1165,7 @@ export function TableView({
                     hidden={hiddenCols}
                     onToggle={onToggleCol}
                     onSetHidden={onSetHiddenCols}
+                    onReorder={(keys) => onTableState({ colOrder: keys })}
                   />
                 </PopoverContent>
               </Popover>
@@ -1628,6 +1659,8 @@ function hasValue(task: Task, col: ViewColumn): boolean {
       return Boolean(task.deadline);
     case 'assignee':
       return Boolean(task.delegation);
+    case 'created':
+      return true;
   }
 }
 
@@ -1706,6 +1739,8 @@ function ColumnIcon({ col }: { col: ViewColumn }): React.ReactElement {
       return <CalendarDays className={cls} />;
     case 'assignee':
       return <User className={cls} />;
+    case 'created':
+      return <Clock className={cls} />;
   }
 }
 
@@ -2000,6 +2035,15 @@ function TableRow({
             />
           </div>
         );
+      case 'created':
+        // Только чтение (Notion Created time).
+        return (
+          <div key={col} {...cellProps('created')}>
+            <span className="flex min-h-8 w-full items-center px-2 text-sm text-muted-foreground">
+              {CREATED_FMT.format(task.createdAt)}
+            </span>
+          </div>
+        );
     }
   };
 
@@ -2203,6 +2247,7 @@ function TableRow({
               value={customProps.valueFor(task.id, prop.id)}
               onChange={(v) => customProps.setValue(task.id, prop.id, v)}
               onAddOption={(label) => customProps.addOption(prop, label)}
+              members={customProps.members}
             />
           );
         }

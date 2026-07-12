@@ -11,6 +11,7 @@ export const TASK_PROPERTY_TYPES = [
   'url',
   'phone',
   'email',
+  'person',
 ] as const;
 export type TaskPropertyType = (typeof TASK_PROPERTY_TYPES)[number];
 
@@ -24,6 +25,8 @@ export const TASK_PROPERTY_TYPE_LABELS: Record<TaskPropertyType, string> = {
   url: 'Ссылка',
   phone: 'Телефон',
   email: 'Email',
+  // Значение — userId участника проекта (Notion Person).
+  person: 'Участник',
 };
 
 // Опция select/multi_select; color — ключ палитры (RULE_COLOR_* в viewShared).

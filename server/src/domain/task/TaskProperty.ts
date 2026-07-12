@@ -11,6 +11,8 @@ export const TASK_PROPERTY_TYPES = [
   'url',
   'phone',
   'email',
+  // Значение — userId участника проекта (Notion Person).
+  'person',
 ] as const;
 export type TaskPropertyType = (typeof TASK_PROPERTY_TYPES)[number];
 

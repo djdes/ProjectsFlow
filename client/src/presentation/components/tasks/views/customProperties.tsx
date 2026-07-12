@@ -1,6 +1,9 @@
 // Кастомные свойства задач (db/109, Notion custom properties): хук данных +
 // ячейки-редакторы по типам + заголовок колонки + пункты «Новое свойство» для «+».
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   AlignLeft,
   ArrowDown,
@@ -15,6 +18,7 @@ import {
   Copy,
   Eye,
   EyeOff,
+  GripVertical,
   Hash,
   Link as LinkIcon,
   List,
@@ -25,6 +29,7 @@ import {
   Search,
   Tags,
   Trash2,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -60,6 +65,7 @@ export const PROPERTY_TYPE_ICONS: Record<TaskPropertyType, LucideIcon> = {
   url: LinkIcon,
   phone: Phone,
   email: AtSign,
+  person: Users,
 };
 
 // Пилюля опции select/multi_select — те же цвета, что у условного цвета строк.
@@ -89,6 +95,8 @@ export type UseTaskPropertiesResult = {
   // Карта `${taskId}:${propertyId}` → value: зависимость для memo (фильтр/сорт
   // по значениям пересчитываются при их изменении).
   values: ReadonlyMap<string, string>;
+  // Участники проекта (для person-свойств); пусто, пока их нет.
+  members: PropertyMember[];
   valueFor: (taskId: string, propertyId: string) => string;
   setValue: (taskId: string, propertyId: string, value: string) => void;
   createProperty: (type: TaskPropertyType, name?: string) => void;
@@ -101,11 +109,37 @@ export type UseTaskPropertiesResult = {
   changeType: (propertyId: string, type: TaskPropertyType) => void;
 };
 
+// Участник для person-свойства (значение = userId).
+export type PropertyMember = { id: string; displayName: string; avatarUrl: string | null };
+
 // Данные свойств проекта: load + SSE-рефетч + оптимистичный setValue.
 export function useTaskProperties(projectId: string): UseTaskPropertiesResult {
-  const { taskPropertyRepository } = useContainer();
+  const { taskPropertyRepository, projectRepository } = useContainer();
   const [properties, setProperties] = useState<TaskProperty[]>([]);
   const [values, setValues] = useState<ReadonlyMap<string, string>>(() => new Map());
+  // Участники проекта — лениво, только если есть person-свойство.
+  const [members, setMembers] = useState<PropertyMember[]>([]);
+  const hasPerson = properties.some((p) => p.type === 'person');
+  useEffect(() => {
+    if (!hasPerson) return;
+    let alive = true;
+    projectRepository
+      .listMembers(projectId)
+      .then((list) => {
+        if (alive)
+          setMembers(
+            list.map((m) => ({
+              id: m.userId,
+              displayName: m.user.displayName,
+              avatarUrl: m.user.avatarUrl ?? null,
+            })),
+          );
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [hasPerson, projectId, projectRepository]);
 
   const refetch = useCallback(async (): Promise<void> => {
     try {
@@ -248,6 +282,7 @@ export function useTaskProperties(projectId: string): UseTaskPropertiesResult {
   return {
     properties,
     values,
+    members,
     valueFor,
     setValue,
     createProperty,
@@ -568,38 +603,88 @@ function optionById(property: TaskProperty, id: string): TaskPropertyOption | un
 // items — ВСЕ колонки в текущем порядке (стандартные + кастомные), key ViewColumn|`p:<id>`.
 export type VisibilityItem = { key: string; label: string; icon: React.ReactNode };
 
+// Строка панели видимости: ⋮⋮ (drag-реордер видимых), иконка, имя, глазок.
+function VisibilityRow({
+  item,
+  isHidden,
+  onToggle,
+  draggable,
+}: {
+  item: VisibilityItem;
+  isHidden: boolean;
+  onToggle: () => void;
+  draggable: boolean;
+}): React.ReactElement {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.key,
+    disabled: !draggable,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(
+        'group/vrow flex items-center gap-1.5 rounded-md px-1 py-1 text-sm transition-colors hover:bg-accent/50',
+        isDragging && 'z-10 bg-accent shadow-sm',
+      )}
+    >
+      {draggable ? (
+        <button
+          type="button"
+          aria-label={`Переместить ${item.label}`}
+          {...attributes}
+          {...listeners}
+          className="grid size-4 shrink-0 cursor-grab place-items-center rounded text-muted-foreground/40 hover:text-foreground active:cursor-grabbing"
+        >
+          <GripVertical className="size-3" />
+        </button>
+      ) : (
+        <span className="size-4 shrink-0" aria-hidden />
+      )}
+      <span className="text-muted-foreground/70">{item.icon}</span>
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      <button
+        type="button"
+        aria-label={isHidden ? `Показать ${item.label}` : `Скрыть ${item.label}`}
+        onClick={onToggle}
+        className="grid size-6 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+      >
+        {isHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+      </button>
+    </div>
+  );
+}
+
 export function PropertyVisibilityPanel({
   items,
   hidden,
   onToggle,
   onSetHidden,
+  onReorder,
 }: {
   items: VisibilityItem[];
   hidden: readonly string[];
   onToggle: (key: string) => void;
   onSetHidden?: (keys: string[]) => void;
+  // Drag за ⋮⋮ в секции «В таблице» — новый порядок ВИДИМЫХ колонок (colOrder).
+  onReorder?: (orderedShownKeys: string[]) => void;
 }): React.ReactElement {
   const [query, setQuery] = useState('');
   const q = query.trim().toLocaleLowerCase('ru');
   const match = (it: VisibilityItem): boolean => !q || it.label.toLocaleLowerCase('ru').includes(q);
   const shown = items.filter((it) => !hidden.includes(it.key) && match(it));
   const hiddenItems = items.filter((it) => hidden.includes(it.key) && match(it));
+  // Drag отключаем при активном поиске (порядок отфильтрованного списка ≠ colOrder).
+  const dragEnabled = Boolean(onReorder) && q.length === 0;
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const row = (it: VisibilityItem, isHidden: boolean): React.ReactElement => (
-    <div
+    <VisibilityRow
       key={it.key}
-      className="group/vrow flex items-center gap-2 rounded-md px-1.5 py-1 text-sm transition-colors hover:bg-accent/50"
-    >
-      <span className="text-muted-foreground/70">{it.icon}</span>
-      <span className="min-w-0 flex-1 truncate">{it.label}</span>
-      <button
-        type="button"
-        aria-label={isHidden ? `Показать ${it.label}` : `Скрыть ${it.label}`}
-        onClick={() => onToggle(it.key)}
-        className="grid size-6 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
-      >
-        {isHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-      </button>
-    </div>
+      item={it}
+      isHidden={isHidden}
+      onToggle={() => onToggle(it.key)}
+      draggable={!isHidden && dragEnabled}
+    />
   );
   return (
     <div className="flex w-72 flex-col gap-1">
@@ -635,7 +720,27 @@ export function PropertyVisibilityPanel({
               </button>
             )}
           </div>
-          {shown.map((it) => row(it, false))}
+          {dragEnabled ? (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={(e) => {
+                const { active, over } = e;
+                if (!over || active.id === over.id) return;
+                const keys = shown.map((it) => it.key);
+                const from = keys.indexOf(String(active.id));
+                const to = keys.indexOf(String(over.id));
+                if (from < 0 || to < 0) return;
+                onReorder?.(arrayMove(keys, from, to));
+              }}
+            >
+              <SortableContext items={shown.map((it) => it.key)} strategy={verticalListSortingStrategy}>
+                {shown.map((it) => row(it, false))}
+              </SortableContext>
+            </DndContext>
+          ) : (
+            shown.map((it) => row(it, false))
+          )}
         </>
       )}
       {hiddenItems.length > 0 && (
@@ -703,11 +808,14 @@ export function PropertyValueCell({
   value,
   onChange,
   onAddOption,
+  members = [],
 }: {
   property: TaskProperty;
   value: string;
   onChange: (value: string) => void;
   onAddOption: (label: string) => Promise<TaskPropertyOption | null>;
+  // Участники проекта — для person-свойства (value = userId).
+  members?: PropertyMember[];
 }): React.ReactElement {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -831,6 +939,67 @@ export function PropertyValueCell({
           className="size-4 cursor-pointer accent-primary"
         />
       </div>
+    );
+  }
+
+  // person (Notion Person): выбор участника проекта, значение = userId.
+  if (property.type === 'person') {
+    const current = members.find((m) => m.id === value);
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex min-w-0 items-center gap-1.5 border-b border-l px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/40"
+          >
+            {current ? (
+              <>
+                <span className="grid size-4 shrink-0 place-items-center overflow-hidden rounded-full bg-primary/15 text-[9px] font-semibold text-primary">
+                  {current.avatarUrl ? (
+                    <img src={current.avatarUrl} alt="" className="size-full object-cover" />
+                  ) : (
+                    current.displayName.slice(0, 1).toUpperCase()
+                  )}
+                </span>
+                <span className="truncate">{current.displayName}</span>
+              </>
+            ) : (
+              // Пустое значение — чистая клетка (Notion).
+              <span className="size-4" aria-hidden />
+            )}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[12rem]">
+          {members.map((m) => (
+            <DropdownMenuItem
+              key={m.id}
+              className="gap-2"
+              onSelect={() => onChange(value === m.id ? '' : m.id)}
+            >
+              <span className="grid size-5 shrink-0 place-items-center overflow-hidden rounded-full bg-primary/15 text-[10px] font-semibold text-primary">
+                {m.avatarUrl ? (
+                  <img src={m.avatarUrl} alt="" className="size-full object-cover" />
+                ) : (
+                  m.displayName.slice(0, 1).toUpperCase()
+                )}
+              </span>
+              <span className="min-w-0 flex-1 truncate">{m.displayName}</span>
+              {value === m.id && <span className="text-xs text-primary">✓</span>}
+            </DropdownMenuItem>
+          ))}
+          {members.length === 0 && (
+            <p className="px-2 py-2 text-xs text-muted-foreground">Участники загружаются…</p>
+          )}
+          {value && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-muted-foreground" onSelect={() => onChange('')}>
+                Убрать
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
   }
 
