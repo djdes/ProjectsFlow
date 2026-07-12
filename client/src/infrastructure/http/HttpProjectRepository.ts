@@ -278,6 +278,16 @@ export class HttpProjectRepository implements ProjectRepository {
     return httpClient.post<{ appRepoFullName: string }>(`/projects/${projectId}/app-repo`);
   }
 
+  async createRepo(
+    projectId: string,
+    input: { name: string; privateRepo: boolean },
+  ): Promise<{ fullName: string; gitRepoUrl: string }> {
+    return httpClient.post<{ fullName: string; gitRepoUrl: string }>(
+      `/projects/${projectId}/repo`,
+      input,
+    );
+  }
+
   async getProjectSite(projectId: string): Promise<ProjectSite> {
     return httpClient.get<ProjectSite>(`/projects/${projectId}/site`);
   }

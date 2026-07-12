@@ -149,6 +149,12 @@ export interface ProjectRepository {
   // Создать/привязать GitHub-репо приложения проекта (self-serve воркер-раннер, M1). Owner-only.
   // Требует привязанный GitHub (иначе сервер вернёт 409 github_not_connected).
   ensureAppRepo(projectId: string): Promise<{ appRepoFullName: string }>;
+  // Создать НОВЫЙ GitHub-репо под аккаунтом текущего юзера и подключить как gitRepoUrl.
+  // Editor+. Ошибки: 409 repo_already_connected|github_not_connected, 422 github_repo_name_taken.
+  createRepo(
+    projectId: string,
+    input: { name: string; privateRepo: boolean },
+  ): Promise<{ fullName: string; gitRepoUrl: string }>;
   // Сайт-результат проекта (db/100): siteSlug есть всегда (адрес <slug>.projectsflow.ru; до
   // деплоя — заглушка), deployedAt/fileCount из site_artifacts (null/0, пока не задеплоен).
   getProjectSite(projectId: string): Promise<ProjectSite>;
