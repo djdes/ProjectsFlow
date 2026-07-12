@@ -21,7 +21,6 @@ import {
   Flag,
   GripVertical,
   ListFilter,
-  MessageSquare,
   PanelRight,
   Plus,
   Snowflake,
@@ -395,6 +394,8 @@ export function TableView({
       return;
     }
     try {
+      // Notion: Enter создаёт задачу, закрывает ввод и ВЫДЕЛЯЕТ клетку названия
+      // строки ниже созданной (вставка в середине) — не открывает новый ввод.
       if (asSub) {
         const parentId = insertAt?.parentId ?? anchor.id;
         const created = await create({
@@ -404,7 +405,8 @@ export function TableView({
           afterTaskId: anchor.id,
         });
         setExpandedTasks((prev) => new Set(prev).add(parentId));
-        setInsertAt({ taskId: created.id, above: false, asSub: true, parentId });
+        setInsertAt(null);
+        setPendingSelect({ id: created.id, below: true });
       } else if (above) {
         const idx = rows.findIndex((t) => t.id === anchor.id);
         const prev = rows[idx - 1];
@@ -414,16 +416,31 @@ export function TableView({
           beforeTaskId: prev && prev.status === anchor.status ? prev.id : null,
           afterTaskId: anchor.id,
         });
-        setInsertAt({ taskId: created.id, above: false });
+        setInsertAt(null);
+        setPendingSelect({ id: created.id, below: true });
       } else {
         const created = await create({ description: name, status: anchor.status, afterTaskId: anchor.id });
-        setInsertAt({ taskId: created.id, above: false });
+        setInsertAt(null);
+        setPendingSelect({ id: created.id, below: true });
       }
     } catch (e) {
       toast.error(`Не удалось: ${(e as Error).message}`);
       setInsertAt(null);
     }
   };
+
+  // Отложенное выделение созданной строки: ждём, пока она появится в rows после
+  // рефетча. below=true — выделяем строку ПОД созданной (Notion), false — саму.
+  const [pendingSelect, setPendingSelect] = useState<{ id: string; below: boolean } | null>(null);
+  useEffect(() => {
+    if (!pendingSelect) return;
+    const idx = rows.findIndex((t) => t.id === pendingSelect.id);
+    if (idx < 0) return;
+    const row = pendingSelect.below && idx + 1 < rows.length ? idx + 1 : idx;
+    const c = { row, col: 0 };
+    setSelRange({ a: c, h: c });
+    setPendingSelect(null);
+  }, [rows, pendingSelect]);
 
   // Дерево подзадач (Notion sub-items): активен без группировки; свёрнуто по умолчанию.
   const [expandedTasks, setExpandedTasks] = useState<ReadonlySet<string>>(() => new Set());
@@ -538,6 +555,28 @@ export function TableView({
     return () => window.removeEventListener('mouseup', up);
   }, []);
 
+  // Notion: клик В ЛЮБОЕ другое место (вне таблицы) сбрасывает и выбор строк,
+  // и Excel-выделение. Порталы (меню/диалоги/панель «Выбрано» во вкладках) —
+  // не сбрасывают: клики по ним — действия над выбранным.
+  const tableRootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const onDown = (e: MouseEvent): void => {
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+      if (tableRootRef.current?.contains(t)) return;
+      if (
+        t.closest(
+          '[data-radix-popper-content-wrapper], [role="dialog"], [role="menu"], [role="menuitem"], #pf-views-tabs-row',
+        )
+      )
+        return;
+      setSelected((prev) => (prev.size > 0 ? new Set() : prev));
+      setSelRange((prev) => (prev ? null : prev));
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, []);
+
   const colIndexOf = (k: 'title' | ViewColumn): number =>
     k === 'title' ? 0 : visibleCols.indexOf(k) + 1;
   const cellDown = (row: number, k: 'title' | ViewColumn, rightButton = false): void => {
@@ -624,7 +663,7 @@ export function TableView({
   const innerPadClass = bleedPadClass ? 'pr-6 sm:pr-14 lg:pl-10 lg:pr-24' : 'pr-8';
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div ref={tableRootRef} className="flex min-h-0 flex-1 flex-col">
       <DndContext
         sensors={dndSensors}
         collisionDetection={pointerWithin}
@@ -960,10 +999,19 @@ export function TableView({
 
           {/* pl-14 — под gutter контролов: «Новая задача» на уровне колонки названия,
               граница — только под контентной частью (Notion). */}
-          {/* Notion New page: компактная строка 28px. */}
+          {/* Notion New page: компактная строка 28px; Enter создаёт, закрывает ввод
+              и выделяет клетку названия созданной строки. */}
           <div className="pl-14">
             <div className="flex h-7 items-center border-b">
-              <NewTaskRow create={create} className="w-full" />
+              <NewTaskRow
+                create={async (input) => {
+                  const created = await create(input);
+                  setPendingSelect({ id: created.id, below: false });
+                  return created;
+                }}
+                closeOnSubmit
+                className="w-full"
+              />
             </div>
           </div>
           {/* Строка подсчётов (Notion Calculate): «Всего» под названием; под каждой
@@ -1602,31 +1650,8 @@ function TableRow({
         style={depth > 0 ? { paddingLeft: 8 + depth * 20 } : undefined}
         onMouseEnter={() => onCellEnter(rowIdx, 'title')}
       >
-        {hasChildren ? (
-          <button
-            type="button"
-            aria-label={expanded ? 'Свернуть подзадачи' : 'Развернуть подзадачи'}
-            title={expanded ? 'Свернуть подзадачи' : 'Развернуть подзадачи'}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleExpand?.();
-            }}
-            className="grid size-4 shrink-0 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <ChevronDown
-              className={cn('size-3.5 transition-transform', !expanded && '-rotate-90')}
-            />
-          </button>
-        ) : (
-          depth > 0 && <span className="size-4 shrink-0" aria-hidden />
-        )}
-        {task.icon ? (
-          <span className="grid size-4 shrink-0 place-items-center overflow-hidden">
-            <ProjectIconView icon={task.icon} pixelSize={15} className="text-sm" />
-          </span>
-        ) : (
-          <FileText className="size-4 shrink-0 text-muted-foreground/60" />
-        )}
+        {/* Редактирование (Notion): ТОЛЬКО текстовое поле — без иконки, стрелки
+            подзадач и кнопки «Открыть». */}
         {editing ? (
           <input
             autoFocus
@@ -1646,36 +1671,52 @@ function TableRow({
             className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none"
           />
         ) : (
-          <button
-            type="button"
-            onClick={onStartEdit}
-            className={cn(
-              'min-w-0 text-left text-sm font-medium',
-              wrapTitle ? 'whitespace-normal break-words' : 'truncate',
+          <>
+            {hasChildren ? (
+              <button
+                type="button"
+                aria-label={expanded ? 'Свернуть подзадачи' : 'Развернуть подзадачи'}
+                title={expanded ? 'Свернуть подзадачи' : 'Развернуть подзадачи'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleExpand?.();
+                }}
+                className="grid size-4 shrink-0 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <ChevronDown
+                  className={cn('size-3.5 transition-transform', !expanded && '-rotate-90')}
+                />
+              </button>
+            ) : (
+              depth > 0 && <span className="size-4 shrink-0" aria-hidden />
             )}
-          >
-            {taskTitle(task)}
-          </button>
+            {task.icon ? (
+              <span className="grid size-4 shrink-0 place-items-center overflow-hidden">
+                <ProjectIconView icon={task.icon} pixelSize={15} className="text-sm" />
+              </span>
+            ) : (
+              <FileText className="size-4 shrink-0 text-muted-foreground/60" />
+            )}
+            <button
+              type="button"
+              onClick={onStartEdit}
+              className={cn(
+                'min-w-0 text-left text-sm font-medium',
+                wrapTitle ? 'whitespace-normal break-words' : 'truncate',
+              )}
+            >
+              {taskTitle(task)}
+            </button>
+            <button
+              type="button"
+              onClick={onOpen}
+              className="ml-auto hidden shrink-0 items-center gap-1 rounded-md border bg-card px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground group-hover:inline-flex"
+            >
+              <PanelRight className="size-3" />
+              Открыть
+            </button>
+          </>
         )}
-        <button
-          type="button"
-          onClick={onOpen}
-          className="ml-auto hidden shrink-0 items-center gap-1 rounded-md border bg-card px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground group-hover:inline-flex"
-        >
-          <PanelRight className="size-3" />
-          Открыть
-        </button>
-        {/* Комментарий (Notion: hover-иконка Comment справа от названия) — открывает окно
-            задачи, тред там. */}
-        <button
-          type="button"
-          aria-label="Комментарий"
-          title="Комментарий"
-          onClick={onOpen}
-          className="hidden shrink-0 rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground group-hover:inline-flex"
-        >
-          <MessageSquare className="size-3.5" />
-        </button>
       </div>
 
       {visibleCols.map(cellFor)}

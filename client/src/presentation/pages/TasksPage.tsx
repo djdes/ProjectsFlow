@@ -192,10 +192,12 @@ export function TasksPage(): React.ReactElement {
     // <main overflow-y-auto> целиком (Notion single-scroll — доска не скроллится отдельно).
     <div className="flex min-h-full flex-col">
       {/* Хлебные крошки прячем на мобиле: имя проекта дублируется в заголовке ниже,
-          навигация — в нижнем таб-баре/drawer. Это возвращает вертикальное место канбану. */}
+          навигация — в нижнем таб-баре/drawer. Это возвращает вертикальное место канбану.
+          z-40: выше sticky-ячеек таблицы (gutter/frozen-title z-20) — иначе при
+          вертикальном скролле строки рисуются ПОВЕРХ крошек/плашек. */}
       <div
         id="pf-project-crumbs"
-        className="sticky top-0 z-20 hidden h-11 items-center justify-between gap-2 bg-background px-2.5 sm:flex"
+        className="sticky top-0 z-40 hidden h-11 items-center justify-between gap-2 bg-background px-2.5 sm:flex"
       >
         <ProjectBreadcrumbs
           projectId={data.id}
@@ -230,7 +232,7 @@ export function TasksPage(): React.ReactElement {
       {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая) — ПОД крошками,
           тоже закреплена при скролле (сразу под sticky-строкой крошек, top-11 = её высота).
           shiftForOverlay: контент центрируется в видимой области, когда открыто окно задачи. */}
-      <div id="pf-sticky-banners" className="sticky top-11 z-10">
+      <div id="pf-sticky-banners" className="sticky top-11 z-40">
         <ProjectPublishedBanner projectId={data.id} shiftForOverlay />
         {/* Липкий гейт готовности воркера (репо + делегация + KB) — пока в колонке «Воркер» есть задача. */}
         <ProjectWorkerGateBanner

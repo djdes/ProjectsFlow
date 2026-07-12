@@ -72,8 +72,21 @@ export function sortBoardTasks(tasks: readonly Task[]): Task[] {
   );
 }
 
+// Заголовок — plain text (Notion): markdown-разметка первой строки описания
+// (**жирный**, `код`, # заголовок, [текст](url)) в названии не показывается.
+function stripMdInline(s: string): string {
+  return s
+    .replace(/^#{1,6}\s+/, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/(\*|_)(.*?)\1/g, '$2')
+    .replace(/~~(.*?)~~/g, '$1')
+    .replace(/`([^`]*)`/g, '$1');
+}
+
 export function taskTitle(task: Task): string {
-  return splitTitleBody(task.description ?? '').title || 'Без названия';
+  const raw = splitTitleBody(task.description ?? '').title;
+  return stripMdInline(raw).trim() || 'Без названия';
 }
 
 export function matchesQuery(task: Task, query: string): boolean {
@@ -233,12 +246,9 @@ export function taskMenuEntries(
     task.updatedAt,
   );
   return [
+    // «Добавить подзадачу» здесь НЕ показываем — в Notion в контекст-меню строки
+    // такого пункта нет (по фидбеку юзера); дерево подзадач при этом живо.
     { kind: 'item', label: 'Открыть', icon: Maximize2, onSelect: h.onOpen },
-    ...(h.onAddSub
-      ? ([
-          { kind: 'item', label: 'Добавить подзадачу', icon: Plus, onSelect: h.onAddSub },
-        ] as MenuEntry[])
-      : []),
     { kind: 'separator' },
     {
       kind: 'sub',
@@ -569,11 +579,15 @@ export function NewTaskRow({
   status = 'backlog',
   deadline = null,
   className,
+  closeOnSubmit = false,
 }: {
   create: UseTasks['create'];
   status?: TaskStatus;
   deadline?: string | null;
   className?: string;
+  // Notion-таблица: Enter создаёт, закрывает ввод (созданную строку выделяет
+  // родитель через обёрнутый create). По умолчанию — цепочка ввода как раньше.
+  closeOnSubmit?: boolean;
 }): React.ReactElement {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
@@ -586,6 +600,7 @@ export function NewTaskRow({
     try {
       await create({ description: name, status, deadline: deadline ?? undefined });
       setValue('');
+      if (closeOnSubmit) setOpen(false);
     } finally {
       setBusy(false);
     }
