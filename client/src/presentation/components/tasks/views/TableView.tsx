@@ -1509,10 +1509,13 @@ function TableRow({
           )}
         >
       {/* Sticky-gutter (Notion): «+» (вставить ниже, Alt — выше), «⋮⋮» (клик — меню,
-          drag — перенос) и чекбокс (Shift — диапазон) закреплены при гор. скролле. */}
+          drag — перенос) и чекбокс (Shift — диапазон) закреплены при гор. скролле.
+          Фон — на ячейке ВСЕГДА (иначе уезжающий текст просвечивает), прозрачность
+          до hover — только на контролах. */}
+      <div className="sticky left-0 z-20 bg-background">
       <div
         className={cn(
-          'sticky left-0 z-20 flex items-center justify-end gap-0 bg-background pr-1 transition-opacity duration-100',
+          'flex h-full items-center justify-end gap-0 pr-1 transition-opacity duration-100',
           selected || anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
         )}
       >
@@ -1564,6 +1567,7 @@ function TableRow({
           aria-label="Выбрать задачу"
           className="ml-0.5 size-3.5 cursor-pointer accent-primary"
         />
+      </div>
       </div>
 
       {/* Название: иконка + заголовок; клик по тексту — inline-правка (Notion: клик по
