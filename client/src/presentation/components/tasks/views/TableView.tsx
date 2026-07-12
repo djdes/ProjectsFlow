@@ -636,7 +636,10 @@ export function TableView({
         style={{ top: headerTop }}
       >
         <div ref={headScrollRef} className="overflow-x-hidden">
-        <div className={cn('min-w-[55rem]', innerPadClass)}>
+        {/* w-max: контейнер (и грид-строки в нём) растягивается на ПОЛНУЮ ширину
+            колонок — иначе грид переполняет собственный бокс и sticky-«Название»
+            не хватает слака внутри containing block (колонка уезжает при скролле). */}
+        <div className={cn('w-max min-w-full', innerPadClass)}>
           {/* Шапка таблицы: иконка типа свойства + название; клик по заголовку —
               меню колонки (сортировка ↑↓, скрыть свойство), как в Notion. Границы —
               на ячейках, НЕ на контейнере: зона контролов слева чистая. */}
@@ -770,7 +773,8 @@ export function TableView({
         }}
         className={cn('overflow-x-auto', bleedNegClass)}
       >
-        <div className={cn('min-w-[55rem]', innerPadClass)}>
+        {/* w-max min-w-full — см. комментарий у шапки (sticky-freeze «Название»). */}
+        <div className={cn('w-max min-w-full', innerPadClass)}>
           {(grouping && groups
             ? // При группировке дерево отключено — плоские строки внутри групп.
               (groups.flatMap((g) => {
