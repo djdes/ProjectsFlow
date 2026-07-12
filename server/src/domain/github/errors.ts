@@ -46,3 +46,10 @@ export class GithubApiError extends Error {
     this.name = 'GithubApiError';
   }
 }
+
+export class GithubRepoNameTakenError extends Error {
+  constructor(public readonly repoName: string) {
+    super(`Repository name already taken: ${repoName}`);
+    this.name = 'GithubRepoNameTakenError';
+  }
+}

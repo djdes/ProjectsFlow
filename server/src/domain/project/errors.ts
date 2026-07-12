@@ -149,3 +149,10 @@ export class NotProjectMemberForDelegationError extends Error {
     this.name = 'NotProjectMemberForDelegationError';
   }
 }
+
+export class ProjectRepoAlreadyConnectedError extends Error {
+  constructor() {
+    super('Project already has a connected git repo');
+    this.name = 'ProjectRepoAlreadyConnectedError';
+  }
+}
