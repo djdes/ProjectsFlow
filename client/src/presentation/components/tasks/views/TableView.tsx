@@ -489,14 +489,6 @@ export function TableView({
     );
   };
 
-  // Задачи, попавшие в диапазон (>1 ячейки) — панель действий как при выборе строк.
-  const rangeTaskIds = useMemo(() => {
-    if (!selRange) return [] as string[];
-    const [r1, r2] = [Math.min(selRange.a.row, selRange.h.row), Math.max(selRange.a.row, selRange.h.row)];
-    const single = r1 === r2 && selRange.a.col === selRange.h.col;
-    if (single) return [] as string[];
-    return rows.slice(r1, r2 + 1).map((t) => t.id);
-  }, [selRange, rows]);
 
   const toggleSelected = (id: string): void => {
     setSelected((prev) => {
@@ -513,8 +505,6 @@ export function TableView({
   };
 
   const selectedIds = rows.filter((t) => selected.has(t.id)).map((t) => t.id);
-  // Цель bulk-действий: чекбоксы приоритетнее; иначе — задачи Excel-диапазона.
-  const barTaskIds = selectedIds.length > 0 ? selectedIds : rangeTaskIds;
 
   const reportBulk = (label: string) => (res: BulkResult) => {
     if (res.failed > 0) toast.error(`${label}: ${res.ok} из ${res.ok + res.failed}`);
@@ -604,6 +594,8 @@ export function TableView({
                 property={p}
                 onRename={(name) => customProps.renameProperty(p.id, name)}
                 onRemove={() => customProps.removeProperty(p.id)}
+                onDuplicate={() => customProps.duplicateProperty(p)}
+                onInsert={(side) => customProps.insertProperty(p, side)}
               />
             ))}
             <div className="border-l" aria-hidden />
@@ -869,19 +861,16 @@ export function TableView({
         tasksApi={tasksApi}
       />
 
-      {/* Плавающая панель выбранных — поверх строки вкладок (Notion). Работает и от
-          чекбоксов строк, и от Excel-диапазона ячеек (>1 ячейки). */}
-      {(selectedIds.length > 0 || rangeTaskIds.length > 0) && (
+      {/* Плавающая панель выбранных — поверх строки вкладок (Notion). ТОЛЬКО от
+          чекбоксов строк: Excel-диапазон — визуальное выделение, не выбор. */}
+      {selectedIds.length > 0 && (
         <SelectedBar
-          count={selectedIds.length > 0 ? selectedIds.length : rangeTaskIds.length}
-          onExit={() => {
-            setSelected(new Set());
-            setSelRange(null);
-          }}
-          onStatus={(s) => void bulk.moveToColumn(barTaskIds, s).then(reportBulk('Статус'))}
-          onPriority={(p) => void bulk.setPriority(barTaskIds, p).then(reportBulk('Приоритет'))}
-          onDeadline={(d) => void bulk.setDeadline(barTaskIds, d).then(reportBulk('Срок'))}
-          onDelete={() => void bulk.remove(barTaskIds).then(reportBulk('Удаление'))}
+          count={selectedIds.length}
+          onExit={() => setSelected(new Set())}
+          onStatus={(s) => void bulk.moveToColumn(selectedIds, s).then(reportBulk('Статус'))}
+          onPriority={(p) => void bulk.setPriority(selectedIds, p).then(reportBulk('Приоритет'))}
+          onDeadline={(d) => void bulk.setDeadline(selectedIds, d).then(reportBulk('Срок'))}
+          onDelete={() => void bulk.remove(selectedIds).then(reportBulk('Удаление'))}
         />
       )}
     </div>
@@ -959,6 +948,8 @@ function HeaderCell({
         ] as MenuEntry[])
       : []),
   ];
+  // ПКМ по заголовку открывает то же меню колонки, что и клик (Notion).
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div
       className={cn(
@@ -968,10 +959,14 @@ function HeaderCell({
         frozen && 'sticky left-0 z-20 border-r bg-background',
       )}
     >
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setMenuOpen(true);
+            }}
             className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left transition-colors hover:bg-accent/60"
           >
             {iconNode}

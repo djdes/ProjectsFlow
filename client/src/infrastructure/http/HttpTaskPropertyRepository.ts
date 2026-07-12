@@ -39,7 +39,7 @@ export class HttpTaskPropertyRepository implements TaskPropertyRepository {
   async update(
     projectId: string,
     propertyId: string,
-    patch: { name?: string; options?: TaskPropertyOption[] },
+    patch: { name?: string; options?: TaskPropertyOption[]; position?: number },
   ): Promise<TaskProperty> {
     const res = await httpClient.patch<{ property: PropertyDto }>(
       `/projects/${projectId}/properties/${propertyId}`,

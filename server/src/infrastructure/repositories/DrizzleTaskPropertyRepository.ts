@@ -75,8 +75,9 @@ export class DrizzleTaskPropertyRepository implements TaskPropertyRepository {
   }
 
   async update(id: string, patch: UpdateTaskPropertyPatch): Promise<TaskProperty | null> {
-    const set: Partial<{ name: string; options: string | null }> = {};
+    const set: Partial<{ name: string; options: string | null; position: number }> = {};
     if (patch.name !== undefined) set.name = patch.name;
+    if (patch.position !== undefined) set.position = patch.position;
     if (patch.options !== undefined)
       set.options = patch.options.length ? JSON.stringify(patch.options) : null;
     if (Object.keys(set).length > 0) {

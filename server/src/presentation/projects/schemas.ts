@@ -167,8 +167,10 @@ export const updateTaskPropertySchema = z
   .object({
     name: z.string().trim().min(1).max(64).optional(),
     options: z.array(taskPropertyOptionSchema).max(50).optional(),
+    // Порядок колонок (Вставить слева/справа, Дублировать — Notion-меню заголовка).
+    position: z.number().int().min(0).max(100000).optional(),
   })
-  .refine((v) => v.name !== undefined || v.options !== undefined, {
+  .refine((v) => v.name !== undefined || v.options !== undefined || v.position !== undefined, {
     message: 'Нечего обновлять',
   });
 

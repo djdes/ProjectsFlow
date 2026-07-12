@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlignLeft,
+  ArrowLeftToLine,
+  ArrowRightToLine,
   AtSign,
   Calendar,
   CheckSquare,
   ChevronDown,
+  Copy,
   Hash,
   Link as LinkIcon,
   List,
@@ -79,6 +82,9 @@ export type UseTaskPropertiesResult = {
   renameProperty: (propertyId: string, name: string) => void;
   addOption: (property: TaskProperty, label: string) => Promise<TaskPropertyOption | null>;
   removeProperty: (propertyId: string) => void;
+  // Notion-меню заголовка: дубликат рядом с исходным; вставка нового «Текст» слева/справа.
+  duplicateProperty: (property: TaskProperty) => void;
+  insertProperty: (anchor: TaskProperty, side: 'left' | 'right') => void;
 };
 
 // Данные свойств проекта: load + SSE-рефетч + оптимистичный setValue.
@@ -172,22 +178,82 @@ export function useTaskProperties(projectId: string): UseTaskPropertiesResult {
     });
   };
 
-  return { properties, valueFor, setValue, createProperty, renameProperty, addOption, removeProperty };
+  // Создать свойство и поставить его на index в текущем порядке: сервер кладёт в
+  // конец, затем PATCH'ами переприсваиваем позиции 1..N всем сдвинувшимся.
+  const createAt = async (
+    input: { name: string; type: TaskPropertyType; options?: TaskPropertyOption[] },
+    index: number,
+  ): Promise<void> => {
+    try {
+      const created = await taskPropertyRepository.create(projectId, input);
+      const next = [...properties];
+      next.splice(Math.min(index, next.length), 0, created);
+      setProperties(next);
+      for (let i = 0; i < next.length; i++) {
+        const want = i + 1;
+        if (next[i]!.position !== want) {
+          await taskPropertyRepository.update(projectId, next[i]!.id, { position: want });
+        }
+      }
+      setProperties(next.map((p, i) => ({ ...p, position: i + 1 })));
+    } catch (e) {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+      void refetch();
+    }
+  };
+
+  const duplicateProperty = (property: TaskProperty): void => {
+    const idx = properties.findIndex((p) => p.id === property.id);
+    void createAt(
+      {
+        name: `${property.name} (копия)`.slice(0, 64),
+        type: property.type,
+        options: property.options,
+      },
+      idx + 1,
+    );
+  };
+
+  const insertProperty = (anchor: TaskProperty, side: 'left' | 'right'): void => {
+    const idx = properties.findIndex((p) => p.id === anchor.id);
+    void createAt(
+      { name: TASK_PROPERTY_TYPE_LABELS.text, type: 'text' },
+      side === 'left' ? idx : idx + 1,
+    );
+  };
+
+  return {
+    properties,
+    valueFor,
+    setValue,
+    createProperty,
+    renameProperty,
+    addOption,
+    removeProperty,
+    duplicateProperty,
+    insertProperty,
+  };
 }
 
-// Заголовок кастомной колонки: клик = меню (Переименовать / Удалить свойство);
-// переименование — inline-инпут на месте названия (как у вкладок).
+// Заголовок кастомной колонки: клик = меню как в Notion (Переименовать / Дублировать /
+// Вставить слева/справа / Удалить); переименование — inline-инпут на месте названия.
 export function PropertyHeaderCell({
   property,
   onRename,
   onRemove,
+  onDuplicate,
+  onInsert,
 }: {
   property: TaskProperty;
   onRename: (name: string) => void;
   onRemove: () => void;
+  onDuplicate?: () => void;
+  onInsert?: (side: 'left' | 'right') => void;
 }): React.ReactElement {
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(property.name);
+  // ПКМ по заголовку открывает то же меню, что и клик (Notion).
+  const [menuOpen, setMenuOpen] = useState(false);
   const Icon = PROPERTY_TYPE_ICONS[property.type];
   const commit = (): void => {
     setRenaming(false);
@@ -218,17 +284,21 @@ export function PropertyHeaderCell({
     );
   }
   return (
-    <DropdownMenu>
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setMenuOpen(true);
+          }}
           className="flex min-w-0 items-center gap-1.5 border-l px-2 py-1.5 text-left transition-colors hover:bg-accent/60"
         >
           <Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
           <span className="truncate">{property.name}</span>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[11rem]">
+      <DropdownMenuContent align="start" className="min-w-[13rem]">
         <DropdownMenuItem
           className="gap-2"
           onSelect={() => setTimeout(() => setRenaming(true), 150)}
@@ -236,6 +306,24 @@ export function PropertyHeaderCell({
           <Pencil className="size-4" />
           Переименовать
         </DropdownMenuItem>
+        {onDuplicate && (
+          <DropdownMenuItem className="gap-2" onSelect={onDuplicate}>
+            <Copy className="size-4" />
+            Дублировать свойство
+          </DropdownMenuItem>
+        )}
+        {onInsert && (
+          <>
+            <DropdownMenuItem className="gap-2" onSelect={() => onInsert('left')}>
+              <ArrowLeftToLine className="size-4" />
+              Вставить слева
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2" onSelect={() => onInsert('right')}>
+              <ArrowRightToLine className="size-4" />
+              Вставить справа
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="gap-2 text-destructive focus:text-destructive"
