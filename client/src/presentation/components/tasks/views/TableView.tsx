@@ -278,7 +278,11 @@ export function TableView({
         // Gutter hover-контролов («+»/⋮⋮/чекбокс) — sticky-колонка, закреплена при
         // горизонтальном скролле (Notion).
         '3.5rem',
-        tableState.colWidths.title ? `${tableState.colWidths.title}px` : 'minmax(16rem,1fr)',
+        // ФИКСИРОВАННАЯ ширина (Notion): НИКОГДА не по контенту. В w-max контейнере
+        // (sticky-freeze) minmax(...,1fr) считался бы по max-content — одна задача
+        // с длинным неразрывным названием раздувала колонку на тысячи px, и грид
+        // строк переставал совпадать с шапкой («клетки исчезли»).
+        tableState.colWidths.title ? `${tableState.colWidths.title}px` : '16rem',
         ...visibleCols.map((c) =>
           tableState.colWidths[c] ? `${tableState.colWidths[c]}px` : COLUMN_WIDTH[c],
         ),
