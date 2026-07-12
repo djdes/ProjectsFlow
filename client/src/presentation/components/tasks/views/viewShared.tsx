@@ -110,6 +110,9 @@ export type ViewFilters = {
   readonly statuses: readonly TaskStatus[];
   readonly priorities: readonly TaskPriority[];
   readonly due: ViewDueFilter | null;
+  // Фильтры по кастомным свойствам: propertyId → выбранные значения (id опций;
+  // checkbox: '1'/''). Применяет TableView — только у него есть значения свойств.
+  readonly props?: Readonly<Record<string, readonly string[]>>;
 };
 
 export const EMPTY_VIEW_FILTERS: ViewFilters = {
@@ -120,7 +123,12 @@ export const EMPTY_VIEW_FILTERS: ViewFilters = {
 };
 
 export function hasActiveFilters(f: ViewFilters): boolean {
-  return f.statuses.length > 0 || f.priorities.length > 0 || f.due !== null;
+  return (
+    f.statuses.length > 0 ||
+    f.priorities.length > 0 ||
+    f.due !== null ||
+    Object.values(f.props ?? {}).some((v) => v.length > 0)
+  );
 }
 
 export function matchesFilters(task: Task, f: ViewFilters): boolean {
@@ -283,13 +291,16 @@ export function taskMenuEntries(
 // ---- Состояние табличного вида (Notion table): ширины колонок, перенос текста,
 // подсчёты под колонками ----
 
-export type ViewCalc = 'count' | 'notEmpty' | 'empty' | 'pctNotEmpty';
+export type ViewCalc = 'count' | 'notEmpty' | 'empty' | 'pctNotEmpty' | 'sum' | 'avg';
 
 export const VIEW_CALC_LABELS: Record<ViewCalc, string> = {
   count: 'Всего',
   notEmpty: 'Заполнено',
   empty: 'Пусто',
   pctNotEmpty: '% заполнено',
+  // Только числовые кастомные свойства (PropCalcCell).
+  sum: 'Сумма',
+  avg: 'Среднее',
 };
 
 export type TableViewState = {
@@ -297,7 +308,8 @@ export type TableViewState = {
   readonly colWidths: Partial<Record<string, number>>;
   readonly wrapTitle: boolean;
   readonly freezeTitle: boolean;
-  readonly calc: Partial<Record<ViewColumn, ViewCalc>>;
+  // Ключ подсчёта: ViewColumn | `p:<propertyId>` (кастомные — PropCalcCell).
+  readonly calc: Partial<Record<string, ViewCalc>>;
   // Порядок колонок (drag за заголовок, Notion): ключи ViewColumn | `p:<id>`.
   // Отсутствие/неполнота — дефолтный порядок (стандартные, затем кастомные).
   readonly colOrder?: readonly string[];
@@ -314,13 +326,20 @@ export const EMPTY_TABLE_STATE: TableViewState = {
 
 // ---- Группировка, условные цвета, режим календаря (Notion) ----
 
-export type ViewGrouping = 'status' | 'priority' | 'assignee';
+// Группировка: стандартные свойства или select-свойство (`p:<id>`, Notion Group).
+export type StandardGrouping = 'status' | 'priority' | 'assignee';
+export type ViewGrouping = StandardGrouping | `p:${string}`;
 
-export const VIEW_GROUPING_LABELS: Record<ViewGrouping, string> = {
+export const VIEW_GROUPING_LABELS: Record<StandardGrouping, string> = {
   status: 'Статус',
   priority: 'Приоритет',
   assignee: 'Ответственный',
 };
+
+// Лейбл группировки/сортировки для UI без доступа к списку свойств проекта.
+export function groupingLabel(g: ViewGrouping): string {
+  return g.startsWith('p:') ? 'Свойство' : VIEW_GROUPING_LABELS[g as StandardGrouping];
+}
 
 // Условный цвет строки (Notion Conditional color): «если свойство = значение → цвет».
 export type ViewColorRule = {
@@ -404,7 +423,8 @@ export function buildTreeRows(rows: readonly Task[], expanded: ReadonlySet<strin
 }
 
 // Ключ группы задачи при активной группировке.
-export function groupKeyFor(task: Task, grouping: ViewGrouping): string {
+// Для `p:<id>`-группировки ключ/лейбл считает вид сам (нужны значения свойств).
+export function groupKeyFor(task: Task, grouping: StandardGrouping): string {
   switch (grouping) {
     case 'status':
       return task.status;
@@ -415,7 +435,7 @@ export function groupKeyFor(task: Task, grouping: ViewGrouping): string {
   }
 }
 
-export function groupLabelFor(key: string, grouping: ViewGrouping, sample?: Task): string {
+export function groupLabelFor(key: string, grouping: StandardGrouping, sample?: Task): string {
   switch (grouping) {
     case 'status':
       return STATUS_LABEL[key as TaskStatus] ?? key;
@@ -522,7 +542,9 @@ export function perViewFromConfig(c: unknown): PerViewState {
 }
 
 export type ViewSortKey = 'title' | 'status' | 'priority' | 'deadline' | 'created';
-export type ViewSort = { readonly key: ViewSortKey; readonly dir: 'asc' | 'desc' };
+// key: стандартный ключ или `p:<propertyId>` (сортировку по кастомному свойству
+// применяет TableView — только у него есть значения).
+export type ViewSort = { readonly key: ViewSortKey | `p:${string}`; readonly dir: 'asc' | 'desc' };
 
 export const VIEW_SORT_LABELS: Record<ViewSortKey, string> = {
   title: 'Название',
@@ -532,9 +554,15 @@ export const VIEW_SORT_LABELS: Record<ViewSortKey, string> = {
   created: 'Дата создания',
 };
 
+export function sortKeyLabel(key: ViewSort['key']): string {
+  return key.startsWith('p:') ? 'Свойство' : VIEW_SORT_LABELS[key as ViewSortKey];
+}
+
 // null-значения (без срока/приоритета) — всегда в конец независимо от направления.
 export function applyViewSort(tasks: readonly Task[], sort: ViewSort | null): Task[] {
-  if (!sort) return sortBoardTasks(tasks);
+  // `p:<id>`-сортировку применяет TableView сам (значения свойств только у него);
+  // здесь — стабильный базовый порядок.
+  if (!sort || sort.key.startsWith('p:')) return sortBoardTasks(tasks);
   const mul = sort.dir === 'asc' ? 1 : -1;
   const cmp = (a: Task, b: Task): number => {
     switch (sort.key) {
@@ -556,6 +584,8 @@ export function applyViewSort(tasks: readonly Task[], sort: ViewSort | null): Ta
       }
       case 'created':
         return (a.createdAt.getTime() - b.createdAt.getTime()) * mul;
+      default:
+        return 0; // `p:<id>` отсечён guard'ом выше
     }
   };
   return [...tasks].sort((a, b) => cmp(a, b) || a.position - b.position);

@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlignLeft,
+  ArrowDown,
   ArrowLeftToLine,
   ArrowRightToLine,
+  ArrowUp,
   AtSign,
   Calendar,
   Check,
@@ -14,8 +16,10 @@ import {
   Hash,
   Link as LinkIcon,
   List,
+  ListFilter,
   Phone,
   Repeat2,
+  Rows3,
   Search,
   Tags,
   Trash2,
@@ -80,6 +84,9 @@ const OPTION_COLOR_CYCLE: ViewRuleColor[] = [
 
 export type UseTaskPropertiesResult = {
   properties: TaskProperty[];
+  // Карта `${taskId}:${propertyId}` → value: зависимость для memo (фильтр/сорт
+  // по значениям пересчитываются при их изменении).
+  values: ReadonlyMap<string, string>;
   valueFor: (taskId: string, propertyId: string) => string;
   setValue: (taskId: string, propertyId: string, value: string) => void;
   createProperty: (type: TaskPropertyType, name?: string) => void;
@@ -238,6 +245,7 @@ export function useTaskProperties(projectId: string): UseTaskPropertiesResult {
 
   return {
     properties,
+    values,
     valueFor,
     setValue,
     createProperty,
@@ -265,6 +273,11 @@ export function PropertyHeaderCell({
   dropSide = null,
   onColDragStart,
   consumeColDragged,
+  sorted = null,
+  onSort,
+  filterOptions,
+  grouped = false,
+  onToggleGroup,
 }: {
   property: TaskProperty;
   onRename: (name: string) => void;
@@ -278,6 +291,13 @@ export function PropertyHeaderCell({
   dropSide?: 'left' | 'right' | null;
   onColDragStart?: (e: React.PointerEvent) => void;
   consumeColDragged?: () => boolean;
+  // Notion-меню: сортировка ↑↓ (null = убрать), Фильтр ▸ (чекбоксы значений),
+  // «Группировать» (только select).
+  sorted?: 'asc' | 'desc' | null;
+  onSort?: (dir: 'asc' | 'desc' | null) => void;
+  filterOptions?: { id: string; label: string; checked: boolean; onToggle: () => void }[];
+  grouped?: boolean;
+  onToggleGroup?: () => void;
 }): React.ReactElement {
   const [name, setName] = useState(property.name);
   // ПКМ по заголовку открывает то же меню, что и клик (Notion).
@@ -335,6 +355,8 @@ export function PropertyHeaderCell({
           >
             <Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
             <span className="truncate">{property.name}</span>
+            {sorted === 'asc' && <ArrowUp className="size-3 shrink-0" />}
+            {sorted === 'desc' && <ArrowDown className="size-3 shrink-0" />}
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="min-w-[13rem]">
@@ -378,6 +400,52 @@ export function PropertyHeaderCell({
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           )}
+          {/* Notion: сортировка ↑↓ / Фильтр ▸ / Группировать — прямо в меню колонки. */}
+          {onSort && (
+            <>
+              <DropdownMenuItem className="gap-2" onSelect={() => onSort(sorted === 'asc' ? null : 'asc')}>
+                <ArrowUp className="size-4" />
+                По возрастанию
+                {sorted === 'asc' && <span className="ml-auto text-xs text-primary">✓</span>}
+              </DropdownMenuItem>
+              <DropdownMenuItem className="gap-2" onSelect={() => onSort(sorted === 'desc' ? null : 'desc')}>
+                <ArrowDown className="size-4" />
+                По убыванию
+                {sorted === 'desc' && <span className="ml-auto text-xs text-primary">✓</span>}
+              </DropdownMenuItem>
+            </>
+          )}
+          {filterOptions && filterOptions.length > 0 && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="gap-2">
+                <ListFilter className="size-4 text-muted-foreground" />
+                Фильтр
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-[11rem]">
+                {filterOptions.map((o) => (
+                  <DropdownMenuItem
+                    key={o.id || '∅'}
+                    className="gap-2"
+                    // Мультивыбор не закрывает меню (как фильтры Notion).
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      o.onToggle();
+                    }}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                    {o.checked && <span className="text-xs text-primary">✓</span>}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
+          {onToggleGroup && (
+            <DropdownMenuItem className="gap-2" onSelect={onToggleGroup}>
+              <Rows3 className="size-4" />
+              {grouped ? 'Разгруппировать' : 'Группировать'}
+            </DropdownMenuItem>
+          )}
+          {(onSort ?? filterOptions ?? onToggleGroup) && <DropdownMenuSeparator />}
           {onDuplicate && (
             <DropdownMenuItem className="gap-2" onSelect={onDuplicate}>
               <Copy className="size-4" />

@@ -82,6 +82,9 @@ import {
   VIEW_COLUMN_LABELS,
   VIEW_GROUPING_LABELS,
   VIEW_SORT_LABELS,
+  groupingLabel,
+  sortKeyLabel,
+  type StandardGrouping,
   hasActiveFilters,
   perViewFromConfig,
   perViewToConfig,
@@ -915,7 +918,7 @@ export function ProjectBoardViews({
               ) : (
                 <ArrowDown className="size-3" />
               )}
-              {VIEW_SORT_LABELS[state.sort.key]}
+              {sortKeyLabel(state.sort.key)}
               <X
                 className="size-3 opacity-60 hover:opacity-100"
                 onClick={(e) => {
@@ -995,6 +998,7 @@ export function ProjectBoardViews({
           tableState={state.table}
           onTableState={setTableState}
           grouping={state.grouping}
+          onGroupingChange={setGrouping}
           colorRules={state.colorRules}
           createRequest={createReq}
         />
@@ -1316,13 +1320,13 @@ function NewViewPanel({
                   type="button"
                   className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
-                  {state.grouping ? VIEW_GROUPING_LABELS[state.grouping] : 'Нет'}
+                  {state.grouping ? groupingLabel(state.grouping) : 'Нет'}
                   <ChevronRight className="size-3.5 opacity-60" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[10rem]">
                 <DropdownMenuItem onClick={() => onGrouping(null)}>Нет</DropdownMenuItem>
-                {(Object.keys(VIEW_GROUPING_LABELS) as ViewGrouping[]).map((g) => (
+                {(Object.keys(VIEW_GROUPING_LABELS) as StandardGrouping[]).map((g) => (
                   <DropdownMenuItem key={g} className="gap-2" onClick={() => onGrouping(g)}>
                     {VIEW_GROUPING_LABELS[g]}
                     {state.grouping === g && <Check className="ml-auto size-3.5 text-primary" />}
@@ -2058,14 +2062,14 @@ function ViewSettingsCard({
             <NavRow
               icon={ArrowUpDown}
               label="Сортировка"
-              value={sort ? VIEW_SORT_LABELS[sort.key] : undefined}
+              value={sort ? sortKeyLabel(sort.key) : undefined}
               onClick={() => setPage('sort')}
             />
             {view.type !== 'calendar' && (
               <NavRow
                 icon={Rows3}
                 label="Группировка"
-                value={grouping ? VIEW_GROUPING_LABELS[grouping] : 'Нет'}
+                value={grouping ? groupingLabel(grouping) : 'Нет'}
                 onClick={() => setPage('group')}
               />
             )}
@@ -2150,7 +2154,7 @@ function ViewSettingsCard({
               Нет
               {grouping === null && <Check className="ml-auto size-3.5" />}
             </button>
-            {(Object.keys(VIEW_GROUPING_LABELS) as ViewGrouping[]).map((g) => (
+            {(Object.keys(VIEW_GROUPING_LABELS) as StandardGrouping[]).map((g) => (
               <button
                 key={g}
                 type="button"

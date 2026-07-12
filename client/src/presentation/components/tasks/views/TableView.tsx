@@ -80,6 +80,7 @@ import {
   buildTreeRows,
   groupKeyFor,
   groupLabelFor,
+  type StandardGrouping,
   hasActiveFilters,
   matchesFilters,
   rowColorFor,
@@ -111,6 +112,8 @@ type Props = {
   tableState: TableViewState;
   onTableState: (patch: Partial<TableViewState>) => void;
   grouping: ViewGrouping | null;
+  // Меню select-колонки: «Группировать по этому свойству» (Notion Group).
+  onGroupingChange?: (g: ViewGrouping | null) => void;
   colorRules: ViewColorRule[];
   createRequest: ViewCreateRequest | null;
   // Full-bleed: горизонтальный скролл таблицы во всю ширину окна (как канбан) —
@@ -157,6 +160,7 @@ export function TableView({
   tableState,
   onTableState,
   grouping,
+  onGroupingChange,
   colorRules,
   createRequest,
   bleedNegClass = '',
@@ -194,24 +198,103 @@ export function TableView({
   const selDragging = useRef(false);
   const bulk = useBulkTaskActions({ projectId, update, move, remove, refetch });
 
-  const rows = useMemo(
-    () => applyViewSort(tasks.filter((t) => matchesFilters(t, filters)), sort),
-    [tasks, filters, sort],
-  );
+  // Пустота значения кастомного свойства (multi_select '[]' — тоже пусто).
+  const propValueEmpty = (raw: string, type: TaskProperty['type']): boolean => {
+    if (!raw) return true;
+    if (type === 'multi_select') {
+      try {
+        return (JSON.parse(raw) as string[]).length === 0;
+      } catch {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const rows = useMemo(() => {
+    let list = tasks.filter((t) => matchesFilters(t, filters));
+    // Фильтры по кастомным свойствам (Notion): select/multi_select — id опций,
+    // checkbox — '1'/''. Применяются только здесь (значения есть у таблицы).
+    for (const [pid, wanted] of Object.entries(filters.props ?? {})) {
+      if (!wanted || wanted.length === 0) continue;
+      const prop = customProps.properties.find((p) => p.id === pid);
+      if (!prop) continue;
+      list = list.filter((t) => {
+        const raw = customProps.valueFor(t.id, pid);
+        if (prop.type === 'multi_select') {
+          try {
+            const ids = raw ? (JSON.parse(raw) as string[]) : [];
+            return wanted.some((w) => ids.includes(w));
+          } catch {
+            return false;
+          }
+        }
+        if (prop.type === 'checkbox') return wanted.includes(raw === '1' ? '1' : '');
+        return wanted.includes(raw);
+      });
+    }
+    const sorted = applyViewSort(list, sort);
+    // Сортировка по кастомному свойству: пустые всегда в конец (как стандартные).
+    if (sort && sort.key.startsWith('p:')) {
+      const pid = sort.key.slice(2);
+      const prop = customProps.properties.find((p) => p.id === pid);
+      const optLabel = (id: string): string => prop?.options.find((o) => o.id === id)?.label ?? '';
+      const keyOf = (t: Task): { empty: boolean; num: number; str: string } => {
+        const raw = customProps.valueFor(t.id, pid);
+        if (!prop || propValueEmpty(raw, prop.type)) return { empty: true, num: 0, str: '' };
+        switch (prop.type) {
+          case 'number':
+            return { empty: false, num: parseFloat(raw) || 0, str: '' };
+          case 'checkbox':
+            return { empty: false, num: raw === '1' ? 1 : 0, str: '' };
+          case 'select':
+            return { empty: false, num: 0, str: optLabel(raw) };
+          case 'multi_select': {
+            try {
+              const ids = JSON.parse(raw) as string[];
+              return { empty: ids.length === 0, num: 0, str: ids.map(optLabel).join(', ') };
+            } catch {
+              return { empty: true, num: 0, str: '' };
+            }
+          }
+          default:
+            return { empty: false, num: 0, str: raw };
+        }
+      };
+      const numeric = prop?.type === 'number' || prop?.type === 'checkbox';
+      const mul = sort.dir === 'asc' ? 1 : -1;
+      sorted.sort((a, b) => {
+        const ka = keyOf(a);
+        const kb = keyOf(b);
+        if (ka.empty !== kb.empty) return ka.empty ? 1 : -1;
+        const cmp = numeric ? ka.num - kb.num : ka.str.localeCompare(kb.str, 'ru');
+        return cmp * mul || a.position - b.position;
+      });
+    }
+    return sorted;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, filters, sort, customProps.properties, customProps.values]);
 
   // Группировка (Notion Group by): порядок групп — по первому появлению в rows
   // (rows уже отсортированы по статусу/позиции или пользовательской сортировке).
+  // `p:<id>` — группировка по select-свойству (ключ = id опции | 'none').
+  const groupProp = grouping?.startsWith('p:')
+    ? customProps.properties.find((p) => p.id === grouping.slice(2))
+    : undefined;
   const groups = useMemo(() => {
     if (!grouping) return null;
     const map = new Map<string, Task[]>();
     for (const t of rows) {
-      const key = groupKeyFor(t, grouping);
+      const key = groupProp
+        ? customProps.valueFor(t.id, groupProp.id) || 'none'
+        : groupKeyFor(t, grouping as StandardGrouping);
       const arr = map.get(key);
       if (arr) arr.push(t);
       else map.set(key, [t]);
     }
     return [...map.entries()].map(([key, tasks_]) => ({ key, tasks: tasks_ }));
-  }, [rows, grouping]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, grouping, groupProp]);
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(() => new Set());
   const toggleGroup = (key: string): void =>
     setCollapsedGroups((prev) => {
@@ -888,6 +971,14 @@ export function TableView({
               const dropSide =
                 colDropIdx === i ? ('left' as const) : colDropIdx === orderedKeys.length && i === orderedKeys.length - 1 ? ('right' as const) : null;
               if (prop) {
+                const propKey = k as `p:${string}`;
+                const selectedVals = filters.props?.[prop.id] ?? [];
+                const togglePropFilter = (val: string): void => {
+                  const next = selectedVals.includes(val)
+                    ? selectedVals.filter((x) => x !== val)
+                    : [...selectedVals, val];
+                  onFiltersChange({ props: { ...(filters.props ?? {}), [prop.id]: next } });
+                };
                 return (
                   <PropertyHeaderCell
                     key={k}
@@ -902,6 +993,42 @@ export function TableView({
                     dropSide={dropSide}
                     onColDragStart={startColDrag(k)}
                     consumeColDragged={consumeColDragged}
+                    // Notion-меню колонки: сортировка ↑↓ / Фильтр ▸ / Группировать.
+                    sorted={sort?.key === propKey ? sort.dir : null}
+                    onSort={(dir) =>
+                      dir === null ? onSortChange(null) : onSortChange({ key: propKey, dir })
+                    }
+                    filterOptions={
+                      prop.type === 'select' || prop.type === 'multi_select'
+                        ? prop.options.map((o) => ({
+                            id: o.id,
+                            label: o.label,
+                            checked: selectedVals.includes(o.id),
+                            onToggle: () => togglePropFilter(o.id),
+                          }))
+                        : prop.type === 'checkbox'
+                          ? [
+                              {
+                                id: '1',
+                                label: 'Отмечено',
+                                checked: selectedVals.includes('1'),
+                                onToggle: () => togglePropFilter('1'),
+                              },
+                              {
+                                id: '',
+                                label: 'Не отмечено',
+                                checked: selectedVals.includes(''),
+                                onToggle: () => togglePropFilter(''),
+                              },
+                            ]
+                          : undefined
+                    }
+                    grouped={grouping === propKey}
+                    onToggleGroup={
+                      prop.type === 'select' && onGroupingChange
+                        ? () => onGroupingChange(grouping === propKey ? null : propKey)
+                        : undefined
+                    }
                   />
                 );
               }
@@ -1005,7 +1132,11 @@ export function TableView({
                       />
                     </button>
                     <span className="text-sm font-medium">
-                      {groupLabelFor(g.key, grouping, sample)}
+                      {groupProp
+                        ? g.key === 'none'
+                          ? 'Без значения'
+                          : (groupProp.options.find((o) => o.id === g.key)?.label ?? g.key)
+                        : groupLabelFor(g.key, grouping as StandardGrouping, sample)}
                     </span>
                     <span className="text-xs text-muted-foreground">{g.tasks.length}</span>
                     {grouping !== 'assignee' && (
@@ -1184,21 +1315,29 @@ export function TableView({
             <p className="px-2 pt-1.5 text-[11px] text-muted-foreground/60">
               Всего: {rows.length}
             </p>
-            {orderedKeys.map((k) =>
-              k.startsWith('p:') ? (
-                <div key={k} aria-hidden />
+            {orderedKeys.map((k) => {
+              const prop = propByKey(k);
+              return prop ? (
+                <PropCalcCell
+                  key={k}
+                  property={prop}
+                  rows={rows}
+                  valueFor={customProps.valueFor}
+                  value={tableState.calc[k]}
+                  onChange={(v) => onTableState({ calc: { ...tableState.calc, [k]: v } })}
+                />
               ) : (
                 <CalcCell
                   key={k}
                   col={k as ViewColumn}
                   rows={rows}
-                  value={tableState.calc[k as ViewColumn]}
+                  value={tableState.calc[k]}
                   onChange={(v) =>
                     onTableState({ calc: { ...tableState.calc, [k]: v } })
                   }
                 />
-              ),
-            )}
+              );
+            })}
             <div aria-hidden />
           </div>
         </div>
@@ -1472,16 +1611,20 @@ function CalcCell({
         return `Пусто ${rows.length - filled}`;
       case 'pctNotEmpty':
         return rows.length === 0 ? '—' : `${Math.round((filled / rows.length) * 100)}%`;
+      default:
+        return '—'; // sum/avg — только числовые кастомные (PropCalcCell)
     }
   };
   const entries: MenuEntry[] = [
     { kind: 'item', label: 'Нет', muted: true, onSelect: () => onChange(undefined) },
-    ...(Object.keys(VIEW_CALC_LABELS) as ViewCalc[]).map((v) => ({
-      kind: 'item' as const,
-      label: VIEW_CALC_LABELS[v],
-      checked: value === v,
-      onSelect: () => onChange(v),
-    })),
+    ...(Object.keys(VIEW_CALC_LABELS) as ViewCalc[])
+      .filter((v) => v !== 'sum' && v !== 'avg')
+      .map((v) => ({
+        kind: 'item' as const,
+        label: VIEW_CALC_LABELS[v],
+        checked: value === v,
+        onSelect: () => onChange(v),
+      })),
   ];
   return (
     <div className="flex justify-end border-l border-transparent px-1 pt-0.5">
@@ -1520,6 +1663,90 @@ function ColumnIcon({ col }: { col: ViewColumn }): React.ReactElement {
     case 'assignee':
       return <User className={cls} />;
   }
+}
+
+// Подсчёт под КАСТОМНОЙ колонкой (Notion Calculate): Всего/Заполнено/Пусто/%,
+// для числового свойства — ещё Сумма/Среднее.
+function PropCalcCell({
+  property,
+  rows,
+  valueFor,
+  value,
+  onChange,
+}: {
+  property: TaskProperty;
+  rows: readonly Task[];
+  valueFor: (taskId: string, propertyId: string) => string;
+  value: ViewCalc | undefined;
+  onChange: (v: ViewCalc | undefined) => void;
+}): React.ReactElement {
+  const isEmpty = (raw: string): boolean => {
+    if (!raw) return true;
+    if (property.type === 'multi_select') {
+      try {
+        return (JSON.parse(raw) as string[]).length === 0;
+      } catch {
+        return true;
+      }
+    }
+    return false;
+  };
+  const vals = rows.map((t) => valueFor(t.id, property.id));
+  const filled = vals.filter((v) => !isEmpty(v)).length;
+  const nums = property.type === 'number' ? vals.filter((v) => v !== '').map((v) => parseFloat(v) || 0) : [];
+  const fmt = (n: number): string =>
+    Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+  const text = (v: ViewCalc): string => {
+    switch (v) {
+      case 'count':
+        return `Всего ${rows.length}`;
+      case 'notEmpty':
+        return `Заполнено ${filled}`;
+      case 'empty':
+        return `Пусто ${rows.length - filled}`;
+      case 'pctNotEmpty':
+        return rows.length === 0 ? '—' : `${Math.round((filled / rows.length) * 100)}%`;
+      case 'sum':
+        return `Сумма ${fmt(nums.reduce((s, n) => s + n, 0))}`;
+      case 'avg':
+        return nums.length === 0 ? '—' : `Среднее ${fmt(nums.reduce((s, n) => s + n, 0) / nums.length)}`;
+    }
+  };
+  const available = (Object.keys(VIEW_CALC_LABELS) as ViewCalc[]).filter(
+    (v) => (v !== 'sum' && v !== 'avg') || property.type === 'number',
+  );
+  const entries: MenuEntry[] = [
+    { kind: 'item', label: 'Нет', muted: true, onSelect: () => onChange(undefined) },
+    ...available.map((v) => ({
+      kind: 'item' as const,
+      label: VIEW_CALC_LABELS[v],
+      checked: value === v,
+      onSelect: () => onChange(v),
+    })),
+  ];
+  return (
+    <div className="flex justify-end border-l border-transparent px-1 pt-0.5">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              'inline-flex items-center gap-1 rounded px-1 text-[11px] transition-opacity hover:bg-accent',
+              value
+                ? 'text-muted-foreground'
+                : 'text-muted-foreground/60 opacity-0 group-hover/calc:opacity-100',
+            )}
+          >
+            {value ? text(value) : 'Подсчёт'}
+            <ChevronDown className="size-3" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[10rem]">
+          <DropdownEntries entries={entries} />
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
 }
 
 function TableRow({

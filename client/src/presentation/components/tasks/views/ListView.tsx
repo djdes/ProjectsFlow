@@ -45,6 +45,7 @@ import {
   applyViewSort,
   buildTreeRows,
   groupKeyFor,
+  type StandardGrouping,
   groupLabelFor,
   hasActiveFilters,
   matchesFilters,
@@ -99,11 +100,13 @@ export function ListView({
   );
 
   // Группировка (Notion Group by): порядок групп — по первому появлению в rows.
+  // `p:<id>`-группировка (по кастомному свойству) живёт только в таблице — у списка
+  // нет значений свойств, рендерим без групп.
   const groups = useMemo(() => {
-    if (!grouping) return null;
+    if (!grouping || grouping.startsWith('p:')) return null;
     const map = new Map<string, Task[]>();
     for (const t of rows) {
-      const key = groupKeyFor(t, grouping);
+      const key = groupKeyFor(t, grouping as StandardGrouping);
       const arr = map.get(key);
       if (arr) arr.push(t);
       else map.set(key, [t]);
@@ -333,7 +336,9 @@ export function ListView({
                       className={cn('size-3.5 transition-transform', collapsedGroups.has(g.key) && '-rotate-90')}
                     />
                   </button>
-                  <span className="text-sm font-medium">{groupLabelFor(g.key, grouping, sample)}</span>
+                  <span className="text-sm font-medium">
+                    {groupLabelFor(g.key, grouping as StandardGrouping, sample)}
+                  </span>
                   <span className="text-xs text-muted-foreground">{g.tasks.length}</span>
                   {grouping !== 'assignee' && (
                     <button
