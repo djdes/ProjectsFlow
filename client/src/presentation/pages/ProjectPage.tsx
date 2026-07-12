@@ -61,10 +61,10 @@ export function ProjectPage(): React.ReactElement {
         />
       </div>
 
-      {/* Тело: отступы как у Входящих/доски (px-6/14/24), контент прижат влево,
-          текстовым секциям — max-w-3xl для читаемости строк. */}
+      {/* Тело: отступы как у Входящих/доски (px-6/14/24), контент — центрированная
+          колонка max-w-4xl (Notion): на широких мониторах воздух по бокам симметричен. */}
       <div className="px-6 pb-12 pt-1 sm:px-14 lg:px-24">
-        <div className="max-w-3xl space-y-6">
+        <div className="mx-auto w-full max-w-4xl space-y-6">
           <div className="space-y-3">
             <EditableProjectTitle projectId={data.id} name={data.name} />
             <div className="flex flex-wrap items-center gap-2">
