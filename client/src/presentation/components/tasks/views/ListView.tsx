@@ -50,6 +50,7 @@ import {
   matchesFilters,
   rowColorFor,
   taskMenuEntries,
+  isUntitledTask,
   taskTitle,
   type TreeRow,
   type ViewColorRule,
@@ -536,7 +537,8 @@ function ListRow({
             dragListeners?.onPointerDown?.(e as unknown as React.PointerEvent);
           }}
           className={cn(
-            'group relative flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/50',
+            // Notion list: компактная строка ровно 30px.
+            'group relative flex min-h-[30px] cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 transition-colors hover:bg-accent/50',
             rowColor,
             selected && 'bg-primary/5',
             isDragging && 'opacity-40',
@@ -652,6 +654,8 @@ function ListRow({
                   'min-w-0 truncate text-sm font-medium',
                   task.status === 'done' &&
                     'text-muted-foreground line-through decoration-muted-foreground/40',
+                  // Notion: безымянная страница — серый плейсхолдер.
+                  isUntitledTask(task) && 'font-normal text-muted-foreground/60',
                 )}
               >
                 {taskTitle(task)}

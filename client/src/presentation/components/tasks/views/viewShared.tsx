@@ -89,6 +89,11 @@ export function taskTitle(task: Task): string {
   return stripMdInline(raw).trim() || 'Без названия';
 }
 
+// Безымянная задача: плейсхолдер «Без названия» рисуем серым (Notion "New page").
+export function isUntitledTask(task: Task): boolean {
+  return stripMdInline(splitTitleBody(task.description ?? '').title).trim().length === 0;
+}
+
 export function matchesQuery(task: Task, query: string): boolean {
   const q = query.trim().toLocaleLowerCase('ru');
   if (!q) return true;

@@ -24,6 +24,7 @@ import {
   PanelRight,
   Plus,
   Snowflake,
+  Trash2,
   User,
   WrapText,
 } from 'lucide-react';
@@ -82,6 +83,7 @@ import {
   matchesFilters,
   rowColorFor,
   taskMenuEntries,
+  isUntitledTask,
   taskTitle,
   type TreeRow,
   type TableViewState,
@@ -657,6 +659,75 @@ export function TableView({
     setSelRange(null);
   };
 
+  // ПКМ по одной из НЕСКОЛЬКИХ выбранных строк — bulk-меню над всеми (Notion):
+  // статус/приоритет/срок для всех + «Удалить N задач».
+  const bulkMenuEntries = (): MenuEntry[] => {
+    const n = selectedIds.length;
+    return [
+      {
+        kind: 'sub',
+        label: 'Статус',
+        icon: CircleDot,
+        items: VISIBLE_KANBAN_STATUSES.map((s) => ({
+          kind: 'item' as const,
+          label: STATUS_LABEL[s],
+          onSelect: () => void bulk.moveToColumn(selectedIds, s).then(reportBulk('Статус')),
+        })),
+      },
+      {
+        kind: 'sub',
+        label: 'Приоритет',
+        icon: Flag,
+        items: [
+          ...TASK_PRIORITIES.map((p) => ({
+            kind: 'item' as const,
+            label: PRIORITY_META[p].label,
+            onSelect: () => void bulk.setPriority(selectedIds, p).then(reportBulk('Приоритет')),
+          })),
+          {
+            kind: 'item' as const,
+            label: 'Без приоритета',
+            onSelect: () => void bulk.setPriority(selectedIds, null).then(reportBulk('Приоритет')),
+          },
+        ],
+      },
+      {
+        kind: 'sub',
+        label: 'Срок',
+        icon: CalendarDays,
+        items: [
+          {
+            kind: 'item' as const,
+            label: 'Сегодня',
+            onSelect: () =>
+              void bulk.setDeadline(selectedIds, ymd(startOfDay(new Date()))).then(reportBulk('Срок')),
+          },
+          {
+            kind: 'item' as const,
+            label: 'Завтра',
+            onSelect: () =>
+              void bulk
+                .setDeadline(selectedIds, ymd(addDays(startOfDay(new Date()), 1)))
+                .then(reportBulk('Срок')),
+          },
+          {
+            kind: 'item' as const,
+            label: 'Убрать срок',
+            onSelect: () => void bulk.setDeadline(selectedIds, null).then(reportBulk('Срок')),
+          },
+        ],
+      },
+      { kind: 'separator' },
+      {
+        kind: 'item',
+        label: `Удалить ${n} задач${n % 10 === 1 && n % 100 !== 11 ? 'у' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'и' : ''}`,
+        icon: Trash2,
+        destructive: true,
+        onSelect: () => void bulk.remove(selectedIds).then(reportBulk('Удаление')),
+      },
+    ];
+  };
+
   if (loading) return <div className="h-64 animate-pulse rounded-xl bg-muted/60" />;
   if (error) return <p className="text-sm text-destructive">{error}</p>;
 
@@ -911,6 +982,9 @@ export function TableView({
                 onCancelEdit={() => setEditingId(null)}
                 selected={selected.has(task.id)}
                 anySelected={selected.size > 0}
+                bulkEntries={
+                  selected.size > 1 && selected.has(task.id) ? bulkMenuEntries() : undefined
+                }
                 rowIdx={idx}
                 onCellDown={cellDown}
                 onCellEnter={cellEnter}
@@ -1348,6 +1422,7 @@ function TableRow({
   onCancelEdit,
   selected,
   anySelected,
+  bulkEntries,
   rowIdx,
   onCellDown,
   onCellEnter,
@@ -1390,6 +1465,8 @@ function TableRow({
   onCancelEdit: () => void;
   selected: boolean;
   anySelected: boolean;
+  // ПКМ по строке из мульти-выбора: bulk-меню над всеми выбранными (Notion).
+  bulkEntries?: MenuEntry[];
   rowIdx: number;
   onCellDown: (row: number, col: 'title' | ViewColumn, rightButton?: boolean) => void;
   onCellEnter: (row: number, col: 'title' | ViewColumn) => void;
@@ -1703,6 +1780,8 @@ function TableRow({
               className={cn(
                 'min-w-0 text-left text-sm font-medium',
                 wrapTitle ? 'whitespace-normal break-words' : 'truncate',
+                // Notion: безымянная страница — серый плейсхолдер.
+                isUntitledTask(task) && 'font-normal text-muted-foreground/60',
               )}
             >
               {taskTitle(task)}
@@ -1732,14 +1811,15 @@ function TableRow({
       <div className="border-b border-l" aria-hidden />
         </div>
       </ContextMenuTrigger>
-      {/* Правый клик по строке — контекстное меню задачи (Notion-style).
+      {/* Правый клик по строке — контекстное меню задачи (Notion-style); по строке
+          из мульти-выбора — bulk-меню над всеми выбранными.
           onCloseAutoFocus preventDefault: возврат фокуса крал бы фокус у inline-инпутов
           (вставка подзадачи/переименование), открытых из пункта меню. */}
       <ContextMenuContent
         className="min-w-[12rem]"
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
-        <ContextEntries entries={menuEntries} />
+        <ContextEntries entries={bulkEntries ?? menuEntries} />
       </ContextMenuContent>
     </ContextMenu>
   );
