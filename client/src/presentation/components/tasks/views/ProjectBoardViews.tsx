@@ -96,6 +96,7 @@ import {
   type ViewSortKey,
 } from './viewShared';
 import { DropdownEntries, ContextEntries, type MenuEntry } from './menuEntries';
+import { ViewsOverflowMenu } from './ViewsOverflowMenu';
 
 export const VIEW_TYPE_ICONS: Record<BoardViewType, LucideIcon> = {
   kanban: LayoutGrid,
@@ -182,7 +183,9 @@ export function ProjectBoardViews({
     }
   };
   const [deleteTarget, setDeleteTarget] = useState<BoardView | null>(null);
-  const [panel, setPanel] = useState<'settings' | null>(null);
+  // 'newview' — правая панель сразу после создания вью (Notion New view → Done →
+  // View settings); 'settings' — полные настройки.
+  const [panel, setPanel] = useState<'settings' | 'newview' | null>(null);
   // Фильтры/сортировка — пер-вью, живут в памяти вкладки (смена вью не сбрасывает).
   const [perView, setPerView] = useState<Record<string, PerViewState>>({});
   const [searchOpen, setSearchOpen] = useState(false);
@@ -334,9 +337,35 @@ export function ProjectBoardViews({
       const view = await boardViewRepository.create(projectId, name, type);
       setViews((prev) => [...(prev ?? []), view]);
       selectView(view.id);
-      setPanel(null);
+      // Notion: после создания справа открывается панель «Новая вью» (тип/имя → Done).
+      setPanel('newview');
     } catch (e) {
       toast.error(`Не удалось создать вью: ${(e as Error).message}`);
+    }
+  };
+
+  // Drag-reorder вкладок в окне «ещё…»: оптимистично переставляем локально,
+  // затем PATCH sortOrder только изменившимся вью.
+  const handleReorder = (orderedIds: string[]): void => {
+    const current = views ?? [];
+    const byId = new Map(current.map((v) => [v.id, v]));
+    const next = orderedIds
+      .map((id, i) => {
+        const v = byId.get(id);
+        return v ? { ...v, sortOrder: i + 1 } : null;
+      })
+      .filter((v): v is BoardView => v !== null);
+    setViews(next);
+    for (const v of next) {
+      const prev = byId.get(v.id);
+      if (prev && prev.sortOrder !== v.sortOrder) {
+        boardViewRepository
+          .update(projectId, v.id, { sortOrder: v.sortOrder })
+          .catch((e: unknown) => {
+            toast.error(`Не удалось изменить порядок: ${(e as Error).message}`);
+            void refetch();
+          });
+      }
     }
   };
 
@@ -455,9 +484,27 @@ export function ProjectBoardViews({
     },
     {
       kind: 'item',
+      label: 'Настроить вью',
+      icon: Settings2,
+      onSelect: () => {
+        selectView(DEFAULT_VIEW_ID);
+        setPanel('settings');
+      },
+    },
+    {
+      kind: 'item',
       label: 'Дублировать вью',
       icon: Copy,
       onSelect: () => void handleCreate('Доска (копия)', 'kanban'),
+    },
+    { kind: 'separator' },
+    {
+      kind: 'item',
+      label: 'Удалить вью',
+      icon: Trash2,
+      destructive: true,
+      // Дефолтная «Доска» — сама доска проекта, в БД как вью не хранится.
+      onSelect: () => toast.error('Дефолтную вкладку «Доска» нельзя удалить'),
     },
   ];
 
@@ -506,8 +553,13 @@ export function ProjectBoardViews({
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       {/* Строка вкладок + тулбар вью (Notion-style). На узком экране (как в Notion)
-          ряд вкладок сворачивается в одну кнопку «Активная вью ⌄» с дропдауном. */}
-      <div className="flex items-center gap-0.5 pb-1">
+          ряд вкладок сворачивается в одну кнопку «Активная вью ⌄» с дропдауном.
+          group/tabs — «+» новой вью появляется при наведении на строку; sticky —
+          строка (и панель выделения таблицы поверх неё) видна при скролле. */}
+      <div
+        id="pf-views-tabs-row"
+        className="group/tabs sticky top-0 z-30 flex items-center gap-0.5 bg-background pb-1"
+      >
         {/* Компактный переключатель вью (узкий экран). */}
         <div className="flex min-w-0 flex-1 items-center md:hidden">
           <DropdownMenu>
@@ -567,62 +619,56 @@ export function ProjectBoardViews({
               onRenameSubmit={(name) => void handleUpdate(v, { name })}
             />
           ))}
-          {hiddenViews.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+          {/* Notion: «N ещё…» появляется только при переполнении и открывает полное
+              окно вью (поиск / reorder / «…»-меню / «+ Новая вью»); «+» тогда скрыт. */}
+          {hiddenViews.length > 0 ? (
+            <ViewsOverflowMenu
+              views={allViewsSorted}
+              boardName={boardName}
+              activeId={activeId}
+              defaultViewId={DEFAULT_VIEW_ID}
+              onSelect={selectView}
+              onReorder={handleReorder}
+              menuFor={tabMenuEntries}
+              boardMenu={defaultTabMenuEntries()}
+              onCreate={(t) => void handleCreate(BOARD_VIEW_TYPE_LABELS[t], t)}
+              label={`ещё ${hiddenViews.length}…`}
+            />
+          ) : (
+            /* «+» — только при наведении на строку вкладок (Notion): попап «Начать
+               с нуля», клик по типу сразу создаёт вью с именем типа. */
+            <Popover>
+              <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[13px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+                  aria-label="Новая вью"
+                  title="Новая вью"
+                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover/tabs:opacity-100 data-[state=open]:opacity-100"
                 >
-                  ещё {hiddenViews.length}…
+                  <Plus className="size-4" />
                 </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[12rem]">
-                {hiddenViews.map((v) => {
-                  const Icon = VIEW_TYPE_ICONS[v.type];
-                  return (
-                    <DropdownMenuItem key={v.id} className="gap-2" onClick={() => selectView(v.id)}>
-                      <Icon className="size-4" />
-                      <span className="min-w-0 flex-1 truncate">{v.name}</span>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-72 p-3">
+                <p className="pb-2 text-xs font-medium text-muted-foreground">Начать с нуля</p>
+                <div className="grid grid-cols-4 gap-1">
+                  {BOARD_VIEW_TYPES.map((t) => {
+                    const Icon = VIEW_TYPE_ICONS[t];
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => void handleCreate(BOARD_VIEW_TYPE_LABELS[t], t)}
+                        className="flex flex-col items-center gap-1.5 rounded-lg px-1 py-2.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        <Icon className="size-5" />
+                        {BOARD_VIEW_TYPE_LABELS[t]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
           )}
-          {/* «+» — попап «Начать с нуля» (Notion Start from scratch): клик по типу сразу
-              создаёт вью с именем типа. */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                aria-label="Новая вью"
-                title="Новая вью"
-                className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <Plus className="size-4" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-72 p-3">
-              <p className="pb-2 text-xs font-medium text-muted-foreground">Начать с нуля</p>
-              <div className="grid grid-cols-4 gap-1">
-                {BOARD_VIEW_TYPES.map((t) => {
-                  const Icon = VIEW_TYPE_ICONS[t];
-                  return (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => void handleCreate(BOARD_VIEW_TYPE_LABELS[t], t)}
-                      className="flex flex-col items-center gap-1.5 rounded-lg px-1 py-2.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    >
-                      <Icon className="size-5" />
-                      {BOARD_VIEW_TYPE_LABELS[t]}
-                    </button>
-                  );
-                })}
-              </div>
-            </PopoverContent>
-          </Popover>
         </div>
 
         {/* Тулбар вью — только для табличного/списочного/календарного (у канбана свой).
@@ -859,27 +905,80 @@ export function ProjectBoardViews({
       )}
 
       </div>
-      {panel === 'settings' && active && (
+      {/* Панель «Новая вью» (Notion): сразу после создания — имя/тип → «Готово»
+          открывает полные настройки вью. */}
+      {panel === 'newview' && active && (
         <aside className="sticky top-2 w-72 shrink-0 border-l pl-3 duration-150 animate-in fade-in slide-in-from-right-1 max-md:hidden">
-          <ViewSettingsCard
+          <NewViewPanel
             view={active}
             onClose={() => setPanel(null)}
             onRename={(name) => void handleUpdate(active, { name })}
             onType={(type) => void handleUpdate(active, { type })}
-            onCopyLink={() => copyViewLink(active)}
-            onDuplicate={() => void handleDuplicate(active)}
-            onDelete={() => setDeleteTarget(active)}
-            hidden={state.hidden}
-            onToggleColumn={active.type === 'table' ? toggleColumn : undefined}
-            filters={state.filters}
-            onFilters={setFilters}
-            sort={state.sort}
-            onSort={setSort}
-            grouping={state.grouping}
-            onGrouping={setGrouping}
-            colorRules={state.colorRules}
-            onColorRules={setColorRules}
+            onDone={() => setPanel('settings')}
           />
+        </aside>
+      )}
+      {panel === 'settings' && (active !== null || activeId === DEFAULT_VIEW_ID) && (
+        <aside className="sticky top-2 w-72 shrink-0 border-l pl-3 duration-150 animate-in fade-in slide-in-from-right-1 max-md:hidden">
+          {active ? (
+            <ViewSettingsCard
+              view={active}
+              onClose={() => setPanel(null)}
+              onRename={(name) => void handleUpdate(active, { name })}
+              onType={(type) => void handleUpdate(active, { type })}
+              onCopyLink={() => copyViewLink(active)}
+              onDuplicate={() => void handleDuplicate(active)}
+              onDelete={() => setDeleteTarget(active)}
+              hidden={state.hidden}
+              onToggleColumn={active.type === 'table' ? toggleColumn : undefined}
+              filters={state.filters}
+              onFilters={setFilters}
+              sort={state.sort}
+              onSort={setSort}
+              grouping={state.grouping}
+              onGrouping={setGrouping}
+              colorRules={state.colorRules}
+              onColorRules={setColorRules}
+            />
+          ) : (
+            /* Настройки дефолтной «Доски» (в БД не хранится): синтетическая вью;
+               смена типа создаёт новую вью, удаление недоступно. */
+            <ViewSettingsCard
+              view={{
+                id: DEFAULT_VIEW_ID,
+                projectId,
+                name: boardName,
+                type: 'kanban',
+                sortOrder: 0,
+                config: null,
+                createdAt: new Date(),
+              }}
+              onClose={() => setPanel(null)}
+              onRename={renameBoard}
+              onType={(type) => {
+                if (type !== 'kanban') void handleCreate(BOARD_VIEW_TYPE_LABELS[type], type);
+              }}
+              onCopyLink={() => {
+                const url = `${window.location.origin}${window.location.pathname}?view=${DEFAULT_VIEW_ID}`;
+                void navigator.clipboard
+                  .writeText(url)
+                  .then(() => toast.success('Ссылка на вью скопирована'))
+                  .catch(() => toast.error('Не удалось скопировать ссылку'));
+              }}
+              onDuplicate={() => void handleCreate('Доска (копия)', 'kanban')}
+              onDelete={() => toast.error('Дефолтную вкладку «Доска» нельзя удалить')}
+              hidden={state.hidden}
+              onToggleColumn={undefined}
+              filters={state.filters}
+              onFilters={setFilters}
+              sort={state.sort}
+              onSort={setSort}
+              grouping={state.grouping}
+              onGrouping={setGrouping}
+              colorRules={state.colorRules}
+              onColorRules={setColorRules}
+            />
+          )}
         </aside>
       )}
       </div>
@@ -906,6 +1005,91 @@ export function ProjectBoardViews({
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// Панель «Новая вью» (Notion New view): сразу после создания вью — имя (autoFocus),
+// сетка типов (клик меняет тип на лету), «Готово» → полные настройки вью.
+function NewViewPanel({
+  view,
+  onClose,
+  onRename,
+  onType,
+  onDone,
+}: {
+  view: BoardView;
+  onClose: () => void;
+  onRename: (name: string) => void;
+  onType: (type: BoardViewType) => void;
+  onDone: () => void;
+}): React.ReactElement {
+  const [name, setName] = useState(view.name);
+  useEffect(() => {
+    setName(view.name);
+    // Имя сбрасываем только при переходе на другую вью.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.id]);
+  const commitName = (): void => {
+    const trimmed = name.trim();
+    if (trimmed && trimmed !== view.name) onRename(trimmed);
+  };
+  return (
+    <div className="rounded-lg border bg-card shadow-sm">
+      <div className="flex items-center justify-between px-3 pb-1 pt-2.5">
+        <p className="text-sm font-semibold">Новая вью</p>
+        <button
+          type="button"
+          aria-label="Закрыть"
+          onClick={onClose}
+          className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+      <div className="px-3 pb-1">
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={commitName}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitName();
+          }}
+          placeholder="Имя вью"
+          aria-label="Имя вью"
+          className="h-8 w-full rounded-md border bg-background px-2 text-sm outline-none ring-primary/30 focus:ring-2"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-1.5 p-3 pt-2">
+        {BOARD_VIEW_TYPES.map((t) => {
+          const Icon = VIEW_TYPE_ICONS[t];
+          const selected = view.type === t;
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => {
+                if (!selected) onType(t);
+              }}
+              className={cn(
+                'flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-xs transition-colors',
+                selected
+                  ? 'border-primary text-primary'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+              )}
+            >
+              <Icon className="size-5" />
+              {BOARD_VIEW_TYPE_LABELS[t]}
+            </button>
+          );
+        })}
+      </div>
+      <div className="px-3 pb-3">
+        <Button className="w-full" onClick={onDone}>
+          Готово
+        </Button>
+      </div>
     </div>
   );
 }

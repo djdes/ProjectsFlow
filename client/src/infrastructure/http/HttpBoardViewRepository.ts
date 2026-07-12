@@ -41,7 +41,12 @@ export class HttpBoardViewRepository implements BoardViewRepository {
   async update(
     projectId: string,
     viewId: string,
-    patch: { name?: string; type?: BoardViewType; config?: Record<string, unknown> | null },
+    patch: {
+      name?: string;
+      type?: BoardViewType;
+      sortOrder?: number;
+      config?: Record<string, unknown> | null;
+    },
   ): Promise<BoardView> {
     const res = await httpClient.patch<{ view: BoardViewDto }>(
       `/projects/${projectId}/views/${viewId}`,

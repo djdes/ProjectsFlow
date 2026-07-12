@@ -108,6 +108,8 @@ export const updateBoardViewSchema = z
   .object({
     name: z.string().trim().min(1, 'Введите название').max(64).optional(),
     type: z.enum(['kanban', 'table', 'list', 'calendar']).optional(),
+    // Порядок вкладок (drag-reorder в окне «ещё…», Notion-style).
+    sortOrder: z.number().int().min(0).max(100000).optional(),
     // Пер-вью настройки — прозрачный JSON от клиента; ограничиваем только размер.
     config: z
       .record(z.string(), z.unknown())
@@ -117,9 +119,14 @@ export const updateBoardViewSchema = z
         message: 'Слишком большой конфиг вью',
       }),
   })
-  .refine((v) => v.name !== undefined || v.type !== undefined || v.config !== undefined, {
-    message: 'Нечего обновлять',
-  });
+  .refine(
+    (v) =>
+      v.name !== undefined ||
+      v.type !== undefined ||
+      v.config !== undefined ||
+      v.sortOrder !== undefined,
+    { message: 'Нечего обновлять' },
+  );
 
 // Шаблоны задач (Notion Templates, db/108).
 export const createTaskTemplateSchema = z.object({

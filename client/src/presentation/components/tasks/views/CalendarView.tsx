@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -67,12 +67,24 @@ function diffDays(a: string, b: string): number {
   return Math.round((parseYmd(b).getTime() - parseYmd(a).getTime()) / 86400000);
 }
 
-// Сетка месяца: 6 недель с понедельника (полные ряды — соседние месяцы приглушены).
-function buildMonthGrid(monthStart: Date): Date[] {
-  const first = new Date(monthStart.getFullYear(), monthStart.getMonth(), 1);
+// Непрерывная сетка недель нескольких месяцев подряд — бесконечный скролл вниз
+// (Notion): от понедельника недели 1-го числа base до воскресенья недели последнего
+// дня base+months-1.
+function buildRangeGrid(base: Date, months: number): Date[] {
+  const first = new Date(base.getFullYear(), base.getMonth(), 1);
   const dow = (first.getDay() + 6) % 7; // 0=Пн … 6=Вс
-  const gridStart = addDays(first, -dow);
-  return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  const start = addDays(first, -dow);
+  const lastDay = new Date(base.getFullYear(), base.getMonth() + months, 0);
+  const endDow = (lastDay.getDay() + 6) % 7;
+  const end = addDays(lastDay, 6 - endDow);
+  const out: Date[] = [];
+  for (let d = start; d.getTime() <= end.getTime(); d = addDays(d, 1)) out.push(d);
+  return out;
+}
+
+// Ключ месяца для скролл-навигации ‹ › и подписи в шапке.
+function monthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 // Неделя (Notion Week view): 7 дней с понедельника недели, содержащей anchor.
@@ -172,15 +184,77 @@ export function CalendarView({
   }, [tasks]);
   const noDate = useMemo(() => tasks.filter((t) => !t.deadline), [tasks]);
 
+  // Месячный режим — бесконечный скролл: рендерим monthCount месяцев одной
+  // непрерывной сеткой, при подходе к низу догружаем ещё (Notion).
+  const [monthCount, setMonthCount] = useState(3);
+  const [visibleMonth, setVisibleMonth] = useState<Date>(monthStart);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Месяц, к которому нужно проскроллить после рендера (стрелки ‹ › / «Сегодня»).
+  const [pendingScroll, setPendingScroll] = useState<string | null>(null);
+
   const days = useMemo(
-    () => (mode === 'week' ? buildWeekGrid(monthStart) : buildMonthGrid(monthStart)),
-    [monthStart, mode],
+    () => (mode === 'week' ? buildWeekGrid(monthStart) : buildRangeGrid(monthStart, monthCount)),
+    [monthStart, mode, monthCount],
   );
   const todayYmd = ymd(startOfDay(new Date()));
   const monthLabel =
     mode === 'week'
       ? `${new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(days[0])} — ${new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(days[6])}`
-      : new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(monthStart);
+      : new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(visibleMonth);
+
+  // Подпись месяца в шапке следует за скроллом: первый заголовок «1-е число»,
+  // видимый в верхней части контейнера.
+  const handleCalScroll = (): void => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollTop + el.clientHeight > el.scrollHeight - 600) {
+      setMonthCount((c) => Math.min(c + 2, 36));
+    }
+    const top = el.getBoundingClientRect().top;
+    const anchors = el.querySelectorAll<HTMLElement>('[data-month-anchor]');
+    let current: string | null = null;
+    for (const a of anchors) {
+      if (a.getBoundingClientRect().top <= top + 80) current = a.dataset['monthAnchor'] ?? null;
+      else break;
+    }
+    if (current) {
+      const [y, m] = current.split('-').map(Number);
+      if (y && m) {
+        setVisibleMonth((prev) =>
+          prev.getFullYear() === y && prev.getMonth() === m - 1 ? prev : new Date(y, m - 1, 1),
+        );
+      }
+    }
+  };
+
+  // Скролл к месяцу после того, как он появился в сетке.
+  useEffect(() => {
+    if (!pendingScroll || mode === 'week') return;
+    const el = scrollRef.current?.querySelector<HTMLElement>(
+      `[data-month-anchor="${pendingScroll}"]`,
+    );
+    if (el) {
+      el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      setPendingScroll(null);
+    }
+  }, [pendingScroll, days, mode]);
+
+  // Навигация ‹ › (месячный режим): скроллим к соседнему месяцу; назад за базу —
+  // сдвигаем базу, вперёд за диапазон — догружаем месяцы.
+  const goToMonth = (target: Date): void => {
+    const key = monthKey(target);
+    const baseIdx =
+      (target.getFullYear() - monthStart.getFullYear()) * 12 +
+      (target.getMonth() - monthStart.getMonth());
+    if (baseIdx < 0) {
+      setMonthStart(new Date(target.getFullYear(), target.getMonth(), 1));
+      setVisibleMonth(new Date(target.getFullYear(), target.getMonth(), 1));
+      scrollRef.current?.scrollTo({ top: 0 });
+      return;
+    }
+    if (baseIdx >= monthCount) setMonthCount(Math.min(baseIdx + 2, 36));
+    setPendingScroll(key);
+  };
 
   // Контекстное меню чипа задачи (правая кнопка) — как у строк таблицы/списка.
   const menuFor = (task: Task): MenuEntry[] =>
@@ -336,11 +410,11 @@ export function CalendarView({
             size="icon"
             className="size-7"
             aria-label={mode === 'week' ? 'Предыдущая неделя' : 'Предыдущий месяц'}
-            onClick={() =>
-              setMonthStart((m) =>
-                mode === 'week' ? addDays(m, -7) : new Date(m.getFullYear(), m.getMonth() - 1, 1),
-              )
-            }
+            onClick={() => {
+              if (mode === 'week') setMonthStart((m) => addDays(m, -7));
+              else
+                goToMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1));
+            }}
           >
             <ChevronLeft className="size-4" />
           </Button>
@@ -350,9 +424,8 @@ export function CalendarView({
             className="h-7 px-2 text-xs"
             onClick={() => {
               const now = new Date();
-              setMonthStart(
-                mode === 'week' ? startOfDay(now) : new Date(now.getFullYear(), now.getMonth(), 1),
-              );
+              if (mode === 'week') setMonthStart(startOfDay(now));
+              else goToMonth(new Date(now.getFullYear(), now.getMonth(), 1));
             }}
           >
             Сегодня
@@ -362,11 +435,11 @@ export function CalendarView({
             size="icon"
             className="size-7"
             aria-label={mode === 'week' ? 'Следующая неделя' : 'Следующий месяц'}
-            onClick={() =>
-              setMonthStart((m) =>
-                mode === 'week' ? addDays(m, 7) : new Date(m.getFullYear(), m.getMonth() + 1, 1),
-              )
-            }
+            onClick={() => {
+              if (mode === 'week') setMonthStart((m) => addDays(m, 7));
+              else
+                goToMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1));
+            }}
           >
             <ChevronRight className="size-4" />
           </Button>
@@ -388,15 +461,21 @@ export function CalendarView({
             </div>
           ))}
         </div>
-        {/* Сетка: месяц 6×7 или одна неделя (высокие ячейки). */}
-        <div className="grid grid-cols-7">
+        {/* Сетка: месяцы непрерывной лентой с бесконечным скроллом вниз (Notion)
+            или одна неделя (высокие ячейки). Чередующиеся месяцы слегка затенены. */}
+        <div
+          ref={scrollRef}
+          onScroll={mode === 'week' ? undefined : handleCalScroll}
+          className={cn('grid grid-cols-7', mode !== 'week' && 'max-h-[70vh] overflow-y-auto')}
+        >
           {days.map((day) => (
             <DayCell
               key={ymd(day)}
               day={day}
-              inMonth={mode === 'week' || day.getMonth() === monthStart.getMonth()}
+              inMonth={mode === 'week' || day.getMonth() % 2 === 0}
               isToday={ymd(day) === todayYmd}
               tall={mode === 'week'}
+              monthAnchor={mode !== 'week' && day.getDate() === 1 ? monthKey(day) : undefined}
               tasks={byDay.get(ymd(day)) ?? []}
               dragging={activeDrag !== null}
               onOpen={(t) => setDrawer({ mode: 'edit', task: t })}
@@ -495,6 +574,7 @@ function DayCell({
   inMonth,
   isToday,
   tall = false,
+  monthAnchor,
   tasks,
   dragging,
   onOpen,
@@ -502,9 +582,12 @@ function DayCell({
   menuFor,
 }: {
   day: Date;
+  // Чередование фона месяцев в непрерывной ленте (Notion) / приглушение в неделе.
   inMonth: boolean;
   isToday: boolean;
   tall?: boolean;
+  // YYYY-MM у 1-го числа месяца: якорь скролл-навигации ‹ › + подпись «1 июл».
+  monthAnchor?: string;
   tasks: DayItem[];
   dragging: boolean;
   onOpen: (t: Task) => void;
@@ -518,6 +601,7 @@ function DayCell({
   return (
     <div
       ref={setNodeRef}
+      data-month-anchor={monthAnchor}
       className={cn(
         'group/cell relative border-b border-r p-1 first:border-l [&:nth-child(7n+1)]:border-l',
         tall ? 'min-h-[24rem]' : 'min-h-24',
@@ -525,8 +609,8 @@ function DayCell({
         dragging && isOver && 'bg-primary/10 ring-2 ring-inset ring-primary/40',
       )}
     >
-      {/* Notion-порядок: «+» слева при hover, число дня — в правом верхнем углу,
-          сегодня — красный кружок. */}
+      {/* Notion-порядок: «+» слева при hover, число дня — в правом верхнем углу
+          (у 1-го числа — с месяцем), сегодня — красный кружок. */}
       <div className="flex items-center justify-between">
         <button
           type="button"
@@ -538,12 +622,14 @@ function DayCell({
         </button>
         <span
           className={cn(
-            'inline-flex size-5 items-center justify-center rounded-full text-[11px]',
-            isToday ? 'bg-red-500 font-semibold text-white' : 'text-muted-foreground',
-            !inMonth && !isToday && 'text-muted-foreground/40',
+            'inline-flex h-5 items-center justify-center rounded-full text-[11px]',
+            isToday ? 'size-5 bg-red-500 font-semibold text-white' : 'text-muted-foreground',
+            monthAnchor && !isToday && 'px-1 font-medium text-foreground',
           )}
         >
-          {day.getDate()}
+          {monthAnchor
+            ? `${day.getDate()} ${new Intl.DateTimeFormat('ru-RU', { month: 'short' }).format(day)}`
+            : day.getDate()}
         </span>
       </div>
       <div className="mt-0.5 flex flex-col gap-0.5">

@@ -113,6 +113,10 @@ type Props = {
   createRequest: ViewCreateRequest | null;
 };
 
+// Координата ячейки для Excel-выделения: row — индекс в rows, col — 0 (название)
+// или индекс видимой колонки + 1.
+type CellCoord = { row: number; col: number };
+
 // Ширины колонок; сетка собирается из видимых (скрытие свойств — как в Notion).
 const COLUMN_WIDTH: Record<ViewColumn, string> = {
   status: '8.5rem',
@@ -159,7 +163,10 @@ export function TableView({
   const isShared = (memberCount ?? 0) > 1;
   const [drawer, setDrawer] = useState<TaskDrawerState | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
-  const [selCell, setSelCell] = useState<string | null>(null); // `${taskId}:${col}`
+  // Выделение ячеек как в Excel (Notion): mousedown — якорь, drag по ячейкам — диапазон.
+  // Координаты: row — индекс в rows, col — 0 (название) или индекс в visibleCols + 1.
+  const [selRange, setSelRange] = useState<{ a: CellCoord; h: CellCoord } | null>(null);
+  const selDragging = useRef(false);
   const bulk = useBulkTaskActions({ projectId, update, move, remove, refetch });
 
   const rows = useMemo(
@@ -377,6 +384,15 @@ export function TableView({
       .catch((err: unknown) => toast.error(`Не удалось: ${(err as Error).message}`));
   };
 
+  // Notion: перемещённая строка сразу получает выделение ячейки названия.
+  useEffect(() => {
+    if (!recentlyMovedId) return;
+    const idx = rows.findIndex((t) => t.id === recentlyMovedId);
+    if (idx < 0) return;
+    const c = { row: idx, col: 0 };
+    setSelRange({ a: c, h: c });
+  }, [recentlyMovedId, rows]);
+
   // Shift+клик по чекбоксу — выделение диапазона (Notion).
   const lastCheckedRef = useRef<number | null>(null);
   const toggleWithRange = (idx: number, shift: boolean): void => {
@@ -414,15 +430,59 @@ export function TableView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createRequest]);
 
-  // Esc снимает выделение ячейки.
+  // Esc снимает выделение ячеек; mouseup завершает протяжку диапазона.
   useEffect(() => {
-    if (!selCell) return;
+    if (!selRange) return;
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setSelCell(null);
+      if (e.key === 'Escape') setSelRange(null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selCell]);
+  }, [selRange]);
+  useEffect(() => {
+    const up = (): void => {
+      selDragging.current = false;
+    };
+    window.addEventListener('mouseup', up);
+    return () => window.removeEventListener('mouseup', up);
+  }, []);
+
+  const colIndexOf = (k: 'title' | ViewColumn): number =>
+    k === 'title' ? 0 : visibleCols.indexOf(k) + 1;
+  const cellDown = (row: number, k: 'title' | ViewColumn): void => {
+    selDragging.current = true;
+    const c = { row, col: colIndexOf(k) };
+    setSelRange({ a: c, h: c });
+  };
+  const cellEnter = (row: number, k: 'title' | ViewColumn): void => {
+    if (!selDragging.current) return;
+    setSelRange((prev) => (prev ? { a: prev.a, h: { row, col: colIndexOf(k) } } : prev));
+  };
+  // Стиль ячейки в диапазоне: одиночная — синяя рамка с уголком (как раньше),
+  // диапазон — заливка Excel-style.
+  const rangeClassFor = (row: number, k: 'title' | ViewColumn): string | null => {
+    if (!selRange) return null;
+    const c = colIndexOf(k);
+    const [r1, r2] = [Math.min(selRange.a.row, selRange.h.row), Math.max(selRange.a.row, selRange.h.row)];
+    const [c1, c2] = [Math.min(selRange.a.col, selRange.h.col), Math.max(selRange.a.col, selRange.h.col)];
+    if (row < r1 || row > r2 || c < c1 || c > c2) return null;
+    const single = r1 === r2 && c1 === c2;
+    if (single)
+      return 'ring-2 ring-inset ring-primary/70 after:pointer-events-none after:absolute after:-bottom-[3px] after:-right-[3px] after:size-1.5 after:rounded-[1px] after:bg-primary';
+    return cn(
+      'bg-primary/10',
+      row === selRange.a.row && c === selRange.a.col && 'ring-2 ring-inset ring-primary/70',
+    );
+  };
+
+  // Задачи, попавшие в диапазон (>1 ячейки) — панель действий как при выборе строк.
+  const rangeTaskIds = useMemo(() => {
+    if (!selRange) return [] as string[];
+    const [r1, r2] = [Math.min(selRange.a.row, selRange.h.row), Math.max(selRange.a.row, selRange.h.row)];
+    const single = r1 === r2 && selRange.a.col === selRange.h.col;
+    if (single) return [] as string[];
+    return rows.slice(r1, r2 + 1).map((t) => t.id);
+  }, [selRange, rows]);
 
   const toggleSelected = (id: string): void => {
     setSelected((prev) => {
@@ -439,10 +499,13 @@ export function TableView({
   };
 
   const selectedIds = rows.filter((t) => selected.has(t.id)).map((t) => t.id);
+  // Цель bulk-действий: чекбоксы приоритетнее; иначе — задачи Excel-диапазона.
+  const barTaskIds = selectedIds.length > 0 ? selectedIds : rangeTaskIds;
 
   const reportBulk = (label: string) => (res: BulkResult) => {
     if (res.failed > 0) toast.error(`${label}: ${res.ok} из ${res.ok + res.failed}`);
     setSelected(new Set());
+    setSelRange(null);
   };
 
   if (loading) return <div className="h-64 animate-pulse rounded-xl bg-muted/60" />;
@@ -458,8 +521,9 @@ export function TableView({
         onDragCancel={() => setDragTask(null)}
       >
       <div className="overflow-x-auto">
-        {/* Левое «поле» (pl-12): hover-контролы строк живут в нём, как в Notion. */}
-        <div className="min-w-[55rem] pl-12 pr-8">
+        {/* Левое «поле» (pl-14 = 56px): hover-контролы строк (-left-14) живут в нём,
+            как в Notion; меньший паддинг обрезал бы «⋮⋮» краем overflow-контейнера. */}
+        <div className="min-w-[55rem] pl-14 pr-8">
           {/* Шапка таблицы: иконка типа свойства + название; клик по заголовку —
               меню колонки (сортировка ↑↓, скрыть свойство), как в Notion. */}
           <div
@@ -646,8 +710,10 @@ export function TableView({
                 onCancelEdit={() => setEditingId(null)}
                 selected={selected.has(task.id)}
                 anySelected={selected.size > 0}
-                selCell={selCell}
-                onSelCell={setSelCell}
+                rowIdx={idx}
+                onCellDown={cellDown}
+                onCellEnter={cellEnter}
+                rangeClassFor={rangeClassFor}
                 onToggleSelected={(shift) => toggleWithRange(idx, shift)}
                 onOpen={() => setDrawer({ mode: 'edit', task })}
                 onCreateBelow={(above) => setInsertAt({ taskId: task.id, above })}
@@ -768,15 +834,19 @@ export function TableView({
         tasksApi={tasksApi}
       />
 
-      {/* Плавающая панель выбранных (Notion «N selected» сверху). */}
-      {selectedIds.length > 0 && (
+      {/* Плавающая панель выбранных — поверх строки вкладок (Notion). Работает и от
+          чекбоксов строк, и от Excel-диапазона ячеек (>1 ячейки). */}
+      {(selectedIds.length > 0 || rangeTaskIds.length > 0) && (
         <SelectedBar
-          count={selectedIds.length}
-          onExit={() => setSelected(new Set())}
-          onStatus={(s) => void bulk.moveToColumn(selectedIds, s).then(reportBulk('Статус'))}
-          onPriority={(p) => void bulk.setPriority(selectedIds, p).then(reportBulk('Приоритет'))}
-          onDeadline={(d) => void bulk.setDeadline(selectedIds, d).then(reportBulk('Срок'))}
-          onDelete={() => void bulk.remove(selectedIds).then(reportBulk('Удаление'))}
+          count={selectedIds.length > 0 ? selectedIds.length : rangeTaskIds.length}
+          onExit={() => {
+            setSelected(new Set());
+            setSelRange(null);
+          }}
+          onStatus={(s) => void bulk.moveToColumn(barTaskIds, s).then(reportBulk('Статус'))}
+          onPriority={(p) => void bulk.setPriority(barTaskIds, p).then(reportBulk('Приоритет'))}
+          onDeadline={(d) => void bulk.setDeadline(barTaskIds, d).then(reportBulk('Срок'))}
+          onDelete={() => void bulk.remove(barTaskIds).then(reportBulk('Удаление'))}
         />
       )}
     </div>
@@ -1046,8 +1116,10 @@ function TableRow({
   onCancelEdit,
   selected,
   anySelected,
-  selCell,
-  onSelCell,
+  rowIdx,
+  onCellDown,
+  onCellEnter,
+  rangeClassFor,
   onToggleSelected,
   onOpen,
   onCreateBelow,
@@ -1084,8 +1156,10 @@ function TableRow({
   onCancelEdit: () => void;
   selected: boolean;
   anySelected: boolean;
-  selCell: string | null;
-  onSelCell: (c: string | null) => void;
+  rowIdx: number;
+  onCellDown: (row: number, col: 'title' | ViewColumn) => void;
+  onCellEnter: (row: number, col: 'title' | ViewColumn) => void;
+  rangeClassFor: (row: number, col: 'title' | ViewColumn) => string | null;
   onToggleSelected: (shift: boolean) => void;
   onOpen: () => void;
   onCreateBelow: (above: boolean) => void;
@@ -1111,17 +1185,21 @@ function TableRow({
     isDragging,
   } = useDraggable({ id: task.id, disabled: !dndEnabled });
   const [gripMenuOpen, setGripMenuOpen] = useState(false);
-  // Клик по «пустому» месту ячейки — выделение синей рамкой (Notion cell selection).
-  const cellProps = (col: ViewColumn): { className: string; onMouseDown: (e: React.MouseEvent) => void } => ({
-    className: cn(
-      'relative border-l px-1 py-0.5',
-      selCell === `${task.id}:${col}` &&
-        'ring-2 ring-inset ring-primary/70 after:pointer-events-none after:absolute after:-bottom-[3px] after:-right-[3px] after:size-1.5 after:rounded-[1px] after:bg-primary',
-    ),
+  // Клик по «пустому» месту ячейки — выделение (Notion cell selection); зажатая
+  // кнопка + движение по ячейкам растягивает диапазон как в Excel.
+  const cellProps = (
+    col: ViewColumn,
+  ): {
+    className: string;
+    onMouseDown: (e: React.MouseEvent) => void;
+    onMouseEnter: () => void;
+  } => ({
+    className: cn('relative border-l px-1 py-0.5', rangeClassFor(rowIdx, col)),
     onMouseDown: (e: React.MouseEvent) => {
       if ((e.target as HTMLElement).closest('button,input,a')) return;
-      onSelCell(`${task.id}:${col}`);
+      onCellDown(rowIdx, col);
     },
+    onMouseEnter: () => onCellEnter(rowIdx, col),
   });
 
   const cellFor = (col: ViewColumn): React.ReactElement => {
@@ -1314,10 +1392,16 @@ function TableRow({
           подзадач (Notion sub-items). */}
       <div
         className={cn(
-          'flex min-w-0 items-center gap-1.5 px-2 py-1',
+          'relative flex min-w-0 items-center gap-1.5 px-2 py-1',
           frozenTitle && 'sticky left-0 z-10 border-r bg-background',
+          rangeClassFor(rowIdx, 'title'),
         )}
         style={depth > 0 ? { paddingLeft: 8 + depth * 20 } : undefined}
+        onMouseDown={(e) => {
+          if ((e.target as HTMLElement).closest('button,input,a')) return;
+          onCellDown(rowIdx, 'title');
+        }}
+        onMouseEnter={() => onCellEnter(rowIdx, 'title')}
       >
         {hasChildren ? (
           <button

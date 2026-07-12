@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { X, Trash2 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -16,7 +17,9 @@ import { ymd, startOfDay, addDays } from '../assignedGrouping';
 import { STATUS_DOT } from './viewShared';
 
 // Плавающая панель действий над выбранными строками — копия Notion selection toolbar:
-// «N выбрано ✕ | Статус | Приоритет | Срок | 🗑», плавает СВЕРХУ по центру.
+// «N выбрано ✕ | Статус | Приоритет | Срок | 🗑». Рендерится ПОВЕРХ строки вкладок вью
+// (портал в #pf-views-tabs-row — Notion закрывает вкладки панелью; строка sticky, так
+// что при скролле панель остаётся видимой). Fallback — fixed сверху по центру.
 // Общая для табличного и списочного видов.
 export function SelectedBar({
   count,
@@ -34,11 +37,17 @@ export function SelectedBar({
   onDelete: () => void;
 }): React.ReactElement {
   const today = ymd(startOfDay(new Date()));
-  return (
+  const host = document.getElementById('pf-views-tabs-row');
+  const bar = (
     <div
       role="toolbar"
       aria-label="Действия с выбранными задачами"
-      className="fixed left-1/2 top-16 z-40 flex -translate-x-1/2 items-center overflow-hidden rounded-lg border bg-card shadow-lg duration-200 animate-in fade-in slide-in-from-top-2"
+      className={cn(
+        'flex items-center overflow-hidden border bg-card shadow-lg duration-200 animate-in fade-in',
+        host
+          ? 'absolute inset-y-0 left-0 z-40 rounded-lg'
+          : 'fixed left-1/2 top-16 z-40 -translate-x-1/2 rounded-lg slide-in-from-top-2',
+      )}
     >
       <span className="flex items-center gap-1.5 border-r px-2.5 py-1.5 text-xs font-medium text-primary">
         Выбрано: {count}
@@ -108,4 +117,5 @@ export function SelectedBar({
       </button>
     </div>
   );
+  return host ? createPortal(bar, host) : bar;
 }
