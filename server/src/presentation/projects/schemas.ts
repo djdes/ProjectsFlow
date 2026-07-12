@@ -149,7 +149,17 @@ const taskPropertyOptionSchema = z.object({
 
 export const createTaskPropertySchema = z.object({
   name: z.string().trim().min(1, 'Введите имя свойства').max(64),
-  type: z.enum(['text', 'number', 'select', 'multi_select', 'date', 'checkbox', 'url']),
+  type: z.enum([
+    'text',
+    'number',
+    'select',
+    'multi_select',
+    'date',
+    'checkbox',
+    'url',
+    'phone',
+    'email',
+  ]),
   options: z.array(taskPropertyOptionSchema).max(50).optional(),
 });
 

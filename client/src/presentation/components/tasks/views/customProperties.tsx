@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlignLeft,
+  AtSign,
   Calendar,
   CheckSquare,
   ChevronDown,
@@ -10,6 +11,8 @@ import {
   Link as LinkIcon,
   List,
   Pencil,
+  Phone,
+  Search,
   Tags,
   Trash2,
   type LucideIcon,
@@ -42,6 +45,8 @@ export const PROPERTY_TYPE_ICONS: Record<TaskPropertyType, LucideIcon> = {
   date: Calendar,
   checkbox: CheckSquare,
   url: LinkIcon,
+  phone: Phone,
+  email: AtSign,
 };
 
 // Пилюля опции select/multi_select — те же цвета, что у условного цвета строк.
@@ -70,7 +75,7 @@ export type UseTaskPropertiesResult = {
   properties: TaskProperty[];
   valueFor: (taskId: string, propertyId: string) => string;
   setValue: (taskId: string, propertyId: string, value: string) => void;
-  createProperty: (type: TaskPropertyType) => void;
+  createProperty: (type: TaskPropertyType, name?: string) => void;
   renameProperty: (propertyId: string, name: string) => void;
   addOption: (property: TaskProperty, label: string) => Promise<TaskPropertyOption | null>;
   removeProperty: (propertyId: string) => void;
@@ -124,9 +129,9 @@ export function useTaskProperties(projectId: string): UseTaskPropertiesResult {
     });
   };
 
-  const createProperty = (type: TaskPropertyType): void => {
+  const createProperty = (type: TaskPropertyType, name?: string): void => {
     void taskPropertyRepository
-      .create(projectId, { name: TASK_PROPERTY_TYPE_LABELS[type], type })
+      .create(projectId, { name: name?.trim() || TASK_PROPERTY_TYPE_LABELS[type], type })
       .then((p) => setProperties((prev) => [...prev, p]))
       .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`));
   };
@@ -244,24 +249,63 @@ export function PropertyHeaderCell({
   );
 }
 
-// Пункты «Новое свойство» для «+» в конце шапки (Notion add property).
-export function NewPropertyMenuItems({
+// Содержимое попапа «Новое свойство» (Notion add property): инпут имени сверху,
+// «Выбрать тип» с поиском, сетка типов 2 колонки с иконками.
+export function NewPropertyForm({
   onCreate,
 }: {
-  onCreate: (type: TaskPropertyType) => void;
+  onCreate: (type: TaskPropertyType, name?: string) => void;
 }): React.ReactElement {
+  const [name, setName] = useState('');
+  const [typeQuery, setTypeQuery] = useState('');
+  const q = typeQuery.trim().toLowerCase();
+  const types = TASK_PROPERTY_TYPES.filter(
+    (t) => !q || TASK_PROPERTY_TYPE_LABELS[t].toLowerCase().includes(q),
+  );
   return (
-    <>
-      {TASK_PROPERTY_TYPES.map((t) => {
-        const Icon = PROPERTY_TYPE_ICONS[t];
-        return (
-          <DropdownMenuItem key={t} className="gap-2" onClick={() => onCreate(t)}>
-            <Icon className="size-4 text-muted-foreground" />
-            {TASK_PROPERTY_TYPE_LABELS[t]}
-          </DropdownMenuItem>
-        );
-      })}
-    </>
+    <div className="w-72">
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Введите имя свойства…"
+        aria-label="Имя свойства"
+        className="mb-1.5 h-8 w-full rounded-md bg-accent/60 px-2 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
+      />
+      <div className="flex items-center justify-between px-1 pb-1">
+        <p className="text-[11px] font-medium text-muted-foreground">Выбрать тип</p>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-1.5 top-1/2 size-3 -translate-y-1/2 text-muted-foreground/60" />
+          <input
+            value={typeQuery}
+            onChange={(e) => setTypeQuery(e.target.value)}
+            aria-label="Поиск типа"
+            className="h-6 w-24 rounded bg-accent/60 pl-6 pr-1.5 text-[11px] outline-none placeholder:text-muted-foreground/60"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-0.5">
+        {types.map((t) => {
+          const Icon = PROPERTY_TYPE_ICONS[t];
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => onCreate(t, name)}
+              className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60"
+            >
+              <Icon className="size-4 text-muted-foreground" />
+              {TASK_PROPERTY_TYPE_LABELS[t]}
+            </button>
+          );
+        })}
+        {types.length === 0 && (
+          <p className="col-span-2 px-2 py-3 text-center text-xs text-muted-foreground">
+            Ничего не найдено
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -320,24 +364,36 @@ export function PropertyValueCell({
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // text / number / url / date — клик = инлайн-инпут на всю ячейку.
+  // text / number / url / date / phone / email — клик = инлайн-инпут на всю ячейку.
   if (
     property.type === 'text' ||
     property.type === 'number' ||
     property.type === 'url' ||
-    property.type === 'date'
+    property.type === 'date' ||
+    property.type === 'phone' ||
+    property.type === 'email'
   ) {
     const commit = (): void => {
       setEditing(false);
       if (draft !== value) onChange(draft);
     };
+    const inputType =
+      property.type === 'date'
+        ? 'date'
+        : property.type === 'number'
+          ? 'number'
+          : property.type === 'phone'
+            ? 'tel'
+            : property.type === 'email'
+              ? 'email'
+              : 'text';
     if (editing) {
       return (
         <div className="border-l px-2 py-1.5">
           <input
             ref={inputRef}
             autoFocus
-            type={property.type === 'date' ? 'date' : property.type === 'number' ? 'number' : 'text'}
+            type={inputType}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}

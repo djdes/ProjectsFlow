@@ -205,14 +205,17 @@ export function ViewsOverflowMenu({
         createPortal(
           <div
             ref={popupRef}
-            style={pos ? { left: pos.left, top: pos.top } : undefined}
-            className="fixed z-50 w-72 rounded-lg border bg-popover p-1.5 shadow-lg duration-100 animate-in fade-in zoom-in-95"
+            style={!creating && pos ? { left: pos.left, top: pos.top } : undefined}
+            className={cn(
+              'fixed z-50 rounded-lg border bg-popover p-1.5 shadow-lg duration-100 animate-in fade-in zoom-in-95',
+              // «Начать с нуля» — центрированное окно (Notion Start from scratch),
+              // список вью — у кнопки-триггера.
+              creating ? 'left-1/2 top-[38%] w-80 -translate-x-1/2 p-3' : 'w-72',
+            )}
           >
           {creating ? (
             <>
-              <p className="px-1.5 pb-1.5 pt-1 text-xs font-medium text-muted-foreground">
-                Начать с нуля
-              </p>
+              <p className="px-0.5 pb-2 text-sm font-medium">Начать с нуля</p>
               <div className="grid grid-cols-4 gap-1 pb-1">
                 {BOARD_VIEW_TYPES.map((t) => {
                   const Icon = VIEW_TYPE_ICONS[t];

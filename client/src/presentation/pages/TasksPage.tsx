@@ -193,7 +193,10 @@ export function TasksPage(): React.ReactElement {
     <div className="flex min-h-full flex-col">
       {/* Хлебные крошки прячем на мобиле: имя проекта дублируется в заголовке ниже,
           навигация — в нижнем таб-баре/drawer. Это возвращает вертикальное место канбану. */}
-      <div className="sticky top-0 z-20 hidden h-11 items-center justify-between gap-2 bg-background px-2.5 sm:flex">
+      <div
+        id="pf-project-crumbs"
+        className="sticky top-0 z-20 hidden h-11 items-center justify-between gap-2 bg-background px-2.5 sm:flex"
+      >
         <ProjectBreadcrumbs
           projectId={data.id}
           projectName={data.name}
@@ -227,7 +230,7 @@ export function TasksPage(): React.ReactElement {
       {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая) — ПОД крошками,
           тоже закреплена при скролле (сразу под sticky-строкой крошек, top-11 = её высота).
           shiftForOverlay: контент центрируется в видимой области, когда открыто окно задачи. */}
-      <div className="sticky top-11 z-10">
+      <div id="pf-sticky-banners" className="sticky top-11 z-10">
         <ProjectPublishedBanner projectId={data.id} shiftForOverlay />
         {/* Липкий гейт готовности воркера (репо + делегация + KB) — пока в колонке «Воркер» есть задача. */}
         <ProjectWorkerGateBanner

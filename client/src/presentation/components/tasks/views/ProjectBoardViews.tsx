@@ -213,6 +213,22 @@ export function ProjectBoardViews({
   const [searchOpen, setSearchOpen] = useState(false);
   const [createReq, setCreateReq] = useState<ViewCreateRequest | null>(null);
 
+  // Sticky-отступ строки вкладок: под крошками (#pf-project-crumbs) и плашками
+  // (#pf-sticky-banners) страницы — их высоты динамические (баннер закрываемый).
+  const [stickyTop, setStickyTop] = useState(0);
+  useEffect(() => {
+    const crumbs = document.getElementById('pf-project-crumbs');
+    const banners = document.getElementById('pf-sticky-banners');
+    const measure = (): void => {
+      setStickyTop((crumbs?.offsetHeight ?? 0) + (banners?.offsetHeight ?? 0));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (crumbs) ro.observe(crumbs);
+    if (banners) ro.observe(banners);
+    return () => ro.disconnect();
+  }, []);
+
   // Шаблоны задач (db/108) — пункты в шевроне «Создать ▾» (Notion Templates).
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const refetchTemplates = useCallback(async (): Promise<void> => {
@@ -580,10 +596,12 @@ export function ProjectBoardViews({
       {/* Строка вкладок + тулбар вью (Notion-style). На узком экране (как в Notion)
           ряд вкладок сворачивается в одну кнопку «Активная вью ⌄» с дропдауном.
           group/tabs — «+» новой вью появляется при наведении на строку; sticky —
-          строка (и панель выделения таблицы поверх неё) видна при скролле. */}
+          строка (и панель выделения таблицы поверх неё) видна при скролле, прилипая
+          ПОД sticky-крошками и плашками страницы (динамический top, см. эффект). */}
       <div
         id="pf-views-tabs-row"
-        className="group/tabs sticky top-0 z-30 flex items-center gap-0.5 bg-background pb-1"
+        style={{ top: stickyTop }}
+        className="group/tabs sticky z-30 flex items-center gap-0.5 bg-background pb-1"
       >
         {/* Компактный переключатель вью (узкий экран). */}
         <div className="flex min-w-0 flex-1 items-center md:hidden">

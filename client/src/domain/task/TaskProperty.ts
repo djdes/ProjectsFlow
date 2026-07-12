@@ -9,6 +9,8 @@ export const TASK_PROPERTY_TYPES = [
   'date',
   'checkbox',
   'url',
+  'phone',
+  'email',
 ] as const;
 export type TaskPropertyType = (typeof TASK_PROPERTY_TYPES)[number];
 
@@ -20,6 +22,8 @@ export const TASK_PROPERTY_TYPE_LABELS: Record<TaskPropertyType, string> = {
   date: 'Дата',
   checkbox: 'Чекбокс',
   url: 'Ссылка',
+  phone: 'Телефон',
+  email: 'Email',
 };
 
 // Опция select/multi_select; color — ключ палитры (RULE_COLOR_* в viewShared).

@@ -41,6 +41,7 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
@@ -50,7 +51,7 @@ import { VISIBLE_KANBAN_STATUSES } from '@/domain/kanban/KanbanSettings';
 import { useContainer } from '@/infrastructure/di/container';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import {
-  NewPropertyMenuItems,
+  NewPropertyForm,
   PropertyHeaderCell,
   PropertyValueCell,
   useTaskProperties,
@@ -159,6 +160,7 @@ export function TableView({
   const { taskTemplateRepository } = useContainer();
   // Кастомные свойства (db/109): колонки после стандартных, «+» в шапке создаёт новое.
   const customProps = useTaskProperties(projectId);
+  const [addPropOpen, setAddPropOpen] = useState(false);
   const { user } = useCurrentUser();
   const isShared = (memberCount ?? 0) > 1;
   const [drawer, setDrawer] = useState<TaskDrawerState | null>(null);
@@ -605,10 +607,10 @@ export function TableView({
               />
             ))}
             <div className="border-l" aria-hidden />
-            {/* «+» в конце шапки (Notion add property): вернуть скрытые свойства
-                и создать новое кастомное свойство (db/109). */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            {/* «+» в конце шапки (Notion add property): попап с именем свойства,
+                «Выбрать тип» с поиском и сеткой типов; сверху — вернуть скрытые. */}
+            <Popover open={addPropOpen} onOpenChange={setAddPropOpen}>
+              <PopoverTrigger asChild>
                 <button
                   type="button"
                   aria-label="Добавить свойство"
@@ -617,25 +619,37 @@ export function TableView({
                 >
                   <Plus className="size-3.5" />
                 </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[12rem]">
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-auto p-1.5">
                 {hiddenCols.length > 0 && (
-                  <>
+                  <div className="mb-1.5 border-b pb-1">
+                    <p className="px-1 pb-0.5 text-[11px] font-medium text-muted-foreground">
+                      Скрытые свойства
+                    </p>
                     {hiddenCols.map((c) => (
-                      <DropdownMenuItem key={c} className="gap-2" onClick={() => onToggleCol(c)}>
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => {
+                          onToggleCol(c);
+                          setAddPropOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60"
+                      >
                         <ColumnIcon col={c} />
                         {VIEW_COLUMN_LABELS[c]}
-                      </DropdownMenuItem>
+                      </button>
                     ))}
-                    <DropdownMenuSeparator />
-                  </>
+                  </div>
                 )}
-                <p className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
-                  Новое свойство
-                </p>
-                <NewPropertyMenuItems onCreate={customProps.createProperty} />
-              </DropdownMenuContent>
-            </DropdownMenu>
+                <NewPropertyForm
+                  onCreate={(t, name) => {
+                    customProps.createProperty(t, name);
+                    setAddPropOpen(false);
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
           </div>
 
           {(grouping && groups

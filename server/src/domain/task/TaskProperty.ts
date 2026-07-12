@@ -9,6 +9,8 @@ export const TASK_PROPERTY_TYPES = [
   'date',
   'checkbox',
   'url',
+  'phone',
+  'email',
 ] as const;
 export type TaskPropertyType = (typeof TASK_PROPERTY_TYPES)[number];
 
