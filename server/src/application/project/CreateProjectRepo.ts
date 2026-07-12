@@ -1,6 +1,7 @@
 import type { GithubApiClient } from '../github/GithubApiClient.js';
 import type { GithubTokenRepository } from '../github/GithubTokenRepository.js';
 import {
+  GithubApiError,
   GithubNotConnectedError,
   GithubRepoNameTakenError,
 } from '../../domain/github/errors.js';
@@ -21,9 +22,10 @@ export type CreateProjectRepoInput = {
   readonly privateRepo: boolean;
 };
 
-// GitHub возвращает 422, когда имя репо уже занято у пользователя.
+// GitHub возвращает 422, когда имя репо уже занято у пользователя. Невалидные имена
+// до GitHub не доходят (zod-схема маршрута), так что 422 здесь ≈ «имя занято».
 function isNameTaken(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && (err as { status?: number }).status === 422;
+  return err instanceof GithubApiError && err.status === 422;
 }
 
 // Кнопка «Создать репо» на обзоре проекта: создаёт НОВЫЙ репо под аккаунтом

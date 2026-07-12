@@ -129,3 +129,12 @@ test('CreateProjectRepo: прочие ошибки GitHub пробрасываю
     (e: unknown) => e instanceof GithubApiError && e.status === 500,
   );
 });
+
+test('CreateProjectRepo: уже подключён + GitHub не привязан → ProjectRepoAlreadyConnectedError (порядок проверок)', async () => {
+  const project = makeProject({ gitRepoUrl: 'https://github.com/x/y' });
+  const { deps } = makeDeps({ project, role: 'editor', connected: false });
+  await assert.rejects(
+    () => new CreateProjectRepo(deps).execute('p1', 'u1', { name: 'z', privateRepo: true }),
+    ProjectRepoAlreadyConnectedError,
+  );
+});
