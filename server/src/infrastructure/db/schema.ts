@@ -360,6 +360,32 @@ export const workspaceMembers = mysqlTable(
 export type WorkspaceMemberRow = typeof workspaceMembers.$inferSelect;
 export type NewWorkspaceMemberRow = typeof workspaceMembers.$inferInsert;
 
+// Invite-ссылки в пространство (db/111) — замена per-project приглашений. Токен одноразовый,
+// TTL 7 дней; email — информационное поле, mismatch не блокирует accept.
+export const workspaceInvites = mysqlTable(
+  'workspace_invites',
+  {
+    id: id(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    role: mysqlEnum('role', ['editor', 'viewer']).notNull().default('editor'),
+    token: char('token', { length: 64 }).notNull(),
+    email: varchar('email', { length: 255 }),
+    expiresAt: timestamp('expires_at').notNull(),
+    acceptedAt: timestamp('accepted_at'),
+    acceptedByUserId: char('accepted_by_user_id', { length: 36 }),
+    createdByUserId: char('created_by_user_id', { length: 36 }).notNull(),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_ws_invites_token').on(t.token),
+    index('idx_ws_invites_workspace').on(t.workspaceId),
+    index('idx_ws_invites_expires').on(t.expiresAt),
+  ],
+);
+
+export type WorkspaceInviteRow = typeof workspaceInvites.$inferSelect;
+export type NewWorkspaceInviteRow = typeof workspaceInvites.$inferInsert;
+
 // Общий чат пространства (db/075). Один канал на пространство; seq — глобально-монотонный
 // AUTO_INCREMENT курсор (сортировка/пагинация/SSE-replay). Удаление мягкое (deleted_at).
 export const workspaceChatMessages = mysqlTable(
