@@ -8,6 +8,7 @@ import type { PublishProject } from '../../application/project/PublishProject.js
 import type { UnpublishProject } from '../../application/project/UnpublishProject.js';
 import type { SetPublicIndexing } from '../../application/project/SetPublicIndexing.js';
 import type { EnsureProjectAppRepo } from '../../application/project/EnsureProjectAppRepo.js';
+import type { CreateProjectRepo } from '../../application/project/CreateProjectRepo.js';
 import type { GetProjectSite } from '../../application/site/GetProjectSite.js';
 import { publicBoardUrl } from '../../domain/project/publicBoardUrl.js';
 import type { SetProjectDispatcher } from '../../application/project/SetProjectDispatcher.js';
@@ -56,6 +57,7 @@ import type { BoardView } from '../../domain/project/BoardView.js';
 import type { AttachmentStorage } from '../../application/task/AttachmentStorage.js';
 import {
   createBoardViewSchema,
+  createProjectRepoSchema,
   createTaskTemplateSchema,
   createTaskPropertySchema,
   updateTaskPropertySchema,
@@ -88,6 +90,7 @@ type Deps = {
   readonly unpublishProject: UnpublishProject;
   readonly setPublicIndexing: SetPublicIndexing;
   readonly ensureAppRepo: EnsureProjectAppRepo;
+  readonly createProjectRepo: CreateProjectRepo;
   readonly getProjectSite: GetProjectSite;
   readonly setProjectDispatcher: SetProjectDispatcher;
   readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
@@ -421,6 +424,21 @@ export function projectsRouter(deps: Deps): Router {
       const { fullName } = await deps.ensureAppRepo.execute(id, req.user!.id);
       deps.notifyProjectChanged(id);
       res.json({ appRepoFullName: fullName });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // === Создать НОВЫЙ GitHub-репо и подключить к проекту (кнопка на «Обзоре»). ===
+  // Репо создаётся под аккаунтом вызывающего его токеном. Editor+. 409 если уже подключён.
+  router.post('/:id/repo', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const { name, privateRepo } = createProjectRepoSchema.parse(req.body);
+      const result = await deps.createProjectRepo.execute(id, req.user!.id, { name, privateRepo });
+      deps.notifyProjectChanged(id);
+      res.json({ fullName: result.fullName, gitRepoUrl: result.gitRepoUrl });
     } catch (e) {
       next(e);
     }

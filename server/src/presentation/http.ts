@@ -29,6 +29,7 @@ import type { PublishProject } from '../application/project/PublishProject.js';
 import type { UnpublishProject } from '../application/project/UnpublishProject.js';
 import type { SetPublicIndexing } from '../application/project/SetPublicIndexing.js';
 import type { EnsureProjectAppRepo } from '../application/project/EnsureProjectAppRepo.js';
+import type { CreateProjectRepo } from '../application/project/CreateProjectRepo.js';
 import type { GetPublicBoard } from '../application/project/GetPublicBoard.js';
 import type { ClonePublicBoard } from '../application/project/ClonePublicBoard.js';
 import type { GetPublicTaskDetail } from '../application/project/GetPublicTaskDetail.js';
@@ -317,6 +318,7 @@ type AppDeps = {
     readonly unpublishProject: UnpublishProject;
     readonly setPublicIndexing: SetPublicIndexing;
     readonly ensureAppRepo: EnsureProjectAppRepo;
+    readonly createProjectRepo: CreateProjectRepo;
     readonly getProjectSite: GetProjectSite;
     readonly setProjectDispatcher: SetProjectDispatcher;
     readonly setMultiTaskWorker: SetProjectMultiTaskWorker;

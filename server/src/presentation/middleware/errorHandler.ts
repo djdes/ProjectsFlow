@@ -24,12 +24,14 @@ import {
   ProjectNameAlreadyExistsError,
   ProjectNameEmptyError,
   ProjectNotFoundError,
+  ProjectRepoAlreadyConnectedError,
 } from '../../domain/project/errors.js';
 import { DispatcherCandidateInvalidError } from '../../application/project/SetProjectDispatcher.js';
 import {
   GithubApiError,
   GithubIntegrationDisabledError,
   GithubNotConnectedError,
+  GithubRepoNameTakenError,
   GithubRepoUrlInvalidError,
 } from '../../domain/github/errors.js';
 import {
@@ -322,6 +324,22 @@ export function errorHandler(
     res.status(409).json({
       error: 'github_not_connected',
       message: 'Сначала подключи GitHub в профиле.',
+    });
+    return;
+  }
+
+  if (err instanceof GithubRepoNameTakenError) {
+    res.status(422).json({
+      error: 'github_repo_name_taken',
+      message: 'Репозиторий с таким именем уже существует.',
+    });
+    return;
+  }
+
+  if (err instanceof ProjectRepoAlreadyConnectedError) {
+    res.status(409).json({
+      error: 'repo_already_connected',
+      message: 'У проекта уже подключён репозиторий.',
     });
     return;
   }

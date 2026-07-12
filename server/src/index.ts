@@ -67,6 +67,7 @@ import { PublishProject } from './application/project/PublishProject.js';
 import { UnpublishProject } from './application/project/UnpublishProject.js';
 import { SetPublicIndexing } from './application/project/SetPublicIndexing.js';
 import { EnsureProjectAppRepo } from './application/project/EnsureProjectAppRepo.js';
+import { CreateProjectRepo } from './application/project/CreateProjectRepo.js';
 import { GetPublicBoard } from './application/project/GetPublicBoard.js';
 import { ClonePublicBoard } from './application/project/ClonePublicBoard.js';
 import { GetPublicTaskDetail } from './application/project/GetPublicTaskDetail.js';
@@ -1421,6 +1422,12 @@ const { app, devProxyUpgrade } = createApp({
       tokens: githubTokenRepo,
       api: githubApi,
       delegations: gitTokenDelegationRepo,
+    }),
+    createProjectRepo: new CreateProjectRepo({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tokens: githubTokenRepo,
+      api: githubApi,
     }),
     getProjectSite: new GetProjectSite({
       projects: projectRepo,
