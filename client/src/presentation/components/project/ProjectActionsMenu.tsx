@@ -279,9 +279,11 @@ export function ProjectActionsMenu({
               </p>
             )}
           </div>
-          {/* Футер (Notion Last edited by …): дата создания проекта. */}
-          <div className="mt-1 border-t px-2 pb-0.5 pt-1.5 text-[11px] text-muted-foreground/70">
-            Создан {created}
+          {/* Футер (Notion Last edited by …): дата создания проекта + маркер сборки
+              (диагностика «у меня старая версия» без консоли). */}
+          <div className="mt-1 flex items-center justify-between gap-2 border-t px-2 pb-0.5 pt-1.5 text-[11px] text-muted-foreground/70">
+            <span>Создан {created}</span>
+            <span className="font-mono text-muted-foreground/50">{__PF_BUILD__}</span>
           </div>
         </PopoverContent>
       </Popover>

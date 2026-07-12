@@ -3,6 +3,11 @@ import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
 export default defineConfig({
+  // Маркер сборки: git sha из CI (GITHUB_SHA) — виден в консоли и в «⋯»-меню
+  // проекта. Позволяет мгновенно понять, какую версию видит пользователь.
+  define: {
+    __PF_BUILD__: JSON.stringify((process.env.GITHUB_SHA ?? 'dev').slice(0, 7)),
+  },
   plugins: [react()],
   resolve: {
     alias: {
