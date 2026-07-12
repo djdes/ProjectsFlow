@@ -167,6 +167,22 @@ export function TableView({
   // Кастомные свойства (db/109): колонки после стандартных, «+» в шапке создаёт новое.
   const customProps = useTaskProperties(projectId);
   const [addPropOpen, setAddPropOpen] = useState(false);
+
+  // Sticky-шапка колонок: top = высота sticky-стека страницы (крошки + плашки +
+  // строка вкладок); гор. скролл тела транслируется в шапку (refs ниже).
+  const bodyScrollRef = useRef<HTMLDivElement | null>(null);
+  const headScrollRef = useRef<HTMLDivElement | null>(null);
+  const [headerTop, setHeaderTop] = useState(0);
+  useEffect(() => {
+    const els = ['pf-project-crumbs', 'pf-sticky-banners', 'pf-views-tabs-row']
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => el !== null);
+    const measure = (): void => setHeaderTop(els.reduce((s, el) => s + el.offsetHeight, 0));
+    measure();
+    const ro = new ResizeObserver(measure);
+    els.forEach((el) => ro.observe(el));
+    return () => ro.disconnect();
+  }, []);
   const { user } = useCurrentUser();
   const isShared = (memberCount ?? 0) > 1;
   const [drawer, setDrawer] = useState<TaskDrawerState | null>(null);
@@ -602,6 +618,8 @@ export function TableView({
   if (loading) return <div className="h-64 animate-pulse rounded-xl bg-muted/60" />;
   if (error) return <p className="text-sm text-destructive">{error}</p>;
 
+  const innerPadClass = bleedPadClass ? 'pr-6 sm:pr-14 lg:pl-10 lg:pr-24' : 'pr-8';
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <DndContext
@@ -611,15 +629,17 @@ export function TableView({
         onDragEnd={handleRowDragEnd}
         onDragCancel={() => setDragTask(null)}
       >
-      {/* Full-bleed: скролл-вьюпорт на всю ширину окна (Notion) — при скролле колонки
-          уезжают под края страницы. Левый внутренний паддинг = отступ страницы минус
-          3.5rem gutter'а контролов (на узких экранах gutter занимает весь отступ). */}
-      <div className={cn('overflow-x-auto', bleedNegClass)}>
-        <div className={cn('min-w-[55rem]', bleedPadClass ? 'pr-6 sm:pr-14 lg:pl-10 lg:pr-24' : 'pr-8')}>
+      {/* Sticky-шапка колонок (Notion): липнет под строкой вкладок при вертикальном
+          скролле; горизонтальный скролл синхронизируется с телом (onScroll ниже). */}
+      <div
+        className={cn('sticky z-20 bg-background', bleedNegClass)}
+        style={{ top: headerTop }}
+      >
+        <div ref={headScrollRef} className="overflow-x-hidden">
+        <div className={cn('min-w-[55rem]', innerPadClass)}>
           {/* Шапка таблицы: иконка типа свойства + название; клик по заголовку —
-              меню колонки (сортировка ↑↓, скрыть свойство), как в Notion. */}
-          {/* Границы шапки — на ячейках, НЕ на контейнере: зона контролов слева
-              остаётся чистой (Notion). */}
+              меню колонки (сортировка ↑↓, скрыть свойство), как в Notion. Границы —
+              на ячейках, НЕ на контейнере: зона контролов слева чистая. */}
           <div
             className="group/head relative grid text-xs text-muted-foreground"
             style={gridStyle}
@@ -736,7 +756,21 @@ export function TableView({
               </PopoverContent>
             </Popover>
           </div>
+        </div>
+        </div>
+      </div>
 
+      {/* Тело таблицы: full-bleed гор. скролл (Notion) — колонки уезжают под края
+          страницы; scrollLeft транслируется в шапку. */}
+      <div
+        ref={bodyScrollRef}
+        onScroll={(e) => {
+          if (headScrollRef.current)
+            headScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+        }}
+        className={cn('overflow-x-auto', bleedNegClass)}
+      >
+        <div className={cn('min-w-[55rem]', innerPadClass)}>
           {(grouping && groups
             ? // При группировке дерево отключено — плоские строки внутри групп.
               (groups.flatMap((g) => {
