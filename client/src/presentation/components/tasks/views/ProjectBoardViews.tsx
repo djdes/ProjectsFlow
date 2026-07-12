@@ -13,7 +13,6 @@ import {
   Copy,
   Eye,
   FileText,
-  EyeOff,
   Flag,
   LayoutGrid,
   Link as LinkIcon,
@@ -100,6 +99,12 @@ import {
   type ViewSortKey,
 } from './viewShared';
 import { DropdownEntries, ContextEntries, type MenuEntry } from './menuEntries';
+import {
+  NewPropertyForm,
+  PROPERTY_TYPE_ICONS,
+  PropertyVisibilityPanel,
+  useTaskProperties,
+} from './customProperties';
 import { ViewsOverflowMenu } from './ViewsOverflowMenu';
 
 export const VIEW_TYPE_ICONS: Record<BoardViewType, LucideIcon> = {
@@ -109,7 +114,7 @@ export const VIEW_TYPE_ICONS: Record<BoardViewType, LucideIcon> = {
   calendar: Calendar,
 };
 
-// Иконка вью: lucide-иконка типа ИЛИ кастомное эмодзи из config (Notion view icon).
+// Иконка отображения: lucide-иконка типа ИЛИ кастомное эмодзи из config (Notion view icon).
 export type ViewIconLike = LucideIcon | string;
 
 export function ViewIconGlyph({
@@ -166,7 +171,7 @@ export type ViewCreateRequest = {
 // Строка вкладок: «Доска» (неявный канбан) + пользовательские вью из БД, overflow — «N ещё…»,
 // «+» — правая панель создания. Справа тулбар вью: фильтр / сортировка / поиск / настройки /
 // синяя «Создать». Активная вью — localStorage пер-проект; `?view=<id>` в URL важнее
-// (для «Скопировать ссылку на вью»).
+// (для «Скопировать ссылку на отображение»).
 export function ProjectBoardViews({
   projectId,
   projectName,
@@ -209,8 +214,9 @@ export function ProjectBoardViews({
   };
   const [deleteTarget, setDeleteTarget] = useState<BoardView | null>(null);
   // 'newview' — правая панель сразу после создания вью (Notion New view → Done →
-  // View settings); 'settings' — полные настройки.
-  const [panel, setPanel] = useState<'settings' | 'newview' | null>(null);
+  // View settings); 'settings' — полные настройки; 'newprop' — «Новое свойство»
+  // (по «+» в шапке таблицы — таблица плавно поджимается).
+  const [panel, setPanel] = useState<'settings' | 'newview' | 'newprop' | null>(null);
   // Фильтры/сортировка — пер-вью, живут в памяти вкладки (смена вью не сбрасывает).
   const [perView, setPerView] = useState<Record<string, PerViewState>>({});
   const [searchOpen, setSearchOpen] = useState(false);
@@ -365,7 +371,11 @@ export function ProjectBoardViews({
     }));
   const setSort = (sort: ViewSort | null): void =>
     setPerView((prev) => ({ ...prev, [activeId]: { ...state, sort } }));
-  const toggleColumn = (col: ViewColumn): void =>
+  // «Скрыть все» / «Показать все» в панели «Видимость свойств».
+  const setHiddenCols = (keys: string[]): void =>
+    setPerView((prev) => ({ ...prev, [activeId]: { ...state, hidden: keys } }));
+  // col: ViewColumn | `p:<propertyId>` — кастомные колонки тоже скрываются.
+  const toggleColumn = (col: string): void =>
     setPerView((prev) => ({
       ...prev,
       [activeId]: {
@@ -381,10 +391,10 @@ export function ProjectBoardViews({
       const view = await boardViewRepository.create(projectId, name, type);
       setViews((prev) => [...(prev ?? []), view]);
       selectView(view.id);
-      // Notion: после создания справа открывается панель «Новая вью» (тип/имя → Done).
+      // Notion: после создания справа открывается панель «Новое отображение» (тип/имя → Done).
       setPanel('newview');
     } catch (e) {
-      toast.error(`Не удалось создать вью: ${(e as Error).message}`);
+      toast.error(`Не удалось создать отображение: ${(e as Error).message}`);
     }
   };
 
@@ -422,7 +432,7 @@ export function ProjectBoardViews({
       setViews((prev) => (prev ?? []).map((v) => (v.id === view.id ? updated : v)));
       setRenameTarget(null);
     } catch (e) {
-      toast.error(`Не удалось изменить вью: ${(e as Error).message}`);
+      toast.error(`Не удалось изменить отображение: ${(e as Error).message}`);
     }
   };
 
@@ -452,7 +462,7 @@ export function ProjectBoardViews({
     const url = `${window.location.origin}${window.location.pathname}?view=${view.id}`;
     void navigator.clipboard
       .writeText(url)
-      .then(() => toast.success('Ссылка на вью скопирована'))
+      .then(() => toast.success('Ссылка на отображение скопирована'))
       .catch(() => toast.error('Не удалось скопировать ссылку'));
   };
 
@@ -564,13 +574,13 @@ export function ProjectBoardViews({
         const url = `${window.location.origin}${window.location.pathname}?view=${DEFAULT_VIEW_ID}`;
         void navigator.clipboard
           .writeText(url)
-          .then(() => toast.success('Ссылка на вью скопирована'))
+          .then(() => toast.success('Ссылка на отображение скопирована'))
           .catch(() => toast.error('Не удалось скопировать ссылку'));
       },
     },
     {
       kind: 'item',
-      label: 'Настроить вью',
+      label: 'Настроить отображение',
       icon: Settings2,
       onSelect: () => {
         selectView(DEFAULT_VIEW_ID);
@@ -579,14 +589,14 @@ export function ProjectBoardViews({
     },
     {
       kind: 'item',
-      label: 'Дублировать вью',
+      label: 'Дублировать отображение',
       icon: Copy,
       onSelect: () => void handleCreate('Доска (копия)', 'kanban'),
     },
     { kind: 'separator' },
     {
       kind: 'item',
-      label: 'Удалить вью',
+      label: 'Удалить отображение',
       icon: Trash2,
       destructive: true,
       // Дефолтная «Доска» — сама доска проекта, в БД как вью не хранится.
@@ -617,7 +627,7 @@ export function ProjectBoardViews({
     },
     {
       kind: 'item',
-      label: 'Настроить вью',
+      label: 'Настроить отображение',
       icon: Settings2,
       onSelect: () => {
         selectView(v.id);
@@ -625,11 +635,11 @@ export function ProjectBoardViews({
       },
     },
     { kind: 'item', label: 'Скопировать ссылку', icon: LinkIcon, onSelect: () => copyViewLink(v) },
-    { kind: 'item', label: 'Дублировать вью', icon: Copy, onSelect: () => void handleDuplicate(v) },
+    { kind: 'item', label: 'Дублировать отображение', icon: Copy, onSelect: () => void handleDuplicate(v) },
     { kind: 'separator' },
     {
       kind: 'item',
-      label: 'Удалить вью',
+      label: 'Удалить отображение',
       icon: Trash2,
       destructive: true,
       onSelect: () => setDeleteTarget(v),
@@ -739,7 +749,7 @@ export function ProjectBoardViews({
             />
           ))}
           {/* Notion: «N ещё…» появляется только при переполнении и открывает полное
-              окно вью (поиск / reorder / «…»-меню / «+ Новая вью»); «+» тогда скрыт. */}
+              окно вью (поиск / reorder / «…»-меню / «+ Новое отображение»); «+» тогда скрыт. */}
           {hiddenViews.length > 0 ? (
             <ViewsOverflowMenu
               views={allViewsSorted}
@@ -761,8 +771,8 @@ export function ProjectBoardViews({
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  aria-label="Новая вью"
-                  title="Новая вью"
+                  aria-label="Новое отображение"
+                  title="Новое отображение"
                   className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover/tabs:opacity-100 data-[state=open]:opacity-100"
                 >
                   <Plus className="size-4" />
@@ -835,7 +845,7 @@ export function ProjectBoardViews({
             )}
             </div>
             {active && (
-              <ToolbarIcon label="Настройки вью" onClick={() => setPanel('settings')}>
+              <ToolbarIcon label="Настройки отображения" onClick={() => setPanel('settings')}>
                 <Settings2 className="size-4" />
               </ToolbarIcon>
             )}
@@ -968,7 +978,7 @@ export function ProjectBoardViews({
       )}
 
       {/* Активный вид. key по вью — смена вкладки пересоздаёт вид (свой useTasks/стейт).
-          Панель «Настройки вью» — В ПОТОКЕ справа (Notion): контент поджимается. */}
+          Панель «Настройки отображения» — В ПОТОКЕ справа (Notion): контент поджимается. */}
       <div className="flex min-h-0 flex-1 items-start gap-4">
       <div className="min-w-0 flex-1">
       {isKanban ? (
@@ -1001,6 +1011,8 @@ export function ProjectBoardViews({
           onGroupingChange={setGrouping}
           colorRules={state.colorRules}
           createRequest={createReq}
+          onRequestNewProperty={() => setPanel('newprop')}
+          onSetHiddenCols={setHiddenCols}
         />
       ) : activeType === 'list' ? (
         <ListView
@@ -1028,10 +1040,17 @@ export function ProjectBoardViews({
       )}
 
       </div>
-      {/* Панель «Новая вью» (Notion): сразу после создания — имя/тип → «Готово»
+      {/* Панель «Новое свойство» (Notion New property): по «+» в шапке таблицы —
+          контент плавно поджимается (PanelSlot), панель выезжает справа. */}
+      {panel === 'newprop' && (
+        <PanelSlot>
+          <NewPropertyPanel projectId={projectId} onClose={() => setPanel(null)} />
+        </PanelSlot>
+      )}
+      {/* Панель «Новое отображение» (Notion): сразу после создания — имя/тип → «Готово»
           открывает полные настройки вью. */}
       {panel === 'newview' && active && (
-        <aside className="sticky top-2 w-72 shrink-0 border-l pl-3 duration-150 animate-in fade-in slide-in-from-right-1 max-md:hidden">
+        <aside className="sticky top-2 z-40 w-72 shrink-0 rounded-lg border bg-popover p-2 shadow-xl duration-200 animate-in fade-in slide-in-from-right-2 max-md:hidden">
           <NewViewPanel
             view={active}
             projectName={projectName}
@@ -1048,7 +1067,7 @@ export function ProjectBoardViews({
         </aside>
       )}
       {panel === 'settings' && (active !== null || activeId === DEFAULT_VIEW_ID) && (
-        <aside className="sticky top-2 w-72 shrink-0 border-l pl-3 duration-150 animate-in fade-in slide-in-from-right-1 max-md:hidden">
+        <aside className="sticky top-2 z-40 w-72 shrink-0 rounded-lg border bg-popover p-2 shadow-xl duration-200 animate-in fade-in slide-in-from-right-2 max-md:hidden">
           {active ? (
             <ViewSettingsCard
               view={active}
@@ -1060,6 +1079,7 @@ export function ProjectBoardViews({
               onDelete={() => setDeleteTarget(active)}
               hidden={state.hidden}
               onToggleColumn={active.type === 'table' ? toggleColumn : undefined}
+              onSetHidden={active.type === 'table' ? setHiddenCols : undefined}
               filters={state.filters}
               onFilters={setFilters}
               sort={state.sort}
@@ -1091,13 +1111,14 @@ export function ProjectBoardViews({
                 const url = `${window.location.origin}${window.location.pathname}?view=${DEFAULT_VIEW_ID}`;
                 void navigator.clipboard
                   .writeText(url)
-                  .then(() => toast.success('Ссылка на вью скопирована'))
+                  .then(() => toast.success('Ссылка на отображение скопирована'))
                   .catch(() => toast.error('Не удалось скопировать ссылку'));
               }}
               onDuplicate={() => void handleCreate('Доска (копия)', 'kanban')}
               onDelete={() => toast.error('Дефолтную вкладку «Доска» нельзя удалить')}
               hidden={state.hidden}
               onToggleColumn={undefined}
+              onSetHidden={undefined}
               filters={state.filters}
               onFilters={setFilters}
               sort={state.sort}
@@ -1116,7 +1137,7 @@ export function ProjectBoardViews({
       <Dialog open={deleteTarget !== null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <DialogContent className="max-w-xs gap-3 p-5">
           <DialogHeader>
-            <DialogTitle className="text-base">Удалить вью?</DialogTitle>
+            <DialogTitle className="text-base">Удалить отображение?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             «{deleteTarget?.name}» будет удалена у всех участников. Задачи не пострадают.
@@ -1134,6 +1155,59 @@ export function ProjectBoardViews({
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// Слот правой панели с ПЛАВНЫМ раскрытием: ширина 0 → 304px (Notion: контент
+// «съезжает» влево, панель выезжает). Закрытие — мгновенное (панель размонтируется).
+function PanelSlot({ children }: { children: React.ReactNode }): React.ReactElement {
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setW(304));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  return (
+    <div
+      style={{ width: w }}
+      className="shrink-0 overflow-hidden transition-[width] duration-300 ease-out max-md:hidden"
+    >
+      <aside className="sticky top-2 z-40 w-72 rounded-lg border bg-popover p-2 shadow-xl">
+        {children}
+      </aside>
+    </div>
+  );
+}
+
+// Правая панель «Новое свойство» (Notion New property): имя + поиск типа + сетка
+// типов. Свой useTaskProperties — живёт только пока панель открыта.
+function NewPropertyPanel({
+  projectId,
+  onClose,
+}: {
+  projectId: string;
+  onClose: () => void;
+}): React.ReactElement {
+  const props = useTaskProperties(projectId);
+  return (
+    <div className="flex flex-col">
+      <div className="flex items-center justify-between px-1 py-1">
+        <p className="text-sm font-semibold">Новое свойство</p>
+        <button
+          type="button"
+          aria-label="Закрыть панель"
+          onClick={onClose}
+          className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+      <NewPropertyForm
+        onCreate={(t, name) => {
+          props.createProperty(t, name);
+          onClose();
+        }}
+      />
     </div>
   );
 }
@@ -1156,7 +1230,7 @@ function ToggleRow({
   );
 }
 
-// Панель «Новая вью» (Notion New view): сразу после создания вью — иконка типа + имя
+// Панель «Новое отображение» (Notion New view): сразу после создания вью — иконка типа + имя
 // (autoFocus), сетка типов (клик меняет тип на лету), настройки ПОД ВЫБРАННЫЙ ТИП
 // (Notion: у Table/Board/Calendar разные), «Источник», «Готово» → полные настройки.
 // Набор эмодзи для пикера иконки вью (Notion Icon → Filter/Remove + сетка).
@@ -1201,7 +1275,7 @@ function NewViewPanel({
   return (
     <div className="rounded-lg border bg-card shadow-sm">
       <div className="flex items-center justify-between px-3 pb-1 pt-2.5">
-        <p className="text-sm font-semibold">Новая вью</p>
+        <p className="text-sm font-semibold">Новое отображение</p>
         <button
           type="button"
           aria-label="Закрыть"
@@ -1218,8 +1292,8 @@ function NewViewPanel({
           <PopoverTrigger asChild>
             <button
               type="button"
-              aria-label="Иконка вью"
-              title="Иконка вью"
+              aria-label="Иконка отображения"
+              title="Иконка отображения"
               className="grid size-8 shrink-0 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <ViewIconGlyph
@@ -1925,13 +1999,13 @@ function TabRenameInput({
         }
       }}
       maxLength={64}
-      aria-label="Название вью"
+      aria-label="Название отображения"
       className="w-full rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus:border-foreground/30"
     />
   );
 }
 
-// Карточка «Настройки вью» (Notion View settings): строки-пункты со значением и «›»,
+// Карточка «Настройки отображения» (Notion View settings): строки-пункты со значением и «›»,
 // drill-down в подстраницы Вид / Свойства / Фильтр / Сортировка / Группировка / Цвет.
 type SettingsPage = 'root' | 'layout' | 'props' | 'filter' | 'sort' | 'group' | 'color';
 
@@ -1945,6 +2019,7 @@ function ViewSettingsCard({
   onDelete,
   hidden,
   onToggleColumn,
+  onSetHidden,
   filters,
   onFilters,
   sort,
@@ -1961,8 +2036,9 @@ function ViewSettingsCard({
   onCopyLink: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
-  hidden: ViewColumn[];
-  onToggleColumn?: (c: ViewColumn) => void;
+  hidden: string[];
+  onToggleColumn?: (c: string) => void;
+  onSetHidden?: (keys: string[]) => void;
   filters: ViewFilters;
   onFilters: (patch: Partial<ViewFilters>) => void;
   sort: ViewSort | null;
@@ -1974,6 +2050,9 @@ function ViewSettingsCard({
 }): React.ReactElement {
   const [page, setPage] = useState<SettingsPage>('root');
   const [name, setName] = useState(view.name);
+  // Кастомные свойства проекта — для страницы «Видимость свойств» (панель
+  // смонтирована только когда открыта, лишних запросов нет).
+  const cardProps = useTaskProperties(view.projectId);
   useEffect(() => setName(view.name), [view.id, view.name]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -2006,7 +2085,7 @@ function ViewSettingsCard({
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-between px-2 py-1.5">
-        <p className="text-sm font-semibold">Настройки вью</p>
+        <p className="text-sm font-semibold">Настройки отображения</p>
         <button
           type="button"
           aria-label="Закрыть панель"
@@ -2035,7 +2114,7 @@ function ViewSettingsCard({
                   }
                 }}
                 maxLength={64}
-                aria-label="Название вью"
+                aria-label="Название отображения"
                 className="h-8 w-full rounded-md border bg-background px-2.5 text-sm outline-none focus:border-foreground/30"
               />
             </div>
@@ -2079,10 +2158,10 @@ function ViewSettingsCard({
               value={colorRules.length > 0 ? String(colorRules.length) : undefined}
               onClick={() => setPage('color')}
             />
-            <PanelRow icon={LinkIcon} label="Скопировать ссылку на вью" onClick={onCopyLink} />
+            <PanelRow icon={LinkIcon} label="Скопировать ссылку на отображение" onClick={onCopyLink} />
             <div className="my-0.5 border-t" />
-            <PanelRow icon={Copy} label="Дублировать вью" onClick={onDuplicate} />
-            <PanelRow icon={Trash2} label="Удалить вью" onClick={onDelete} destructive />
+            <PanelRow icon={Copy} label="Дублировать отображение" onClick={onDuplicate} />
+            <PanelRow icon={Trash2} label="Удалить отображение" onClick={onDelete} destructive />
           </div>
         )}
         {page === 'layout' && (
@@ -2114,27 +2193,23 @@ function ViewSettingsCard({
         {page === 'props' && onToggleColumn && (
           <div className="flex flex-col gap-1">
             {backHeader('Видимость свойств')}
-            {(Object.keys(VIEW_COLUMN_LABELS) as ViewColumn[]).map((c) => {
-              const isHidden = hidden.includes(c);
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => onToggleColumn(c)}
-                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground/90 transition-colors hover:bg-accent"
-                >
-                  {VIEW_COLUMN_LABELS[c]}
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    {isHidden ? 'Скрыто' : 'Показано'}
-                  </span>
-                  {isHidden ? (
-                    <EyeOff className="size-4 text-muted-foreground/70" />
-                  ) : (
-                    <Eye className="size-4 text-muted-foreground/70" />
-                  )}
-                </button>
-              );
-            })}
+            {/* Notion Property visibility: поиск + глазки + Скрыть/Показать все. */}
+            <PropertyVisibilityPanel
+              items={[
+                ...(Object.keys(VIEW_COLUMN_LABELS) as ViewColumn[]).map((c) => ({
+                  key: c as string,
+                  label: VIEW_COLUMN_LABELS[c],
+                  icon: <span className="inline-block size-3.5" aria-hidden />,
+                })),
+                ...cardProps.properties.map((p) => {
+                  const Icon = PROPERTY_TYPE_ICONS[p.type];
+                  return { key: `p:${p.id}`, label: p.name, icon: <Icon className="size-3.5" /> };
+                }),
+              ]}
+              hidden={hidden}
+              onToggle={onToggleColumn}
+              onSetHidden={onSetHidden}
+            />
           </div>
         )}
         {page === 'filter' && (

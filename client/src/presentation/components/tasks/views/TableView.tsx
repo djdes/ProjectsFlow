@@ -21,6 +21,7 @@ import {
   Flag,
   GripVertical,
   ListFilter,
+  MoreHorizontal,
   PanelRight,
   Plus,
   Snowflake,
@@ -52,8 +53,10 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import {
   NewPropertyForm,
+  PROPERTY_TYPE_ICONS,
   PropertyHeaderCell,
   PropertyValueCell,
+  PropertyVisibilityPanel,
   useTaskProperties,
   type UseTaskPropertiesResult,
 } from './customProperties';
@@ -107,8 +110,9 @@ type Props = {
   onFiltersChange: (patch: Partial<ViewFilters>) => void;
   sort: ViewSort | null;
   onSortChange: (s: ViewSort | null) => void;
-  hiddenCols: ViewColumn[];
-  onToggleCol: (c: ViewColumn) => void;
+  // Скрытые колонки: ViewColumn | `p:<propertyId>`.
+  hiddenCols: string[];
+  onToggleCol: (c: string) => void;
   tableState: TableViewState;
   onTableState: (patch: Partial<TableViewState>) => void;
   grouping: ViewGrouping | null;
@@ -116,6 +120,10 @@ type Props = {
   onGroupingChange?: (g: ViewGrouping | null) => void;
   colorRules: ViewColorRule[];
   createRequest: ViewCreateRequest | null;
+  // «+» в шапке: открыть правую панель «Новое свойство» (сдвигает таблицу).
+  onRequestNewProperty?: () => void;
+  // «Скрыть все»/«Показать все» в панели «Видимость свойств».
+  onSetHiddenCols?: (keys: string[]) => void;
   // Full-bleed: горизонтальный скролл таблицы во всю ширину окна (как канбан) —
   // колонки заезжают в отступы страницы (Notion).
   bleedNegClass?: string;
@@ -163,6 +171,8 @@ export function TableView({
   onGroupingChange,
   colorRules,
   createRequest,
+  onRequestNewProperty,
+  onSetHiddenCols,
   bleedNegClass = '',
   bleedPadClass = '',
 }: Props): React.ReactElement {
@@ -309,6 +319,22 @@ export function TableView({
     [hiddenCols],
   );
 
+  // Все колонки для панели «Видимость свойств» (стандартные + кастомные).
+  const visibilityItems = useMemo(
+    () => [
+      ...ALL_COLUMNS.map((c) => ({
+        key: c as string,
+        label: VIEW_COLUMN_LABELS[c],
+        icon: <ColumnIcon col={c} />,
+      })),
+      ...customProps.properties.map((p) => {
+        const Icon = PROPERTY_TYPE_ICONS[p.type];
+        return { key: `p:${p.id}`, label: p.name, icon: <Icon className="size-3.5" /> };
+      }),
+    ],
+    [customProps.properties],
+  );
+
   // Подменю «Фильтр» в меню заголовка колонки (чекбоксы значений — как в Notion).
   const filterEntriesFor = (col: ViewColumn): MenuEntry[] | undefined => {
     if (col === 'status') {
@@ -360,12 +386,14 @@ export function TableView({
   const orderedKeys = useMemo<string[]>(() => {
     const avail: string[] = [
       ...visibleCols,
-      ...customProps.properties.map((p) => `p:${p.id}`),
+      ...customProps.properties
+        .filter((p) => !hiddenCols.includes(`p:${p.id}`))
+        .map((p) => `p:${p.id}`),
     ];
     const saved = (tableState.colOrder ?? []).filter((k) => avail.includes(k));
     const missing = avail.filter((k) => !saved.includes(k));
     return [...saved, ...missing];
-  }, [visibleCols, customProps.properties, tableState.colOrder]);
+  }, [visibleCols, customProps.properties, tableState.colOrder, hiddenCols]);
   const propByKey = (k: string): TaskProperty | undefined =>
     customProps.properties.find((p) => `p:${p.id}` === k);
 
@@ -1029,6 +1057,7 @@ export function TableView({
                         ? () => onGroupingChange(grouping === propKey ? null : propKey)
                         : undefined
                     }
+                    onHide={() => onToggleCol(k)}
                   />
                 );
               }
@@ -1052,49 +1081,64 @@ export function TableView({
               );
             })}
             <div className="border-b border-l border-t" aria-hidden />
-            {/* «+» в конце шапки (Notion add property): попап с именем свойства,
-                «Выбрать тип» с поиском и сеткой типов; сверху — вернуть скрытые. */}
-            <Popover open={addPropOpen} onOpenChange={setAddPropOpen}>
-              <PopoverTrigger asChild>
+            {/* Хвост шапки (Notion): «+» — новое свойство (правая панель со сдвигом
+                таблицы, если родитель дал onRequestNewProperty; иначе попап),
+                «⋯» — «Видимость свойств» (глазки/поиск/Скрыть все). */}
+            <div className="absolute -right-14 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+              {onRequestNewProperty ? (
                 <button
                   type="button"
                   aria-label="Добавить свойство"
                   title="Добавить свойство"
-                  className="absolute -right-7 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                  onClick={onRequestNewProperty}
+                  className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
                 >
                   <Plus className="size-3.5" />
                 </button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-auto p-1.5">
-                {hiddenCols.length > 0 && (
-                  <div className="mb-1.5 border-b pb-1">
-                    <p className="px-1 pb-0.5 text-[11px] font-medium text-muted-foreground">
-                      Скрытые свойства
-                    </p>
-                    {hiddenCols.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => {
-                          onToggleCol(c);
-                          setAddPropOpen(false);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-accent/60"
-                      >
-                        <ColumnIcon col={c} />
-                        {VIEW_COLUMN_LABELS[c]}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <NewPropertyForm
-                  onCreate={(t, name) => {
-                    customProps.createProperty(t, name);
-                    setAddPropOpen(false);
-                  }}
-                />
-              </PopoverContent>
-            </Popover>
+              ) : (
+                <Popover open={addPropOpen} onOpenChange={setAddPropOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Добавить свойство"
+                      title="Добавить свойство"
+                      className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      <Plus className="size-3.5" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-auto p-1.5">
+                    <NewPropertyForm
+                      onCreate={(t, name) => {
+                        customProps.createProperty(t, name);
+                        setAddPropOpen(false);
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
+              )}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Видимость свойств"
+                    title="Видимость свойств"
+                    className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    <MoreHorizontal className="size-3.5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-auto p-2">
+                  <p className="px-1 pb-1.5 text-sm font-semibold">Видимость свойств</p>
+                  <PropertyVisibilityPanel
+                    items={visibilityItems}
+                    hidden={hiddenCols}
+                    onToggle={onToggleCol}
+                    onSetHidden={onSetHiddenCols}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
         </div>
         </div>
@@ -1455,7 +1499,7 @@ function HeaderCell({
     ...(onHide
       ? ([
           ...(sortKey !== null ? ([{ kind: 'separator' }] as MenuEntry[]) : []),
-          { kind: 'item', label: 'Скрыть в виде', icon: EyeOff, onSelect: onHide },
+          { kind: 'item', label: 'Скрыть в отображении', icon: EyeOff, onSelect: onHide },
         ] as MenuEntry[])
       : []),
   ];

@@ -453,7 +453,8 @@ export function groupLabelFor(key: string, grouping: StandardGrouping, sample?: 
 export type ViewConfig = {
   filters?: ViewFilters;
   sort?: ViewSort | null;
-  hidden?: ViewColumn[];
+  // Скрытые колонки: ViewColumn | `p:<propertyId>` (кастомные тоже скрываются).
+  hidden?: string[];
   // table сериализуется с unfreezeTitle (инверсия freezeTitle — см. perViewToConfig);
   // freezeTitle оставлен для чтения совсем старых конфигов.
   table?: {
@@ -474,7 +475,7 @@ export type ViewConfig = {
 export type PerViewState = {
   filters: ViewFilters;
   sort: ViewSort | null;
-  hidden: ViewColumn[];
+  hidden: string[];
   table: TableViewState;
   grouping: ViewGrouping | null;
   colorRules: ViewColorRule[];

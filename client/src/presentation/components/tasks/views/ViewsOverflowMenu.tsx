@@ -1,5 +1,5 @@
 // Окно «ещё…» (Notion "N more..."): поиск по вью, полный список с drag-reorder
-// (⋮⋮), «…»-меню у каждого пункта при hover и «+ Новая вью» внизу (drill-down
+// (⋮⋮), «…»-меню у каждого пункта при hover и «+ Новое отображение» внизу (drill-down
 // «Начать с нуля»). Ручной absolute-попап (TabRenamePopup-паттерн): Radix-меню
 // не дружит с dnd и вложенными меню.
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -38,7 +38,7 @@ type Props = {
   onReorder: (orderedIds: string[]) => void;
   menuFor: (v: BoardView) => MenuEntry[];
   boardMenu: MenuEntry[];
-  // Иконка вью: кастомное эмодзи из config или иконка типа.
+  // Иконка отображения: кастомное эмодзи из config или иконка типа.
   iconFor?: (v: BoardView) => ViewIconLike;
   onCreate: (type: BoardViewType) => void;
   label: string;
@@ -129,7 +129,7 @@ export function ViewsOverflowMenu({
 }: Props): React.ReactElement {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  // Drill-down «Начать с нуля» по кнопке «+ Новая вью» (Notion New view).
+  // Drill-down «Начать с нуля» по кнопке «+ Новое отображение» (Notion New view).
   const [creating, setCreating] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
@@ -303,7 +303,7 @@ export function ViewsOverflowMenu({
                   className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-[13px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
                 >
                   <Plus className="size-4" />
-                  Новая вью
+                  Новое отображение
                 </button>
               </div>
             </>

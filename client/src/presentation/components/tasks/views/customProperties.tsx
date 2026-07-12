@@ -13,6 +13,8 @@ import {
   CheckSquare,
   ChevronDown,
   Copy,
+  Eye,
+  EyeOff,
   Hash,
   Link as LinkIcon,
   List,
@@ -278,6 +280,7 @@ export function PropertyHeaderCell({
   filterOptions,
   grouped = false,
   onToggleGroup,
+  onHide,
 }: {
   property: TaskProperty;
   onRename: (name: string) => void;
@@ -298,6 +301,8 @@ export function PropertyHeaderCell({
   filterOptions?: { id: string; label: string; checked: boolean; onToggle: () => void }[];
   grouped?: boolean;
   onToggleGroup?: () => void;
+  // «Скрыть в отображении» (Notion Hide in view).
+  onHide?: () => void;
 }): React.ReactElement {
   const [name, setName] = useState(property.name);
   // ПКМ по заголовку открывает то же меню, что и клик (Notion).
@@ -445,7 +450,13 @@ export function PropertyHeaderCell({
               {grouped ? 'Разгруппировать' : 'Группировать'}
             </DropdownMenuItem>
           )}
-          {(onSort ?? filterOptions ?? onToggleGroup) && <DropdownMenuSeparator />}
+          {onHide && (
+            <DropdownMenuItem className="gap-2" onSelect={onHide}>
+              <EyeOff className="size-4" />
+              Скрыть в отображении
+            </DropdownMenuItem>
+          )}
+          {(onSort ?? filterOptions ?? onToggleGroup ?? onHide) && <DropdownMenuSeparator />}
           {onDuplicate && (
             <DropdownMenuItem className="gap-2" onSelect={onDuplicate}>
               <Copy className="size-4" />
@@ -550,6 +561,105 @@ export function NewPropertyForm({
 
 function optionById(property: TaskProperty, id: string): TaskPropertyOption | undefined {
   return property.options.find((o) => o.id === id);
+}
+
+// «Видимость свойств» (Notion Property visibility): поиск, секции «В таблице» /
+// «Скрыто в таблице», глазок-тоггл у каждой строки, «Скрыть все» / «Показать все».
+// items — ВСЕ колонки в текущем порядке (стандартные + кастомные), key ViewColumn|`p:<id>`.
+export type VisibilityItem = { key: string; label: string; icon: React.ReactNode };
+
+export function PropertyVisibilityPanel({
+  items,
+  hidden,
+  onToggle,
+  onSetHidden,
+}: {
+  items: VisibilityItem[];
+  hidden: readonly string[];
+  onToggle: (key: string) => void;
+  onSetHidden?: (keys: string[]) => void;
+}): React.ReactElement {
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLocaleLowerCase('ru');
+  const match = (it: VisibilityItem): boolean => !q || it.label.toLocaleLowerCase('ru').includes(q);
+  const shown = items.filter((it) => !hidden.includes(it.key) && match(it));
+  const hiddenItems = items.filter((it) => hidden.includes(it.key) && match(it));
+  const row = (it: VisibilityItem, isHidden: boolean): React.ReactElement => (
+    <div
+      key={it.key}
+      className="group/vrow flex items-center gap-2 rounded-md px-1.5 py-1 text-sm transition-colors hover:bg-accent/50"
+    >
+      <span className="text-muted-foreground/70">{it.icon}</span>
+      <span className="min-w-0 flex-1 truncate">{it.label}</span>
+      <button
+        type="button"
+        aria-label={isHidden ? `Показать ${it.label}` : `Скрыть ${it.label}`}
+        onClick={() => onToggle(it.key)}
+        className="grid size-6 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+      >
+        {isHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+      </button>
+    </div>
+  );
+  return (
+    <div className="flex w-72 flex-col gap-1">
+      <div className="relative px-0.5">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Поиск свойства…"
+          aria-label="Поиск свойства"
+          className="h-8 w-full rounded-md border bg-background pl-8 pr-2 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
+        />
+      </div>
+      {/* «Название» всегда видно (Notion: Name нельзя скрыть). */}
+      {(!q || 'название'.includes(q)) && (
+        <div className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm">
+          <span className="font-mono text-[11px] leading-none text-muted-foreground/70">Aa</span>
+          <span className="min-w-0 flex-1 truncate">Название</span>
+          <Eye className="mr-1.5 size-3.5 text-muted-foreground/30" />
+        </div>
+      )}
+      {shown.length > 0 && (
+        <>
+          <div className="flex items-center justify-between px-1.5 pt-1">
+            <p className="text-[11px] font-medium text-muted-foreground">В таблице</p>
+            {onSetHidden && (
+              <button
+                type="button"
+                onClick={() => onSetHidden(items.map((it) => it.key))}
+                className="text-[11px] text-primary transition-opacity hover:opacity-70"
+              >
+                Скрыть все
+              </button>
+            )}
+          </div>
+          {shown.map((it) => row(it, false))}
+        </>
+      )}
+      {hiddenItems.length > 0 && (
+        <>
+          <div className="flex items-center justify-between px-1.5 pt-1">
+            <p className="text-[11px] font-medium text-muted-foreground">Скрыто в таблице</p>
+            {onSetHidden && (
+              <button
+                type="button"
+                onClick={() => onSetHidden([])}
+                className="text-[11px] text-primary transition-opacity hover:opacity-70"
+              >
+                Показать все
+              </button>
+            )}
+          </div>
+          {hiddenItems.map((it) => row(it, true))}
+        </>
+      )}
+      {shown.length === 0 && hiddenItems.length === 0 && (
+        <p className="px-2 py-3 text-center text-xs text-muted-foreground">Ничего не найдено</p>
+      )}
+    </div>
+  );
 }
 
 function parseMulti(value: string): string[] {
