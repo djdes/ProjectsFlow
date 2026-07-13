@@ -1,5 +1,4 @@
 import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
 import { useSidebarResizing } from '@/presentation/layout/sidebarResizingContext';
 import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Trash2 } from 'lucide-react';
@@ -97,10 +96,14 @@ export function KanbanCard({
     transition: DND_TRANSITION,
   });
 
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  // Reorder-transform от dnd-kit НЕ применяем к карточкам: соседи не должны
+  // раздвигаться/дёргаться при drag (Notion — карточки стоят, место дропа = синяя
+  // полоска). Перетаскиваемую заменяет пилюля-оверлей, исходная остаётся opacity-30
+  // на месте. transition тоже убираем — анимировать нечего. Оставляем _unused, чтобы
+  // не ловить ошибку линта на неиспользуемые деструктурированные значения.
+  void transform;
+  void transition;
+  const style: React.CSSProperties = {};
 
   // motion.div снаружи — обрабатывает layout-переходы между колонками (auto-transition
   // после Sync commits, ручной link и пр.). dnd-kit'овский transform — отдельный inline-style
