@@ -1,4 +1,4 @@
-import { aliasedTable, and, asc, eq, ne, or, sql } from 'drizzle-orm';
+import { aliasedTable, and, asc, eq, isNotNull, ne, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   projectMembers,
@@ -26,6 +26,7 @@ import { parseJsonCol } from './jsonCol.js';
 import {
   deriveMembership,
   deriveOwnersCount,
+  projectRowVisibility,
   type ProjectAccessRow,
 } from './workspaceMembershipView.js';
 
@@ -143,12 +144,13 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
         .limit(1);
       const r = rows[0];
       if (!r) return [];
+      // Тот же предикат, что findForProject: для своего inbox — role 'owner',
+      // joinedAt = createdAt проекта (ws-строка не нужна и не запрашивается).
+      const membership = deriveMembership(project, project.ownerId, null);
+      if (!membership) return [];
       return [
         {
-          projectId,
-          userId: project.ownerId,
-          role: 'owner',
-          joinedAt: project.createdAt,
+          ...membership,
           user: toUser(r.user),
           notificationPrefs: parseJsonCol<NotificationPrefs | null>(r.prefs, null),
         },
@@ -195,13 +197,20 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
   }
 
   // Проекты всех пространств, где юзер участник, + его собственные Входящие.
-  // Чужие inbox отфильтровываются WHERE-условием (NOT is_inbox OR owner_id = me).
+  // LEFT JOIN workspace_members (не INNER!) — иначе свой inbox выпадал бы, если владельца
+  // убрали из пространства, где inbox был создан (доступ к inbox через findForProject от
+  // ws-членства НЕ зависит, листинг должен вести себя так же). Строка проекта включается
+  // тем же предикатом, что projectRowVisibility: не-inbox — только если юзер участник
+  // пространства (wm.user_id IS NOT NULL); свой inbox — по owner_id, независимо от ws.
   // Per-member настройки — left join к ленивым строкам project_members.
   private async listProjectsWhere(
     userId: string,
     workspaceId: string | undefined,
   ): Promise<ProjectWithRole[]> {
-    const inboxPrivacy = or(eq(projects.isInbox, false), eq(projects.ownerId, userId));
+    const visible = or(
+      and(eq(projects.isInbox, false), isNotNull(workspaceMembers.userId)),
+      and(eq(projects.isInbox, true), eq(projects.ownerId, userId)),
+    );
     const rows = await this.db
       .select({
         project: projects,
@@ -212,7 +221,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
         favoriteSortOrder: projectMembers.favoriteSortOrder,
       })
       .from(projects)
-      .innerJoin(
+      .leftJoin(
         workspaceMembers,
         and(
           eq(workspaceMembers.workspaceId, projects.workspaceId),
@@ -224,19 +233,25 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
         and(eq(projectMembers.projectId, projects.id), eq(projectMembers.userId, userId)),
       )
       .where(
-        workspaceId === undefined
-          ? inboxPrivacy
-          : and(inboxPrivacy, eq(projects.workspaceId, workspaceId)),
+        workspaceId === undefined ? visible : and(visible, eq(projects.workspaceId, workspaceId)),
       )
       .orderBy(sql`COALESCE(${projectMembers.sortOrder}, 0)`, asc(projects.createdAt));
-    return rows.map((r) => ({
-      ...toProject(r.project),
-      role: r.project.isInbox ? ('owner' as const) : (r.wsRole as ProjectRole),
-      memberCount: r.project.isInbox ? 1 : Number(r.memberCount),
-      taskCount: Number(r.taskCount),
-      isFavorite: r.isFavorite ?? false,
-      favoriteSortOrder: Number(r.favoriteSortOrder ?? 0),
-    }));
+    // Роль/включение — через ту же чистую функцию (единый источник истины с findForProject).
+    return rows.flatMap((r) => {
+      const wsMember = r.wsRole !== null ? { role: r.wsRole as ProjectRole } : null;
+      const vis = projectRowVisibility(r.project, userId, wsMember);
+      if (!vis) return [];
+      return [
+        {
+          ...toProject(r.project),
+          role: vis.role,
+          memberCount: r.project.isInbox ? 1 : Number(r.memberCount),
+          taskCount: Number(r.taskCount),
+          isFavorite: r.isFavorite ?? false,
+          favoriteSortOrder: Number(r.favoriteSortOrder ?? 0),
+        },
+      ];
+    });
   }
 
   async countOwners(projectId: string): Promise<number> {

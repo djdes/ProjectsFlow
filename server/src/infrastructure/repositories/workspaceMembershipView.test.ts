@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  projectRowVisibility,
   deriveMembership,
-  deriveProjectMembers,
   deriveOwnersCount,
   type ProjectAccessRow,
   type WorkspaceMemberAccessRow,
@@ -25,6 +25,27 @@ function proj(over: Partial<ProjectAccessRow> = {}): ProjectAccessRow {
 function wm(userId: string, role: WorkspaceMemberAccessRow['role']): WorkspaceMemberAccessRow {
   return { userId, role, createdAt: WM_CREATED };
 }
+
+// projectRowVisibility — единый предикат «виден ли проект юзеру и с какой ролью».
+// Источник истины и для findForProject, и для листингов (тот же инвариант, что раньше
+// был продублирован руками в listProjectsWhere и приводил к выпадению своего inbox).
+test('projectRowVisibility: свой inbox без ws-строки → виден, роль owner', () => {
+  assert.deepEqual(projectRowVisibility(proj({ isInbox: true }), 'u-owner', null), { role: 'owner' });
+});
+
+test('projectRowVisibility: чужой inbox → null (приватность Входящих)', () => {
+  assert.equal(projectRowVisibility(proj({ isInbox: true }), 'u2', { role: 'owner' }), null);
+});
+
+test('projectRowVisibility: не-inbox с ws-строкой → виден, роль = ws-роль', () => {
+  for (const role of ['owner', 'editor', 'viewer'] as const) {
+    assert.deepEqual(projectRowVisibility(proj(), 'u2', { role }), { role });
+  }
+});
+
+test('projectRowVisibility: не-inbox без ws-строки → null', () => {
+  assert.equal(projectRowVisibility(proj(), 'u2', null), null);
+});
 
 test('deriveMembership: ws-роль маппится 1:1 в роль проекта', () => {
   for (const role of ['owner', 'editor', 'viewer'] as const) {
@@ -49,32 +70,6 @@ test('deriveMembership: inbox — владелец всегда owner, даже 
 
 test('deriveMembership: inbox — участник пространства НЕ владелец → null (приватность Входящих)', () => {
   assert.equal(deriveMembership(proj({ isInbox: true }), 'u2', wm('u2', 'owner')), null);
-});
-
-test('deriveProjectMembers: обычный проект — все участники пространства с их ролями', () => {
-  const list = deriveProjectMembers(proj(), [wm('u-owner', 'owner'), wm('u2', 'editor'), wm('u3', 'viewer')]);
-  assert.deepEqual(
-    list.map((m) => [m.userId, m.role]),
-    [['u-owner', 'owner'], ['u2', 'editor'], ['u3', 'viewer']],
-  );
-});
-
-test('deriveProjectMembers: inbox — ровно один участник (владелец), остальные отброшены', () => {
-  const list = deriveProjectMembers(proj({ isInbox: true }), [wm('u-owner', 'editor'), wm('u2', 'owner')]);
-  assert.equal(list.length, 1);
-  assert.deepEqual(list[0], {
-    projectId: 'p1',
-    userId: 'u-owner',
-    role: 'owner',
-    joinedAt: WM_CREATED, // joinedAt владельца берётся из его ws-строки, если есть
-  });
-});
-
-test('deriveProjectMembers: inbox без ws-строки владельца — joinedAt = createdAt проекта', () => {
-  const list = deriveProjectMembers(proj({ isInbox: true }), []);
-  assert.deepEqual(list, [
-    { projectId: 'p1', userId: 'u-owner', role: 'owner', joinedAt: PROJECT_CREATED },
-  ]);
 });
 
 test('deriveOwnersCount: inbox всегда 1, иначе — счётчик ws-owner-ов', () => {

@@ -20,51 +20,41 @@ export type WorkspaceMemberAccessRow = {
 };
 
 /**
- * Членство юзера в проекте, дериватив от членства в пространстве.
- * Инвариант приватности Входящих: is_inbox → доступ есть ТОЛЬКО у владельца
- * (projects.owner_id), роль всегда 'owner'. Делегаты видят отдельные inbox-задачи
- * через taskAuthorization, но НЕ через членство в проекте.
+ * Единый предикат «виден ли проект юзеру и с какой ролью» — источник истины и для
+ * findForProject, и для листингов (listProjectsForUser/InWorkspace, listByProject).
+ * Возвращает `null`, если проект юзеру не виден.
+ *
+ * Инвариант приватности Входящих: is_inbox виден ТОЛЬКО владельцу (projects.owner_id),
+ * роль всегда 'owner', НЕЗАВИСИМО от ws-членства (владелец видит свой inbox, даже если
+ * его убрали из пространства). Не-inbox виден участнику пространства с его ws-ролью 1:1.
+ * Делегаты видят отдельные inbox-задачи через taskAuthorization, но НЕ через членство.
+ */
+export function projectRowVisibility(
+  project: Pick<ProjectAccessRow, 'isInbox' | 'ownerId'>,
+  userId: string,
+  wsMember: Pick<WorkspaceMemberAccessRow, 'role'> | null,
+): { readonly role: ProjectRole } | null {
+  if (project.isInbox) {
+    return project.ownerId === userId ? { role: 'owner' } : null;
+  }
+  if (!wsMember) return null;
+  return { role: wsMember.role };
+}
+
+/**
+ * Членство юзера в проекте, дериватив от членства в пространстве. Надстройка над
+ * projectRowVisibility: добавляет joinedAt (для своего inbox — момент создания проекта,
+ * ws-строки может не быть; для не-inbox — момент вступления в пространство).
  */
 export function deriveMembership(
   project: ProjectAccessRow,
   userId: string,
   wsMember: WorkspaceMemberAccessRow | null,
 ): ProjectMembership | null {
-  if (project.isInbox) {
-    if (project.ownerId !== userId) return null;
-    return { projectId: project.id, userId, role: 'owner', joinedAt: project.createdAt };
-  }
-  if (!wsMember) return null;
-  return {
-    projectId: project.id,
-    userId,
-    role: wsMember.role,
-    joinedAt: wsMember.createdAt,
-  };
-}
-
-/** Список участников проекта: для inbox — только владелец; иначе все участники пространства. */
-export function deriveProjectMembers(
-  project: ProjectAccessRow,
-  wsMembers: readonly WorkspaceMemberAccessRow[],
-): ProjectMembership[] {
-  if (project.isInbox) {
-    const owner = wsMembers.find((m) => m.userId === project.ownerId);
-    return [
-      {
-        projectId: project.id,
-        userId: project.ownerId,
-        role: 'owner',
-        joinedAt: owner?.createdAt ?? project.createdAt,
-      },
-    ];
-  }
-  return wsMembers.map((m) => ({
-    projectId: project.id,
-    userId: m.userId,
-    role: m.role,
-    joinedAt: m.createdAt,
-  }));
+  const vis = projectRowVisibility(project, userId, wsMember);
+  if (!vis) return null;
+  const joinedAt = wsMember && !project.isInbox ? wsMember.createdAt : project.createdAt;
+  return { projectId: project.id, userId, role: vis.role, joinedAt };
 }
 
 /** Owners проекта: inbox — всегда ровно 1 (владелец); иначе owners пространства. */

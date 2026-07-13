@@ -228,7 +228,7 @@ export const projects = mysqlTable(
     // GET /api/projects скоупится по активному пространству юзера. См. db/073.
     workspaceId: char('workspace_id', { length: 36 }).notNull(),
     // owner_id остаётся как кеш «кто создал» для backward-compat и отката. Реальный
-    // доступ-чек идёт через project_members (см. spec фазу P4 — финальный дроп колонки).
+    // доступ-чек идёт через workspace_members (единое пространство, см. spec unified-workspace §3.2).
     ownerId: fkUserId('owner_id'),
     name: varchar('name', { length: 80 }).notNull(),
     // Иконка проекта (Notion-style): эмодзи / lucide:Name[:color] / data-URL. NULL = дефолтная папка.
