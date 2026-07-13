@@ -83,6 +83,9 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
       delegatorUserId: input.delegatorUserId,
       revertToUserId: input.revertToUserId ?? null,
       status: input.status ?? 'pending',
+      // Мгновенное делегирование: accepted-строка отвечена в момент создания
+      // (responded_at = created_at, спека §4).
+      respondedAt: (input.status ?? 'pending') === 'accepted' ? new Date() : null,
     });
     const created = await this.getById(input.id);
     if (!created) {

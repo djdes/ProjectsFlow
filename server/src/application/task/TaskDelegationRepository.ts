@@ -10,8 +10,8 @@ export type CreateDelegationInput = {
   readonly delegateUserId: string;
   // Кто делегирует. Required (compile-time): новые строки всегда знают делегатора.
   readonly delegatorUserId: string;
-  // Статус создаваемой делегации. По умолчанию 'pending'. 'pending_invite' — для
-  // приглашения+делегирования не-участника проекта (см. InviteAndDelegateTask).
+  // Статус создаваемой делегации. Все актуальные пути создают 'accepted'
+  // (мгновенное делегирование, спека §4); дефолт 'pending' — легаси.
   readonly status?: TaskDelegationStatus;
   // Кому откатить ответственность при отказе от вступления (только для pending_invite).
   readonly revertToUserId?: string | null;
