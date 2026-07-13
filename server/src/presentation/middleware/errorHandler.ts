@@ -117,6 +117,7 @@ import {
   WorkspaceNotFoundError,
   NotWorkspaceMemberError,
   NotWorkspaceOwnerError,
+  NotWorkspaceEditorError,
   LastOwnerError,
   WorkspaceNotEmptyError,
   CannotDeleteLastWorkspaceError,
@@ -695,6 +696,10 @@ export function errorHandler(
   }
   if (err instanceof NotWorkspaceOwnerError) {
     res.status(403).json({ error: 'not_workspace_owner', message: 'Нужны права владельца пространства' });
+    return;
+  }
+  if (err instanceof NotWorkspaceEditorError) {
+    res.status(403).json({ error: 'not_workspace_editor', message: 'Нужны права редактора пространства' });
     return;
   }
   if (err instanceof NotProjectOwnerError) {

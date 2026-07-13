@@ -2,15 +2,12 @@ import type {
   WorkspaceInvite,
   WorkspaceInviteRole,
 } from '../../domain/workspace/WorkspaceInvite.js';
-import {
-  NotWorkspaceOwnerError,
-  WorkspaceNotFoundError,
-} from '../../domain/workspace/errors.js';
+import { WorkspaceNotFoundError } from '../../domain/workspace/errors.js';
 import type { WorkspaceMember } from '../../domain/workspace/WorkspaceMember.js';
 import type { NotificationPayload } from '../../domain/notifications/Notification.js';
 import type { EmailSender } from '../notifications/EmailSender.js';
 import { renderWorkspaceInviteEmail } from '../notifications/emails/workspaceInviteEmail.js';
-import { requireWorkspaceMember } from './workspaceAccess.js';
+import { requireWorkspaceEditor } from './workspaceAccess.js';
 import type { WorkspaceInviteRepository } from './WorkspaceInviteRepository.js';
 
 // Узкие структурные порты — реальные репозитории (DrizzleWorkspaceRepository,
@@ -53,12 +50,7 @@ export class CreateWorkspaceInvite {
 
   async execute(input: CreateWorkspaceInviteCommand): Promise<{ invite: WorkspaceInvite }> {
     // Приглашать могут owner и editor (зеркало project-права 'invite_member'); viewer — нет.
-    const m = await requireWorkspaceMember(
-      this.deps.workspaces,
-      input.workspaceId,
-      input.actorUserId,
-    );
-    if (m.role === 'viewer') throw new NotWorkspaceOwnerError();
+    await requireWorkspaceEditor(this.deps.workspaces, input.workspaceId, input.actorUserId);
     const ws = await this.deps.workspaces.getById(input.workspaceId);
     if (!ws) throw new WorkspaceNotFoundError();
 

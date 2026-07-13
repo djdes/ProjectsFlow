@@ -1,9 +1,6 @@
-import {
-  NotWorkspaceOwnerError,
-  WorkspaceInviteNotFoundError,
-} from '../../domain/workspace/errors.js';
+import { WorkspaceInviteNotFoundError } from '../../domain/workspace/errors.js';
 import type { WorkspaceMember } from '../../domain/workspace/WorkspaceMember.js';
-import { requireWorkspaceMember } from './workspaceAccess.js';
+import { requireWorkspaceEditor } from './workspaceAccess.js';
 import type { WorkspaceInviteRepository } from './WorkspaceInviteRepository.js';
 
 type WorkspacesPort = {
@@ -20,8 +17,7 @@ export class DeleteWorkspaceInvite {
 
   // Idempotent cleanup: использованный invite тоже можно удалить.
   async execute(workspaceId: string, actorUserId: string, inviteId: string): Promise<void> {
-    const m = await requireWorkspaceMember(this.deps.workspaces, workspaceId, actorUserId);
-    if (m.role === 'viewer') throw new NotWorkspaceOwnerError();
+    await requireWorkspaceEditor(this.deps.workspaces, workspaceId, actorUserId);
 
     const invite = await this.deps.invites.getById(inviteId);
     if (!invite || invite.workspaceId !== workspaceId) throw new WorkspaceInviteNotFoundError();

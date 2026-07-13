@@ -8,7 +8,7 @@ import type { WorkspaceInviteRepository } from './WorkspaceInviteRepository.js';
 import type { WorkspaceInvite } from '../../domain/workspace/WorkspaceInvite.js';
 import type { WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 import {
-  NotWorkspaceOwnerError,
+  NotWorkspaceEditorError,
   WorkspaceNotFoundError,
   WorkspaceInviteNotFoundError,
   WorkspaceInviteExpiredError,
@@ -161,8 +161,15 @@ test('create: viewer не может приглашать', async () => {
   const { create } = makeFakes({ members: [{ workspaceId: 'w1', userId: 'u3', role: 'viewer' }] });
   await assert.rejects(
     () => create.execute({ workspaceId: 'w1', actorUserId: 'u3', role: 'editor', email: null }),
-    NotWorkspaceOwnerError,
+    NotWorkspaceEditorError,
   );
+});
+
+test('create: editor тоже может приглашать (не только owner)', async () => {
+  const { create } = makeFakes({ members: [{ workspaceId: 'w1', userId: 'u2', role: 'editor' }] });
+  const { invite } = await create.execute({ workspaceId: 'w1', actorUserId: 'u2', role: 'viewer', email: null });
+  assert.equal(invite.workspaceId, 'w1');
+  assert.equal(invite.createdByUserId, 'u2');
 });
 
 test('create: не участник — 404-ошибка (не палим пространство)', async () => {
@@ -244,7 +251,16 @@ test('list: viewer не видит инвайты', async () => {
     members: [{ workspaceId: 'w1', userId: 'u3', role: 'viewer' }],
     invites: [pendingInvite()],
   });
-  await assert.rejects(() => list.execute('w1', 'u3'), NotWorkspaceOwnerError);
+  await assert.rejects(() => list.execute('w1', 'u3'), NotWorkspaceEditorError);
+});
+
+test('list: editor тоже видит pending (не только owner)', async () => {
+  const { list } = makeFakes({
+    members: [{ workspaceId: 'w1', userId: 'u2', role: 'editor' }],
+    invites: [pendingInvite()],
+  });
+  const items = await list.execute('w1', 'u2');
+  assert.deepEqual(items.map((i) => i.id), ['inv-1']);
 });
 
 test('delete: owner отзывает invite; чужой inviteId → not found', async () => {
@@ -255,4 +271,21 @@ test('delete: owner отзывает invite; чужой inviteId → not found',
   await del.execute('w1', 'u1', 'inv-1');
   assert.equal(await invitesRepo.getById('inv-1'), null);
   await assert.rejects(() => del.execute('w1', 'u1', 'inv-other'), WorkspaceInviteNotFoundError);
+});
+
+test('delete: editor тоже может отзывать (не только owner)', async () => {
+  const { del, invitesRepo } = makeFakes({
+    members: [{ workspaceId: 'w1', userId: 'u2', role: 'editor' }],
+    invites: [pendingInvite()],
+  });
+  await del.execute('w1', 'u2', 'inv-1');
+  assert.equal(await invitesRepo.getById('inv-1'), null);
+});
+
+test('delete: viewer не может отзывать', async () => {
+  const { del } = makeFakes({
+    members: [{ workspaceId: 'w1', userId: 'u3', role: 'viewer' }],
+    invites: [pendingInvite()],
+  });
+  await assert.rejects(() => del.execute('w1', 'u3', 'inv-1'), NotWorkspaceEditorError);
 });

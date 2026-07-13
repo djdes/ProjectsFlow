@@ -19,6 +19,13 @@ export class NotWorkspaceOwnerError extends Error {
   }
 }
 
+export class NotWorkspaceEditorError extends Error {
+  constructor() {
+    super('Workspace editor role required');
+    this.name = 'NotWorkspaceEditorError';
+  }
+}
+
 export class LastOwnerError extends Error {
   constructor() {
     super('Cannot remove or demote the last owner');
