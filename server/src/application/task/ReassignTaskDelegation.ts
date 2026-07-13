@@ -33,7 +33,7 @@ type Deps = {
 // Переназначить ответственного за уже делегированную задачу (drag'ом на кубик человека
 // во «Входящих»). В отличие от DelegateExistingTask (создаёт первую делегацию и падает
 // AlreadyDelegatedError, если активная есть) — здесь текущая активная делегация ЛЮБОГО
-// статуса архивируется, и создаётся новая pending. Область «Максимально»: переназначить
+// статуса архивируется, и создаётся новая (сразу accepted). Область «Максимально»: переназначить
 // может делегатор (владелец inbox / editor+ проекта) ИЛИ текущий делегат — «передать
 // дальше» задачу, порученную ему. DB не гарантирует уникальность активной делегации
 // (см. TaskDelegationRepository) — порядок archive→create держим здесь.
@@ -87,6 +87,8 @@ export class ReassignTaskDelegation {
       taskId,
       delegateUserId,
       delegatorUserId: callerUserId,
+      // Мгновенное делегирование: новая делегация сразу accepted (спека §4).
+      status: 'accepted',
     });
 
     void this.notifyDelegated(created, task, callerUserId).catch((err: unknown) => {
