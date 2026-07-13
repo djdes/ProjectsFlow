@@ -48,4 +48,10 @@ export interface WorkspaceRepository {
   getCurrentWorkspaceId(userId: string): Promise<string | null>;
   /** Любое другое пространство юзера, кроме excludeId (для авто-switch). */
   findAnotherForUser(userId: string, excludeId: string): Promise<string | null>;
+  /**
+   * id единственного kind='team' пространства, где юзер участник — ТОЛЬКО если оно
+   * ровно одно. Если их 0 или >1 — null (не угадываем при неоднозначности). Нужен для
+   * резолва «единого пространства» под новые проекты (см. resolveWorkspaceForNewProject).
+   */
+  findSoleTeamWorkspaceForUser(userId: string): Promise<string | null>;
 }

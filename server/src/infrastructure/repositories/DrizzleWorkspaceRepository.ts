@@ -223,4 +223,15 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
       .limit(1);
     return rows[0]?.workspaceId ?? null;
   }
+
+  async findSoleTeamWorkspaceForUser(userId: string): Promise<string | null> {
+    // Тянем до 2 строк — если их 2+, значит не «ровно одно», не угадываем (null).
+    const rows = await this.db
+      .select({ workspaceId: workspaces.id })
+      .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+      .where(and(eq(workspaceMembers.userId, userId), eq(workspaces.kind, 'team')))
+      .limit(2);
+    return rows.length === 1 ? (rows[0]?.workspaceId ?? null) : null;
+  }
 }

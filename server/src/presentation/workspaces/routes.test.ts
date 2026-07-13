@@ -84,6 +84,13 @@ function makeWorkspaceRepo(seed: Seed): WorkspaceRepository {
     async findAnotherForUser() {
       return null;
     },
+    async findSoleTeamWorkspaceForUser(userId) {
+      const teamIds = members
+        .filter((m) => m.userId === userId)
+        .map((m) => m.workspaceId)
+        .filter((wid) => workspaces.get(wid)?.kind === 'team');
+      return teamIds.length === 1 ? teamIds[0]! : null;
+    },
   };
 }
 
