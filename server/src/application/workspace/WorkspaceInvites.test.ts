@@ -27,6 +27,9 @@ type Seed = {
   // По умолчанию все пространства из members — 'team' (не влияет на существующие тесты).
   // Указывай явно только для тестов гарда «нельзя пригласить в default».
   workspaceKinds?: Record<string, WorkspaceKind>;
+  // Что возвращает мок absorbDefaultHubInto (реальная логика гейтов проверяется в
+  // DrizzleWorkspaceRepository — тут важен только факт и аргументы вызова из accept).
+  absorbResult?: boolean;
 };
 
 function makeFakes(seed: Seed = {}) {
@@ -75,6 +78,7 @@ function makeFakes(seed: Seed = {}) {
     },
   };
 
+  const absorbCalls: Array<{ userId: string; targetWorkspaceId: string }> = [];
   const workspaces = {
     async getMembership(workspaceId: string, userId: string) {
       const m = members.find((x) => x.workspaceId === workspaceId && x.userId === userId);
@@ -88,6 +92,10 @@ function makeFakes(seed: Seed = {}) {
     async getById(id: string) {
       const kind = seed.workspaceKinds?.[id] ?? 'team';
       return { id, name: 'Команда', kind };
+    },
+    async absorbDefaultHubInto(userId: string, targetWorkspaceId: string) {
+      absorbCalls.push({ userId, targetWorkspaceId });
+      return seed.absorbResult ?? true;
     },
   };
   const usersPort = {
@@ -136,7 +144,7 @@ function makeFakes(seed: Seed = {}) {
   });
   const del = new DeleteWorkspaceInvite({ workspaces, invites: invitesRepo });
 
-  return { create, accept, list, del, invitesRepo, workspaces, members, sentEmails, notifications };
+  return { create, accept, list, del, invitesRepo, workspaces, members, sentEmails, notifications, absorbCalls };
 }
 
 function pendingInvite(over: Partial<WorkspaceInvite> = {}): WorkspaceInvite {
@@ -237,6 +245,31 @@ test('accept: уже участник — роль не меняется, ток
   });
   await accept.execute('t'.repeat(64), 'u2');
   assert.equal((await workspaces.getMembership('w1', 'u2'))?.role, 'owner');
+  assert.ok((await invitesRepo.getById('inv-1'))?.acceptedAt);
+});
+
+test('accept: мёржит личный дефолт-хаб юзера в целевое пространство (durability)', async () => {
+  const { accept, absorbCalls } = makeFakes({ invites: [pendingInvite()] });
+  await accept.execute('t'.repeat(64), 'u2');
+  assert.deepEqual(absorbCalls, [{ userId: 'u2', targetWorkspaceId: 'w1' }]);
+});
+
+test('accept: absorb вызывается даже если юзер уже был участником (чинит вступивших до фичи)', async () => {
+  const { accept, absorbCalls } = makeFakes({
+    members: [{ workspaceId: 'w1', userId: 'u2', role: 'owner' }],
+    invites: [pendingInvite({ role: 'viewer' })],
+  });
+  await accept.execute('t'.repeat(64), 'u2');
+  assert.deepEqual(absorbCalls, [{ userId: 'u2', targetWorkspaceId: 'w1' }]);
+});
+
+test('accept: результат absorb (true/false) не влияет на успех accept — no-op тоже ок', async () => {
+  const { accept, invitesRepo } = makeFakes({
+    invites: [pendingInvite()],
+    absorbResult: false,
+  });
+  const res = await accept.execute('t'.repeat(64), 'u2');
+  assert.equal(res.workspaceId, 'w1');
   assert.ok((await invitesRepo.getById('inv-1'))?.acceptedAt);
 });
 

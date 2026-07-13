@@ -19,7 +19,7 @@ type Seed = {
   workspaces?: Array<{ id: string; name?: string; ownerUserId: string; kind?: WorkspaceKind }>;
   members?: Array<{ workspaceId: string; userId: string; role: WorkspaceRole }>;
   current?: Record<string, string>; // userId -> workspaceId
-  projects?: Array<{ id: string; ownerId: string; workspaceId: string }>;
+  projects?: Array<{ id: string; ownerId: string; workspaceId: string; isInbox?: boolean }>;
   users?: Array<{ id: string; email: string }>;
 };
 
@@ -32,6 +32,7 @@ function makeFakes(seed: Seed) {
   const current = new Map<string, string>(Object.entries(seed.current ?? {}));
   const projects = (seed.projects ?? []).map((p) => ({ ...p }));
   const users = seed.users ?? [];
+  const absorbCalls: Array<{ userId: string; targetWorkspaceId: string }> = [];
 
   let idSeq = 0;
   const idGen = (): string => `ws-new-${++idSeq}`;
@@ -122,6 +123,25 @@ function makeFakes(seed: Seed) {
         .filter((wid) => workspaces.get(wid)?.kind === 'team');
       return teamIds.length === 1 ? teamIds[0]! : null;
     },
+    // Мирроит гейты реального DrizzleWorkspaceRepository.absorbDefaultHubInto (нет
+    // интеграционного БД-харнесса для Drizzle-репо в этом проекте — это единственная
+    // проверка логики слияния, кроме ручного code-review реализации).
+    async absorbDefaultHubInto(userId, targetWorkspaceId) {
+      absorbCalls.push({ userId, targetWorkspaceId });
+      const hub = [...workspaces.values()].find((w) => w.ownerUserId === userId && w.kind === 'default');
+      if (!hub) return false;
+      const target = workspaces.get(targetWorkspaceId);
+      if (!target || target.kind !== 'team') return false;
+      const nonInbox = projects.filter((p) => p.workspaceId === hub.id && !p.isInbox);
+      if (nonInbox.length > 0) return false;
+      for (const p of projects) {
+        if (p.workspaceId === hub.id && p.isInbox) p.workspaceId = targetWorkspaceId;
+      }
+      workspaces.delete(hub.id);
+      for (let i = members.length - 1; i >= 0; i -= 1) if (members[i]!.workspaceId === hub.id) members.splice(i, 1);
+      for (const [u, w] of current) if (w === hub.id) current.set(u, targetWorkspaceId);
+      return true;
+    },
   };
 
   const projectsPort = {
@@ -148,7 +168,7 @@ function makeFakes(seed: Seed) {
   };
 
   const service = new WorkspaceService({ repo, projects: projectsPort, users: usersPort, idGen });
-  return { service, repo, projects };
+  return { service, repo, projects, absorbCalls };
 }
 
 test('create: creates workspace, adds creator as owner, sets it current', async () => {
@@ -214,6 +234,48 @@ test('addMember: adds existing user by email', async () => {
   const m = await service.addMember('w1', 'u1', 'u2@x', 'editor');
   assert.equal(m.userId, 'u2');
   assert.equal((await repo.getMembership('w1', 'u2'))?.role, 'editor');
+});
+
+test('addMember: сливает пустой дефолт-хаб добавленного юзера в это пространство (durability)', async () => {
+  const { service, repo, absorbCalls } = makeFakes({
+    workspaces: [
+      { id: 'w1', ownerUserId: 'u1', kind: 'team' },
+      { id: 'hub-2', ownerUserId: 'u2', kind: 'default' },
+    ],
+    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
+    projects: [{ id: 'inbox-2', ownerId: 'u2', workspaceId: 'hub-2', isInbox: true }],
+    users: [{ id: 'u1', email: 'u1@x' }, { id: 'u2', email: 'u2@x' }],
+    current: { u2: 'hub-2' },
+  });
+  await service.addMember('w1', 'u1', 'u2@x', 'editor');
+  assert.deepEqual(absorbCalls, [{ userId: 'u2', targetWorkspaceId: 'w1' }]);
+  assert.equal(await repo.getById('hub-2'), null, 'хаб удалён');
+  assert.equal(await repo.getCurrentWorkspaceId('u2'), 'w1', 'current переставлен на команду');
+});
+
+test('addMember: хаб с НЕ-inbox проектом — не сливаем (safety), хаб остаётся', async () => {
+  const { service, repo, absorbCalls } = makeFakes({
+    workspaces: [
+      { id: 'w1', ownerUserId: 'u1', kind: 'team' },
+      { id: 'hub-2', ownerUserId: 'u2', kind: 'default' },
+    ],
+    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
+    projects: [{ id: 'p-private', ownerId: 'u2', workspaceId: 'hub-2', isInbox: false }],
+    users: [{ id: 'u1', email: 'u1@x' }, { id: 'u2', email: 'u2@x' }],
+  });
+  await service.addMember('w1', 'u1', 'u2@x', 'editor');
+  assert.deepEqual(absorbCalls, [{ userId: 'u2', targetWorkspaceId: 'w1' }]);
+  assert.notEqual(await repo.getById('hub-2'), null, 'хаб цел — приватный проект не раскрываем');
+});
+
+test('addMember: у добавленного юзера нет дефолт-хаба — absorb вызван, но no-op', async () => {
+  const { service, absorbCalls } = makeFakes({
+    workspaces: [{ id: 'w1', ownerUserId: 'u1', kind: 'team' }],
+    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
+    users: [{ id: 'u1', email: 'u1@x' }, { id: 'u2', email: 'u2@x' }],
+  });
+  await service.addMember('w1', 'u1', 'u2@x', 'editor');
+  assert.deepEqual(absorbCalls, [{ userId: 'u2', targetWorkspaceId: 'w1' }]);
 });
 
 test('delete: workspace with projects rejected', async () => {

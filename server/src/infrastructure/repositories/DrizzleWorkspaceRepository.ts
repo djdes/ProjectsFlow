@@ -1,6 +1,7 @@
 import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
+  activityEvents,
   projects,
   users,
   workspaces,
@@ -233,5 +234,50 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
       .where(and(eq(workspaceMembers.userId, userId), eq(workspaces.kind, 'team')))
       .limit(2);
     return rows.length === 1 ? (rows[0]?.workspaceId ?? null) : null;
+  }
+
+  async absorbDefaultHubInto(userId: string, targetWorkspaceId: string): Promise<boolean> {
+    // Гейты — до открытия транзакции (зеркало ручного мёржа ядра-5, уже проверенного на проде).
+    const hubId = await this.findDefaultForOwner(userId);
+    if (!hubId) return false;
+    const target = await this.getById(targetWorkspaceId);
+    if (!target || target.kind !== 'team') return false;
+    // Safety: НЕ-inbox проекты в хабе — юзер успел что-то создать соло. Не сливаем молча,
+    // иначе его приватные проекты стали бы видны всей команде.
+    const nonInboxRows = await this.db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(projects)
+      .where(and(eq(projects.workspaceId, hubId), eq(projects.isInbox, false)));
+    if (Number(nonInboxRows[0]?.count ?? 0) > 0) return false;
+
+    await this.db.transaction(async (tx) => {
+      // Перенос «Входящих»: имя переписываем на collision-safe (uq(workspace_id,name)) —
+      // юзеру оно не видно, лейбл «Входящие» захардкожен в UI.
+      await tx
+        .update(projects)
+        .set({
+          workspaceId: targetWorkspaceId,
+          name: sql`CONCAT('inbox:', ${projects.ownerId})`,
+        })
+        .where(and(eq(projects.workspaceId, hubId), eq(projects.isInbox, true)));
+      // Сохраняем историю ленты активности — переносим ДО удаления хаба (иначе CASCADE её сотрёт).
+      await tx
+        .update(activityEvents)
+        .set({ workspaceId: targetWorkspaceId })
+        .where(eq(activityEvents.workspaceId, hubId));
+      // cascade чистит workspace_members/chat/chat_reads/invites хаба; projects уже перенесены.
+      await tx.delete(workspaces).where(eq(workspaces.id, hubId));
+      // Если хаб был активным пространством юзера — переставляем current на target, читаем
+      // внутри транзакции, чтобы не разъехаться с конкурентным вызовом.
+      const currentRows = await tx
+        .select({ current: users.currentWorkspaceId })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (currentRows[0]?.current === hubId) {
+        await tx.update(users).set({ currentWorkspaceId: targetWorkspaceId }).where(eq(users.id, userId));
+      }
+    });
+    return true;
   }
 }

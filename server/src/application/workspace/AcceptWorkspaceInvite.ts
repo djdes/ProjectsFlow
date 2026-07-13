@@ -9,6 +9,8 @@ import type { WorkspaceInviteRepository } from './WorkspaceInviteRepository.js';
 type WorkspacesPort = {
   getMembership(workspaceId: string, userId: string): Promise<WorkspaceMember | null>;
   addMember(workspaceId: string, userId: string, role: WorkspaceRole): Promise<void>;
+  /** Слить личный дефолт-хаб юзера в целевую команду при вступлении. См. WorkspaceRepository. */
+  absorbDefaultHubInto(userId: string, targetWorkspaceId: string): Promise<boolean>;
 };
 
 type Deps = {
@@ -32,6 +34,11 @@ export class AcceptWorkspaceInvite {
     if (!existing) {
       await this.deps.workspaces.addMember(invite.workspaceId, userId, invite.role);
     }
+
+    // Мёржим личный дефолт-хаб юзера в команду при вступлении (durability, "слить, не
+    // скрыть"). Вызываем БЕЗУСЛОВНО (идемпотентно, no-op если хаба нет) — чинит и тех, кто
+    // вступил до появления этой фичи и всё ещё видит два «Пространства».
+    await this.deps.workspaces.absorbDefaultHubInto(userId, invite.workspaceId);
 
     await this.deps.invites.markAccepted({
       inviteId: invite.id,

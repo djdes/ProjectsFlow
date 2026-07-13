@@ -54,4 +54,11 @@ export interface WorkspaceRepository {
    * резолва «единого пространства» под новые проекты (см. resolveWorkspaceForNewProject).
    */
   findSoleTeamWorkspaceForUser(userId: string): Promise<string | null>;
+  /**
+   * Слить личный дефолт-хаб юзера в целевое КОМАНДНОЕ пространство при вступлении: перенести
+   * его «Входящие» (+ activity) в target, удалить хаб, переставить current на target.
+   * No-op (вернуть false), если: у юзера нет дефолт-хаба; target не 'team'; в хабе есть
+   * НЕ-inbox проекты (не раскрываем приватное). Идемпотентно и транзакционно.
+   */
+  absorbDefaultHubInto(userId: string, targetWorkspaceId: string): Promise<boolean>;
 }

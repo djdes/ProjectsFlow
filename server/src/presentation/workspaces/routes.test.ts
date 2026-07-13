@@ -91,6 +91,9 @@ function makeWorkspaceRepo(seed: Seed): WorkspaceRepository {
         .filter((wid) => workspaces.get(wid)?.kind === 'team');
       return teamIds.length === 1 ? teamIds[0]! : null;
     },
+    async absorbDefaultHubInto() {
+      return false;
+    },
   };
 }
 

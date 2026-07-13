@@ -117,6 +117,9 @@ export class WorkspaceService {
     const user = await this.deps.users.getByEmail(email.trim());
     if (!user) throw new UserNotFoundByEmailError(email);
     await this.deps.repo.addMember(workspaceId, user.id, role);
+    // Мёржим личный дефолт-хаб добавленного юзера в это командное пространство (durability,
+    // см. AcceptWorkspaceInvite для того же вызова на пути accept-invite). Идемпотентно.
+    await this.deps.repo.absorbDefaultHubInto(user.id, workspaceId);
     const m = await this.deps.repo.getMembership(workspaceId, user.id);
     if (!m) throw new WorkspaceNotFoundError();
     return m;
