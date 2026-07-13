@@ -13,7 +13,9 @@ import {
   WorkspaceInviteNotFoundError,
   WorkspaceInviteExpiredError,
   WorkspaceInviteAlreadyUsedError,
+  CannotInviteToDefaultWorkspaceError,
 } from '../../domain/workspace/errors.js';
+import type { WorkspaceKind } from '../../domain/workspace/Workspace.js';
 
 const NOW = new Date('2026-07-13T12:00:00Z');
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -22,6 +24,9 @@ type Seed = {
   members?: Array<{ workspaceId: string; userId: string; role: WorkspaceRole }>;
   users?: Array<{ id: string; email: string; displayName: string }>;
   invites?: WorkspaceInvite[];
+  // По умолчанию все пространства из members — 'team' (не влияет на существующие тесты).
+  // Указывай явно только для тестов гарда «нельзя пригласить в default».
+  workspaceKinds?: Record<string, WorkspaceKind>;
 };
 
 function makeFakes(seed: Seed = {}) {
@@ -81,7 +86,8 @@ function makeFakes(seed: Seed = {}) {
       }
     },
     async getById(id: string) {
-      return { id, name: 'Команда' };
+      const kind = seed.workspaceKinds?.[id] ?? 'team';
+      return { id, name: 'Команда', kind };
     },
   };
   const usersPort = {
@@ -178,6 +184,26 @@ test('create: не участник — 404-ошибка (не палим про
     () => create.execute({ workspaceId: 'w1', actorUserId: 'intruder', role: 'editor', email: null }),
     WorkspaceNotFoundError,
   );
+});
+
+test('create: в личный дефолт-хаб пригласить нельзя, даже owner', async () => {
+  const { create } = makeFakes({
+    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
+    workspaceKinds: { w1: 'default' },
+  });
+  await assert.rejects(
+    () => create.execute({ workspaceId: 'w1', actorUserId: 'u1', role: 'editor', email: null }),
+    CannotInviteToDefaultWorkspaceError,
+  );
+});
+
+test('create: в командное (kind=team) пространство приглашать можно (гард не мешает)', async () => {
+  const { create } = makeFakes({
+    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
+    workspaceKinds: { w1: 'team' },
+  });
+  const { invite } = await create.execute({ workspaceId: 'w1', actorUserId: 'u1', role: 'editor', email: null });
+  assert.equal(invite.workspaceId, 'w1');
 });
 
 test('create с email: шлёт письмо + in-app workspace_invite зарегистрированному', async () => {
