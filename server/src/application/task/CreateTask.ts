@@ -189,6 +189,9 @@ export class CreateTask {
       taskId,
       delegateUserId,
       delegatorUserId: creatorUserId,
+      // Мгновенное делегирование: сразу accepted (спека §4), делегат видит задачу
+      // в «Поручено мне» и может завершать без «Принять».
+      status: 'accepted',
     });
 
     // Best-effort notification + email. Не блокируют успех create.
