@@ -16,7 +16,6 @@ import {
   type DragStartEvent,
   type DropAnimation,
 } from '@dnd-kit/core';
-import { getEventCoordinates } from '@dnd-kit/utilities';
 import {
   ArrowDownNarrowWide,
   ArrowUpNarrowWide,
@@ -500,6 +499,16 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
       window.removeEventListener(LIVE_CHANGED_EVENT, onLive);
     };
   }, [projectId]);
+  // Живой Y курсора (для расчёта before/after синей полоски по позиции курсора —
+  // DragOverEvent не даёт надёжного delta).
+  const pointerYRef = useRef<number | null>(null);
+  useEffect(() => {
+    const onMove = (e: PointerEvent): void => {
+      pointerYRef.current = e.clientY;
+    };
+    window.addEventListener('pointermove', onMove, { passive: true });
+    return () => window.removeEventListener('pointermove', onMove);
+  }, []);
   // Позиция drop-индикатора: в какой колонке и над каким элементом находится курсор.
   // overId — id задачи (вставка перед ней) или 'column-{status}' (вставка в конец).
   const [dropTarget, setDropTarget] = useState<{
@@ -691,14 +700,13 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   };
 
   // Курсор ниже вертикального центра over-карточки? → вставка ПОСЛЕ неё (полоска
-  // снизу), иначе перед (сверху). Курсор = точка активации + текущий delta драга.
+  // снизу), иначе перед (сверху). Y курсора берём из живого pointerYRef (у
+  // DragOverEvent нет надёжного delta), rect — из over.
   const pointerBelowOverCenter = (e: DragOverEvent | DragEndEvent): boolean => {
     const overRect = e.over?.rect;
-    if (!overRect) return false;
-    const coords = getEventCoordinates(e.activatorEvent);
-    if (!coords) return false;
-    const pointerY = coords.y + e.delta.y;
-    return pointerY > overRect.top + overRect.height / 2;
+    const py = pointerYRef.current;
+    if (!overRect || py == null) return false;
+    return py > overRect.top + overRect.height / 2;
   };
 
   const handleDragOver = (e: DragOverEvent): void => {
