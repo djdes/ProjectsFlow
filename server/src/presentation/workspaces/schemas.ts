@@ -26,3 +26,16 @@ export const changeRoleSchema = z.object({
 export const moveProjectSchema = z.object({
   targetWorkspaceId: z.string().min(1),
 });
+
+export const createWorkspaceInviteSchema = z.object({
+  role: z.enum(['editor', 'viewer']),
+  // Информационный email «для кого» — опционален; пустая строка → null.
+  email: z
+    .string()
+    .trim()
+    .email('Невалидный email')
+    .max(255)
+    .nullable()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null)),
+});

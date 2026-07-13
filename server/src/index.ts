@@ -98,12 +98,13 @@ import { ListProjectMembers } from './application/project/ListProjectMembers.js'
 import { RemoveProjectMember } from './application/project/RemoveProjectMember.js';
 import { UpdateProjectMemberRole } from './application/project/UpdateProjectMemberRole.js';
 import { TransferProjectOwnership } from './application/project/TransferProjectOwnership.js';
-import { CreateProjectInvite } from './application/project/CreateProjectInvite.js';
-import { ListProjectInvites } from './application/project/ListProjectInvites.js';
-import { DeleteProjectInvite } from './application/project/DeleteProjectInvite.js';
 import { ListSharedMembers } from './application/project/ListSharedMembers.js';
 import { GetInviteByToken } from './application/project/GetInviteByToken.js';
 import { AcceptProjectInvite } from './application/project/AcceptProjectInvite.js';
+import { CreateWorkspaceInvite } from './application/workspace/CreateWorkspaceInvite.js';
+import { AcceptWorkspaceInvite } from './application/workspace/AcceptWorkspaceInvite.js';
+import { ListWorkspaceInvites } from './application/workspace/ListWorkspaceInvites.js';
+import { DeleteWorkspaceInvite } from './application/workspace/DeleteWorkspaceInvite.js';
 import { CheckGitCollision } from './application/project/CheckGitCollision.js';
 import { RequestProjectJoin } from './application/project/RequestProjectJoin.js';
 import { ResolveProjectJoinRequest } from './application/project/ResolveProjectJoinRequest.js';
@@ -1502,30 +1503,6 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
     }),
-    createInvite: new CreateProjectInvite({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      invites: projectInviteRepo,
-      users: userRepo,
-      notifications: notificationRepo,
-      email: emailSender,
-      idGen: idGenerator,
-      randomToken: () => randomBytes(32).toString('hex'),
-      now,
-      ttlMs: 7 * 24 * 60 * 60 * 1000, // 7 дней (см. spec)
-      appUrl: appBaseUrl,
-    }),
-    listInvites: new ListProjectInvites({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      invites: projectInviteRepo,
-      now,
-    }),
-    deleteInvite: new DeleteProjectInvite({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      invites: projectInviteRepo,
-    }),
     listSharedMembers: new ListSharedMembers(projectMemberRepo),
     checkGitCollision: new CheckGitCollision({
       projects: projectRepo,
@@ -1558,6 +1535,30 @@ const { app, devProxyUpgrade } = createApp({
   },
   workspaces: {
     service: workspaceService,
+    invites: {
+      create: new CreateWorkspaceInvite({
+        workspaces: workspaceRepo,
+        invites: workspaceInviteRepo,
+        users: userRepo,
+        notifications: notificationRepo,
+        email: emailSender,
+        idGen: idGenerator,
+        randomToken: () => randomBytes(32).toString('hex'),
+        now,
+        ttlMs: 7 * 24 * 60 * 60 * 1000, // 7 дней — как у project-инвайтов
+        appUrl: appBaseUrl,
+      }),
+      list: new ListWorkspaceInvites({
+        workspaces: workspaceRepo,
+        invites: workspaceInviteRepo,
+        now,
+      }),
+      delete: new DeleteWorkspaceInvite({
+        workspaces: workspaceRepo,
+        invites: workspaceInviteRepo,
+      }),
+    },
+    appUrl: appBaseUrl,
   },
   activity: {
     getFeed: getActivityFeed,
@@ -1610,7 +1611,12 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
       now,
     }),
-    accept: new AcceptProjectInvite({
+    acceptWorkspace: new AcceptWorkspaceInvite({
+      invites: workspaceInviteRepo,
+      workspaces: workspaceRepo,
+      now,
+    }),
+    acceptProject: new AcceptProjectInvite({
       invites: projectInviteRepo,
       projects: projectRepo,
       workspaces: workspaceRepo,

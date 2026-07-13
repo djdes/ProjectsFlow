@@ -212,19 +212,6 @@ export type ReorderProjectsBody = z.infer<typeof reorderProjectsSchema>;
 export type ToggleFavoriteBody = z.infer<typeof toggleFavoriteSchema>;
 export type ReorderFavoritesBody = z.infer<typeof reorderFavoritesSchema>;
 
-export const createInviteSchema = z.object({
-  role: z.enum(['editor', 'viewer']),
-  // Опциональный email — пометка «для кого». Пусто/null → не сохраняем.
-  email: z
-    .string()
-    .trim()
-    .email('Невалидный email')
-    .max(255)
-    .nullable()
-    .optional()
-    .transform((v) => (v && v.length > 0 ? v : null)),
-});
-
 export const updateMemberRoleSchema = z.object({
   role: z.enum(['editor', 'viewer']),
 });
@@ -251,7 +238,6 @@ export const setGitTokenDelegationSchema = z.object({
   granterUserId: z.string().min(1).optional(),
 });
 
-export type CreateInviteBody = z.infer<typeof createInviteSchema>;
 export type UpdateMemberRoleBody = z.infer<typeof updateMemberRoleSchema>;
 export type TransferOwnershipBody = z.infer<typeof transferOwnershipSchema>;
 export type SetDispatcherBody = z.infer<typeof setDispatcherSchema>;

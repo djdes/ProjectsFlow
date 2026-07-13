@@ -27,9 +27,6 @@ import type { ListProjectMembers } from '../../application/project/ListProjectMe
 import type { RemoveProjectMember } from '../../application/project/RemoveProjectMember.js';
 import type { UpdateProjectMemberRole } from '../../application/project/UpdateProjectMemberRole.js';
 import type { TransferProjectOwnership } from '../../application/project/TransferProjectOwnership.js';
-import type { CreateProjectInvite } from '../../application/project/CreateProjectInvite.js';
-import type { ListProjectInvites } from '../../application/project/ListProjectInvites.js';
-import type { DeleteProjectInvite } from '../../application/project/DeleteProjectInvite.js';
 import type { CheckGitCollision } from '../../application/project/CheckGitCollision.js';
 import type { RequestProjectJoin } from '../../application/project/RequestProjectJoin.js';
 import type { ResolveProjectJoinRequest } from '../../application/project/ResolveProjectJoinRequest.js';
@@ -41,7 +38,6 @@ import type { ProjectNotificationService } from '../../application/notifications
 import type { ListProjectCommits } from '../../application/github/ListProjectCommits.js';
 import { ProjectNotFoundError } from '../../domain/project/errors.js';
 import type { Project } from '../../domain/project/Project.js';
-import type { ProjectInvite } from '../../domain/project/ProjectInvite.js';
 import type { GithubCommit } from '../../domain/github/GithubConnection.js';
 import multer from 'multer';
 import { randomUUID } from 'node:crypto';
@@ -62,7 +58,6 @@ import {
   createTaskPropertySchema,
   updateTaskPropertySchema,
   setTaskPropertyValueSchema,
-  createInviteSchema,
   createProjectSchema,
   kanbanSettingsSchema,
   updateBoardViewSchema,
@@ -121,9 +116,6 @@ type Deps = {
   readonly removeMember: RemoveProjectMember;
   readonly updateMemberRole: UpdateProjectMemberRole;
   readonly transferOwnership: TransferProjectOwnership;
-  readonly createInvite: CreateProjectInvite;
-  readonly listInvites: ListProjectInvites;
-  readonly deleteInvite: DeleteProjectInvite;
   readonly checkGitCollision: CheckGitCollision;
   readonly requestJoin: RequestProjectJoin;
   readonly resolveJoinRequest: ResolveProjectJoinRequest;
@@ -191,40 +183,6 @@ function memberToDto(m: ProjectMemberWithUser): MemberDto {
   };
 }
 
-type InviteDto = {
-  id: string;
-  projectId: string;
-  role: 'editor' | 'viewer';
-  email: string | null;
-  expiresAt: string;
-  acceptedAt: string | null;
-  acceptedByUserId: string | null;
-  createdByUserId: string;
-  createdAt: string;
-  // Сам token приходит только в ответе на создание (см. invite-маршрут);
-  // listInvites его не отдаёт — он одноразовый секрет.
-  token?: string;
-  url?: string;
-};
-
-function inviteToDto(i: ProjectInvite, opts?: { includeToken?: boolean; appUrl?: string }): InviteDto {
-  const dto: InviteDto = {
-    id: i.id,
-    projectId: i.projectId,
-    role: i.role,
-    email: i.email,
-    expiresAt: i.expiresAt.toISOString(),
-    acceptedAt: i.acceptedAt?.toISOString() ?? null,
-    acceptedByUserId: i.acceptedByUserId,
-    createdByUserId: i.createdByUserId,
-    createdAt: i.createdAt.toISOString(),
-  };
-  if (opts?.includeToken) {
-    dto.token = i.token;
-    if (opts.appUrl) dto.url = `${opts.appUrl.replace(/\/$/, '')}/invite/${i.token}`;
-  }
-  return dto;
-}
 
 type CommitDto = Omit<GithubCommit, 'committedAt'> & { committedAt: string };
 
@@ -1232,54 +1190,6 @@ export function projectsRouter(deps: Deps): Router {
             context: e.context,
           })),
         });
-      } catch (e) {
-        next(e);
-      }
-    },
-  );
-
-  // Invites ---------------------------------------------------------------
-  router.get('/:id/invites', async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const id = req.params.id;
-      if (typeof id !== 'string') throw new ProjectNotFoundError();
-      const list = await deps.listInvites.execute(id, req.user!.id);
-      // listInvites — для owner-UI, token не отдаём (одноразовый секрет; см. spec секцию 10).
-      res.json({ invites: list.map((i) => inviteToDto(i)) });
-    } catch (e) {
-      next(e);
-    }
-  });
-
-  router.post('/:id/invites', async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const id = req.params.id;
-      if (typeof id !== 'string') throw new ProjectNotFoundError();
-      const body = createInviteSchema.parse(req.body);
-      const { invite } = await deps.createInvite.execute({
-        projectId: id,
-        actorUserId: req.user!.id,
-        role: body.role,
-        email: body.email ?? null,
-      });
-      // В ответ на create отдаём token + готовый URL — больше нигде эта инфа не доступна.
-      res.status(201).json({
-        invite: inviteToDto(invite, { includeToken: true, appUrl: deps.appUrl }),
-      });
-    } catch (e) {
-      next(e);
-    }
-  });
-
-  router.delete(
-    '/:id/invites/:inviteId',
-    async (req: Request, res: Response, next: NextFunction) => {
-      try {
-        const id = req.params.id;
-        const inviteId = req.params['inviteId'];
-        if (typeof id !== 'string' || typeof inviteId !== 'string') throw new ProjectNotFoundError();
-        await deps.deleteInvite.execute(id, req.user!.id, inviteId);
-        res.status(204).end();
       } catch (e) {
         next(e);
       }

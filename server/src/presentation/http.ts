@@ -54,15 +54,16 @@ import type { ListProjectMembers } from '../application/project/ListProjectMembe
 import type { RemoveProjectMember } from '../application/project/RemoveProjectMember.js';
 import type { UpdateProjectMemberRole } from '../application/project/UpdateProjectMemberRole.js';
 import type { TransferProjectOwnership } from '../application/project/TransferProjectOwnership.js';
-import type { CreateProjectInvite } from '../application/project/CreateProjectInvite.js';
-import type { ListProjectInvites } from '../application/project/ListProjectInvites.js';
 import type { ListSharedMembers } from '../application/project/ListSharedMembers.js';
-import type { DeleteProjectInvite } from '../application/project/DeleteProjectInvite.js';
 import type { CheckGitCollision } from '../application/project/CheckGitCollision.js';
 import type { RequestProjectJoin } from '../application/project/RequestProjectJoin.js';
 import type { ResolveProjectJoinRequest } from '../application/project/ResolveProjectJoinRequest.js';
 import type { GetInviteByToken } from '../application/project/GetInviteByToken.js';
 import type { AcceptProjectInvite } from '../application/project/AcceptProjectInvite.js';
+import type { CreateWorkspaceInvite } from '../application/workspace/CreateWorkspaceInvite.js';
+import type { ListWorkspaceInvites } from '../application/workspace/ListWorkspaceInvites.js';
+import type { DeleteWorkspaceInvite } from '../application/workspace/DeleteWorkspaceInvite.js';
+import type { AcceptWorkspaceInvite } from '../application/workspace/AcceptWorkspaceInvite.js';
 import type { ListProjectCommits } from '../application/github/ListProjectCommits.js';
 import type { StartDeviceFlow } from '../application/github/StartDeviceFlow.js';
 import type { PollDeviceFlow } from '../application/github/PollDeviceFlow.js';
@@ -351,9 +352,6 @@ type AppDeps = {
     readonly removeMember: RemoveProjectMember;
     readonly updateMemberRole: UpdateProjectMemberRole;
     readonly transferOwnership: TransferProjectOwnership;
-    readonly createInvite: CreateProjectInvite;
-    readonly listInvites: ListProjectInvites;
-    readonly deleteInvite: DeleteProjectInvite;
     readonly listSharedMembers: ListSharedMembers;
     readonly checkGitCollision: CheckGitCollision;
     readonly requestJoin: RequestProjectJoin;
@@ -369,6 +367,12 @@ type AppDeps = {
   };
   readonly workspaces: {
     readonly service: WorkspaceService;
+    readonly invites: {
+      readonly create: CreateWorkspaceInvite;
+      readonly list: ListWorkspaceInvites;
+      readonly delete: DeleteWorkspaceInvite;
+    };
+    readonly appUrl: string;
   };
   readonly activity: {
     readonly getFeed: GetActivityFeed;
@@ -378,7 +382,8 @@ type AppDeps = {
   };
   readonly invites: {
     readonly getByToken: GetInviteByToken;
-    readonly accept: AcceptProjectInvite;
+    readonly acceptWorkspace: AcceptWorkspaceInvite;
+    readonly acceptProject: AcceptProjectInvite;
   };
   // Публичная доска (Publish to web, db/096) — анонимный доступ по slug, БЕЗ requireAuth.
   readonly public: {
@@ -743,7 +748,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       notifier: deps.notifications.projectNotifier,
     }),
   );
-  app.use('/api/workspaces', workspacesRouter({ service: deps.workspaces.service }));
+  app.use('/api/workspaces', workspacesRouter(deps.workspaces));
   app.use(
     '/api/workspaces/:workspaceId/feed',
     activityFeedRouter({
@@ -850,7 +855,8 @@ export function createApp(deps: AppDeps): CreatedApp {
   // Invites: GET — anon-доступ; POST /:token/accept — внутри router'а через requireAuth.
   app.use('/api/invites', invitesRouter({
     getByToken: deps.invites.getByToken,
-    accept: deps.invites.accept,
+    acceptWorkspace: deps.invites.acceptWorkspace,
+    acceptProject: deps.invites.acceptProject,
   }));
   // Публичная доска (Publish to web, db/096) — анонимный доступ по slug, БЕЗ requireAuth.
   app.use('/api/public/boards', publicBoardRouter(deps.public));
