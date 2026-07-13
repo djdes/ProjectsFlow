@@ -1,6 +1,6 @@
 // Делегирование одной задачи одному пользователю. См. db/039, db/054.
 // Работает для inbox-задач И задач именованных проектов (см. DelegateExistingTask).
-// One-to-one: одна активная (pending|accepted) делегация на task. Архивные/declined/
+// One-to-one: одна активная (accepted) делегация на task. Архивные/declined/
 // withdrawn остаются для истории.
 //
 // creatorUserId/creatorDisplayName = делегатор. Источник — персистентная колонка

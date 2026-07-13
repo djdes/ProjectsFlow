@@ -3,7 +3,7 @@ import type {
   SharedUser,
 } from './ProjectMemberRepository.js';
 
-// Список user'ов, с которыми caller состоит в общих проектах — для дропдауна
+// Список user'ов, с которыми caller состоит в общих пространствах — для дропдауна
 // «делегировать» во входящих. Без caller'а самого.
 export class ListSharedMembers {
   constructor(private readonly members: ProjectMemberRepository) {}

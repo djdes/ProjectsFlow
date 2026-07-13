@@ -6,7 +6,7 @@ type Deps = {
   readonly listSharedMembers: ListSharedMembers;
 };
 
-// GET /api/users/me/shared-members — список user'ов из общих проектов caller'а.
+// GET /api/users/me/shared-members — список user'ов из общих пространств caller'а.
 // Используется UI-дропдауном «делегировать» при создании inbox-задачи.
 export function sharedMembersRouter(deps: Deps): Router {
   const r = Router();

@@ -34,14 +34,18 @@ export function DelegateSelect({ value, onChange, disabled, className, projectId
 
   useEffect(() => {
     let cancelled = false;
+    // Кандидаты в делегаты — только editor+/owner: сервер отвергает viewer'а как делегата
+    // (DelegateNotProjectMemberError), показывать его в списке — вести юзера к error-toast'у.
     const loadMembers = projectId
       ? projectRepository.listMembers(projectId).then((list) =>
-          list.map((m) => ({
-            id: m.userId,
-            displayName: m.user.displayName,
-            email: m.user.email,
-            avatarUrl: m.user.avatarUrl,
-          })),
+          list
+            .filter((m) => m.role !== 'viewer')
+            .map((m) => ({
+              id: m.userId,
+              displayName: m.user.displayName,
+              email: m.user.email,
+              avatarUrl: m.user.avatarUrl,
+            })),
         )
       : projectRepository.listSharedMembers();
     loadMembers

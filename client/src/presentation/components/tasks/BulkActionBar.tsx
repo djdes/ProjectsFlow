@@ -84,14 +84,15 @@ export function BulkActionBar({
   const [exporting, setExporting] = useState(false);
   const { animations } = useMotion();
 
-  // Подгружаем участников для делегирования (как в DelegateTaskButton).
+  // Подгружаем участников для делегирования (как в DelegateTaskButton). Viewer'ов исключаем —
+  // сервер отвергает viewer'а как делегата (DelegateNotProjectMemberError).
   useEffect(() => {
     let cancelled = false;
     const load = isInbox
       ? projectRepository.listSharedMembers()
       : projectRepository.listMembers(projectId).then((list) =>
           list
-            .filter((m) => m.userId !== currentUserId)
+            .filter((m) => m.userId !== currentUserId && m.role !== 'viewer')
             .map((m) => ({
               id: m.userId,
               displayName: m.user.displayName,

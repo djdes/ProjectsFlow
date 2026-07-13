@@ -138,7 +138,7 @@ type TaskDto = Omit<
   commitCount?: number;
   attachmentCount?: number;
   commentCount?: number;
-  // Активная (pending|accepted) делегация. null если задача не делегирована.
+  // Активная (accepted) делегация. null если задача не делегирована.
   // undefined невозможен на проводе — backend всегда выдаёт null.
   delegation: TaskDelegationDto | null;
 };
