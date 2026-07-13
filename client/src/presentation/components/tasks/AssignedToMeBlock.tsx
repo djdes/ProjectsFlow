@@ -190,6 +190,19 @@ function usePersistentScrollLeft(storageKey: string): {
   return { setRef, onScroll };
 }
 
+// Активная вкладка «Для меня»/«Другим» персистится за браузером (localStorage) — при
+// перезагрузке открывается та же (просьба юзера). Grouping персистится серверно (ui_prefs),
+// вкладку держим локально, чтобы не слать серверный запрос на каждый клик по вкладке.
+const TAB_STORAGE_KEY = 'pf.inbox.assignedTab';
+function readStoredTab(): DelegationTab | null {
+  try {
+    const v = localStorage.getItem(TAB_STORAGE_KEY);
+    return v === 'toMe' || v === 'byMe' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AssignedToMeBlock({
   onChanged,
   toolbarSlot = null,
@@ -206,7 +219,20 @@ export function AssignedToMeBlock({
   const { data: allProjects } = useProjectsContext();
   const [tasks, setTasks] = useState<AssignedTask[]>([]); // «Для меня»
   const [byMeTasks, setByMeTasks] = useState<AssignedTask[]>([]); // «Другим»
-  const [tab, setTab] = useState<DelegationTab>('toMe');
+  const [tab, setTab] = useState<DelegationTab>(() => readStoredTab() ?? 'toMe');
+  // Был ли сохранённый выбор вкладки при монтировании — чтобы авто-переключение (когда
+  // «Для меня» пуста, а «Другим» — нет) НЕ перебивало явный выбор юзера при перезагрузке.
+  const hadStoredTabRef = useRef(readStoredTab() !== null);
+  // Явная смена вкладки юзером — персистим в localStorage и глушим авто-переключение.
+  const handleTabChange = useCallback((next: DelegationTab): void => {
+    hadStoredTabRef.current = true;
+    try {
+      localStorage.setItem(TAB_STORAGE_KEY, next);
+    } catch {
+      /* ignore */
+    }
+    setTab(next);
+  }, []);
   // Фильтры вкладки «Другим»: от кого (creatorUserId) / кому (delegateUserId) /
   // проект (projectId). null = все (дефолт).
   const [filterFrom, setFilterFrom] = useState<string | null>(null);
@@ -263,7 +289,9 @@ export function AssignedToMeBlock({
         // видимым (с учётом hide-done) спискам — тем же, что реально отрисуются.
         const mineShown = hideDoneRef.current ? mine.filter(notDone) : mine;
         const byMeShown = hideDoneRef.current ? byMe.filter(notDone) : byMe;
-        if (mineShown.length === 0 && byMeShown.length > 0) setTab('byMe');
+        if (!hadStoredTabRef.current && mineShown.length === 0 && byMeShown.length > 0) {
+          setTab('byMe');
+        }
       })
       .catch((e: unknown) => {
         if (!cancelled) toast.error(`Не удалось загрузить поручения: ${(e as Error).message}`);
@@ -625,7 +653,7 @@ export function AssignedToMeBlock({
                 там, где стоял бы обычный заголовок (и подзаголовок под ним). */}
             <DelegationTabs
               tab={tab}
-              onChange={setTab}
+              onChange={handleTabChange}
               toMeCount={toMeVisible.length}
               // #3: бейдж «Другим» = РЕАЛЬНО отрисованный список (с учётом фильтров от/кому/
               // проект), а не сырой byMeVisibleAll — иначе при активном фильтре число на вкладке
@@ -676,7 +704,11 @@ export function AssignedToMeBlock({
         <div
           ref={setHScrollRef}
           onScroll={onHScroll}
-          className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}
+          className={cn(
+            'flex snap-x sm:snap-none gap-3 overflow-x-auto pb-2',
+            bleedNegClass,
+            bleedPadClass,
+          )}
         >
           {kanbanGroups.map((group) => (
             // Дроп-зона (drag-срок/делегирование) + пагинация «первые 4 + Показать ещё» +
@@ -715,7 +747,11 @@ export function AssignedToMeBlock({
         <div
           ref={setHScrollRef}
           onScroll={onHScroll}
-          className={cn('flex snap-x gap-3 overflow-x-auto pb-2', bleedNegClass, bleedPadClass)}
+          className={cn(
+            'flex snap-x sm:snap-none gap-3 overflow-x-auto pb-2',
+            bleedNegClass,
+            bleedPadClass,
+          )}
         >
           {boardDragActive && phantomProjectNeeded && (
             <PhantomDropColumn
