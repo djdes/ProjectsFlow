@@ -327,7 +327,11 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
       }
       return;
     }
-    if (d && d.delegateUserId === member.id) return; // уже на нём — ни дроп, ни диалог не нужны
+    if (d && d.delegateUserId === member.id) {
+      // Уже на нём — переназначать некуда, но не молчим: сообщаем тостом (диалог не нужен).
+      toast.info(`Задача уже у ${member.displayName}`);
+      return;
+    }
     setPendingBoardReassign({ task, member });
   };
 

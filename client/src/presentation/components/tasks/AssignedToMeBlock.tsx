@@ -510,9 +510,10 @@ export function AssignedToMeBlock({
     // кубик → забрать себе, сразу (не делегирование, подтверждение не нужно).
     if (data.type === 'user' && data.member) {
       if (user && data.member.id === user.id) void reclaimToSelf(item);
-      // Дроп на кубик текущего делегата — no-op (не открываем зря подтверждение), как на
-      // доске (dropBoardTaskOnUser). Ту же проверку делает и reassignTo при подтверждении.
-      else if (data.member.id === item.delegation.delegateUserId) return;
+      // Дроп на кубик текущего делегата — переназначать некуда, но тихо не проглатываем:
+      // сообщаем тостом, что задача уже у него (не открываем зря подтверждение).
+      else if (data.member.id === item.delegation.delegateUserId)
+        toast.info(`Задача уже у ${data.member.displayName}`);
       else setPendingReassign({ item, member: data.member });
       return;
     }
