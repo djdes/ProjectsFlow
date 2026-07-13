@@ -2,12 +2,14 @@ import type { ActivityFeedItem } from '../../domain/activity/ActivityFeedItem.js
 import type { Notification } from '../../domain/notifications/Notification.js';
 import type { ActivityRepository } from './ActivityRepository.js';
 
-// Уведомления, требующие действия (кнопки Принять/Отклонить). Только они формируют вкладку
-// «Требуется действие» и считаются непрочитанными по умолчанию.
+// Уведомления, требующие действия (кнопка «Принять»). Только они формируют вкладку
+// «Требуется действие». task_delegation сюда НЕ входит: делегирование принимается
+// автоматически (спека §4), уведомление о нём — информационное.
+// Зеркало: DrizzleNotificationRepository.countActionableUnread — менять СИНХРОННО.
 const ACTIONABLE_TYPES: ReadonlySet<string> = new Set([
+  'workspace_invite',
   'project_invite',
   'join_request',
-  'task_delegation',
 ]);
 
 export type FeedTab = 'all' | 'action';

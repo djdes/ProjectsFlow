@@ -20,6 +20,8 @@ type Deps = {
 
 // Заявитель просится в чужой проект (по совпадению git-репо). Создаёт join-request +
 // уведомляет владельцев (in-app push через SSE + best-effort email).
+// После перехода на единое пространство код не менялся: «уже участник» и владельцы
+// (listByProject → role 'owner') читаются через workspace_members (Task 4).
 export class RequestProjectJoin {
   constructor(private readonly deps: Deps) {}
 

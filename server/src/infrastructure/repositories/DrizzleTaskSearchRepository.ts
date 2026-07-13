@@ -1,12 +1,16 @@
-import { and, desc, eq, like } from 'drizzle-orm';
+import { and, desc, eq, inArray, like, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { projectMembers, projects, tasks } from '../db/schema.js';
+import { projects, tasks } from '../db/schema.js';
 import type { TaskStatus } from '../../domain/task/Task.js';
 import type {
   TaskSearchQuery,
   TaskSearchRepository,
   TaskSearchResult,
 } from '../../application/task/TaskSearchRepository.js';
+// Скоуп «только мои проекты» — через единое пространство (workspace_members, is_inbox→owner),
+// НЕ project_members (#блокер4) — переиспользуем ProjectMemberRepository (эталон
+// DrizzleProjectMemberRepository).
+import type { ProjectMemberRepository } from '../../application/project/ProjectMemberRepository.js';
 
 const EXCERPT_MAX = 160;
 
@@ -22,7 +26,10 @@ function toExcerpt(description: string | null): string {
 }
 
 export class DrizzleTaskSearchRepository implements TaskSearchRepository {
-  constructor(private readonly db: Database) {}
+  constructor(
+    private readonly db: Database,
+    private readonly projectMembers: ProjectMemberRepository,
+  ) {}
 
   async search(q: TaskSearchQuery): Promise<TaskSearchResult[]> {
     const pattern = `%${escapeLike(q.query)}%`;
@@ -35,28 +42,26 @@ export class DrizzleTaskSearchRepository implements TaskSearchRepository {
       createdAt: tasks.createdAt,
     };
 
-    const rows = q.includeAllProjects
-      ? await this.db
-          .select(columns)
-          .from(tasks)
-          .innerJoin(projects, eq(projects.id, tasks.projectId))
-          .where(like(tasks.description, pattern))
-          .orderBy(desc(tasks.updatedAt))
-          .limit(q.limit)
-      : await this.db
-          .select(columns)
-          .from(tasks)
-          .innerJoin(projects, eq(projects.id, tasks.projectId))
-          .innerJoin(
-            projectMembers,
-            and(
-              eq(projectMembers.projectId, projects.id),
-              eq(projectMembers.userId, q.userId),
-            ),
-          )
-          .where(like(tasks.description, pattern))
-          .orderBy(desc(tasks.updatedAt))
-          .limit(q.limit);
+    // Скоуп «только мои проекты» — через единое пространство (workspace_members,
+    // is_inbox→owner), НЕ project_members (#блокер4: ws-участник без ленивой
+    // project_members-строки получал 0 результатов). Без workspaceId — ВСЕ пространства
+    // юзера, как и раньше (TaskSearchQuery не несёт workspaceId).
+    let scopeCond: SQL | undefined;
+    if (!q.includeAllProjects) {
+      const accessibleIds = (await this.projectMembers.listProjectsForUser(q.userId)).map(
+        (p) => p.id,
+      );
+      if (accessibleIds.length === 0) return [];
+      scopeCond = inArray(tasks.projectId, accessibleIds);
+    }
+
+    const rows = await this.db
+      .select(columns)
+      .from(tasks)
+      .innerJoin(projects, eq(projects.id, tasks.projectId))
+      .where(scopeCond ? and(like(tasks.description, pattern), scopeCond) : like(tasks.description, pattern))
+      .orderBy(desc(tasks.updatedAt))
+      .limit(q.limit);
 
     return rows.map((r) => ({
       taskId: r.taskId,

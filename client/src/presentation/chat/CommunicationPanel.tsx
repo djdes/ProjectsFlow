@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { useActionableUnreadCount } from '@/presentation/hooks/useActionableUnreadCount';
@@ -7,6 +7,7 @@ import { useActivityFeed } from '@/presentation/hooks/useActivityFeed';
 import { NotificationItem } from '@/presentation/notifications/NotificationItem';
 import { useNotificationActions } from '@/presentation/notifications/useNotificationActions';
 import { ActivityItem } from '@/presentation/activity/ActivityItem';
+import { OPEN_CHAT_EVENT } from './openChatEvent';
 import { WorkspaceChatPanel } from './WorkspaceChatPanel';
 
 type CommTab = 'all' | 'action' | 'chat';
@@ -39,6 +40,20 @@ export function CommunicationPanel(): React.ReactElement {
       /* ignore */
     }
   };
+
+  // chat_mention: внешний сигнал «открой чат» — переключаем вкладку панели.
+  useEffect(() => {
+    const onOpenChat = (): void => {
+      setTab('chat');
+      try {
+        localStorage.setItem(STORAGE_KEY, 'chat');
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener(OPEN_CHAT_EVENT, onOpenChat);
+    return () => window.removeEventListener(OPEN_CHAT_EVENT, onOpenChat);
+  }, []);
 
   return (
     <div className="flex h-full min-h-0 flex-col">

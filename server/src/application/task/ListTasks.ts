@@ -51,7 +51,7 @@ export class ListTasks {
     const commitCounts = await this.deps.taskCommits.countsByTasks(ids);
     const attachmentCounts = await this.deps.attachments.countsByTasks(ids);
     const commentCounts = await this.deps.comments.countsByTasks(ids);
-    // Активные (pending|accepted) делегации — для inbox-задач. Для проектных
+    // Активные (accepted) делегации — для inbox-задач. Для проектных
     // задач map будет пустой (мы их не делегируем — см. spec out-of-scope).
     const delegations = await this.deps.delegations.listActiveForTasks(ids);
     return tasks.map((t) => ({

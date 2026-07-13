@@ -6,7 +6,9 @@ import type { Notification } from '@/domain/notifications/Notification';
 import { useContainer } from '@/infrastructure/di/container';
 import { useUnreadNotificationsCount } from '@/presentation/hooks/useUnreadNotificationsCount';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
+import { useWorkspacesContext } from '@/presentation/hooks/WorkspacesProvider';
 import { NOTIFICATIONS_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
+import { OPEN_CHAT_EVENT } from '@/presentation/chat/openChatEvent';
 
 export type DelegationUiState = 'busy' | 'accepted' | 'declined' | 'resolved';
 
@@ -15,24 +17,24 @@ export type NotificationActions = {
   readonly markRead: (n: Notification) => Promise<void>;
   readonly handleClick: (n: Notification) => void;
   readonly handleAcceptInvite: (n: Notification) => void;
+  readonly handleAcceptWorkspaceInvite: (n: Notification) => void;
   readonly handleResolveJoin: (n: Notification, accept: boolean) => void;
-  readonly handleAcceptDelegation: (n: Notification) => void;
-  readonly handleDeclineDelegation: (n: Notification) => void;
 };
 
-// Действия над уведомлением (отметить прочитанным, принять/отклонить делегирование/инвайт/
-// join-request, навигация по клику). Извлечено из NotificationsPage для переиспользования
-// в ленте «Все»/«Требуется действие». opts.patchItem — оптимистичный апдейт строки в списке
-// вызывающего; opts.onChanged — сигнал «список изменился» (для рефетча ленты).
+// Действия над уведомлением (отметить прочитанным, принять инвайт в проект/пространство,
+// принять/отклонить join-request, навигация по клику). Извлечено из NotificationsPage для
+// переиспользования в ленте «Все»/«Требуется действие». opts.patchItem — оптимистичный
+// апдейт строки в списке вызывающего; opts.onChanged — сигнал «список изменился» (для
+// рефетча ленты).
 export function useNotificationActions(opts?: {
   patchItem?: (id: string, patch: Partial<Notification>) => void;
   onChanged?: () => void;
 }): NotificationActions {
-  const { notificationRepository, inviteRepository, projectRepository, taskDelegationRepository } =
-    useContainer();
+  const { notificationRepository, inviteRepository, projectRepository } = useContainer();
   const navigate = useNavigate();
   const { refresh: refreshBadge } = useUnreadNotificationsCount();
   const { applyAppend, refresh: refreshProjects } = useProjectsContext();
+  const { refresh: refreshWorkspaces } = useWorkspacesContext();
   const [delegationUi, setDelegationUi] = useState<Record<string, DelegationUiState>>({});
 
   const markRead = async (n: Notification): Promise<void> => {
@@ -61,55 +63,18 @@ export function useNotificationActions(opts?: {
       else if (p.type === 'server_alert') navigate(`/projects/${p.projectId}/monitoring`);
       else if (p.type === 'daily_digest') navigate(`/projects/${p.projectId}`);
       else if (p.type === 'support_ticket') navigate('/admin?tab=support');
-      // project_invite: переход — по кнопке «Принять».
-    })();
-  };
-
-  const resolveDelegationError = (n: Notification, e: unknown, action: 'accept' | 'decline'): void => {
-    if (e instanceof HttpError && e.status === 409) {
-      setDelegationUi((s) => ({ ...s, [n.id]: action === 'accept' ? 'accepted' : 'resolved' }));
-      void markRead(n);
-      toast.success('Это делегирование уже обработано');
-      return;
-    }
-    setDelegationUi((s) => {
-      const next = { ...s };
-      delete next[n.id];
-      return next;
-    });
-    toast.error(`Не удалось: ${(e as Error).message}`);
-  };
-
-  const handleAcceptDelegation = (n: Notification): void => {
-    if (n.payload.type !== 'task_delegation' || delegationUi[n.id]) return;
-    const { delegationId } = n.payload;
-    setDelegationUi((s) => ({ ...s, [n.id]: 'busy' }));
-    void (async () => {
-      try {
-        await taskDelegationRepository.accept(delegationId);
-        setDelegationUi((s) => ({ ...s, [n.id]: 'accepted' }));
-        await markRead(n);
-        refreshProjects();
-        toast.success('Задача принята');
-      } catch (e) {
-        resolveDelegationError(n, e, 'accept');
+      else if (p.type === 'chat_mention') {
+        // Переключаем сайдбар на чат (rail + вкладка панели); localStorage — чтобы выбор пережил
+        // remount, событие — чтобы сработало на уже смонтированных Sidebar/CommunicationPanel.
+        try {
+          localStorage.setItem('pf_sidebar_rail', 'chat');
+          localStorage.setItem('pf_comm_tab', 'chat');
+        } catch {
+          /* ignore */
+        }
+        window.dispatchEvent(new Event(OPEN_CHAT_EVENT));
       }
-    })();
-  };
-
-  const handleDeclineDelegation = (n: Notification): void => {
-    if (n.payload.type !== 'task_delegation' || delegationUi[n.id]) return;
-    const { delegationId } = n.payload;
-    setDelegationUi((s) => ({ ...s, [n.id]: 'busy' }));
-    void (async () => {
-      try {
-        await taskDelegationRepository.decline(delegationId);
-        setDelegationUi((s) => ({ ...s, [n.id]: 'declined' }));
-        await markRead(n);
-        toast.success('Задача отклонена');
-      } catch (e) {
-        resolveDelegationError(n, e, 'decline');
-      }
+      // project_invite / workspace_invite: переход — по кнопке «Принять».
     })();
   };
 
@@ -169,13 +134,42 @@ export function useNotificationActions(opts?: {
     })();
   };
 
+  const handleAcceptWorkspaceInvite = (n: Notification): void => {
+    if (n.payload.type !== 'workspace_invite' || delegationUi[n.id]) return;
+    const { token, workspaceName } = n.payload;
+    setDelegationUi((s) => ({ ...s, [n.id]: 'busy' }));
+    void (async () => {
+      try {
+        await inviteRepository.accept(token);
+        setDelegationUi((s) => ({ ...s, [n.id]: 'accepted' }));
+        await markRead(n);
+        // Приглашённый видит новое пространство и его проекты сразу.
+        refreshWorkspaces();
+        refreshProjects();
+        toast.success(`Вы присоединились к пространству «${workspaceName}»`);
+      } catch (e) {
+        if (e instanceof HttpError && (e.status === 410 || e.status === 409)) {
+          setDelegationUi((s) => ({ ...s, [n.id]: 'resolved' }));
+          await markRead(n);
+          toast.success('Приглашение уже использовано — убрал из действий');
+          return;
+        }
+        setDelegationUi((s) => {
+          const next = { ...s };
+          delete next[n.id];
+          return next;
+        });
+        toast.error(`Не удалось принять приглашение: ${(e as Error).message}`);
+      }
+    })();
+  };
+
   return {
     delegationUi,
     markRead,
     handleClick,
     handleAcceptInvite,
+    handleAcceptWorkspaceInvite,
     handleResolveJoin,
-    handleAcceptDelegation,
-    handleDeclineDelegation,
   };
 }

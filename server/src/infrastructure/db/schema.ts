@@ -228,7 +228,7 @@ export const projects = mysqlTable(
     // GET /api/projects скоупится по активному пространству юзера. См. db/073.
     workspaceId: char('workspace_id', { length: 36 }).notNull(),
     // owner_id остаётся как кеш «кто создал» для backward-compat и отката. Реальный
-    // доступ-чек идёт через project_members (см. spec фазу P4 — финальный дроп колонки).
+    // доступ-чек идёт через workspace_members (единое пространство, см. spec unified-workspace §3.2).
     ownerId: fkUserId('owner_id'),
     name: varchar('name', { length: 80 }).notNull(),
     // Иконка проекта (Notion-style): эмодзи / lucide:Name[:color] / data-URL. NULL = дефолтная папка.
@@ -348,7 +348,7 @@ export const workspaceMembers = mysqlTable(
   {
     workspaceId: char('workspace_id', { length: 36 }).notNull(),
     userId: char('user_id', { length: 36 }).notNull(),
-    role: mysqlEnum('role', ['owner', 'member']).notNull().default('member'),
+    role: mysqlEnum('role', ['owner', 'editor', 'viewer']).notNull().default('editor'),
     createdAt: createdAtCol(),
   },
   (t) => [
@@ -359,6 +359,32 @@ export const workspaceMembers = mysqlTable(
 
 export type WorkspaceMemberRow = typeof workspaceMembers.$inferSelect;
 export type NewWorkspaceMemberRow = typeof workspaceMembers.$inferInsert;
+
+// Invite-ссылки в пространство (db/111) — замена per-project приглашений. Токен одноразовый,
+// TTL 7 дней; email — информационное поле, mismatch не блокирует accept.
+export const workspaceInvites = mysqlTable(
+  'workspace_invites',
+  {
+    id: id(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    role: mysqlEnum('role', ['editor', 'viewer']).notNull().default('editor'),
+    token: char('token', { length: 64 }).notNull(),
+    email: varchar('email', { length: 255 }),
+    expiresAt: timestamp('expires_at').notNull(),
+    acceptedAt: timestamp('accepted_at'),
+    acceptedByUserId: char('accepted_by_user_id', { length: 36 }),
+    createdByUserId: char('created_by_user_id', { length: 36 }).notNull(),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    uniqueIndex('uq_ws_invites_token').on(t.token),
+    index('idx_ws_invites_workspace').on(t.workspaceId),
+    index('idx_ws_invites_expires').on(t.expiresAt),
+  ],
+);
+
+export type WorkspaceInviteRow = typeof workspaceInvites.$inferSelect;
+export type NewWorkspaceInviteRow = typeof workspaceInvites.$inferInsert;
 
 // Общий чат пространства (db/075). Один канал на пространство; seq — глобально-монотонный
 // AUTO_INCREMENT курсор (сортировка/пагинация/SSE-replay). Удаление мягкое (deleted_at).

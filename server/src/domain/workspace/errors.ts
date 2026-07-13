@@ -19,6 +19,13 @@ export class NotWorkspaceOwnerError extends Error {
   }
 }
 
+export class NotWorkspaceEditorError extends Error {
+  constructor() {
+    super('Workspace editor role required');
+    this.name = 'NotWorkspaceEditorError';
+  }
+}
+
 export class LastOwnerError extends Error {
   constructor() {
     super('Cannot remove or demote the last owner');
@@ -65,5 +72,26 @@ export class NotProjectOwnerError extends Error {
   constructor() {
     super('Only the project owner can move it');
     this.name = 'NotProjectOwnerError';
+  }
+}
+
+export class WorkspaceInviteNotFoundError extends Error {
+  constructor() {
+    super('Workspace invite not found');
+    this.name = 'WorkspaceInviteNotFoundError';
+  }
+}
+
+export class WorkspaceInviteExpiredError extends Error {
+  constructor() {
+    super('Workspace invite expired');
+    this.name = 'WorkspaceInviteExpiredError';
+  }
+}
+
+export class WorkspaceInviteAlreadyUsedError extends Error {
+  constructor() {
+    super('Workspace invite already used');
+    this.name = 'WorkspaceInviteAlreadyUsedError';
   }
 }

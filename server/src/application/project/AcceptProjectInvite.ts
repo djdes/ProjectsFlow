@@ -2,28 +2,45 @@ import {
   ProjectInviteAlreadyUsedError,
   ProjectInviteExpiredError,
   ProjectInviteNotFoundError,
+  ProjectNotFoundError,
 } from '../../domain/project/errors.js';
-import type { ProjectInviteRepository } from './ProjectInviteRepository.js';
-import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
-import type { UserRepository } from '../user/UserRepository.js';
+import type { ProjectInvite } from '../../domain/project/ProjectInvite.js';
+import type {
+  WorkspaceMember,
+  WorkspaceRole,
+} from '../../domain/workspace/WorkspaceMember.js';
+import type { AcceptProjectInviteInput } from './ProjectInviteRepository.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
-import type { HubMembershipSync } from '../workspace/HubMembershipSync.js';
+
+// Узкие структурные порты (реальные projectRepo/workspaceRepo им соответствуют).
+type InvitesPort = {
+  findByToken(token: string): Promise<ProjectInvite | null>;
+  markAccepted(input: AcceptProjectInviteInput): Promise<ProjectInvite | null>;
+};
+type ProjectsPort = {
+  getWorkspaceId(projectId: string): Promise<string | null>;
+};
+type WorkspacesPort = {
+  getMembership(workspaceId: string, userId: string): Promise<WorkspaceMember | null>;
+  addMember(workspaceId: string, userId: string, role: WorkspaceRole): Promise<void>;
+};
 
 type Deps = {
-  readonly invites: ProjectInviteRepository;
-  readonly members: ProjectMemberRepository;
-  readonly users: UserRepository;
+  readonly invites: InvitesPort;
+  readonly projects: ProjectsPort;
+  readonly workspaces: WorkspacesPort;
   readonly now: () => Date;
   // Лента действий (best-effort). Опционально.
   readonly activityRecorder?: ActivityRecorder;
-  // Синк участников дефолт-хаба владельца (best-effort). Опционально.
-  readonly hubSync?: HubMembershipSync;
 };
 
 export type AcceptInviteResult = {
   readonly projectId: string;
 };
 
+// Легаси-токены project_invites заморожены (новые не создаются), но непринятые
+// продолжают работать: accept зачисляет юзера в ПРОСТРАНСТВО проекта (спека §3.1) —
+// он получает доступ ко всем проектам пространства, как и по workspace-инвайту.
 export class AcceptProjectInvite {
   constructor(private readonly deps: Deps) {}
 
@@ -34,38 +51,20 @@ export class AcceptProjectInvite {
     const now = this.deps.now();
     if (invite.expiresAt.getTime() < now.getTime()) throw new ProjectInviteExpiredError();
 
-    // Если юзер уже member — не апгрейдим/даунгрейдим, просто потребляем токен.
-    // Идемпотентность: повторный клик по уже использованной ссылке (которую сами и
-    // акцептнули) даёт ту же reply «ок, ты уже в проекте».
-    const existing = await this.deps.members.findForProject(invite.projectId, userId);
+    const workspaceId = await this.deps.projects.getWorkspaceId(invite.projectId);
+    if (!workspaceId) throw new ProjectNotFoundError();
+
+    // Уже участник пространства — роль не апгрейдим/даунгрейдим, просто потребляем токен.
+    const existing = await this.deps.workspaces.getMembership(workspaceId, userId);
     if (!existing) {
-      await this.deps.members.add({
-        projectId: invite.projectId,
-        userId,
-        role: invite.role,
-      });
-      // Копируем глобальные дефолтные notification prefs юзера (если заданы).
-      try {
-        const defaults = await this.deps.users.getDefaultNotificationPrefs(userId);
-        if (defaults && Object.keys(defaults).length > 0) {
-          await this.deps.members.setNotificationPrefs(invite.projectId, userId, defaults);
-        }
-      } catch {
-        // Best-effort: ошибка копирования prefs не должна блокировать вступление.
-      }
-      // Лента действий (best-effort): новый участник присоединился по инвайту.
+      await this.deps.workspaces.addMember(workspaceId, userId, invite.role);
+      // Лента действий проекта (best-effort): участник присоединился по инвайту.
       void this.deps.activityRecorder?.record({
         projectId: invite.projectId,
         actorUserId: userId,
         kind: 'member_added',
         payload: { targetUserId: userId, role: invite.role },
       });
-      // Добавляем в хаб-чат владельца проекта (best-effort: не блокирует вступление).
-      try {
-        await this.deps.hubSync?.onMemberAdded(invite.projectId, userId);
-      } catch {
-        // Синк хаба не должен ломать вступление в проект — drift поправит следующая операция/миграция.
-      }
     }
 
     await this.deps.invites.markAccepted({

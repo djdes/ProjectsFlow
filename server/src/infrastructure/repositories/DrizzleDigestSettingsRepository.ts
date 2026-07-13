@@ -1,8 +1,7 @@
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   projectDigestSettings,
-  projectMembers,
   projects,
   type ProjectDigestSettingsRow,
 } from '../db/schema.js';
@@ -18,6 +17,12 @@ import {
   type DigestTgTarget,
 } from '../../domain/digest/DigestSettings.js';
 import type { TaskStatus } from '../../domain/task/Task.js';
+// Скоуп «мои проекты» (ветка А) — через единое пространство (workspace_members,
+// is_inbox→owner), НЕ project_members (тот же класс бага, что #блокер3..5/ef0cea3) —
+// переиспользуем ProjectMemberRepository (эталон DrizzleProjectMemberRepository) вместо
+// прямого JOIN на project_members: ws-приглашённый юзер без ленивой project_members-строки
+// получал бы пустую ветку А.
+import type { ProjectMemberRepository } from '../../application/project/ProjectMemberRepository.js';
 import { parseJsonCol } from './jsonCol.js';
 
 function rowToSettings(row: ProjectDigestSettingsRow): DigestSettings {
@@ -41,7 +46,10 @@ function rowToSettings(row: ProjectDigestSettingsRow): DigestSettings {
 }
 
 export class DrizzleDigestSettingsRepository implements DigestSettingsRepository {
-  constructor(private readonly db: Database) {}
+  constructor(
+    private readonly db: Database,
+    private readonly projectMembers: ProjectMemberRepository,
+  ) {}
 
   async getByProject(projectId: string): Promise<DigestSettings> {
     const [row] = await this.db
@@ -89,8 +97,8 @@ export class DrizzleDigestSettingsRepository implements DigestSettingsRepository
 
   async listGroupsForUser(userId: string, projectId: string): Promise<DigestGroupHistory[]> {
     // Подсказки «ранее введённые группы» = объединение двух выборок (обе с непустым chat_id):
-    //  (A) группы из всех проектов, где юзер — участник (любое пространство) — JOIN на
-    //      project_members гейтит выдачу его проектами;
+    //  (A) группы из всех проектов, где юзер — участник (любое пространство) —
+    //      ProjectMemberRepository.listProjectsForUser гейтит выдачу его проектами;
     //  (B) группы из всех проектов ПРОСТРАНСТВА текущего проекта — т.е. то, что вводили
     //      другие участники пространства. Доступ к проекту = участник пространства, поэтому
     //      светить группы в пределах одного пространства безопасно.
@@ -100,16 +108,20 @@ export class DrizzleDigestSettingsRepository implements DigestSettingsRepository
     } as const;
 
     // (A) — мои проекты.
-    const mine = await this.db
-      .select(selectCols)
-      .from(projectDigestSettings)
-      .innerJoin(projectMembers, eq(projectMembers.projectId, projectDigestSettings.projectId))
-      .where(
-        and(
-          eq(projectMembers.userId, userId),
-          isNotNull(projectDigestSettings.telegramGroupChatId),
-        ),
-      );
+    const accessibleIds = (await this.projectMembers.listProjectsForUser(userId)).map(
+      (p) => p.id,
+    );
+    const mine = accessibleIds.length
+      ? await this.db
+          .select(selectCols)
+          .from(projectDigestSettings)
+          .where(
+            and(
+              inArray(projectDigestSettings.projectId, accessibleIds),
+              isNotNull(projectDigestSettings.telegramGroupChatId),
+            ),
+          )
+      : [];
 
     // (B) — все проекты пространства текущего проекта. workspace_id резолвим по projectId.
     const [cur] = await this.db

@@ -41,10 +41,10 @@ export class DelegateExistingTask {
     delegateUserId: string,
     creatorUserId: string,
   ): Promise<TaskDelegation> {
-    // Самоделегирование РАЗРЕШЕНО (в отличие от Create/Reassign/Invite): «назначить себя
-    // ответственным». Нужен drag-переносу инбокс-задачи в проект (задача после переноса
-    // должна появиться в блоке делегирования как «делегировано мне»). Создаётся сразу
-    // accepted — «принять» поручение от самого себя абсурдно; уведомления себе не шлём.
+    // Самоделегирование РАЗРЕШЕНО: «назначить себя ответственным» (drag-перенос
+    // инбокс-задачи в проект). isSelf влияет только на валидацию (себя нет в
+    // shared-members) и на уведомления (себе не шлём) — статус у ВСЕХ делегирований
+    // одинаковый: accepted сразу при создании.
     const isSelf = delegateUserId === creatorUserId;
 
     const task = await this.deps.tasks.getById(taskId);
@@ -86,7 +86,9 @@ export class DelegateExistingTask {
       taskId,
       delegateUserId,
       delegatorUserId: creatorUserId,
-      ...(isSelf ? { status: 'accepted' as const } : {}),
+      // Делегирование без принятия/отказа: всегда сразу accepted (спека
+      // 2026-07-13-unified-workspace §4). isSelf-особая ветка стала общим случаем.
+      status: 'accepted',
     });
 
     if (!isSelf) {

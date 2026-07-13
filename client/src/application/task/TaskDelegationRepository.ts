@@ -1,28 +1,15 @@
-import type { TaskDelegation } from '@/domain/task/TaskDelegation';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
 
-// Pending делегация + excerpt описания задачи — то, что приходит из
-// /api/delegations/pending для верхнего блока inbox.
-export type PendingDelegation = TaskDelegation & {
-  readonly taskExcerpt: string;
-};
-
 export interface TaskDelegationRepository {
-  // pending для меня как делегата (UI блок «Делегировано мне»).
-  listMyPending(): Promise<PendingDelegation[]>;
-  // Все поручённые мне задачи (pending+accepted) по всем проектам — плоским списком.
+  // Все поручённые мне задачи (accepted) по всем проектам — плоским списком.
   // Группировку (проект/дата/дедлайн/приоритет) делает презентация (assignedGrouping.ts).
   listAssignedToMe(): Promise<AssignedTask[]>;
-  // Все активные делегирования «кому-то другому», видимые мне (pending+accepted), по
-  // всем проектам — вкладка «Другим»: в именованных проектах-участниках — от любого
-  // любому, в инбоксе — только мои исходящие. Тот же shape: delegation.creator* — от
-  // кого, delegation.delegate* — кому. Фильтры (от кого/кому/проект) — презентация.
+  // Все активные делегирования «кому-то другому», видимые мне, по всем проектам —
+  // вкладка «Другим». Тот же shape: delegation.creator* — от кого, delegate* — кому.
   listDelegatedToOthers(): Promise<AssignedTask[]>;
-  accept(id: string): Promise<TaskDelegation>;
-  decline(id: string): Promise<TaskDelegation>;
-  // creator отзывает pending до accept'а.
+  // Создатель забирает задачу обратно (в т.ч. уже принятую) — drop на свою аву.
   withdraw(id: string): Promise<void>;
-  // ДЕЛЕГАТ складывает с себя активную (pending|accepted|pending_invite) делегацию —
-  // drag карточки из блока делегирования на нижнюю доску «Входящих».
+  // ДЕЛЕГАТ снимает с себя задачу (право отказа постфактум) — создателю уйдёт
+  // уведомление task_delegation_resolved/declined.
   relinquish(id: string): Promise<void>;
 }

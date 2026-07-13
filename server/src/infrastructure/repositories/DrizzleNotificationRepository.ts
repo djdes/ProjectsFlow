@@ -71,8 +71,10 @@ export class DrizzleNotificationRepository implements NotificationRepository {
   }
 
   async countActionableUnread(userId: string): Promise<number> {
-    // Actionable-типы (кнопки Принять/Отклонить) — те же, что формируют вкладку «Действие».
-    // См. GetActivityFeed.ACTIONABLE_TYPES. Сводки/упоминания сюда НЕ входят.
+    // Actionable-типы (кнопка «Принять») — те же, что формируют вкладку «Действие».
+    // Зеркало GetActivityFeed.ACTIONABLE_TYPES — менять СИНХРОННО. Делегирования
+    // (task_delegation) не actionable: принимаются автоматически. Сводки/упоминания
+    // сюда НЕ входят.
     const rows = await this.db
       .select({ count: sql<number>`COUNT(*)` })
       .from(notifications)
@@ -80,7 +82,7 @@ export class DrizzleNotificationRepository implements NotificationRepository {
         and(
           eq(notifications.userId, userId),
           isNull(notifications.readAt),
-          inArray(notifications.type, ['project_invite', 'join_request', 'task_delegation']),
+          inArray(notifications.type, ['workspace_invite', 'project_invite', 'join_request']),
         ),
       );
     return Number(rows[0]?.count ?? 0);

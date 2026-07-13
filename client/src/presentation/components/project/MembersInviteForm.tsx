@@ -11,20 +11,23 @@ import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { SharedMember } from '@/application/project/ProjectRepository';
-import type { ProjectInviteRole } from '@/domain/project/ProjectInvite';
+import type { WorkspaceInviteRole } from '@/domain/workspace/WorkspaceInvite';
 import { useContainer } from '@/infrastructure/di/container';
+import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 
 // Простая email-валидация для UX (строгую делает сервер). Та же, что в ProjectsShareCard.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Компактная форма приглашения в ОДИН проект — живёт в подвале панели участников
+// Компактная форма приглашения в ПРОСТРАНСТВО — живёт в подвале панели участников
 // (см. MembersHoverPanel). Несколько email сразу (чипсы), «Из знакомых», роль, отправка
-// батчем через createInvite. Показывается только тем, кто может приглашать (editor+).
-export function MembersInviteForm({ projectId }: { projectId: string }): React.ReactElement {
-  const { projectRepository } = useContainer();
+// батчем через workspaceRepository.createInvite. Приглашённый получает доступ ко всем
+// проектам пространства.
+export function MembersInviteForm(): React.ReactElement {
+  const { workspaceRepository, projectRepository } = useContainer();
+  const { workspace } = useCurrentWorkspace();
   const [emailDraft, setEmailDraft] = useState('');
   const [emails, setEmails] = useState<string[]>([]);
-  const [role, setRole] = useState<ProjectInviteRole>('editor');
+  const [role, setRole] = useState<WorkspaceInviteRole>('editor');
   const [shared, setShared] = useState<SharedMember[] | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -78,10 +81,10 @@ export function MembersInviteForm({ projectId }: { projectId: string }): React.R
 
   const handleSubmit = async (): Promise<void> => {
     const finalEmails = previewEmails;
-    if (finalEmails.length === 0) return;
+    if (finalEmails.length === 0 || !workspace) return;
     setSubmitting(true);
     const settled = await Promise.allSettled(
-      finalEmails.map((email) => projectRepository.createInvite(projectId, { role, email })),
+      finalEmails.map((email) => workspaceRepository.createInvite(workspace.id, { role, email })),
     );
     setSubmitting(false);
     const ok = settled.filter((s) => s.status === 'fulfilled').length;
@@ -104,7 +107,7 @@ export function MembersInviteForm({ projectId }: { projectId: string }): React.R
   return (
     <div className="space-y-2 border-t p-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">Пригласить в проект</span>
+        <span className="text-xs font-medium text-muted-foreground">Пригласить в пространство</span>
         {hasShared && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -188,7 +191,7 @@ export function MembersInviteForm({ projectId }: { projectId: string }): React.R
         type="button"
         size="sm"
         className={cn('h-8 w-full gap-1.5')}
-        disabled={submitting || previewEmails.length === 0}
+        disabled={submitting || previewEmails.length === 0 || !workspace}
         onClick={() => void handleSubmit()}
       >
         {submitting ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}

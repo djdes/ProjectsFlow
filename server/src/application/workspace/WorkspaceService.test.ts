@@ -19,7 +19,7 @@ type Seed = {
   workspaces?: Array<{ id: string; name?: string; ownerUserId: string; kind?: WorkspaceKind }>;
   members?: Array<{ workspaceId: string; userId: string; role: WorkspaceRole }>;
   current?: Record<string, string>; // userId -> workspaceId
-  projects?: Array<{ id: string; ownerId: string; workspaceId: string; members?: string[] }>;
+  projects?: Array<{ id: string; ownerId: string; workspaceId: string }>;
   users?: Array<{ id: string; email: string }>;
 };
 
@@ -30,7 +30,7 @@ function makeFakes(seed: Seed) {
   }
   const members = (seed.members ?? []).map((m) => ({ ...m }));
   const current = new Map<string, string>(Object.entries(seed.current ?? {}));
-  const projects = (seed.projects ?? []).map((p) => ({ ...p, members: p.members ?? [p.ownerId] }));
+  const projects = (seed.projects ?? []).map((p) => ({ ...p }));
   const users = seed.users ?? [];
 
   let idSeq = 0;
@@ -133,12 +133,6 @@ function makeFakes(seed: Seed) {
       return projects.filter((p) => p.workspaceId === workspaceId).map((p) => ({ id: p.id, name: p.id, icon: null }));
     },
   };
-  const projectMembersPort = {
-    async listByProject(projectId: string) {
-      const p = projects.find((x) => x.id === projectId);
-      return (p?.members ?? []).map((userId) => ({ userId }));
-    },
-  };
   const usersPort = {
     async getByEmail(email: string) {
       const u = users.find((x) => x.email === email);
@@ -146,7 +140,7 @@ function makeFakes(seed: Seed) {
     },
   };
 
-  const service = new WorkspaceService({ repo, projects: projectsPort, projectMembers: projectMembersPort, users: usersPort, idGen });
+  const service = new WorkspaceService({ repo, projects: projectsPort, users: usersPort, idGen });
   return { service, repo, projects };
 }
 
@@ -166,7 +160,7 @@ test('create: empty name rejected', async () => {
 test('rename: non-owner rejected', async () => {
   const { service } = makeFakes({
     workspaces: [{ id: 'w1', ownerUserId: 'u1' }],
-    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }, { workspaceId: 'w1', userId: 'u2', role: 'member' }],
+    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }, { workspaceId: 'w1', userId: 'u2', role: 'editor' }],
   });
   await assert.rejects(() => service.rename('w1', 'u2', { name: 'x' }), NotWorkspaceOwnerError);
 });
@@ -184,7 +178,15 @@ test('changeMemberRole: demoting the last owner rejected', async () => {
     workspaces: [{ id: 'w1', ownerUserId: 'u1' }],
     members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
   });
-  await assert.rejects(() => service.changeMemberRole('w1', 'u1', 'u1', 'member'), LastOwnerError);
+  await assert.rejects(() => service.changeMemberRole('w1', 'u1', 'u1', 'editor'), LastOwnerError);
+});
+
+test('changeMemberRole: demoting the last owner to viewer rejected', async () => {
+  const { service } = makeFakes({
+    workspaces: [{ id: 'w1', ownerUserId: 'u1' }],
+    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
+  });
+  await assert.rejects(() => service.changeMemberRole('w1', 'u1', 'u1', 'viewer'), LastOwnerError);
 });
 
 test('addMember: unknown email rejected', async () => {
@@ -193,7 +195,7 @@ test('addMember: unknown email rejected', async () => {
     members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
     users: [{ id: 'u1', email: 'u1@x' }],
   });
-  await assert.rejects(() => service.addMember('w1', 'u1', 'nobody@x', 'member'), UserNotFoundByEmailError);
+  await assert.rejects(() => service.addMember('w1', 'u1', 'nobody@x', 'editor'), UserNotFoundByEmailError);
 });
 
 test('addMember: adds existing user by email', async () => {
@@ -202,9 +204,9 @@ test('addMember: adds existing user by email', async () => {
     members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
     users: [{ id: 'u1', email: 'u1@x' }, { id: 'u2', email: 'u2@x' }],
   });
-  const m = await service.addMember('w1', 'u1', 'u2@x', 'member');
+  const m = await service.addMember('w1', 'u1', 'u2@x', 'editor');
   assert.equal(m.userId, 'u2');
-  assert.equal((await repo.getMembership('w1', 'u2'))?.role, 'member');
+  assert.equal((await repo.getMembership('w1', 'u2'))?.role, 'editor');
 });
 
 test('delete: workspace with projects rejected', async () => {
@@ -259,15 +261,20 @@ test('moveProject: non-owner of project rejected', async () => {
   await assert.rejects(() => service.moveProject('w1', 'u1', 'p1', 'w2'), NotProjectOwnerError);
 });
 
-test('moveProject: moves and auto-adds project members to target workspace', async () => {
+test('moveProject: участники НЕ копируются — аудитория проекта = аудитория целевого пространства', async () => {
   const { service, repo, projects } = makeFakes({
     workspaces: [{ id: 'w1', ownerUserId: 'u1' }, { id: 'w2', ownerUserId: 'u1' }],
-    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }, { workspaceId: 'w2', userId: 'u1', role: 'owner' }],
-    projects: [{ id: 'p1', ownerId: 'u1', workspaceId: 'w1', members: ['u1', 'u2'] }],
+    members: [
+      { workspaceId: 'w1', userId: 'u1', role: 'owner' },
+      { workspaceId: 'w1', userId: 'u2', role: 'editor' }, // видел проект в w1
+      { workspaceId: 'w2', userId: 'u1', role: 'owner' },
+    ],
+    projects: [{ id: 'p1', ownerId: 'u1', workspaceId: 'w1' }],
   });
   await service.moveProject('w1', 'u1', 'p1', 'w2');
   assert.equal(projects.find((p) => p.id === 'p1')?.workspaceId, 'w2');
-  assert.ok(await repo.getMembership('w2', 'u2'), 'u2 added to target workspace');
+  // u2 не перетащило в w2: он теряет доступ к p1 — задокументированное следствие модели.
+  assert.deepEqual((await repo.listMembers('w2')).map((m) => m.userId), ['u1']);
 });
 
 test('moveProject: rejected when project is not in the source workspace', async () => {

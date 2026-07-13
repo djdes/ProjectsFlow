@@ -2,6 +2,7 @@ import type { WorkspaceMember } from '../../domain/workspace/WorkspaceMember.js'
 import {
   WorkspaceNotFoundError,
   NotWorkspaceOwnerError,
+  NotWorkspaceEditorError,
 } from '../../domain/workspace/errors.js';
 
 // Минимальный порт, нужный guard'ам (структурно совместим с WorkspaceRepository).
@@ -31,5 +32,19 @@ export async function requireWorkspaceOwner(
 ): Promise<WorkspaceMember> {
   const m = await requireWorkspaceMember(repo, workspaceId, userId);
   if (m.role !== 'owner') throw new NotWorkspaceOwnerError();
+  return m;
+}
+
+/**
+ * Юзер должен иметь право editor+ (owner или editor) — например, управлять инвайтами
+ * пространства. viewer — read-mostly, приглашать/отзывать не может → NotWorkspaceEditorError.
+ */
+export async function requireWorkspaceEditor(
+  repo: MembershipReader,
+  workspaceId: string,
+  userId: string,
+): Promise<WorkspaceMember> {
+  const m = await requireWorkspaceMember(repo, workspaceId, userId);
+  if (m.role === 'viewer') throw new NotWorkspaceEditorError();
   return m;
 }

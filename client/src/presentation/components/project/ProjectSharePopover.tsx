@@ -7,8 +7,10 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { Project } from '@/domain/project/Project';
 import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
+import type { WorkspaceInviteRole } from '@/domain/workspace/WorkspaceInvite';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { ProjectPublishTab } from './ProjectPublishTab';
 import { ProjectSiteTab } from './ProjectSiteTab';
 
@@ -36,10 +38,11 @@ function Initial({ name }: { name: string }): React.ReactElement {
 }
 
 function ShareTab({ project, members, canInvite }: Omit<Props, 'isOwner'>): React.ReactElement {
-  const { projectRepository } = useContainer();
+  const { workspaceRepository } = useContainer();
+  const { workspace } = useCurrentWorkspace();
   const { user } = useCurrentUser();
   const [draft, setDraft] = useState('');
-  const [role, setRole] = useState<Exclude<ProjectRole, 'owner'>>('editor');
+  const [role, setRole] = useState<WorkspaceInviteRole>('editor');
   const [submitting, setSubmitting] = useState(false);
 
   const emails = draft
@@ -47,11 +50,12 @@ function ShareTab({ project, members, canInvite }: Omit<Props, 'isOwner'>): Reac
     .map((s) => s.trim().toLowerCase())
     .filter((s) => s.length > 0 && EMAIL_RE.test(s));
 
+  // Инвайт теперь в ПРОСТРАНСТВО проекта: приглашённый увидит все проекты пространства.
   const invite = async (): Promise<void> => {
-    if (emails.length === 0) return;
+    if (emails.length === 0 || !workspace) return;
     setSubmitting(true);
     const settled = await Promise.allSettled(
-      emails.map((email) => projectRepository.createInvite(project.id, { role, email })),
+      emails.map((email) => workspaceRepository.createInvite(workspace.id, { role, email })),
     );
     setSubmitting(false);
     const ok = settled.filter((s) => s.status === 'fulfilled').length;

@@ -2,11 +2,16 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import type { WorkspaceService } from '../../application/workspace/WorkspaceService.js';
 import type { Workspace, WorkspaceKind } from '../../domain/workspace/Workspace.js';
 import type { WorkspaceListItem } from '../../application/workspace/WorkspaceRepository.js';
-import type { WorkspaceMember } from '../../domain/workspace/WorkspaceMember.js';
+import type { WorkspaceMember, WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
+import type { WorkspaceInvite } from '../../domain/workspace/WorkspaceInvite.js';
+import type { CreateWorkspaceInvite } from '../../application/workspace/CreateWorkspaceInvite.js';
+import type { ListWorkspaceInvites } from '../../application/workspace/ListWorkspaceInvites.js';
+import type { DeleteWorkspaceInvite } from '../../application/workspace/DeleteWorkspaceInvite.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
   addMemberSchema,
   changeRoleSchema,
+  createWorkspaceInviteSchema,
   createWorkspaceSchema,
   moveProjectSchema,
   setCurrentSchema,
@@ -19,7 +24,7 @@ type WorkspaceDto = {
   icon: string | null;
   kind: WorkspaceKind;
   ownerUserId: string;
-  role?: 'owner' | 'member';
+  role?: WorkspaceRole;
   projectCount?: number;
   memberCount?: number;
   isCurrent?: boolean;
@@ -46,7 +51,7 @@ function toDto(ws: Workspace | WorkspaceListItem, isCurrent?: boolean): Workspac
 
 function memberToDto(m: WorkspaceMember): {
   userId: string;
-  role: 'owner' | 'member';
+  role: WorkspaceRole;
   displayName: string | null;
   email: string | null;
   avatarUrl: string | null;
@@ -60,8 +65,52 @@ function memberToDto(m: WorkspaceMember): {
   };
 }
 
+// Полная форма — зеркало InviteDto из projects/routes.ts (эррата #3): клиент объявит
+// домен WorkspaceInviteDto с этими полями. token/url — только в ответе на create.
+type WorkspaceInviteDto = {
+  id: string;
+  workspaceId: string;
+  role: 'editor' | 'viewer';
+  email: string | null;
+  expiresAt: string;
+  acceptedAt: string | null;
+  acceptedByUserId: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  token?: string;
+  url?: string;
+};
+
+function inviteToDto(
+  i: WorkspaceInvite,
+  opts?: { includeToken?: boolean; appUrl?: string },
+): WorkspaceInviteDto {
+  const dto: WorkspaceInviteDto = {
+    id: i.id,
+    workspaceId: i.workspaceId,
+    role: i.role,
+    email: i.email,
+    expiresAt: i.expiresAt.toISOString(),
+    acceptedAt: i.acceptedAt?.toISOString() ?? null,
+    acceptedByUserId: i.acceptedByUserId,
+    createdByUserId: i.createdByUserId,
+    createdAt: i.createdAt.toISOString(),
+  };
+  if (opts?.includeToken) {
+    dto.token = i.token;
+    if (opts.appUrl) dto.url = `${opts.appUrl.replace(/\/$/, '')}/invite/${i.token}`;
+  }
+  return dto;
+}
+
 type Deps = {
   readonly service: WorkspaceService;
+  readonly invites: {
+    readonly create: CreateWorkspaceInvite;
+    readonly list: ListWorkspaceInvites;
+    readonly delete: DeleteWorkspaceInvite;
+  };
+  readonly appUrl: string;
 };
 
 export function workspacesRouter(deps: Deps): Router {
@@ -141,7 +190,7 @@ export function workspacesRouter(deps: Deps): Router {
   router.post('/:id/members', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const body = addMemberSchema.parse(req.body);
-      const m = await deps.service.addMember(req.params.id as string, req.user!.id, body.email, body.role ?? 'member');
+      const m = await deps.service.addMember(req.params.id as string, req.user!.id, body.email, body.role ?? 'editor');
       res.status(201).json({ member: memberToDto(m) });
     } catch (e) {
       next(e);
@@ -189,6 +238,51 @@ export function workspacesRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  // GET /api/workspaces/:id/invites — pending-инвайты (owner/editor). Token не отдаём.
+  router.get('/:id/invites', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const list = await deps.invites.list.execute(req.params.id as string, req.user!.id);
+      res.json({ invites: list.map((i) => inviteToDto(i)) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // POST /api/workspaces/:id/invites — создать invite; token+url только в этом ответе.
+  router.post('/:id/invites', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = createWorkspaceInviteSchema.parse(req.body);
+      const { invite } = await deps.invites.create.execute({
+        workspaceId: req.params.id as string,
+        actorUserId: req.user!.id,
+        role: body.role,
+        email: body.email,
+      });
+      res.status(201).json({
+        invite: inviteToDto(invite, { includeToken: true, appUrl: deps.appUrl }),
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // DELETE /api/workspaces/:id/invites/:inviteId — отозвать invite.
+  router.delete(
+    '/:id/invites/:inviteId',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        await deps.invites.delete.execute(
+          req.params.id as string,
+          req.user!.id,
+          req.params['inviteId'] as string,
+        );
+        res.status(204).end();
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   return router;
 }

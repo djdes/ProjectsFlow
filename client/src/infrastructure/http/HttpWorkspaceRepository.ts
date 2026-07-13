@@ -4,8 +4,10 @@ import type {
   WorkspaceMember,
   WorkspaceRole,
 } from '@/domain/workspace/Workspace';
+import type { WorkspaceInvite, WorkspaceInviteRole } from '@/domain/workspace/WorkspaceInvite';
 import type {
   CreateWorkspaceInput,
+  CreateWorkspaceInviteInput,
   UpdateWorkspaceInput,
   WorkspaceRepository,
 } from '@/application/workspace/WorkspaceRepository';
@@ -17,7 +19,8 @@ type WorkspaceDto = {
   icon: string | null;
   kind?: WorkspaceKind;
   ownerUserId: string;
-  role?: WorkspaceRole;
+  // Сервер старой версии мог отдавать 'member' — нормализуем через normalizeRole.
+  role?: string;
   projectCount?: number;
   memberCount?: number;
   isCurrent?: boolean;
@@ -26,13 +29,42 @@ type WorkspaceDto = {
 
 type MemberDto = {
   userId: string;
-  role: WorkspaceRole;
+  role?: string;
   displayName: string | null;
   email: string | null;
   avatarUrl: string | null;
 };
 
 type ProjectDto = { id: string; name: string; icon: string | null };
+
+// Старый бэк отдавал 'member' — маппим в 'editor' (миграция БД переводит роли так же).
+function normalizeRole(role: string | undefined): WorkspaceRole {
+  if (role === 'owner' || role === 'editor' || role === 'viewer') return role;
+  return 'editor';
+}
+
+type WorkspaceInviteDto = {
+  id: string;
+  workspaceId: string;
+  role: WorkspaceInviteRole;
+  email: string | null;
+  expiresAt: string;
+  acceptedAt: string | null;
+  acceptedByUserId: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  token?: string;
+  url?: string;
+};
+
+function inviteFromDto(dto: WorkspaceInviteDto): WorkspaceInvite {
+  return {
+    ...dto,
+    expiresAt: new Date(dto.expiresAt),
+    acceptedAt: dto.acceptedAt ? new Date(dto.acceptedAt) : null,
+    createdAt: new Date(dto.createdAt),
+  };
+}
 
 function fromDto(dto: WorkspaceDto): Workspace {
   return {
@@ -42,7 +74,7 @@ function fromDto(dto: WorkspaceDto): Workspace {
     // Старый бэк без kind → считаем командным (дефолт явно помечается миграцией db/079).
     kind: dto.kind ?? 'team',
     ownerUserId: dto.ownerUserId,
-    role: dto.role ?? 'member',
+    role: normalizeRole(dto.role),
     projectCount: dto.projectCount ?? 0,
     memberCount: dto.memberCount ?? 0,
     isCurrent: dto.isCurrent ?? false,
@@ -53,7 +85,7 @@ function fromDto(dto: WorkspaceDto): Workspace {
 function memberFromDto(dto: MemberDto): WorkspaceMember {
   return {
     userId: dto.userId,
-    role: dto.role,
+    role: normalizeRole(dto.role),
     displayName: dto.displayName ?? null,
     email: dto.email ?? null,
     avatarUrl: dto.avatarUrl ?? null,
@@ -109,6 +141,28 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
 
   async removeMember(id: string, userId: string): Promise<void> {
     await httpClient.delete<void>(`/workspaces/${id}/members/${userId}`);
+  }
+
+  async listInvites(workspaceId: string): Promise<WorkspaceInvite[]> {
+    const { invites } = await httpClient.get<{ invites: WorkspaceInviteDto[] }>(
+      `/workspaces/${workspaceId}/invites`,
+    );
+    return invites.map(inviteFromDto);
+  }
+
+  async createInvite(
+    workspaceId: string,
+    input: CreateWorkspaceInviteInput,
+  ): Promise<WorkspaceInvite> {
+    const { invite } = await httpClient.post<{ invite: WorkspaceInviteDto }>(
+      `/workspaces/${workspaceId}/invites`,
+      input,
+    );
+    return inviteFromDto(invite);
+  }
+
+  async deleteInvite(workspaceId: string, inviteId: string): Promise<void> {
+    await httpClient.delete<void>(`/workspaces/${workspaceId}/invites/${inviteId}`);
   }
 
   async listProjects(id: string): Promise<ProjectDto[]> {

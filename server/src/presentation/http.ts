@@ -51,18 +51,16 @@ import type { ReorderFavoriteProjects } from '../application/project/ReorderFavo
 import type { CreateProjectWithGit } from '../application/project/CreateProjectWithGit.js';
 import type { GetOrCreateInbox } from '../application/project/GetOrCreateInbox.js';
 import type { ListProjectMembers } from '../application/project/ListProjectMembers.js';
-import type { RemoveProjectMember } from '../application/project/RemoveProjectMember.js';
-import type { UpdateProjectMemberRole } from '../application/project/UpdateProjectMemberRole.js';
-import type { TransferProjectOwnership } from '../application/project/TransferProjectOwnership.js';
-import type { CreateProjectInvite } from '../application/project/CreateProjectInvite.js';
-import type { ListProjectInvites } from '../application/project/ListProjectInvites.js';
 import type { ListSharedMembers } from '../application/project/ListSharedMembers.js';
-import type { DeleteProjectInvite } from '../application/project/DeleteProjectInvite.js';
 import type { CheckGitCollision } from '../application/project/CheckGitCollision.js';
 import type { RequestProjectJoin } from '../application/project/RequestProjectJoin.js';
 import type { ResolveProjectJoinRequest } from '../application/project/ResolveProjectJoinRequest.js';
 import type { GetInviteByToken } from '../application/project/GetInviteByToken.js';
 import type { AcceptProjectInvite } from '../application/project/AcceptProjectInvite.js';
+import type { CreateWorkspaceInvite } from '../application/workspace/CreateWorkspaceInvite.js';
+import type { ListWorkspaceInvites } from '../application/workspace/ListWorkspaceInvites.js';
+import type { DeleteWorkspaceInvite } from '../application/workspace/DeleteWorkspaceInvite.js';
+import type { AcceptWorkspaceInvite } from '../application/workspace/AcceptWorkspaceInvite.js';
 import type { ListProjectCommits } from '../application/github/ListProjectCommits.js';
 import type { StartDeviceFlow } from '../application/github/StartDeviceFlow.js';
 import type { PollDeviceFlow } from '../application/github/PollDeviceFlow.js';
@@ -124,20 +122,16 @@ import type { UpdateTaskComment } from '../application/task/UpdateTaskComment.js
 import type { DeleteTaskComment } from '../application/task/DeleteTaskComment.js';
 import type { RequestRalphCancel } from '../application/task/RequestRalphCancel.js';
 import type { RevokeRalphCancel } from '../application/task/RevokeRalphCancel.js';
-import type { AcceptTaskDelegation } from '../application/task/AcceptTaskDelegation.js';
-import type { DeclineTaskDelegation } from '../application/task/DeclineTaskDelegation.js';
 import type { WithdrawTaskDelegation } from '../application/task/WithdrawTaskDelegation.js';
 import type { RelinquishTaskDelegation } from '../application/task/RelinquishTaskDelegation.js';
 import type { BoardViewRepository } from '../application/project/BoardViewRepository.js';
 import type { TaskTemplateRepository } from '../application/task/TaskTemplateRepository.js';
 import type { TaskPropertyRepository } from '../application/task/TaskPropertyRepository.js';
-import type { ListMyPendingDelegations } from '../application/task/ListMyPendingDelegations.js';
 import type { ListTasksAssignedToMe } from '../application/task/ListTasksAssignedToMe.js';
 import type { ListTasksDelegatedToOthers } from '../application/task/ListTasksDelegatedToOthers.js';
 import type { MoveTaskToProject } from '../application/task/MoveTaskToProject.js';
 import type { DelegateExistingTask } from '../application/task/DelegateExistingTask.js';
 import type { ReassignTaskDelegation } from '../application/task/ReassignTaskDelegation.js';
-import type { InviteAndDelegateTask } from '../application/task/InviteAndDelegateTask.js';
 import type { ListNotifications } from '../application/notifications/ListNotifications.js';
 import type { CountUnreadNotifications } from '../application/notifications/CountUnreadNotifications.js';
 import type { MarkNotificationRead } from '../application/notifications/MarkNotificationRead.js';
@@ -348,12 +342,6 @@ type AppDeps = {
     readonly listProjectCommits: ListProjectCommits;
     readonly getOrCreateInbox: GetOrCreateInbox;
     readonly listMembers: ListProjectMembers;
-    readonly removeMember: RemoveProjectMember;
-    readonly updateMemberRole: UpdateProjectMemberRole;
-    readonly transferOwnership: TransferProjectOwnership;
-    readonly createInvite: CreateProjectInvite;
-    readonly listInvites: ListProjectInvites;
-    readonly deleteInvite: DeleteProjectInvite;
     readonly listSharedMembers: ListSharedMembers;
     readonly checkGitCollision: CheckGitCollision;
     readonly requestJoin: RequestProjectJoin;
@@ -369,6 +357,12 @@ type AppDeps = {
   };
   readonly workspaces: {
     readonly service: WorkspaceService;
+    readonly invites: {
+      readonly create: CreateWorkspaceInvite;
+      readonly list: ListWorkspaceInvites;
+      readonly delete: DeleteWorkspaceInvite;
+    };
+    readonly appUrl: string;
   };
   readonly activity: {
     readonly getFeed: GetActivityFeed;
@@ -378,7 +372,8 @@ type AppDeps = {
   };
   readonly invites: {
     readonly getByToken: GetInviteByToken;
-    readonly accept: AcceptProjectInvite;
+    readonly acceptWorkspace: AcceptWorkspaceInvite;
+    readonly acceptProject: AcceptProjectInvite;
   };
   // Публичная доска (Publish to web, db/096) — анонимный доступ по slug, БЕЗ requireAuth.
   readonly public: {
@@ -535,17 +530,13 @@ type AppDeps = {
     readonly sendNow: TriggerDailyDigestNow;
   };
   readonly delegations: {
-    readonly accept: AcceptTaskDelegation;
-    readonly decline: DeclineTaskDelegation;
     readonly withdraw: WithdrawTaskDelegation;
     readonly relinquish: RelinquishTaskDelegation;
-    readonly listPending: ListMyPendingDelegations;
     readonly listAssignedToMe: ListTasksAssignedToMe;
     readonly listDelegatedToOthers: ListTasksDelegatedToOthers;
     readonly assignToProject: MoveTaskToProject;
     readonly delegateExisting: DelegateExistingTask;
     readonly reassignDelegation: ReassignTaskDelegation;
-    readonly inviteAndDelegate: InviteAndDelegateTask;
   };
   readonly agent: {
     readonly createAgentToken: CreateAgentToken;
@@ -743,7 +734,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       notifier: deps.notifications.projectNotifier,
     }),
   );
-  app.use('/api/workspaces', workspacesRouter({ service: deps.workspaces.service }));
+  app.use('/api/workspaces', workspacesRouter(deps.workspaces));
   app.use(
     '/api/workspaces/:workspaceId/feed',
     activityFeedRouter({
@@ -782,7 +773,6 @@ export function createApp(deps: AppDeps): CreatedApp {
       assignToProject: deps.delegations.assignToProject,
       delegateExisting: deps.delegations.delegateExisting,
       reassignDelegation: deps.delegations.reassignDelegation,
-      inviteAndDelegate: deps.delegations.inviteAndDelegate,
     }),
   );
   // LIVE-вкладка (cookie requireAuth + requireProjectAccess внутри): read + SSE /stream.
@@ -850,7 +840,8 @@ export function createApp(deps: AppDeps): CreatedApp {
   // Invites: GET — anon-доступ; POST /:token/accept — внутри router'а через requireAuth.
   app.use('/api/invites', invitesRouter({
     getByToken: deps.invites.getByToken,
-    accept: deps.invites.accept,
+    acceptWorkspace: deps.invites.acceptWorkspace,
+    acceptProject: deps.invites.acceptProject,
   }));
   // Публичная доска (Publish to web, db/096) — анонимный доступ по slug, БЕЗ requireAuth.
   app.use('/api/public/boards', publicBoardRouter(deps.public));

@@ -2,8 +2,8 @@ import type { InlineKeyboardMarkup } from './TelegramClient.js';
 
 // Kinds задачных TG-уведомлений, к которым автоматически прицепляем инлайн-действия
 // «Завершить/Комментировать» и регистрируем reply→комментарий. НЕ включаем:
-//  - task_done (завершать нечего), ralph_* (свой reply-поток), server_alert (не задача),
-//  - делегирование (у него свои кнопки «Принять/Отказать» — приходит с явным replyMarkup).
+//  - task_done (завершать нечего), ralph_* (свой reply-поток), server_alert (не задача).
+//  Карточка поручения (task_delegation) шлётся композером с этой же клавиатурой явно.
 // task_digest_item — карточка задачи из ежедневной сводки (личный TG).
 export const TASK_ACTION_KINDS: ReadonlySet<string> = new Set([
   'comment',

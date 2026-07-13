@@ -21,13 +21,11 @@ const ROLE_LABEL: Record<ProjectRole, string> = {
 // раскрытием остальных. Клик по аватару — увеличение в маленьком модальном окне.
 export function MembersHoverPanel({
   members,
-  projectId,
   canInvite = false,
 }: {
   members: ProjectMember[];
-  // Проект + право приглашать (editor+). Если заданы — в подвале панели рисуем форму
-  // приглашения (email + «Из знакомых» + роль + отправка).
-  projectId?: string;
+  // Право приглашать (editor+). Если true — в подвале панели рисуем форму приглашения
+  // в пространство (email + «Из знакомых» + роль + отправка).
   canInvite?: boolean;
 }): React.ReactElement {
   const [showAll, setShowAll] = React.useState(false);
@@ -64,7 +62,7 @@ export function MembersHoverPanel({
         </button>
       )}
 
-      {canInvite && projectId && <MembersInviteForm projectId={projectId} />}
+      {canInvite && <MembersInviteForm />}
 
       <AvatarZoom member={zoom} onClose={() => setZoom(null)} />
     </div>

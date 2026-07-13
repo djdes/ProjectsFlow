@@ -20,12 +20,12 @@ import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleP
 import { DrizzleProjectMemberRepository } from './infrastructure/repositories/DrizzleProjectMemberRepository.js';
 import { DrizzleWorkspaceRepository } from './infrastructure/repositories/DrizzleWorkspaceRepository.js';
 import { WorkspaceService } from './application/workspace/WorkspaceService.js';
-import { HubMembershipSync } from './application/workspace/HubMembershipSync.js';
 import type { WorkspaceKind } from './domain/workspace/Workspace.js';
 import { DrizzleActivityRepository } from './infrastructure/repositories/DrizzleActivityRepository.js';
 import { ActivityRecorder } from './application/activity/ActivityRecorder.js';
 import { GetActivityFeed } from './application/activity/GetActivityFeed.js';
 import { DrizzleProjectInviteRepository } from './infrastructure/repositories/DrizzleProjectInviteRepository.js';
+import { DrizzleWorkspaceInviteRepository } from './infrastructure/repositories/DrizzleWorkspaceInviteRepository.js';
 import { DrizzleNotificationRepository } from './infrastructure/repositories/DrizzleNotificationRepository.js';
 import { DrizzleRecentTaskViewRepository } from './infrastructure/repositories/DrizzleRecentTaskViewRepository.js';
 import { DrizzleBoardViewRepository } from './infrastructure/repositories/DrizzleBoardViewRepository.js';
@@ -94,15 +94,13 @@ import { DrizzleCommentNotificationLogRepository } from './infrastructure/reposi
 import { CreateProjectWithGit } from './application/project/CreateProjectWithGit.js';
 import { GetOrCreateInbox } from './application/project/GetOrCreateInbox.js';
 import { ListProjectMembers } from './application/project/ListProjectMembers.js';
-import { RemoveProjectMember } from './application/project/RemoveProjectMember.js';
-import { UpdateProjectMemberRole } from './application/project/UpdateProjectMemberRole.js';
-import { TransferProjectOwnership } from './application/project/TransferProjectOwnership.js';
-import { CreateProjectInvite } from './application/project/CreateProjectInvite.js';
-import { ListProjectInvites } from './application/project/ListProjectInvites.js';
-import { DeleteProjectInvite } from './application/project/DeleteProjectInvite.js';
 import { ListSharedMembers } from './application/project/ListSharedMembers.js';
 import { GetInviteByToken } from './application/project/GetInviteByToken.js';
 import { AcceptProjectInvite } from './application/project/AcceptProjectInvite.js';
+import { CreateWorkspaceInvite } from './application/workspace/CreateWorkspaceInvite.js';
+import { AcceptWorkspaceInvite } from './application/workspace/AcceptWorkspaceInvite.js';
+import { ListWorkspaceInvites } from './application/workspace/ListWorkspaceInvites.js';
+import { DeleteWorkspaceInvite } from './application/workspace/DeleteWorkspaceInvite.js';
 import { CheckGitCollision } from './application/project/CheckGitCollision.js';
 import { RequestProjectJoin } from './application/project/RequestProjectJoin.js';
 import { ResolveProjectJoinRequest } from './application/project/ResolveProjectJoinRequest.js';
@@ -145,17 +143,13 @@ import { DrizzleTaskCommitRepository } from './infrastructure/repositories/Drizz
 import { DrizzleTaskAttachmentRepository } from './infrastructure/repositories/DrizzleTaskAttachmentRepository.js';
 import { DrizzleTaskCommentRepository } from './infrastructure/repositories/DrizzleTaskCommentRepository.js';
 import { DrizzleTaskDelegationRepository } from './infrastructure/repositories/DrizzleTaskDelegationRepository.js';
-import { AcceptTaskDelegation } from './application/task/AcceptTaskDelegation.js';
-import { DeclineTaskDelegation } from './application/task/DeclineTaskDelegation.js';
 import { WithdrawTaskDelegation } from './application/task/WithdrawTaskDelegation.js';
 import { RelinquishTaskDelegation } from './application/task/RelinquishTaskDelegation.js';
-import { ListMyPendingDelegations } from './application/task/ListMyPendingDelegations.js';
 import { ListTasksAssignedToMe } from './application/task/ListTasksAssignedToMe.js';
 import { ListTasksDelegatedToOthers } from './application/task/ListTasksDelegatedToOthers.js';
 import { MoveTaskToProject } from './application/task/MoveTaskToProject.js';
 import { DelegateExistingTask } from './application/task/DelegateExistingTask.js';
 import { ReassignTaskDelegation } from './application/task/ReassignTaskDelegation.js';
-import { InviteAndDelegateTask } from './application/task/InviteAndDelegateTask.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
 import { DrizzleAiPromptJobRepository } from './infrastructure/repositories/DrizzleAiPromptJobRepository.js';
@@ -316,7 +310,8 @@ const sessionRepo = new DrizzleSessionRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const projectMemberRepo = new DrizzleProjectMemberRepository(db);
 const projectInviteRepo = new DrizzleProjectInviteRepository(db);
-const recentTaskViewRepo = new DrizzleRecentTaskViewRepository(db);
+const workspaceInviteRepo = new DrizzleWorkspaceInviteRepository(db);
+const recentTaskViewRepo = new DrizzleRecentTaskViewRepository(db, projectMemberRepo);
 const projectViewRepo = new DrizzleProjectViewRepository(db);
 
 // === Пространства (workspaces) ===
@@ -324,7 +319,6 @@ const workspaceRepo = new DrizzleWorkspaceRepository(db);
 const workspaceService = new WorkspaceService({
   repo: workspaceRepo,
   projects: projectRepo,
-  projectMembers: projectMemberRepo,
   users: userRepo,
   idGen: idGenerator,
 });
@@ -358,13 +352,6 @@ const createDefaultWorkspace = async (userId: string, displayName: string): Prom
     kind: 'default',
   });
 };
-// Синк участников дефолт-хаба владельца с участниками его проектов (для общего чата).
-// Дёргается best-effort из invite/accept/remove use-cases.
-const hubMembershipSync = new HubMembershipSync({
-  projects: projectRepo,
-  members: projectMemberRepo,
-  workspaces: workspaceRepo,
-});
 // Deep-link авто-switch: открыли проект → делаем его пространство активным.
 // В новой модели в ЧУЖОЙ дефолт-хаб не переключаемся (он скрыт из свитчера, см. listForUser) —
 // проект и так виден в собственном дефолт-хабе юзера (агрегация). В этом случае переключаем
@@ -393,7 +380,7 @@ const notificationRepo = new PublishingNotificationRepository(
 );
 
 // === Лента действий (activity feed) ===
-const activityRepo = new DrizzleActivityRepository(db);
+const activityRepo = new DrizzleActivityRepository(db, projectMemberRepo);
 // best-effort рекордер: инжектится в мутирующие use-case'ы (создание/статус/удаление задач,
 // комментарии, создание проекта, изменения участников). Резолвит пространство по проекту.
 const activityRecorder = new ActivityRecorder({
@@ -482,8 +469,8 @@ const taskVersionRecorder = new TaskVersionRecorder({ versions: taskVersionRepo,
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
-const taskDelegationRepo = new DrizzleTaskDelegationRepository(db);
-const digestSettingsRepo = new DrizzleDigestSettingsRepository(db);
+const taskDelegationRepo = new DrizzleTaskDelegationRepository(db, projectMemberRepo);
+const digestSettingsRepo = new DrizzleDigestSettingsRepository(db, projectMemberRepo);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const aiPromptJobRepo = new DrizzleAiPromptJobRepository(db);
 // Метеринг расхода ИИ (db/082): единый ledger + хаб RecordUsage, который зовут все
@@ -517,7 +504,7 @@ const getUserUsage = new GetUserUsage({
 const buyPlan = new BuyPlan({ users: userRepo, now });
 const checkBudget = new CheckBudget({ getUserUsage });
 const automationRepo = new DrizzleAutomationRepository(db);
-const taskSearchRepo = new DrizzleTaskSearchRepository(db);
+const taskSearchRepo = new DrizzleTaskSearchRepository(db, projectMemberRepo);
 const projectJoinRequestRepo = new DrizzleProjectJoinRequestRepository(db);
 const adminRepo = new DrizzleAdminRepository(db);
 const employeeRepo = new DrizzleEmployeeRepository(db);
@@ -757,36 +744,6 @@ const telegramComposer = new TelegramComposerService({
     idGen: idGenerator,
     resolveWorkspaceId,
   }),
-  accept: new AcceptTaskDelegation({
-    delegations: taskDelegationRepo,
-    tasks: taskRepo,
-    projects: projectRepo,
-    members: projectMemberRepo,
-    users: userRepo,
-    notifications: notificationRepo,
-    idGen: idGenerator,
-  }),
-  decline: new DeclineTaskDelegation({
-    delegations: taskDelegationRepo,
-    tasks: taskRepo,
-    projects: projectRepo,
-    users: userRepo,
-    notifications: notificationRepo,
-    email: emailSender,
-    idGen: idGenerator,
-    appUrl: appBaseUrl,
-  }),
-  assignToProject: new MoveTaskToProject({
-    tasks: taskRepo,
-    projects: projectRepo,
-    members: projectMemberRepo,
-    delegations: taskDelegationRepo,
-    users: userRepo,
-    notifications: notificationRepo,
-    email: emailSender,
-    idGen: idGenerator,
-    appUrl: appBaseUrl,
-  }),
   sendNotification: sendAgentTelegramNotification,
   client: telegramClient,
   idGen: idGenerator,
@@ -853,6 +810,7 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   users: userRepo,
   members: projectMemberRepo,
   tasks: taskRepo,
+  delegations: taskDelegationRepo,
   client: telegramClient,
   appUrl: appBaseUrl,
   signingSecret: repoAccessSecret,
@@ -1490,40 +1448,6 @@ const { app, devProxyUpgrade } = createApp({
       resolveWorkspaceId,
     }),
     listMembers: new ListProjectMembers({ projects: projectRepo, members: projectMemberRepo }),
-    removeMember: new RemoveProjectMember({ projects: projectRepo, members: projectMemberRepo, activityRecorder, hubSync: hubMembershipSync }),
-    updateMemberRole: new UpdateProjectMemberRole({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      activityRecorder,
-    }),
-    transferOwnership: new TransferProjectOwnership({
-      projects: projectRepo,
-      members: projectMemberRepo,
-    }),
-    createInvite: new CreateProjectInvite({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      invites: projectInviteRepo,
-      users: userRepo,
-      notifications: notificationRepo,
-      email: emailSender,
-      idGen: idGenerator,
-      randomToken: () => randomBytes(32).toString('hex'),
-      now,
-      ttlMs: 7 * 24 * 60 * 60 * 1000, // 7 дней (см. spec)
-      appUrl: appBaseUrl,
-    }),
-    listInvites: new ListProjectInvites({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      invites: projectInviteRepo,
-      now,
-    }),
-    deleteInvite: new DeleteProjectInvite({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      invites: projectInviteRepo,
-    }),
     listSharedMembers: new ListSharedMembers(projectMemberRepo),
     checkGitCollision: new CheckGitCollision({
       projects: projectRepo,
@@ -1543,9 +1467,8 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       joinRequests: projectJoinRequestRepo,
-      users: userRepo,
+      workspaces: workspaceRepo,
       now,
-      hubSync: hubMembershipSync,
     }),
     appUrl: process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? 'http://localhost:5173',
     notifyProjectChanged,
@@ -1556,6 +1479,30 @@ const { app, devProxyUpgrade } = createApp({
   },
   workspaces: {
     service: workspaceService,
+    invites: {
+      create: new CreateWorkspaceInvite({
+        workspaces: workspaceRepo,
+        invites: workspaceInviteRepo,
+        users: userRepo,
+        notifications: notificationRepo,
+        email: emailSender,
+        idGen: idGenerator,
+        randomToken: () => randomBytes(32).toString('hex'),
+        now,
+        ttlMs: 7 * 24 * 60 * 60 * 1000, // 7 дней — как у project-инвайтов
+        appUrl: appBaseUrl,
+      }),
+      list: new ListWorkspaceInvites({
+        workspaces: workspaceRepo,
+        invites: workspaceInviteRepo,
+        now,
+      }),
+      delete: new DeleteWorkspaceInvite({
+        workspaces: workspaceRepo,
+        invites: workspaceInviteRepo,
+      }),
+    },
+    appUrl: appBaseUrl,
   },
   activity: {
     getFeed: getActivityFeed,
@@ -1602,17 +1549,23 @@ const { app, devProxyUpgrade } = createApp({
   invites: {
     getByToken: new GetInviteByToken({
       invites: projectInviteRepo,
+      workspaceInvites: workspaceInviteRepo,
       projects: projectRepo,
+      workspaces: workspaceRepo,
       users: userRepo,
       now,
     }),
-    accept: new AcceptProjectInvite({
+    acceptWorkspace: new AcceptWorkspaceInvite({
+      invites: workspaceInviteRepo,
+      workspaces: workspaceRepo,
+      now,
+    }),
+    acceptProject: new AcceptProjectInvite({
       invites: projectInviteRepo,
-      members: projectMemberRepo,
-      users: userRepo,
+      projects: projectRepo,
+      workspaces: workspaceRepo,
       now,
       activityRecorder,
-      hubSync: hubMembershipSync,
     }),
   },
   // Публичная доска (Publish to web, db/096) — анонимный доступ по slug.
@@ -2027,28 +1980,16 @@ const { app, devProxyUpgrade } = createApp({
     }),
   },
   delegations: {
-    accept: new AcceptTaskDelegation({
+    withdraw: new WithdrawTaskDelegation({ delegations: taskDelegationRepo }),
+    relinquish: new RelinquishTaskDelegation({
       delegations: taskDelegationRepo,
       tasks: taskRepo,
-      projects: projectRepo,
-      members: projectMemberRepo,
-      users: userRepo,
-      notifications: notificationRepo,
-      idGen: idGenerator,
-    }),
-    decline: new DeclineTaskDelegation({
-      delegations: taskDelegationRepo,
-      tasks: taskRepo,
-      projects: projectRepo,
       users: userRepo,
       notifications: notificationRepo,
       email: emailSender,
       idGen: idGenerator,
       appUrl: appBaseUrl,
     }),
-    withdraw: new WithdrawTaskDelegation({ delegations: taskDelegationRepo }),
-    relinquish: new RelinquishTaskDelegation({ delegations: taskDelegationRepo }),
-    listPending: new ListMyPendingDelegations(taskDelegationRepo),
     listAssignedToMe: new ListTasksAssignedToMe({
       delegations: taskDelegationRepo,
       tasks: taskRepo,
@@ -2086,17 +2027,6 @@ const { app, devProxyUpgrade } = createApp({
       appUrl: appBaseUrl,
     }),
     reassignDelegation: new ReassignTaskDelegation({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      tasks: taskRepo,
-      delegations: taskDelegationRepo,
-      users: userRepo,
-      notifications: notificationRepo,
-      email: emailSender,
-      idGen: idGenerator,
-      appUrl: appBaseUrl,
-    }),
-    inviteAndDelegate: new InviteAndDelegateTask({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
@@ -2481,7 +2411,7 @@ const server = app.listen(config.port, () => {
     // Меню команд бота (кнопка «/» в TG-клиенте) — discoverability функционала. Best-effort.
     void telegramClient
       .setMyCommands([
-        { command: 'tasks', description: 'Мои проекты и задачи' },
+        { command: 'tasks', description: 'Задачи по ответственным' },
         { command: 'pending', description: 'Задачи на уточнении' },
         { command: 'pause', description: 'Выключить уведомления' },
         { command: 'help', description: 'Что умеет бот' },

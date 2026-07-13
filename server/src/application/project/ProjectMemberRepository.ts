@@ -42,17 +42,10 @@ export interface ProjectMemberRepository {
   // в ListProjects (сайдбар / GET /api/projects) для изоляции по активному пространству.
   listProjectsForUserInWorkspace(userId: string, workspaceId: string): Promise<ProjectWithRole[]>;
 
-  // Сколько owner'ов у проекта — для валидации «не понизь последнего owner'а».
-  countOwners(projectId: string): Promise<number>;
-
-  // Состоит ли userId хотя бы в одном проекте, которым владеет ownerUserId. Нужно синку
-  // участников дефолт-хаба: при выходе из проекта убираем юзера из хаб-чата владельца
-  // только если у них больше нет общих проектов (HubMembershipSync).
+  // Есть ли у userId общий (не-inbox) проект с ownerUserId. Считается через общие пространства.
   isMemberOfAnyProjectOwnedBy(userId: string, ownerUserId: string): Promise<boolean>;
 
   add(input: AddMemberInput): Promise<ProjectMembership>;
-  remove(projectId: string, userId: string): Promise<boolean>;
-  updateRole(projectId: string, userId: string, role: ProjectRole): Promise<ProjectMembership | null>;
 
   // Персональная пересортировка проектов в сайдбаре userId. orderedIds задаёт желаемый
   // порядок; sort_order проставляется по индексу. id, по которым у юзера нет membership,

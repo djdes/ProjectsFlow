@@ -1,4 +1,4 @@
-export type WorkspaceRole = 'owner' | 'member';
+export type WorkspaceRole = 'owner' | 'editor' | 'viewer';
 
 // Участник пространства. displayName/email/avatarUrl заполняются только для member-list
 // ответов (join с users); в guard-проверках достаточно workspaceId/userId/role.

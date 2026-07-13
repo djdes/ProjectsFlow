@@ -6,7 +6,7 @@ import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import { useAuth } from '@/presentation/auth/AuthProvider';
 import { HttpError } from '@/lib/HttpError';
-import type { ProjectInvitePreview } from '@/domain/project/ProjectInvite';
+import type { InvitePreview } from '@/domain/invite/InvitePreview';
 
 const ROLE_LABEL: Record<'editor' | 'viewer', string> = {
   editor: 'редактор',
@@ -15,7 +15,7 @@ const ROLE_LABEL: Record<'editor' | 'viewer', string> = {
 
 type LoadState =
   | { status: 'loading' }
-  | { status: 'ready'; preview: ProjectInvitePreview }
+  | { status: 'ready'; preview: InvitePreview }
   | { status: 'error'; message: string };
 
 // Анонимная страница: открывается по `/invite/:token`. Если юзер не залогинен — показывает
@@ -58,9 +58,15 @@ export function InvitePage(): React.ReactElement {
     if (!token) return;
     setAccepting(true);
     try {
-      const { projectId } = await inviteRepository.accept(token);
-      toast.success('Вы добавлены в проект');
-      navigate(`/projects/${projectId}`, { replace: true });
+      const res = await inviteRepository.accept(token);
+      if (res.projectId) {
+        // Legacy project-токен: accept зачислил в пространство проекта — ведём на проект.
+        toast.success('Вы добавлены в проект');
+        navigate(`/projects/${res.projectId}`, { replace: true });
+      } else {
+        toast.success('Вы присоединились к пространству');
+        navigate('/', { replace: true });
+      }
     } catch (e) {
       const msg =
         e instanceof HttpError && e.status === 410
@@ -82,7 +88,7 @@ export function InvitePage(): React.ReactElement {
   return (
     <div className="grid min-h-screen place-items-center p-6">
       <div className="w-full max-w-md space-y-5 rounded-xl border bg-card p-7 shadow-sm">
-        <h1 className="text-2xl font-semibold tracking-tight">Приглашение в проект</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Приглашение</h1>
 
         {state.status === 'loading' && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -104,10 +110,15 @@ export function InvitePage(): React.ReactElement {
           <>
             <div className="space-y-2 text-sm">
               <p>
-                Тебя приглашают в проект{' '}
-                <span className="font-semibold">«{state.preview.projectName}»</span> с правами{' '}
+                Тебя приглашают в {state.preview.kind === 'workspace' ? 'пространство' : 'проект'}{' '}
+                <span className="font-semibold">«{state.preview.targetName}»</span> с правами{' '}
                 <span className="font-semibold">{ROLE_LABEL[state.preview.role]}</span>.
               </p>
+              {state.preview.kind === 'workspace' && (
+                <p className="text-muted-foreground">
+                  Доступ — ко всем проектам пространства, включая будущие.
+                </p>
+              )}
               {state.preview.inviterDisplayName && (
                 <p className="text-muted-foreground">
                   Пригласил: {state.preview.inviterDisplayName}

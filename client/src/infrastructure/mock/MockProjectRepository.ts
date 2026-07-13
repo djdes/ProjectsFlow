@@ -1,9 +1,7 @@
 import type { Project } from '@/domain/project/Project';
-import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
-import type { ProjectInvite } from '@/domain/project/ProjectInvite';
+import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { ProjectNameAlreadyExistsError } from '@/domain/project/errors';
 import type {
-  CreateInviteInput,
   GitCollision,
   ProjectRepository,
   CreateProjectInput,
@@ -24,7 +22,7 @@ function normalizeName(name: string): string {
 }
 
 // Mock сейчас не подключён в DI-контейнере (используется HttpProjectRepository) — оставлен
-// под потенциальный demo/preview-режим. Методы members/invites не реализованы — кинут
+// под потенциальный demo/preview-режим. Методы members не реализованы — кинут
 // «not implemented», если кто-то всё же его подключит.
 export class MockProjectRepository implements ProjectRepository {
   private projects: Project[] = [...seedProjects];
@@ -234,41 +232,11 @@ export class MockProjectRepository implements ProjectRepository {
     return Promise.reject(new Error('Mock.listGitTokenAccessLog: not implemented'));
   }
 
-  // Multi-tenancy stubs — mock пока не моделирует members/invites. Если кому-то понадобится
+  // Multi-tenancy stubs — mock пока не моделирует members. Если кому-то понадобится
   // мокать «команду» — реализовать здесь по аналогии с projects[]. Параметры в payload'е
   // ошибки, чтобы лог дал понять что не так.
   listMembers(projectId: string): Promise<ProjectMember[]> {
     return Promise.reject(new Error(`Mock.listMembers(${projectId}): not implemented`));
-  }
-  updateMemberRole(
-    projectId: string,
-    userId: string,
-    role: Exclude<ProjectRole, 'owner'>,
-  ): Promise<void> {
-    return Promise.reject(
-      new Error(`Mock.updateMemberRole(${projectId}, ${userId}, ${role}): not implemented`),
-    );
-  }
-  removeMember(projectId: string, userId: string): Promise<void> {
-    return Promise.reject(new Error(`Mock.removeMember(${projectId}, ${userId}): not implemented`));
-  }
-  transferOwnership(projectId: string, toUserId: string): Promise<void> {
-    return Promise.reject(
-      new Error(`Mock.transferOwnership(${projectId} → ${toUserId}): not implemented`),
-    );
-  }
-  listInvites(projectId: string): Promise<ProjectInvite[]> {
-    return Promise.reject(new Error(`Mock.listInvites(${projectId}): not implemented`));
-  }
-  createInvite(projectId: string, input: CreateInviteInput): Promise<ProjectInvite> {
-    return Promise.reject(
-      new Error(`Mock.createInvite(${projectId}, role=${input.role}): not implemented`),
-    );
-  }
-  deleteInvite(projectId: string, inviteId: string): Promise<void> {
-    return Promise.reject(
-      new Error(`Mock.deleteInvite(${projectId}, ${inviteId}): not implemented`),
-    );
   }
   checkGitCollision(): Promise<GitCollision> {
     return Promise.resolve({ exists: false });

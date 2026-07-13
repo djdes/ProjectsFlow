@@ -2,6 +2,7 @@ import type { ChatMessageRecord } from '../../domain/chat/ChatMessage.js';
 import type { ChatReaction } from '../../domain/chat/ChatReaction.js';
 import type { ChatAttachment } from '../../domain/chat/ChatAttachment.js';
 import type { WorkspaceKind } from '../../domain/workspace/Workspace.js';
+import type { WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 
 // Строка-кандидат для списка чат-комнат юзера (пространства, где он участник) — без unread,
 // его добавляет ChatService через countUnread. messageCount/lastMessageSeq — по неудалённым.
@@ -11,7 +12,7 @@ export type ChatRoomRow = {
   readonly kind: WorkspaceKind;
   readonly ownerUserId: string;
   // Роль текущего юзера в этой комнате (owner может модерировать чужие сообщения).
-  readonly role: 'owner' | 'member';
+  readonly role: WorkspaceRole;
   readonly memberCount: number;
   readonly messageCount: number;
   readonly lastMessageSeq: number;

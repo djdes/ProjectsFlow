@@ -1,11 +1,10 @@
 import { aliasedTable, and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { projectMembers, projects, taskDelegations, tasks, users } from '../db/schema.js';
+import { projects, taskDelegations, tasks, users } from '../db/schema.js';
 import type {
   AssignedDelegationRow,
   CreateDelegationInput,
   DelegatedToOthersRow,
-  DelegationWithTaskInfo,
   TaskDelegationRepository,
 } from '../../application/task/TaskDelegationRepository.js';
 import type {
@@ -13,11 +12,15 @@ import type {
   TaskDelegationStatus,
 } from '../../domain/task/TaskDelegation.js';
 import type { ProjectRole } from '../../domain/project/ProjectMembership.js';
+// Роль caller'а/делегата резолвится через единое пространство (спека unified-workspace §3.2),
+// НЕ через project_members (см. #блокер1/#блокер2 в отчёте fix-blockers-report.md) —
+// переиспользуем ProjectMemberRepository (эталон DrizzleProjectMemberRepository), единый
+// источник истины для всех гейтов доступа/роли.
+import type { ProjectMemberRepository } from '../../application/project/ProjectMemberRepository.js';
 
-const TASK_EXCERPT_LEN = 120;
-// pending_invite тоже занимает активный слот задачи (ждёт вступления приглашённого) —
-// зеркало ACTIVE_DELEGATION_STATUSES в домене.
-const ACTIVE_STATUSES: readonly TaskDelegationStatus[] = ['pending', 'accepted', 'pending_invite'];
+// Активная делегация — только accepted, делегирование мгновенное (спека §4); legacy
+// pending/pending_invite добиты миграцией 112. Зеркало ACTIVE_DELEGATION_STATUSES в домене.
+const ACTIVE_STATUSES: readonly TaskDelegationStatus[] = ['accepted'];
 
 // Сырой ряд join'а. Делегатор = delegator_user_id (persisted, db/054; для legacy-строк
 // backfill = owner проекта), фолбэк-id — projects.owner_id. Имя делегатора берём
@@ -59,6 +62,62 @@ function toDomain(r: DelegationRowRaw): TaskDelegation {
   };
 }
 
+// Сырой ряд listAssignedTo: DelegationRowRaw + контекст проекта. Роль в SQL НЕ резолвится
+// (см. комментарий в listAssignedTo) — считается в resolveAssignedRows.
+type AssignedRowRaw = DelegationRowRaw & {
+  projectId: string;
+  projectName: string;
+  isInbox: boolean;
+};
+
+// Чистая функция (0 deps на Drizzle/БД — юнит-тестируема напрямую, см.
+// DrizzleTaskDelegationRepository.gating.test.ts): сырые ряды delegations + карта «моя роль
+// по projectId» (из ProjectMemberRepository.listProjectsForUser, единое пространство) →
+// итоговые AssignedDelegationRow. roleByProject НИКОГДА не строится из project_members —
+// регресс-тест #блокер1 фиксирует именно это (ws-участник без project_members-строки).
+export function resolveAssignedRows(
+  rows: readonly AssignedRowRaw[],
+  roleByProject: ReadonlyMap<string, ProjectRole>,
+): AssignedDelegationRow[] {
+  return rows.map((r) => ({
+    taskId: r.taskId,
+    delegation: toDomain(r),
+    projectId: r.projectId,
+    projectName: r.projectName,
+    isInbox: Boolean(r.isInbox),
+    delegateRole: roleByProject.get(r.projectId) ?? null,
+  }));
+}
+
+// Сырой ряд обеих веток listDelegatedToOthers. delegateRole/callerRole резолвятся ПОСЛЕ
+// выборки — см. resolveDelegatedToOthersRows.
+type DelegatedToOthersRowRaw = DelegationRowRaw & {
+  projectId: string;
+  projectName: string;
+  isInbox: boolean;
+};
+
+// Чистая функция (0 deps на Drizzle/БД, юнит-тестируема): сырые ряды + карта «роль
+// caller'а по projectId» (ProjectMemberRepository.listProjectsForUser) + карта «роль
+// делегата по паре projectId:delegateUserId» (ProjectMemberRepository.findForProject,
+// т.к. делегат — произвольный юзер, не caller) → итоговые DelegatedToOthersRow.
+// Ни одна из карт НЕ читает project_members (#блокер2).
+export function resolveDelegatedToOthersRows(
+  rows: readonly DelegatedToOthersRowRaw[],
+  callerRoleByProject: ReadonlyMap<string, ProjectRole>,
+  delegateRoleByPair: ReadonlyMap<string, ProjectRole | null>,
+): DelegatedToOthersRow[] {
+  return rows.map((r) => ({
+    taskId: r.taskId,
+    delegation: toDomain(r),
+    projectId: r.projectId,
+    projectName: r.projectName,
+    isInbox: Boolean(r.isInbox),
+    delegateRole: delegateRoleByPair.get(`${r.projectId}:${r.delegateUserId}`) ?? null,
+    callerRole: callerRoleByProject.get(r.projectId) ?? null,
+  }));
+}
+
 // Имя/фото делегатора по delegator_user_id — корелированные подзапросы (без лишнего join'а).
 const delegatorNameSql = sql<
   string | null
@@ -68,7 +127,10 @@ const delegatorAvatarSql = sql<
 >`(SELECT du.avatar_url FROM users du WHERE du.id = ${taskDelegations.delegatorUserId})`;
 
 export class DrizzleTaskDelegationRepository implements TaskDelegationRepository {
-  constructor(private readonly db: Database) {}
+  constructor(
+    private readonly db: Database,
+    private readonly projectMembers: ProjectMemberRepository,
+  ) {}
 
   async create(input: CreateDelegationInput): Promise<TaskDelegation> {
     // Runtime-guard: новые строки всегда знают делегатора (порт требует это compile-time,
@@ -81,8 +143,13 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
       taskId: input.taskId,
       delegateUserId: input.delegateUserId,
       delegatorUserId: input.delegatorUserId,
-      revertToUserId: input.revertToUserId ?? null,
+      // Поле больше не приходит на вход (эррата #15) — revert-флоу удалён вместе с
+      // pending_invite. Колонка остаётся в schema только для чтения legacy-строк.
+      revertToUserId: null,
       status: input.status ?? 'pending',
+      // Мгновенное делегирование: accepted-строка отвечена в момент создания
+      // (responded_at = created_at, спека §4).
+      respondedAt: (input.status ?? 'pending') === 'accepted' ? new Date() : null,
     });
     const created = await this.getById(input.id);
     if (!created) {
@@ -119,46 +186,6 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
       .set({ status, respondedAt: new Date() })
       .where(eq(taskDelegations.id, id));
     return this.getById(id);
-  }
-
-  async listPendingForDelegate(userId: string): Promise<DelegationWithTaskInfo[]> {
-    const delegateUser = aliasedTable(users, 'delegate_user');
-    const ownerUser = aliasedTable(users, 'owner_user');
-    const rows = await this.db
-      .select({
-        id: taskDelegations.id,
-        taskId: taskDelegations.taskId,
-        delegateUserId: taskDelegations.delegateUserId,
-        delegateDisplayName: delegateUser.displayName,
-        delegateAvatarUrl: delegateUser.avatarUrl,
-        delegatorUserId: taskDelegations.delegatorUserId,
-        revertToUserId: taskDelegations.revertToUserId,
-        ownerId: projects.ownerId,
-        delegatorDisplayName: delegatorNameSql,
-        delegatorAvatarUrl: delegatorAvatarSql,
-        ownerDisplayName: ownerUser.displayName,
-        ownerAvatarUrl: ownerUser.avatarUrl,
-        status: taskDelegations.status,
-        createdAt: taskDelegations.createdAt,
-        respondedAt: taskDelegations.respondedAt,
-        taskDescription: tasks.description,
-      })
-      .from(taskDelegations)
-      .innerJoin(delegateUser, eq(delegateUser.id, taskDelegations.delegateUserId))
-      .innerJoin(tasks, eq(tasks.id, taskDelegations.taskId))
-      .innerJoin(projects, eq(projects.id, tasks.projectId))
-      .innerJoin(ownerUser, eq(ownerUser.id, projects.ownerId))
-      .where(
-        and(
-          eq(taskDelegations.delegateUserId, userId),
-          eq(taskDelegations.status, 'pending'),
-        ),
-      );
-
-    return rows.map((r) => ({
-      ...toDomain(r),
-      taskExcerpt: (r.taskDescription ?? '').slice(0, TASK_EXCERPT_LEN),
-    }));
   }
 
   async listActiveForTasks(
@@ -209,10 +236,14 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
       .innerJoin(ownerUser, eq(ownerUser.id, projects.ownerId));
   }
 
-  // Все активные (pending|accepted) делегации НА userId по всем проектам — для блока
+  // Все активные делегации НА userId по всем проектам — для блока
   // «Поручено мне». Лёгкие строки (id задачи + делегация + контекст проекта + моя роль);
-  // полный Task use-case достаёт батчем через TaskRepository.listByIds. Имя делегатора и
-  // моя роль — корелированные подзапросы (без 5-го/left join'а, который ломает inference).
+  // полный Task use-case достаёт батчем через TaskRepository.listByIds. Имя делегатора —
+  // корелированный подзапрос (без 5-го/left join'а, который ломает inference). Роль (=моя
+  // роль, userId здесь ВСЕГДА и delegate, и viewer) больше НЕ читается из project_members
+  // (#блокер1 — NULL для ws-участника без ленивой строки) — резолвится в resolveAssignedRows
+  // из ProjectMemberRepository.listProjectsForUser (единое пространство, тот же источник
+  // истины, что DrizzleProjectMemberRepository).
   async listAssignedTo(userId: string): Promise<AssignedDelegationRow[]> {
     const delegateUser = aliasedTable(users, 'delegate_user');
     const ownerUser = aliasedTable(users, 'owner_user');
@@ -236,7 +267,6 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
         projectId: projects.id,
         projectName: projects.name,
         isInbox: projects.isInbox,
-        delegateRole: sql<ProjectRole | null>`(SELECT pm.role FROM project_members pm WHERE pm.project_id = ${projects.id} AND pm.user_id = ${userId} LIMIT 1)`,
       })
       .from(taskDelegations)
       .innerJoin(delegateUser, eq(delegateUser.id, taskDelegations.delegateUserId))
@@ -250,17 +280,12 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
         ),
       );
 
-    return rows.map((r) => ({
-      taskId: r.taskId,
-      delegation: toDomain(r),
-      projectId: r.projectId,
-      projectName: r.projectName,
-      isInbox: Boolean(r.isInbox),
-      delegateRole: r.delegateRole ?? null,
-    }));
+    const myProjects = await this.projectMembers.listProjectsForUser(userId);
+    const roleByProject = new Map(myProjects.map((p) => [p.id, p.role]));
+    return resolveAssignedRows(rows, roleByProject);
   }
 
-  // Все активные (pending|accepted) делегации «кому-то другому», видимые userId, по всем
+  // Все активные делегации «кому-то другому», видимые userId, по всем
   // проектам — вкладка «Другим». Видимость: (а) участник именованного проекта видит все
   // делегирования в нём (как на доске проекта); (б) inbox-строки — только где caller сам
   // делегатор (legacy delegator NULL → фолбэк на owner, как в toDomain). Строки, где
@@ -273,18 +298,18 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
   // несаржабельны) и скатывался в full scan, растущий с ГЛОБАЛЬНЫМ объёмом делегаций.
   // Ветки дизъюнктны по projects.is_inbox — конкат без дедупа.
   async listDelegatedToOthers(userId: string): Promise<DelegatedToOthersRow[]> {
-    // Проекты caller'а — отдельным индексным запросом (idx_project_members_user);
-    // дальше ветка именованных проектов едет по tasks.project_id IN (...).
-    const memberships = await this.db
-      .select({ projectId: projectMembers.projectId })
-      .from(projectMembers)
-      .where(eq(projectMembers.userId, userId));
-    const memberProjectIds = memberships.map((m) => m.projectId);
+    // Проекты caller'а — через единое пространство (workspace_members), НЕ project_members
+    // (#блокер2): ws-участник без ленивой project_members-строки должен видеть свои
+    // делегирования. Один и тот же список — источник и memberProjectIds (скоуп именованной
+    // ветки), и callerRoleByProject (видимость+canModify в use-case).
+    const myProjects = await this.projectMembers.listProjectsForUser(userId);
+    const callerRoleByProject = new Map(myProjects.map((p) => [p.id, p.role]));
+    const memberProjectIds = myProjects.filter((p) => !p.isInbox).map((p) => p.id);
 
     const named =
       memberProjectIds.length === 0
         ? []
-        : await this.selectDelegatedToOthers(userId).where(
+        : await this.selectDelegatedToOthers().where(
             and(
               inArray(tasks.projectId, memberProjectIds),
               eq(projects.isInbox, false),
@@ -297,7 +322,7 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
     // Inbox: только собственные исходящие (caller = делегатор / legacy-owner) — едет по
     // idx_delegator_status. Делегатор, УДАЛЁННЫЙ из именованного проекта, не виден нигде
     // (ветка выше требует членства) — иначе утечка read_project-гейта.
-    const inbox = await this.selectDelegatedToOthers(userId).where(
+    const inbox = await this.selectDelegatedToOthers().where(
       and(
         eq(projects.isInbox, true),
         inArray(taskDelegations.status, [...ACTIVE_STATUSES]),
@@ -309,20 +334,34 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
       ),
     );
 
-    return [...named, ...inbox].map((r) => ({
-      taskId: r.taskId,
-      delegation: toDomain(r),
-      projectId: r.projectId,
-      projectName: r.projectName,
-      isInbox: Boolean(r.isInbox),
-      delegateRole: r.delegateRole ?? null,
-      callerRole: r.callerRole ?? null,
-    }));
+    const rawRows = [...named, ...inbox];
+    const delegateRoleByPair = await this.resolveDelegateRoles(rawRows);
+    return resolveDelegatedToOthersRows(rawRows, callerRoleByProject, delegateRoleByPair);
+  }
+
+  // delegateRole — роль ПРОИЗВОЛЬНОГО делегата (не caller'а) в проекте строки; чисто
+  // диагностическое поле («делегата убрали из проекта» — НЕ гейтит видимость, см.
+  // ListTasksDelegatedToOthers.ts). findForProject уже инкапсулирует workspace_members +
+  // is_inbox→owner инвариант — переиспользуем вместо повторного project_members-подзапроса
+  // (#блокер2). Дедуп по (projectId,delegateUserId): строк в ленте caller'а обычно немного,
+  // N+1 приемлем ради переиспользования эталонной логики.
+  private async resolveDelegateRoles(
+    rows: readonly { projectId: string; delegateUserId: string }[],
+  ): Promise<Map<string, ProjectRole | null>> {
+    const pairs = new Map<string, { projectId: string; delegateUserId: string }>();
+    for (const r of rows) pairs.set(`${r.projectId}:${r.delegateUserId}`, r);
+    const entries = await Promise.all(
+      [...pairs.entries()].map(async ([key, { projectId, delegateUserId }]) => {
+        const membership = await this.projectMembers.findForProject(projectId, delegateUserId);
+        return [key, membership?.role ?? null] as const;
+      }),
+    );
+    return new Map(entries);
   }
 
   // Общий select обеих веток listDelegatedToOthers (сборка заново на каждый вызов —
   // drizzle-билдеры мутабельны, шарить построенный нельзя).
-  private selectDelegatedToOthers(userId: string) {
+  private selectDelegatedToOthers() {
     const delegateUser = aliasedTable(users, 'delegate_user');
     const ownerUser = aliasedTable(users, 'owner_user');
     return this.db
@@ -345,8 +384,6 @@ export class DrizzleTaskDelegationRepository implements TaskDelegationRepository
         projectId: projects.id,
         projectName: projects.name,
         isInbox: projects.isInbox,
-        delegateRole: sql<ProjectRole | null>`(SELECT pm.role FROM project_members pm WHERE pm.project_id = ${projects.id} AND pm.user_id = ${taskDelegations.delegateUserId} LIMIT 1)`,
-        callerRole: sql<ProjectRole | null>`(SELECT pm.role FROM project_members pm WHERE pm.project_id = ${projects.id} AND pm.user_id = ${userId} LIMIT 1)`,
       })
       .from(taskDelegations)
       .innerJoin(delegateUser, eq(delegateUser.id, taskDelegations.delegateUserId))

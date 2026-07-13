@@ -8,6 +8,8 @@ import type { TaskRepository } from '../task/TaskRepository.js';
 import type { CreateTaskComment } from '../task/CreateTaskComment.js';
 import type { MoveTask } from '../task/MoveTask.js';
 import type { MaybeReopenForClarification } from '../task/MaybeReopenForClarification.js';
+import type { TaskDelegationRepository } from '../task/TaskDelegationRepository.js';
+import { buildAssigneeMenu, buildAssigneeTaskCards } from './assigneeBrowse.js';
 import {
   taskActionKeyboard,
   taskCompletedKeyboard,
@@ -29,6 +31,7 @@ import {
   stripAllMarkdown,
   markdownToRich,
   extractImageSrcs,
+  splitDescription,
 } from '../../domain/task/digestFormat.js';
 import { signAttachmentUrl } from '../attachments/signedAttachmentUrl.js';
 
@@ -72,6 +75,9 @@ type Deps = {
   readonly users: UserRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
+  // Активные делегации задач — меню /tasks «по ответственным» (ba:-callbacks). Узкий Pick:
+  // билдерам assigneeBrowse нужен только listActiveForTasks.
+  readonly delegations: Pick<TaskDelegationRepository, 'listActiveForTasks'>;
   readonly client: TelegramClient;
   readonly appUrl: string;
   // Секрет для подписи URL картинок задачи (альбом при открытии задачи в TG, без сессии).
@@ -120,8 +126,8 @@ export class HandleTelegramWebhook {
   constructor(private readonly deps: Deps) {}
 
   async execute(update: TelegramUpdate): Promise<void> {
-    // Нажатие inline-кнопки. `bt:` — навигация /tasks (наш handler); остальное (tp/td/tc/
-    // tx/da/dd) — конструктор задач/делегирование.
+    // Нажатие inline-кнопки. `bt:` — навигация /tasks (наш handler); остальное (tp/td/
+    // tc/tx/a*/ts) — конструктор задач. Легаси da:/dd: гаснут в композере молча.
     if (update.callback_query) {
       const cq = update.callback_query;
       const data = cq.data ?? '';
@@ -132,6 +138,7 @@ export class HandleTelegramWebhook {
       // Предложения закрыть (db/101): pd: подтвердить, px: отклонить.
       if (data.startsWith('pd:')) return this.handleCloseProposalConfirm(cq, data.slice(3));
       if (data.startsWith('px:')) return this.handleCloseProposalDismiss(cq, data.slice(3));
+      if (data.startsWith('ba:')) return this.handleAssigneeCallback(cq);
       if (data.startsWith('bt:')) return this.handleBrowseCallback(cq);
       return this.deps.composer.handleCallback(cq);
     }
@@ -170,6 +177,14 @@ export class HandleTelegramWebhook {
     // просто текстом, без слэш-префикса (типичный TG UX).
     if (msg.reply_to_message?.message_id) {
       return this.handleReply(tgUserId, chatId, msg.reply_to_message.message_id, text);
+    }
+
+    // «Пустое» @упоминание в группе (только @bot, без другого текста) → меню задач
+    // «по ответственным» в охвате ВЛАДЕЛЬЦА привязки группы (telegram_group_owners).
+    // Сюда попадаем только если бот был упомянут/reply'нут (гейт isGroup выше), а после
+    // вырезания @упоминания текст пуст. Упоминание с текстом — ниже, composer как раньше.
+    if (isGroup && text.length === 0) {
+      return this.handleGroupAssigneeMenu(chatId);
     }
 
     // Routing по первому слову.
@@ -706,7 +721,7 @@ export class HandleTelegramWebhook {
         `⚡ <b>Из любого чата</b> — набери <code>${bot} текст задачи</code> и выбери проект из списка.\n\n` +
         `💬 <b>Комментарий</b> — ответь (reply) на карточку задачи от бота. Участники получат уведомление.\n\n` +
         `<b>Команды:</b>\n` +
-        `/tasks — мои проекты и задачи\n` +
+        `/tasks — задачи по ответственным\n` +
         `/pending — задачи «На уточнении»\n` +
         `/pause — выключить уведомления\n` +
         `/start — переподключить бота\n` +
@@ -787,13 +802,53 @@ export class HandleTelegramWebhook {
     await this.reply(chatId, '💬 Комментарий добавлен.');
   }
 
-  // --- /tasks: просмотр проектов → задач → карточка с reply-комментированием. ---
+  // --- /tasks: экран 1 «по ответственным» → карточки задач; «📁 По проектам» (bt:root)
+  //     ведёт на старый браузер проект → задачи → карточка. ---
   private async handleTasks(tgUserId: number, chatId: number): Promise<void> {
     const userId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
     if (!userId) {
       await this.reply(chatId, '⚠️ Сначала привяжи Telegram через /profile.');
       return;
     }
+    await this.sendAssigneeMenu(chatId, userId);
+  }
+
+  // Меню «по ответственным». ownerUserId — чей охват проектов показываем (в личке —
+  // сам вызывающий; в группе — владелец привязки, см. handleGroupAssigneeMenu).
+  private async sendAssigneeMenu(chatId: number, ownerUserId: string): Promise<void> {
+    const menu = await buildAssigneeMenu(this.assigneeDeps(), ownerUserId);
+    if (!menu) {
+      await this.reply(chatId, '📭 У тебя пока нет проектов. Напиши текст — создам задачу во «Входящие».');
+      return;
+    }
+    await this.reply(chatId, menu.text, menu.keyboard);
+  }
+
+  // Пустое @упоминание в группе: меню по ответственным от имени владельца привязки.
+  // Не привязано → подсказка /start (та же привязка, что ловит задачи непривязанных).
+  private async handleGroupAssigneeMenu(chatId: number): Promise<void> {
+    const ownerUserId = await this.deps.groupOwners.getOwnerUserId(chatId);
+    if (!ownerUserId) {
+      await this.reply(
+        chatId,
+        '⚠️ Группа не привязана к аккаунту. Отправь /start, чтобы привязать её к себе, — и вызывай меню задач пустым упоминанием.',
+      );
+      return;
+    }
+    await this.sendAssigneeMenu(chatId, ownerUserId);
+  }
+
+  // Узкий deps-набор для билдеров assigneeBrowse.
+  private assigneeDeps() {
+    return {
+      members: this.deps.members,
+      tasks: this.deps.tasks,
+      delegations: this.deps.delegations,
+    };
+  }
+
+  // Экран «По проектам» (бывший корень /tasks) — вторичная навигация с кнопки bt:root.
+  private async sendProjectList(chatId: number, userId: string): Promise<void> {
     const projects = await this.deps.members.listProjectsForUser(userId);
     if (projects.length === 0) {
       await this.reply(chatId, '📭 У тебя пока нет проектов. Напиши текст — создам задачу во «Входящие».');
@@ -810,6 +865,56 @@ export class HandleTelegramWebhook {
     await this.reply(chatId, `📂 <b>Выбери проект:</b>${note}`, { inline_keyboard: rows });
   }
 
+  // ba:<userId> | ba:none — карточки открытых задач выбранного ответственного (экран 2).
+  // Охват — проекты НАЖАВШЕГО (гейт членства встроен: listProjectsForUser). Каждая карточка
+  // регистрируется в telegram_task_messages → reply на неё = комментарий (handleTaskReplyComment).
+  private async handleAssigneeCallback(cq: TelegramCallbackQuery): Promise<void> {
+    const chatId = cq.message?.chat.id ?? cq.from.id;
+    const userId = await this.deps.users.findUserIdByTelegramUserId(cq.from.id);
+    if (!userId) {
+      await this.answerNeedsLink(cq.id);
+      return;
+    }
+    const arg = (cq.data ?? '').slice('ba:'.length);
+    const assigneeUserId = arg === 'none' ? null : arg;
+    const result = await buildAssigneeTaskCards(
+      this.assigneeDeps(),
+      userId,
+      assigneeUserId,
+      this.deps.appUrl,
+    );
+    if (result.cards.length === 0) {
+      await this.deps.client.answerCallbackQuery(cq.id, {
+        text: 'Открытых задач не нашлось.',
+        showAlert: true,
+      });
+      return;
+    }
+    const who = assigneeUserId === null ? 'Без ответственного' : (result.assigneeName ?? 'Ответственный');
+    const extra =
+      result.totalCount > result.cards.length
+        ? ` (первые ${result.cards.length} из ${result.totalCount})`
+        : '';
+    await this.reply(chatId, `👤 <b>${escapeHtml(who)}</b> — открытые задачи${extra}:`);
+    for (const card of result.cards) {
+      const messageId = await this.sendReturningId(chatId, card.text, card.keyboard);
+      if (messageId !== null) {
+        try {
+          await this.deps.taskMessages.upsert({
+            tgChatId: chatId,
+            tgMessageId: messageId,
+            recipientUserId: userId,
+            taskId: card.taskId,
+            projectId: card.projectId,
+          });
+        } catch (err) {
+          console.warn('[tg-webhook] assignee card taskMessage upsert failed:', err);
+        }
+      }
+    }
+    await this.deps.client.answerCallbackQuery(cq.id);
+  }
+
   private async handleBrowseCallback(cq: TelegramCallbackQuery): Promise<void> {
     const data = cq.data ?? '';
     // В личном чате chat.id === from.id. Для «старых» сообщений (>48ч) Telegram НЕ
@@ -823,6 +928,12 @@ export class HandleTelegramWebhook {
         text: 'Сначала привяжи Telegram: в профиле на сайте нажми «Login with Telegram», затем отправь /start.',
         showAlert: true,
       });
+      return;
+    }
+    // bt:root — экран «По проектам» из меню по ответственным.
+    if (data === 'bt:root') {
+      await this.sendProjectList(chatId, userId);
+      await this.deps.client.answerCallbackQuery(cq.id);
       return;
     }
     // bt:p:<projectId> | bt:t:<taskId>
@@ -849,8 +960,11 @@ export class HandleTelegramWebhook {
       const rows = shown.map((t) => {
         // Есть картинки в описании → префикс 🖼 (в кнопке видно, что внутри фото).
         const hasImg = extractImageSrcs(t.description).length > 0;
-        const label = `${hasImg ? '🖼 ' : ''}${excerptShort(t.description, hasImg ? 52 : 56)}`;
-        return [{ text: label, callback_data: `bt:t:${t.id}` }];
+        // Лейбл — plain-НАЗВАНИЕ (первая непустая строка без markdown), не обрывок описания.
+        const cap = hasImg ? 52 : 56;
+        const title = splitDescription(t.description).name;
+        const clipped = title.length <= cap ? title : title.slice(0, cap - 1).trimEnd() + '…';
+        return [{ text: `${hasImg ? '🖼 ' : ''}${clipped}`, callback_data: `bt:t:${t.id}` }];
       });
       const note =
         tasks.length > BROWSE_LIMIT
@@ -939,14 +1053,19 @@ export class HandleTelegramWebhook {
     }
   }
 
-  // Как reply, но возвращает message_id (для маппинга task-сообщения в /tasks). null при ошибке.
-  private async sendReturningId(chatId: number, text: string): Promise<number | null> {
+  // Как reply, но возвращает message_id (для маппинга task-сообщения). null при ошибке.
+  private async sendReturningId(
+    chatId: number,
+    text: string,
+    replyMarkup?: InlineKeyboardMarkup,
+  ): Promise<number | null> {
     try {
       const res = await this.deps.client.sendMessage({
         chatId,
         text,
         parseMode: 'HTML',
         disableWebPagePreview: true,
+        replyMarkup,
       });
       return res.kind === 'ok' ? res.messageId : null;
     } catch (err) {

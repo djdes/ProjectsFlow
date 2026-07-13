@@ -15,12 +15,10 @@ const STACK = 4;
 // выровнена по правому краю стека, клампится по вьюпорту (Radix Popover).
 export function MemberAvatarStack({
   members,
-  projectId,
   canInvite = false,
 }: {
   members: ProjectMember[];
-  // Проброс в панель: проект + право приглашать (editor+) включают форму приглашения.
-  projectId?: string;
+  // Право приглашать (editor+) включает форму приглашения в пространство в панели.
   canInvite?: boolean;
 }): React.ReactElement | null {
   // Панель участников открывается по КЛИКУ (не по наведению) — по требованию.
@@ -63,7 +61,7 @@ export function MemberAvatarStack({
         onOpenAutoFocus={(e) => e.preventDefault()}
         className="w-80 p-0"
       >
-        <MembersHoverPanel members={members} projectId={projectId} canInvite={canInvite} />
+        <MembersHoverPanel members={members} canInvite={canInvite} />
       </PopoverContent>
     </Popover>
   );

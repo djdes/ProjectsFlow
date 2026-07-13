@@ -325,7 +325,7 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
       await afterDelegationChange();
     } catch (e) {
       // Кубики = shared-members caller'а, а inbox-делегирование валидируется по ним же —
-      // инвайт-флоу (delegate_not_*) здесь недостижим, любая ошибка — честный тост.
+      // любая ошибка здесь всё равно остаётся честным тостом.
       toast.error(`Не удалось делегировать: ${(e as Error).message}`);
     }
   };

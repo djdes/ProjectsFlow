@@ -18,9 +18,7 @@ import type { ProjectRepository } from '../../project/ProjectRepository.js';
 import type { UserRepository } from '../../user/UserRepository.js';
 import type { CreateTask } from '../../task/CreateTask.js';
 import type { GetOrCreateInbox } from '../../project/GetOrCreateInbox.js';
-import type { AcceptTaskDelegation } from '../../task/AcceptTaskDelegation.js';
-import type { DeclineTaskDelegation } from '../../task/DeclineTaskDelegation.js';
-import type { MoveTaskToProject } from '../../task/MoveTaskToProject.js';
+import { taskActionKeyboard } from '../taskActionKeyboard.js';
 import { parseComposerMessage } from './parseComposerMessage.js';
 import { fuzzyMatch, greedyProjectPrefix } from './fuzzyMatch.js';
 import { parseComposeSegments, type ParsedComposeSegment } from './parseComposeSegments.js';
@@ -61,9 +59,6 @@ type Deps = {
   readonly users: UserRepository;
   readonly createTask: CreateTask;
   readonly getOrCreateInbox: GetOrCreateInbox;
-  readonly accept: AcceptTaskDelegation;
-  readonly decline: DeclineTaskDelegation;
-  readonly assignToProject: MoveTaskToProject;
   readonly sendNotification: SendAgentTelegramNotification;
   readonly client: TelegramClient;
   readonly idGen: () => string;
@@ -129,7 +124,8 @@ function mdToPlain(s: string): string {
 }
 
 // --- callback_data ---------------------------------------------------------
-// tp:<d>:<idx|i|?|pN>  td:<d>:<idx|n|pN>  tc:<d>  tx:<d>  da:<delegationId>  dd:<delegationId>
+// tp:<d>:<idx|i|?|pN>  td:<d>:<idx|n|pN>  tc:<d>  tx:<d>. Легаси da:/dd: (принять/
+// отказать) удалены — parseCallback вернёт null, старые кнопки гаснут молча.
 type ProjectSel =
   | { readonly type: 'idx'; readonly idx: number }
   | { readonly type: 'inbox' }
@@ -163,8 +159,6 @@ type ParsedCallback =
   | { readonly kind: 'delegate'; readonly draftId: string; readonly sel: DelegateSel }
   | { readonly kind: 'confirm'; readonly draftId: string }
   | { readonly kind: 'cancel'; readonly draftId: string }
-  | { readonly kind: 'accept'; readonly delegationId: string }
-  | { readonly kind: 'decline'; readonly delegationId: string }
   // --- AI-сегменты (compose) ---
   | { readonly kind: 'seg-create'; readonly draftId: string }
   | { readonly kind: 'seg-edit'; readonly draftId: string; readonly seg: number }
@@ -203,10 +197,6 @@ function parseCallback(data: string | undefined): ParsedCallback {
       return { kind: 'confirm', draftId: rest };
     case 'tx':
       return { kind: 'cancel', draftId: rest };
-    case 'da':
-      return { kind: 'accept', delegationId: rest };
-    case 'dd':
-      return { kind: 'decline', delegationId: rest };
     // --- AI-сегменты ---
     case 'ac':
       return rest ? { kind: 'seg-create', draftId: rest } : null;
@@ -318,7 +308,8 @@ function clearMembers(o: TelegramDraftOffered | null): TelegramDraftOffered | nu
 type Card = { readonly text: string; readonly replyMarkup?: InlineKeyboardMarkup };
 
 // Конструктор задач: парсит `+проект текст @делегат`, ведёт многошаговый выбор кнопками,
-// создаёт задачу (и при наличии делегата — делегирует с кнопками Принять/Отказать).
+// создаёт задачу (и при наличии делегата — делегация мгновенно accepted, делегату шлётся
+// карточка с кнопками «Завершить»/«Комментировать»/«Открыть»).
 export class TelegramComposerService {
   constructor(private readonly deps: Deps) {}
 
@@ -614,8 +605,6 @@ export class TelegramComposerService {
       await this.deps.client.answerCallbackQuery(cq.id);
       return;
     }
-    if (cb.kind === 'accept') return this.handleAccept(cq, cb.delegationId);
-    if (cb.kind === 'decline') return this.handleDecline(cq, cb.delegationId);
 
     const draft = await this.deps.drafts.getById(cb.draftId);
     if (!draft) {
@@ -769,17 +758,19 @@ export class TelegramComposerService {
 
     try {
       if (draft.delegateUserId) {
-        // Делегирование возможно только для inbox-задач → создаём во «Входящие».
-        const inbox = await this.deps.getOrCreateInbox.execute(userId);
+        // Мгновенное делегирование (спека §4): задача создаётся СРАЗУ в выбранном
+        // проекте (или во «Входящих», если проект не назван), делегация — accepted
+        // при создании. Ветки «перенос в проект после accept» больше нет.
+        const targetId =
+          draft.projectId ?? (await this.deps.getOrCreateInbox.execute(userId)).id;
         const task = await this.deps.createTask.execute({
-          projectId: inbox.id,
+          projectId: targetId,
           ownerUserId: userId,
           description: text,
           status: draft.targetStatus ?? DEFAULT_COLUMN,
           delegateUserId: draft.delegateUserId,
         });
         const delegationId = task.delegation?.id ?? null;
-        // confirmed-черновик живёт долго: на accept нужен intended project_id.
         await this.deps.drafts.patch(draft.id, {
           status: 'confirmed',
           delegationId,
@@ -791,24 +782,22 @@ export class TelegramComposerService {
             tgMessageId: messageId,
             recipientUserId: userId,
             taskId: task.id,
-            projectId: inbox.id,
+            projectId: targetId,
           });
         }
-        await this.notifyDelegate(draft, task.id, inbox.id, delegationId, userId, text);
+        await this.notifyDelegate(draft, task.id, targetId, delegationId, userId, text);
 
         const delegateName =
           (await this.deps.users.getById(draft.delegateUserId))?.displayName ?? 'участнику';
-        const projName = draft.projectId
-          ? ((await this.deps.projects.getById(draft.projectId))?.name ?? 'проект')
-          : 'Входящие';
+        const projName = await this.projNameOf(draft.projectId);
         if (messageId) {
           await this.edit(
             chatId,
             messageId,
-            `✅ Задача делегирована <b>${escapeHtml(delegateName)}</b> (контекст: <b>${escapeHtml(projName)}</b>).\n📝 ${markdownToTelegramHtml(excerpt(text))}\n\n⏳ Жду ответа: принять / отказать.`,
+            `✅ Задача создана в <b>${escapeHtml(projName)}</b> и поручена <b>${escapeHtml(delegateName)}</b>.\n📝 ${markdownToTelegramHtml(excerpt(text))}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
           );
         }
-        await this.deps.client.answerCallbackQuery(cqId, { text: 'Делегировано' });
+        await this.deps.client.answerCallbackQuery(cqId, { text: 'Создано и поручено' });
       } else {
         const targetId = draft.projectId ?? (await this.deps.getOrCreateInbox.execute(userId)).id;
         const task = await this.deps.createTask.execute({
@@ -848,10 +837,13 @@ export class TelegramComposerService {
     }
   }
 
+  // TG-карточка делегату: делегация уже принята автоматически — кнопки действий по
+  // задаче («Завершить»/«Комментировать»), НЕ «Принять/Отказать». Reply на карточку =
+  // комментарий (существующий механизм telegram_task_messages).
   private async notifyDelegate(
     draft: TelegramTaskDraft,
     taskId: string,
-    inboxId: string,
+    projectId: string,
     delegationId: string | null,
     creatorUserId: string,
     text: string,
@@ -863,23 +855,20 @@ export class TelegramComposerService {
       ? ((await this.deps.projects.getById(draft.projectId))?.name ?? null)
       : null;
     const ctx = projName ? ` Проект: <b>${escapeHtml(projName)}</b>.` : ' (во «Входящие»).';
-    const msg = `👤 <b>${escapeHtml(creatorName)}</b> делегирует тебе задачу:\n📝 <i>${mdToPlain(excerpt(text))}</i>.${ctx}`;
-    const replyMarkup: InlineKeyboardMarkup = {
-      inline_keyboard: [
-        [
-          { text: '✅ Принять', callback_data: `da:${delegationId}` },
-          { text: '❌ Отказать', callback_data: `dd:${delegationId}` },
-        ],
-      ],
-    };
+    const msg = `👤 <b>${escapeHtml(creatorName)}</b> поручил(а) тебе задачу:\n📝 <i>${mdToPlain(excerpt(text))}</i>.${ctx}`;
     const res = await this.deps.sendNotification.execute({
       userId: draft.delegateUserId,
       text: msg,
       parseMode: 'HTML',
       kind: 'task_delegation',
       taskId,
-      replyMarkup,
-      skipPrefsCheck: true, // actionable — должен дойти независимо от prefs
+      replyMarkup: {
+        inline_keyboard: [
+          ...taskActionKeyboard(taskId).inline_keyboard,
+          [{ text: 'Открыть в ProjectsFlow', url: `${this.deps.appUrl.replace(/\/$/, '')}/projects/${projectId}?task=${taskId}` }],
+        ],
+      },
+      skipPrefsCheck: true, // важное — должно дойти независимо от prefs
       skipDedupCheck: true,
     });
     if (res.status === 'ok') {
@@ -888,91 +877,8 @@ export class TelegramComposerService {
         tgMessageId: res.messageId,
         recipientUserId: draft.delegateUserId,
         taskId,
-        projectId: inboxId,
+        projectId,
       });
-    }
-  }
-
-  // --- Принять / Отказать (нажал делегат) ---
-  private async handleAccept(cq: TelegramCallbackQuery, delegationId: string): Promise<void> {
-    const userId = await this.deps.users.findUserIdByTelegramUserId(cq.from.id);
-    if (!userId) {
-      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Сначала привяжи Telegram (/start).', showAlert: true });
-      return;
-    }
-    const chatId = cq.message?.chat.id;
-    const messageId = cq.message?.message_id;
-    try {
-      const delegation = await this.deps.accept.execute(delegationId, userId);
-      // Если был назван проект и делегат — его участник, переносим задачу в проект
-      // (иначе делегирование заархивируется и делегат потеряет доступ — оставляем в inbox).
-      let movedInfo = '';
-      const draft = await this.deps.drafts.getByDelegationId(delegationId);
-      if (draft?.projectId) {
-        const isMember = await this.deps.members.findForProject(draft.projectId, userId);
-        if (isMember) {
-          try {
-            await this.deps.assignToProject.execute(
-              delegation.taskId,
-              draft.projectId,
-              draft.creatorUserId,
-            );
-            const proj = await this.deps.projects.getById(draft.projectId);
-            movedInfo = proj ? ` Задача перенесена в «${proj.name}».` : '';
-          } catch (err) {
-            console.warn('[tg-composer] assignToProject on accept failed:', err);
-          }
-        }
-      }
-      if (chatId && messageId) {
-        await this.edit(chatId, messageId, `✅ Принято.${movedInfo}`);
-      }
-      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Принято' });
-      // TG-пинг создателю (in-app/email уже шлёт use-case; здесь — мгновенный TG).
-      await this.pingCreator(delegation.creatorUserId, delegation.taskId,
-        `✅ <b>${escapeHtml(delegation.delegateDisplayName)}</b> принял делегированную задачу.${movedInfo}`);
-    } catch (err) {
-      await this.answerDelegationError(cq.id, err);
-    }
-  }
-
-  private async handleDecline(cq: TelegramCallbackQuery, delegationId: string): Promise<void> {
-    const userId = await this.deps.users.findUserIdByTelegramUserId(cq.from.id);
-    if (!userId) {
-      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Сначала привяжи Telegram (/start).', showAlert: true });
-      return;
-    }
-    const chatId = cq.message?.chat.id;
-    const messageId = cq.message?.message_id;
-    try {
-      const delegation = await this.deps.decline.execute(delegationId, userId);
-      if (chatId && messageId) await this.edit(chatId, messageId, '❌ Ты отклонил задачу.');
-      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Отклонено' });
-      await this.pingCreator(delegation.creatorUserId, delegation.taskId,
-        `❌ <b>${escapeHtml(delegation.delegateDisplayName)}</b> отклонил делегированную задачу.`);
-    } catch (err) {
-      await this.answerDelegationError(cq.id, err);
-    }
-  }
-
-  private async pingCreator(creatorUserId: string, taskId: string, text: string): Promise<void> {
-    // Неизвестный kind → шлётся без pref-чека (это мгновенный статус-апдейт по действию).
-    await this.deps.sendNotification
-      .execute({ userId: creatorUserId, text, parseMode: 'HTML', kind: 'task_delegation_resolved', taskId })
-      .catch(() => {});
-  }
-
-  private async answerDelegationError(cqId: string, err: unknown): Promise<void> {
-    const name = err instanceof Error ? err.constructor.name : '';
-    if (name === 'DelegationWrongStateError') {
-      await this.deps.client.answerCallbackQuery(cqId, { text: 'Делегирование уже неактуально.', showAlert: true });
-    } else if (name === 'NotDelegateError') {
-      await this.deps.client.answerCallbackQuery(cqId, { text: 'Это делегирование адресовано не тебе.', showAlert: true });
-    } else if (name === 'DelegationNotFoundError') {
-      await this.deps.client.answerCallbackQuery(cqId, { text: 'Делегирование не найдено.', showAlert: true });
-    } else {
-      console.warn('[tg-composer] delegation action failed:', err);
-      await this.deps.client.answerCallbackQuery(cqId, { text: 'Не удалось обработать. Попробуй через интерфейс.', showAlert: true });
     }
   }
 
@@ -1667,7 +1573,7 @@ export class TelegramComposerService {
     await this.deps.client.answerCallbackQuery(cqId, { text: created > 0 ? 'Создано' : 'Не удалось' });
   }
 
-  // TG-уведомление делегату сегмента с кнопками Принять/Отказать (in-app/email шлёт CreateTask).
+  // TG-уведомление делегату сегмента: кнопки Завершить/Комментировать (in-app/email шлёт CreateTask).
   private async notifySegmentDelegate(
     seg: TelegramDraftSegment,
     taskId: string,
@@ -1680,22 +1586,19 @@ export class TelegramComposerService {
     const creator = await this.deps.users.getById(creatorUserId);
     const creatorName = creator?.displayName ?? 'Коллега';
     const projName = await this.projNameOf(seg.projectId);
-    const msg = `👤 <b>${escapeHtml(creatorName)}</b> делегирует тебе задачу:\n📝 <i>${markdownToTelegramHtml(excerpt(description))}</i>. Проект: <b>${escapeHtml(projName)}</b>.`;
-    const replyMarkup: InlineKeyboardMarkup = {
-      inline_keyboard: [
-        [
-          { text: '✅ Принять', callback_data: `da:${delegationId}` },
-          { text: '❌ Отказать', callback_data: `dd:${delegationId}` },
-        ],
-      ],
-    };
+    const msg = `👤 <b>${escapeHtml(creatorName)}</b> поручил(а) тебе задачу:\n📝 <i>${markdownToTelegramHtml(excerpt(description))}</i>. Проект: <b>${escapeHtml(projName)}</b>.`;
     const res = await this.deps.sendNotification.execute({
       userId: seg.assigneeUserId,
       text: msg,
       parseMode: 'HTML',
       kind: 'task_delegation',
       taskId,
-      replyMarkup,
+      replyMarkup: {
+        inline_keyboard: [
+          ...taskActionKeyboard(taskId).inline_keyboard,
+          [{ text: 'Открыть в ProjectsFlow', url: `${this.deps.appUrl.replace(/\/$/, '')}/projects/${projectId}?task=${taskId}` }],
+        ],
+      },
       skipPrefsCheck: true,
       skipDedupCheck: true,
     });

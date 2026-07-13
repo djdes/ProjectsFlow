@@ -45,7 +45,31 @@ export type JoinRequestPayload = {
   readonly actorDisplayName: string;
 };
 
-// Делегирование inbox-задачи. Прилетает делегату с кнопками Accept/Decline.
+// Приглашение в пространство: кнопка «Принять» (token → /invites/:token/accept).
+export type WorkspaceInvitePayload = {
+  readonly type: 'workspace_invite';
+  readonly workspaceId: string;
+  readonly workspaceName: string;
+  readonly role: 'editor' | 'viewer';
+  readonly inviteId: string;
+  readonly token: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
+// Упоминание в чате пространства. Клик ведёт во вкладку «Чат» сайдбара.
+export type ChatMentionPayload = {
+  readonly type: 'chat_mention';
+  readonly workspaceId: string;
+  readonly workspaceName: string;
+  readonly messageId: string;
+  readonly messageSeq: number;
+  readonly messageExcerpt: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
+// Информационное: делегация создаётся сразу принятой, кнопок нет.
 export type TaskDelegationPayload = {
   readonly type: 'task_delegation';
   readonly delegationId: string;
@@ -55,8 +79,8 @@ export type TaskDelegationPayload = {
   readonly actorDisplayName: string;
 };
 
-// Ответ делегата (accepted/declined). Прилетает создателю.
-// actor = делегат.
+// Делегат снял(а) с себя задачу (relinquish). resolution:'accepted' — легаси-записи старого
+// флоу. actor = делегат.
 export type TaskDelegationResolvedPayload = {
   readonly type: 'task_delegation_resolved';
   readonly delegationId: string;
@@ -113,13 +137,15 @@ export type SupportTicketPayload = {
 export type NotificationPayload =
   | CommentMentionPayload
   | ProjectInvitePayload
+  | WorkspaceInvitePayload
   | JoinRequestPayload
   | TaskDelegationPayload
   | TaskDelegationResolvedPayload
   | TaskAssignedToProjectPayload
   | ServerAlertPayload
   | DailyDigestPayload
-  | SupportTicketPayload;
+  | SupportTicketPayload
+  | ChatMentionPayload;
 
 export type Notification = {
   readonly id: string;

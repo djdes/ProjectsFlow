@@ -56,12 +56,14 @@ export function DelegateTaskButton({
       : true; // без delegation caller — владелец задачи (= создатель), иначе он бы её не видел
 
   // Участников грузим ВСЕГДА (селектор виден всегда). Себя исключаем — «Я» отдельным пунктом.
+  // Viewer'ов тоже исключаем — сервер отвергает viewer'а как делегата
+  // (DelegateNotProjectMemberError), показывать его в списке — вести юзера к error-toast'у.
   useEffect(() => {
     let cancelled = false;
     const load = projectId
       ? projectRepository.listMembers(projectId).then((list) =>
           list
-            .filter((m) => m.userId !== currentUserId)
+            .filter((m) => m.userId !== currentUserId && m.role !== 'viewer')
             .map((m) => ({
               id: m.userId,
               displayName: m.user.displayName,
@@ -207,7 +209,7 @@ export function DelegateTaskButton({
           </>
         ) : (
           <div className="px-2 py-1.5 text-xs text-muted-foreground">
-            В проекте пока нет других участников — задача за вами. Пригласите кого-то, чтобы делегировать.
+            В проекте пока нет других участников — задача за вами. Пригласите кого-то в пространство, чтобы делегировать.
           </div>
         )}
       </DropdownMenuContent>

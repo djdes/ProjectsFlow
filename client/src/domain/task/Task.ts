@@ -93,7 +93,7 @@ export type Task = {
   readonly parentTaskId: string | null;
   // Приоритет 1..4 (1=urgent, 4=low). null = без приоритета. См. db/041.
   readonly priority: TaskPriority | null;
-  // Активная (pending|accepted) делегация — null если задача не делегирована.
+  // Активная (accepted) делегация — null если задача не делегирована.
   // Заполняется list-endpoint'ом left-join'ом. Optional: undefined = «не загружено».
   readonly delegation?: TaskDelegation | null;
 };

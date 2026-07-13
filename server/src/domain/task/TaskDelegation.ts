@@ -1,6 +1,6 @@
 // Делегирование одной задачи одному пользователю. См. db/039, db/054.
 // Работает для inbox-задач И задач именованных проектов (см. DelegateExistingTask).
-// One-to-one: одна активная (pending|accepted) делегация на task. Архивные/declined/
+// One-to-one: одна активная (accepted) делегация на task. Архивные/declined/
 // withdrawn остаются для истории.
 //
 // creatorUserId/creatorDisplayName = делегатор. Источник — персистентная колонка
@@ -28,14 +28,9 @@ export const TASK_DELEGATION_STATUSES: readonly TaskDelegationStatus[] = [
   'pending_invite',
 ];
 
-// Активные = занимают слот «одна делегация на задачу». pending — ждёт ответа,
-// accepted — делегат принял и работает, pending_invite — ждёт вступления в проект.
-// Остальные — терминальные.
-export const ACTIVE_DELEGATION_STATUSES: readonly TaskDelegationStatus[] = [
-  'pending',
-  'accepted',
-  'pending_invite',
-];
+// Активная делегация — только accepted: делегирование мгновенное (спека §4), pending/
+// pending_invite больше не создаются (см. Task 11); legacy-строки добиты миграцией 112.
+export const ACTIVE_DELEGATION_STATUSES: readonly TaskDelegationStatus[] = ['accepted'];
 
 export type TaskDelegation = {
   readonly id: string;

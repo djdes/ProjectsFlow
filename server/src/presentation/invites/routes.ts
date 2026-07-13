@@ -1,11 +1,14 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import type { GetInviteByToken } from '../../application/project/GetInviteByToken.js';
 import type { AcceptProjectInvite } from '../../application/project/AcceptProjectInvite.js';
+import type { AcceptWorkspaceInvite } from '../../application/workspace/AcceptWorkspaceInvite.js';
+import { WorkspaceInviteNotFoundError } from '../../domain/workspace/errors.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 type Deps = {
   readonly getByToken: GetInviteByToken;
-  readonly accept: AcceptProjectInvite;
+  readonly acceptWorkspace: AcceptWorkspaceInvite;
+  readonly acceptProject: AcceptProjectInvite;
 };
 
 export function invitesRouter(deps: Deps): Router {
@@ -23,7 +26,10 @@ export function invitesRouter(deps: Deps): Router {
       const preview = await deps.getByToken.execute(token);
       res.json({
         preview: {
-          projectName: preview.projectName,
+          kind: preview.kind,
+          targetName: preview.targetName,
+          // Легаси-алиас для клиента до правки InvitePage (клиентская секция).
+          projectName: preview.targetName,
           role: preview.role,
           inviterDisplayName: preview.inviterDisplayName,
           inviteEmail: preview.inviteEmail,
@@ -35,7 +41,8 @@ export function invitesRouter(deps: Deps): Router {
     }
   });
 
-  // Accept — требует session (юзер должен быть залогинен).
+  // Accept — требует session. Токены двух поколений: сначала workspace_invites,
+  // затем легаси project_invites (спека §3.1). Ответ: { workspaceId } | { projectId }.
   router.post(
     '/:token/accept',
     requireAuth,
@@ -46,7 +53,15 @@ export function invitesRouter(deps: Deps): Router {
           res.status(404).json({ error: 'invite_not_found' });
           return;
         }
-        const { projectId } = await deps.accept.execute(token, req.user!.id);
+        try {
+          const { workspaceId } = await deps.acceptWorkspace.execute(token, req.user!.id);
+          res.json({ workspaceId });
+          return;
+        } catch (err) {
+          if (!(err instanceof WorkspaceInviteNotFoundError)) throw err;
+          // Не workspace-токен — пробуем легаси project_invites.
+        }
+        const { projectId } = await deps.acceptProject.execute(token, req.user!.id);
         res.json({ projectId });
       } catch (e) {
         next(e);

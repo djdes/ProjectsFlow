@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Copy, Loader2, Trash2, UserPlus } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,17 +23,27 @@ import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { WorkspaceRole } from '@/domain/workspace/Workspace';
+import type { WorkspaceInvite } from '@/domain/workspace/WorkspaceInvite';
+import { useContainer } from '@/infrastructure/di/container';
+import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import { useRenameWorkspace } from '@/presentation/hooks/useRenameWorkspace';
 import { useDeleteWorkspace } from '@/presentation/hooks/useDeleteWorkspace';
 import { useWorkspaceMembers } from '@/presentation/hooks/useWorkspaceMembers';
 import { useWorkspaceProjects } from '@/presentation/hooks/useWorkspaceProjects';
 import { EmojiGrid } from '@/presentation/components/forms/EmojiGrid';
+import { InviteDialog } from '@/presentation/components/project/InviteDialog';
 import { WorkspaceIcon } from '@/presentation/layout/WorkspaceIcon';
 import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 
 const ROLE_SELECT_CLASS =
   'h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
+
+const WS_ROLE_LABEL: Record<WorkspaceRole, string> = {
+  owner: 'Владелец',
+  editor: 'Редактор',
+  viewer: 'Наблюдатель',
+};
 
 export function WorkspaceSettingsPage(): React.ReactElement {
   const { workspaceId = '' } = useParams<{ workspaceId: string }>();
@@ -84,6 +94,7 @@ export function WorkspaceSettingsPage(): React.ReactElement {
 
       <RenameCard workspaceId={workspace.id} initialName={workspace.name} initialIcon={workspace.icon} disabled={!isOwner} />
       <MembersCard workspaceId={workspace.id} canManage={isOwner && !isDefault} autoManaged={isDefault} />
+      {isOwner && !isDefault && <InvitesCard workspaceId={workspace.id} />}
       <ProjectsCard workspaceId={workspace.id} />
       {isOwner && !isDefault && (
         <DangerZoneCard
@@ -176,8 +187,9 @@ function MembersCard({
   autoManaged?: boolean;
 }): React.ReactElement {
   const { members, loading, add, changeRole, remove } = useWorkspaceMembers(workspaceId);
+  const { user: currentUser } = useCurrentUser();
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<WorkspaceRole>('member');
+  const [role, setRole] = useState<WorkspaceRole>('editor');
   const [adding, setAdding] = useState(false);
 
   const handleAdd = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
@@ -252,7 +264,8 @@ function MembersCard({
                       aria-label="Роль участника"
                     >
                       <option value="owner">Владелец</option>
-                      <option value="member">Участник</option>
+                      <option value="editor">Редактор</option>
+                      <option value="viewer">Наблюдатель</option>
                     </select>
                     <button
                       type="button"
@@ -270,9 +283,27 @@ function MembersCard({
                     </button>
                   </>
                 ) : (
-                  <span className="text-xs text-muted-foreground">
-                    {m.role === 'owner' ? 'Владелец' : 'Участник'}
-                  </span>
+                  <>
+                    <span className="text-xs text-muted-foreground">{WS_ROLE_LABEL[m.role]}</span>
+                    {currentUser?.id === m.userId && m.role !== 'owner' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-muted-foreground hover:text-destructive"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              'Выйти из пространства? Доступ вернёт только новое приглашение.',
+                            )
+                          ) {
+                            void handleRemove(m.userId);
+                          }
+                        }}
+                      >
+                        Выйти
+                      </Button>
+                    )}
+                  </>
                 )}
               </li>
             ))}
@@ -297,8 +328,8 @@ function MembersCard({
               onChange={(e) => setRole(e.target.value as WorkspaceRole)}
               aria-label="Роль нового участника"
             >
-              <option value="member">Участник</option>
-              <option value="owner">Владелец</option>
+              <option value="editor">Редактор</option>
+              <option value="viewer">Наблюдатель</option>
             </select>
             <Button type="submit" disabled={adding || email.trim().length === 0}>
               {adding ? 'Добавляем…' : 'Добавить'}
@@ -481,6 +512,121 @@ function DangerZoneCard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </Card>
+  );
+}
+
+function InvitesCard({ workspaceId }: { workspaceId: string }): React.ReactElement {
+  const { workspaceRepository } = useContainer();
+  const [invites, setInvites] = useState<WorkspaceInvite[] | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    workspaceRepository
+      .listInvites(workspaceId)
+      .then((list) => {
+        if (!cancelled) setInvites(list);
+      })
+      .catch(() => {
+        if (!cancelled) setInvites([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceRepository, workspaceId]);
+
+  const handleCreated = (invite: WorkspaceInvite): void => {
+    setInvites((prev) => [...(prev ?? []), invite]);
+    if (invite.url) {
+      void navigator.clipboard.writeText(invite.url).then(
+        () => toast.success('Ссылка скопирована'),
+        () => toast.success('Приглашение создано'),
+      );
+    }
+  };
+
+  const copyUrl = async (invite: WorkspaceInvite): Promise<void> => {
+    if (!invite.url) {
+      // Для существующих pending-инвайтов сервер не отдаёт token/url — только в момент create.
+      toast.error('Ссылка доступна только в момент создания. Отзови и создай новое.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(invite.url);
+      toast.success('Скопировано');
+    } catch {
+      toast.error('Не удалось скопировать.');
+    }
+  };
+
+  const revoke = async (invite: WorkspaceInvite): Promise<void> => {
+    if (!window.confirm('Отозвать приглашение?')) return;
+    try {
+      await workspaceRepository.deleteInvite(workspaceId, invite.id);
+      setInvites((prev) => (prev ?? []).filter((i) => i.id !== invite.id));
+      toast.success('Приглашение отозвано');
+    } catch (e) {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Приглашения</CardTitle>
+        <CardDescription>
+          Токен-ссылки в пространство: получатель открывает ссылку и получает доступ ко всем
+          проектам. Срок действия — 7 дней.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Button size="sm" variant="outline" onClick={() => setDialogOpen(true)}>
+          <UserPlus className="size-4" />
+          Создать приглашение
+        </Button>
+        {invites !== null && invites.length > 0 && (
+          <ul className="divide-y">
+            {invites.map((inv) => (
+              <li key={inv.id} className="flex items-center gap-3 py-2">
+                <div className="min-w-0 flex-1 text-sm">
+                  <p className="truncate">
+                    {inv.email ?? <span className="italic text-muted-foreground">без email</span>}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {inv.role === 'editor' ? 'редактор' : 'наблюдатель'} · истекает{' '}
+                    {inv.expiresAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => void copyUrl(inv)}
+                  aria-label="Скопировать ссылку"
+                >
+                  <Copy className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-destructive hover:text-destructive"
+                  onClick={() => void revoke(inv)}
+                  aria-label="Отозвать"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+      <InviteDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        workspaceId={workspaceId}
+        onCreated={handleCreated}
+      />
     </Card>
   );
 }

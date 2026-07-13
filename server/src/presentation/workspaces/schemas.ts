@@ -16,13 +16,26 @@ export const setCurrentSchema = z.object({
 
 export const addMemberSchema = z.object({
   email: z.string().email(),
-  role: z.enum(['owner', 'member']).optional(),
+  role: z.enum(['owner', 'editor', 'viewer']).optional(),
 });
 
 export const changeRoleSchema = z.object({
-  role: z.enum(['owner', 'member']),
+  role: z.enum(['owner', 'editor', 'viewer']),
 });
 
 export const moveProjectSchema = z.object({
   targetWorkspaceId: z.string().min(1),
+});
+
+export const createWorkspaceInviteSchema = z.object({
+  role: z.enum(['editor', 'viewer']),
+  // Информационный email «для кого» — опционален; пустая строка → null.
+  email: z
+    .string()
+    .trim()
+    .email('Невалидный email')
+    .max(255)
+    .nullable()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null)),
 });
