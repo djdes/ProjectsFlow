@@ -1,83 +1,74 @@
 import { useEffect, useState } from 'react';
-import { MoreVertical, Trash2, UserPlus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Settings2, UserPlus } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { Project } from '@/domain/project/Project';
-import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
+import type { WorkspaceMember, WorkspaceRole } from '@/domain/workspace/Workspace';
 import type { WorkspaceInvite } from '@/domain/workspace/WorkspaceInvite';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { OverviewSection } from '@/presentation/components/project/OverviewSection';
 import { InviteDialog } from './InviteDialog';
 
-const ROLE_LABEL: Record<ProjectRole, string> = {
+const ROLE_LABEL: Record<WorkspaceRole, string> = {
   owner: 'владелец',
   editor: 'редактор',
   viewer: 'наблюдатель',
 };
 
-const ROLE_BADGE_CLASS: Record<ProjectRole, string> = {
+const ROLE_BADGE_CLASS: Record<WorkspaceRole, string> = {
   owner: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
   editor: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
   viewer: 'bg-muted text-muted-foreground',
 };
 
+// Секция «Команда» на странице проекта. После унификации доступа команда — это участники
+// ПРОСТРАНСТВА проекта (read-only список). Управление ролями/удаление/инвайт-лист — на
+// странице настроек пространства (ссылка «Управлять командой» для owner'а).
 export function TeamSection({ project }: { project: Project }): React.ReactElement | null {
-  const { projectRepository } = useContainer();
+  const { workspaceRepository } = useContainer();
   const { user: currentUser } = useCurrentUser();
-  const [members, setMembers] = useState<ProjectMember[]>([]);
+  const { workspace } = useCurrentWorkspace();
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
-  const isOwner = project.role === 'owner';
-  // С permissions-обновлением invite_member=editor — редактор тоже может приглашать,
-  // видеть и отзывать pending-инвайты. Viewer — нет.
-  const canInvite = project.role === 'owner' || project.role === 'editor';
+  const isOwner = workspace?.role === 'owner';
+  const canInvite = workspace?.role === 'owner' || workspace?.role === 'editor';
 
-  // В inbox команды не бывает (см. spec, решение 3). Скрываем секцию целиком.
-  // Также защита: если как-то сервер отдал isInbox=true, мы не показываем UI.
+  // В inbox команды не бывает — секцию не показываем.
   const skip = project.isInbox;
+  const workspaceId = workspace?.id ?? null;
 
   useEffect(() => {
-    if (skip) return;
+    if (skip || !workspaceId) return;
     let cancelled = false;
     setLoading(true);
-    const loadAll = async (): Promise<void> => {
-      try {
-        const membersList = await projectRepository.listMembers(project.id);
-        if (cancelled) return;
-        setMembers(membersList);
-      } catch (e) {
-        if (!cancelled) {
-          toast.error(`Не удалось загрузить команду: ${(e as Error).message}`);
-        }
-      } finally {
+    workspaceRepository
+      .listMembers(workspaceId)
+      .then((list) => {
+        if (!cancelled) setMembers(list);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) toast.error(`Не удалось загрузить команду: ${(e as Error).message}`);
+      })
+      .finally(() => {
         if (!cancelled) setLoading(false);
-      }
-    };
-    void loadAll();
+      });
     return () => {
       cancelled = true;
     };
-  }, [project.id, projectRepository, canInvite, skip]);
+  }, [workspaceRepository, workspaceId, skip]);
 
   if (skip) return null;
 
   const handleInviteCreated = (invite: WorkspaceInvite): void => {
     if (invite.url) {
-      // Сразу копируем ссылку — самый частый следующий шаг.
       void navigator.clipboard.writeText(invite.url).then(
         () => toast.success('Ссылка скопирована'),
         () => toast.success('Приглашение создано'),
@@ -85,72 +76,33 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
     }
   };
 
-  const handleRoleChange = async (
-    member: ProjectMember,
-    newRole: Exclude<ProjectRole, 'owner'>,
-  ): Promise<void> => {
-    try {
-      await projectRepository.updateMemberRole(project.id, member.userId, newRole);
-      setMembers((prev) =>
-        prev.map((m) => (m.userId === member.userId ? { ...m, role: newRole } : m)),
-      );
-      toast.success('Роль обновлена');
-    } catch (e) {
-      toast.error(`Не удалось: ${(e as Error).message}`);
-    }
-  };
-
-  const handleRemoveMember = async (member: ProjectMember): Promise<void> => {
-    const isSelf = currentUser?.id === member.userId;
-    const confirmText = isSelf
-      ? 'Выйти из проекта? Доступ можно будет восстановить только новым приглашением.'
-      : `Удалить ${member.user.displayName} из проекта?`;
-    if (!window.confirm(confirmText)) return;
-    try {
-      await projectRepository.removeMember(project.id, member.userId);
-      setMembers((prev) => prev.filter((m) => m.userId !== member.userId));
-      toast.success(isSelf ? 'Ты вышел из проекта' : 'Участник удалён');
-    } catch (e) {
-      toast.error(`Не удалось: ${(e as Error).message}`);
-    }
-  };
-
-  const handleTransfer = async (member: ProjectMember): Promise<void> => {
-    if (
-      !window.confirm(
-        `Передать владение проектом «${project.name}» участнику ${member.user.displayName}? Ты станешь редактором.`,
-      )
-    )
-      return;
-    try {
-      await projectRepository.transferOwnership(project.id, member.userId);
-      toast.success('Владение передано. Обнови страницу.');
-      // Лениво обновляем locally — после refresh страница покажет реальные роли.
-      setMembers((prev) =>
-        prev.map((m) => {
-          if (m.userId === member.userId) return { ...m, role: 'owner' };
-          if (m.userId === currentUser?.id) return { ...m, role: 'editor' };
-          return m;
-        }),
-      );
-    } catch (e) {
-      toast.error(`Не удалось: ${(e as Error).message}`);
-    }
-  };
-
   return (
     <OverviewSection
       title="Команда"
       actions={
-        canInvite && (
-          <Button size="sm" variant="outline" onClick={() => setShowInviteDialog(true)}>
-            <UserPlus className="size-4" />
-            Пригласить
-          </Button>
-        )
+        <div className="flex items-center gap-1.5">
+          {isOwner && workspaceId && (
+            <Button asChild size="sm" variant="ghost" className="text-muted-foreground">
+              <Link to={`/workspaces/${workspaceId}/settings`}>
+                <Settings2 className="size-4" />
+                Управлять командой
+              </Link>
+            </Button>
+          )}
+          {canInvite && (
+            <Button size="sm" variant="outline" onClick={() => setShowInviteDialog(true)}>
+              <UserPlus className="size-4" />
+              Пригласить
+            </Button>
+          )}
+        </div>
       }
     >
       <div className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Участники пространства{workspace ? ` «${workspace.name}»` : ''} — им доступны все его
+          проекты.
+        </p>
         {loading ? (
           <div className="space-y-2">
             <div className="h-10 animate-pulse rounded-md bg-muted" />
@@ -161,22 +113,22 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
             {members.map((m) => (
               <li
                 key={m.userId}
-                className="group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/40"
+                className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/40"
               >
                 <Avatar className="size-8 shrink-0">
-                  {m.user.avatarUrl ? (
-                    <AvatarImage src={m.user.avatarUrl} alt={m.user.displayName} />
+                  {m.avatarUrl ? (
+                    <AvatarImage src={m.avatarUrl} alt={m.displayName ?? ''} />
                   ) : null}
-                  <AvatarFallback>{getInitials(m.user.displayName)}</AvatarFallback>
+                  <AvatarFallback>{getInitials(m.displayName ?? m.email ?? '?')}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">
-                    {m.user.displayName}
+                    {m.displayName ?? '—'}
                     {currentUser?.id === m.userId && (
                       <span className="ml-1 text-xs text-muted-foreground">(ты)</span>
                     )}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">{m.user.email}</p>
+                  <p className="truncate text-xs text-muted-foreground">{m.email}</p>
                 </div>
                 <span
                   className={cn(
@@ -186,54 +138,6 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
                 >
                   {ROLE_LABEL[m.role]}
                 </span>
-                {/* Меню owner'а: change role + remove + transfer. Editor/viewer не видят. */}
-                {isOwner && m.role !== 'owner' && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 opacity-0 transition-opacity group-hover:opacity-100"
-                        aria-label="Действия"
-                      >
-                        <MoreVertical className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuRadioGroup
-                        value={m.role}
-                        onValueChange={(v) =>
-                          void handleRoleChange(m, v as Exclude<ProjectRole, 'owner'>)
-                        }
-                      >
-                        <DropdownMenuRadioItem value="editor">Редактор</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="viewer">Наблюдатель</DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={() => void handleTransfer(m)}>
-                        Передать владение
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() => void handleRemoveMember(m)}
-                        className="text-destructive focus:text-destructive"
-                      >
-                        <Trash2 className="size-3.5" />
-                        Удалить
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-                {/* Свой self-exit для non-owner. */}
-                {!isOwner && currentUser?.id === m.userId && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs text-muted-foreground hover:text-destructive"
-                    onClick={() => void handleRemoveMember(m)}
-                  >
-                    Выйти
-                  </Button>
-                )}
               </li>
             ))}
           </ul>
@@ -243,6 +147,7 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
       <InviteDialog
         open={showInviteDialog}
         onClose={() => setShowInviteDialog(false)}
+        workspaceId={workspaceId ?? undefined}
         onCreated={handleInviteCreated}
       />
     </OverviewSection>

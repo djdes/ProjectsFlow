@@ -10,7 +10,7 @@ export type ChatRoom = {
   readonly kind: WorkspaceKind;
   readonly ownerUserId: string;
   // Роль текущего юзера в комнате — owner может модерировать (удалять) чужие сообщения.
-  readonly role: 'owner' | 'member';
+  readonly role: 'owner' | 'editor' | 'viewer';
   readonly memberCount: number;
   readonly unreadCount: number;
   readonly lastMessageSeq: number;

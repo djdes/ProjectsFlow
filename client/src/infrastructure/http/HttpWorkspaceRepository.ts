@@ -19,7 +19,8 @@ type WorkspaceDto = {
   icon: string | null;
   kind?: WorkspaceKind;
   ownerUserId: string;
-  role?: WorkspaceRole;
+  // Сервер старой версии мог отдавать 'member' — нормализуем через normalizeRole.
+  role?: string;
   projectCount?: number;
   memberCount?: number;
   isCurrent?: boolean;
@@ -28,13 +29,19 @@ type WorkspaceDto = {
 
 type MemberDto = {
   userId: string;
-  role: WorkspaceRole;
+  role?: string;
   displayName: string | null;
   email: string | null;
   avatarUrl: string | null;
 };
 
 type ProjectDto = { id: string; name: string; icon: string | null };
+
+// Старый бэк отдавал 'member' — маппим в 'editor' (миграция БД переводит роли так же).
+function normalizeRole(role: string | undefined): WorkspaceRole {
+  if (role === 'owner' || role === 'editor' || role === 'viewer') return role;
+  return 'editor';
+}
 
 type WorkspaceInviteDto = {
   id: string;
@@ -67,7 +74,7 @@ function fromDto(dto: WorkspaceDto): Workspace {
     // Старый бэк без kind → считаем командным (дефолт явно помечается миграцией db/079).
     kind: dto.kind ?? 'team',
     ownerUserId: dto.ownerUserId,
-    role: dto.role ?? 'member',
+    role: normalizeRole(dto.role),
     projectCount: dto.projectCount ?? 0,
     memberCount: dto.memberCount ?? 0,
     isCurrent: dto.isCurrent ?? false,
@@ -78,7 +85,7 @@ function fromDto(dto: WorkspaceDto): Workspace {
 function memberFromDto(dto: MemberDto): WorkspaceMember {
   return {
     userId: dto.userId,
-    role: dto.role,
+    role: normalizeRole(dto.role),
     displayName: dto.displayName ?? null,
     email: dto.email ?? null,
     avatarUrl: dto.avatarUrl ?? null,
