@@ -256,7 +256,11 @@ export function KanbanCard({
             сжимается). Сплошной bg-card маскирует текст под кнопками. */}
         {!selecting && !preview && (
           <div
-            className="pointer-events-none absolute right-2 top-2 z-20 flex items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:gap-1 max-sm:opacity-100 dark:ring-white/[0.08]"
+            // top-4 + -translate-y-1/2: центр плашки садится на центр ПЕРВОЙ строки
+            // (~16px от края) НЕЗАВИСИМО от её высоты (24px desktop / 32px тач) — на
+            // однострочной карточке кнопки строго по вертикали, на многострочной — по
+            // первой строке (как в Notion).
+            className="pointer-events-none absolute right-2 top-4 z-20 flex -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:gap-1 max-sm:opacity-100 dark:ring-white/[0.08]"
             {...stopDragProps}
           >
             {onQuickPromote && promoteNext && (
@@ -310,9 +314,9 @@ export function KanbanCard({
             // наведении плавно наслаивается на начало текста. На тач всегда виден (max-sm).
             // rounded-full bg-card маскирует символ под кружком.
             <div
-              // Чуть правее и ниже угла (запрос) — кружок «выполнено» садится ровно
-              // по центру первой строки, не жмётся в самый угол карточки.
-              className="pointer-events-none absolute left-2 top-2 z-20 rounded-full bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:opacity-100 dark:ring-white/[0.08]"
+              // Кружок «выполнено» центрируется на первой строке (top-4 + -translate-y-1/2),
+              // симметрично плашке действий справа — на однострочной карточке ровно по центру.
+              className="pointer-events-none absolute left-2 top-4 z-20 -translate-y-1/2 rounded-full bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:opacity-100 dark:ring-white/[0.08]"
               {...stopDragProps}
             >
               <InboxCheckbox
