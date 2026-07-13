@@ -7,8 +7,10 @@ import {
   MouseSensor,
   TouchSensor,
   defaultDropAnimationSideEffects,
+  rectIntersection,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -191,6 +193,40 @@ function toVisibleStatus(status: TaskStatus): TaskStatus {
   if (status === 'in_progress' || status === 'awaiting_clarification') return 'todo';
   return status;
 }
+
+// Коллизия для доски (Notion-точность): «over» — карточка, чей ВЕРТИКАЛЬНЫЙ ЦЕНТР
+// ближе всего к КУРСОРУ (а не по перекрытию перетаскиваемого блока). Итог: синяя
+// полоска встаёт в зазор рядом с курсором, а зона каждого зазора = пол-карточки
+// сверху + пол-карточки снизу (запрос юзера). Колонку выбираем по X курсора; в
+// пустой — сама колонка (дроп в конец).
+const boardCollision: CollisionDetection = (args) => {
+  const p = args.pointerCoordinates;
+  if (!p) return rectIntersection(args);
+  const containers = args.droppableContainers;
+  const col = containers.find((c) => {
+    const r = c.rect.current;
+    return c.data.current?.type === 'column' && r != null && p.x >= r.left && p.x <= r.right;
+  });
+  if (!col) return rectIntersection(args);
+  const colStatus = col.data.current?.status as TaskStatus | undefined;
+  const cards = containers.filter((c) => {
+    if (c.data.current?.type !== 'task' || c.rect.current == null) return false;
+    const st = (c.data.current?.task as Task | undefined)?.status;
+    return st != null && colStatus != null && toVisibleStatus(st) === toVisibleStatus(colStatus);
+  });
+  if (cards.length === 0) return [{ id: col.id }];
+  let best = cards[0]!;
+  let bestDist = Infinity;
+  for (const c of cards) {
+    const r = c.rect.current!;
+    const d = Math.abs(p.y - (r.top + r.height / 2));
+    if (d < bestDist) {
+      bestDist = d;
+      best = c;
+    }
+  }
+  return [{ id: best.id }];
+};
 
 // Длительность drop-анимации в ms. Используется и dnd-kit'ом для position-lerp'а оверлея,
 // и motion'ом для exit-анимации rotate/scale у обёртки preview — они должны быть равны.
@@ -1147,6 +1183,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
         return (
           <DndContext
             sensors={sensors}
+            collisionDetection={boardCollision}
             measuring={MEASURING_CONFIG}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
