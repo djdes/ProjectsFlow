@@ -345,22 +345,6 @@ export class HttpProjectRepository implements ProjectRepository {
     return members.map(memberFromDto);
   }
 
-  async updateMemberRole(
-    projectId: string,
-    userId: string,
-    role: Exclude<ProjectRole, 'owner'>,
-  ): Promise<void> {
-    await httpClient.patch<unknown>(`/projects/${projectId}/members/${userId}`, { role });
-  }
-
-  async removeMember(projectId: string, userId: string): Promise<void> {
-    await httpClient.delete<void>(`/projects/${projectId}/members/${userId}`);
-  }
-
-  async transferOwnership(projectId: string, toUserId: string): Promise<void> {
-    await httpClient.post<void>(`/projects/${projectId}/transfer`, { toUserId });
-  }
-
   async checkGitCollision(gitRepoUrl: string): Promise<GitCollision> {
     return httpClient.get<GitCollision>(
       `/projects/git-collision?url=${encodeURIComponent(gitRepoUrl)}`,

@@ -176,15 +176,9 @@ export interface ProjectRepository {
   // но затрагивает только favorite_sort_order для favorites текущего юзера.
   reorderFavorites(orderedIds: readonly string[]): Promise<void>;
 
-  // Multi-tenancy: members. Owner-only операции упадут 403 на сервере.
+  // Multi-tenancy: members (read-only с клиента — управление ролью/составом/владением
+  // переехало на уровень пространства, см. workspaceRepository).
   listMembers(projectId: string): Promise<ProjectMember[]>;
-  updateMemberRole(
-    projectId: string,
-    userId: string,
-    role: Exclude<ProjectRole, 'owner'>,
-  ): Promise<void>;
-  removeMember(projectId: string, userId: string): Promise<void>;
-  transferOwnership(projectId: string, toUserId: string): Promise<void>;
 
   // Git-collision → join-request: проверка совпадения репо + заявка на вступление +
   // её разрешение владельцем (accept/decline).

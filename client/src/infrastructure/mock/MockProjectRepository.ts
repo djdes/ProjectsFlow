@@ -1,5 +1,5 @@
 import type { Project } from '@/domain/project/Project';
-import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
+import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { ProjectNameAlreadyExistsError } from '@/domain/project/errors';
 import type {
   GitCollision,
@@ -237,23 +237,6 @@ export class MockProjectRepository implements ProjectRepository {
   // ошибки, чтобы лог дал понять что не так.
   listMembers(projectId: string): Promise<ProjectMember[]> {
     return Promise.reject(new Error(`Mock.listMembers(${projectId}): not implemented`));
-  }
-  updateMemberRole(
-    projectId: string,
-    userId: string,
-    role: Exclude<ProjectRole, 'owner'>,
-  ): Promise<void> {
-    return Promise.reject(
-      new Error(`Mock.updateMemberRole(${projectId}, ${userId}, ${role}): not implemented`),
-    );
-  }
-  removeMember(projectId: string, userId: string): Promise<void> {
-    return Promise.reject(new Error(`Mock.removeMember(${projectId}, ${userId}): not implemented`));
-  }
-  transferOwnership(projectId: string, toUserId: string): Promise<void> {
-    return Promise.reject(
-      new Error(`Mock.transferOwnership(${projectId} → ${toUserId}): not implemented`),
-    );
   }
   checkGitCollision(): Promise<GitCollision> {
     return Promise.resolve({ exists: false });

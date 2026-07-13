@@ -27,7 +27,7 @@ type Props = {
 // Single-select dropdown для выбора делегата при создании inbox-задачи.
 // Icon-only кнопка: UserPlus когда выбран делегат, User когда нет.
 // Список — люди из моих shared-проектов (без меня самого). При пустом списке
-// показывает hint «пригласите кого-то в проект».
+// показывает hint «пригласите кого-то в пространство».
 export function DelegateSelect({ value, onChange, disabled, className, projectId }: Props): React.ReactElement {
   const { projectRepository } = useContainer();
   const [members, setMembers] = useState<SharedMember[] | null>(null);
@@ -137,7 +137,7 @@ export function DelegateSelect({ value, onChange, disabled, className, projectId
         {members && members.length === 0 && (
           <div className="px-2 py-1.5 text-xs text-muted-foreground">
             Нет общих участников.<br />
-            Пригласите кого-то в проект — потом сможете делегировать.
+            Пригласите кого-то в пространство — потом сможете делегировать.
           </div>
         )}
       </DropdownMenuContent>
