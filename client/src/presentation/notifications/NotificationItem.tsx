@@ -11,8 +11,9 @@ const roleLabel: Record<'editor' | 'viewer', string> = {
   viewer: 'наблюдатель',
 };
 
-// Строка уведомления с действиями (принять/отклонить инвайт/делегацию/join-request).
-// Переиспользуется на странице /notifications и в ленте «Все»/«Требуется действие».
+// Строка уведомления с действиями (принять инвайт в пространство/проект, join-request;
+// делегирование — информационное). Переиспользуется на странице /notifications и в ленте
+// «Все»/«Требуется действие».
 export function NotificationItem({
   n,
   actions,
@@ -116,53 +117,50 @@ export function NotificationItem({
           </>
         )}
 
-        {payload.type === 'task_delegation' && (
+        {payload.type === 'workspace_invite' && (
           <>
             <p className="text-sm leading-tight">
-              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> делегировал вам задачу:
-            </p>
-            <p className="line-clamp-2 text-xs italic text-muted-foreground">
-              «{payload.taskExcerpt || '(без описания)'}»
+              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> приглашает вас в
+              пространство <span className="font-medium">«{payload.workspaceName}»</span> как{' '}
+              {roleLabel[payload.role]}
             </p>
             {delegationUi === 'accepted' ? (
-              <p className="pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">✓ Принято</p>
-            ) : delegationUi === 'declined' ? (
-              <p className="pt-1 text-xs text-muted-foreground">Отклонено</p>
+              <p className="clear-left pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                ✓ Принято
+              </p>
             ) : delegationUi === 'resolved' ? (
-              <p className="pt-1 text-xs text-muted-foreground">Уже обработано</p>
+              <p className="clear-left pt-1 text-xs text-muted-foreground">Уже обработано</p>
             ) : (
-              <div className="flex clear-left gap-2 pt-1">
+              <div className="clear-left pt-1">
                 <Button
                   size="sm"
-                  className="bg-emerald-600 hover:bg-emerald-700"
                   disabled={delegationUi === 'busy'}
                   onClick={(e) => {
                     e.stopPropagation();
-                    actions.handleAcceptDelegation(n);
+                    actions.handleAcceptWorkspaceInvite(n);
                   }}
                 >
                   Принять
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={delegationUi === 'busy'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    actions.handleDeclineDelegation(n);
-                  }}
-                >
-                  Отклонить
                 </Button>
               </div>
             )}
           </>
         )}
 
-        {payload.type === 'task_delegation_resolved' && (
+        {payload.type === 'task_delegation' && (
+          <>
+            <p className="text-sm leading-tight">
+              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> поручил вам задачу:
+            </p>
+            <p className="line-clamp-2 text-xs italic text-muted-foreground">
+              «{payload.taskExcerpt || '(без описания)'}»
+            </p>
+          </>
+        )}
+
+        {payload.type === 'task_delegation_resolved' && payload.resolution === 'declined' && (
           <p className="text-sm leading-tight">
-            <span className="font-medium">{payload.actorDisplayName}</span>{' '}
-            {payload.resolution === 'accepted' ? 'принял' : 'отклонил'} делегированную вами задачу
+            <span className="font-medium">{payload.actorDisplayName}</span> снял(а) с себя задачу
             {payload.taskExcerpt && (
               <>
                 {' '}
@@ -183,6 +181,18 @@ export function NotificationItem({
               </>
             )}
           </p>
+        )}
+
+        {payload.type === 'chat_mention' && (
+          <>
+            <p className="text-sm leading-tight">
+              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> упомянул(а) вас в
+              чате <span className="font-medium">«{payload.workspaceName}»</span>
+            </p>
+            {payload.messageExcerpt && (
+              <p className="line-clamp-2 text-xs text-muted-foreground">«{payload.messageExcerpt}»</p>
+            )}
+          </>
         )}
 
         {payload.type === 'server_alert' && (

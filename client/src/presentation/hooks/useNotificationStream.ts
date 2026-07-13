@@ -34,6 +34,8 @@ type RealtimeEvent =
 type StreamPayload =
   | { type: 'comment_mention'; projectName: string; actorDisplayName: string }
   | { type: 'project_invite'; projectName: string; actorDisplayName: string }
+  | { type: 'workspace_invite'; workspaceName: string; actorDisplayName: string }
+  | { type: 'chat_mention'; workspaceName: string; actorDisplayName: string }
   | { type: 'join_request'; projectName: string; requesterDisplayName: string };
 
 function toastFor(payload: StreamPayload): void {
@@ -41,8 +43,14 @@ function toastFor(payload: StreamPayload): void {
     case 'project_invite':
       toast(`${payload.actorDisplayName} пригласил вас в «${payload.projectName}»`);
       break;
+    case 'workspace_invite':
+      toast(`${payload.actorDisplayName} пригласил вас в пространство «${payload.workspaceName}»`);
+      break;
     case 'comment_mention':
       toast(`${payload.actorDisplayName} упомянул вас в «${payload.projectName}»`);
+      break;
+    case 'chat_mention':
+      toast(`${payload.actorDisplayName} упомянул вас в чате «${payload.workspaceName}»`);
       break;
     case 'join_request':
       toast(`${payload.requesterDisplayName} просит доступ к «${payload.projectName}»`);

@@ -1,8 +1,9 @@
-import type { ProjectInvitePreview } from '@/domain/project/ProjectInvite';
+import type { InviteAcceptResult, InvitePreview } from '@/domain/invite/InvitePreview';
 
-// Anon-friendly: GET preview не требует логина, accept — требует.
-// Используется страницей /invite/:token (см. presentation/pages/InvitePage.tsx).
+// Anon-friendly: GET preview не требует логина, accept — требует. Dual-token:
+// обслуживает и workspace-инвайты, и legacy project-инвайты (см. InvitePreview.kind).
+// Используется страницей /invite/:token и кнопкой «Принять» в уведомлениях.
 export interface InviteRepository {
-  getPreview(token: string): Promise<ProjectInvitePreview>;
-  accept(token: string): Promise<{ projectId: string }>;
+  getPreview(token: string): Promise<InvitePreview>;
+  accept(token: string): Promise<InviteAcceptResult>;
 }

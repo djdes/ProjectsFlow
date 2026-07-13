@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useCallback, useState } from 'react';
+import { cloneElement, isValidElement, useCallback, useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ChevronsLeft, ChevronsRight, Plus, Shield } from 'lucide-react';
@@ -24,6 +24,7 @@ import {
   AnimatedSearch,
 } from '@/presentation/components/nav/AnimatedNavIcons';
 import { CommunicationPanel } from '@/presentation/chat/CommunicationPanel';
+import { OPEN_CHAT_EVENT } from '@/presentation/chat/openChatEvent';
 import type { Project } from '@/domain/project/Project';
 import { SidebarProjectList } from './SidebarProjectList';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
@@ -82,6 +83,13 @@ export function Sidebar({
       /* localStorage недоступен — активная кнопка просто не персистится */
     }
   }, []);
+
+  // Клик по chat_mention-уведомлению в ленте — переключаемся на вкладку «Чат».
+  useEffect(() => {
+    const onOpenChat = (): void => setRailPersist('chat');
+    window.addEventListener(OPEN_CHAT_EVENT, onOpenChat);
+    return () => window.removeEventListener(OPEN_CHAT_EVENT, onOpenChat);
+  }, [setRailPersist]);
   // Нижняя область = чат только когда активен Чат; для Главная/Входящие/Поиск — проекты.
   const showChat = activeRail === 'chat';
 
