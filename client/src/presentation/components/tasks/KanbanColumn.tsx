@@ -6,14 +6,12 @@ import { SortableContext, type SortingStrategy } from '@dnd-kit/sortable';
 // дропа показывает только синяя полоска (DropIndicatorLine). Стратегия без сдвигов —
 // возвращает null для всех соседей (dnd-kit не применяет transform реордера).
 const noReflowStrategy: SortingStrategy = () => null;
-import { AnimatePresence } from 'motion/react';
 import { FileText, ListChecks, PanelRight, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { cn } from '@/lib/utils';
 import { KanbanCard } from './KanbanCard';
 import { ColumnMoreButton, useColumnPreview } from './ColumnPreview';
-import { DropIndicatorLine } from './DropIndicatorLine';
 import { TaskComposer } from './TaskComposer';
 import { IconPicker } from '@/presentation/components/project/IconPicker';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
@@ -251,7 +249,8 @@ export function KanbanColumn({
   const hiddenCount = rest.length - listTasks.length;
 
   // Единый рендер карточки (используется и в сессии, и в основном списке).
-  const renderCard = (t: Task): React.ReactElement => (
+  // dropLine — синяя полоска-индикатор дропа в зазоре над/под карточкой (absolute).
+  const renderCard = (t: Task, dropLine: 'before' | 'after' | null = null): React.ReactElement => (
     <KanbanCard
       task={t}
       onEdit={onEdit}
@@ -269,6 +268,7 @@ export function KanbanColumn({
       selectionMode={selectionMode}
       selected={selectedIds?.has(t.id) ?? false}
       onSelectToggle={onSelectToggle}
+      dropLine={dropLine}
     />
   );
 
@@ -453,31 +453,40 @@ export function KanbanColumn({
         ))}
         {inlineCard}
         <SortableContext items={listTasks.map((t) => t.id)} strategy={noReflowStrategy}>
-          {listTasks.map((t, idx) => (
-            <Fragment key={t.id}>
-              {/* «Готово» группируем по датам завершения: Сегодня / Вчера / Ранее. */}
-              {status === 'done' &&
-                (idx === 0 ||
-                  doneBucket((listTasks[idx - 1] ?? t).updatedAt) !== doneBucket(t.updatedAt)) && (
-                  <p className="px-1 pb-0.5 pt-1.5 text-[11px] font-medium text-muted-foreground/70 first:pt-0">
-                    {doneBucket(t.updatedAt)}
-                  </p>
-                )}
-              <AnimatePresence>
-                {dropTarget && dropTarget.overId === t.id && t.id !== activeId && (
-                  <DropIndicatorLine key={`drop-before-${t.id}`} />
-                )}
-              </AnimatePresence>
-              {renderCard(t)}
-            </Fragment>
-          ))}
+          {listTasks.map((t, idx) => {
+            // Синяя полоска дропа — ПОВЕРХ карточки в зазоре (absolute, не двигает
+            // соседей). 'before' у карточки, над которой держим; 'after' у последней
+            // при дропе в конец колонки.
+            const isLast = idx === listTasks.length - 1;
+            const dropLine: 'before' | 'after' | null =
+              dropTarget && dropTarget.overId === t.id && t.id !== activeId
+                ? 'before'
+                : dropTarget && dropTarget.overId === `column-${status}` && isLast && t.id !== activeId
+                  ? 'after'
+                  : null;
+            return (
+              <Fragment key={t.id}>
+                {/* «Готово» группируем по датам завершения: Сегодня / Вчера / Ранее. */}
+                {status === 'done' &&
+                  (idx === 0 ||
+                    doneBucket((listTasks[idx - 1] ?? t).updatedAt) !== doneBucket(t.updatedAt)) && (
+                    <p className="px-1 pb-0.5 pt-1.5 text-[11px] font-medium text-muted-foreground/70 first:pt-0">
+                      {doneBucket(t.updatedAt)}
+                    </p>
+                  )}
+                {renderCard(t, dropLine)}
+              </Fragment>
+            );
+          })}
         </SortableContext>
-        {/* Индикатор в конце колонки: при drop в пустую зону или пустая колонка */}
-        <AnimatePresence>
-          {dropTarget && dropTarget.overId === `column-${status}` && (
-            <DropIndicatorLine key={`drop-end-${status}`} />
-          )}
-        </AnimatePresence>
+        {/* Пустая колонка (нет карточек) — тонкая статичная полоска как цель дропа. */}
+        {listTasks.length === 0 && dropTarget && dropTarget.overId === `column-${status}` && (
+          <div className="pointer-events-none mx-1 flex items-center gap-1">
+            <span className="size-1.5 shrink-0 rounded-full bg-primary" />
+            <span className="h-0.5 flex-1 rounded-full bg-primary shadow-[0_0_6px_rgba(59,130,246,0.5)]" />
+            <span className="size-1.5 shrink-0 rounded-full bg-primary" />
+          </div>
+        )}
         {!selectionMode && <ColumnMoreButton preview={preview} />}
         {hiddenCount > 0 && (
           <span className="sr-only">{`Скрыто карточек: ${hiddenCount}`}</span>

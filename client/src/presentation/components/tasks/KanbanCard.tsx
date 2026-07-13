@@ -57,6 +57,9 @@ type Props = {
   selected?: boolean;
   // Тогл выбора с модификаторами клавиатуры (shift=диапазон, ctrl/cmd=точечно).
   onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
+  // Индикатор дропа (Notion): синяя полоска В ЗАЗОРЕ над/под карточкой — АБСОЛЮТНАЯ,
+  // не занимает место в потоке (соседи НЕ раздвигаются). 'before'/'after'/null.
+  dropLine?: 'before' | 'after' | null;
 };
 
 // Кастомный transition для reflow соседей при drag. Out-quart — плавнее дефолтного
@@ -83,6 +86,7 @@ export function KanbanCard({
   selectionMode = false,
   selected = false,
   onSelectToggle,
+  dropLine = null,
 }: Props): React.ReactElement {
   // В режиме выделения карточка не таскается и не открывает дравер — клик тогает выбор.
   const selecting = selectionMode && !preview;
@@ -218,6 +222,22 @@ export function KanbanCard({
           isDragging && !preview && 'cursor-grabbing opacity-30',
         )}
       >
+        {/* Индикатор дропа (Notion): синяя полоска В ЗАЗОРЕ над/под карточкой.
+            Абсолютная (zero-layout) — соседи НЕ раздвигаются, линия не задевает
+            карточки, просто появляется между ними (запрос: «не дёргать задачи»). */}
+        {dropLine && !preview && (
+          <span
+            aria-hidden
+            className={cn(
+              'pointer-events-none absolute inset-x-1 z-30 flex items-center gap-1',
+              dropLine === 'before' ? '-top-[5px]' : '-bottom-[5px]',
+            )}
+          >
+            <span className="size-1.5 shrink-0 rounded-full bg-primary" />
+            <span className="h-0.5 flex-1 rounded-full bg-primary shadow-[0_0_6px_rgba(59,130,246,0.5)]" />
+            <span className="size-1.5 shrink-0 rounded-full bg-primary" />
+          </span>
+        )}
         {/* 🔴 LIVE-индикатор: воркер прямо сейчас работает над задачей (есть running-сессия).
             На hover прячем — там всплывают кнопки действий в том же углу. */}
         {liveRunning && !preview && (

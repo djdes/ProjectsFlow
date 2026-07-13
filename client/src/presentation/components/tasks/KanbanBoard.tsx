@@ -685,6 +685,10 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     }, DROP_DURATION_MS);
     const { active, over } = e;
     if (!over) return;
+    // Дроп НА СЕБЯ (отпустил там же, не сдвинув) — no-op. Иначе over.id===active.id
+    // не находится в targetList (он отфильтрован), insertIndex падает в конец, и
+    // карточка «улетает в самый низ» (баг из фидбека).
+    if (over.id === active.id) return;
 
     const activeTask = tasks.find((t) => t.id === active.id);
     if (!activeTask) return;
