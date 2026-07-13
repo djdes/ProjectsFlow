@@ -68,8 +68,9 @@ type Props = {
   // E4: id открытой в drawer'е задачи (синий бордер) и только что перемещённой (синее выделение).
   openTaskId?: string | null;
   recentlyMovedId?: string | null;
-  // Drop target для этой колонки (null = курсор не над этой колонкой).
-  dropTarget?: { status: TaskStatus; overId: string } | null;
+  // Drop target для этой колонки (null = курсор не над этой колонкой). after —
+  // вставка ПОСЛЕ over-карточки (полоска снизу), иначе перед (сверху).
+  dropTarget?: { status: TaskStatus; overId: string; after?: boolean } | null;
   // taskId'ы с активной LIVE-сессией воркера — карточка рисует 🔴 точку.
   liveTaskIds?: ReadonlySet<string>;
   // Цвета колонки (пилюля заголовка + мягкая тонировка тела). Notion-стиль.
@@ -455,15 +456,28 @@ export function KanbanColumn({
         <SortableContext items={listTasks.map((t) => t.id)} strategy={noReflowStrategy}>
           {listTasks.map((t, idx) => {
             // Синяя полоска дропа — ПОВЕРХ карточки в зазоре (absolute, не двигает
-            // соседей). 'before' у карточки, над которой держим; 'after' у последней
-            // при дропе в конец колонки.
+            // соседей). Сторона (before/after) — по позиции курсора (dropTarget.after).
             const isLast = idx === listTasks.length - 1;
-            const dropLine: 'before' | 'after' | null =
-              dropTarget && dropTarget.overId === t.id && t.id !== activeId
-                ? 'before'
-                : dropTarget && dropTarget.overId === `column-${status}` && isLast && t.id !== activeId
-                  ? 'after'
-                  : null;
+            const activeIdx = activeId ? listTasks.findIndex((x) => x.id === activeId) : -1;
+            let dropLine: 'before' | 'after' | null = null;
+            if (dropTarget && dropTarget.overId === t.id && t.id !== activeId) {
+              const side = dropTarget.after ? 'after' : 'before';
+              // #5: не рисуем полоску на текущем месте перетаскиваемой карточки
+              // (её сосед сверху→after / снизу→before = тот же слот, дроп = no-op).
+              const isNoop =
+                activeIdx >= 0 &&
+                ((side === 'before' && idx === activeIdx + 1) ||
+                  (side === 'after' && idx === activeIdx - 1));
+              if (!isNoop) dropLine = side;
+            } else if (
+              dropTarget &&
+              dropTarget.overId === `column-${status}` &&
+              isLast &&
+              t.id !== activeId &&
+              activeIdx !== listTasks.length - 1 // active уже последняя → дроп в конец no-op
+            ) {
+              dropLine = 'after';
+            }
             return (
               <Fragment key={t.id}>
                 {/* «Готово» группируем по датам завершения: Сегодня / Вчера / Ранее. */}

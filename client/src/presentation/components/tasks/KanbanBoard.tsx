@@ -14,6 +14,7 @@ import {
   type DragStartEvent,
   type DropAnimation,
 } from '@dnd-kit/core';
+import { getEventCoordinates } from '@dnd-kit/utilities';
 import {
   ArrowDownNarrowWide,
   ArrowUpNarrowWide,
@@ -82,8 +83,8 @@ import {
   type VisibleKanbanStatus,
 } from '@/domain/kanban/KanbanSettings';
 import type { UnifiedDndRef } from './unifiedDndTypes';
-import { TaskDragPill } from './AssignedToMeBlock';
-import { splitTitleBody } from '@/lib/taskTitleBody';
+import { TaskDragPill, snapToCursor } from './AssignedToMeBlock';
+import { plainTaskTitle } from '@/lib/taskTitleBody';
 
 type Props = {
   projectId: string;
@@ -465,6 +466,9 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   const [dropTarget, setDropTarget] = useState<{
     status: TaskStatus;
     overId: string;
+    // Вставка ПОСЛЕ over-карточки (курсор ниже её центра), иначе перед ней. Синяя
+    // полоска рисуется снизу/сверху соответственно (Notion).
+    after?: boolean;
   } | null>(null);
   // 'lifted' — карточка приподнята (rotate+scale), 'settled' — лерпит обратно к identity.
   // Меняем на 'settled' в момент drop'а и держим activeId до конца drop-анимации, чтобы
@@ -647,6 +651,17 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     setDropTarget(null);
   };
 
+  // Курсор ниже вертикального центра over-карточки? → вставка ПОСЛЕ неё (полоска
+  // снизу), иначе перед (сверху). Курсор = точка активации + текущий delta драга.
+  const pointerBelowOverCenter = (e: DragOverEvent | DragEndEvent): boolean => {
+    const overRect = e.over?.rect;
+    if (!overRect) return false;
+    const coords = getEventCoordinates(e.activatorEvent);
+    if (!coords) return false;
+    const pointerY = coords.y + e.delta.y;
+    return pointerY > overRect.top + overRect.height / 2;
+  };
+
   const handleDragOver = (e: DragOverEvent): void => {
     const { active, over } = e;
     if (!over || !active) {
@@ -669,6 +684,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
       setDropTarget({
         status: toVisibleStatus(overTask.status),
         overId: String(over.id),
+        after: pointerBelowOverCenter(e),
       });
     } else {
       setDropTarget(null);
@@ -729,6 +745,10 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     } else {
       insertIndex = targetList.findIndex((t) => t.id === over.id);
       if (insertIndex === -1) insertIndex = targetList.length;
+      // Курсор ниже центра over-карточки → вставляем ПОСЛЕ неё (иначе перед). Это и
+      // чинит «верхняя карточка не двигалась на одну ниже»: дроп на нижнюю половину
+      // соседа теперь встаёт за него.
+      else if (pointerBelowOverCenter(e)) insertIndex += 1;
     }
 
     const beforeTask = insertIndex > 0 ? targetList[insertIndex - 1] : null;
@@ -740,11 +760,19 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     // вернул в done → просто игнорируем, карточка остаётся на месте.
     if (visibleColumn === 'done' && activeTask.status === 'done') return;
 
-    // No-op: дропнули туда же, где было.
+    // No-op: дропнули в ТОТ ЖЕ слот (соседи-до/после совпадают с текущими) — не
+    // трогаем. Сравниваем по фактическим соседям, а не индексам (устойчиво к
+    // before/after-логике).
     if (toVisibleStatus(activeTask.status) === visibleColumn) {
-      const currentList = grouped[visibleColumn];
-      const currentIndex = currentList.findIndex((t) => t.id === activeTask.id);
-      if (currentIndex === insertIndex || currentIndex === insertIndex - 1) return;
+      const fullList = grouped[visibleColumn];
+      const activePos = fullList.findIndex((t) => t.id === activeTask.id);
+      const curPrev = activePos > 0 ? fullList[activePos - 1] : null;
+      const curNext = activePos < fullList.length - 1 ? fullList[activePos + 1] : null;
+      if (
+        (beforeTask?.id ?? null) === (curPrev?.id ?? null) &&
+        (afterTask?.id ?? null) === (curNext?.id ?? null)
+      )
+        return;
     }
 
     const movedId = activeTask.id;
@@ -1123,11 +1151,10 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
           >
             {boardBody}
         {/* Drag-оверлей — полупрозрачная однострочная пилюля (как в инбоксе): сквозь
-            неё видно колонку, куда целишься; drag выглядит одинаково по всему сайту. */}
-        <DragOverlay dropAnimation={null}>
-          {activeTask ? (
-            <TaskDragPill title={splitTitleBody(activeTask.description ?? '').title} />
-          ) : null}
+            неё видно колонку, куда целишься. snapToCursor — пилюля центрируется на
+            курсоре по вертикали (запрос: задача под курсором ровно по центру). */}
+        <DragOverlay dropAnimation={null} modifiers={[snapToCursor]}>
+          {activeTask ? <TaskDragPill title={plainTaskTitle(activeTask.description ?? '')} /> : null}
         </DragOverlay>
           </DndContext>
         );

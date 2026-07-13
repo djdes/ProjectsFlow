@@ -74,7 +74,7 @@ import {
 } from './assignedGrouping';
 import { ColumnPreviewList } from './ColumnPreview';
 import { TaskTitleText } from './TaskTitleText';
-import { splitTitleBody } from '@/lib/taskTitleBody';
+import { splitTitleBody, plainTaskTitle } from '@/lib/taskTitleBody';
 import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import { InboxCheckbox } from './InboxCheckbox';
 import { DelegationBadge } from './DelegationBadge';
@@ -949,7 +949,7 @@ export function AssignedToMeBlock({
 // (запрос: «видно, кому делегирую»). Мелкий оверлей = легче целиться (+ коллизии по курсору,
 // см. dndCollision). Экспорт — его же рендерит InboxUnifiedDnd в общем контексте.
 export function AssignedDragPill({ item }: { item: AssignedTask }): React.ReactElement {
-  return <TaskDragPill title={splitTitleBody(item.description ?? '').title || 'Задача'} />;
+  return <TaskDragPill title={plainTaskTitle(item.description ?? '') || 'Задача'} />;
 }
 
 // Общая drag-пилюля (Notion-style «взял задачу»): полупрозрачная (~55%) однострочная

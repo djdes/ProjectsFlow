@@ -27,7 +27,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
-import { splitTitleBody } from '@/lib/taskTitleBody';
+import { plainTaskTitle } from '@/lib/taskTitleBody';
 import { MEASURING_CONFIG } from './KanbanBoard';
 import {
   AssignedDragPill,
@@ -418,7 +418,7 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
             пилюлей (запрос: drag из нижних канбанов тоже прозрачный и в строку). */}
         <DragOverlay dropAnimation={null} modifiers={[snapToCursor]}>
           {active?.origin === 'board' ? (
-            <TaskDragPill title={splitTitleBody(active.task.description ?? '').title} />
+            <TaskDragPill title={plainTaskTitle(active.task.description ?? '')} />
           ) : active?.origin === 'block' ? (
             <AssignedDragPill item={active.item} />
           ) : null}

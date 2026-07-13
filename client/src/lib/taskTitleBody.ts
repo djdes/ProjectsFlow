@@ -9,6 +9,13 @@ export type TitleBody = {
   readonly body: string;
 };
 
+// Чистый plain-текст заголовка задачи для мест, где нельзя рендерить компонент
+// (drag-пилюля, tooltip): первая строка → без `#`-префикса → без инлайн-markdown.
+export function plainTaskTitle(description: string): string {
+  const raw = splitTitleBody(description ?? '').title;
+  return stripInlineMarkdown(parseTitleHeading(raw).text).trim();
+}
+
 // Разбить описание по первому '\n': title = первая строка, body = остаток (с переносами).
 // Нет переноса строки → всё описание это заголовок, тело пустое.
 export function splitTitleBody(description: string): TitleBody {
