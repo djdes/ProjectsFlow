@@ -176,8 +176,14 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       .orderBy(asc(workspaceMembers.createdAt));
     return rows.map((r) => ({
       projectId,
+      // Создатель проекта — owner своего проекта поверх ws-роли (тот же апгрейд, что в
+      // projectRowVisibility/findForProject), чтобы «мой доступ» и «список участников»
+      // не разъезжались (создатель везде owner).
+      role:
+        r.member.userId === project.ownerId
+          ? ('owner' as ProjectRole)
+          : (r.member.role as ProjectRole),
       userId: r.member.userId,
-      role: r.member.role as ProjectRole,
       joinedAt: r.member.createdAt,
       user: toUser(r.user),
       notificationPrefs: parseJsonCol<NotificationPrefs | null>(r.prefs, null),

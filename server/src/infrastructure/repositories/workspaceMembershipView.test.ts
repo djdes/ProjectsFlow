@@ -47,6 +47,28 @@ test('projectRowVisibility: не-inbox без ws-строки → null', () => {
   assert.equal(projectRowVisibility(proj(), 'u2', null), null);
 });
 
+test('projectRowVisibility: создатель не-inbox проекта → owner поверх ws-роли editor', () => {
+  // owner_id === userId, ws-роль editor — создатель должен получить owner (danger zone).
+  assert.deepEqual(projectRowVisibility(proj({ ownerId: 'u-c' }), 'u-c', { role: 'editor' }), {
+    role: 'owner',
+  });
+  // И даже если ws-роль viewer — создатель всё равно owner своего проекта.
+  assert.deepEqual(projectRowVisibility(proj({ ownerId: 'u-c' }), 'u-c', { role: 'viewer' }), {
+    role: 'owner',
+  });
+});
+
+test('projectRowVisibility: НЕ-создатель получает свою ws-роль без апгрейда', () => {
+  for (const role of ['editor', 'viewer'] as const) {
+    assert.deepEqual(projectRowVisibility(proj({ ownerId: 'u-c' }), 'u2', { role }), { role });
+  }
+});
+
+test('deriveMembership: создатель не-inbox проекта → роль owner', () => {
+  const m = deriveMembership(proj({ ownerId: 'u-c' }), 'u-c', wm('u-c', 'editor'));
+  assert.deepEqual(m, { projectId: 'p1', userId: 'u-c', role: 'owner', joinedAt: WM_CREATED });
+});
+
 test('deriveMembership: ws-роль маппится 1:1 в роль проекта', () => {
   for (const role of ['owner', 'editor', 'viewer'] as const) {
     const m = deriveMembership(proj(), 'u2', wm('u2', role));

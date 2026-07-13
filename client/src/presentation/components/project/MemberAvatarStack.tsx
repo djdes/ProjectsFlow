@@ -16,10 +16,13 @@ const STACK = 4;
 export function MemberAvatarStack({
   members,
   canInvite = false,
+  ownerId,
 }: {
   members: ProjectMember[];
   // Право приглашать (editor+) включает форму приглашения в пространство в панели.
   canInvite?: boolean;
+  // Создатель проекта (projects.owner_id) — панель помечает его «Создал».
+  ownerId?: string;
 }): React.ReactElement | null {
   // Панель участников открывается по КЛИКУ (не по наведению) — по требованию.
   const [open, setOpen] = React.useState(false);
@@ -61,7 +64,7 @@ export function MemberAvatarStack({
         onOpenAutoFocus={(e) => e.preventDefault()}
         className="w-80 p-0"
       >
-        <MembersHoverPanel members={members} canInvite={canInvite} />
+        <MembersHoverPanel members={members} canInvite={canInvite} ownerId={ownerId} />
       </PopoverContent>
     </Popover>
   );

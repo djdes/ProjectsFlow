@@ -165,6 +165,7 @@ export function TasksPage(): React.ReactElement {
         <MemberAvatarStack
           members={members}
           canInvite={data.role === 'owner' || data.role === 'editor'}
+          ownerId={data.ownerId}
         />
       )}
       <ProjectResultLink projectId={data.id} />

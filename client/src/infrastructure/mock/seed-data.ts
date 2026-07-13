@@ -4,6 +4,7 @@ import type { User } from '@/domain/user/User';
 export const seedProjects: Project[] = [
   {
     id: '01HXXXXXXXXXXXXXXXXXXXXX01',
+    ownerId: '01HUSR0000000000000000001',
     name: 'Acme site',
     icon: null,
     status: 'active',
@@ -28,6 +29,7 @@ export const seedProjects: Project[] = [
   },
   {
     id: '01HXXXXXXXXXXXXXXXXXXXXX02',
+    ownerId: '01HUSR0000000000000000001',
     name: 'Mobile app',
     icon: null,
     status: 'active',
@@ -52,6 +54,7 @@ export const seedProjects: Project[] = [
   },
   {
     id: '01HXXXXXXXXXXXXXXXXXXXXX03',
+    ownerId: '01HUSR0000000000000000001',
     name: 'Internal CRM',
     icon: null,
     status: 'paused',
@@ -76,6 +79,7 @@ export const seedProjects: Project[] = [
   },
   {
     id: '01HXXXXXXXXXXXXXXXXXXXXX04',
+    ownerId: '01HUSR0000000000000000001',
     name: 'Marketing pages',
     icon: null,
     status: 'archived',

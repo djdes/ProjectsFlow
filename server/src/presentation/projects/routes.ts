@@ -260,7 +260,11 @@ export function projectsRouter(deps: Deps): Router {
       } catch {
         // авто-switch не критичен для отдачи проекта
       }
-      res.json({ project: toDto(project) });
+      // Реальная роль юзера в проекте, а не захардкоженный 'owner': иначе editor/viewer
+      // по прямой ссылке видели бы danger zone. getProject уже подтвердил read-доступ, значит
+      // membership есть; null возможен только для admin-bypass (не member) — ему отдаём 'owner'.
+      const membership = await deps.members.findForProject(id, req.user!.id);
+      res.json({ project: toDto(project, membership?.role ?? 'owner') });
     } catch (e) {
       next(e);
     }

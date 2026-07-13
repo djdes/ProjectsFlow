@@ -8,6 +8,9 @@ export type KbKind = 'none' | 'github' | 'local';
 
 export type Project = {
   readonly id: string;
+  // Создатель проекта (projects.owner_id). Для не-inbox после workspace-merge пространство
+  // может принадлежать другому — но создатель остаётся «Создал» и вправе удалить свой проект.
+  readonly ownerId: string;
   readonly name: string;
   // Эмодзи-иконка проекта (Notion-style). null = дефолтная папка в UI.
   readonly icon: string | null;

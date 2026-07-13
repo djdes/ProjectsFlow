@@ -40,6 +40,7 @@ export class MockProjectRepository implements ProjectRepository {
     if (inbox) return delay(inbox);
     inbox = {
       id: crypto.randomUUID(),
+      ownerId: '01HUSR0000000000000000001',
       name: 'Входящие',
       icon: null,
       status: 'active',
@@ -128,6 +129,7 @@ export class MockProjectRepository implements ProjectRepository {
 
     const project: Project = {
       id: crypto.randomUUID(),
+      ownerId: '01HUSR0000000000000000001',
       name: input.name,
       icon: null,
       status: 'active',

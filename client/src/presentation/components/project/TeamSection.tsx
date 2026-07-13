@@ -16,16 +16,21 @@ import { OverviewSection } from '@/presentation/components/project/OverviewSecti
 import { InviteDialog } from './InviteDialog';
 
 const ROLE_LABEL: Record<WorkspaceRole, string> = {
-  owner: 'владелец',
+  // «Владелец» — концепт пространства (показывается на настройках пространства), а не проекта:
+  // на уровне проекта роли — «редактор»/«наблюдатель», а создателя помечаем «создал» ниже.
+  owner: 'редактор',
   editor: 'редактор',
   viewer: 'наблюдатель',
 };
 
 const ROLE_BADGE_CLASS: Record<WorkspaceRole, string> = {
-  owner: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+  owner: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
   editor: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
   viewer: 'bg-muted text-muted-foreground',
 };
+
+// Бейдж создателя проекта (projects.owner_id) — нейтральное «создал», без роли «владелец».
+const CREATOR_BADGE_CLASS = 'bg-amber-500/15 text-amber-700 dark:text-amber-400';
 
 // Секция «Команда» на странице проекта. После унификации доступа команда — это участники
 // ПРОСТРАНСТВА проекта (read-only список). Управление ролями/удаление/инвайт-лист — на
@@ -110,7 +115,9 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
           </div>
         ) : (
           <ul className="space-y-1">
-            {members.map((m) => (
+            {members.map((m) => {
+              const isCreator = m.userId === project.ownerId;
+              return (
               <li
                 key={m.userId}
                 className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/40"
@@ -133,13 +140,14 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
                 <span
                   className={cn(
                     'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
-                    ROLE_BADGE_CLASS[m.role],
+                    isCreator ? CREATOR_BADGE_CLASS : ROLE_BADGE_CLASS[m.role],
                   )}
                 >
-                  {ROLE_LABEL[m.role]}
+                  {isCreator ? 'создал' : ROLE_LABEL[m.role]}
                 </span>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </div>

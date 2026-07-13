@@ -35,6 +35,7 @@ function asPlainObject<T>(v: unknown): T {
 
 type ProjectDto = {
   id: string;
+  // Создатель проекта (projects.owner_id). Сервер отдаёт его на всех эндпоинтах проекта.
   ownerId: string;
   name: string;
   icon?: string | null;
@@ -68,6 +69,7 @@ type ProjectDto = {
 function fromDto(dto: ProjectDto): Project {
   return {
     id: dto.id,
+    ownerId: dto.ownerId,
     name: dto.name,
     icon: dto.icon ?? null,
     status: dto.status,

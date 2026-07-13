@@ -10,8 +10,10 @@ import { MembersInviteForm } from './MembersInviteForm';
 // Сколько участников показываем сразу; остальные — под кнопкой «Показать всех».
 const VISIBLE = 6;
 
+// «Владелец» на уровне проекта не показываем: роли — «Редактор»/«Наблюдатель», а создателя
+// (projects.owner_id) помечаем нейтральным «Создал» (см. MemberRow).
 const ROLE_LABEL: Record<ProjectRole, string> = {
-  owner: 'Владелец',
+  owner: 'Редактор',
   editor: 'Редактор',
   viewer: 'Наблюдатель',
 };
@@ -22,11 +24,14 @@ const ROLE_LABEL: Record<ProjectRole, string> = {
 export function MembersHoverPanel({
   members,
   canInvite = false,
+  ownerId,
 }: {
   members: ProjectMember[];
   // Право приглашать (editor+). Если true — в подвале панели рисуем форму приглашения
   // в пространство (email + «Из знакомых» + роль + отправка).
   canInvite?: boolean;
+  // Создатель проекта (projects.owner_id) — помечаем его «Создал», а не ролью.
+  ownerId?: string;
 }): React.ReactElement {
   const [showAll, setShowAll] = React.useState(false);
   const [zoom, setZoom] = React.useState<ProjectMember | null>(null);
@@ -41,12 +46,12 @@ export function MembersHoverPanel({
       </div>
       <div className="max-h-[60vh] overflow-y-auto pb-1">
         {head.map((m) => (
-          <MemberRow key={m.userId} member={m} onZoom={() => setZoom(m)} />
+          <MemberRow key={m.userId} member={m} isCreator={m.userId === ownerId} onZoom={() => setZoom(m)} />
         ))}
         {rest.length > 0 && (
           <Collapse open={showAll}>
             {rest.map((m) => (
-              <MemberRow key={m.userId} member={m} onZoom={() => setZoom(m)} />
+              <MemberRow key={m.userId} member={m} isCreator={m.userId === ownerId} onZoom={() => setZoom(m)} />
             ))}
           </Collapse>
         )}
@@ -71,9 +76,11 @@ export function MembersHoverPanel({
 
 function MemberRow({
   member,
+  isCreator = false,
   onZoom,
 }: {
   member: ProjectMember;
+  isCreator?: boolean;
   onZoom: () => void;
 }): React.ReactElement {
   return (
@@ -96,7 +103,9 @@ function MemberRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-sm font-medium">{member.user.displayName}</span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{ROLE_LABEL[member.role]}</span>
+          <span className="shrink-0 text-[10px] text-muted-foreground">
+            {isCreator ? 'Создал' : ROLE_LABEL[member.role]}
+          </span>
         </div>
         <div className="truncate text-xs text-muted-foreground">{member.user.email}</div>
       </div>

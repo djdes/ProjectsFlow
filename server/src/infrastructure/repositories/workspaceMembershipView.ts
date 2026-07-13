@@ -26,7 +26,10 @@ export type WorkspaceMemberAccessRow = {
  *
  * Инвариант приватности Входящих: is_inbox виден ТОЛЬКО владельцу (projects.owner_id),
  * роль всегда 'owner', НЕЗАВИСИМО от ws-членства (владелец видит свой inbox, даже если
- * его убрали из пространства). Не-inbox виден участнику пространства с его ws-ролью 1:1.
+ * его убрали из пространства). Не-inbox виден участнику пространства с его ws-ролью 1:1,
+ * НО создатель проекта (projects.owner_id) — 'owner' СВОЕГО проекта поверх ws-роли: после
+ * workspace-merge пространство может принадлежать другому, а создатель всё равно вправе
+ * удалить/настроить свой проект (delete_project и прочая danger zone, см. permissions.ts).
  * Делегаты видят отдельные inbox-задачи через taskAuthorization, но НЕ через членство.
  */
 export function projectRowVisibility(
@@ -38,6 +41,8 @@ export function projectRowVisibility(
     return project.ownerId === userId ? { role: 'owner' } : null;
   }
   if (!wsMember) return null;
+  // Создатель = owner своего проекта поверх ws-роли (editor). Даёт danger zone создателю.
+  if (project.ownerId === userId) return { role: 'owner' };
   return { role: wsMember.role };
 }
 
