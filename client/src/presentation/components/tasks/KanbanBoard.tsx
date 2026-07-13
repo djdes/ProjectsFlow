@@ -476,7 +476,10 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   // курсором; зона каждого зазора = пол-карточки сверху + пол-карточки снизу (Notion).
   const boardCollision = useCallback<CollisionDetection>((args) => {
     const p = args.pointerCoordinates;
-    if (!p) return rectIntersection(args);
+    if (!p) {
+      (window as unknown as { __pfDbg?: unknown }).__pfDbg = { branch: 'no-pointer' };
+      return rectIntersection(args);
+    }
     const containers = args.droppableContainers;
     const col = containers.find((c) => {
       const r = c.rect.current;
@@ -505,6 +508,14 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     }
     const br = best.rect.current!;
     dropAfterRef.current = p.y > br.top + br.height / 2;
+    (window as unknown as { __pfDbg?: unknown }).__pfDbg = {
+      branch: 'nearest',
+      py: p.y,
+      bestTop: br.top,
+      bestH: br.height,
+      center: br.top + br.height / 2,
+      after: dropAfterRef.current,
+    };
     return [{ id: best.id }];
   }, []);
   // Позиция drop-индикатора: в какой колонке и над каким элементом находится курсор.
