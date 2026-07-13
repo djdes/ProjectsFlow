@@ -41,7 +41,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
@@ -384,6 +384,13 @@ export function AssignedToMeBlock({
   // Дроп в «Будущее» не применяет срок сразу — открывает всплывашку выбора (неделя / конец
   // месяца / конкретный день). null = закрыта.
   const [futureDrop, setFutureDrop] = useState<AssignedTask | null>(null);
+  // Дроп на кубик ДРУГОГО участника не переназначает сразу — открывает подтверждение
+  // (спека 2026-07-13): виден и текущий делегат, и новый. null = закрыта. Дроп на свой
+  // кубик (reclaimToSelf) и колонки-сроки — без подтверждения, это не делегирование.
+  const [pendingReassign, setPendingReassign] = useState<{
+    item: AssignedTask;
+    member: SharedMember;
+  } | null>(null);
 
   // Оптимистично проставить дедлайн задаче в обоих списках («Для меня» / «Другим»).
   const patchDeadlineLocal = useCallback((id: string, deadline: string | null): void => {
@@ -501,10 +508,11 @@ export function AssignedToMeBlock({
       | undefined;
     const item = e.active.data.current?.item as AssignedTask | undefined;
     if (!over || !item || !data) return;
-    // Дроп на кубик человека → переназначить делегата. Дроп на СВОЙ кубик → забрать себе.
+    // Дроп на кубик человека → переназначить делегата (с подтверждением). Дроп на СВОЙ
+    // кубик → забрать себе, сразу (не делегирование, подтверждение не нужно).
     if (data.type === 'user' && data.member) {
       if (user && data.member.id === user.id) void reclaimToSelf(item);
-      else void reassignTo(item, data.member);
+      else setPendingReassign({ item, member: data.member });
       return;
     }
     if (data.type !== 'bucket') return;
@@ -632,7 +640,20 @@ export function AssignedToMeBlock({
         {members.length > 0 && (
           <div className="flex min-w-0 items-center gap-1.5 self-center overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {members.map((m) => (
-              <UserCube key={m.id} member={m} dragging={dragActive} />
+              <UserCube
+                key={m.id}
+                member={m}
+                dragging={dragActive}
+                // Клик-фильтр «кому» — только на вкладке «Другим» (спека 2026-07-13); на
+                // «Для меня» пропы не передаём, кубик остаётся только drop-целью.
+                {...(tab === 'byMe'
+                  ? {
+                      filterActive: filterTo === m.id,
+                      onToggleFilter: () =>
+                        setFilterTo((prev) => (prev === m.id ? null : m.id)),
+                    }
+                  : {})}
+              />
             ))}
           </div>
         )}
@@ -807,6 +828,48 @@ export function AssignedToMeBlock({
           if (it) void applyDeadline(it, deadline);
         }}
       />
+
+      {/* Дроп на кубик другого участника → подтверждение делегирования (спека 2026-07-13):
+          показываем название задачи, у кого сейчас, и кому уходит — прежде чем звать сервер. */}
+      <Dialog open={pendingReassign !== null} onOpenChange={(o) => !o && setPendingReassign(null)}>
+        <DialogContent className="max-w-xs gap-3 p-5">
+          <DialogHeader>
+            <DialogTitle className="text-base">Делегировать задачу?</DialogTitle>
+          </DialogHeader>
+          {pendingReassign && (
+            <div className="space-y-2 text-sm">
+              <p className="line-clamp-3 font-medium text-foreground">
+                {plainTaskTitle(pendingReassign.item.description ?? '') || 'Задача'}
+              </p>
+              <p className="text-muted-foreground">
+                Сейчас у:{' '}
+                <span className="font-medium text-foreground">
+                  {pendingReassign.item.delegation.delegateDisplayName}
+                </span>
+              </p>
+              <p className="text-muted-foreground">
+                Делегировать:{' '}
+                <span className="font-medium text-foreground">{pendingReassign.member.displayName}</span>
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingReassign(null)}>
+              Отмена
+            </Button>
+            <Button
+              onClick={async () => {
+                const pending = pendingReassign;
+                if (!pending) return;
+                await reassignTo(pending.item, pending.member);
+                setPendingReassign(null);
+              }}
+            >
+              Делегировать
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 
@@ -1010,24 +1073,37 @@ function DraggableTask({
 // primary-ринг (сигнал «сюда можно»), а тот, что под курсором, плавно всплывает: лёгкий
 // scale + сплошной ринг + подпись сменяется на «Делегировать». Себя тут нет — «забрать себе»
 // делается дропом на свою аву слева (SelfDropAvatar).
+// filterActive/onToggleFilter (спека 2026-07-13, только вкладка «Другим») — клик по кубику
+// (не по хвостовой ×) переключает single-фильтр «кому», общий с шапочным меню-фильтром.
 function UserCube({
   member,
   dragging,
+  filterActive = false,
+  onToggleFilter,
 }: {
   member: SharedMember;
   dragging: boolean;
+  filterActive?: boolean;
+  onToggleFilter?: () => void;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id: `user-${member.id}`, data: { type: 'user', member } });
+  // Клик-фильтр доступен только вне drag'а (в drag-режиме кубик — цель делегирования, не
+  // клик-таргет) и только когда проп передан (т.е. на вкладке «Другим», см. место рендера).
+  const clickable = !dragging && !!onToggleFilter;
   return (
     <div
       ref={setNodeRef}
+      onClick={clickable ? onToggleFilter : undefined}
       className={cn(
-        'flex shrink-0 items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2 text-[11px] transition-all duration-200 ease-out',
+        'relative flex shrink-0 items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2 text-[11px] transition-all duration-200 ease-out',
+        clickable && 'cursor-pointer',
         dragging
           ? isOver
             ? 'scale-[1.06] bg-primary/10 text-primary shadow-sm ring-2 ring-inset ring-primary'
             : 'bg-primary/[0.05] text-foreground ring-1 ring-inset ring-primary/20'
-          : 'text-muted-foreground hover:bg-muted',
+          : filterActive
+            ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/30'
+            : 'text-muted-foreground hover:bg-muted',
       )}
     >
       {dragging ? (
@@ -1048,6 +1124,21 @@ function UserCube({
       <span className="max-w-[7rem] truncate font-medium">
         {dragging && isOver ? 'Делегировать' : member.displayName}
       </span>
+      {/* Активный фильтр — маленький × снимает его (stopPropagation — не даём клику
+          провалиться в onToggleFilter кубика, у него тот же эффект, но так явнее). */}
+      {!dragging && filterActive && onToggleFilter && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFilter();
+          }}
+          aria-label="Снять фильтр"
+          className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm ring-1 ring-background"
+        >
+          <X className="size-2.5" />
+        </button>
+      )}
     </div>
   );
 }
