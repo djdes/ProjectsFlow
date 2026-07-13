@@ -1,11 +1,15 @@
-import { and, desc, eq, lt } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { activityEvents, projectMembers, type ActivityEventRow } from '../db/schema.js';
+import { activityEvents, type ActivityEventRow } from '../db/schema.js';
 import type { ActivityEvent, ActivityKind, ActivityPayload } from '../../domain/activity/ActivityEvent.js';
 import type {
   ActivityRepository,
   RecordActivityInput,
 } from '../../application/activity/ActivityRepository.js';
+// Видимость события — через единое пространство (workspace_members, is_inbox→owner),
+// НЕ project_members (#блокер3, отчёт fix-blockers-report.md) — переиспользуем
+// ProjectMemberRepository (эталон DrizzleProjectMemberRepository).
+import type { ProjectMemberRepository } from '../../application/project/ProjectMemberRepository.js';
 import { parseJsonCol } from './jsonCol.js';
 
 function toEvent(row: ActivityEventRow): ActivityEvent {
@@ -21,7 +25,10 @@ function toEvent(row: ActivityEventRow): ActivityEvent {
 }
 
 export class DrizzleActivityRepository implements ActivityRepository {
-  constructor(private readonly db: Database) {}
+  constructor(
+    private readonly db: Database,
+    private readonly projectMembers: ProjectMemberRepository,
+  ) {}
 
   async record(input: RecordActivityInput): Promise<void> {
     await this.db.insert(activityEvents).values({
@@ -34,24 +41,32 @@ export class DrizzleActivityRepository implements ActivityRepository {
     });
   }
 
+  // Видимость: событие видно, если userId — участник пространства ПРОЕКТА события (единое
+  // пространство, workspace_members), с сохранением инварианта приватности Входящих
+  // (is_inbox → только владелец). listProjectsForUserInWorkspace уже инкапсулирует этот
+  // предикат (projectRowVisibility) — переиспользуем вместо project_members-join'а (#блокер3:
+  // ws-участник без ленивой project_members-строки видел пустую ленту «Активность»/«Все»).
   async listForUserInWorkspace(
     userId: string,
     workspaceId: string,
     opts: { before?: Date; limit: number },
   ): Promise<ActivityEvent[]> {
+    const myProjects = await this.projectMembers.listProjectsForUserInWorkspace(userId, workspaceId);
+    const projectIds = myProjects.map((p) => p.id);
+    if (projectIds.length === 0) return [];
+
     const conds = [
       eq(activityEvents.workspaceId, workspaceId),
-      eq(projectMembers.userId, userId),
+      inArray(activityEvents.projectId, projectIds),
     ];
     if (opts.before) conds.push(lt(activityEvents.createdAt, opts.before));
     const rows = await this.db
-      .select({ ae: activityEvents })
+      .select()
       .from(activityEvents)
-      .innerJoin(projectMembers, eq(projectMembers.projectId, activityEvents.projectId))
       .where(and(...conds))
       .orderBy(desc(activityEvents.createdAt))
       .limit(opts.limit);
-    return rows.map((r) => toEvent(r.ae));
+    return rows.map((r) => toEvent(r));
   }
 
   async listForProject(

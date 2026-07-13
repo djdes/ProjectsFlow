@@ -314,7 +314,7 @@ const projectRepo = new DrizzleProjectRepository(db);
 const projectMemberRepo = new DrizzleProjectMemberRepository(db);
 const projectInviteRepo = new DrizzleProjectInviteRepository(db);
 const workspaceInviteRepo = new DrizzleWorkspaceInviteRepository(db);
-const recentTaskViewRepo = new DrizzleRecentTaskViewRepository(db);
+const recentTaskViewRepo = new DrizzleRecentTaskViewRepository(db, projectMemberRepo);
 const projectViewRepo = new DrizzleProjectViewRepository(db);
 
 // === Пространства (workspaces) ===
@@ -383,7 +383,7 @@ const notificationRepo = new PublishingNotificationRepository(
 );
 
 // === Лента действий (activity feed) ===
-const activityRepo = new DrizzleActivityRepository(db);
+const activityRepo = new DrizzleActivityRepository(db, projectMemberRepo);
 // best-effort рекордер: инжектится в мутирующие use-case'ы (создание/статус/удаление задач,
 // комментарии, создание проекта, изменения участников). Резолвит пространство по проекту.
 const activityRecorder = new ActivityRecorder({
@@ -472,7 +472,7 @@ const taskVersionRecorder = new TaskVersionRecorder({ versions: taskVersionRepo,
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
-const taskDelegationRepo = new DrizzleTaskDelegationRepository(db);
+const taskDelegationRepo = new DrizzleTaskDelegationRepository(db, projectMemberRepo);
 const digestSettingsRepo = new DrizzleDigestSettingsRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const aiPromptJobRepo = new DrizzleAiPromptJobRepository(db);
@@ -507,7 +507,7 @@ const getUserUsage = new GetUserUsage({
 const buyPlan = new BuyPlan({ users: userRepo, now });
 const checkBudget = new CheckBudget({ getUserUsage });
 const automationRepo = new DrizzleAutomationRepository(db);
-const taskSearchRepo = new DrizzleTaskSearchRepository(db);
+const taskSearchRepo = new DrizzleTaskSearchRepository(db, projectMemberRepo);
 const projectJoinRequestRepo = new DrizzleProjectJoinRequestRepository(db);
 const adminRepo = new DrizzleAdminRepository(db);
 const employeeRepo = new DrizzleEmployeeRepository(db);

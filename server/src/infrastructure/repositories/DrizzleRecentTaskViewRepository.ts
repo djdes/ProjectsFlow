@@ -1,9 +1,13 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { projectMembers, projects, recentTaskViews, tasks } from '../db/schema.js';
+import { projects, recentTaskViews, tasks } from '../db/schema.js';
 import type { RecentTaskView } from '../../domain/task/RecentTaskView.js';
 import type { TaskStatus } from '../../domain/task/Task.js';
 import type { RecentTaskViewRepository } from '../../application/task/RecentTaskViewRepository.js';
+// Access-check — через единое пространство (workspace_members, is_inbox→owner), НЕ
+// project_members (#блокер5, отчёт fix-blockers-report.md) — переиспользуем
+// ProjectMemberRepository (эталон DrizzleProjectMemberRepository).
+import type { ProjectMemberRepository } from '../../application/project/ProjectMemberRepository.js';
 
 // Описание задачи отдельного title-поля не имеет — берём первые N символов.
 const EXCERPT_MAX = 80;
@@ -15,22 +19,26 @@ function toExcerpt(description: string | null): string {
 }
 
 export class DrizzleRecentTaskViewRepository implements RecentTaskViewRepository {
-  constructor(private readonly db: Database) {}
+  constructor(
+    private readonly db: Database,
+    private readonly projectMembers: ProjectMemberRepository,
+  ) {}
 
   async recordView(userId: string, taskId: string): Promise<void> {
-    // Access-чек: задача существует И юзер — участник её проекта. Иначе тихо выходим
-    // (не создаём запись для недоступной/чужой задачи).
-    const rows = await this.db
+    // Access-чек: задача существует И юзер — участник её проекта через единое пространство
+    // (findForProject: workspace_members + is_inbox→owner). Иначе тихо выходим (не создаём
+    // запись для недоступной/чужой задачи). #блокер5: раньше гейтилось project_members —
+    // ws-участник без ленивой строки тихо терял запись просмотра.
+    const taskRows = await this.db
       .select({ projectId: tasks.projectId })
       .from(tasks)
-      .innerJoin(
-        projectMembers,
-        and(eq(projectMembers.projectId, tasks.projectId), eq(projectMembers.userId, userId)),
-      )
       .where(eq(tasks.id, taskId))
       .limit(1);
-    const projectId = rows[0]?.projectId;
+    const projectId = taskRows[0]?.projectId;
     if (!projectId) return;
+
+    const membership = await this.projectMembers.findForProject(projectId, userId);
+    if (!membership) return;
 
     // Апсерт: одна строка на (user, task), повторное открытие бампит viewed_at.
     // CURRENT_TIMESTAMP (не VALUES(...)) — MariaDB-совместимо, без alias-синтаксиса.
@@ -41,8 +49,14 @@ export class DrizzleRecentTaskViewRepository implements RecentTaskViewRepository
   }
 
   async listRecent(userId: string, limit: number): Promise<RecentTaskView[]> {
-    // INNER JOIN на project_members гейтит доступ (только проекты, где юзер участник) и
-    // на tasks/projects — отсекает удалённые. Без фильтра по workspace (кросс-воркспейсно).
+    // Гейт доступа — через единое пространство (workspace_members, is_inbox→owner), НЕ
+    // project_members (#блокер5: «Недавно просмотренные» были мертвы для ws-участника без
+    // ленивой строки). Без фильтра по workspace (кросс-воркспейсно, как и раньше).
+    const accessibleIds = (await this.projectMembers.listProjectsForUser(userId)).map(
+      (p) => p.id,
+    );
+    if (accessibleIds.length === 0) return [];
+
     const rows = await this.db
       .select({
         taskId: recentTaskViews.taskId,
@@ -57,11 +71,7 @@ export class DrizzleRecentTaskViewRepository implements RecentTaskViewRepository
       .from(recentTaskViews)
       .innerJoin(tasks, eq(tasks.id, recentTaskViews.taskId))
       .innerJoin(projects, eq(projects.id, tasks.projectId))
-      .innerJoin(
-        projectMembers,
-        and(eq(projectMembers.projectId, projects.id), eq(projectMembers.userId, userId)),
-      )
-      .where(eq(recentTaskViews.userId, userId))
+      .where(and(eq(recentTaskViews.userId, userId), inArray(projects.id, accessibleIds)))
       .orderBy(desc(recentTaskViews.viewedAt))
       .limit(limit);
 
