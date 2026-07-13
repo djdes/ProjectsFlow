@@ -95,3 +95,13 @@ export class WorkspaceInviteAlreadyUsedError extends Error {
     this.name = 'WorkspaceInviteAlreadyUsedError';
   }
 }
+
+// Личный дефолт-хаб (kind='default') — авто-управляемая агрегирующая вьюха юзера,
+// не контейнер с общими участниками. Приглашать в него нельзя — иначе «единое
+// командное пространство» разъезжается (гость видел бы личный хаб как команду).
+export class CannotInviteToDefaultWorkspaceError extends Error {
+  constructor() {
+    super('Cannot invite to a default (personal) workspace');
+    this.name = 'CannotInviteToDefaultWorkspaceError';
+  }
+}

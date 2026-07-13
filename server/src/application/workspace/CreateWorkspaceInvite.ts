@@ -2,7 +2,11 @@ import type {
   WorkspaceInvite,
   WorkspaceInviteRole,
 } from '../../domain/workspace/WorkspaceInvite.js';
-import { WorkspaceNotFoundError } from '../../domain/workspace/errors.js';
+import type { WorkspaceKind } from '../../domain/workspace/Workspace.js';
+import {
+  WorkspaceNotFoundError,
+  CannotInviteToDefaultWorkspaceError,
+} from '../../domain/workspace/errors.js';
 import type { WorkspaceMember } from '../../domain/workspace/WorkspaceMember.js';
 import type { NotificationPayload } from '../../domain/notifications/Notification.js';
 import type { EmailSender } from '../notifications/EmailSender.js';
@@ -14,7 +18,7 @@ import type { WorkspaceInviteRepository } from './WorkspaceInviteRepository.js';
 // DrizzleUserRepository, NotificationRepository) им соответствуют.
 type WorkspacesPort = {
   getMembership(workspaceId: string, userId: string): Promise<WorkspaceMember | null>;
-  getById(id: string): Promise<{ id: string; name: string } | null>;
+  getById(id: string): Promise<{ id: string; name: string; kind: WorkspaceKind } | null>;
 };
 type UsersPort = {
   getById(id: string): Promise<{ displayName: string } | null>;
@@ -53,6 +57,9 @@ export class CreateWorkspaceInvite {
     await requireWorkspaceEditor(this.deps.workspaces, input.workspaceId, input.actorUserId);
     const ws = await this.deps.workspaces.getById(input.workspaceId);
     if (!ws) throw new WorkspaceNotFoundError();
+    // Личный дефолт-хаб — авто-управляемая агрегирующая вьюха, не контейнер с общими
+    // участниками. Приглашать в него нельзя (см. CannotInviteToDefaultWorkspaceError).
+    if (ws.kind === 'default') throw new CannotInviteToDefaultWorkspaceError();
 
     const expiresAt = new Date(this.deps.now().getTime() + this.deps.ttlMs);
     const invite = await this.deps.invites.create({

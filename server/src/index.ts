@@ -20,6 +20,7 @@ import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleP
 import { DrizzleProjectMemberRepository } from './infrastructure/repositories/DrizzleProjectMemberRepository.js';
 import { DrizzleWorkspaceRepository } from './infrastructure/repositories/DrizzleWorkspaceRepository.js';
 import { WorkspaceService } from './application/workspace/WorkspaceService.js';
+import { resolveWorkspaceForNewProject } from './application/workspace/resolveWorkspaceForNewProject.js';
 import type { WorkspaceKind } from './domain/workspace/Workspace.js';
 import { DrizzleActivityRepository } from './infrastructure/repositories/DrizzleActivityRepository.js';
 import { ActivityRecorder } from './application/activity/ActivityRecorder.js';
@@ -322,15 +323,21 @@ const workspaceService = new WorkspaceService({
   users: userRepo,
   idGen: idGenerator,
 });
-// Активное пространство юзера (current ?? первое доступное). Кидает если пространств нет —
-// для create-проекта/inbox это инвариант (после миграции у каждого есть личное пространство).
-const resolveWorkspaceId = async (userId: string): Promise<string> => {
-  const current = await workspaceRepo.getCurrentWorkspaceId(userId);
-  if (current) return current;
-  const another = await workspaceRepo.findAnotherForUser(userId, '');
-  if (another) return another;
-  throw new Error(`User ${userId} has no workspace`);
-};
+// Активное пространство юзера (current ?? первое доступное), с уводом новых проектов
+// из личного дефолт-хаба в единственное командное пространство юзера — чтобы «единое
+// пространство» не разъезжалось (см. resolveWorkspaceForNewProject). Кидает если
+// пространств нет — для create-проекта/inbox это инвариант (после миграции у каждого
+// есть личное пространство).
+const resolveWorkspaceId = async (userId: string): Promise<string> =>
+  resolveWorkspaceForNewProject(
+    {
+      getCurrentWorkspaceId: (uid) => workspaceRepo.getCurrentWorkspaceId(uid),
+      getWorkspaceKind: async (workspaceId) => (await workspaceRepo.getById(workspaceId))?.kind ?? null,
+      findSoleTeamWorkspaceForUser: (uid) => workspaceRepo.findSoleTeamWorkspaceForUser(uid),
+      findAnotherForUser: (uid) => workspaceRepo.findAnotherForUser(uid, ''),
+    },
+    userId,
+  );
 // Активное пространство для листинга проектов: id + kind (null = нет пространств → пустой список).
 // kind решает охват: 'default' → ВСЕ мои проекты (хаб), 'team' → срез по workspace_id (см. ListProjects).
 const resolveActiveWorkspace = async (

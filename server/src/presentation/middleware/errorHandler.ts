@@ -128,6 +128,7 @@ import {
   WorkspaceInviteNotFoundError,
   WorkspaceInviteExpiredError,
   WorkspaceInviteAlreadyUsedError,
+  CannotInviteToDefaultWorkspaceError,
 } from '../../domain/workspace/errors.js';
 import {
   ChatMessageNotFoundError,
@@ -720,6 +721,13 @@ export function errorHandler(
   }
   if (err instanceof WorkspaceInviteAlreadyUsedError) {
     res.status(410).json({ error: 'invite_used', message: 'Это приглашение уже использовано' });
+    return;
+  }
+  if (err instanceof CannotInviteToDefaultWorkspaceError) {
+    res.status(409).json({
+      error: 'cannot_invite_to_default_workspace',
+      message: 'В личное пространство пригласить нельзя',
+    });
     return;
   }
   if (err instanceof WorkspaceNotEmptyError) {
