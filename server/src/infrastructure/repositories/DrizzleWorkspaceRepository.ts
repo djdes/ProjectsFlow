@@ -265,9 +265,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
         .update(activityEvents)
         .set({ workspaceId: targetWorkspaceId })
         .where(eq(activityEvents.workspaceId, hubId));
-      // cascade чистит workspace_members/chat/chat_reads/invites хаба; projects уже перенесены.
-      await tx.delete(workspaces).where(eq(workspaces.id, hubId));
-      // Если хаб был активным пространством юзера — переставляем current на target, читаем
+      // Если хаб был активным пространством юзера — переставляем current на target ДО удаления
+      // хаба. FK users.current_workspace_id = ON DELETE SET NULL: если удалить первым, current
+      // обнулится (а не переедет на target) и юзер попадёт в случайное пространство. Читаем
       // внутри транзакции, чтобы не разъехаться с конкурентным вызовом.
       const currentRows = await tx
         .select({ current: users.currentWorkspaceId })
@@ -277,6 +277,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepository {
       if (currentRows[0]?.current === hubId) {
         await tx.update(users).set({ currentWorkspaceId: targetWorkspaceId }).where(eq(users.id, userId));
       }
+      // Удаляем хаб ПОСЛЕДНИМ: projects/activity перенесены, current переставлен.
+      // cascade чистит workspace_members/chat/chat_reads/invites хаба.
+      await tx.delete(workspaces).where(eq(workspaces.id, hubId));
     });
     return true;
   }

@@ -137,9 +137,13 @@ function makeFakes(seed: Seed) {
       for (const p of projects) {
         if (p.workspaceId === hub.id && p.isInbox) p.workspaceId = targetWorkspaceId;
       }
+      // Переставляем current ДО удаления хаба — как в реальном репо. Удаление ниже моделирует
+      // FK users.current_workspace_id = ON DELETE SET NULL: если поменять порядок, current
+      // обнулится, а не переедет на target (именно этот баг ловит тест).
+      if (current.get(userId) === hub.id) current.set(userId, targetWorkspaceId);
       workspaces.delete(hub.id);
       for (let i = members.length - 1; i >= 0; i -= 1) if (members[i]!.workspaceId === hub.id) members.splice(i, 1);
-      for (const [u, w] of current) if (w === hub.id) current.set(u, targetWorkspaceId);
+      for (const [u, w] of current) if (w === hub.id) current.delete(u); // SET NULL для остальных
       return true;
     },
   };
