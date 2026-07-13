@@ -13,6 +13,7 @@ import { toast } from '@/components/ui/sonner';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { useContainer } from '@/infrastructure/di/container';
 import { cn } from '@/lib/utils';
+import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useRightPanelWidth } from '@/presentation/layout/rightPanelContext';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
@@ -106,7 +107,12 @@ export function TaskComposer({
   storageKey,
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
+  const { user } = useCurrentUser();
   const isInline = variant === 'inline';
+  // В именованном общем проекте новая задача по умолчанию «на мне» (accepted self-делегация)
+  // → попадает во «Входящие → Для меня». В inbox оставляем null (само-делегация увела бы
+  // задачу с inbox-доски в блок «Для меня»). Юзер может сменить ответственного/очистить.
+  const selfDelegateDefault = isShared && !isInbox ? (user?.id ?? null) : null;
   // Плавающий композер `fixed` к вьюпорту → сам не наследует сужение <main>. Читаем ширину
   // открытой правой панели и отступаем на неё справа, чтобы не заезжать под окно задачи/аналитики.
   const rightPanelWidth = useRightPanelWidth();
@@ -120,7 +126,9 @@ export function TaskComposer({
   const [ralphMode, setRalphMode] = useState<RalphMode>(initialDraft.ralphMode);
   // По умолчанию — черновик (backlog): быстрое добавление кидает в бэклог, а не сразу воркеру.
   const [quickStatus, setQuickStatus] = useState<'todo' | 'backlog'>('backlog');
-  const [delegateUserId, setDelegateUserId] = useState<string | null>(initialDraft.delegateUserId);
+  const [delegateUserId, setDelegateUserId] = useState<string | null>(
+    initialDraft.delegateUserId ?? selfDelegateDefault,
+  );
   const [priority, setPriority] = useState<TaskPriority | null>(initialDraft.priority);
   const [deadline, setDeadline] = useState<string | null>(initialDraft.deadline);
   // Есть ли отложенный черновик «восстановить» (создаётся доской при закрытии без создания).
@@ -260,7 +268,7 @@ export function TaskComposer({
       setHasStash(false);
       setRalphMode('normal');
       setQuickStatus('backlog');
-      setDelegateUserId(null);
+      setDelegateUserId(selfDelegateDefault);
       setPriority(null);
       setDeadline(null);
     } catch (err) {

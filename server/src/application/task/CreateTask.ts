@@ -2,7 +2,6 @@ import {
   AlreadyDelegatedError,
   DelegateNotInSharedMembersError,
   DelegateNotProjectMemberError,
-  SelfDelegationError,
   TaskDescriptionEmptyError,
 } from '../../domain/task/errors.js';
 import { can } from '../../domain/project/permissions.js';
@@ -161,19 +160,27 @@ export class CreateTask {
     creatorUserId: string,
     projectId: string,
   ): Promise<TaskDelegation> {
-    if (delegateUserId === creatorUserId) throw new SelfDelegationError();
+    // Самоделегирование РАЗРЕШЕНО (по образцу DelegateExistingTask): «назначить себя
+    // ответственным» — задача попадает в «Для меня». isSelf влияет только на валидацию
+    // (себя нет в shared-members / своё право уже проверено) и уведомления (себе не шлём);
+    // статус у всех делегирований одинаков — accepted сразу.
+    const isSelf = delegateUserId === creatorUserId;
 
     const project = await this.deps.projects.getById(projectId);
     if (project && !project.isInbox) {
       // Именованный проект: делегатор — с правом delegate_task (editor+); делегат —
-      // участник-редактор этого проекта.
+      // участник-редактор этого проекта. Для isSelf делегат == делегатор — его право
+      // уже проверено requireProjectAccess, проверка членства делегата пропускается.
       await requireProjectAccess(this.deps, project.id, creatorUserId, 'delegate_task');
-      const membership = await this.deps.members.findForProject(project.id, delegateUserId);
-      if (!membership || !can(membership.role, 'move_task')) {
-        throw new DelegateNotProjectMemberError();
+      if (!isSelf) {
+        const membership = await this.deps.members.findForProject(project.id, delegateUserId);
+        if (!membership || !can(membership.role, 'move_task')) {
+          throw new DelegateNotProjectMemberError();
+        }
       }
-    } else {
+    } else if (!isSelf) {
       // Inbox (или защитный фолбэк): делегат должен быть в shared-members caller'а.
+      // Себя в shared-members нет (сервер исключает) — для isSelf проверка пропускается.
       const shared = await this.deps.members.listSharedUsers(creatorUserId);
       if (!shared.find((u) => u.id === delegateUserId)) {
         throw new DelegateNotInSharedMembersError();
@@ -194,10 +201,12 @@ export class CreateTask {
       status: 'accepted',
     });
 
-    // Best-effort notification + email. Не блокируют успех create.
-    void this.notifyDelegated(created, description, creatorUserId).catch((err: unknown) => {
-      console.error('[delegation] notify failed:', err);
-    });
+    // Best-effort notification + email. Не блокируют успех create. Себе не уведомляем.
+    if (!isSelf) {
+      void this.notifyDelegated(created, description, creatorUserId).catch((err: unknown) => {
+        console.error('[delegation] notify failed:', err);
+      });
+    }
 
     return created;
   }
