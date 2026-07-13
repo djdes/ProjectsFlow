@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Copy, MoreVertical, Trash2, UserPlus } from 'lucide-react';
+import { MoreVertical, Trash2, UserPlus } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,7 +15,7 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { Project } from '@/domain/project/Project';
 import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
-import type { ProjectInvite } from '@/domain/project/ProjectInvite';
+import type { WorkspaceInvite } from '@/domain/workspace/WorkspaceInvite';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { getInitials } from '@/presentation/layout/projectIcons';
@@ -38,7 +38,6 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
   const { projectRepository } = useContainer();
   const { user: currentUser } = useCurrentUser();
   const [members, setMembers] = useState<ProjectMember[]>([]);
-  const [invites, setInvites] = useState<ProjectInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
@@ -60,11 +59,6 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
         const membersList = await projectRepository.listMembers(project.id);
         if (cancelled) return;
         setMembers(membersList);
-        if (canInvite) {
-          const invitesList = await projectRepository.listInvites(project.id);
-          if (cancelled) return;
-          setInvites(invitesList);
-        }
       } catch (e) {
         if (!cancelled) {
           toast.error(`Не удалось загрузить команду: ${(e as Error).message}`);
@@ -81,25 +75,13 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
 
   if (skip) return null;
 
-  const handleInviteCreated = (invite: ProjectInvite): void => {
-    setInvites((prev) => [...prev, invite]);
+  const handleInviteCreated = (invite: WorkspaceInvite): void => {
     if (invite.url) {
-      // Параллельно с toast предлагаем сразу скопировать URL.
+      // Сразу копируем ссылку — самый частый следующий шаг.
       void navigator.clipboard.writeText(invite.url).then(
         () => toast.success('Ссылка скопирована'),
         () => toast.success('Приглашение создано'),
       );
-    }
-  };
-
-  const handleRevokeInvite = async (invite: ProjectInvite): Promise<void> => {
-    if (!window.confirm('Отозвать приглашение?')) return;
-    try {
-      await projectRepository.deleteInvite(project.id, invite.id);
-      setInvites((prev) => prev.filter((i) => i.id !== invite.id));
-      toast.success('Приглашение отозвано');
-    } catch (e) {
-      toast.error(`Не удалось: ${(e as Error).message}`);
     }
   };
 
@@ -153,20 +135,6 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
       );
     } catch (e) {
       toast.error(`Не удалось: ${(e as Error).message}`);
-    }
-  };
-
-  const handleCopyInvite = async (invite: ProjectInvite): Promise<void> => {
-    if (!invite.url) {
-      // Для уже существующих pending-инвайтов сервер не отдаёт token/url — только в момент create.
-      toast.error('Ссылка доступна только в момент создания приглашения. Создай новое.');
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(invite.url);
-      toast.success('Скопировано');
-    } catch {
-      toast.error('Не удалось скопировать. Скопируй вручную из истории.');
     }
   };
 
@@ -270,62 +238,9 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
             ))}
           </ul>
         )}
-
-        {canInvite && invites.length > 0 && (
-          <div className="space-y-1.5 pt-2">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Ожидают принятия
-            </p>
-            <ul className="space-y-1">
-              {invites.map((inv) => (
-                <li
-                  key={inv.id}
-                  className="group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/40"
-                >
-                  <div className="min-w-0 flex-1 text-sm">
-                    <p className="truncate">
-                      {inv.email ?? (
-                        <span className="italic text-muted-foreground">без email</span>
-                      )}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {ROLE_LABEL[inv.role]} · истекает{' '}
-                      {inv.expiresAt.toLocaleDateString('ru-RU', {
-                        day: 'numeric',
-                        month: 'short',
-                      })}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    onClick={() => void handleCopyInvite(inv)}
-                    aria-label="Скопировать ссылку"
-                    title={
-                      inv.url ? 'Скопировать ссылку' : 'Ссылка доступна только в момент создания'
-                    }
-                  >
-                    <Copy className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7 text-destructive hover:text-destructive"
-                    onClick={() => void handleRevokeInvite(inv)}
-                    aria-label="Отозвать"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
 
       <InviteDialog
-        projectId={project.id}
         open={showInviteDialog}
         onClose={() => setShowInviteDialog(false)}
         onCreated={handleInviteCreated}

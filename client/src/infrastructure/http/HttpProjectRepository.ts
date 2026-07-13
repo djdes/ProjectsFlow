@@ -1,9 +1,7 @@
 import type { Project, ProjectStatus } from '@/domain/project/Project';
 import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
-import type { ProjectInvite, ProjectInviteRole } from '@/domain/project/ProjectInvite';
 import { ProjectNameAlreadyExistsError } from '@/domain/project/errors';
 import type {
-  CreateInviteInput,
   CreateProjectInput,
   DispatcherCandidate,
   GitCollision,
@@ -118,36 +116,6 @@ function memberFromDto(dto: MemberDto): ProjectMember {
     role: dto.role,
     joinedAt: new Date(dto.joinedAt),
     user: dto.user,
-  };
-}
-
-type InviteDto = {
-  id: string;
-  projectId: string;
-  role: ProjectInviteRole;
-  email: string | null;
-  expiresAt: string;
-  acceptedAt: string | null;
-  acceptedByUserId: string | null;
-  createdByUserId: string;
-  createdAt: string;
-  token?: string;
-  url?: string;
-};
-
-function inviteFromDto(dto: InviteDto): ProjectInvite {
-  return {
-    id: dto.id,
-    projectId: dto.projectId,
-    role: dto.role,
-    email: dto.email,
-    expiresAt: new Date(dto.expiresAt),
-    acceptedAt: dto.acceptedAt ? new Date(dto.acceptedAt) : null,
-    acceptedByUserId: dto.acceptedByUserId,
-    createdByUserId: dto.createdByUserId,
-    createdAt: new Date(dto.createdAt),
-    token: dto.token,
-    url: dto.url,
   };
 }
 
@@ -391,25 +359,6 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async transferOwnership(projectId: string, toUserId: string): Promise<void> {
     await httpClient.post<void>(`/projects/${projectId}/transfer`, { toUserId });
-  }
-
-  async listInvites(projectId: string): Promise<ProjectInvite[]> {
-    const { invites } = await httpClient.get<{ invites: InviteDto[] }>(
-      `/projects/${projectId}/invites`,
-    );
-    return invites.map(inviteFromDto);
-  }
-
-  async createInvite(projectId: string, input: CreateInviteInput): Promise<ProjectInvite> {
-    const { invite } = await httpClient.post<{ invite: InviteDto }>(
-      `/projects/${projectId}/invites`,
-      input,
-    );
-    return inviteFromDto(invite);
-  }
-
-  async deleteInvite(projectId: string, inviteId: string): Promise<void> {
-    await httpClient.delete<void>(`/projects/${projectId}/invites/${inviteId}`);
   }
 
   async checkGitCollision(gitRepoUrl: string): Promise<GitCollision> {

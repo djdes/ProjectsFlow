@@ -18,33 +18,37 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
-import type {
-  ProjectInvite,
-  ProjectInviteRole,
-} from '@/domain/project/ProjectInvite';
+import type { WorkspaceInvite, WorkspaceInviteRole } from '@/domain/workspace/WorkspaceInvite';
 import type { SharedMember } from '@/application/project/ProjectRepository';
 import { useContainer } from '@/infrastructure/di/container';
+import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 
 type Props = {
-  projectId: string;
   open: boolean;
   onClose: () => void;
-  onCreated: (invite: ProjectInvite) => void;
+  // Пространство, в которое приглашаем. Не задано — активное пространство юзера
+  // (кейс «пригласить из проекта»: проект живёт в текущем пространстве).
+  workspaceId?: string;
+  onCreated?: (invite: WorkspaceInvite) => void;
 };
 
-export function InviteDialog({ projectId, open, onClose, onCreated }: Props): React.ReactElement {
-  const { projectRepository } = useContainer();
+// Диалог приглашения в ПРОСТРАНСТВО (единая точка: из настроек пространства, со страницы
+// проекта, из панели участников). Приглашённый получает доступ ко всем проектам
+// пространства, включая будущие. Роль editor/viewer, email опционален (без email —
+// «бесхозная» токен-ссылка).
+export function InviteDialog({ open, onClose, workspaceId, onCreated }: Props): React.ReactElement {
+  const { workspaceRepository, projectRepository } = useContainer();
+  const { workspace } = useCurrentWorkspace();
+  const targetWorkspaceId = workspaceId ?? workspace?.id ?? null;
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<ProjectInviteRole>('editor');
+  const [role, setRole] = useState<WorkspaceInviteRole>('editor');
   const [submitting, setSubmitting] = useState(false);
-  const [created, setCreated] = useState<ProjectInvite | null>(null);
-  // Список юзеров, с которыми caller уже состоит в общих проектах. Подгружаем при
-  // открытии и предлагаем выбрать одним кликом — частый кейс «пригласить того же».
+  const [created, setCreated] = useState<WorkspaceInvite | null>(null);
+  // Люди, с которыми caller уже состоит в общих пространствах — выбор одним кликом.
   const [sharedMembers, setSharedMembers] = useState<SharedMember[] | null>(null);
 
   useEffect(() => {
     if (!open) {
-      // На закрытии чистим стейт чтобы при следующем открытии форма была пустая.
       setEmail('');
       setRole('editor');
       setCreated(null);
@@ -66,14 +70,18 @@ export function InviteDialog({ projectId, open, onClose, onCreated }: Props): Re
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
+    if (!targetWorkspaceId) {
+      toast.error('Пространство ещё не загружено — попробуйте ещё раз');
+      return;
+    }
     setSubmitting(true);
     try {
-      const invite = await projectRepository.createInvite(projectId, {
+      const invite = await workspaceRepository.createInvite(targetWorkspaceId, {
         role,
         email: email.trim().length > 0 ? email.trim() : null,
       });
       setCreated(invite);
-      onCreated(invite);
+      onCreated?.(invite);
     } catch (e2) {
       toast.error(`Не удалось: ${(e2 as Error).message}`);
     } finally {
@@ -97,10 +105,11 @@ export function InviteDialog({ projectId, open, onClose, onCreated }: Props): Re
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Пригласить в проект</DialogTitle>
+          <DialogTitle>Пригласить в пространство</DialogTitle>
           <DialogDescription>
-            Если у получателя есть аккаунт — ему придёт уведомление в системе и письмо на
-            email. Иначе — отправь ссылку любым каналом. Срок действия — 7 дней.
+            Участник получит доступ ко всем проектам пространства, включая будущие. Если у
+            получателя есть аккаунт — придёт уведомление и письмо; иначе отправь ссылку любым
+            каналом. Срок действия — 7 дней.
           </DialogDescription>
         </DialogHeader>
 
@@ -191,15 +200,15 @@ export function InviteDialog({ projectId, open, onClose, onCreated }: Props): Re
               </div>
               <p className="text-xs text-muted-foreground">
                 {role === 'editor'
-                  ? 'Редактор: создаёт/правит задачи, комментарии, KB, аттачи. Не может управлять командой.'
-                  : 'Наблюдатель: только смотрит. Может оставлять комментарии.'}
+                  ? 'Редактор: создаёт/правит задачи, комментарии, KB во всех проектах пространства. Не управляет командой.'
+                  : 'Наблюдатель: только смотрит проекты пространства. Может оставлять комментарии.'}
               </p>
             </div>
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={onClose} disabled={submitting}>
                 Отмена
               </Button>
-              <Button type="submit" disabled={submitting}>
+              <Button type="submit" disabled={submitting || !targetWorkspaceId}>
                 {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
                 Пригласить
               </Button>

@@ -1,7 +1,6 @@
 import type { Project, ProjectStatus } from '@/domain/project/Project';
 import type { ProjectAnalytics, ProjectActivity } from '@/domain/project/ProjectAnalytics';
 import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
-import type { ProjectInvite, ProjectInviteRole } from '@/domain/project/ProjectInvite';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 import type { KanbanBoardSettings } from '@/domain/kanban/KanbanSettings';
 
@@ -106,11 +105,6 @@ export type UpdateProjectInput = {
   readonly coverPosition?: number;
 };
 
-export type CreateInviteInput = {
-  readonly role: ProjectInviteRole;
-  readonly email: string | null;
-};
-
 // Результат проверки: используется ли тот же git-репо в чужом проекте.
 export type GitCollision = {
   readonly exists: boolean;
@@ -182,7 +176,7 @@ export interface ProjectRepository {
   // но затрагивает только favorite_sort_order для favorites текущего юзера.
   reorderFavorites(orderedIds: readonly string[]): Promise<void>;
 
-  // Multi-tenancy: members + invites. Owner-only операции упадут 403 на сервере.
+  // Multi-tenancy: members. Owner-only операции упадут 403 на сервере.
   listMembers(projectId: string): Promise<ProjectMember[]>;
   updateMemberRole(
     projectId: string,
@@ -191,9 +185,6 @@ export interface ProjectRepository {
   ): Promise<void>;
   removeMember(projectId: string, userId: string): Promise<void>;
   transferOwnership(projectId: string, toUserId: string): Promise<void>;
-  listInvites(projectId: string): Promise<ProjectInvite[]>;
-  createInvite(projectId: string, input: CreateInviteInput): Promise<ProjectInvite>;
-  deleteInvite(projectId: string, inviteId: string): Promise<void>;
 
   // Git-collision → join-request: проверка совпадения репо + заявка на вступление +
   // её разрешение владельцем (accept/decline).

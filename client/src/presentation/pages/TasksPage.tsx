@@ -164,7 +164,6 @@ export function TasksPage(): React.ReactElement {
       {members.length > 1 && (
         <MemberAvatarStack
           members={members}
-          projectId={data.id}
           canInvite={data.role === 'owner' || data.role === 'editor'}
         />
       )}
