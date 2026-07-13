@@ -65,8 +65,8 @@ export type JoinRequestPayload = {
   readonly actorDisplayName: string;
 };
 
-// Делегирование inbox-задачи. Прилетает делегату с кнопками Accept/Decline
-// в UI (на странице уведомлений и в верхнем блоке «Делегировано мне» в инбоксе).
+// Поручение задачи. Прилетает делегату; информационное — делегирование принимается
+// автоматически (спека §4), кнопок Принять/Отклонить нет.
 export type TaskDelegationPayload = {
   readonly type: 'task_delegation';
   readonly delegationId: string;

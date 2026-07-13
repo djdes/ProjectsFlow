@@ -89,17 +89,23 @@ test('all: project-less personal notification (inbox delegation) included', asyn
   assert.equal(items[0]!.type, 'notification');
 });
 
-test('action: only actionable unread notifications, scoped', async () => {
+test('action: workspace_invite/project_invite/join_request actionable; task_delegation и mention — нет', async () => {
   const feed = makeFeed({
     notifs: [
       notif('inv', 'project_invite', '2026-06-24T10:00:00Z', 'p1'),
+      notif('wsinv', 'workspace_invite', '2026-06-24T10:30:00Z', null),
       notif('mention', 'comment_mention', '2026-06-24T11:00:00Z', 'p1'),
-      notif('read', 'task_delegation', '2026-06-24T12:00:00Z', null, new Date('2026-06-24T12:30:00Z')),
+      notif('deleg', 'task_delegation', '2026-06-24T12:00:00Z', null),
+      notif('readJoin', 'join_request', '2026-06-24T12:30:00Z', 'p1', new Date('2026-06-24T13:00:00Z')),
     ],
   });
   const items = await feed.execute('u1', 'w1', { tab: 'action', limit: 10 });
-  // mention не actionable; read — прочитано → только invite.
-  assert.deepEqual(items.map((i) => (i.type === 'notification' ? i.notification.id : '')), ['inv']);
+  // mention — не actionable; deleg — делегирование мгновенное, действия нет;
+  // readJoin — прочитан; остаются wsinv (10:30) и inv (10:00), по убыванию времени.
+  assert.deepEqual(
+    items.map((i) => (i.type === 'notification' ? i.notification.id : '')),
+    ['wsinv', 'inv'],
+  );
 });
 
 test('all: notifications past the first page are reachable via before-cursor', async () => {
