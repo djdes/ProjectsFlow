@@ -109,6 +109,9 @@ type Props = {
   // (их даёт InboxUnifiedDnd на странице), а регистрирует свои хендлеры и операции в этом
   // реестре. null/undefined (доски проектов) — прежнее поведение без изменений.
   externalDnd?: UnifiedDndRef | null;
+  // Верхний офсет для sticky-шапок колонок (Notion: при скролле липнут заголовки
+  // колонок, а не строка вкладок). undefined — не закрепляем (инбокс).
+  stickyHeaderTop?: number;
 };
 
 // Локальная ISO-дата 'YYYY-MM-DD' (без UTC-сдвига) — для сравнения с deadline.
@@ -242,7 +245,7 @@ function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStat
   return out;
 }
 
-export function KanbanBoard({ projectId, showCommits = true, projectName, hideDone = false, memberCount, onOpenAutomation, bleedNegClass = '', bleedPadClass = '', externalDnd = null }: Props): React.ReactElement {
+export function KanbanBoard({ projectId, showCommits = true, projectName, hideDone = false, memberCount, onOpenAutomation, bleedNegClass = '', bleedPadClass = '', externalDnd = null, stickyHeaderTop }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const { user } = useCurrentUser();
   const { projectRepository } = useContainer();
@@ -1053,6 +1056,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
                 key={status}
                 status={status}
                 label={label}
+                stickyHeaderTop={stickyHeaderTop}
                 tasks={filterTasks(hideDone && status === 'done' ? [] : grouped[status])}
                 onCreate={(s) => setDialog({ mode: 'create', status: s })}
                 onEdit={(t) => setDialog({ mode: 'edit', task: t })}

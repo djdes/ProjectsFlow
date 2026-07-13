@@ -668,7 +668,12 @@ export function ProjectBoardViews({
       <div
         id="pf-views-tabs-row"
         style={{ top: stickyTop }}
-        className="group/tabs sticky z-30 flex items-center gap-0.5 bg-background pb-1"
+        className={cn(
+          'group/tabs z-30 flex items-center gap-0.5 bg-background pb-1',
+          // На канбане строку вкладок НЕ закрепляем — при скролле липнут только шапки
+          // колонок (запрос). В остальных видах — как раньше (нужна для панели выбора).
+          !isKanban && 'sticky',
+        )}
       >
         {/* Компактный переключатель вью (узкий экран). */}
         <div className="flex min-w-0 flex-1 items-center md:hidden">
@@ -1002,6 +1007,7 @@ export function ProjectBoardViews({
           onOpenAutomation={onOpenAutomation}
           bleedNegClass={bleedNegClass}
           bleedPadClass={bleedPadClass}
+          stickyHeaderTop={stickyTop}
         />
       ) : activeType === 'table' ? (
         <TableView

@@ -6,6 +6,7 @@ import {
   BookOpen,
   Bot,
   Download,
+  EyeOff,
   Link as LinkIcon,
   MoreHorizontal,
   Search,
@@ -23,8 +24,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { useTaskHiding, setTaskHiding } from '@/presentation/components/tasks/taskHidingSetting';
 import type { Project } from '@/domain/project/Project';
 import { taskTitle } from '@/presentation/components/tasks/views/viewShared';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
@@ -62,6 +65,7 @@ export function ProjectActionsMenu({
   const { projectRepository, taskRepository } = useContainer();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const taskHiding = useTaskHiding();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const projectId = project.id;
   const isOwner = project.role === 'owner';
@@ -244,6 +248,15 @@ export function ProjectActionsMenu({
               className="h-7 w-full rounded-md bg-accent/60 pl-7 pr-2 text-xs outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
             />
           </div>
+          {/* Глобальный тумблер «Скрывать лишние задачи» (на весь сайт). Выкл (дефолт) —
+              канбаны показывают ВСЕ задачи сразу, без «Показать ещё». */}
+          {!query && (
+            <label className="mb-1 flex cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-1.5 text-sm transition-colors hover:bg-accent/60">
+              <EyeOff className="size-4 text-muted-foreground" />
+              <span className="min-w-0 flex-1">Скрывать лишние задачи</span>
+              <Switch checked={taskHiding} onCheckedChange={setTaskHiding} />
+            </label>
+          )}
           <div className="max-h-96 overflow-y-auto">
             {filtered.map((a, i) => {
               const prev = filtered[i - 1];

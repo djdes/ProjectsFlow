@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTaskHiding } from './taskHidingSetting';
 
 // Порционный показ карточек канбан-колонки по всему сайту: первые 4, кнопка
 // «Показать ещё» добавляет по 4 — колонки не растягивают страницу километровым
@@ -18,14 +19,16 @@ export type ColumnPreview = {
 };
 
 export function useColumnPreview(total: number): ColumnPreview {
+  const hiding = useTaskHiding();
   const [limit, setLimit] = useState(COLUMN_PREVIEW_COUNT);
-  const shownCount = Math.min(limit, total);
+  // Скрытие ВЫКЛючено (дефолт) → показываем ВСЕ задачи, «Показать ещё» не появляется.
+  const shownCount = hiding ? Math.min(limit, total) : total;
   return {
     shownCount,
-    hiddenCount: Math.max(0, total - shownCount),
+    hiddenCount: hiding ? Math.max(0, total - shownCount) : 0,
     // Гейт и на total: раскрытая колонка, усохшая до ≤4 задач, не должна показывать
     // сиротскую «Свернуть» (устаревший limit при этом безвреден — кнопки просто нет).
-    expanded: limit > COLUMN_PREVIEW_COUNT && total > COLUMN_PREVIEW_COUNT,
+    expanded: hiding && limit > COLUMN_PREVIEW_COUNT && total > COLUMN_PREVIEW_COUNT,
     showMore: () => setLimit((c) => c + COLUMN_PREVIEW_COUNT),
     collapse: () => setLimit(COLUMN_PREVIEW_COUNT),
   };

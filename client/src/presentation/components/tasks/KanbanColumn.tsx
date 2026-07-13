@@ -42,6 +42,9 @@ type Props = {
   status: TaskStatus;
   // Пустая строка ⇒ хедер без названия (backlog-колонка). Счётчик и `+` остаются.
   label: string;
+  // Верхний офсет для sticky-шапки колонки (Notion: заголовки липнут при скролле).
+  // undefined — шапка не закрепляется.
+  stickyHeaderTop?: number;
   tasks: Task[];
   onCreate: (status: TaskStatus) => void;
   onEdit: (task: Task) => void;
@@ -124,6 +127,7 @@ function doneBucket(d: Date): string {
 export function KanbanColumn({
   status,
   label,
+  stickyHeaderTop,
   tasks,
   onCreate,
   onEdit,
@@ -298,8 +302,15 @@ export function KanbanColumn({
       )}
     >
       <div
+        style={stickyHeaderTop != null && !preview ? { top: stickyHeaderTop } : undefined}
         className={cn(
           'flex shrink-0 items-center justify-between gap-2 px-3 pb-1 pt-2.5',
+          // Notion: шапка колонки липнет при скролле страницы (заголовки колонок
+          // остаются видны). Фрост-фон (bg-muted/85 + blur) прячет карточки, уезжающие
+          // под неё, и сохраняет тон колонки.
+          stickyHeaderTop != null &&
+            !preview &&
+            'sticky z-20 rounded-t-xl bg-muted/85 backdrop-blur-md dark:bg-muted/90',
           // Режим выделения: подсвечиваем шапку акцентом, чтобы было видно активную колонку.
           selectionMode && 'rounded-t-xl bg-primary/10',
         )}
