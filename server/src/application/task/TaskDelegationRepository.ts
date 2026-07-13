@@ -45,8 +45,9 @@ export type DelegatedToOthersRow = AssignedDelegationRow & {
 };
 
 export interface TaskDelegationRepository {
-  // Создаёт row со status='pending'. Уникальность активной делегации (=одна pending|accepted
-  // на task) проверяется в application через findActiveForTask до insert.
+  // Создаёт row (актуальные пути — status='accepted', см. поле status выше). Уникальность
+  // активной делегации (=одна pending|accepted на task) проверяется в application через
+  // findActiveForTask до insert.
   create(input: CreateDelegationInput): Promise<TaskDelegation>;
   // Активная (pending|accepted) делегация для задачи. null если нет.
   findActiveForTask(taskId: string): Promise<TaskDelegation | null>;
