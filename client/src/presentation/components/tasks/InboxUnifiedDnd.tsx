@@ -483,8 +483,18 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
         taskTitle={
           pendingBoardReassign ? plainTaskTitle(pendingBoardReassign.task.description ?? '') : ''
         }
-        fromName={pendingBoardReassign?.task.delegation?.delegateDisplayName ?? null}
-        toName={pendingBoardReassign?.member.displayName ?? ''}
+        from={
+          pendingBoardReassign?.task.delegation
+            ? {
+                name: pendingBoardReassign.task.delegation.delegateDisplayName,
+                avatarUrl: pendingBoardReassign.task.delegation.delegateAvatarUrl ?? null,
+              }
+            : null
+        }
+        to={{
+          name: pendingBoardReassign?.member.displayName ?? '',
+          avatarUrl: pendingBoardReassign?.member.avatarUrl ?? null,
+        }}
         onCancel={() => setPendingBoardReassign(null)}
         onConfirm={async () => {
           const pending = pendingBoardReassign;

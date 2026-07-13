@@ -25,6 +25,7 @@ import {
   CalendarRange,
   Eye,
   EyeOff,
+  ArrowRight,
   Filter,
   Flag,
   FolderKanban,
@@ -345,19 +346,16 @@ export function AssignedToMeBlock({
         .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
     return { from: toArr(from), to: toArr(to), projects: toArr(projects) };
   }, [byMeTasks]);
-  // Выбранное в фильтре значение исчезло из данных (делегации завершились/отозваны) —
-  // сбрасываем этот фильтр, чтобы вкладка не выглядела пустой без причины.
+  // Проект-фильтр сбрасываем, если проект исчез из данных (архив/удаление) — иначе вкладка
+  // выглядела бы пустой без причины. Фильтры «от кого»/«кому» НЕ сбрасываем: клик по аватару
+  // участника выставляет фильтр даже на того, у кого сейчас нет поручений — держим выбор
+  // активным и показываем пустое состояние. (Раньше сброс срабатывал сразу после клика по
+  // участнику без поручений → «фильтр сбрасывался, аватар не выделялся».)
   useEffect(() => {
-    if (filterFrom && !byMeTasks.some((t) => t.delegation.creatorUserId === filterFrom)) {
-      setFilterFrom(null);
-    }
-    if (filterTo && !byMeTasks.some((t) => t.delegation.delegateUserId === filterTo)) {
-      setFilterTo(null);
-    }
     if (filterProject && !byMeTasks.some((t) => t.projectId === filterProject)) {
       setFilterProject(null);
     }
-  }, [byMeTasks, filterFrom, filterTo, filterProject]);
+  }, [byMeTasks, filterProject]);
   // Группировку (проект/дата/дедлайн/приоритет) для СПИСКА делает чистый хелпер.
   // Направление = активная вкладка: влияет на подпись inbox-групп («Личные · кто/кому»).
   const groups = useMemo(
@@ -838,8 +836,18 @@ export function AssignedToMeBlock({
       <DelegateConfirmDialog
         open={pendingReassign !== null}
         taskTitle={pendingReassign ? plainTaskTitle(pendingReassign.item.description ?? '') : ''}
-        fromName={pendingReassign?.item.delegation.delegateDisplayName ?? null}
-        toName={pendingReassign?.member.displayName ?? ''}
+        from={
+          pendingReassign
+            ? {
+                name: pendingReassign.item.delegation.delegateDisplayName,
+                avatarUrl: pendingReassign.item.delegation.delegateAvatarUrl ?? null,
+              }
+            : null
+        }
+        to={{
+          name: pendingReassign?.member.displayName ?? '',
+          avatarUrl: pendingReassign?.member.avatarUrl ?? null,
+        }}
         onCancel={() => setPendingReassign(null)}
         onConfirm={async () => {
           const pending = pendingReassign;
@@ -1102,8 +1110,9 @@ function UserCube({
       <span className="max-w-[7rem] truncate font-medium">
         {dragging && isOver ? 'Делегировать' : member.displayName}
       </span>
-      {/* Активный фильтр — маленький × снимает его (stopPropagation — не даём клику
-          провалиться в onToggleFilter кубика, у него тот же эффект, но так явнее). */}
+      {/* Активный фильтр — инлайновый × ВНУТРИ пилюли (не absolute: ряд аватаров в
+          overflow-x-auto обрезал бы вынесенный badge — «крестик отображался фигово»).
+          stopPropagation — клик по × снимает фильтр, не проваливаясь в onClick кубика. */}
       {!dragging && filterActive && onToggleFilter && (
         <button
           type="button"
@@ -1112,9 +1121,9 @@ function UserCube({
             onToggleFilter();
           }}
           aria-label="Снять фильтр"
-          className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm ring-1 ring-background"
+          className="-mr-1 ml-0.5 flex size-4 shrink-0 items-center justify-center rounded-full text-primary/70 transition-colors hover:bg-primary/15 hover:text-primary"
         >
-          <X className="size-2.5" />
+          <X className="size-3" />
         </button>
       )}
     </div>
@@ -1229,44 +1238,85 @@ export function FutureDeadlineDialog({
   );
 }
 
+// Один участник в диалоге делегирования: подпись-роль + аватар с hover-карточкой (наведи —
+// увидишь человека) + имя. highlight — получатель (primary-ринг, имя жирнее).
+function DelegatePerson({
+  name,
+  avatarUrl,
+  label,
+  highlight = false,
+}: {
+  name: string;
+  avatarUrl?: string | null;
+  label: string;
+  highlight?: boolean;
+}): React.ReactElement {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+        {label}
+      </span>
+      <UserAvatarHover
+        displayName={name}
+        avatarUrl={avatarUrl}
+        subtitle="участник пространства"
+        triggerClassName={cn(
+          'size-11 text-sm',
+          highlight && 'ring-2 ring-primary/50 ring-offset-2 ring-offset-background',
+        )}
+      />
+      <span
+        className={cn(
+          'max-w-[8rem] truncate text-xs',
+          highlight ? 'font-medium text-foreground' : 'text-muted-foreground',
+        )}
+      >
+        {name}
+      </span>
+    </div>
+  );
+}
+
 // Подтверждение делегирования дропом на кубик участника (спека 2026-07-13). Единый диалог
 // для обоих происхождений драга: карточки блока «Входящих» (AssignedToMeBlock) и карточки
 // нижней доски (InboxUnifiedDnd → dropBoardTaskOnUser) — чтобы дроп на один и тот же кубик
-// вёл себя одинаково. Показывает название задачи, текущего делегата (fromName; null —
-// свежее делегирование без делегата, строку прячем) и нового. Кнопки блокируются на время
-// запроса (защита от двойного клика/двойного делегирования).
+// вёл себя одинаково. Название задачи + визуальный «от кого → кому» с аватарами (from=null —
+// свежее делегирование, показываем только получателя). Кнопки блокируются на время запроса.
 export function DelegateConfirmDialog({
   open,
   taskTitle,
-  fromName,
-  toName,
+  from,
+  to,
   onConfirm,
   onCancel,
 }: {
   open: boolean;
   taskTitle: string;
-  fromName: string | null;
-  toName: string;
+  from: { name: string; avatarUrl?: string | null } | null;
+  to: { name: string; avatarUrl?: string | null };
   onConfirm: () => Promise<void> | void;
   onCancel: () => void;
 }): React.ReactElement {
   const [busy, setBusy] = useState(false);
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !busy && onCancel()}>
-      <DialogContent className="max-w-xs gap-3 p-5">
+      <DialogContent className="max-w-sm gap-4 p-5">
         <DialogHeader>
           <DialogTitle className="text-base">Делегировать задачу?</DialogTitle>
         </DialogHeader>
-        <div className="space-y-2 text-sm">
-          <p className="line-clamp-3 font-medium text-foreground">{taskTitle || 'Задача'}</p>
-          {fromName && (
-            <p className="text-muted-foreground">
-              Сейчас у: <span className="font-medium text-foreground">{fromName}</span>
-            </p>
+        <p className="line-clamp-2 text-sm text-muted-foreground">{taskTitle || 'Задача'}</p>
+        {/* «Сейчас у» → «Кому» с аватарами: наведи на аву — карточка человека. Свежее
+            делегирование (from=null) — только получатель. */}
+        <div className="flex items-center justify-center gap-2 rounded-lg border bg-muted/30 px-2 py-3">
+          {from ? (
+            <>
+              <DelegatePerson name={from.name} avatarUrl={from.avatarUrl} label="Сейчас у" />
+              <ArrowRight className="size-4 shrink-0 self-center text-muted-foreground/50" />
+              <DelegatePerson name={to.name} avatarUrl={to.avatarUrl} label="Кому" highlight />
+            </>
+          ) : (
+            <DelegatePerson name={to.name} avatarUrl={to.avatarUrl} label="Делегировать" highlight />
           )}
-          <p className="text-muted-foreground">
-            Делегировать: <span className="font-medium text-foreground">{toName}</span>
-          </p>
         </div>
         <DialogFooter>
           <Button variant="outline" disabled={busy} onClick={onCancel}>
