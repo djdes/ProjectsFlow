@@ -150,13 +150,11 @@ import { AcceptTaskDelegation } from './application/task/AcceptTaskDelegation.js
 import { DeclineTaskDelegation } from './application/task/DeclineTaskDelegation.js';
 import { WithdrawTaskDelegation } from './application/task/WithdrawTaskDelegation.js';
 import { RelinquishTaskDelegation } from './application/task/RelinquishTaskDelegation.js';
-import { ListMyPendingDelegations } from './application/task/ListMyPendingDelegations.js';
 import { ListTasksAssignedToMe } from './application/task/ListTasksAssignedToMe.js';
 import { ListTasksDelegatedToOthers } from './application/task/ListTasksDelegatedToOthers.js';
 import { MoveTaskToProject } from './application/task/MoveTaskToProject.js';
 import { DelegateExistingTask } from './application/task/DelegateExistingTask.js';
 import { ReassignTaskDelegation } from './application/task/ReassignTaskDelegation.js';
-import { InviteAndDelegateTask } from './application/task/InviteAndDelegateTask.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
 import { DrizzleAiPromptJobRepository } from './infrastructure/repositories/DrizzleAiPromptJobRepository.js';
@@ -2026,28 +2024,8 @@ const { app, devProxyUpgrade } = createApp({
     }),
   },
   delegations: {
-    accept: new AcceptTaskDelegation({
-      delegations: taskDelegationRepo,
-      tasks: taskRepo,
-      projects: projectRepo,
-      members: projectMemberRepo,
-      users: userRepo,
-      notifications: notificationRepo,
-      idGen: idGenerator,
-    }),
-    decline: new DeclineTaskDelegation({
-      delegations: taskDelegationRepo,
-      tasks: taskRepo,
-      projects: projectRepo,
-      users: userRepo,
-      notifications: notificationRepo,
-      email: emailSender,
-      idGen: idGenerator,
-      appUrl: appBaseUrl,
-    }),
     withdraw: new WithdrawTaskDelegation({ delegations: taskDelegationRepo }),
     relinquish: new RelinquishTaskDelegation({ delegations: taskDelegationRepo }),
-    listPending: new ListMyPendingDelegations(taskDelegationRepo),
     listAssignedToMe: new ListTasksAssignedToMe({
       delegations: taskDelegationRepo,
       tasks: taskRepo,
@@ -2085,17 +2063,6 @@ const { app, devProxyUpgrade } = createApp({
       appUrl: appBaseUrl,
     }),
     reassignDelegation: new ReassignTaskDelegation({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      tasks: taskRepo,
-      delegations: taskDelegationRepo,
-      users: userRepo,
-      notifications: notificationRepo,
-      email: emailSender,
-      idGen: idGenerator,
-      appUrl: appBaseUrl,
-    }),
-    inviteAndDelegate: new InviteAndDelegateTask({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,

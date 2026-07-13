@@ -125,20 +125,16 @@ import type { UpdateTaskComment } from '../application/task/UpdateTaskComment.js
 import type { DeleteTaskComment } from '../application/task/DeleteTaskComment.js';
 import type { RequestRalphCancel } from '../application/task/RequestRalphCancel.js';
 import type { RevokeRalphCancel } from '../application/task/RevokeRalphCancel.js';
-import type { AcceptTaskDelegation } from '../application/task/AcceptTaskDelegation.js';
-import type { DeclineTaskDelegation } from '../application/task/DeclineTaskDelegation.js';
 import type { WithdrawTaskDelegation } from '../application/task/WithdrawTaskDelegation.js';
 import type { RelinquishTaskDelegation } from '../application/task/RelinquishTaskDelegation.js';
 import type { BoardViewRepository } from '../application/project/BoardViewRepository.js';
 import type { TaskTemplateRepository } from '../application/task/TaskTemplateRepository.js';
 import type { TaskPropertyRepository } from '../application/task/TaskPropertyRepository.js';
-import type { ListMyPendingDelegations } from '../application/task/ListMyPendingDelegations.js';
 import type { ListTasksAssignedToMe } from '../application/task/ListTasksAssignedToMe.js';
 import type { ListTasksDelegatedToOthers } from '../application/task/ListTasksDelegatedToOthers.js';
 import type { MoveTaskToProject } from '../application/task/MoveTaskToProject.js';
 import type { DelegateExistingTask } from '../application/task/DelegateExistingTask.js';
 import type { ReassignTaskDelegation } from '../application/task/ReassignTaskDelegation.js';
-import type { InviteAndDelegateTask } from '../application/task/InviteAndDelegateTask.js';
 import type { ListNotifications } from '../application/notifications/ListNotifications.js';
 import type { CountUnreadNotifications } from '../application/notifications/CountUnreadNotifications.js';
 import type { MarkNotificationRead } from '../application/notifications/MarkNotificationRead.js';
@@ -540,17 +536,13 @@ type AppDeps = {
     readonly sendNow: TriggerDailyDigestNow;
   };
   readonly delegations: {
-    readonly accept: AcceptTaskDelegation;
-    readonly decline: DeclineTaskDelegation;
     readonly withdraw: WithdrawTaskDelegation;
     readonly relinquish: RelinquishTaskDelegation;
-    readonly listPending: ListMyPendingDelegations;
     readonly listAssignedToMe: ListTasksAssignedToMe;
     readonly listDelegatedToOthers: ListTasksDelegatedToOthers;
     readonly assignToProject: MoveTaskToProject;
     readonly delegateExisting: DelegateExistingTask;
     readonly reassignDelegation: ReassignTaskDelegation;
-    readonly inviteAndDelegate: InviteAndDelegateTask;
   };
   readonly agent: {
     readonly createAgentToken: CreateAgentToken;
@@ -787,7 +779,6 @@ export function createApp(deps: AppDeps): CreatedApp {
       assignToProject: deps.delegations.assignToProject,
       delegateExisting: deps.delegations.delegateExisting,
       reassignDelegation: deps.delegations.reassignDelegation,
-      inviteAndDelegate: deps.delegations.inviteAndDelegate,
     }),
   );
   // LIVE-вкладка (cookie requireAuth + requireProjectAccess внутри): read + SSE /stream.
