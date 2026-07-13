@@ -124,6 +124,9 @@ import {
   WorkspaceNameEmptyError,
   UserNotFoundByEmailError,
   NotProjectOwnerError,
+  WorkspaceInviteNotFoundError,
+  WorkspaceInviteExpiredError,
+  WorkspaceInviteAlreadyUsedError,
 } from '../../domain/workspace/errors.js';
 import {
   ChatMessageNotFoundError,
@@ -700,6 +703,18 @@ export function errorHandler(
   }
   if (err instanceof LastOwnerError) {
     res.status(409).json({ error: 'workspace_last_owner', message: 'Нельзя удалить или понизить единственного владельца' });
+    return;
+  }
+  if (err instanceof WorkspaceInviteNotFoundError) {
+    res.status(404).json({ error: 'invite_not_found', message: 'Приглашение не найдено' });
+    return;
+  }
+  if (err instanceof WorkspaceInviteExpiredError) {
+    res.status(410).json({ error: 'invite_expired', message: 'Срок действия приглашения истёк' });
+    return;
+  }
+  if (err instanceof WorkspaceInviteAlreadyUsedError) {
+    res.status(410).json({ error: 'invite_used', message: 'Это приглашение уже использовано' });
     return;
   }
   if (err instanceof WorkspaceNotEmptyError) {
