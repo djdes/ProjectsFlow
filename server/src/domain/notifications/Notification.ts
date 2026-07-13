@@ -39,6 +39,19 @@ export type ProjectInvitePayload = {
   readonly actorDisplayName: string;
 };
 
+// Приглашение в пространство (спека unified-workspace §6). Создаётся при invite на email
+// зарегистрированного юзера — уведомление с кнопкой «Принять» (token → /invite/:token).
+export type WorkspaceInvitePayload = {
+  readonly type: 'workspace_invite';
+  readonly workspaceId: string;
+  readonly workspaceName: string;
+  readonly role: 'editor' | 'viewer';
+  readonly inviteId: string;
+  readonly token: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
 // Запрос на вступление по совпадению git-репо. Прилетает владельцу проекта; он решает,
 // пускать ли заявителя. Подтверждение добавляет заявителя в project_members.
 export type JoinRequestPayload = {
@@ -154,6 +167,7 @@ export type CloseProposalPayload = {
 export type NotificationPayload =
   | CommentMentionPayload
   | ProjectInvitePayload
+  | WorkspaceInvitePayload
   | JoinRequestPayload
   | TaskDelegationPayload
   | TaskDelegationResolvedPayload

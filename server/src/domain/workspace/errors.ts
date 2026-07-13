@@ -67,3 +67,24 @@ export class NotProjectOwnerError extends Error {
     this.name = 'NotProjectOwnerError';
   }
 }
+
+export class WorkspaceInviteNotFoundError extends Error {
+  constructor() {
+    super('Workspace invite not found');
+    this.name = 'WorkspaceInviteNotFoundError';
+  }
+}
+
+export class WorkspaceInviteExpiredError extends Error {
+  constructor() {
+    super('Workspace invite expired');
+    this.name = 'WorkspaceInviteExpiredError';
+  }
+}
+
+export class WorkspaceInviteAlreadyUsedError extends Error {
+  constructor() {
+    super('Workspace invite already used');
+    this.name = 'WorkspaceInviteAlreadyUsedError';
+  }
+}
