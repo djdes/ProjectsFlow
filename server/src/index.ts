@@ -26,6 +26,7 @@ import { DrizzleActivityRepository } from './infrastructure/repositories/Drizzle
 import { ActivityRecorder } from './application/activity/ActivityRecorder.js';
 import { GetActivityFeed } from './application/activity/GetActivityFeed.js';
 import { DrizzleProjectInviteRepository } from './infrastructure/repositories/DrizzleProjectInviteRepository.js';
+import { DrizzleWorkspaceInviteRepository } from './infrastructure/repositories/DrizzleWorkspaceInviteRepository.js';
 import { DrizzleNotificationRepository } from './infrastructure/repositories/DrizzleNotificationRepository.js';
 import { DrizzleRecentTaskViewRepository } from './infrastructure/repositories/DrizzleRecentTaskViewRepository.js';
 import { DrizzleBoardViewRepository } from './infrastructure/repositories/DrizzleBoardViewRepository.js';
@@ -316,6 +317,7 @@ const sessionRepo = new DrizzleSessionRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const projectMemberRepo = new DrizzleProjectMemberRepository(db);
 const projectInviteRepo = new DrizzleProjectInviteRepository(db);
+const workspaceInviteRepo = new DrizzleWorkspaceInviteRepository(db);
 const recentTaskViewRepo = new DrizzleRecentTaskViewRepository(db);
 const projectViewRepo = new DrizzleProjectViewRepository(db);
 
@@ -1602,17 +1604,18 @@ const { app, devProxyUpgrade } = createApp({
   invites: {
     getByToken: new GetInviteByToken({
       invites: projectInviteRepo,
+      workspaceInvites: workspaceInviteRepo,
       projects: projectRepo,
+      workspaces: workspaceRepo,
       users: userRepo,
       now,
     }),
     accept: new AcceptProjectInvite({
       invites: projectInviteRepo,
-      members: projectMemberRepo,
-      users: userRepo,
+      projects: projectRepo,
+      workspaces: workspaceRepo,
       now,
       activityRecorder,
-      hubSync: hubMembershipSync,
     }),
   },
   // Публичная доска (Publish to web, db/096) — анонимный доступ по slug.
