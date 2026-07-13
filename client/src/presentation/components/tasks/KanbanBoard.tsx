@@ -193,39 +193,8 @@ function toVisibleStatus(status: TaskStatus): TaskStatus {
   return status;
 }
 
-// Коллизия для доски (Notion-точность): «over» — карточка, чей ВЕРТИКАЛЬНЫЙ ЦЕНТР
-// ближе всего к КУРСОРУ (а не по перекрытию перетаскиваемого блока). Итог: синяя
-// полоска встаёт в зазор рядом с курсором, а зона каждого зазора = пол-карточки
-// сверху + пол-карточки снизу (запрос юзера). Колонку выбираем по X курсора; в
-// пустой — сама колонка (дроп в конец).
-const boardCollision: CollisionDetection = (args) => {
-  const p = args.pointerCoordinates;
-  if (!p) return rectIntersection(args);
-  const containers = args.droppableContainers;
-  const col = containers.find((c) => {
-    const r = c.rect.current;
-    return c.data.current?.type === 'column' && r != null && p.x >= r.left && p.x <= r.right;
-  });
-  if (!col) return rectIntersection(args);
-  const colStatus = col.data.current?.status as TaskStatus | undefined;
-  const cards = containers.filter((c) => {
-    if (c.data.current?.type !== 'task' || c.rect.current == null) return false;
-    const st = (c.data.current?.task as Task | undefined)?.status;
-    return st != null && colStatus != null && toVisibleStatus(st) === toVisibleStatus(colStatus);
-  });
-  if (cards.length === 0) return [{ id: col.id }];
-  let best = cards[0]!;
-  let bestDist = Infinity;
-  for (const c of cards) {
-    const r = c.rect.current!;
-    const d = Math.abs(p.y - (r.top + r.height / 2));
-    if (d < bestDist) {
-      bestDist = d;
-      best = c;
-    }
-  }
-  return [{ id: best.id }];
-};
+// Коллизия для доски (Notion-точность) вынесена в компонент (нужен ref для передачи
+// решения before/after в handleDragOver) — см. makeBoardCollision ниже.
 
 // Длительность drop-анимации в ms. Используется и dnd-kit'ом для position-lerp'а оверлея,
 // и motion'ом для exit-анимации rotate/scale у обёртки preview — они должны быть равны.
@@ -499,15 +468,44 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
       window.removeEventListener(LIVE_CHANGED_EVENT, onLive);
     };
   }, [projectId]);
-  // Живой Y курсора (для расчёта before/after синей полоски по позиции курсора —
-  // DragOverEvent не даёт надёжного delta).
-  const pointerYRef = useRef<number | null>(null);
-  useEffect(() => {
-    const onMove = (e: PointerEvent): void => {
-      pointerYRef.current = e.clientY;
-    };
-    window.addEventListener('pointermove', onMove, { passive: true });
-    return () => window.removeEventListener('pointermove', onMove);
+  // Решение «вставка ПОСЛЕ over-карточки» вычисляется в коллизии (у неё есть точные
+  // pointerCoordinates от dnd-kit) и читается в handleDragOver/End через этот ref.
+  const dropAfterRef = useRef(false);
+  // Коллизия доски: «over» — карточка, чей вертикальный ЦЕНТР ближе всего к КУРСОРУ
+  // (а не по перекрытию перетаскиваемого блока). Полоска встаёт в зазор рядом с
+  // курсором; зона каждого зазора = пол-карточки сверху + пол-карточки снизу (Notion).
+  const boardCollision = useCallback<CollisionDetection>((args) => {
+    const p = args.pointerCoordinates;
+    if (!p) return rectIntersection(args);
+    const containers = args.droppableContainers;
+    const col = containers.find((c) => {
+      const r = c.rect.current;
+      return c.data.current?.type === 'column' && r != null && p.x >= r.left && p.x <= r.right;
+    });
+    if (!col) return rectIntersection(args);
+    const colStatus = col.data.current?.status as TaskStatus | undefined;
+    const cards = containers.filter((c) => {
+      if (c.data.current?.type !== 'task' || c.rect.current == null) return false;
+      const st = (c.data.current?.task as Task | undefined)?.status;
+      return st != null && colStatus != null && toVisibleStatus(st) === toVisibleStatus(colStatus);
+    });
+    if (cards.length === 0) {
+      dropAfterRef.current = false;
+      return [{ id: col.id }];
+    }
+    let best = cards[0]!;
+    let bestDist = Infinity;
+    for (const c of cards) {
+      const r = c.rect.current!;
+      const d = Math.abs(p.y - (r.top + r.height / 2));
+      if (d < bestDist) {
+        bestDist = d;
+        best = c;
+      }
+    }
+    const br = best.rect.current!;
+    dropAfterRef.current = p.y > br.top + br.height / 2;
+    return [{ id: best.id }];
   }, []);
   // Позиция drop-индикатора: в какой колонке и над каким элементом находится курсор.
   // overId — id задачи (вставка перед ней) или 'column-{status}' (вставка в конец).
@@ -699,15 +697,6 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     setDropTarget(null);
   };
 
-  // Курсор ниже вертикального центра over-карточки? → вставка ПОСЛЕ неё (полоска
-  // снизу), иначе перед (сверху). Y курсора берём из живого pointerYRef (у
-  // DragOverEvent нет надёжного delta), rect — из over.
-  const pointerBelowOverCenter = (e: DragOverEvent | DragEndEvent): boolean => {
-    const overRect = e.over?.rect;
-    const py = pointerYRef.current;
-    if (!overRect || py == null) return false;
-    return py > overRect.top + overRect.height / 2;
-  };
 
   const handleDragOver = (e: DragOverEvent): void => {
     const { active, over } = e;
@@ -731,7 +720,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
       setDropTarget({
         status: toVisibleStatus(overTask.status),
         overId: String(over.id),
-        after: pointerBelowOverCenter(e),
+        after: dropAfterRef.current,
       });
     } else {
       setDropTarget(null);
@@ -795,7 +784,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
       // Курсор ниже центра over-карточки → вставляем ПОСЛЕ неё (иначе перед). Это и
       // чинит «верхняя карточка не двигалась на одну ниже»: дроп на нижнюю половину
       // соседа теперь встаёт за него.
-      else if (pointerBelowOverCenter(e)) insertIndex += 1;
+      else if (dropAfterRef.current) insertIndex += 1;
     }
 
     const beforeTask = insertIndex > 0 ? targetList[insertIndex - 1] : null;
