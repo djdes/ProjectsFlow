@@ -55,10 +55,7 @@ function makeHarness(opts?: {
   const sent: { chatId: number; text: string }[] = [];
   const edits: { messageId: number; text: string; replyMarkup?: any }[] = [];
   const answers: { text?: string }[] = [];
-  const delegateMessages: { userId: string; hasButtons: boolean }[] = [];
-  const accepted: string[] = [];
-  const declined: string[] = [];
-  const assigned: { taskId: string; projectId: string }[] = [];
+  const delegateMessages: { userId: string; buttons: string }[] = [];
   const inboxUserIds: string[] = [];
 
   const draftsRepo = {
@@ -176,47 +173,12 @@ function makeHarness(opts?: {
         return { id: 'inbox1', name: 'Входящие', isInbox: true } as any;
       },
     },
-    accept: {
-      async execute(delegationId: string, userId: string) {
-        accepted.push(delegationId);
-        return {
-          id: delegationId,
-          taskId: 't1',
-          delegateUserId: userId,
-          delegateDisplayName: 'Вася',
-          creatorUserId: 'u1',
-          creatorDisplayName: 'Создатель',
-          status: 'accepted',
-          createdAt: new Date(0),
-          respondedAt: new Date(0),
-        } as any;
-      },
-    },
-    decline: {
-      async execute(delegationId: string, userId: string) {
-        declined.push(delegationId);
-        return {
-          id: delegationId,
-          taskId: 't1',
-          delegateUserId: userId,
-          delegateDisplayName: 'Вася',
-          creatorUserId: 'u1',
-          creatorDisplayName: 'Создатель',
-          status: 'declined',
-          createdAt: new Date(0),
-          respondedAt: new Date(0),
-        } as any;
-      },
-    },
-    assignToProject: {
-      async execute(taskId: string, projectId: string) {
-        assigned.push({ taskId, projectId });
-        return { id: taskId, projectId } as any;
-      },
-    },
     sendNotification: {
       async execute(cmd: any) {
-        delegateMessages.push({ userId: cmd.userId, hasButtons: !!cmd.replyMarkup });
+        delegateMessages.push({
+          userId: cmd.userId,
+          buttons: JSON.stringify(cmd.replyMarkup ?? null),
+        });
         return { status: 'ok' as const, messageId: 5000, chatId: 999 };
       },
     },
@@ -244,7 +206,7 @@ function makeHarness(opts?: {
   };
 
   const service = new TelegramComposerService(deps as any);
-  return { service, drafts, createTaskCalls, sent, edits, answers, delegateMessages, accepted, declined, assigned, inboxUserIds };
+  return { service, drafts, createTaskCalls, sent, edits, answers, delegateMessages, inboxUserIds };
 }
 
 function cq(draftIdOrData: string, tgUserId = 111): TelegramCallbackQuery {
@@ -348,21 +310,22 @@ test('+неоднозначный проект → пикер, выбор кно
   assert.equal(h.createTaskCalls[0]!.projectId, 'p2');
 });
 
-test('+Проект текст @делегат → createTask в inbox с delegateUserId + сообщение делегату с кнопками', async () => {
+test('+Проект текст @делегат → задача СРАЗУ в проекте, делегату карточка Завершить/Комментировать', async () => {
   const h = makeHarness();
   await h.service.startFromMessage(111, 500, '+Альфа Обнови билд @Вася');
   const draftId = [...h.drafts.keys()][0]!;
   await h.service.handleCallback(cq(`tc:${draftId}`));
-  assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1'); // делегирование — только inbox
+  assert.equal(h.createTaskCalls[0]!.projectId, 'p1'); // сразу в проект, без переноса-на-accept
   assert.equal(h.createTaskCalls[0]!.delegateUserId, 'u2');
   assert.equal(h.delegateMessages.length, 1);
   assert.equal(h.delegateMessages[0]!.userId, 'u2');
-  assert.ok(h.delegateMessages[0]!.hasButtons); // Принять/Отказать
-  // intended project сохранён в confirmed-черновике для переноса на accept.
+  // Кнопки действий по задаче, НЕ «Принять/Отказать».
+  assert.ok(h.delegateMessages[0]!.buttons.includes('nd:t1'));
+  assert.ok(h.delegateMessages[0]!.buttons.includes('nc:t1'));
+  assert.ok(!h.delegateMessages[0]!.buttons.includes('da:'));
   const d = h.drafts.get(draftId)!;
   assert.equal(d.status, 'confirmed');
   assert.equal(d.delegationId, 'del1');
-  assert.equal(d.projectId, 'p1');
 });
 
 test('+многословный проект → жадный матч имени, остаток = текст', async () => {
@@ -374,26 +337,13 @@ test('+многословный проект → жадный матч имен�
   assert.equal(h.createTaskCalls[0]!.description, 'Обнови билд');
 });
 
-test('accept (da:) → accept.execute + перенос в проект (делегат — участник)', async () => {
+test('легаси da:/dd: (старые кнопки в чатах) → молчаливый ack, без действий', async () => {
   const h = makeHarness();
-  await h.service.startFromMessage(111, 500, '+Альфа Обнови билд @Вася');
-  const draftId = [...h.drafts.keys()][0]!;
-  await h.service.handleCallback(cq(`tc:${draftId}`)); // создаёт делегирование del1
-  // Делегат (tgUserId=222 → u2) принимает.
   await h.service.handleCallback(cq('da:del1', 222));
-  assert.deepEqual(h.accepted, ['del1']);
-  assert.equal(h.assigned.length, 1);
-  assert.equal(h.assigned[0]!.projectId, 'p1');
-});
-
-test('decline (dd:) → decline.execute', async () => {
-  const h = makeHarness();
-  await h.service.startFromMessage(111, 500, '+Альфа Обнови билд @Вася');
-  const draftId = [...h.drafts.keys()][0]!;
-  await h.service.handleCallback(cq(`tc:${draftId}`));
   await h.service.handleCallback(cq('dd:del1', 222));
-  assert.deepEqual(h.declined, ['del1']);
-  assert.equal(h.assigned.length, 0);
+  assert.equal(h.createTaskCalls.length, 0);
+  assert.equal(h.edits.length, 0);
+  assert.equal(h.answers.length, 2); // оба коллбэка «отвечены», кнопка просто гаснет
 });
 
 test('чужой пользователь не может трогать чужой черновик', async () => {
@@ -536,7 +486,8 @@ test('AI: сегмент с исполнителем → задача в про�
   assert.equal(h.createTaskCalls[0]!.projectId, 'p1'); // в проекте, не в inbox
   assert.equal(h.createTaskCalls[0]!.delegateUserId, 'u2');
   assert.equal(h.delegateMessages.length, 1);
-  assert.ok(h.delegateMessages[0]!.hasButtons);
+  assert.ok(h.delegateMessages[0]!.buttons.includes('nd:t1'));
+  assert.ok(!h.delegateMessages[0]!.buttons.includes('da:'));
 });
 
 test('AI: таймаут → откат на ручной флоу (создаёт как есть)', async () => {
