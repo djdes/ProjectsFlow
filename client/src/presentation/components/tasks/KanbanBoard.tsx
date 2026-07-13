@@ -476,10 +476,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   // курсором; зона каждого зазора = пол-карточки сверху + пол-карточки снизу (Notion).
   const boardCollision = useCallback<CollisionDetection>((args) => {
     const p = args.pointerCoordinates;
-    if (!p) {
-      (window as unknown as { __pfDbg?: unknown }).__pfDbg = { branch: 'no-pointer' };
-      return rectIntersection(args);
-    }
+    if (!p) return rectIntersection(args);
     const containers = args.droppableContainers;
     const col = containers.find((c) => {
       const r = c.rect.current;
@@ -508,14 +505,6 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     }
     const br = best.rect.current!;
     dropAfterRef.current = p.y > br.top + br.height / 2;
-    (window as unknown as { __pfDbg?: unknown }).__pfDbg = {
-      branch: 'nearest',
-      py: p.y,
-      bestTop: br.top,
-      bestH: br.height,
-      center: br.top + br.height / 2,
-      after: dropAfterRef.current,
-    };
     return [{ id: best.id }];
   }, []);
   // Позиция drop-индикатора: в какой колонке и над каким элементом находится курсор.
@@ -736,6 +725,18 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
     } else {
       setDropTarget(null);
     }
+  };
+
+  // onDragOver в dnd-kit срабатывает ТОЛЬКО при смене over-контейнера. Пересечение
+  // середины карточки остаётся над той же карточкой → onDragOver молчит и сторона
+  // (before/after) замирает. Поэтому обновляем `after` на каждом движении: коллизия
+  // уже пересчитала dropAfterRef, здесь лишь синхронизируем его в dropTarget.
+  const handleDragMove = (): void => {
+    setDropTarget((prev) => {
+      if (!prev || prev.overId.startsWith('column-')) return prev;
+      if (prev.after === dropAfterRef.current) return prev;
+      return { ...prev, after: dropAfterRef.current };
+    });
   };
 
   const handleDragEnd = async (e: DragEndEvent): Promise<void> => {
@@ -1195,6 +1196,7 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
             measuring={MEASURING_CONFIG}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
+            onDragMove={handleDragMove}
             onDragEnd={handleDragEnd}
             onDragCancel={handleDragCancel}
           >
