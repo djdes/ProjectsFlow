@@ -23,7 +23,10 @@ export function invitesRouter(deps: Deps): Router {
       const preview = await deps.getByToken.execute(token);
       res.json({
         preview: {
-          projectName: preview.projectName,
+          kind: preview.kind,
+          targetName: preview.targetName,
+          // Легаси-алиас для клиента до правки InvitePage (клиентская секция).
+          projectName: preview.targetName,
           role: preview.role,
           inviterDisplayName: preview.inviterDisplayName,
           inviteEmail: preview.inviteEmail,
