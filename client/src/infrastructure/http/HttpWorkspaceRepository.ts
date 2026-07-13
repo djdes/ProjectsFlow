@@ -4,8 +4,10 @@ import type {
   WorkspaceMember,
   WorkspaceRole,
 } from '@/domain/workspace/Workspace';
+import type { WorkspaceInvite, WorkspaceInviteRole } from '@/domain/workspace/WorkspaceInvite';
 import type {
   CreateWorkspaceInput,
+  CreateWorkspaceInviteInput,
   UpdateWorkspaceInput,
   WorkspaceRepository,
 } from '@/application/workspace/WorkspaceRepository';
@@ -33,6 +35,29 @@ type MemberDto = {
 };
 
 type ProjectDto = { id: string; name: string; icon: string | null };
+
+type WorkspaceInviteDto = {
+  id: string;
+  workspaceId: string;
+  role: WorkspaceInviteRole;
+  email: string | null;
+  expiresAt: string;
+  acceptedAt: string | null;
+  acceptedByUserId: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  token?: string;
+  url?: string;
+};
+
+function inviteFromDto(dto: WorkspaceInviteDto): WorkspaceInvite {
+  return {
+    ...dto,
+    expiresAt: new Date(dto.expiresAt),
+    acceptedAt: dto.acceptedAt ? new Date(dto.acceptedAt) : null,
+    createdAt: new Date(dto.createdAt),
+  };
+}
 
 function fromDto(dto: WorkspaceDto): Workspace {
   return {
@@ -109,6 +134,28 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
 
   async removeMember(id: string, userId: string): Promise<void> {
     await httpClient.delete<void>(`/workspaces/${id}/members/${userId}`);
+  }
+
+  async listInvites(workspaceId: string): Promise<WorkspaceInvite[]> {
+    const { invites } = await httpClient.get<{ invites: WorkspaceInviteDto[] }>(
+      `/workspaces/${workspaceId}/invites`,
+    );
+    return invites.map(inviteFromDto);
+  }
+
+  async createInvite(
+    workspaceId: string,
+    input: CreateWorkspaceInviteInput,
+  ): Promise<WorkspaceInvite> {
+    const { invite } = await httpClient.post<{ invite: WorkspaceInviteDto }>(
+      `/workspaces/${workspaceId}/invites`,
+      input,
+    );
+    return inviteFromDto(invite);
+  }
+
+  async deleteInvite(workspaceId: string, inviteId: string): Promise<void> {
+    await httpClient.delete<void>(`/workspaces/${workspaceId}/invites/${inviteId}`);
   }
 
   async listProjects(id: string): Promise<ProjectDto[]> {
