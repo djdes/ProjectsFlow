@@ -832,6 +832,9 @@ export function PropertyValueCell({
   onChange,
   onAddOption,
   members = [],
+  dataCell,
+  onCellMouseEnter,
+  rangeClass,
 }: {
   property: TaskProperty;
   value: string;
@@ -839,10 +842,18 @@ export function PropertyValueCell({
   onAddOption: (label: string) => Promise<TaskPropertyOption | null>;
   // Участники проекта — для person-свойства (value = userId).
   members?: PropertyMember[];
+  // Excel-выделение (Notion): помечаем клетку data-cell, ловим наведение при протяжке
+  // и подсвечиваем диапазон. Ячейка-«выборка» (select/person) участвует наравне со
+  // стандартными — первый клик выделяет (gate в строке гасит открытие выпадашки).
+  dataCell?: string;
+  onCellMouseEnter?: () => void;
+  rangeClass?: string | null;
 }): React.ReactElement {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  // Общие для всех веток атрибуты выделения (data-cell + наведение при протяжке).
+  const selAttrs = { 'data-cell': dataCell, onMouseEnter: onCellMouseEnter };
 
   // text / number / url / date / phone / email — клик = инлайн-инпут на всю ячейку.
   if (
@@ -869,7 +880,7 @@ export function PropertyValueCell({
               : 'text';
     if (editing) {
       return (
-        <div className="relative border-b border-l">
+        <div {...selAttrs} className={cn('relative border-b border-l', rangeClass)}>
           {/* Notion: редактор раскрывается ПОВЕРХ ячейки РОВНО по её ширине (w-full),
               текст растёт вниз не двигая строки. Тонкая рамка + мягкая тень как в
               Notion (не «плавающий» широкий бокс). Enter — коммит (Shift+Enter —
@@ -932,12 +943,16 @@ export function PropertyValueCell({
     }
     return (
       <button
+        {...selAttrs}
         type="button"
         onClick={() => {
           setDraft(value);
           setEditing(true);
         }}
-        className="min-w-0 border-b border-l px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/40"
+        className={cn(
+          'relative min-w-0 border-b border-l px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/40',
+          rangeClass,
+        )}
       >
         {value ? (
           property.type === 'url' ? (
@@ -954,7 +969,7 @@ export function PropertyValueCell({
 
   if (property.type === 'checkbox') {
     return (
-      <div className="flex items-center border-b border-l px-2 py-1.5">
+      <div {...selAttrs} className={cn('relative flex items-center border-b border-l px-2 py-1.5', rangeClass)}>
         <input
           type="checkbox"
           checked={value === '1'}
@@ -973,8 +988,12 @@ export function PropertyValueCell({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
+            {...selAttrs}
             type="button"
-            className="flex min-w-0 items-center gap-1.5 border-b border-l px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/40"
+            className={cn(
+              'relative flex min-w-0 items-center gap-1.5 border-b border-l px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/40',
+              rangeClass,
+            )}
           >
             {current ? (
               <>
@@ -1044,8 +1063,12 @@ export function PropertyValueCell({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
+          {...selAttrs}
           type="button"
-          className="flex min-w-0 flex-wrap items-center gap-1 border-b border-l px-2 py-1.5 text-left transition-colors hover:bg-accent/40"
+          className={cn(
+            'relative flex min-w-0 flex-wrap items-center gap-1 border-b border-l px-2 py-1.5 text-left transition-colors hover:bg-accent/40',
+            rangeClass,
+          )}
         >
           {selectedIds.length === 0 ? (
             <ChevronDown className="size-3.5 text-muted-foreground/0" />

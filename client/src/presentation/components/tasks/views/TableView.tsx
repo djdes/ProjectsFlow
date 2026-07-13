@@ -823,6 +823,15 @@ export function TableView({
     document.getSelection()?.removeAllRanges();
     setSelRange((prev) => (prev ? { a: prev.a, h: { row, col: colIndexOf(k) } } : prev));
   };
+  // Клетка = ЕДИНСТВЕННАЯ активно-выделенная (диапазон 1×1 с якорем на ней). Нужно,
+  // чтобы ПЕРВЫЙ клик по ячейке-«выборке» (статус/приоритет/срок/участник/select) её
+  // ВЫДЕЛЯЛ (как в Excel), а не открывал выпадашку; редактор открывается ВТОРЫМ кликом
+  // по уже выделенной (Notion). Так же с неё можно начать протяжку диапазона.
+  const isCellActiveSingle = (row: number, k: 'title' | ViewColumn): boolean => {
+    if (!selRange) return false;
+    const single = selRange.a.row === selRange.h.row && selRange.a.col === selRange.h.col;
+    return single && selRange.a.row === row && selRange.a.col === colIndexOf(k);
+  };
   // Стиль ячейки в диапазоне: одиночная — синяя рамка с уголком (как раньше),
   // диапазон — заливка Excel-style.
   const rangeClassFor = (row: number, k: 'title' | ViewColumn): string | null => {
@@ -1290,6 +1299,7 @@ export function TableView({
                 onCellDown={cellDown}
                 onCellEnter={cellEnter}
                 rangeClassFor={rangeClassFor}
+                isCellActiveSingle={isCellActiveSingle}
                 onToggleSelected={(shift) => toggleWithRange(idx, shift)}
                 onOpen={() => setDrawer({ mode: 'edit', task })}
                 onCreateBelow={(above) => setInsertAt({ taskId: task.id, above })}
@@ -1862,6 +1872,7 @@ function TableRow({
   onCellDown,
   onCellEnter,
   rangeClassFor,
+  isCellActiveSingle,
   onToggleSelected,
   onOpen,
   onCreateBelow,
@@ -1907,6 +1918,7 @@ function TableRow({
   onCellDown: (row: number, col: 'title' | ViewColumn, rightButton?: boolean) => void;
   onCellEnter: (row: number, col: 'title' | ViewColumn) => void;
   rangeClassFor: (row: number, col: 'title' | ViewColumn) => string | null;
+  isCellActiveSingle: (row: number, col: 'title' | ViewColumn) => boolean;
   onToggleSelected: (shift: boolean) => void;
   onOpen: () => void;
   onCreateBelow: (above: boolean) => void;
@@ -2081,6 +2093,20 @@ function TableRow({
             const key = cellEl?.getAttribute('data-cell');
             if (key) onCellDown(rowIdx, key as 'title' | ViewColumn, e.button === 2);
           }}
+          // Первый левый клик по ячейке-«выборке» её ВЫДЕЛЯЕТ, а не открывает выпадашку:
+          // гасим pointerdown ДО того, как он дойдёт до Radix-триггера значения (Radix
+          // открывается на pointerdown). Выделение отработает на mousedown (выше). Если
+          // ячейка УЖЕ активна (второй клик) — не мешаем: редактор открывается. Título/
+          // created пропускаем (текст правится своим кликом / read-only), gutter (+/⋮⋮/
+          // чекбокс) — вне [data-cell], его не трогаем (drag ручки-грипа не ломаем).
+          onPointerDownCapture={(e) => {
+            if (e.button !== 0) return;
+            const cellEl = (e.target as HTMLElement).closest('[data-cell]');
+            const key = cellEl?.getAttribute('data-cell');
+            if (!key || key === 'title' || key === 'created') return;
+            if (isCellActiveSingle(rowIdx, key as 'title' | ViewColumn)) return;
+            e.stopPropagation();
+          }}
           className={cn(
             // Границы — на ячейках (см. cellProps/title): зона контролов слева чистая.
             'group relative grid transition-colors hover:bg-accent/40',
@@ -2254,6 +2280,9 @@ function TableRow({
               onChange={(v) => customProps.setValue(task.id, prop.id, v)}
               onAddOption={(label) => customProps.addOption(prop, label)}
               members={customProps.members}
+              dataCell={k}
+              onCellMouseEnter={() => onCellEnter(rowIdx, k as ViewColumn)}
+              rangeClass={rangeClassFor(rowIdx, k as ViewColumn)}
             />
           );
         }
