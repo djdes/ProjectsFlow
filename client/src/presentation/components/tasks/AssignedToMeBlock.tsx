@@ -830,46 +830,21 @@ export function AssignedToMeBlock({
       />
 
       {/* Дроп на кубик другого участника → подтверждение делегирования (спека 2026-07-13):
-          показываем название задачи, у кого сейчас, и кому уходит — прежде чем звать сервер. */}
-      <Dialog open={pendingReassign !== null} onOpenChange={(o) => !o && setPendingReassign(null)}>
-        <DialogContent className="max-w-xs gap-3 p-5">
-          <DialogHeader>
-            <DialogTitle className="text-base">Делегировать задачу?</DialogTitle>
-          </DialogHeader>
-          {pendingReassign && (
-            <div className="space-y-2 text-sm">
-              <p className="line-clamp-3 font-medium text-foreground">
-                {plainTaskTitle(pendingReassign.item.description ?? '') || 'Задача'}
-              </p>
-              <p className="text-muted-foreground">
-                Сейчас у:{' '}
-                <span className="font-medium text-foreground">
-                  {pendingReassign.item.delegation.delegateDisplayName}
-                </span>
-              </p>
-              <p className="text-muted-foreground">
-                Делегировать:{' '}
-                <span className="font-medium text-foreground">{pendingReassign.member.displayName}</span>
-              </p>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingReassign(null)}>
-              Отмена
-            </Button>
-            <Button
-              onClick={async () => {
-                const pending = pendingReassign;
-                if (!pending) return;
-                await reassignTo(pending.item, pending.member);
-                setPendingReassign(null);
-              }}
-            >
-              Делегировать
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          единый диалог DelegateConfirmDialog (тот же используют карточки нижней доски —
+          InboxUnifiedDnd), показывает название, текущего делегата и нового. */}
+      <DelegateConfirmDialog
+        open={pendingReassign !== null}
+        taskTitle={pendingReassign ? plainTaskTitle(pendingReassign.item.description ?? '') : ''}
+        fromName={pendingReassign?.item.delegation.delegateDisplayName ?? null}
+        toName={pendingReassign?.member.displayName ?? ''}
+        onCancel={() => setPendingReassign(null)}
+        onConfirm={async () => {
+          const pending = pendingReassign;
+          if (!pending) return;
+          await reassignTo(pending.item, pending.member);
+          setPendingReassign(null);
+        }}
+      />
     </section>
   );
 
@@ -1246,6 +1221,68 @@ export function FutureDeadlineDialog({
             aria-label="Выбрать день срока"
           />
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Подтверждение делегирования дропом на кубик участника (спека 2026-07-13). Единый диалог
+// для обоих происхождений драга: карточки блока «Входящих» (AssignedToMeBlock) и карточки
+// нижней доски (InboxUnifiedDnd → dropBoardTaskOnUser) — чтобы дроп на один и тот же кубик
+// вёл себя одинаково. Показывает название задачи, текущего делегата (fromName; null —
+// свежее делегирование без делегата, строку прячем) и нового. Кнопки блокируются на время
+// запроса (защита от двойного клика/двойного делегирования).
+export function DelegateConfirmDialog({
+  open,
+  taskTitle,
+  fromName,
+  toName,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  taskTitle: string;
+  fromName: string | null;
+  toName: string;
+  onConfirm: () => Promise<void> | void;
+  onCancel: () => void;
+}): React.ReactElement {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && !busy && onCancel()}>
+      <DialogContent className="max-w-xs gap-3 p-5">
+        <DialogHeader>
+          <DialogTitle className="text-base">Делегировать задачу?</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 text-sm">
+          <p className="line-clamp-3 font-medium text-foreground">{taskTitle || 'Задача'}</p>
+          {fromName && (
+            <p className="text-muted-foreground">
+              Сейчас у: <span className="font-medium text-foreground">{fromName}</span>
+            </p>
+          )}
+          <p className="text-muted-foreground">
+            Делегировать: <span className="font-medium text-foreground">{toName}</span>
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" disabled={busy} onClick={onCancel}>
+            Отмена
+          </Button>
+          <Button
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await onConfirm();
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Делегировать
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

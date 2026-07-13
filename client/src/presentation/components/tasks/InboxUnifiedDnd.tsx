@@ -33,6 +33,7 @@ import {
   AssignedDragPill,
   TaskDragPill,
   FutureDeadlineDialog,
+  DelegateConfirmDialog,
   dndCollision,
   snapToCursor,
 } from './AssignedToMeBlock';
@@ -119,6 +120,13 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
   // Дроп доски-карточки на фантомные колонки → пикеры «Другой проект…» / «Другой приоритет…».
   const [projectPick, setProjectPick] = useState<Task | null>(null);
   const [priorityPick, setPriorityPick] = useState<Task | null>(null);
+  // Дроп доски-карточки на кубик ДРУГОГО участника → подтверждение делегирования (спека
+  // 2026-07-13): тот же диалог, что для карточек блока «Входящих» — дроп на один и тот же
+  // кубик подтверждается одинаково. Свой кубик (забрать себе) — без подтверждения. null = закрыт.
+  const [pendingBoardReassign, setPendingBoardReassign] = useState<{
+    task: Task;
+    member: SharedMember;
+  } | null>(null);
 
   // После смены ответственного обновляем обе зоны: бейдж на карточке доски + списки блока.
   const afterDelegationChange = async (): Promise<void> => {
@@ -292,6 +300,8 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
   // «Ответственный» (DelegateTaskButton): есть активная делегация → reassign, нет → delegate;
   // свой кубик → withdraw («забрать себе»); недоделегированная задача на своём кубике —
   // честный no-op (она и так ваша, самоделегирование тут ничего не добавит).
+  // Делегирование ДРУГОМУ участнику не срабатывает сразу — открывает подтверждение (спека
+  // 2026-07-13), как и карточки блока. Свой кубик (забрать себе) — сразу, это не делегирование.
   const dropBoardTaskOnUser = async (task: Task, member: SharedMember): Promise<void> => {
     if (!user) return;
     const d = task.delegation ?? null;
@@ -317,15 +327,21 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
       }
       return;
     }
-    if (d && d.delegateUserId === member.id) return; // уже на нём
+    if (d && d.delegateUserId === member.id) return; // уже на нём — ни дроп, ни диалог не нужны
+    setPendingBoardReassign({ task, member });
+  };
+
+  // Фактический reassign/delegate задачи доски после подтверждения диалога. Есть активная
+  // делегация → reassign, нет → delegate. Кубики = shared-members caller'а, inbox-делегирование
+  // валидируется по ним же — любая ошибка остаётся честным тостом.
+  const confirmBoardReassign = async (task: Task, member: SharedMember): Promise<void> => {
+    const d = task.delegation ?? null;
     try {
       if (d) await taskRepository.reassign(projectId, task.id, member.id);
       else await taskRepository.delegate(projectId, task.id, member.id);
       toast.success(`Ответственный — ${member.displayName}`);
       await afterDelegationChange();
     } catch (e) {
-      // Кубики = shared-members caller'а, а inbox-делегирование валидируется по ним же —
-      // любая ошибка здесь всё равно остаётся честным тостом.
       toast.error(`Не удалось делегировать: ${(e as Error).message}`);
     }
   };
@@ -456,6 +472,25 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
           const t = priorityPick;
           setPriorityPick(null);
           if (t) void applyBoardPriority(t, priority);
+        }}
+      />
+
+      {/* Дроп доски-карточки на кубик другого участника → подтверждение делегирования
+          (спека 2026-07-13): тот же диалог, что для карточек блока «Входящих». fromName —
+          текущий делегат, если задача уже делегирована; иначе (свежее делегирование) null. */}
+      <DelegateConfirmDialog
+        open={pendingBoardReassign !== null}
+        taskTitle={
+          pendingBoardReassign ? plainTaskTitle(pendingBoardReassign.task.description ?? '') : ''
+        }
+        fromName={pendingBoardReassign?.task.delegation?.delegateDisplayName ?? null}
+        toName={pendingBoardReassign?.member.displayName ?? ''}
+        onCancel={() => setPendingBoardReassign(null)}
+        onConfirm={async () => {
+          const pending = pendingBoardReassign;
+          if (!pending) return;
+          await confirmBoardReassign(pending.task, pending.member);
+          setPendingBoardReassign(null);
         }}
       />
     </>
