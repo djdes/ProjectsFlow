@@ -134,14 +134,6 @@ test('priority: порядок Срочно/Высокий/Средний/Низ
   );
 });
 
-test('внутри бакета ожидающие (pending) — выше принятых', () => {
-  const accepted = mk({ priority: 1, status: 'accepted', position: 0 });
-  const pending = mk({ priority: 1, status: 'pending', position: 1 });
-  const groups = groupAssignedTasks([accepted, pending], 'priority', NOW);
-  assert.equal(groups[0]?.items[0]?.id, pending.id);
-  assert.equal(groups[0]?.items[1]?.id, accepted.id);
-});
-
 test('project, направление «Другим»: inbox-группы дробятся по делегату («Личные · кому»)', () => {
   const tasks = [
     mk({ projectId: 'inbox', isInbox: true, delegate: 'Боб' }),

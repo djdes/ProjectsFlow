@@ -23,7 +23,6 @@ import {
   CalendarDays,
   CalendarOff,
   CalendarRange,
-  Check,
   Eye,
   EyeOff,
   Filter,
@@ -41,7 +40,6 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -50,7 +48,6 @@ import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
-import { avatarColor, getInitials } from '@/presentation/layout/projectIcons';
 import type { Task, RalphMode, TaskPriority } from '@/domain/task/Task';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
 import {
@@ -62,7 +59,6 @@ import {
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
 import { UserAvatarHover } from '@/presentation/components/user/UserAvatarHover';
 import type { SharedMember } from '@/application/project/ProjectRepository';
-import { HttpError } from '@/lib/HttpError';
 import {
   endOfMonthYmd,
   endOfWeekYmd,
@@ -117,12 +113,6 @@ const notDone = (t: AssignedTask): boolean => t.status !== 'done';
 // Все бакеты сортировки «по приоритету» (ключи groupByPriority): если какие-то из них
 // не видны колонками, при drag'е с доски появляется фантом «Другой приоритет…».
 const PRIORITY_BUCKET_KEYS = ['1', '2', '3', '4', 'none'] as const;
-
-// «Ждёт моего ответа» во вкладке «Для меня»: обычное делегирование (pending) ИЛИ
-// приглашение+делегирование (pending_invite — «Вступить/Отклонить»). Обе рисуются
-// карточкой с кнопками действия, а не «принятой».
-const isAwaitingResponse = (t: AssignedTask): boolean =>
-  t.delegation.status === 'pending' || t.delegation.status === 'pending_invite';
 
 // Коллизии по КУРСОРУ (pointerWithin) — целиться в мелкие кубики людей и колонки проще, чем
 // «прямоугольником» всей карточки (дефолтный rectIntersection часто мазал мимо → «тяжело
@@ -210,10 +200,8 @@ export function AssignedToMeBlock({
   const { taskDelegationRepository, taskRepository, userRepository, projectRepository } =
     useContainer();
   const { user } = useCurrentUser();
-  // refresh списка проектов: при accept сервер помечает проект задачи favorite'ом — чтобы
-  // секция «Избранное» в сайдбаре сразу его подхватила, перезагружаем список после принятия.
   // data — для фантомной колонки «Другой проект…» (условие «видны не все мои проекты»).
-  const { refresh: refreshProjects, data: allProjects } = useProjectsContext();
+  const { data: allProjects } = useProjectsContext();
   const [tasks, setTasks] = useState<AssignedTask[]>([]); // «Для меня»
   const [byMeTasks, setByMeTasks] = useState<AssignedTask[]>([]); // «Другим»
   const [tab, setTab] = useState<DelegationTab>('toMe');
@@ -228,7 +216,6 @@ export function AssignedToMeBlock({
     `pf:inbox-hscroll:${tab}:${grouping}`,
   );
   const [loading, setLoading] = useState(true);
-  const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
   const [drawerTask, setDrawerTask] = useState<AssignedTask | null>(null);
   // Зеркало hideDone для mount-эффекта: prop не в deps (иначе refetch на каждый
   // Eye-toggle), а стартовую вкладку надо решать по ВИДИМЫМ спискам — иначе блок
@@ -297,31 +284,6 @@ export function AssignedToMeBlock({
     void userRepository.setUiPrefs({ inboxAssignedGrouping: next }).catch((e: unknown) => {
       toast.error(`Не удалось сохранить сортировку: ${(e as Error).message}`);
     });
-  };
-
-  const resolve = async (delegationId: string, action: 'accept' | 'decline'): Promise<void> => {
-    setResolvingIds((s) => new Set(s).add(delegationId));
-    try {
-      if (action === 'accept') {
-        await taskDelegationRepository.accept(delegationId);
-        // Сервер мог добавить проект задачи в избранное принявшего — обновляем сайдбар.
-        refreshProjects();
-        toast.success('Задача принята');
-      } else {
-        await taskDelegationRepository.decline(delegationId);
-        toast.success('Задача отклонена');
-      }
-      await refresh();
-      onChanged?.();
-    } catch (e) {
-      toast.error(`Не удалось: ${(e as Error).message}`);
-    } finally {
-      setResolvingIds((s) => {
-        const n = new Set(s);
-        n.delete(delegationId);
-        return n;
-      });
-    }
   };
 
   const handleToggled = (): void => {
@@ -481,15 +443,8 @@ export function AssignedToMeBlock({
     grouping === 'priority' &&
     PRIORITY_BUCKET_KEYS.some((k) => !groups.some((g) => g.key === k));
 
-  // Задача, которую переназначаем не-участнику проекта → всплывашка «пригласить?» (Фаза 3).
-  const [inviteFlow, setInviteFlow] = useState<{ item: AssignedTask; member: SharedMember } | null>(
-    null,
-  );
-
-  // Переназначить ответственного (drop карточки на кубик человека). Участник проекта →
-  // просто меняем делегата. Не-участник проекта → сервер вернёт delegate_not_*; открываем
-  // всплывашку «пригласить в проект и поручить?». После успеха — refresh (карточка может
-  // уйти из «Для меня», сменить делегата в «Другим»).
+  // Переназначить ответственного (drop карточки на кубик человека). Делегат — любой участник
+  // пространства; после успеха — refresh.
   const reassignTo = useCallback(
     async (item: AssignedTask, member: SharedMember): Promise<void> => {
       if (member.id === item.delegation.delegateUserId) return; // уже на нём
@@ -499,12 +454,7 @@ export function AssignedToMeBlock({
         await refresh();
         onChanged?.();
       } catch (e) {
-        const code = e instanceof HttpError ? e.body.error : '';
-        if (code === 'delegate_not_project_member' || code === 'delegate_not_in_shared_members') {
-          setInviteFlow({ item, member }); // «его нет в проекте, пригласить?»
-        } else {
-          toast.error(`Не удалось переназначить: ${(e as Error).message}`);
-        }
+        toast.error(`Не удалось переназначить: ${(e as Error).message}`);
       }
     },
     [taskRepository, refresh, onChanged],
@@ -534,25 +484,6 @@ export function AssignedToMeBlock({
       }
     },
     [user, taskDelegationRepository, refresh, onChanged],
-  );
-
-  // Подтвердил приглашение → создаём делегацию pending_invite (человек получит «Вступить/
-  // Отклонить» во «Входящих»). Оптимизма нет — просто refresh (в «Другим» появится карточка
-  // со статусом «ожидает вступления»).
-  const confirmInvite = useCallback(
-    async (item: AssignedTask, member: SharedMember): Promise<void> => {
-      try {
-        await taskRepository.inviteDelegate(item.projectId, item.id, member.id);
-        toast.success(`${member.displayName} приглашён(а) — ждём ответа`);
-        await refresh();
-        onChanged?.();
-      } catch (e) {
-        toast.error(`Не удалось пригласить: ${(e as Error).message}`);
-      } finally {
-        setInviteFlow(null);
-      }
-    },
-    [taskRepository, refresh, onChanged],
   );
 
   const handleDragStart = (e: DragStartEvent): void => {
@@ -643,10 +574,6 @@ export function AssignedToMeBlock({
   // кнопку «Фильтры» (скрыть-выполненные для доски ниже) в шапке страницы оставляем.
   if (!hasAny) return filtersToolbar;
 
-  const pendingCount = visibleTasks.filter(isAwaitingResponse).length;
-  // Русская плюрализация: 1/21/31 «ждёт ответа», иначе «ждут ответа» (11 — исключение).
-  const pendingWord =
-    pendingCount % 10 === 1 && pendingCount % 100 !== 11 ? 'ждёт ответа' : 'ждут ответа';
   const subtitleBase =
     tab === 'toMe' ? 'Задачи от других участников' : 'Поручения в ваших проектах';
   // Пустая видимая вкладка: сначала честно про фильтры, затем про скрытые done
@@ -694,10 +621,7 @@ export function AssignedToMeBlock({
               // расходилось с количеством видимых карточек («неверное количество»).
               byMeCount={byMeVisible.length}
             />
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              {subtitleBase}
-              {pendingCount > 0 && ` · ${pendingCount} ${pendingWord}`}
-            </p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitleBase}</p>
           </div>
         </div>
         {/* Кубики людей пространства — в ПРАВОМ крае строки с вкладками (цель drag-делегирования).
@@ -743,24 +667,13 @@ export function AssignedToMeBlock({
                   key={[tab, filterFrom ?? '', filterTo ?? '', filterProject ?? ''].join('|')}
                   items={group.items}
                   renderItem={(item) => (
-                    // «Принять/Отклонить»/«Вступить» — только у входящих pending/pending_invite
-                    // («Для меня»); иначе «принятая» карточка (DelegationBadge покажет статус).
                     <DraggableTask key={item.id} item={item} disabled={!item.canModify}>
-                      {tab === 'toMe' && isAwaitingResponse(item) ? (
-                        <PendingCard
-                          item={item}
-                          busy={resolvingIds.has(item.delegation.id)}
-                          onAccept={() => void resolve(item.delegation.id, 'accept')}
-                          onDecline={() => void resolve(item.delegation.id, 'decline')}
-                        />
-                      ) : (
-                        <AcceptedCard
-                          item={item}
-                          currentUserId={user?.id ?? null}
-                          onOpen={() => setDrawerTask(item)}
-                          onChanged={handleToggled}
-                        />
-                      )}
+                      <AcceptedCard
+                        item={item}
+                        currentUserId={user?.id ?? null}
+                        onOpen={() => setDrawerTask(item)}
+                        onChanged={handleToggled}
+                      />
                     </DraggableTask>
                   )}
                 />
@@ -837,23 +750,14 @@ export function AssignedToMeBlock({
               <div className="flex flex-col gap-1.5 p-1.5">
                 {group.items.map((item) => (
                   <DraggableTask key={item.id} item={item} disabled={!item.canModify}>
-                    {tab === 'toMe' && isAwaitingResponse(item) ? (
-                      <PendingCard
-                        item={item}
-                        busy={resolvingIds.has(item.delegation.id)}
-                        onAccept={() => void resolve(item.delegation.id, 'accept')}
-                        onDecline={() => void resolve(item.delegation.id, 'decline')}
-                      />
-                    ) : (
-                      <AcceptedCard
-                        item={item}
-                        currentUserId={user?.id ?? null}
-                        onOpen={() => setDrawerTask(item)}
-                        onChanged={handleToggled}
-                        showCreatedAt={grouping === 'created'}
-                        hideProjectLabel={grouping === 'project'}
-                      />
-                    )}
+                    <AcceptedCard
+                      item={item}
+                      currentUserId={user?.id ?? null}
+                      onOpen={() => setDrawerTask(item)}
+                      onChanged={handleToggled}
+                      showCreatedAt={grouping === 'created'}
+                      hideProjectLabel={grouping === 'project'}
+                    />
                   </DraggableTask>
                 ))}
               </div>
@@ -901,13 +805,6 @@ export function AssignedToMeBlock({
           setFutureDrop(null);
           if (it) void applyDeadline(it, deadline);
         }}
-      />
-
-      {/* Дроп на не-участника проекта → «его нет в проекте, пригласить и поручить?». */}
-      <InviteToDelegateDialog
-        flow={inviteFlow}
-        onClose={() => setInviteFlow(null)}
-        onConfirm={confirmInvite}
       />
     </section>
   );
@@ -1257,59 +1154,6 @@ export function FutureDeadlineDialog({
             aria-label="Выбрать день срока"
           />
         </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// Дроп задачи на кубик человека, которого нет в проекте → подтверждение «пригласить в
-// проект и поручить?». Подтвердил → InviteAndDelegate (делегация pending_invite): человек
-// получит «Вступить/Отклонить» во «Входящих». Отмена — ничего не делаем.
-function InviteToDelegateDialog({
-  flow,
-  onClose,
-  onConfirm,
-}: {
-  flow: { item: AssignedTask; member: SharedMember } | null;
-  onClose: () => void;
-  onConfirm: (item: AssignedTask, member: SharedMember) => void | Promise<void>;
-}): React.ReactElement {
-  const [busy, setBusy] = useState(false);
-  const where =
-    flow && !flow.item.isInbox ? `проект «${flow.item.projectName}»` : 'общие проекты';
-  return (
-    <Dialog open={flow !== null} onOpenChange={(o) => !o && !busy && onClose()}>
-      <DialogContent className="max-w-sm gap-3 p-5">
-        <DialogHeader>
-          <DialogTitle className="text-base">Пригласить в проект?</DialogTitle>
-        </DialogHeader>
-        {flow && (
-          <>
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{flow.member.displayName}</span> ещё не
-              в {where}. Пригласить и поручить задачу? Пока приглашение не принято, задача будет
-              со статусом «ожидает вступления».
-            </p>
-            <div className="flex justify-end gap-2 pt-1">
-              <Button variant="ghost" disabled={busy} onClick={onClose}>
-                Отмена
-              </Button>
-              <Button
-                className="gap-1.5"
-                disabled={busy}
-                onClick={() => {
-                  setBusy(true);
-                  void Promise.resolve(onConfirm(flow.item, flow.member)).finally(() =>
-                    setBusy(false),
-                  );
-                }}
-              >
-                <Send className="size-4" />
-                Пригласить
-              </Button>
-            </div>
-          </>
-        )}
       </DialogContent>
     </Dialog>
   );
@@ -1761,71 +1605,6 @@ function AcceptedCard({
           <span className="whitespace-nowrap text-muted-foreground/50">без срока</span>
         )}
         </div>
-      </div>
-    </div>
-  );
-}
-
-// Ожидающая задача-карточка: «<аватар> Имя поручил вам», описание, кнопки Принять/Отклонить.
-// Для pending_invite (приглашение в проект + задача) — текст «зовёт в проект» и кнопка «Вступить».
-function PendingCard({
-  item,
-  busy,
-  onAccept,
-  onDecline,
-}: {
-  item: AssignedTask;
-  busy: boolean;
-  onAccept: () => void;
-  onDecline: () => void;
-}): React.ReactElement {
-  const isInvite = item.delegation.status === 'pending_invite';
-  const intro =
-    isInvite && !item.isInbox
-      ? `зовёт в проект «${item.projectName}» и поручает:`
-      : 'поручил вам:';
-  const acceptLabel = isInvite && !item.isInbox ? 'Вступить' : 'Принять';
-  return (
-    <div className="flex flex-col gap-2.5 rounded-lg border border-l-2 border-black/[0.06] border-l-primary/40 bg-card px-2.5 py-2 shadow-sm dark:border-white/[0.08] dark:border-l-primary/40">
-      <div className="flex items-start gap-2">
-        <Avatar className="size-6 shrink-0">
-          <AvatarFallback className={cn('text-[9px]', avatarColor(item.delegation.creatorDisplayName))}>
-            {getInitials(item.delegation.creatorDisplayName)}
-          </AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs leading-snug">
-            <span className="font-medium">{item.delegation.creatorDisplayName}</span> {intro}
-          </p>
-          <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-            <TaskTitleText title={splitTitleBody(item.description ?? '').title} className="text-xs" />
-          </div>
-        </div>
-      </div>
-      <div
-        className="flex gap-1.5"
-        onMouseDown={(e) => e.stopPropagation()}
-        onTouchStart={(e) => e.stopPropagation()}
-      >
-        <Button
-          size="sm"
-          className="h-7 flex-1 gap-1 bg-success text-white hover:bg-success/90"
-          disabled={busy}
-          onClick={onAccept}
-        >
-          <Check className="size-3.5" />
-          {acceptLabel}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 gap-1 text-muted-foreground"
-          disabled={busy}
-          onClick={onDecline}
-        >
-          <X className="size-3.5" />
-          Отклонить
-        </Button>
       </div>
     </div>
   );

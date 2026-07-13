@@ -1,8 +1,6 @@
-// Делегирование одной inbox-задачи одному пользователю. См. db/039.
-// One-to-one: одна активная (pending|accepted) делегация на task. Архивные/declined/
-// withdrawn остаются для истории.
-//
-// Mirrors server/src/domain/task/TaskDelegation.ts.
+// Делегирование одной задачи одному пользователю. См. db/039.
+// Новые делегации создаются сразу accepted (мгновенное делегирование, спека 2026-07-13);
+// pending/declined/pending_invite остались в union только как исторические значения БД.
 
 export type TaskDelegationStatus =
   | 'pending'
@@ -12,21 +10,6 @@ export type TaskDelegationStatus =
   | 'archived'
   // Приглашение+делегирование не-участнику проекта (db/101): ждёт вступления делегата.
   | 'pending_invite';
-
-export const TASK_DELEGATION_STATUSES: readonly TaskDelegationStatus[] = [
-  'pending',
-  'accepted',
-  'declined',
-  'withdrawn',
-  'archived',
-  'pending_invite',
-];
-
-export const ACTIVE_DELEGATION_STATUSES: readonly TaskDelegationStatus[] = [
-  'pending',
-  'accepted',
-  'pending_invite',
-];
 
 export type TaskDelegation = {
   readonly id: string;

@@ -37,12 +37,6 @@ export function groupAssignedTasks(
   }
 }
 
-// pending / pending_invite (ожидают «Принять»/«Вступить») всегда поднимаются над
-// принятыми — требуют действия.
-function pendingScore(t: AssignedTask): number {
-  return t.delegation.status === 'pending' || t.delegation.status === 'pending_invite' ? 1 : 0;
-}
-
 export function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
@@ -102,7 +96,6 @@ function groupByProject(
     g.items.push(t);
   }
   const groups = [...map.values()];
-  for (const g of groups) g.items.sort((a, b) => pendingScore(b) - pendingScore(a));
   return groups;
 }
 
@@ -144,7 +137,7 @@ function groupByCreated(tasks: readonly AssignedTask[], now: Date): AssignedDisp
     return 'earlier';
   };
   const within = (a: AssignedTask, b: AssignedTask): number =>
-    pendingScore(b) - pendingScore(a) || b.createdAt.getTime() - a.createdAt.getTime();
+    b.createdAt.getTime() - a.createdAt.getTime();
   return buildFixed(
     tasks,
     [
@@ -173,7 +166,7 @@ function groupByDeadline(tasks: readonly AssignedTask[], now: Date): AssignedDis
     return 'later';
   };
   const within = (a: AssignedTask, b: AssignedTask): number =>
-    pendingScore(b) - pendingScore(a) || (a.deadline ?? '').localeCompare(b.deadline ?? '');
+    (a.deadline ?? '').localeCompare(b.deadline ?? '');
   return buildFixed(
     tasks,
     [
@@ -205,7 +198,7 @@ export function groupAssignedByTime(
     return 'future';
   };
   const within = (a: AssignedTask, b: AssignedTask): number =>
-    pendingScore(b) - pendingScore(a) || (a.deadline ?? '').localeCompare(b.deadline ?? '');
+    (a.deadline ?? '').localeCompare(b.deadline ?? '');
   const byKey = new Map<string, AssignedTask[]>();
   for (const t of tasks) {
     const k = bucketOf(t);
@@ -228,8 +221,7 @@ export function groupAssignedByTime(
 function groupByPriority(tasks: readonly AssignedTask[]): AssignedDisplayGroup[] {
   const bucketOf = (t: AssignedTask): string =>
     t.priority === null || t.priority === undefined ? 'none' : String(t.priority);
-  const within = (a: AssignedTask, b: AssignedTask): number =>
-    pendingScore(b) - pendingScore(a) || a.position - b.position;
+  const within = (a: AssignedTask, b: AssignedTask): number => a.position - b.position;
   // Подписи зеркалят domain/task/priorityMeta.ts (1=Срочно … 4=Низкий).
   return buildFixed(
     tasks,
