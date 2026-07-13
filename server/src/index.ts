@@ -470,7 +470,7 @@ const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
 const taskDelegationRepo = new DrizzleTaskDelegationRepository(db, projectMemberRepo);
-const digestSettingsRepo = new DrizzleDigestSettingsRepository(db);
+const digestSettingsRepo = new DrizzleDigestSettingsRepository(db, projectMemberRepo);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const aiPromptJobRepo = new DrizzleAiPromptJobRepository(db);
 // Метеринг расхода ИИ (db/082): единый ledger + хаб RecordUsage, который зовут все
