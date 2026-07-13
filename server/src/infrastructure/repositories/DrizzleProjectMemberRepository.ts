@@ -25,7 +25,6 @@ import type {
 import { parseJsonCol } from './jsonCol.js';
 import {
   deriveMembership,
-  deriveOwnersCount,
   projectRowVisibility,
   type ProjectAccessRow,
 } from './workspaceMembershipView.js';
@@ -254,22 +253,6 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     });
   }
 
-  async countOwners(projectId: string): Promise<number> {
-    const project = await this.getProjectAccessRow(projectId);
-    if (!project) return 0;
-    if (project.isInbox) return deriveOwnersCount(project, 0);
-    const rows = await this.db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, project.workspaceId),
-          eq(workspaceMembers.role, 'owner'),
-        ),
-      );
-    return deriveOwnersCount(project, Number(rows[0]?.count ?? 0));
-  }
-
   async isMemberOfAnyProjectOwnedBy(userId: string, ownerUserId: string): Promise<boolean> {
     // «Общий проект» = юзер состоит в пространстве, где есть не-inbox проект ownerUserId.
     const rows = await this.db
@@ -301,27 +284,6 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
       role: input.role,
       joinedAt: new Date(),
     };
-  }
-
-  async remove(projectId: string, userId: string): Promise<boolean> {
-    const result = await this.db
-      .delete(projectMembers)
-      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
-    const affected = (result as unknown as [{ affectedRows: number }])[0]?.affectedRows ?? 0;
-    return affected > 0;
-  }
-
-  async updateRole(
-    projectId: string,
-    userId: string,
-    role: ProjectRole,
-  ): Promise<ProjectMembership | null> {
-    // Роль в project_members — легаси; фактический доступ определяет пространство.
-    await this.db
-      .update(projectMembers)
-      .set({ role })
-      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
-    return this.findForProject(projectId, userId);
   }
 
   async getNotificationPrefs(

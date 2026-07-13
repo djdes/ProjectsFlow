@@ -24,9 +24,6 @@ import type { ReorderProjects } from '../../application/project/ReorderProjects.
 import type { ToggleProjectFavorite } from '../../application/project/ToggleProjectFavorite.js';
 import type { ReorderFavoriteProjects } from '../../application/project/ReorderFavoriteProjects.js';
 import type { ListProjectMembers } from '../../application/project/ListProjectMembers.js';
-import type { RemoveProjectMember } from '../../application/project/RemoveProjectMember.js';
-import type { UpdateProjectMemberRole } from '../../application/project/UpdateProjectMemberRole.js';
-import type { TransferProjectOwnership } from '../../application/project/TransferProjectOwnership.js';
 import type { CheckGitCollision } from '../../application/project/CheckGitCollision.js';
 import type { RequestProjectJoin } from '../../application/project/RequestProjectJoin.js';
 import type { ResolveProjectJoinRequest } from '../../application/project/ResolveProjectJoinRequest.js';
@@ -69,8 +66,6 @@ import {
   setPublicIndexingSchema,
   setGitTokenDelegationSchema,
   toggleFavoriteSchema,
-  transferOwnershipSchema,
-  updateMemberRoleSchema,
   updateProjectSchema,
 } from './schemas.js';
 
@@ -113,9 +108,6 @@ type Deps = {
   readonly reorderFavoriteProjects: ReorderFavoriteProjects;
   readonly listProjectCommits: ListProjectCommits;
   readonly listMembers: ListProjectMembers;
-  readonly removeMember: RemoveProjectMember;
-  readonly updateMemberRole: UpdateProjectMemberRole;
-  readonly transferOwnership: TransferProjectOwnership;
   readonly checkGitCollision: CheckGitCollision;
   readonly requestJoin: RequestProjectJoin;
   readonly resolveJoinRequest: ResolveProjectJoinRequest;
@@ -934,74 +926,13 @@ export function projectsRouter(deps: Deps): Router {
     }
   });
 
-  router.patch(
-    '/:id/members/:userId',
-    async (req: Request, res: Response, next: NextFunction) => {
-      try {
-        const id = req.params.id;
-        const userId = req.params['userId'];
-        if (typeof id !== 'string' || typeof userId !== 'string') throw new ProjectNotFoundError();
-        const body = updateMemberRoleSchema.parse(req.body);
-        const updated = await deps.updateMemberRole.execute({
-          projectId: id,
-          actorUserId: req.user!.id,
-          targetUserId: userId,
-          role: body.role,
-        });
-        void deps.notifier
-          .onMemberChanged(id, req.user!.id, `изменил роль участника на «${body.role}»`, 'team')
-          .catch(() => {});
-        res.json({
-          membership: {
-            projectId: updated.projectId,
-            userId: updated.userId,
-            role: updated.role,
-            joinedAt: updated.joinedAt.toISOString(),
-          },
-        });
-      } catch (e) {
-        next(e);
-      }
-    },
-  );
-
-  router.delete(
-    '/:id/members/:userId',
-    async (req: Request, res: Response, next: NextFunction) => {
-      try {
-        const id = req.params.id;
-        const userId = req.params['userId'];
-        if (typeof id !== 'string' || typeof userId !== 'string') throw new ProjectNotFoundError();
-        await deps.removeMember.execute(id, req.user!.id, userId);
-        // Оставшимся участникам — email «изменение в команде» (fire-and-forget).
-        void deps.notifier
-          .onMemberChanged(id, req.user!.id, 'удалил участника из проекта', 'team')
-          .catch(() => {});
-        res.status(204).end();
-      } catch (e) {
-        next(e);
-      }
-    },
-  );
-
-  router.post('/:id/transfer', async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const id = req.params.id;
-      if (typeof id !== 'string') throw new ProjectNotFoundError();
-      const body = transferOwnershipSchema.parse(req.body);
-      await deps.transferOwnership.execute({
-        projectId: id,
-        actorUserId: req.user!.id,
-        toUserId: body.toUserId,
-      });
-      void deps.notifier
-        .onMemberChanged(id, req.user!.id, 'передал владение проектом', 'team')
-        .catch(() => {});
-      res.status(204).end();
-    } catch (e) {
-      next(e);
-    }
-  });
+  // Управление составом команды (смена роли/удаление участника/передача владения)
+  // переехало на уровень пространства — см. /api/workspaces/:id/members/*
+  // (WorkspaceService). Роуты PATCH/DELETE /:id/members/:userId и POST /:id/transfer
+  // отсюда удалены (Concern B code review): доступ к проекту читается только из
+  // workspace_members (unified-workspace §3.2), а эти роуты мутировали лишь легаси
+  // project_members-кеш — возвращали success и слали команде уведомления об
+  // изменении, реально ни на что не влияя.
 
   // Ralph-диспетчер -------------------------------------------------------
   // Список кандидатов в диспетчеры (участники с ≥1 активным agent-токеном). viewer+.

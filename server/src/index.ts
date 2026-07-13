@@ -94,9 +94,6 @@ import { DrizzleCommentNotificationLogRepository } from './infrastructure/reposi
 import { CreateProjectWithGit } from './application/project/CreateProjectWithGit.js';
 import { GetOrCreateInbox } from './application/project/GetOrCreateInbox.js';
 import { ListProjectMembers } from './application/project/ListProjectMembers.js';
-import { RemoveProjectMember } from './application/project/RemoveProjectMember.js';
-import { UpdateProjectMemberRole } from './application/project/UpdateProjectMemberRole.js';
-import { TransferProjectOwnership } from './application/project/TransferProjectOwnership.js';
 import { ListSharedMembers } from './application/project/ListSharedMembers.js';
 import { GetInviteByToken } from './application/project/GetInviteByToken.js';
 import { AcceptProjectInvite } from './application/project/AcceptProjectInvite.js';
@@ -1451,16 +1448,6 @@ const { app, devProxyUpgrade } = createApp({
       resolveWorkspaceId,
     }),
     listMembers: new ListProjectMembers({ projects: projectRepo, members: projectMemberRepo }),
-    removeMember: new RemoveProjectMember({ projects: projectRepo, members: projectMemberRepo, activityRecorder }),
-    updateMemberRole: new UpdateProjectMemberRole({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      activityRecorder,
-    }),
-    transferOwnership: new TransferProjectOwnership({
-      projects: projectRepo,
-      members: projectMemberRepo,
-    }),
     listSharedMembers: new ListSharedMembers(projectMemberRepo),
     checkGitCollision: new CheckGitCollision({
       projects: projectRepo,

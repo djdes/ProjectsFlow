@@ -51,9 +51,6 @@ import type { ReorderFavoriteProjects } from '../application/project/ReorderFavo
 import type { CreateProjectWithGit } from '../application/project/CreateProjectWithGit.js';
 import type { GetOrCreateInbox } from '../application/project/GetOrCreateInbox.js';
 import type { ListProjectMembers } from '../application/project/ListProjectMembers.js';
-import type { RemoveProjectMember } from '../application/project/RemoveProjectMember.js';
-import type { UpdateProjectMemberRole } from '../application/project/UpdateProjectMemberRole.js';
-import type { TransferProjectOwnership } from '../application/project/TransferProjectOwnership.js';
 import type { ListSharedMembers } from '../application/project/ListSharedMembers.js';
 import type { CheckGitCollision } from '../application/project/CheckGitCollision.js';
 import type { RequestProjectJoin } from '../application/project/RequestProjectJoin.js';
@@ -345,9 +342,6 @@ type AppDeps = {
     readonly listProjectCommits: ListProjectCommits;
     readonly getOrCreateInbox: GetOrCreateInbox;
     readonly listMembers: ListProjectMembers;
-    readonly removeMember: RemoveProjectMember;
-    readonly updateMemberRole: UpdateProjectMemberRole;
-    readonly transferOwnership: TransferProjectOwnership;
     readonly listSharedMembers: ListSharedMembers;
     readonly checkGitCollision: CheckGitCollision;
     readonly requestJoin: RequestProjectJoin;

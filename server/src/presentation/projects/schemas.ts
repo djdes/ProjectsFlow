@@ -212,14 +212,6 @@ export type ReorderProjectsBody = z.infer<typeof reorderProjectsSchema>;
 export type ToggleFavoriteBody = z.infer<typeof toggleFavoriteSchema>;
 export type ReorderFavoritesBody = z.infer<typeof reorderFavoritesSchema>;
 
-export const updateMemberRoleSchema = z.object({
-  role: z.enum(['editor', 'viewer']),
-});
-
-export const transferOwnershipSchema = z.object({
-  toUserId: z.string().min(1),
-});
-
 // Назначить или снять Ralph-диспетчера проекта. userId: null = снять.
 export const setDispatcherSchema = z.object({
   userId: z.string().min(1).nullable(),
@@ -238,8 +230,6 @@ export const setGitTokenDelegationSchema = z.object({
   granterUserId: z.string().min(1).optional(),
 });
 
-export type UpdateMemberRoleBody = z.infer<typeof updateMemberRoleSchema>;
-export type TransferOwnershipBody = z.infer<typeof transferOwnershipSchema>;
 export type SetDispatcherBody = z.infer<typeof setDispatcherSchema>;
 export type SetMultiTaskWorkerBody = z.infer<typeof setMultiTaskWorkerSchema>;
 export type SetGitTokenDelegationBody = z.infer<typeof setGitTokenDelegationSchema>;
