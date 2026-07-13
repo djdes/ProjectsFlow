@@ -3,21 +3,28 @@ import type { JoinRequestStatus } from '../../domain/project/ProjectJoinRequest.
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRepository } from './ProjectRepository.js';
 import type { ProjectJoinRequestRepository } from './ProjectJoinRequestRepository.js';
-import type { UserRepository } from '../user/UserRepository.js';
+import type {
+  WorkspaceMember,
+  WorkspaceRole,
+} from '../../domain/workspace/WorkspaceMember.js';
 import { requireProjectAccess } from './projectAccess.js';
-import type { HubMembershipSync } from '../workspace/HubMembershipSync.js';
+
+type WorkspacesPort = {
+  getMembership(workspaceId: string, userId: string): Promise<WorkspaceMember | null>;
+  addMember(workspaceId: string, userId: string, role: WorkspaceRole): Promise<void>;
+};
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly joinRequests: ProjectJoinRequestRepository;
-  readonly users: UserRepository;
+  readonly workspaces: WorkspacesPort;
   readonly now: () => Date;
-  // Синк участников дефолт-хаба владельца (best-effort). Опционально.
-  readonly hubSync?: HubMembershipSync;
 };
 
-// Владелец (или admin) принимает/отклоняет заявку. Accept → заявитель становится editor.
+// Владелец (или admin) принимает/отклоняет заявку по git-коллизии. Accept → заявитель
+// зачисляется в ПРОСТРАНСТВО проекта с ролью editor (спека unified-workspace §3.2):
+// доступ к проекту дальше деривится через workspace_members, project_members не пишем.
 export class ResolveProjectJoinRequest {
   constructor(private readonly deps: Deps) {}
 
@@ -35,28 +42,14 @@ export class ResolveProjectJoinRequest {
     if (jr.status !== 'pending') return { status: jr.status };
 
     if (accept) {
-      const existing = await this.deps.members.findForProject(jr.projectId, jr.requesterUserId);
+      const workspaceId = await this.deps.projects.getWorkspaceId(jr.projectId);
+      if (!workspaceId) throw new ProjectNotFoundError();
+      const existing = await this.deps.workspaces.getMembership(
+        workspaceId,
+        jr.requesterUserId,
+      );
       if (!existing) {
-        await this.deps.members.add({
-          projectId: jr.projectId,
-          userId: jr.requesterUserId,
-          role: 'editor',
-        });
-        // Копируем глобальные дефолтные notification prefs.
-        try {
-          const defaults = await this.deps.users.getDefaultNotificationPrefs(jr.requesterUserId);
-          if (defaults && Object.keys(defaults).length > 0) {
-            await this.deps.members.setNotificationPrefs(jr.projectId, jr.requesterUserId, defaults);
-          }
-        } catch {
-          // Best-effort.
-        }
-        // Добавляем нового участника в хаб-чат владельца проекта (best-effort).
-        try {
-          await this.deps.hubSync?.onMemberAdded(jr.projectId, jr.requesterUserId);
-        } catch {
-          // Синк хаба не должен ломать одобрение заявки.
-        }
+        await this.deps.workspaces.addMember(workspaceId, jr.requesterUserId, 'editor');
       }
     }
 
