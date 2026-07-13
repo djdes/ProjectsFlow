@@ -31,9 +31,6 @@ type ProjectsPort = {
   setWorkspace(projectId: string, workspaceId: string): Promise<void>;
   listByWorkspace(workspaceId: string): Promise<ReadonlyArray<{ id: string; name: string; icon: string | null }>>;
 };
-type ProjectMembersPort = {
-  listByProject(projectId: string): Promise<ReadonlyArray<{ userId: string }>>;
-};
 type UsersPort = {
   getByEmail(email: string): Promise<{ id: string } | null>;
 };
@@ -41,7 +38,6 @@ type UsersPort = {
 type Deps = {
   readonly repo: WorkspaceRepository;
   readonly projects: ProjectsPort;
-  readonly projectMembers: ProjectMembersPort;
   readonly users: UsersPort;
   readonly idGen: () => string;
 };
@@ -179,11 +175,8 @@ export class WorkspaceService {
     if (sourceWorkspaceId !== workspaceId) throw new ProjectNotFoundError();
     if (project.ownerId !== userId) throw new NotProjectOwnerError();
     await this.deps.projects.setWorkspace(projectId, targetWorkspaceId);
-    // Все участники проекта должны стать участниками целевого пространства (идемпотентно).
-    const members = await this.deps.projectMembers.listByProject(projectId);
-    for (const m of members) {
-      await this.deps.repo.addMember(targetWorkspaceId, m.userId, 'editor');
-    }
+    // Участники НЕ копируются: доступ к проекту деривится из workspace_members целевого
+    // пространства (спека unified-workspace §3.2) — перенос просто меняет аудиторию.
   }
 
   async deleteWorkspace(workspaceId: string, userId: string): Promise<void> {

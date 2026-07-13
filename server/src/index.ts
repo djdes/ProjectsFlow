@@ -20,7 +20,6 @@ import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleP
 import { DrizzleProjectMemberRepository } from './infrastructure/repositories/DrizzleProjectMemberRepository.js';
 import { DrizzleWorkspaceRepository } from './infrastructure/repositories/DrizzleWorkspaceRepository.js';
 import { WorkspaceService } from './application/workspace/WorkspaceService.js';
-import { HubMembershipSync } from './application/workspace/HubMembershipSync.js';
 import type { WorkspaceKind } from './domain/workspace/Workspace.js';
 import { DrizzleActivityRepository } from './infrastructure/repositories/DrizzleActivityRepository.js';
 import { ActivityRecorder } from './application/activity/ActivityRecorder.js';
@@ -327,7 +326,6 @@ const workspaceRepo = new DrizzleWorkspaceRepository(db);
 const workspaceService = new WorkspaceService({
   repo: workspaceRepo,
   projects: projectRepo,
-  projectMembers: projectMemberRepo,
   users: userRepo,
   idGen: idGenerator,
 });
@@ -361,13 +359,6 @@ const createDefaultWorkspace = async (userId: string, displayName: string): Prom
     kind: 'default',
   });
 };
-// Синк участников дефолт-хаба владельца с участниками его проектов (для общего чата).
-// Дёргается best-effort из invite/accept/remove use-cases.
-const hubMembershipSync = new HubMembershipSync({
-  projects: projectRepo,
-  members: projectMemberRepo,
-  workspaces: workspaceRepo,
-});
 // Deep-link авто-switch: открыли проект → делаем его пространство активным.
 // В новой модели в ЧУЖОЙ дефолт-хаб не переключаемся (он скрыт из свитчера, см. listForUser) —
 // проект и так виден в собственном дефолт-хабе юзера (агрегация). В этом случае переключаем
@@ -1493,7 +1484,7 @@ const { app, devProxyUpgrade } = createApp({
       resolveWorkspaceId,
     }),
     listMembers: new ListProjectMembers({ projects: projectRepo, members: projectMemberRepo }),
-    removeMember: new RemoveProjectMember({ projects: projectRepo, members: projectMemberRepo, activityRecorder, hubSync: hubMembershipSync }),
+    removeMember: new RemoveProjectMember({ projects: projectRepo, members: projectMemberRepo, activityRecorder }),
     updateMemberRole: new UpdateProjectMemberRole({
       projects: projectRepo,
       members: projectMemberRepo,
