@@ -146,8 +146,6 @@ import { DrizzleTaskCommitRepository } from './infrastructure/repositories/Drizz
 import { DrizzleTaskAttachmentRepository } from './infrastructure/repositories/DrizzleTaskAttachmentRepository.js';
 import { DrizzleTaskCommentRepository } from './infrastructure/repositories/DrizzleTaskCommentRepository.js';
 import { DrizzleTaskDelegationRepository } from './infrastructure/repositories/DrizzleTaskDelegationRepository.js';
-import { AcceptTaskDelegation } from './application/task/AcceptTaskDelegation.js';
-import { DeclineTaskDelegation } from './application/task/DeclineTaskDelegation.js';
 import { WithdrawTaskDelegation } from './application/task/WithdrawTaskDelegation.js';
 import { RelinquishTaskDelegation } from './application/task/RelinquishTaskDelegation.js';
 import { ListTasksAssignedToMe } from './application/task/ListTasksAssignedToMe.js';
@@ -748,36 +746,6 @@ const telegramComposer = new TelegramComposerService({
     members: projectMemberRepo,
     idGen: idGenerator,
     resolveWorkspaceId,
-  }),
-  accept: new AcceptTaskDelegation({
-    delegations: taskDelegationRepo,
-    tasks: taskRepo,
-    projects: projectRepo,
-    members: projectMemberRepo,
-    users: userRepo,
-    notifications: notificationRepo,
-    idGen: idGenerator,
-  }),
-  decline: new DeclineTaskDelegation({
-    delegations: taskDelegationRepo,
-    tasks: taskRepo,
-    projects: projectRepo,
-    users: userRepo,
-    notifications: notificationRepo,
-    email: emailSender,
-    idGen: idGenerator,
-    appUrl: appBaseUrl,
-  }),
-  assignToProject: new MoveTaskToProject({
-    tasks: taskRepo,
-    projects: projectRepo,
-    members: projectMemberRepo,
-    delegations: taskDelegationRepo,
-    users: userRepo,
-    notifications: notificationRepo,
-    email: emailSender,
-    idGen: idGenerator,
-    appUrl: appBaseUrl,
   }),
   sendNotification: sendAgentTelegramNotification,
   client: telegramClient,

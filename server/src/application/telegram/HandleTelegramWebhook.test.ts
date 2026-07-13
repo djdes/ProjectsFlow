@@ -200,6 +200,7 @@ function makeCbHarness(opts?: { userId?: string | null; task?: any }) {
   const moves: any[] = [];
   const upserts: any[] = [];
   const statusNotifs: string[] = [];
+  const composerCallbacks: string[] = [];
   const userId = opts && 'userId' in opts ? opts.userId! : 'u1';
   const task =
     opts?.task !== undefined
@@ -225,13 +226,19 @@ function makeCbHarness(opts?: { userId?: string | null; task?: any }) {
     createComment: {},
     moveTask: { async execute(i: any) { moves.push(i); return { ...task, status: i.targetStatus }; } },
     dispatchCommentNotifications: {},
-    composer: { async handleCallback() {}, async startFromMessage() {}, async handleInlineQuery() {} },
+    composer: {
+      async handleCallback(cq: any) {
+        composerCallbacks.push(String(cq?.data ?? ''));
+      },
+      async startFromMessage() {},
+      async handleInlineQuery() {},
+    },
     maybeReopenForClarification: {},
     notifyTaskChanged() {},
     notifyCommentAdded() {},
     notifyStatusChanged(_p: string, _t: string, _o: string, n: string) { statusNotifs.push(n); },
   };
-  return { h: new HandleTelegramWebhook(deps as any), answers, edits, sent, moves, upserts, statusNotifs };
+  return { h: new HandleTelegramWebhook(deps as any), answers, edits, sent, moves, upserts, statusNotifs, composerCallbacks };
 }
 
 function cbUpdate(data: string): TelegramUpdate {
@@ -285,4 +292,12 @@ test('nc: «Комментировать» → force-reply приглашени�
   assert.equal(h.upserts.length, 1);
   assert.equal(h.upserts[0].taskId, 't1');
   assert.equal(h.upserts[0].projectId, 'p1');
+});
+
+test('легаси da:/dd: коллбэки не роутятся отдельно — проваливаются в композер (гаснут молча)', async () => {
+  const h = makeCbHarness();
+  await h.h.execute(cbUpdate('da:del1'));
+  await h.h.execute(cbUpdate('dd:del1'));
+  assert.equal(h.moves.length, 0);
+  assert.deepEqual(h.composerCallbacks, ['da:del1', 'dd:del1']);
 });

@@ -120,8 +120,8 @@ export class HandleTelegramWebhook {
   constructor(private readonly deps: Deps) {}
 
   async execute(update: TelegramUpdate): Promise<void> {
-    // Нажатие inline-кнопки. `bt:` — навигация /tasks (наш handler); остальное (tp/td/tc/
-    // tx/da/dd) — конструктор задач/делегирование.
+    // Нажатие inline-кнопки. `bt:` — навигация /tasks (наш handler); остальное (tp/td/
+    // tc/tx/a*/ts) — конструктор задач. Легаси da:/dd: гаснут в композере молча.
     if (update.callback_query) {
       const cq = update.callback_query;
       const data = cq.data ?? '';

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MoveTaskToProject } from './MoveTaskToProject.js';
 import { TargetProjectIsInboxError } from '../../domain/task/errors.js';
 
-// Фейки по образцу AcceptTaskDelegation.test.ts. Покрывается НОВАЯ ветка: перенос задачи
+// Минимальные in-memory фейки. Покрывается НОВАЯ ветка: перенос задачи
 // именованного проекта в СВОЙ инбокс (drag пилюли на нижнюю доску «Входящих»). Чужой
 // инбокс — по-прежнему TargetProjectIsInboxError. Полная матрица прав requireProjectAccess
 // покрыта её собственными тестами.
