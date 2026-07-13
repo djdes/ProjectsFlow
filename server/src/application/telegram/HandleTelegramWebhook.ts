@@ -179,6 +179,14 @@ export class HandleTelegramWebhook {
       return this.handleReply(tgUserId, chatId, msg.reply_to_message.message_id, text);
     }
 
+    // «Пустое» @упоминание в группе (только @bot, без другого текста) → меню задач
+    // «по ответственным» в охвате ВЛАДЕЛЬЦА привязки группы (telegram_group_owners).
+    // Сюда попадаем только если бот был упомянут/reply'нут (гейт isGroup выше), а после
+    // вырезания @упоминания текст пуст. Упоминание с текстом — ниже, composer как раньше.
+    if (isGroup && text.length === 0) {
+      return this.handleGroupAssigneeMenu(chatId);
+    }
+
     // Routing по первому слову.
     const cmd = text.split(/\s+/, 1)[0]?.toLowerCase() ?? '';
     // В группе /start привязывает чат к аккаунту отправителя (а не трогает его личный DM-чат).
@@ -814,6 +822,20 @@ export class HandleTelegramWebhook {
       return;
     }
     await this.reply(chatId, menu.text, menu.keyboard);
+  }
+
+  // Пустое @упоминание в группе: меню по ответственным от имени владельца привязки.
+  // Не привязано → подсказка /start (та же привязка, что ловит задачи непривязанных).
+  private async handleGroupAssigneeMenu(chatId: number): Promise<void> {
+    const ownerUserId = await this.deps.groupOwners.getOwnerUserId(chatId);
+    if (!ownerUserId) {
+      await this.reply(
+        chatId,
+        '⚠️ Группа не привязана к аккаунту. Отправь /start, чтобы привязать её к себе, — и вызывай меню задач пустым упоминанием.',
+      );
+      return;
+    }
+    await this.sendAssigneeMenu(chatId, ownerUserId);
   }
 
   // Узкий deps-набор для билдеров assigneeBrowse.

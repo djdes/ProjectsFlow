@@ -2424,7 +2424,7 @@ const server = app.listen(config.port, () => {
     // Меню команд бота (кнопка «/» в TG-клиенте) — discoverability функционала. Best-effort.
     void telegramClient
       .setMyCommands([
-        { command: 'tasks', description: 'Мои проекты и задачи' },
+        { command: 'tasks', description: 'Задачи по ответственным' },
         { command: 'pending', description: 'Задачи на уточнении' },
         { command: 'pause', description: 'Выключить уведомления' },
         { command: 'help', description: 'Что умеет бот' },
