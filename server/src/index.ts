@@ -2025,7 +2025,15 @@ const { app, devProxyUpgrade } = createApp({
   },
   delegations: {
     withdraw: new WithdrawTaskDelegation({ delegations: taskDelegationRepo }),
-    relinquish: new RelinquishTaskDelegation({ delegations: taskDelegationRepo }),
+    relinquish: new RelinquishTaskDelegation({
+      delegations: taskDelegationRepo,
+      tasks: taskRepo,
+      users: userRepo,
+      notifications: notificationRepo,
+      email: emailSender,
+      idGen: idGenerator,
+      appUrl: appBaseUrl,
+    }),
     listAssignedToMe: new ListTasksAssignedToMe({
       delegations: taskDelegationRepo,
       tasks: taskRepo,

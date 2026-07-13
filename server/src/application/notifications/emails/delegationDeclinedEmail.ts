@@ -7,22 +7,22 @@ export type DelegationDeclinedEmailInput = {
   readonly inboxUrl: string;
 };
 
-// Письмо создателю: «делегат отклонил вашу задачу». Шлём email (важная инфо —
-// нужно перераспределить). Кнопка ведёт на inbox, задача там уже без ярлыка
-// делегирования (статус delegation = declined).
+// Письмо создателю: «делегат снял(а) с себя вашу задачу» (relinquish — единственный
+// способ отказа после отмены accept/decline-флоу). Кнопка ведёт на inbox; задача там
+// уже без ярлыка делегирования (статус delegation = withdrawn).
 export function renderDelegationDeclinedEmail(
   input: DelegationDeclinedEmailInput,
 ): EmailMessage {
-  const subject = `${input.delegateDisplayName} отклонил делегированную задачу`;
+  const subject = `${input.delegateDisplayName} снял(а) с себя задачу`;
 
   const text = [
-    `${input.delegateDisplayName} отклонил вашу задачу:`,
+    `${input.delegateDisplayName} снял(а) с себя вашу задачу:`,
     '',
     `«${input.taskExcerpt}»`,
     '',
     `Открыть «Входящие»: ${input.inboxUrl}`,
     '',
-    'Задача снова доступна в ваших входящих — можно делегировать другому или выполнить самим.',
+    'Задача снова у вас — можно поручить другому или выполнить самим.',
   ].join('\n');
 
   const html = `<!DOCTYPE html>
@@ -35,9 +35,9 @@ export function renderDelegationDeclinedEmail(
           <div style="font-size:13px;font-weight:700;letter-spacing:.5px;color:#2563eb;">PROJECTSFLOW</div>
         </td></tr>
         <tr><td style="padding:8px 32px 0;">
-          <h1 style="margin:0 0 12px;font-size:20px;line-height:1.3;color:#0f172a;">Делегирование отклонено</h1>
+          <h1 style="margin:0 0 12px;font-size:20px;line-height:1.3;color:#0f172a;">Задача возвращена</h1>
           <p style="margin:0 0 8px;font-size:15px;line-height:1.5;color:#334155;">
-            <strong style="color:#0f172a;">${input.delegateDisplayName}</strong> отклонил вашу задачу:
+            <strong style="color:#0f172a;">${input.delegateDisplayName}</strong> снял(а) с себя вашу задачу:
           </p>
           <blockquote style="margin:12px 0 0;padding:12px 14px;border-left:3px solid #f59e0b;background:#fffbeb;font-size:14px;line-height:1.5;color:#0f172a;">
             ${input.taskExcerpt}
@@ -48,7 +48,7 @@ export function renderDelegationDeclinedEmail(
             Открыть «Входящие»
           </a>
           <p style="margin:18px 0 0;font-size:12px;line-height:1.5;color:#94a3b8;">
-            Задача снова доступна — можно делегировать другому или выполнить самим.
+            Задача снова у вас — можно поручить другому или выполнить самим.
           </p>
         </td></tr>
       </table>
