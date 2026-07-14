@@ -21,6 +21,11 @@ import { ProjectViewsChart } from './ProjectViewsChart';
 import { TaskVersionsDialog } from '@/presentation/components/tasks/TaskVersionsDialog';
 import type { ActivityEventItem } from '@/domain/activity/ActivityFeedItem';
 import type { ProjectAnalytics, ProjectActivitySummary } from '@/domain/project/ProjectAnalytics';
+import {
+  PROJECT_CHANGED_EVENT,
+  TASK_CHANGED_EVENT,
+  TASK_VERSION_CHANGED_EVENT,
+} from '@/presentation/hooks/useNotificationStream';
 
 type Props = {
   open: boolean;
@@ -184,22 +189,65 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    let requestId = 0;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     const load = (withSpinner: boolean): void => {
+      const currentRequestId = ++requestId;
       if (withSpinner) setLoadingActivity(true);
       projectRepository
         .getProjectActivity(projectId, 40)
-        .then((r) => { if (!cancelled) { setActivity(r.items); setSummary(r.summary); } })
-        .catch(() => { if (!cancelled) { setActivity([]); setSummary(null); } })
-        .finally(() => { if (!cancelled) setLoadingActivity(false); });
+        .then((r) => {
+          if (!cancelled && currentRequestId === requestId) {
+            setActivity(r.items);
+            setSummary(r.summary);
+          }
+        })
+        .catch(() => {
+          if (!cancelled && currentRequestId === requestId && withSpinner) {
+            setActivity([]);
+            setSummary(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled && currentRequestId === requestId) setLoadingActivity(false);
+        });
     };
     load(true);
     // Открытое окно моментально подхватывает новые события (создали/перенесли задачу).
     const onChanged = (e: Event): void => {
-      const detail = (e as CustomEvent<{ projectId?: string }>).detail;
-      if (!detail || detail.projectId === projectId) load(false);
+      const detail = (e as CustomEvent<{
+        projectId?: string;
+        createdAt?: string;
+        actorDisplayName?: string | null;
+      }>).detail;
+      if (detail?.projectId && detail.projectId !== projectId) return;
+      if (e.type === TASK_VERSION_CHANGED_EVENT && detail?.createdAt) {
+        setSummary((current) => current ? {
+          ...current,
+          lastEditedAt: new Date(detail.createdAt!),
+          lastEditedByName: detail.actorDisplayName ?? null,
+        } : current);
+      }
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => load(false), 80);
+      // Лента activity записывается сразу после версии; повтор забирает её при редкой гонке запросов.
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = setTimeout(() => load(false), 600);
     };
     window.addEventListener('pf:project-activity-changed', onChanged);
-    return () => { cancelled = true; window.removeEventListener('pf:project-activity-changed', onChanged); };
+    window.addEventListener(TASK_VERSION_CHANGED_EVENT, onChanged);
+    window.addEventListener(TASK_CHANGED_EVENT, onChanged);
+    window.addEventListener(PROJECT_CHANGED_EVENT, onChanged);
+    return () => {
+      cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      if (retryTimer) clearTimeout(retryTimer);
+      window.removeEventListener('pf:project-activity-changed', onChanged);
+      window.removeEventListener(TASK_VERSION_CHANGED_EVENT, onChanged);
+      window.removeEventListener(TASK_CHANGED_EVENT, onChanged);
+      window.removeEventListener(PROJECT_CHANGED_EVENT, onChanged);
+    };
   }, [open, projectId, projectRepository]);
 
   // Аналитика просмотров — перезапрашивается при смене окна (7/28/90).

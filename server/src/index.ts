@@ -468,7 +468,11 @@ const kbDocumentRepo = new DrizzleKbDocumentRepository(db);
 
 const secretsRepo = new DrizzleSecretsRepository(db);
 const taskVersionRepo = new DrizzleTaskVersionRepository(db);
-const taskVersionRecorder = new TaskVersionRecorder({ versions: taskVersionRepo, idGen: idGenerator });
+const taskVersionRecorder = new TaskVersionRecorder({
+  versions: taskVersionRepo,
+  idGen: idGenerator,
+  onRecorded: (event) => projectEventBroadcaster.broadcastTaskVersionCreated(event),
+});
 const taskRepo = new DrizzleTaskRepository(db, taskVersionRecorder);
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);

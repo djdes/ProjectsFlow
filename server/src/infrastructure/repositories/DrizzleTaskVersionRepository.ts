@@ -86,6 +86,7 @@ export class DrizzleTaskVersionRepository implements TaskVersionRepository {
       actorUserId: input.actorUserId,
       snapshot: input.snapshot,
       changedFields: [...input.changedFields],
+      createdAt: input.createdAt,
     });
   }
 
@@ -116,6 +117,14 @@ export class DrizzleTaskVersionRepository implements TaskVersionRepository {
 
   async getById(id: string): Promise<TaskVersion | null> {
     const rows = await this.selectWithActor().where(eq(taskVersions.id, id)).limit(1);
+    return rows[0] ? toVersion(rows[0] as VersionRowWithActor) : null;
+  }
+
+  async getLatestForProject(projectId: string): Promise<TaskVersion | null> {
+    const rows = await this.selectWithActor()
+      .where(eq(taskVersions.projectId, projectId))
+      .orderBy(desc(taskVersions.createdAt), desc(taskVersions.id))
+      .limit(1);
     return rows[0] ? toVersion(rows[0] as VersionRowWithActor) : null;
   }
 

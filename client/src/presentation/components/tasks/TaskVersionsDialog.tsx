@@ -37,6 +37,11 @@ import type {
   TaskVersionField,
   TaskVersionsResult,
 } from '@/domain/task/TaskVersion';
+import {
+  PROJECT_CHANGED_EVENT,
+  TASK_CHANGED_EVENT,
+  TASK_VERSION_CHANGED_EVENT,
+} from '@/presentation/hooks/useNotificationStream';
 
 const VERSION_FIELD_OPTIONS: ReadonlyArray<{
   readonly field: TaskVersionField;
@@ -269,25 +274,59 @@ export function TaskVersionsDialog({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    let requestId = 0;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let latestVersionId: string | null = null;
     setLoading(true);
     setData(null);
     setSelectedId(null);
     setVisibleFields(new Set(ALL_VERSION_FIELDS));
-    taskRepository
-      .getVersions(projectId, taskId)
-      .then((r) => {
-        if (cancelled) return;
-        setData(r);
-        setSelectedId(r.versions[0]?.id ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setData({ versions: [], plan: 'free', cutoffAt: null });
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    const load = (initial: boolean): void => {
+      const currentRequestId = ++requestId;
+      taskRepository
+        .getVersions(projectId, taskId)
+        .then((r) => {
+          if (cancelled || currentRequestId !== requestId) return;
+          const previousLatestId = latestVersionId;
+          latestVersionId = r.versions[0]?.id ?? null;
+          setData(r);
+          setSelectedId((current) => {
+            const stillExists = !!current && r.versions.some((version) => version.id === current);
+            if (initial || !stillExists || current === previousLatestId) return latestVersionId;
+            return current;
+          });
+        })
+        .catch(() => {
+          if (!cancelled && currentRequestId === requestId && initial) {
+            setData({ versions: [], plan: 'free', cutoffAt: null });
+          }
+        })
+        .finally(() => {
+          if (!cancelled && currentRequestId === requestId) setLoading(false);
+        });
+    };
+    const scheduleRefresh = (): void => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => load(false), 80);
+    };
+    const onChanged = (event: Event): void => {
+      const detail = (event as CustomEvent<{ projectId?: string; taskId?: string }>).detail;
+      if (detail?.projectId && detail.projectId !== projectId) return;
+      if (event.type === TASK_VERSION_CHANGED_EVENT && detail?.taskId !== taskId) return;
+      scheduleRefresh();
+    };
+    load(true);
+    window.addEventListener(TASK_VERSION_CHANGED_EVENT, onChanged);
+    window.addEventListener(TASK_CHANGED_EVENT, onChanged);
+    window.addEventListener(PROJECT_CHANGED_EVENT, onChanged);
+    window.addEventListener('pf:project-activity-changed', onChanged);
     return () => {
       cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      window.removeEventListener(TASK_VERSION_CHANGED_EVENT, onChanged);
+      window.removeEventListener(TASK_CHANGED_EVENT, onChanged);
+      window.removeEventListener(PROJECT_CHANGED_EVENT, onChanged);
+      window.removeEventListener('pf:project-activity-changed', onChanged);
     };
   }, [open, projectId, taskId, taskRepository]);
 

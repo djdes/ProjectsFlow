@@ -39,8 +39,20 @@ function task(overrides: Partial<Task> = {}): Task {
 function harness(): {
   readonly recorder: TaskVersionRecorder;
   readonly created: CreateTaskVersionInput[];
+  readonly published: Array<{
+    readonly projectId: string;
+    readonly taskId: string;
+    readonly actorUserId: string | null;
+    readonly recipientUserIds: readonly string[];
+  }>;
 } {
   const created: CreateTaskVersionInput[] = [];
+  const published: Array<{
+    readonly projectId: string;
+    readonly taskId: string;
+    readonly actorUserId: string | null;
+    readonly recipientUserIds: readonly string[];
+  }> = [];
   const versions: TaskVersionRepository = {
     async create(input) {
       created.push(input);
@@ -49,6 +61,9 @@ function harness(): {
       return [];
     },
     async getById(): Promise<TaskVersion | null> {
+      return null;
+    },
+    async getLatestForProject(): Promise<TaskVersion | null> {
       return null;
     },
     async taskIdsWithVersions(): Promise<Set<string>> {
@@ -60,13 +75,17 @@ function harness(): {
     recorder: new TaskVersionRecorder({
       versions,
       idGen: () => `version-${++sequence}`,
+      onRecorded: (event) => {
+        published.push(event);
+      },
     }),
     created,
+    published,
   };
 }
 
 test('records creation, exact changed fields, actor and expanded snapshot', async () => {
-  const { recorder, created } = harness();
+  const { recorder, created, published } = harness();
   const before = task();
   const after = task({
     assignee: { userId: 'user-2', displayName: 'Денис', avatarUrl: '/denis.png' },
@@ -92,10 +111,12 @@ test('records creation, exact changed fields, actor and expanded snapshot', asyn
   ]);
   assert.equal(created[1]!.snapshot.assignee.displayName, 'Денис');
   assert.equal(created[1]!.snapshot.startDate, '2026-07-20');
+  assert.equal(published.length, 2);
+  assert.deepEqual(published[1]!.recipientUserIds, ['editor-1', 'user-2', 'user-1']);
 });
 
 test('skips no-op updates but records explicit related changes', async () => {
-  const { recorder, created } = harness();
+  const { recorder, created, published } = harness();
   const current = task();
 
   await recorder.record(current, 'user-1', current);
@@ -103,4 +124,5 @@ test('skips no-op updates but records explicit related changes', async () => {
 
   assert.equal(created.length, 1);
   assert.deepEqual(created[0]!.changedFields, ['files']);
+  assert.equal(published.length, 1);
 });

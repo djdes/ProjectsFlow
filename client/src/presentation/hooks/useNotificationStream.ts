@@ -8,6 +8,7 @@ export const NOTIFICATIONS_CHANGED_EVENT = 'pf:notifications-changed';
 // detail.projectId — в каком проекте произошло изменение.
 export const TASK_CHANGED_EVENT = 'pf:task-changed';
 export const PROJECT_CHANGED_EVENT = 'pf:project-changed';
+export const TASK_VERSION_CHANGED_EVENT = 'pf:task-version-changed';
 // Сменилось состояние LIVE-сессии воркера (start/finish). Канбан рисует 🔴 на карточке,
 // открытая LIVE-вкладка обновляет список сессий. detail = {projectId,taskId,sessionId,status}.
 export const LIVE_CHANGED_EVENT = 'pf:live-changed';
@@ -21,6 +22,15 @@ type LiveSessionStatus = 'running' | 'completed' | 'failed' | 'timeout' | 'cance
 
 type RealtimeEvent =
   | { kind: 'task_changed' | 'project_changed'; projectId: string }
+  | {
+      kind: 'task_version_created';
+      projectId: string;
+      taskId: string;
+      actorUserId: string | null;
+      actorDisplayName: string | null;
+      changedFields: string[];
+      createdAt: string;
+    }
   | {
       kind: 'live_session_changed';
       projectId: string;
@@ -105,6 +115,18 @@ export function useNotificationStream(): void {
         if (data.kind === 'workspace_chat_changed') {
           window.dispatchEvent(
             new CustomEvent(CHAT_CHANGED_EVENT, { detail: { workspaceId: data.workspaceId } }),
+          );
+          return;
+        }
+        if (data.kind === 'task_version_created') {
+          window.dispatchEvent(
+            new CustomEvent(TASK_VERSION_CHANGED_EVENT, { detail: data }),
+          );
+          // Фоновая правка могла пройти не через обычный HTTP-route задачи. Обновляем и канбан.
+          window.dispatchEvent(
+            new CustomEvent(TASK_CHANGED_EVENT, {
+              detail: { projectId: data.projectId, taskId: data.taskId },
+            }),
           );
           return;
         }

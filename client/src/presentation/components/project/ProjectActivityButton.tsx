@@ -9,6 +9,11 @@ import { useContainer } from '@/infrastructure/di/container';
 import { relativeTime } from '@/lib/relativeTime';
 import type { ProjectActivitySummary } from '@/domain/project/ProjectAnalytics';
 import { ProjectActivityDialog } from './ProjectActivityDialog';
+import {
+  PROJECT_CHANGED_EVENT,
+  TASK_CHANGED_EVENT,
+  TASK_VERSION_CHANGED_EVENT,
+} from '@/presentation/hooks/useNotificationStream';
 
 // Кнопка активности проекта слева от участников. Показывается ТЕКСТОМ (без иконки):
 // «Изменено 12 ч назад». Наведение — аккуратный поповер «Изменено/Создано» (как «Activity»
@@ -29,27 +34,56 @@ export function ProjectActivityButton({
   const { projectRepository } = useContainer();
   const [summary, setSummary] = useState<ProjectActivitySummary | null>(null);
 
+  // Относительная подпись («только что», «1 мин назад») продолжает идти без действий пользователя.
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockTick((tick) => tick + 1), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
+    let requestId = 0;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const load = (): void => {
+      const currentRequestId = ++requestId;
       projectRepository
         .getProjectActivity(projectId, 1)
         .then((r) => {
-          if (!cancelled) setSummary(r.summary);
+          if (!cancelled && currentRequestId === requestId) setSummary(r.summary);
         })
         .catch(() => undefined);
     };
     load();
-    // Мгновенно обновляем «Изменено …» когда в проекте что-то поменялось (создали/перенесли
-    // задачу и т.п.) — по кастомному событию из useTasks.
+    // Мгновенно обновляем «Изменено …» по локальным и серверным realtime-событиям.
     const onChanged = (e: Event): void => {
-      const detail = (e as CustomEvent<{ projectId?: string }>).detail;
-      if (!detail || detail.projectId === projectId) load();
+      const detail = (e as CustomEvent<{
+        projectId?: string;
+        createdAt?: string;
+        actorDisplayName?: string | null;
+      }>).detail;
+      if (detail?.projectId && detail.projectId !== projectId) return;
+      if (e.type === TASK_VERSION_CHANGED_EVENT && detail?.createdAt) {
+        setSummary((current) => current ? {
+          ...current,
+          lastEditedAt: new Date(detail.createdAt!),
+          lastEditedByName: detail.actorDisplayName ?? null,
+        } : current);
+      }
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(load, 80);
     };
     window.addEventListener('pf:project-activity-changed', onChanged);
+    window.addEventListener(TASK_VERSION_CHANGED_EVENT, onChanged);
+    window.addEventListener(TASK_CHANGED_EVENT, onChanged);
+    window.addEventListener(PROJECT_CHANGED_EVENT, onChanged);
     return () => {
       cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
       window.removeEventListener('pf:project-activity-changed', onChanged);
+      window.removeEventListener(TASK_VERSION_CHANGED_EVENT, onChanged);
+      window.removeEventListener(TASK_CHANGED_EVENT, onChanged);
+      window.removeEventListener(PROJECT_CHANGED_EVENT, onChanged);
     };
   }, [projectId, projectRepository]);
 

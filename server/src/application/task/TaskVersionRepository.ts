@@ -11,6 +11,7 @@ export type CreateTaskVersionInput = {
   readonly actorUserId: string | null;
   readonly snapshot: TaskSnapshot;
   readonly changedFields: readonly TaskVersionField[];
+  readonly createdAt: Date;
 };
 
 export interface TaskVersionRepository {
@@ -18,6 +19,8 @@ export interface TaskVersionRepository {
   /** Версии задачи, новые → старые. */
   listForTask(taskId: string): Promise<TaskVersion[]>;
   getById(id: string): Promise<TaskVersion | null>;
+  /** Последняя версия среди всех задач проекта. */
+  getLatestForProject(projectId: string): Promise<TaskVersion | null>;
   /** Из переданных taskId — те, у которых есть хотя бы одна версия (для гейта кнопки истории). */
   taskIdsWithVersions(taskIds: readonly string[]): Promise<Set<string>>;
 }

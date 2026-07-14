@@ -6,6 +6,15 @@ export type RealtimeEvent =
   | { readonly kind: 'task_changed'; readonly projectId: string }
   | { readonly kind: 'project_changed'; readonly projectId: string }
   | {
+      readonly kind: 'task_version_created';
+      readonly projectId: string;
+      readonly taskId: string;
+      readonly actorUserId: string | null;
+      readonly actorDisplayName: string | null;
+      readonly changedFields: readonly string[];
+      readonly createdAt: string;
+    }
+  | {
       readonly kind: 'comment_added';
       readonly projectId: string;
       readonly taskId: string;

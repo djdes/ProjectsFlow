@@ -23,6 +23,35 @@ export class ProjectEventBroadcaster {
     }
   }
 
+  async broadcastTaskVersionCreated(event: {
+    readonly projectId: string;
+    readonly taskId: string;
+    readonly actorUserId: string | null;
+    readonly changedFields: readonly string[];
+    readonly createdAt: Date;
+    readonly recipientUserIds: readonly string[];
+  }): Promise<void> {
+    const members = await this.deps.members.listByProject(event.projectId);
+    const actorDisplayName = event.actorUserId
+      ? (members.find((member) => member.userId === event.actorUserId)?.user.displayName ?? null)
+      : null;
+    const recipientUserIds = new Set([
+      ...members.map((member) => member.userId),
+      ...event.recipientUserIds,
+    ]);
+    for (const userId of recipientUserIds) {
+      this.deps.publisher.publish(userId, {
+        kind: 'task_version_created',
+        projectId: event.projectId,
+        taskId: event.taskId,
+        actorUserId: event.actorUserId,
+        actorDisplayName,
+        changedFields: event.changedFields,
+        createdAt: event.createdAt.toISOString(),
+      });
+    }
+  }
+
   // Отдельный метод для comment_added — нужны taskId/commentId/ownerUserId, чтобы Ralph
   // диспетчер мгновенно подхватывал ответы юзера без 30с polling'а GET .../comments.
   async broadcastCommentAdded(

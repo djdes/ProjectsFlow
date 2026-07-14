@@ -48,7 +48,10 @@ export class GetProjectActivity {
     opts: { before?: Date; limit: number },
   ): Promise<ProjectActivityResult> {
     const { project } = await requireProjectAccess(this.deps, projectId, userId, 'read_project');
-    const events = await this.deps.activity.listForProject(projectId, opts);
+    const [events, latestVersion] = await Promise.all([
+      this.deps.activity.listForProject(projectId, opts),
+      this.deps.taskVersions.getLatestForProject(projectId),
+    ]);
 
     // Резолвим имена акторов/таргетов + владельца проекта (для «создан»).
     const ids = new Set<string>([project.ownerId]);
@@ -57,6 +60,7 @@ export class GetProjectActivity {
       const target = e.payload?.targetUserId;
       if (target) ids.add(target);
     }
+    if (latestVersion?.actorUserId) ids.add(latestVersion.actorUserId);
     const users = ids.size > 0 ? await this.deps.users.getManyByIds([...ids]) : [];
     const byId = new Map(users.map((u) => [u.id, u]));
 
@@ -87,12 +91,17 @@ export class GetProjectActivity {
     });
 
     // Последнее событие (события пришли DESC) → «изменён». Владелец + createdAt → «создан».
-    const latest = events[0] ?? null;
+    const latestEvent = events[0] ?? null;
+    const latestIsVersion = !!latestVersion && (
+      !latestEvent || latestVersion.createdAt.getTime() > latestEvent.createdAt.getTime()
+    );
+    const lastEditedAt = latestIsVersion ? latestVersion.createdAt : (latestEvent?.createdAt ?? null);
+    const lastEditorId = latestIsVersion ? latestVersion.actorUserId : (latestEvent?.actorUserId ?? null);
     const summary: ProjectActivitySummary = {
       createdAt: project.createdAt,
       createdByName: byId.get(project.ownerId)?.displayName ?? null,
-      lastEditedAt: latest?.createdAt ?? null,
-      lastEditedByName: latest?.actorUserId ? (byId.get(latest.actorUserId)?.displayName ?? null) : null,
+      lastEditedAt,
+      lastEditedByName: lastEditorId ? (byId.get(lastEditorId)?.displayName ?? null) : null,
     };
 
     return { summary, items };
