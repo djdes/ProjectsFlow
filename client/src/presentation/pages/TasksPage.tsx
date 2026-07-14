@@ -179,6 +179,7 @@ export function TasksPage(): React.ReactElement {
         monitoringVisible={monitoringVisible}
         monitoringAlerts={monitoringAlerts}
         onOpenAutomation={() => setAutomationOpen(true)}
+        onOpenTaskFromHistory={() => setActivityOpen(false)}
       />
     </>
   );

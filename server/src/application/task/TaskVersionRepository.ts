@@ -18,6 +18,8 @@ export interface TaskVersionRepository {
   create(input: CreateTaskVersionInput): Promise<void>;
   /** Версии задачи, новые → старые. */
   listForTask(taskId: string): Promise<TaskVersion[]>;
+  /** Все версии всех задач проекта, новые → старые. */
+  listForProject(projectId: string): Promise<TaskVersion[]>;
   getById(id: string): Promise<TaskVersion | null>;
   /** Последняя версия среди всех задач проекта. */
   getLatestForProject(projectId: string): Promise<TaskVersion | null>;

@@ -221,6 +221,7 @@ import { UpdateTask } from './application/task/UpdateTask.js';
 import { DrizzleTaskVersionRepository } from './infrastructure/repositories/DrizzleTaskVersionRepository.js';
 import { TaskVersionRecorder } from './application/task/TaskVersionRecorder.js';
 import { GetTaskVersions } from './application/task/GetTaskVersions.js';
+import { GetProjectTaskVersions } from './application/task/GetProjectTaskVersions.js';
 import { RestoreTaskVersion } from './application/task/RestoreTaskVersion.js';
 import { MoveTask } from './application/task/MoveTask.js';
 import { DrizzleEmailActionTokenRepository } from './infrastructure/repositories/DrizzleEmailActionTokenRepository.js';
@@ -1799,6 +1800,13 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
+      versions: taskVersionRepo,
+      users: userRepo,
+      now: () => new Date(),
+    }),
+    getProjectTaskVersions: new GetProjectTaskVersions({
+      projects: projectRepo,
+      members: projectMemberRepo,
       versions: taskVersionRepo,
       users: userRepo,
       now: () => new Date(),

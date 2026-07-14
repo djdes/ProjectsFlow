@@ -7,6 +7,7 @@ import {
   Bot,
   Download,
   EyeOff,
+  History,
   Link as LinkIcon,
   MoreHorizontal,
   Search,
@@ -33,6 +34,7 @@ import { taskTitle } from '@/presentation/components/tasks/views/viewShared';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { useContainer } from '@/infrastructure/di/container';
+import { ProjectVersionsDialog } from './ProjectVersionsDialog';
 
 type Props = {
   project: Project;
@@ -40,6 +42,7 @@ type Props = {
   monitoringVisible: boolean;
   monitoringAlerts: number;
   onOpenAutomation: () => void;
+  onOpenTaskFromHistory?: () => void;
 };
 
 type Action = {
@@ -60,6 +63,7 @@ export function ProjectActionsMenu({
   monitoringVisible,
   monitoringAlerts,
   onOpenAutomation,
+  onOpenTaskFromHistory,
 }: Props): React.ReactElement {
   const navigate = useNavigate();
   const { projectRepository, taskRepository } = useContainer();
@@ -67,6 +71,7 @@ export function ProjectActionsMenu({
   const [query, setQuery] = useState('');
   const taskHiding = useTaskHiding();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const projectId = project.id;
   const isOwner = project.role === 'owner';
   const canEdit = isOwner || project.role === 'editor';
@@ -165,6 +170,13 @@ export function ProjectActionsMenu({
         onSelect: () => navigate(`/projects/${projectId}/monitoring`),
         section: 1,
       });
+    list.push({
+      key: 'versions',
+      label: 'История версий',
+      icon: History,
+      onSelect: () => setVersionsOpen(true),
+      section: 1,
+    });
     list.push({
       key: 'settings',
       label: 'Настройки',
@@ -300,6 +312,21 @@ export function ProjectActionsMenu({
           </div>
         </PopoverContent>
       </Popover>
+
+      <ProjectVersionsDialog
+        projectId={projectId}
+        projectName={project.name}
+        open={versionsOpen}
+        onOpenChange={setVersionsOpen}
+        onOpenTask={(taskId) => {
+          setVersionsOpen(false);
+          onOpenTaskFromHistory?.();
+          const search = new URLSearchParams(window.location.search);
+          search.set('task', taskId);
+          search.delete('done');
+          navigate(`/projects/${projectId}?${search.toString()}`);
+        }}
+      />
 
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent className="max-w-xs gap-3 p-5">

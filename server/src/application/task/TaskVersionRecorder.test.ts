@@ -60,6 +60,9 @@ function harness(): {
     async listForTask(): Promise<TaskVersion[]> {
       return [];
     },
+    async listForProject(): Promise<TaskVersion[]> {
+      return [];
+    },
     async getById(): Promise<TaskVersion | null> {
       return null;
     },

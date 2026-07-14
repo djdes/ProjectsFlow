@@ -4,6 +4,7 @@ import type { ListTasks, TaskWithCounts } from '../../application/task/ListTasks
 import type { CreateTask } from '../../application/task/CreateTask.js';
 import type { UpdateTask } from '../../application/task/UpdateTask.js';
 import type { GetTaskVersions } from '../../application/task/GetTaskVersions.js';
+import type { GetProjectTaskVersions } from '../../application/task/GetProjectTaskVersions.js';
 import type { RestoreTaskVersion } from '../../application/task/RestoreTaskVersion.js';
 import type { MoveTask } from '../../application/task/MoveTask.js';
 import type { DeleteTask } from '../../application/task/DeleteTask.js';
@@ -27,6 +28,7 @@ import type { Task } from '../../domain/task/Task.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { TaskComment } from '../../domain/task/TaskComment.js';
+import type { TaskVersion } from '../../domain/task/TaskVersion.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
 import type { DispatchCommentNotifications } from '../../application/notifications/DispatchCommentNotifications.js';
@@ -55,6 +57,7 @@ type Deps = {
   readonly moveTask: MoveTask;
   readonly deleteTask: DeleteTask;
   readonly getTaskVersions: GetTaskVersions;
+  readonly getProjectTaskVersions: GetProjectTaskVersions;
   readonly restoreTaskVersion: RestoreTaskVersion;
   readonly linkCommit: LinkCommit;
   readonly unlinkCommit: UnlinkCommit;
@@ -140,6 +143,18 @@ export function toDto(t: Task | TaskWithCounts): TaskDto {
   if ('attachmentCount' in t) base.attachmentCount = t.attachmentCount;
   if ('commentCount' in t) base.commentCount = t.commentCount;
   return base;
+}
+
+function versionToDto(v: TaskVersion) {
+  return {
+    id: v.id,
+    taskId: v.taskId,
+    actorUserId: v.actorUserId,
+    actor: v.actor,
+    changedFields: v.changedFields,
+    createdAt: v.createdAt.toISOString(),
+    snapshot: v.snapshot,
+  };
 }
 
 type CommitDto = Omit<TaskCommit, 'committedAt' | 'linkedAt'> & {
@@ -306,6 +321,24 @@ export function tasksRouter(deps: Deps): Router {
     }
   });
 
+  // Общая история всех задач проекта. Этот статический путь должен быть объявлен до
+  // параметрических taskId-маршрутов, чтобы `versions` не принимался за id задачи.
+  router.get('/versions', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await deps.getProjectTaskVersions.execute(
+        req.params['projectId'] as string,
+        req.user!.id,
+      );
+      res.json({
+        plan: result.plan,
+        cutoffAt: result.cutoffAt,
+        versions: result.versions.map(versionToDto),
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   router.patch('/:taskId', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const projectId = req.params['projectId'] as string;
@@ -342,15 +375,7 @@ export function tasksRouter(deps: Deps): Router {
       res.json({
         plan: result.plan,
         cutoffAt: result.cutoffAt,
-        versions: result.versions.map((v) => ({
-          id: v.id,
-          taskId: v.taskId,
-          actorUserId: v.actorUserId,
-          actor: v.actor,
-          changedFields: v.changedFields,
-          createdAt: v.createdAt.toISOString(),
-          snapshot: v.snapshot,
-        })),
+        versions: result.versions.map(versionToDto),
       });
     } catch (e) {
       next(e);

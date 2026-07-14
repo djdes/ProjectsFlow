@@ -1,6 +1,6 @@
 import { desc, eq, inArray } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { taskVersions, users, type TaskVersionRow } from '../db/schema.js';
+import { tasks, taskVersions, users, type TaskVersionRow } from '../db/schema.js';
 import {
   changedTaskFields,
   type TaskSnapshot,
@@ -75,6 +75,30 @@ function toVersion(row: VersionRowWithActor): TaskVersion {
   };
 }
 
+// До db/115 changedFields не сохранялись. Восстанавливаем их по предыдущему снимку
+// той же задачи. Алгоритм работает и для одной задачи, и для общей проектной ленты:
+// идём от старых записей к новым и держим последний снимок отдельно по taskId.
+function toVersionsWithInferredFields(rows: readonly VersionRowWithActor[]): TaskVersion[] {
+  const versions = rows.map(toVersion);
+  const previousByTask = new Map<string, TaskSnapshot>();
+  const result = versions.slice();
+
+  for (let index = rows.length - 1; index >= 0; index--) {
+    const row = rows[index]!;
+    const version = versions[index]!;
+    const storedFields = parseChangedFields(row.version.changedFields);
+    result[index] = storedFields
+      ? version
+      : {
+          ...version,
+          changedFields: changedTaskFields(previousByTask.get(version.taskId) ?? null, version.snapshot),
+        };
+    previousByTask.set(version.taskId, version.snapshot);
+  }
+
+  return result;
+}
+
 export class DrizzleTaskVersionRepository implements TaskVersionRepository {
   constructor(private readonly db: Database) {}
 
@@ -105,14 +129,17 @@ export class DrizzleTaskVersionRepository implements TaskVersionRepository {
     const rows = await this.selectWithActor()
       .where(eq(taskVersions.taskId, taskId))
       .orderBy(desc(taskVersions.createdAt), desc(taskVersions.id));
-    const versions = rows.map((row) => toVersion(row as VersionRowWithActor));
+    return toVersionsWithInferredFields(rows as VersionRowWithActor[]);
+  }
 
-    return versions.map((version, index) => {
-      const storedFields = parseChangedFields(rows[index]!.version.changedFields);
-      if (storedFields) return version;
-      const previous = versions[index + 1]?.snapshot ?? null;
-      return { ...version, changedFields: changedTaskFields(previous, version.snapshot) };
-    });
+  async listForProject(projectId: string): Promise<TaskVersion[]> {
+    const rows = await this.selectWithActor()
+      // Проект определяем по текущей задаче, а не по projectId старого снимка. Так после
+      // переноса задачи вся её прежняя история едет вместе с ней и «Открыть задачу» работает.
+      .innerJoin(tasks, eq(tasks.id, taskVersions.taskId))
+      .where(eq(tasks.projectId, projectId))
+      .orderBy(desc(taskVersions.createdAt), desc(taskVersions.id));
+    return toVersionsWithInferredFields(rows as VersionRowWithActor[]);
   }
 
   async getById(id: string): Promise<TaskVersion | null> {

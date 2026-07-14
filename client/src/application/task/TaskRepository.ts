@@ -96,6 +96,8 @@ export interface TaskRepository {
   delete(projectId: string, taskId: string): Promise<void>;
   // История версий задачи (окно версий + Restore, как в Notion).
   getVersions(projectId: string, taskId: string): Promise<TaskVersionsResult>;
+  // Единая история версий всех задач проекта.
+  getProjectVersions(projectId: string): Promise<TaskVersionsResult>;
   restoreVersion(projectId: string, taskId: string, versionId: string): Promise<Task>;
   listCommits(projectId: string, taskId: string): Promise<TaskCommit[]>;
   linkCommit(projectId: string, taskId: string, sha: string): Promise<TaskCommit>;

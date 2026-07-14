@@ -100,12 +100,16 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
   // Deep-link `?task=<id>` — открывает drawer задачи один раз после загрузки.
   // Симметрично с KanbanBoard, чтобы переброс из notification работал и в list-view.
   const [searchParams, setSearchParams] = useSearchParams();
-  const deepLinkedRef = useRef(false);
+  const deepLinkedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (deepLinkedRef.current || loading) return;
+    if (loading) return;
     const taskId = searchParams.get('task');
-    if (!taskId) return;
-    deepLinkedRef.current = true;
+    if (!taskId) {
+      deepLinkedRef.current = null;
+      return;
+    }
+    if (deepLinkedRef.current === taskId) return;
+    deepLinkedRef.current = taskId;
     const task = tasks.find((t) => t.id === taskId);
     // #comment-<id> из hash — ловим до очистки query (setSearchParams сбрасывает hash).
     const hashMatch = /^#comment-(.+)$/.exec(window.location.hash);

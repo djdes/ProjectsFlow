@@ -204,6 +204,31 @@ type CommentNotificationDto = {
   createdAt: string;
 };
 
+type TaskVersionsDto = {
+  plan: PlanId;
+  cutoffAt: string | null;
+  versions: Array<{
+    id: string;
+    taskId: string;
+    actorUserId: string | null;
+    actor: TaskVersionActor | null;
+    changedFields: TaskVersionField[];
+    createdAt: string;
+    snapshot: TaskSnapshot;
+  }>;
+};
+
+function taskVersionsFromDto(res: TaskVersionsDto): TaskVersionsResult {
+  return {
+    plan: res.plan,
+    cutoffAt: res.cutoffAt ? new Date(res.cutoffAt) : null,
+    versions: res.versions.map((version) => ({
+      ...version,
+      createdAt: new Date(version.createdAt),
+    })),
+  };
+}
+
 export class HttpTaskRepository implements TaskRepository {
   async list(projectId: string): Promise<Task[]> {
     const { tasks } = await httpClient.get<{ tasks: TaskDto[] }>(`/projects/${projectId}/tasks`);
@@ -234,24 +259,14 @@ export class HttpTaskRepository implements TaskRepository {
     await httpClient.delete<void>(`/projects/${projectId}/tasks/${taskId}`);
   }
   async getVersions(projectId: string, taskId: string): Promise<TaskVersionsResult> {
-    const res = await httpClient.get<{
-      plan: PlanId;
-      cutoffAt: string | null;
-      versions: Array<{
-        id: string;
-        taskId: string;
-        actorUserId: string | null;
-        actor: TaskVersionActor | null;
-        changedFields: TaskVersionField[];
-        createdAt: string;
-        snapshot: TaskSnapshot;
-      }>;
-    }>(`/projects/${projectId}/tasks/${taskId}/versions`);
-    return {
-      plan: res.plan,
-      cutoffAt: res.cutoffAt ? new Date(res.cutoffAt) : null,
-      versions: res.versions.map((v) => ({ ...v, createdAt: new Date(v.createdAt) })),
-    };
+    const res = await httpClient.get<TaskVersionsDto>(
+      `/projects/${projectId}/tasks/${taskId}/versions`,
+    );
+    return taskVersionsFromDto(res);
+  }
+  async getProjectVersions(projectId: string): Promise<TaskVersionsResult> {
+    const res = await httpClient.get<TaskVersionsDto>(`/projects/${projectId}/tasks/versions`);
+    return taskVersionsFromDto(res);
   }
   async restoreVersion(projectId: string, taskId: string, versionId: string): Promise<Task> {
     const { task } = await httpClient.post<{ task: TaskDto }>(
