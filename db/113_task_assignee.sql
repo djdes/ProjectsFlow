@@ -9,61 +9,36 @@
 ALTER TABLE tasks
   ADD COLUMN IF NOT EXISTS assignee_user_id CHAR(36) NULL AFTER created_by;
 
--- Во время deploy старый PM2-процесс продолжает работать до конца migrate. Триггеры
--- закрывают короткое окно совместимости: старый код ещё не передаёт assignee_user_id и
--- может создать accepted delegation после основного backfill.
-DROP TRIGGER IF EXISTS trg_tasks_default_assignee;
-CREATE TRIGGER trg_tasks_default_assignee
-BEFORE INSERT ON tasks
-FOR EACH ROW
-SET NEW.assignee_user_id = COALESCE(
-  NEW.assignee_user_id,
-  NEW.created_by,
-  (SELECT p.owner_id FROM projects p WHERE p.id = NEW.project_id LIMIT 1)
-);
-
-DROP TRIGGER IF EXISTS trg_task_delegation_sync_assignee;
-CREATE TRIGGER trg_task_delegation_sync_assignee
-AFTER INSERT ON task_delegations
-FOR EACH ROW
-UPDATE tasks
-   SET assignee_user_id = NEW.delegate_user_id
- WHERE id = NEW.task_id
-   AND NEW.status = 'accepted';
-
--- Старый процесс создавал строку pending, а принятие оформлял отдельным UPDATE.
--- Этот триггер закрывает тот же rolling-deploy сценарий для уже созданных строк.
-DROP TRIGGER IF EXISTS trg_task_delegation_update_sync_assignee;
-CREATE TRIGGER trg_task_delegation_update_sync_assignee
-AFTER UPDATE ON task_delegations
-FOR EACH ROW
-UPDATE tasks
-   SET assignee_user_id = NEW.delegate_user_id
- WHERE id = NEW.task_id
-   AND NEW.status = 'accepted';
-
 -- Для уже делегированной задачи выигрывает последний active-исполнитель. Для остальных
 -- берём фактического создателя; у совсем старых строк created_by=NULL — владельца проекта.
-UPDATE tasks t
-  JOIN projects p ON p.id = t.project_id
-   SET t.assignee_user_id = COALESCE(
+-- WRITE-lock не даёт старому PM2-процессу вставить NULL между backfill и NOT NULL.
+-- В отличие от триггеров он не требует SUPER при включённом binary log в MariaDB.
+LOCK TABLES
+  tasks WRITE,
+  projects READ,
+  task_delegations READ;
+
+UPDATE tasks
+  JOIN projects ON projects.id = tasks.project_id
+   SET tasks.assignee_user_id = COALESCE(
          (
-           SELECT td.delegate_user_id
-             FROM task_delegations td
-            WHERE td.task_id = t.id
-              AND td.status = 'accepted'
-            ORDER BY COALESCE(td.responded_at, td.created_at) DESC,
-                     td.created_at DESC,
-                     td.id DESC
+           SELECT task_delegations.delegate_user_id
+             FROM task_delegations
+            WHERE task_delegations.task_id = tasks.id
+              AND task_delegations.status = 'accepted'
+            ORDER BY COALESCE(task_delegations.responded_at, task_delegations.created_at) DESC,
+                     task_delegations.created_at DESC,
+                     task_delegations.id DESC
             LIMIT 1
          ),
-         t.created_by,
-         p.owner_id
+         tasks.created_by,
+         projects.owner_id
        )
- WHERE t.assignee_user_id IS NULL;
+ WHERE tasks.assignee_user_id IS NULL;
 
 ALTER TABLE tasks
-  MODIFY COLUMN assignee_user_id CHAR(36) NOT NULL;
+  MODIFY COLUMN assignee_user_id CHAR(36) NOT NULL,
+  ADD INDEX IF NOT EXISTS idx_tasks_assignee (assignee_user_id),
+  LOCK = EXCLUSIVE;
 
-ALTER TABLE tasks
-  ADD INDEX IF NOT EXISTS idx_tasks_assignee (assignee_user_id);
+UNLOCK TABLES;
