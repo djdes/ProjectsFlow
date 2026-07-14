@@ -33,6 +33,8 @@ type TaskRowJoined = TaskRow & {
   cancelByDisplayName: string | null;
   assigneeDisplayName: string | null;
   assigneeAvatarUrl: string | null;
+  creatorDisplayName: string | null;
+  creatorAvatarUrl: string | null;
 };
 
 // status_before_done — VARCHAR в БД, поэтому валидируем против enum (а не голый cast):
@@ -46,6 +48,13 @@ function toTask(row: TaskRowJoined): Task {
     id: row.id,
     projectId: row.projectId,
     createdBy: row.createdBy ?? null,
+    creator: row.createdBy
+      ? {
+          userId: row.createdBy,
+          displayName: row.creatorDisplayName ?? 'Удалённый пользователь',
+          avatarUrl: row.creatorAvatarUrl ?? null,
+        }
+      : null,
     assignee: {
       userId: row.assigneeUserId,
       displayName: row.assigneeDisplayName ?? 'Удалённый пользователь',
@@ -87,6 +96,7 @@ export class DrizzleTaskRepository implements TaskRepository {
   // LEFT JOIN — потому что флаг чаще NULL (стандартный кейс).
   private baseSelect() {
     const assigneeUser = aliasedTable(users, 'task_assignee_user');
+    const creatorUser = aliasedTable(users, 'task_creator_user');
     return this.db
       .select({
         id: tasks.id,
@@ -97,6 +107,8 @@ export class DrizzleTaskRepository implements TaskRepository {
         assigneeUserId: tasks.assigneeUserId,
         assigneeDisplayName: assigneeUser.displayName,
         assigneeAvatarUrl: assigneeUser.avatarUrl,
+        creatorDisplayName: creatorUser.displayName,
+        creatorAvatarUrl: creatorUser.avatarUrl,
         description: tasks.description,
         icon: tasks.icon,
         cover: tasks.cover,
@@ -117,7 +129,8 @@ export class DrizzleTaskRepository implements TaskRepository {
       })
       .from(tasks)
       .leftJoin(users, eq(users.id, tasks.ralphCancelRequestedBy))
-      .leftJoin(assigneeUser, eq(assigneeUser.id, tasks.assigneeUserId));
+      .leftJoin(assigneeUser, eq(assigneeUser.id, tasks.assigneeUserId))
+      .leftJoin(creatorUser, eq(creatorUser.id, tasks.createdBy));
   }
 
   async listByProject(projectId: string): Promise<Task[]> {

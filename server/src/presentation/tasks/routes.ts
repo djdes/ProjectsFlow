@@ -125,8 +125,8 @@ type TaskDto = Omit<
 };
 
 export function toDto(t: Task | TaskWithCounts): TaskDto {
-  // createdBy нужен только серверу для аудита/метеринга. Публичная модель задачи
-  // содержит ровно одного человека — текущего ответственного.
+  // Сырой createdBy остаётся серверным audit-id. Клиент получает отдельный creator
+  // только для отображения рядом с датой создания; назначение живёт исключительно в assignee.
   const { createdBy: _serverOnlyCreatedBy, ...publicTask } = t;
   const base: TaskDto = {
     ...publicTask,

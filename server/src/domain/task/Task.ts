@@ -1,4 +1,5 @@
 import type { TaskAssignee } from './TaskAssignee.js';
+import type { TaskCreator } from './TaskCreator.js';
 
 // 'awaiting_clarification' — активная работа на паузе до действия человека
 // (ответ на ralph-question, разбор после maxAttempts retry, переформулировка задачи,
@@ -45,6 +46,9 @@ export type Task = {
   // Кто создал задачу — серверная атрибуция для аудита/метеринга. null для
   // старых задач (db/088). Заполняется на create; репозиторий читает колонку.
   readonly createdBy: string | null;
+  // Создатель показывается только как часть свойства «Создано». Это не владелец задачи
+  // и не участник назначения. Optional сохраняет совместимость со старыми fake-репозиториями.
+  readonly creator?: TaskCreator | null;
   // Единственный обязательный ответственный. Не зависит от createdBy: любой участник
   // проекта может переназначить задачу или забрать её себе (db/113).
   readonly assignee: TaskAssignee;

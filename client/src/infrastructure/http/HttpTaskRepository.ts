@@ -87,6 +87,13 @@ type CommentDto = Omit<TaskComment, 'createdAt' | 'updatedAt' | 'attachments'> &
 export function fromDto(dto: TaskDto): Task {
   return {
     ...dto,
+    creator: dto.creator
+      ? {
+          userId: dto.creator.userId,
+          displayName: dto.creator.displayName,
+          avatarUrl: dto.creator.avatarUrl ?? null,
+        }
+      : null,
     assignee: {
       userId: dto.assignee.userId,
       displayName: dto.assignee.displayName,

@@ -1,4 +1,5 @@
 import type { TaskAssignee } from './TaskAssignee';
+import type { TaskCreator } from './TaskCreator';
 
 // 'awaiting_clarification' — активная задача на паузе до действия человека (ответ на
 // ralph-question, разбор после maxAttempts retry, переформулировка). Между in_progress
@@ -59,8 +60,11 @@ export const RALPH_MODE_META: Record<RalphMode, { label: string; description: st
 export type Task = {
   readonly id: string;
   readonly projectId: string;
+  // Исторический автор. Показывается только рядом с датой в свойстве «Создано» и
+  // не участвует в назначении. Optional — для совместимости с кэшами старого API.
+  readonly creator?: TaskCreator | null;
   // Единственный обязательный ответственный (db/113). Создатель задачи не участвует
-  // в назначении и остаётся только серверным audit/metering-полем.
+  // в назначении и отображается отдельно только в метаданных «Создано».
   readonly assignee: TaskAssignee;
   readonly description: string | null;
   // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL картинки. null = без иконки. См. db/093.

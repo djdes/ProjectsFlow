@@ -67,6 +67,7 @@ import { ProjectIconView } from '@/presentation/components/project/projectIconVi
 import { STATUS_LABEL } from '../statusLabels';
 import { DeadlineBadge } from '../DeadlineBadge';
 import { AssigneeTaskButton } from '../AssigneeTaskButton';
+import { TaskCreatedValue } from '../TaskCreatedValue';
 import { type TaskDrawerState } from '../TaskDrawer';
 import { ymd, startOfDay, addDays } from '../assignedGrouping';
 import type { ViewCreateRequest } from './ProjectBoardViews';
@@ -141,7 +142,7 @@ const COLUMN_WIDTH: Record<ViewColumn, string> = {
   priority: '8rem',
   deadline: '8.5rem',
   assignee: '11rem',
-  created: '11rem',
+  created: '19rem',
 };
 const ALL_COLUMNS: readonly ViewColumn[] = ['status', 'priority', 'deadline', 'assignee', 'created'];
 
@@ -2055,12 +2056,14 @@ function TableRow({
           </div>
         );
       case 'created':
-        // Только чтение (Notion Created time).
+        // Только чтение: создатель относится к метаданным создания, а не к назначению.
         return (
           <div key={col} {...cellProps('created')}>
-            <span className="flex min-h-8 w-full items-center px-2 text-sm text-muted-foreground">
-              {CREATED_FMT.format(task.createdAt)}
-            </span>
+            <TaskCreatedValue
+              task={task}
+              dateLabel={CREATED_FMT.format(task.createdAt)}
+              className="min-h-8 w-full px-2"
+            />
           </div>
         );
     }

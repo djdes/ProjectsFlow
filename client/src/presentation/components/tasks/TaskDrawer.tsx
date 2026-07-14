@@ -102,6 +102,7 @@ import type { MentionMember, RichTextEditorHandle } from '@/presentation/compone
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
 import { TaskVersionsDialog } from './TaskVersionsDialog';
+import { TaskCreatedValue } from './TaskCreatedValue';
 
 // Tiptap-редактор грузим лениво — он тяжёлый и не нужен на read-heavy экранах,
 // которые не открывают drawer. Suspense-fallback держит высоту, чтобы layout не прыгал.
@@ -2224,9 +2225,11 @@ export function TaskDrawer({
                       </div>
                     ),
                     created: (
-                      <span className="inline-flex min-h-7 items-center text-sm text-muted-foreground/70">
-                        {formatTaskCreated(task.createdAt)}
-                      </span>
+                      <TaskCreatedValue
+                        task={task}
+                        dateLabel={formatTaskCreated(task.createdAt)}
+                        className="min-h-7"
+                      />
                     ),
                   };
                   const propVisible: Record<TaskPropertyKey, boolean> = {
