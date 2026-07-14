@@ -18,6 +18,7 @@ import type { GitTokenDelegationRepository } from '../project/GitTokenDelegation
 import type { UserRepository } from '../user/UserRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
+import type { TaskVersionRecorder } from './TaskVersionRecorder.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -29,6 +30,7 @@ type Deps = {
   // v0.16+: для fallback'а на делегированный токен когда у caller'а нет своего GH.
   readonly delegations: GitTokenDelegationRepository;
   readonly users: UserRepository;
+  readonly versions?: TaskVersionRecorder;
 };
 
 export type LinkCommitCommand = {
@@ -89,7 +91,13 @@ export class LinkCommit {
     // Position не трогаем — карточка останется со своей позицией внутри новой колонки
     // (kanban отсортирует по position; для очень новых задач это OK).
     if (linked && task.status === 'todo') {
-      await this.deps.tasks.update(input.taskId, { status: 'in_progress' });
+      await this.deps.tasks.update(input.taskId, { status: 'in_progress' }, input.ownerUserId);
+    }
+    if (linked) {
+      const current = await this.deps.tasks.getById(input.taskId);
+      if (current) {
+        await this.deps.versions?.record(current, input.ownerUserId, current, ['commits']);
+      }
     }
 
     return {

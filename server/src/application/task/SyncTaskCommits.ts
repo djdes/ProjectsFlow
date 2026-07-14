@@ -16,6 +16,7 @@ import type { GitTokenDelegationRepository } from '../project/GitTokenDelegation
 import type { UserRepository } from '../user/UserRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
+import type { TaskVersionRecorder } from './TaskVersionRecorder.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -27,6 +28,7 @@ type Deps = {
   // v0.16+: fallback на делегированный токен (см. LinkCommit).
   readonly delegations: GitTokenDelegationRepository;
   readonly users: UserRepository;
+  readonly versions?: TaskVersionRecorder;
 };
 
 export type SyncResult = {
@@ -104,9 +106,15 @@ export class SyncTaskCommits {
         if (linked) linkedCount++;
         // Auto-transition: один раз на задачу, только если она ещё в TODO.
         if (linked && task.status === 'todo' && !transitionedTaskIds.has(task.id)) {
-          await this.deps.tasks.update(task.id, { status: 'in_progress' });
+          await this.deps.tasks.update(task.id, { status: 'in_progress' }, ownerUserId);
           autoTransitionedCount++;
           transitionedTaskIds.add(task.id);
+        }
+        if (linked) {
+          const current = await this.deps.tasks.getById(task.id);
+          if (current) {
+            await this.deps.versions?.record(current, ownerUserId, current, ['commits']);
+          }
         }
       }
     }

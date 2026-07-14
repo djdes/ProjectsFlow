@@ -6,6 +6,7 @@ import type { TaskRepository } from './TaskRepository.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { AttachmentStorage } from './AttachmentStorage.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
+import type { TaskVersionRecorder } from './TaskVersionRecorder.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -15,6 +16,7 @@ type Deps = {
   readonly storage: AttachmentStorage;
   readonly idGen: () => string;
   readonly maxBytes: number;
+  readonly versions?: TaskVersionRecorder;
 };
 
 export type UploadTaskAttachmentCommand = {
@@ -63,7 +65,7 @@ export class UploadTaskAttachment {
 
     await this.deps.storage.put({ storageKey, data: input.data, mimeType: input.mimeType });
 
-    return this.deps.attachments.create({
+    const attachment = await this.deps.attachments.create({
       id,
       taskId: input.taskId,
       commentId: input.commentId ?? null,
@@ -72,5 +74,7 @@ export class UploadTaskAttachment {
       sizeBytes: input.data.byteLength,
       storageKey,
     });
+    await this.deps.versions?.record(task, input.ownerUserId, task, ['files']);
+    return attachment;
   }
 }

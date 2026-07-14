@@ -5,7 +5,6 @@ import type { ProjectMemberRepository } from '../project/ProjectMemberRepository
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository, UpdateTaskPatch } from './TaskRepository.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
-import type { TaskVersionRecorder } from './TaskVersionRecorder.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
 
 type Deps = {
@@ -14,8 +13,6 @@ type Deps = {
   readonly tasks: TaskRepository;
   // Логируем правки в ленту изменений (best-effort; опционально для обратной совместимости).
   readonly activity?: ActivityRecorder;
-  // Снимок версии после правки (для окна версий + restore).
-  readonly versions?: TaskVersionRecorder;
 };
 
 // Первая строка описания (заголовок задачи) — короткая выжимка для ленты.
@@ -73,11 +70,8 @@ export class UpdateTask {
     if (input.startDate !== undefined) patch.startDate = input.startDate;
     if (input.priority !== undefined) patch.priority = input.priority;
 
-    const updated = await this.deps.tasks.update(input.taskId, patch);
+    const updated = await this.deps.tasks.update(input.taskId, patch, input.ownerUserId);
     if (!updated) throw new TaskNotFoundError(input.taskId);
-
-    // Снимок версии после правки (для окна версий + restore).
-    await this.deps.versions?.record(updated, input.ownerUserId);
 
     // Логируем в ленту изменений то, что реально поменялось (Notion-style дифф).
     if (this.deps.activity) {

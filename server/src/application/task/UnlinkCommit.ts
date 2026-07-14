@@ -4,12 +4,14 @@ import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
+import type { TaskVersionRecorder } from './TaskVersionRecorder.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly taskCommits: TaskCommitRepository;
+  readonly versions?: TaskVersionRecorder;
 };
 
 export class UnlinkCommit {
@@ -23,5 +25,6 @@ export class UnlinkCommit {
 
     const ok = await this.deps.taskCommits.unlink(taskId, sha);
     if (!ok) throw new TaskCommitNotFoundError(sha);
+    await this.deps.versions?.record(task, ownerUserId, task, ['commits']);
   }
 }

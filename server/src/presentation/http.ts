@@ -125,6 +125,7 @@ import type { RevokeRalphCancel } from '../application/task/RevokeRalphCancel.js
 import type { BoardViewRepository } from '../application/project/BoardViewRepository.js';
 import type { TaskTemplateRepository } from '../application/task/TaskTemplateRepository.js';
 import type { TaskPropertyRepository } from '../application/task/TaskPropertyRepository.js';
+import type { TaskVersionRecorder } from '../application/task/TaskVersionRecorder.js';
 import type { ListTasksAssignedToMe } from '../application/task/ListTasksAssignedToMe.js';
 import type { ListTasksAssignedToOthers } from '../application/task/ListTasksAssignedToOthers.js';
 import type { MoveTaskToProject } from '../application/task/MoveTaskToProject.js';
@@ -333,6 +334,7 @@ type AppDeps = {
     // Кастомные свойства задач (db/109) + tasks для IDOR-проверки value-роута.
     readonly taskProperties: TaskPropertyRepository;
     readonly tasks: TaskRepository;
+    readonly taskVersions: TaskVersionRecorder;
     readonly reorderProjects: ReorderProjects;
     readonly toggleProjectFavorite: ToggleProjectFavorite;
     readonly reorderFavoriteProjects: ReorderFavoriteProjects;

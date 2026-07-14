@@ -8,6 +8,7 @@ import type { TaskRepository } from './TaskRepository.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { AttachmentStorage } from './AttachmentStorage.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
+import type { TaskVersionRecorder } from './TaskVersionRecorder.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -15,6 +16,7 @@ type Deps = {
   readonly tasks: TaskRepository;
   readonly attachments: TaskAttachmentRepository;
   readonly storage: AttachmentStorage;
+  readonly versions?: TaskVersionRecorder;
 };
 
 export class DeleteTaskAttachment {
@@ -34,6 +36,7 @@ export class DeleteTaskAttachment {
     if (!att || att.taskId !== taskId) throw new TaskAttachmentNotFoundError(attachmentId);
 
     await this.deps.attachments.delete(attachmentId);
+    await this.deps.versions?.record(task, ownerUserId, task, ['files']);
     // Файл удаляем после DB-записи — если упадёт, останется orphan на диске.
     // Это лучше чем удалить файл, а потом провалить DB-операцию (тогда задача указывала бы
     // на несуществующий файл). Orphan'ы можно периодически зачищать отдельно.

@@ -1,7 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bot, CalendarClock, CircleDot, Clock, Flag, Loader2, Lock } from 'lucide-react';
+import {
+  Bot,
+  CalendarClock,
+  CircleDot,
+  Clock,
+  Flag,
+  ListFilter,
+  Loader2,
+  Lock,
+  UserRound,
+} from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
@@ -11,9 +29,44 @@ import { PropertyRow } from './PropertyRow';
 import { RalphModeBadge } from './RalphMode';
 import { PriorityBadge } from './PriorityBadge';
 import { DeadlineBadge } from './DeadlineBadge';
+import { UserAvatar } from '@/presentation/components/user/UserAvatar';
 import { Markdown } from '@/presentation/components/markdown/Markdown';
 import type { TaskStatus } from '@/domain/task/Task';
-import type { TaskSnapshot, TaskVersionsResult } from '@/domain/task/TaskVersion';
+import type {
+  TaskSnapshot,
+  TaskVersionField,
+  TaskVersionsResult,
+} from '@/domain/task/TaskVersion';
+
+const VERSION_FIELD_OPTIONS: ReadonlyArray<{
+  readonly field: TaskVersionField;
+  readonly label: string;
+}> = [
+  { field: 'created', label: 'Создание задачи' },
+  { field: 'status', label: 'Статус' },
+  { field: 'deadline', label: 'Дедлайн и даты' },
+  { field: 'assignee', label: 'Ответственный' },
+  { field: 'description', label: 'Описание' },
+  { field: 'priority', label: 'Приоритет' },
+  { field: 'ralphMode', label: 'Режим работы' },
+  { field: 'appearance', label: 'Оформление' },
+  { field: 'parent', label: 'Родительская задача' },
+  { field: 'project', label: 'Проект' },
+  { field: 'cancellation', label: 'Отмена работы' },
+  { field: 'files', label: 'Файлы' },
+  { field: 'customProperties', label: 'Свойства' },
+  { field: 'commits', label: 'Коммиты' },
+];
+
+const ALL_VERSION_FIELDS = VERSION_FIELD_OPTIONS.map((option) => option.field);
+const VERSION_FIELD_LABELS = new Map(
+  VERSION_FIELD_OPTIONS.map((option) => [option.field, option.label] as const),
+);
+
+function changedFieldsLabel(fields: readonly TaskVersionField[]): string {
+  if (fields.length === 0) return 'Изменение задачи';
+  return fields.map((field) => VERSION_FIELD_LABELS.get(field) ?? field).join(', ');
+}
 
 // Цвета статус-пилюли — как в шапке задачи (зеркало STATUS_BADGE_COLOR из TaskDrawer),
 // чтобы превью версии выглядело один-в-один со «своим» окном задачи.
@@ -131,6 +184,20 @@ function VersionPreview({
             </span>
           </ChangedMark>
         </PropertyRow>
+        <PropertyRow icon={UserRound} label="Ответственный">
+          <ChangedMark
+            changed={!!prev && prev.assignee.userId !== snapshot.assignee.userId}
+          >
+            <span className="inline-flex items-center gap-2 text-sm">
+              <UserAvatar
+                displayName={snapshot.assignee.displayName}
+                avatarUrl={snapshot.assignee.avatarUrl}
+                className="size-6 text-[9px]"
+              />
+              <span>{snapshot.assignee.displayName}</span>
+            </span>
+          </ChangedMark>
+        </PropertyRow>
         <PropertyRow icon={Flag} label="Приоритет">
           <ChangedMark changed={!!prev && prev.priority !== snapshot.priority}>
             {snapshot.priority != null ? (
@@ -141,7 +208,12 @@ function VersionPreview({
           </ChangedMark>
         </PropertyRow>
         <PropertyRow icon={CalendarClock} label="Дедлайн">
-          <ChangedMark changed={!!prev && prev.deadline !== snapshot.deadline}>
+          <ChangedMark
+            changed={
+              !!prev &&
+              (prev.deadline !== snapshot.deadline || prev.startDate !== snapshot.startDate)
+            }
+          >
             {snapshot.deadline ? (
               <DeadlineBadge deadline={snapshot.deadline} status={status} />
             ) : (
@@ -190,6 +262,9 @@ export function TaskVersionsDialog({
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const [visibleFields, setVisibleFields] = useState<Set<TaskVersionField>>(
+    () => new Set(ALL_VERSION_FIELDS),
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -197,6 +272,7 @@ export function TaskVersionsDialog({
     setLoading(true);
     setData(null);
     setSelectedId(null);
+    setVisibleFields(new Set(ALL_VERSION_FIELDS));
     taskRepository
       .getVersions(projectId, taskId)
       .then((r) => {
@@ -219,7 +295,29 @@ export function TaskVersionsDialog({
     (createdAt: Date): boolean => !!data?.cutoffAt && createdAt.getTime() < data.cutoffAt.getTime(),
     [data],
   );
-  const selected = data?.versions.find((v) => v.id === selectedId) ?? null;
+  const visibleVersions = useMemo(
+    () =>
+      (data?.versions ?? []).filter((version) =>
+        version.changedFields.some((field) => visibleFields.has(field)),
+      ),
+    [data, visibleFields],
+  );
+  const selected = visibleVersions.find((v) => v.id === selectedId) ?? null;
+
+  useEffect(() => {
+    if (!data || selected) return;
+    const firstAvailable = visibleVersions.find((version) => !isLocked(version.createdAt));
+    setSelectedId(firstAvailable?.id ?? null);
+  }, [data, isLocked, selected, visibleVersions]);
+
+  const toggleField = (field: TaskVersionField, checked: boolean): void => {
+    setVisibleFields((current) => {
+      const next = new Set(current);
+      if (checked) next.add(field);
+      else next.delete(field);
+      return next;
+    });
+  };
   // Версии отсортированы новыми-сверху → предыдущая версия выбранной = следующая в списке.
   const selectedIndex = data ? data.versions.findIndex((v) => v.id === selectedId) : -1;
   const prevSnapshot =
@@ -249,14 +347,51 @@ export function TaskVersionsDialog({
             кнопка «Восстановить» здесь, а не внизу — pr-12 чтобы не залезть под крестик (right-4). */}
         <DialogHeader className="shrink-0 flex-row items-center justify-between gap-3 space-y-0 border-b px-5 py-3 pr-12">
           <DialogTitle>История версий</DialogTitle>
-          <Button
-            size="sm"
-            disabled={!selected || restoring || (selected != null && isLocked(selected.createdAt))}
-            onClick={() => void restore()}
-          >
-            {restoring ? <Loader2 className="size-4 animate-spin" /> : <Clock className="size-4" />}
-            Восстановить
-          </Button>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <ListFilter className="size-4" />
+                  {visibleFields.size === ALL_VERSION_FIELDS.length
+                    ? 'Все изменения'
+                    : `Фильтр: ${visibleFields.size}`}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-[70vh] w-60 overflow-y-auto">
+                <DropdownMenuLabel>Показывать изменения</DropdownMenuLabel>
+                <DropdownMenuCheckboxItem
+                  checked={visibleFields.size === ALL_VERSION_FIELDS.length}
+                  onCheckedChange={(checked) =>
+                    setVisibleFields(
+                      checked ? new Set(ALL_VERSION_FIELDS) : new Set<TaskVersionField>(),
+                    )
+                  }
+                  onSelect={(event) => event.preventDefault()}
+                >
+                  Все типы
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuSeparator />
+                {VERSION_FIELD_OPTIONS.map((option) => (
+                  <DropdownMenuCheckboxItem
+                    key={option.field}
+                    checked={visibleFields.has(option.field)}
+                    onCheckedChange={(checked) => toggleField(option.field, checked === true)}
+                    onSelect={(event) => event.preventDefault()}
+                  >
+                    {option.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              size="sm"
+              disabled={!selected || restoring || (selected != null && isLocked(selected.createdAt))}
+              onClick={() => void restore()}
+            >
+              {restoring ? <Loader2 className="size-4 animate-spin" /> : <Clock className="size-4" />}
+              Восстановить
+            </Button>
+          </div>
         </DialogHeader>
         <div className="flex min-h-0 flex-1">
           {/* Превью выбранной версии — просторная колонка с отступами, как в окне задачи. */}
@@ -272,9 +407,9 @@ export function TaskVersionsDialog({
             )}
           </div>
           {/* Список версий */}
-          <div className="flex w-72 shrink-0 flex-col border-l">
+          <div className="flex w-80 shrink-0 flex-col border-l">
             <ul className="min-h-0 flex-1 overflow-y-auto p-1.5">
-              {(data?.versions ?? []).map((v) => {
+              {visibleVersions.map((v) => {
                 const locked = isLocked(v.createdAt);
                 return (
                   <li key={v.id}>
@@ -283,19 +418,48 @@ export function TaskVersionsDialog({
                       disabled={locked}
                       onClick={() => setSelectedId(v.id)}
                       className={cn(
-                        'flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
+                        'flex w-full items-start justify-between gap-2 rounded-md px-2.5 py-2.5 text-left text-sm transition-colors',
                         locked
                           ? 'cursor-not-allowed text-muted-foreground/60'
                           : 'hover:bg-accent',
                         v.id === selectedId && !locked && 'bg-accent font-medium',
                       )}
                     >
-                      <span className="truncate">{fmtDateTime(v.createdAt)}</span>
-                      {locked && <Lock className="size-3.5 shrink-0 text-muted-foreground" />}
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="flex min-w-0 items-center gap-2 font-medium">
+                          {v.actor ? (
+                            <UserAvatar
+                              displayName={v.actor.displayName}
+                              avatarUrl={v.actor.avatarUrl}
+                              className="size-5 text-[8px]"
+                            />
+                          ) : (
+                            <span className="flex size-5 shrink-0 items-center justify-center rounded bg-muted">
+                              <Bot className="size-3" />
+                            </span>
+                          )}
+                          <span className="truncate">{v.actor?.displayName ?? 'Система'}</span>
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {fmtDateTime(v.createdAt)}
+                        </span>
+                        <span
+                          className="truncate text-[11px] leading-4 text-muted-foreground"
+                          title={changedFieldsLabel(v.changedFields)}
+                        >
+                          {changedFieldsLabel(v.changedFields)}
+                        </span>
+                      </span>
+                      {locked && <Lock className="mt-1 size-3.5 shrink-0 text-muted-foreground" />}
                     </button>
                   </li>
                 );
               })}
+              {!loading && visibleVersions.length === 0 && (
+                <li className="px-3 py-8 text-center text-xs text-muted-foreground">
+                  Нет изменений по выбранным фильтрам.
+                </li>
+              )}
             </ul>
             {/* Гейтинг: старше 7 дней — Прайм/ВИП */}
             {hasLocked && (

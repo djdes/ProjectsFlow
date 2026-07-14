@@ -1,5 +1,9 @@
 import type { Task } from '../../domain/task/Task.js';
-import { snapshotOfTask } from '../../domain/task/TaskVersion.js';
+import {
+  changedTaskFields,
+  snapshotOfTask,
+  type TaskVersionField,
+} from '../../domain/task/TaskVersion.js';
 import type { TaskVersionRepository } from './TaskVersionRepository.js';
 
 type Deps = {
@@ -13,14 +17,26 @@ type Deps = {
 export class TaskVersionRecorder {
   constructor(private readonly deps: Deps) {}
 
-  async record(task: Task, actorUserId: string | null): Promise<void> {
+  async record(
+    task: Task,
+    actorUserId: string | null,
+    previous: Task | null = null,
+    explicitFields?: readonly TaskVersionField[],
+  ): Promise<void> {
     try {
+      const snapshot = snapshotOfTask(task);
+      const changedFields = explicitFields ?? changedTaskFields(
+        previous ? snapshotOfTask(previous) : null,
+        snapshot,
+      );
+      if (changedFields.length === 0) return;
       await this.deps.versions.create({
         id: this.deps.idGen(),
         taskId: task.id,
         projectId: task.projectId,
         actorUserId,
-        snapshot: snapshotOfTask(task),
+        snapshot,
+        changedFields,
       });
     } catch (e) {
       // eslint-disable-next-line no-console

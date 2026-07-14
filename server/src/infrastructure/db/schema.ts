@@ -687,7 +687,9 @@ export const taskVersions = mysqlTable(
     projectId: char('project_id', { length: 36 }).notNull(),
     actorUserId: char('actor_user_id', { length: 36 }),
     snapshot: json('snapshot').$type<import('../../domain/task/TaskVersion.js').TaskSnapshot>().notNull(),
-    createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    changedFields: json('changed_fields')
+      .$type<import('../../domain/task/TaskVersion.js').TaskVersionField[]>(),
+    createdAt: timestamp('created_at', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
   },
   (t) => [
     index('idx_task_versions_task_time').on(t.taskId, t.createdAt),

@@ -1,4 +1,8 @@
-import type { TaskSnapshot, TaskVersion } from '../../domain/task/TaskVersion.js';
+import type {
+  TaskSnapshot,
+  TaskVersion,
+  TaskVersionField,
+} from '../../domain/task/TaskVersion.js';
 
 export type CreateTaskVersionInput = {
   readonly id: string;
@@ -6,6 +10,7 @@ export type CreateTaskVersionInput = {
   readonly projectId: string;
   readonly actorUserId: string | null;
   readonly snapshot: TaskSnapshot;
+  readonly changedFields: readonly TaskVersionField[];
 };
 
 export interface TaskVersionRepository {

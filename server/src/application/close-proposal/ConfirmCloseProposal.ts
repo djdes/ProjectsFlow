@@ -47,7 +47,11 @@ export class ConfirmCloseProposal {
 
     const task = await this.deps.tasks.getById(proposal.taskId);
     if (task && task.status !== 'done') {
-      await this.deps.tasks.update(task.id, { status: 'done', statusBeforeDone: task.status });
+      await this.deps.tasks.update(
+        task.id,
+        { status: 'done', statusBeforeDone: task.status },
+        input.userId,
+      );
     }
 
     try {

@@ -10,7 +10,6 @@ import type { ProjectMemberRepository } from '../project/ProjectMemberRepository
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
-import type { TaskVersionRecorder } from './TaskVersionRecorder.js';
 import type { TaskVersionRepository } from './TaskVersionRepository.js';
 import { VERSION_HISTORY_FREE_DAYS } from './GetTaskVersions.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
@@ -23,7 +22,6 @@ type Deps = {
   readonly users: UserRepository;
   readonly now: () => Date;
   readonly activity?: ActivityRecorder;
-  readonly versionRecorder?: TaskVersionRecorder;
 };
 
 export type RestoreTaskVersionCommand = {
@@ -66,12 +64,23 @@ export class RestoreTaskVersion {
       statusBeforeDone: s.statusBeforeDone,
       ralphMode: s.ralphMode,
       deadline: s.deadline,
+      startDate: s.startDate,
       priority: s.priority,
-    });
+      // Legacy snapshots (before db/115) use an empty assignee sentinel and did not store
+      // appearance/parent fields, so those rows must not erase newer task data on restore.
+      ...(s.assignee.userId
+        ? {
+            assigneeUserId: s.assignee.userId,
+            icon: s.icon,
+            cover: s.cover,
+            coverPosition: s.coverPosition,
+            parentTaskId: s.parentTaskId,
+          }
+        : {}),
+    }, input.ownerUserId);
     if (!updated) throw new TaskNotFoundError(input.taskId);
 
-    // Сам restore фиксируем: новая версия + событие в ленте.
-    await this.deps.versionRecorder?.record(updated, input.ownerUserId);
+    // Сам restore фиксируем в ленте; версия уже записана центральным TaskRepository.
     await this.deps.activity?.record({
       projectId: input.projectId,
       actorUserId: input.ownerUserId,

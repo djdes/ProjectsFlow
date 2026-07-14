@@ -27,8 +27,6 @@ type Deps = {
   readonly appUrl: string;
   // Лента действий (best-effort). Опционально — старые caller'ы/тесты не ломаются.
   readonly activityRecorder?: ActivityRecorder;
-  // Первый снимок версии задачи (для окна версий + restore).
-  readonly versions?: import('./TaskVersionRecorder.js').TaskVersionRecorder;
 };
 
 export type CreateTaskCommand = {
@@ -113,6 +111,7 @@ export class CreateTask {
       id: this.deps.idGen(),
       projectId: input.projectId,
       createdBy,
+      actorUserId: input.ownerUserId,
       assigneeUserId,
       description,
       icon: input.icon ?? null,
@@ -134,9 +133,6 @@ export class CreateTask {
       kind: 'task_created',
       payload: { taskId: task.id, taskExcerpt: description.slice(0, 120) },
     });
-    // Первый снимок версии (best-effort).
-    void this.deps.versions?.record(task, input.ownerUserId);
-
     if (assigneeUserId !== input.ownerUserId) {
       void this.notifyAssigned(task, input.ownerUserId, project).catch((err: unknown) => {
         console.error('[task:assignee:create] notify failed:', err);

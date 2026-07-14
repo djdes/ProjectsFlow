@@ -21,6 +21,7 @@ export class MaybeReopenForClarification {
   async execute(
     taskId: string,
     commentBody: string,
+    actorUserId: string | null = null,
   ): Promise<{ readonly oldStatus: TaskStatus; readonly newStatus: TaskStatus } | null> {
     const hasMarker = RALPH_ANSWER_MARKERS.some((m) => commentBody.includes(m));
     if (!hasMarker) return null;
@@ -35,7 +36,7 @@ export class MaybeReopenForClarification {
     await this.deps.tasks.update(taskId, {
       status: 'in_progress',
       position: nextPosition,
-    });
+    }, actorUserId);
 
     return { oldStatus: 'awaiting_clarification', newStatus: 'in_progress' };
   }

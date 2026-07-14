@@ -49,7 +49,7 @@ export class RevokeRalphCancel {
       if (!me?.isAdmin) throw new RalphCancelNotRequestedByYouError();
     }
 
-    const updated = await this.deps.tasks.clearRalphCancel(input.taskId);
+    const updated = await this.deps.tasks.clearRalphCancel(input.taskId, input.ownerUserId);
     if (!updated) throw new TaskNotFoundError(input.taskId);
     return updated;
   }

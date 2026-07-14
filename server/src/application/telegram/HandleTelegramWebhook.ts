@@ -294,7 +294,11 @@ export class HandleTelegramWebhook {
 
     // Auto-return awaiting_clarification → in_progress. Best-effort.
     try {
-      const reopened = await this.deps.maybeReopenForClarification.execute(task.id, body);
+      const reopened = await this.deps.maybeReopenForClarification.execute(
+        task.id,
+        body,
+        senderUserId,
+      );
       if (reopened) {
         this.deps.notifyStatusChanged(
           task.projectId,

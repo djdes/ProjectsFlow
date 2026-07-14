@@ -13,7 +13,6 @@ type Deps = {
   // Лента действий (best-effort). Опционально.
   readonly activityRecorder?: ActivityRecorder;
   // Снимок версии при смене статуса (для окна версий + restore).
-  readonly versions?: import('./TaskVersionRecorder.js').TaskVersionRecorder;
 };
 
 // Клиент сообщает соседей в целевой колонке — сервер сам считает midpoint position.
@@ -117,7 +116,7 @@ export class MoveTask {
       ...(statusBeforeDonePatch !== undefined
         ? { statusBeforeDone: statusBeforeDonePatch }
         : {}),
-    });
+    }, input.ownerUserId);
     if (!updated) throw new TaskNotFoundError(input.taskId);
 
     // Лента действий: только при реальной смене статуса (не при reorder внутри колонки).
@@ -133,7 +132,6 @@ export class MoveTask {
           newStatus: updated.status,
         },
       });
-      void this.deps.versions?.record(updated, input.ownerUserId);
     }
     return updated;
   }

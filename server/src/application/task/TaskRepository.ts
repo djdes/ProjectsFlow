@@ -5,6 +5,8 @@ export type CreateTaskInput = {
   readonly projectId: string;
   // Кто создал — серверная атрибуция для аудита/метеринга (db/088).
   readonly createdBy: string | null;
+  // Кто выполнил действие. Может отличаться от createdBy у автоматизаций.
+  readonly actorUserId?: string | null;
   // Обязательный ответственный новой задачи. CreateTask по умолчанию передаёт actor'а.
   readonly assigneeUserId: string;
   readonly description: string;
@@ -46,6 +48,8 @@ export type UpdateTaskPatch = {
   readonly deadline?: string | null;
   // null = очистить дату начала. undefined = не менять.
   readonly startDate?: string | null;
+  // null = убрать связь с родительской задачей. undefined = не менять.
+  readonly parentTaskId?: string | null;
   // null = убрать приоритет. undefined = не менять.
   readonly priority?: TaskPriority | null;
 };
@@ -59,7 +63,11 @@ export interface TaskRepository {
   listAssignedTo(userId: string): Promise<Task[]>;
   getById(taskId: string): Promise<Task | null>;
   create(input: CreateTaskInput): Promise<Task>;
-  update(taskId: string, patch: UpdateTaskPatch): Promise<Task | null>;
+  update(
+    taskId: string,
+    patch: UpdateTaskPatch,
+    actorUserId?: string | null,
+  ): Promise<Task | null>;
   delete(taskId: string): Promise<boolean>;
   /**
    * Удалить задачу вместе со ВСЕМИ её child-строками (комментарии, аттачи, коммиты,
@@ -90,7 +98,7 @@ export interface TaskRepository {
    *  - RevokeRalphCancel когда юзер передумал отменять
    *  - AckRalphCancel когда Ralph обработал отмену
    */
-  clearRalphCancel(taskId: string): Promise<Task | null>;
+  clearRalphCancel(taskId: string, actorUserId?: string | null): Promise<Task | null>;
   /**
    * Перенос задачи в другой проект (только для inbox → реальный). Меняет
    * tasks.project_id. Используется MoveTaskToProject use-case'ом.
@@ -101,5 +109,6 @@ export interface TaskRepository {
     taskId: string,
     targetProjectId: string,
     assigneeUserId: string,
+    actorUserId?: string | null,
   ): Promise<Task | null>;
 }

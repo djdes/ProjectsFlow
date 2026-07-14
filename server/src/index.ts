@@ -467,9 +467,9 @@ const kbRepo = new GithubKbRepository(githubApi);
 const kbDocumentRepo = new DrizzleKbDocumentRepository(db);
 
 const secretsRepo = new DrizzleSecretsRepository(db);
-const taskRepo = new DrizzleTaskRepository(db);
 const taskVersionRepo = new DrizzleTaskVersionRepository(db);
 const taskVersionRecorder = new TaskVersionRecorder({ versions: taskVersionRepo, idGen: idGenerator });
+const taskRepo = new DrizzleTaskRepository(db, taskVersionRecorder);
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
@@ -801,6 +801,7 @@ const confirmCloseProposal = new ConfirmCloseProposal({
     api: githubApi,
     delegations: gitTokenDelegationRepo,
     users: userRepo,
+    versions: taskVersionRecorder,
   }),
 });
 const dismissCloseProposal = new DismissCloseProposal({
@@ -1177,6 +1178,7 @@ const completeCommitSyncJob = new CompleteCommitSyncJob({
     api: githubApi,
     delegations: gitTokenDelegationRepo,
     users: userRepo,
+    versions: taskVersionRecorder,
   }),
 });
 const commitSyncJobCleanup = new CommitSyncJobCleanup({ commitSyncJobs: commitSyncJobRepo });
@@ -1359,6 +1361,7 @@ const { app, devProxyUpgrade } = createApp({
     taskTemplates: new DrizzleTaskTemplateRepository(db),
     taskProperties: new DrizzleTaskPropertyRepository(db),
     tasks: taskRepo,
+    taskVersions: taskVersionRecorder,
     createProject: new CreateProject({
       repo: projectRepo,
       members: projectMemberRepo,
@@ -1608,7 +1611,6 @@ const { app, devProxyUpgrade } = createApp({
         idGen: idGenerator,
         appUrl: appBaseUrl,
         activityRecorder,
-        versions: taskVersionRecorder,
       }),
     }),
     projects: projectRepo,
@@ -1769,21 +1771,18 @@ const { app, devProxyUpgrade } = createApp({
       idGen: idGenerator,
       appUrl: appBaseUrl,
       activityRecorder,
-      versions: taskVersionRecorder,
     }),
     updateTask: new UpdateTask({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
       activity: activityRecorder,
-      versions: taskVersionRecorder,
     }),
     moveTask: new MoveTask({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
       activityRecorder,
-      versions: taskVersionRecorder,
     }),
     deleteTask: new DeleteTask({
       projects: projectRepo,
@@ -1808,7 +1807,6 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
       now: () => new Date(),
       activity: activityRecorder,
-      versionRecorder: taskVersionRecorder,
     }),
     linkCommit: new LinkCommit({
       projects: projectRepo,
@@ -1819,12 +1817,14 @@ const { app, devProxyUpgrade } = createApp({
       api: githubApi,
       delegations: gitTokenDelegationRepo,
       users: userRepo,
+      versions: taskVersionRecorder,
     }),
     unlinkCommit: new UnlinkCommit({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
+      versions: taskVersionRecorder,
     }),
     listTaskCommits: new ListTaskCommits({
       projects: projectRepo,
@@ -1841,6 +1841,7 @@ const { app, devProxyUpgrade } = createApp({
       api: githubApi,
       delegations: gitTokenDelegationRepo,
       users: userRepo,
+      versions: taskVersionRecorder,
     }),
     uploadAttachment: new UploadTaskAttachment({
       projects: projectRepo,
@@ -1850,6 +1851,7 @@ const { app, devProxyUpgrade } = createApp({
       storage: attachmentStorage,
       idGen: idGenerator,
       maxBytes: MAX_ATTACHMENT_BYTES,
+      versions: taskVersionRecorder,
     }),
     deleteAttachment: new DeleteTaskAttachment({
       projects: projectRepo,
@@ -1857,6 +1859,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
+      versions: taskVersionRecorder,
     }),
     listAttachments: new ListTaskAttachments({
       projects: projectRepo,
@@ -2068,7 +2071,6 @@ const { app, devProxyUpgrade } = createApp({
       idGen: idGenerator,
       appUrl: appBaseUrl,
       activityRecorder,
-      versions: taskVersionRecorder,
     }),
     createComment: createTaskCommentUseCase,
     // Чтение комментариев задачи (Ralph F11 polling): фильтры since/limit/marker
@@ -2086,7 +2088,6 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       activityRecorder,
-      versions: taskVersionRecorder,
     }),
     linkCommit: new LinkCommit({
       projects: projectRepo,
@@ -2097,6 +2098,7 @@ const { app, devProxyUpgrade } = createApp({
       api: githubApi,
       delegations: gitTokenDelegationRepo,
       users: userRepo,
+      versions: taskVersionRecorder,
     }),
     writeKbDocument: new WriteKbDocument({
       projects: projectRepo,
@@ -2182,7 +2184,6 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       activity: activityRecorder,
-      versions: taskVersionRecorder,
     }),
     deleteTask: new DeleteTask({
       projects: projectRepo,
@@ -2206,6 +2207,7 @@ const { app, devProxyUpgrade } = createApp({
       api: githubApi,
       delegations: gitTokenDelegationRepo,
       users: userRepo,
+      versions: taskVersionRecorder,
     }),
     searchTasks: new SearchTasks({ search: taskSearchRepo }),
     getProject: new GetProject({ projects: projectRepo, members: projectMemberRepo }),

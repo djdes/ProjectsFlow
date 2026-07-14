@@ -46,6 +46,7 @@ import type { TaskTemplate } from '../../domain/task/TaskTemplate.js';
 import type { TaskPropertyRepository } from '../../application/task/TaskPropertyRepository.js';
 import type { TaskProperty } from '../../domain/task/TaskProperty.js';
 import type { TaskRepository } from '../../application/task/TaskRepository.js';
+import type { TaskVersionRecorder } from '../../application/task/TaskVersionRecorder.js';
 import type { BoardView } from '../../domain/project/BoardView.js';
 import type { AttachmentStorage } from '../../application/task/AttachmentStorage.js';
 import {
@@ -103,6 +104,7 @@ type Deps = {
   // Кастомные свойства задач (db/109) + tasks для IDOR-проверки value-роута.
   readonly taskProperties: TaskPropertyRepository;
   readonly tasks: TaskRepository;
+  readonly taskVersions: TaskVersionRecorder;
   readonly reorderProjects: ReorderProjects;
   readonly toggleProjectFavorite: ToggleProjectFavorite;
   readonly reorderFavoriteProjects: ReorderFavoriteProjects;
@@ -910,6 +912,7 @@ export function projectsRouter(deps: Deps): Router {
         if (!task || task.projectId !== id) throw new ProjectNotFoundError();
         const body = setTaskPropertyValueSchema.parse(req.body);
         await deps.taskProperties.setValue(taskId, propertyId, body.value);
+        await deps.taskVersions.record(task, req.user!.id, task, ['customProperties']);
         deps.notifyProjectChanged(id);
         res.status(204).end();
       } catch (e) {

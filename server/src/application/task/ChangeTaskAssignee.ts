@@ -60,7 +60,7 @@ export class ChangeTaskAssignee {
     }
 
     if (task.assignee.userId === assigneeUserId) return task;
-    const updated = await this.deps.tasks.update(taskId, { assigneeUserId });
+    const updated = await this.deps.tasks.update(taskId, { assigneeUserId }, actorUserId);
     if (!updated) throw new TaskNotFoundError(taskId);
 
     void this.deps.activityRecorder?.record({

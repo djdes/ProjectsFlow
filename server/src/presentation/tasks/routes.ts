@@ -346,6 +346,8 @@ export function tasksRouter(deps: Deps): Router {
           id: v.id,
           taskId: v.taskId,
           actorUserId: v.actorUserId,
+          actor: v.actor,
+          changedFields: v.changedFields,
           createdAt: v.createdAt.toISOString(),
           snapshot: v.snapshot,
         })),
@@ -684,7 +686,11 @@ export function tasksRouter(deps: Deps): Router {
       // Авто-возврат awaiting_clarification → in_progress по маркеру в комменте.
       // Best-effort: ошибка не должна ломать ответ на создание коммента.
       try {
-        const reopened = await deps.maybeReopenForClarification.execute(taskId, body.body);
+        const reopened = await deps.maybeReopenForClarification.execute(
+          taskId,
+          body.body,
+          req.user!.id,
+        );
         if (reopened) {
           deps.notifyStatusChanged(
             projectId,

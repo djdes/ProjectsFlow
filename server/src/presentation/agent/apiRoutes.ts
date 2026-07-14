@@ -991,7 +991,11 @@ export function agentApiRouter(deps: Deps): Router {
         // Авто-возврат awaiting_clarification → in_progress по ralph-маркеру.
         // Best-effort: ошибка не должна ломать ответ.
         try {
-          const reopened = await deps.maybeReopenForClarification.execute(taskId, body.body);
+          const reopened = await deps.maybeReopenForClarification.execute(
+            taskId,
+            body.body,
+            req.user!.id,
+          );
           if (reopened) {
             deps.notifyStatusChanged(
               projectId,

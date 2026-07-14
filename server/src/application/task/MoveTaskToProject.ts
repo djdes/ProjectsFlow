@@ -56,6 +56,7 @@ export class MoveTaskToProject {
       taskId,
       targetProjectId,
       assigneeUserId,
+      userId,
     );
     if (!moved) throw new TaskNotFoundError(taskId);
     return moved;

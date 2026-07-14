@@ -116,12 +116,16 @@ export class CompleteCommitSyncJob {
       let moved = false;
       if (ageHours >= threshold) {
         // Старый коммит → готово. Снимок status_before_done как в MoveTask.
-        await this.deps.tasks.update(task.id, { status: 'done', statusBeforeDone: task.status });
+        await this.deps.tasks.update(
+          task.id,
+          { status: 'done', statusBeforeDone: task.status },
+          job.dispatcherUserId,
+        );
         toDone++;
         moved = true;
       } else if (task.status === 'todo') {
         // Свежий коммит, задача в черновике → в работу.
-        await this.deps.tasks.update(task.id, { status: 'in_progress' });
+        await this.deps.tasks.update(task.id, { status: 'in_progress' }, job.dispatcherUserId);
         toInProgress++;
         moved = true;
       }

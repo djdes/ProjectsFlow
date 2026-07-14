@@ -27,6 +27,7 @@ import type {
   TaskRepository,
   UpdateTaskPatch,
 } from '../../application/task/TaskRepository.js';
+import type { TaskVersionRecorder } from '../../application/task/TaskVersionRecorder.js';
 
 // Row shape с заджойненным display_name запросившего отмену Ralph.
 type TaskRowJoined = TaskRow & {
@@ -90,7 +91,10 @@ function toTask(row: TaskRowJoined): Task {
 }
 
 export class DrizzleTaskRepository implements TaskRepository {
-  constructor(private readonly db: Database) {}
+  constructor(
+    private readonly db: Database,
+    private readonly history?: TaskVersionRecorder,
+  ) {}
 
   // Базовый SELECT с LEFT JOIN users для display name запросившего cancel.
   // LEFT JOIN — потому что флаг чаще NULL (стандартный кейс).
@@ -179,10 +183,16 @@ export class DrizzleTaskRepository implements TaskRepository {
     });
     const created = await this.getById(input.id);
     if (!created) throw new Error('Failed to read back task after insert');
+    await this.history?.record(created, input.actorUserId ?? input.createdBy);
     return created;
   }
 
-  async update(taskId: string, patch: UpdateTaskPatch): Promise<Task | null> {
+  async update(
+    taskId: string,
+    patch: UpdateTaskPatch,
+    actorUserId: string | null = null,
+  ): Promise<Task | null> {
+    const before = this.history ? await this.getById(taskId) : null;
     const set: Partial<
       Pick<
         TaskRow,
@@ -197,6 +207,7 @@ export class DrizzleTaskRepository implements TaskRepository {
         | 'ralphMode'
         | 'deadline'
         | 'startDate'
+        | 'parentTaskId'
         | 'priority'
       >
     > = {};
@@ -211,12 +222,15 @@ export class DrizzleTaskRepository implements TaskRepository {
     if (patch.ralphMode !== undefined) set.ralphMode = patch.ralphMode;
     if (patch.deadline !== undefined) set.deadline = patch.deadline;
     if (patch.startDate !== undefined) set.startDate = patch.startDate;
+    if (patch.parentTaskId !== undefined) set.parentTaskId = patch.parentTaskId;
     if (patch.priority !== undefined) set.priority = patch.priority;
 
     if (Object.keys(set).length > 0) {
       await this.db.update(tasks).set(set).where(eq(tasks.id, taskId));
     }
-    return this.getById(taskId);
+    const updated = await this.getById(taskId);
+    if (updated && before) await this.history?.record(updated, actorUserId, before);
+    return updated;
   }
 
   async delete(taskId: string): Promise<boolean> {
@@ -262,6 +276,7 @@ export class DrizzleTaskRepository implements TaskRepository {
   }
 
   async requestRalphCancel(taskId: string, userId: string): Promise<Task | null> {
+    const before = this.history ? await this.getById(taskId) : null;
     // Идемпотентно — пишем только если ralph_cancel_requested_at IS NULL.
     // Это гарантирует что повторный POST не «обновляет» timestamp (важно для UI который
     // показывает «N сек назад»).
@@ -272,15 +287,23 @@ export class DrizzleTaskRepository implements TaskRepository {
         ralphCancelRequestedBy: userId,
       })
       .where(and(eq(tasks.id, taskId), sql`${tasks.ralphCancelRequestedAt} IS NULL`));
-    return this.getById(taskId);
+    const updated = await this.getById(taskId);
+    if (updated && before) await this.history?.record(updated, userId, before);
+    return updated;
   }
 
-  async clearRalphCancel(taskId: string): Promise<Task | null> {
+  async clearRalphCancel(
+    taskId: string,
+    actorUserId: string | null = null,
+  ): Promise<Task | null> {
+    const before = this.history ? await this.getById(taskId) : null;
     await this.db
       .update(tasks)
       .set({ ralphCancelRequestedAt: null, ralphCancelRequestedBy: null })
       .where(eq(tasks.id, taskId));
-    return this.getById(taskId);
+    const updated = await this.getById(taskId);
+    if (updated && before) await this.history?.record(updated, actorUserId, before);
+    return updated;
   }
 
   async rebalanceColumn(
@@ -310,7 +333,9 @@ export class DrizzleTaskRepository implements TaskRepository {
     taskId: string,
     targetProjectId: string,
     assigneeUserId: string,
+    actorUserId: string | null = null,
   ): Promise<Task | null> {
+    const before = this.history ? await this.getById(taskId) : null;
     // Снимок status_before_done относился к колонкам старого проекта — чистим при переносе.
     // Вместе с задачей АТОМАРНО перевешиваем task-scoped строки с денормализованным
     // project_id (версии, лента прогресса, live-сессии, «Недавнее»): иначе (а) чтение
@@ -340,6 +365,8 @@ export class DrizzleTaskRepository implements TaskRepository {
         .set({ projectId: targetProjectId })
         .where(eq(recentTaskViews.taskId, taskId));
     });
-    return this.getById(taskId);
+    const updated = await this.getById(taskId);
+    if (updated && before) await this.history?.record(updated, actorUserId, before);
+    return updated;
   }
 }
