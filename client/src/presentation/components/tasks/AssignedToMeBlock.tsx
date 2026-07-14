@@ -735,7 +735,9 @@ export function AssignedToMeBlock({
           ref={setHScrollRef}
           onScroll={onHScroll}
           className={cn(
-            'flex snap-x sm:snap-none gap-3 overflow-x-auto pb-2',
+            // Как у основной доски: каждая колонка заканчивается под своей последней
+            // задачей, а не растягивается до высоты самой длинной соседней колонки.
+            'flex items-start snap-x sm:snap-none gap-3 overflow-x-auto pb-2',
             bleedNegClass,
             bleedPadClass,
           )}
@@ -777,7 +779,7 @@ export function AssignedToMeBlock({
           ref={setHScrollRef}
           onScroll={onHScroll}
           className={cn(
-            'flex snap-x sm:snap-none gap-3 overflow-x-auto pb-2',
+            'flex items-start snap-x sm:snap-none gap-3 overflow-x-auto pb-2',
             bleedNegClass,
             bleedPadClass,
           )}
@@ -993,11 +995,11 @@ function TimeBucketColumn({
       // серых колонок доски ниже. На мобиле альфа выше, в dark ещё выше. Не поднимать выше
       // /[0.09]//[0.11] — начинает «светиться».
       className={cn(
-        'flex w-[86vw] max-w-[22rem] shrink-0 snap-start flex-col rounded-xl bg-primary/[0.06] transition-shadow dark:bg-primary/[0.09] sm:w-72 sm:max-w-none sm:bg-primary/[0.04] sm:dark:bg-primary/[0.07]',
+        'flex w-[86vw] max-w-[22rem] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-primary/[0.06] transition-shadow dark:border-white/[0.10] dark:bg-primary/[0.09] sm:w-72 sm:max-w-none sm:bg-primary/[0.04] sm:dark:bg-primary/[0.07]',
         isOver && 'ring-2 ring-inset ring-primary',
       )}
     >
-      <div className="flex items-center gap-1.5 px-3 pb-1.5 pt-2.5 text-xs font-medium text-muted-foreground">
+      <div className="flex items-center gap-1.5 border-b border-black/[0.06] px-3 pb-1.5 pt-2.5 text-xs font-medium text-muted-foreground dark:border-white/[0.06]">
         <TimeBucketIcon bucket={bucket} />
         <span className="min-w-0 truncate">{label}</span>
         <span className="shrink-0 text-muted-foreground/60">{count}</span>
