@@ -4,7 +4,6 @@ import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/she
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
-import { SIDEBAR_WIDTH, SIDEBAR_RESTORE_MARGIN } from '@/presentation/hooks/useResizableWidth';
 import { useSetRightPanelWidth } from '@/presentation/layout/rightPanelContext';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -81,19 +80,8 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
   });
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{ x: number; w: number } | null>(null);
-  // Доехало ли окно левым краем до сайдбара (тогда просим AppShell свернуть панель).
-  const reachedSidebarRef = useRef(false);
-  // Окно закрылось, а сайдбар был свёрнут из-за него → вернуть панель.
-  useEffect(() => {
-    if (!open && reachedSidebarRef.current) {
-      reachedSidebarRef.current = false;
-      window.dispatchEvent(new CustomEvent('pf:drawer-clear-sidebar'));
-    }
-  }, [open]);
-
-  // Notion-split (как у окна задачи): публикуем ширину панели → главный <main> сужается на
-  // marginRight, его вертикальный скролл уезжает влево к линии ресайза, а окно активности/
-  // аналитики становится правой панелью со своим скроллом (две независимые полосы). 0 — закрыто.
+  // Публикуем ширину только для синей плашки и строки режимов отображения. Остальная
+  // страница остаётся прежней ширины и просто оказывается под правой панелью.
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const setRightPanelWidth = useSetRightPanelWidth();
   useEffect(() => {
@@ -120,16 +108,6 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
         if (Math.abs(ev.clientX - d.x) > 3) moved = true;
         // Ручка на ЛЕВОМ крае правой панели: влево (меньше clientX) = шире.
         const newWidth = clampPanelWidth(d.w - (ev.clientX - d.x));
-        // Левый край окна доехал до сайдбара → просим свернуть панель; поехал обратно
-        // (с гистерезисом) → вернуть. Тот же механизм, что у окна задачи (useResizableWidth).
-        const leftEdge = window.innerWidth - newWidth;
-        if (leftEdge <= SIDEBAR_WIDTH && !reachedSidebarRef.current) {
-          reachedSidebarRef.current = true;
-          window.dispatchEvent(new CustomEvent('pf:drawer-over-sidebar'));
-        } else if (leftEdge > SIDEBAR_WIDTH + SIDEBAR_RESTORE_MARGIN && reachedSidebarRef.current) {
-          reachedSidebarRef.current = false;
-          window.dispatchEvent(new CustomEvent('pf:drawer-clear-sidebar'));
-        }
         setPanelWidth(newWidth);
       };
       const onUp = (): void => {

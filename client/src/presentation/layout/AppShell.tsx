@@ -48,8 +48,8 @@ const COLLAPSE_KEY = 'pf_sidebar_collapsed';
 export function AppShell(): React.ReactElement {
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [drawerOpen, setDrawerOpen] = useState(false);
-  // Ширина открытого справа окна-оверлея: главный <main> сужается на неё → его вертикальный
-  // скролл сдвигается влево, к линии ресайза окна (Notion-style). 0 — ничего не открыто.
+  // Ширина открытого справа окна. Основной <main> остаётся неизменным; значение используют
+  // только элементы, которым разрешено сужаться под панелью (плашка и строка отображений).
   const [rightPanelWidth, setRightPanelWidth] = useState(0);
   const { pathname } = useLocation();
   // Закрываем мобильный drawer ТОЛЬКО при смене маршрута (клик по проекту/разделу). Раньше
@@ -269,12 +269,7 @@ export function AppShell(): React.ReactElement {
                 </AnimatePresence>
               </>
             )}
-            <main
-              className="relative min-h-0 overflow-y-auto transition-[margin] duration-300 ease-in-out"
-              // Сужаемся на ширину открытого справа окна → скролл главного окна уезжает влево,
-              // к линии ресайза окна, а не прячется под оверлеем (Notion-style).
-              style={{ marginRight: rightPanelWidth }}
-            >
+            <main className="relative min-h-0 overflow-y-auto">
               <PageTransition>
                 <Outlet />
               </PageTransition>

@@ -17,7 +17,6 @@ import { ProjectIconPicker } from '@/presentation/components/project/ProjectIcon
 import { MemberAvatarStack } from '@/presentation/components/project/MemberAvatarStack';
 import { ProjectActionsMenu } from '@/presentation/components/project/ProjectActionsMenu';
 import { ProjectSharePopover } from '@/presentation/components/project/ProjectSharePopover';
-import { ProjectResultLink } from '@/presentation/components/project/ProjectResultLink';
 import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
 import { ProjectWorkerGateBanner } from '@/presentation/components/project/ProjectWorkerGateBanner';
 import { ProjectActivityButton } from '@/presentation/components/project/ProjectActivityButton';
@@ -168,7 +167,6 @@ export function TasksPage(): React.ReactElement {
           ownerId={data.ownerId}
         />
       )}
-      <ProjectResultLink projectId={data.id} />
       <ProjectSharePopover
         project={data}
         members={members}
@@ -209,10 +207,11 @@ export function TasksPage(): React.ReactElement {
         <TooltipProvider delayDuration={300}>
           <div
             className={cn(
-              // Плавно гаснут при открытии окна активности ИЛИ окна задачи (оба выезжают
-              // справа overlay'ем — верхние действия у них свои, дублировать не нужно).
+              // При активности блок полностью выпадает из layout; при окне задачи сохраняем
+              // прежнее плавное скрытие, потому что его шапка живёт отдельным overlay.
               'flex shrink-0 items-center gap-0.5 transition-opacity duration-500',
-              (activityOpen || taskDrawerOpen) && 'pointer-events-none opacity-0',
+              activityOpen && 'hidden',
+              !activityOpen && taskDrawerOpen && 'pointer-events-none opacity-0',
             )}
           >
             {/* Активность/аналитика проекта. */}

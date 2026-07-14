@@ -14,7 +14,6 @@ import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Ta
 import { useContainer } from '@/infrastructure/di/container';
 import { cn } from '@/lib/utils';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
-import { useRightPanelWidth } from '@/presentation/layout/rightPanelContext';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
 import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
@@ -109,9 +108,6 @@ export function TaskComposer({
   const { user } = useCurrentUser();
   const isInline = variant === 'inline';
   const defaultAssigneeUserId = user?.id ?? null;
-  // Плавающий композер `fixed` к вьюпорту → сам не наследует сужение <main>. Читаем ширину
-  // открытой правой панели и отступаем на неё справа, чтобы не заезжать под окно задачи/аналитики.
-  const rightPanelWidth = useRightPanelWidth();
   // Persist text across orientation changes on mobile (браузер может пересоздать layout).
   const STORAGE_KEY = storageKey ?? 'pf:quick-add-text';
   const STASH_KEY = stashKeyFor(STORAGE_KEY);
@@ -561,10 +557,7 @@ export function TaskComposer({
   // над нижним таб-баром (h-14, см. AppShell MobileBottomNav).
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(4.5rem_+_env(safe-area-inset-bottom))] z-40 flex justify-center px-3 transition-[right] duration-300 ease-in-out md:bottom-4 md:px-4"
-      // Отступ справа = ширина открытой правой панели (0 — закрыта): композер центрируется
-      // в суженной области главного окна, а не под панелью.
-      style={{ right: rightPanelWidth }}
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(4.5rem_+_env(safe-area-inset-bottom))] z-40 flex justify-center px-3 md:bottom-4 md:px-4"
     >
       {card}
     </div>

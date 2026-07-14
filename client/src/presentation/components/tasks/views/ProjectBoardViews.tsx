@@ -69,6 +69,7 @@ import {
 import { createPortal } from 'react-dom';
 import { useContainer } from '@/infrastructure/di/container';
 import { PROJECT_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
+import { useRightPanelWidth } from '@/presentation/layout/rightPanelContext';
 import { STATUS_LABEL } from '../statusLabels';
 import { KanbanBoard } from '../KanbanBoard';
 import { TableView } from './TableView';
@@ -182,6 +183,7 @@ export function ProjectBoardViews({
   bleedPadClass = '',
 }: Props): React.ReactElement {
   const { boardViewRepository, taskTemplateRepository } = useContainer();
+  const rightPanelWidth = useRightPanelWidth();
   const storageKey = `pf:board-view:${projectId}`;
   const [views, setViews] = useState<BoardView[] | null>(null);
   const [activeId, setActiveId] = useState<string>(() => {
@@ -667,9 +669,9 @@ export function ProjectBoardViews({
           ПОД sticky-крошками и плашками страницы (динамический top, см. эффект). */}
       <div
         id="pf-views-tabs-row"
-        style={{ top: stickyTop }}
+        style={{ top: stickyTop, marginRight: rightPanelWidth }}
         className={cn(
-          'group/tabs z-30 flex items-center gap-0.5 bg-background pb-1',
+          'group/tabs z-30 flex items-center gap-0.5 bg-background pb-1 transition-[margin] duration-300 ease-in-out',
           // На канбане строку вкладок НЕ закрепляем — при скролле липнут только шапки
           // колонок (запрос). В остальных видах — как раньше (нужна для панели выбора).
           !isKanban && 'sticky',

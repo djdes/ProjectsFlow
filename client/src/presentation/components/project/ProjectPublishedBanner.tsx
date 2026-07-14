@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Globe, X } from 'lucide-react';
 import { useContainer } from '@/infrastructure/di/container';
 import { siteResultUrl, siteResultDisplayUrl } from '@/lib/publicBoardUrl';
+import { useRightPanelWidth } from '@/presentation/layout/rightPanelContext';
 
 type Props = {
   projectId: string;
@@ -32,6 +33,7 @@ const BTN =
 // поллим (воркер до-деплоивает асинхронно), чтобы плашка всплыла сама, без ручного refresh.
 export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: Props): React.ReactElement | null {
   const { projectRepository } = useContainer();
+  const rightPanelWidth = useRightPanelWidth();
   // siteSlug есть у каждого проекта (db/100) — плашка показывается ПО УМОЛЧАНИЮ. deployed —
   // задеплоил ли уже воркер (меняет текст «в разработке» → «результат»).
   const [site, setSite] = useState<{ slug: string; deployed: boolean } | null>(null);
@@ -92,7 +94,10 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
   };
 
   return (
-    <div className="relative flex min-h-[4.375rem] shrink-0 items-stretch border-b border-black/[0.05] bg-[#e8f3f9] dark:border-white/[0.06] dark:bg-[#1d2a31]">
+    <div
+      className="relative flex min-h-[4.375rem] shrink-0 items-stretch border-b border-black/[0.05] bg-[#e8f3f9] transition-[margin] duration-300 ease-in-out dark:border-white/[0.06] dark:bg-[#1d2a31]"
+      style={shiftForOverlay ? { marginRight: rightPanelWidth } : undefined}
+    >
       <div
         className="relative flex flex-1 flex-wrap items-center justify-center gap-x-2.5 gap-y-1 px-10 py-2 text-[13px] leading-tight text-[#37352f] dark:text-blue-50"
         style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
