@@ -28,11 +28,16 @@ export function DialogOverlay({
 export function DialogContent({
   className,
   children,
+  overlayClassName,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>): React.ReactElement {
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+  // По умолчанию overlay прозрачный. Отдельные тяжёлые окна (например, история версий)
+  // могут включить собственное затемнение, не меняя внешний вид всех остальных Dialog.
+  overlayClassName?: string;
+}): React.ReactElement {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         className={cn(
           // Mobile: прижат к низу экрана (bottom-sheet), безопасен для клавиатуры.

@@ -356,7 +356,10 @@ export function TaskVersionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[88vh] w-[95vw] max-w-6xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent
+        overlayClassName="bg-black/70 backdrop-blur-[1px]"
+        className="flex h-[92dvh] w-[94vw] max-w-[94vw] flex-col gap-0 overflow-hidden p-0 shadow-[0_24px_80px_rgba(0,0,0,0.55)] sm:rounded-xl"
+      >
         {/* Заголовок + основное действие справа сверху (как в Notion Version history):
             кнопка «Восстановить» здесь, а не внизу — pr-12 чтобы не залезть под крестик (right-4). */}
         <DialogHeader className="shrink-0 flex-row items-center justify-between gap-3 space-y-0 border-b px-5 py-3 pr-12">
@@ -421,7 +424,7 @@ export function TaskVersionsDialog({
             )}
           </div>
           {/* Список версий */}
-          <div className="flex w-80 shrink-0 flex-col border-l">
+          <div className="flex w-80 shrink-0 flex-col border-l xl:w-96">
             <ul className="min-h-0 flex-1 overflow-y-auto p-1.5">
               {visibleVersions.map((v) => {
                 const locked = isLocked(v.createdAt);

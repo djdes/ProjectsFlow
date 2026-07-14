@@ -226,7 +226,10 @@ export function ProjectVersionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[88vh] w-[96vw] max-w-6xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent
+        overlayClassName="bg-black/70 backdrop-blur-[1px]"
+        className="flex h-[92dvh] w-[94vw] max-w-[94vw] flex-col gap-0 overflow-hidden p-0 shadow-[0_24px_80px_rgba(0,0,0,0.55)] sm:rounded-xl"
+      >
         <DialogHeader className="shrink-0 border-b px-5 py-4 pr-12">
           <DialogTitle className="flex items-center gap-2">
             <History className="size-5 text-muted-foreground" />
