@@ -1,5 +1,8 @@
-import type { AssignedTask } from '@/domain/task/AssignedTask';
 import type { AssignedGrouping } from '@/domain/user/UiPrefs';
+import {
+  isPersonalInboxBlockTask,
+  type InboxBlockTask,
+} from './inboxBlockTasks';
 
 // Группа для рендера блока «Поручено мне». В отличие от прежней доменной AssignedGroup
 // (всегда по проекту) — это результат произвольной группировки (проект/дата/дедлайн/
@@ -9,7 +12,7 @@ export type AssignedDisplayGroup = {
   readonly key: string;
   readonly label: string;
   readonly isInbox: boolean;
-  readonly items: AssignedTask[];
+  readonly items: InboxBlockTask[];
 };
 
 // Направление делегирования: 'toMe' — задачи, порученные мне; 'byMe' — порученные мной.
@@ -19,7 +22,7 @@ export type DelegationDirection = 'toMe' | 'byMe';
 // Чистая функция группировки — вся логика бакетов здесь (тестируется без React/DOM).
 // `now` передаётся явно, чтобы границы дней («сегодня/вчера/неделя») были детерминированы.
 export function groupAssignedTasks(
-  tasks: readonly AssignedTask[],
+  tasks: readonly InboxBlockTask[],
   mode: AssignedGrouping,
   now: Date,
   direction: DelegationDirection = 'toMe',
@@ -69,7 +72,7 @@ export function endOfMonthYmd(now: Date): string {
 }
 
 function groupByProject(
-  tasks: readonly AssignedTask[],
+  tasks: readonly InboxBlockTask[],
   direction: DelegationDirection,
 ): AssignedDisplayGroup[] {
   const map = new Map<string, AssignedDisplayGroup>();
@@ -78,16 +81,18 @@ function groupByProject(
     // <кто поручил>»); в «Другим» инбокс один (свой), подпись своим именем бессмысленна —
     // группируем по делегату («Личные · <кому поручено>»), ключ дробится по человеку.
     const key =
-      t.isInbox && direction === 'byMe'
+      t.isInbox && direction === 'byMe' && !isPersonalInboxBlockTask(t)
         ? `${t.projectId}:${t.delegation.delegateUserId}`
         : t.projectId;
     let g = map.get(key);
     if (!g) {
       const label = t.isInbox
         ? `Личные · ${
-            direction === 'byMe'
-              ? t.delegation.delegateDisplayName
-              : t.delegation.creatorDisplayName
+            isPersonalInboxBlockTask(t)
+              ? t.personalOwnerDisplayName
+              : direction === 'byMe'
+                ? t.delegation.delegateDisplayName
+                : t.delegation.creatorDisplayName
           }`
         : t.projectName;
       g = { key, label, isInbox: t.isInbox, items: [] };
@@ -102,12 +107,12 @@ function groupByProject(
 // Универсальный сборщик для режимов с фиксированным набором бакетов: раскладывает задачи
 // по ключам, сортирует внутри и отдаёт непустые бакеты в порядке `defs`.
 function buildFixed(
-  tasks: readonly AssignedTask[],
+  tasks: readonly InboxBlockTask[],
   defs: readonly { key: string; label: string }[],
-  bucketOf: (t: AssignedTask) => string,
-  within: (a: AssignedTask, b: AssignedTask) => number,
+  bucketOf: (t: InboxBlockTask) => string,
+  within: (a: InboxBlockTask, b: InboxBlockTask) => number,
 ): AssignedDisplayGroup[] {
-  const byKey = new Map<string, AssignedTask[]>();
+  const byKey = new Map<string, InboxBlockTask[]>();
   for (const t of tasks) {
     const k = bucketOf(t);
     const arr = byKey.get(k);
@@ -124,19 +129,19 @@ function buildFixed(
   return out;
 }
 
-function groupByCreated(tasks: readonly AssignedTask[], now: Date): AssignedDisplayGroup[] {
+function groupByCreated(tasks: readonly InboxBlockTask[], now: Date): AssignedDisplayGroup[] {
   const sod = startOfDay(now);
   const tToday = sod.getTime();
   const tYesterday = addDays(sod, -1).getTime();
   const tWeek = addDays(sod, -7).getTime();
-  const bucketOf = (t: AssignedTask): string => {
+  const bucketOf = (t: InboxBlockTask): string => {
     const x = t.createdAt.getTime();
     if (x >= tToday) return 'today';
     if (x >= tYesterday) return 'yesterday';
     if (x >= tWeek) return 'week';
     return 'earlier';
   };
-  const within = (a: AssignedTask, b: AssignedTask): number =>
+  const within = (a: InboxBlockTask, b: InboxBlockTask): number =>
     b.createdAt.getTime() - a.createdAt.getTime();
   return buildFixed(
     tasks,
@@ -151,12 +156,12 @@ function groupByCreated(tasks: readonly AssignedTask[], now: Date): AssignedDisp
   );
 }
 
-function groupByDeadline(tasks: readonly AssignedTask[], now: Date): AssignedDisplayGroup[] {
+function groupByDeadline(tasks: readonly InboxBlockTask[], now: Date): AssignedDisplayGroup[] {
   const sod = startOfDay(now);
   const today = ymd(sod);
   const tomorrow = ymd(addDays(sod, 1));
   const weekEnd = ymd(addDays(sod, 7));
-  const bucketOf = (t: AssignedTask): string => {
+  const bucketOf = (t: InboxBlockTask): string => {
     const d = t.deadline;
     if (d === null) return 'none';
     if (d < today) return 'overdue';
@@ -165,7 +170,7 @@ function groupByDeadline(tasks: readonly AssignedTask[], now: Date): AssignedDis
     if (d <= weekEnd) return 'week';
     return 'later';
   };
-  const within = (a: AssignedTask, b: AssignedTask): number =>
+  const within = (a: InboxBlockTask, b: InboxBlockTask): number =>
     (a.deadline ?? '').localeCompare(b.deadline ?? '');
   return buildFixed(
     tasks,
@@ -187,19 +192,19 @@ function groupByDeadline(tasks: readonly AssignedTask[], now: Date): AssignedDis
 // раньше (включая просроченные) → «На сегодня»; дедлайн позже сегодня → «Будущее». `key` бакета
 // ('none'/'today'/'future') используется в UI для выбора иконки колонки.
 export function groupAssignedByTime(
-  tasks: readonly AssignedTask[],
+  tasks: readonly InboxBlockTask[],
   now: Date,
 ): AssignedDisplayGroup[] {
   const today = ymd(startOfDay(now));
-  const bucketOf = (t: AssignedTask): 'none' | 'today' | 'future' => {
+  const bucketOf = (t: InboxBlockTask): 'none' | 'today' | 'future' => {
     const d = t.deadline;
     if (d === null || d === undefined) return 'none';
     if (d <= today) return 'today';
     return 'future';
   };
-  const within = (a: AssignedTask, b: AssignedTask): number =>
+  const within = (a: InboxBlockTask, b: InboxBlockTask): number =>
     (a.deadline ?? '').localeCompare(b.deadline ?? '');
-  const byKey = new Map<string, AssignedTask[]>();
+  const byKey = new Map<string, InboxBlockTask[]>();
   for (const t of tasks) {
     const k = bucketOf(t);
     const arr = byKey.get(k);
@@ -218,10 +223,10 @@ export function groupAssignedByTime(
   });
 }
 
-function groupByPriority(tasks: readonly AssignedTask[]): AssignedDisplayGroup[] {
-  const bucketOf = (t: AssignedTask): string =>
+function groupByPriority(tasks: readonly InboxBlockTask[]): AssignedDisplayGroup[] {
+  const bucketOf = (t: InboxBlockTask): string =>
     t.priority === null || t.priority === undefined ? 'none' : String(t.priority);
-  const within = (a: AssignedTask, b: AssignedTask): number => a.position - b.position;
+  const within = (a: InboxBlockTask, b: InboxBlockTask): number => a.position - b.position;
   // Подписи зеркалят domain/task/priorityMeta.ts (1=Срочно … 4=Низкий).
   return buildFixed(
     tasks,

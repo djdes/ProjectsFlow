@@ -20,7 +20,6 @@ import { cn } from '@/lib/utils';
 import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { TASK_PRIORITIES } from '@/domain/task/Task';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
-import type { AssignedTask } from '@/domain/task/AssignedTask';
 import type { Project } from '@/domain/project/Project';
 import type { SharedMember } from '@/application/project/ProjectRepository';
 import { useContainer } from '@/infrastructure/di/container';
@@ -39,6 +38,10 @@ import {
 } from './AssignedToMeBlock';
 import { startOfDay, ymd } from './assignedGrouping';
 import type { UnifiedDndRef } from './unifiedDndTypes';
+import {
+  isPersonalInboxBlockTask,
+  type InboxBlockTask,
+} from './inboxBlockTasks';
 
 type Props = {
   // Реестр хендлеров/операций детей (доска + блок). Живёт в ref у InboxPage — стабильная
@@ -51,10 +54,12 @@ type Props = {
 
 // Происхождение активного drag'а: доска кладёт в data ключ `task` (KanbanCard/useSortable),
 // блок делегирования — ключ `item` (DraggableTask/useDraggable). Оба с type:'task'.
-type ActiveDrag = { origin: 'board'; task: Task } | { origin: 'block'; item: AssignedTask };
+type ActiveDrag = { origin: 'board'; task: Task } | { origin: 'block'; item: InboxBlockTask };
 
 function detectActive(active: Active | null): ActiveDrag | null {
-  const data = active?.data.current as { type?: string; task?: Task; item?: AssignedTask } | undefined;
+  const data = active?.data.current as
+    | { type?: string; task?: Task; item?: InboxBlockTask }
+    | undefined;
   if (data?.type !== 'task') return null;
   if (data.task) return { origin: 'board', task: data.task };
   if (data.item) return { origin: 'block', item: data.item };
@@ -71,7 +76,7 @@ type OverData = {
   grouping?: string;
   projectId?: string;
   priority?: string; // '1'..'4' | 'none'
-  // type='phantom': какой пикер открыть ('project' | 'priority' | 'created' — забрать себе).
+  // type='phantom': какой пикер открыть ('project' | 'priority').
   kind?: string;
   // type='column' (колонка доски) — цель дропа пилюли блока: снять делегацию + статус.
   status?: TaskStatus;
@@ -87,13 +92,11 @@ type OverData = {
 //   • доска-карточка → bucket      — дедлайн задаче (none/today; future — попап даты);
 //   • доска-карточка → user        — делегировать (свой кубик — забрать себе/withdraw);
 //   • доска-карточка → group       — по сортировке блока: project → перенос в проект +
-//     самоделегирование; priority → смена приоритета (план inbox-grouped-dnd);
-//   • доска-карточка → phantom     — пикеры «Другой проект…» / «Другой приоритет…» /
-//     «Забрать себе» (created). Любой дроп доски-карточки в верхний канбан дополнительно
-//     самоделегирует недоделегированную задачу («мне делегировалось»);
+//     назначение себе; priority → смена приоритета (план inbox-grouped-dnd);
+//   • доска-карточка → phantom     — пикеры «Другой проект…» / «Другой приоритет…»;
 //   • блок-карточка  → bucket/user — родная логика блока (срок/переназначение);
-//   • блок-карточка  → column/task доски — снять делегацию (withdraw/relinquish) и для
-//     задач своего инбокса поставить статус колонки.
+//   • блок-карточка  → column/task доски — личному зеркалу сменить статус; у реального
+//     поручения снять делегацию (withdraw/relinquish) и при необходимости сменить статус.
 // Оверлей тоже один, вид зависит от происхождения: карточка доски с tilt (drop-анимация
 // как у KanbanBoard) либо пилюля-«комок» блока (без drop-анимации, липнет к курсору).
 export function InboxUnifiedDnd({ registry, projectId, children }: Props): React.ReactElement {
@@ -133,47 +136,8 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
     await Promise.all([registry.current.board?.refetch(), registry.current.block?.refresh()]);
   };
 
-  // «Поручить себе» задачу ДОСКИ: любой дроп в верхний канбан означает «мне делегировалось»
-  // (просьба юзера) — недоделегированная задача получает accepted-самоделегирование и
-  // появляется в блоке. Уже делегированную (мне или другому) не трогаем. true = создали.
-  const ensureSelfDelegated = async (task: Task): Promise<boolean> => {
-    if (!user || task.delegation) return false;
-    try {
-      await taskRepository.delegate(projectId, task.id, user.id);
-      return true;
-    } catch (e) {
-      toast.error(`Не удалось поручить вам: ${(e as Error).message}`);
-      return false;
-    }
-  };
-
-  // Обновление зон после операции над задачей доски: создали самоделегирование → обе зоны;
-  // задача уже была делегирована → пере-бакетить блок; иначе ничего (доска обновилась сама).
-  const refreshAfterBoardOp = async (task: Task, selfDelegated: boolean): Promise<void> => {
-    if (selfDelegated) await afterDelegationChange();
-    else if (task.delegation) await registry.current.block?.refresh();
-  };
-
-  // Дроп доски-карточки в верхний канбан БЕЗ смены свойства (свой же бакет/приоритет или
-  // фантом «Забрать себе» в сортировке по дате создания): только самоделегирование.
-  // quiet — не тостить, когда дроп был про свойство и оно не изменилось.
-  const claimBoardTask = async (task: Task, quiet: boolean): Promise<void> => {
-    if (!user) return;
-    if (task.delegation) {
-      if (quiet) return;
-      if (task.delegation.delegateUserId === user.id) toast.info('Задача уже поручена вам');
-      else toast.error('Задача поручена другому — заберите её дропом на свой кубик');
-      return;
-    }
-    const created = await ensureSelfDelegated(task);
-    if (created) {
-      if (!quiet) toast.success('Задача поручена вам');
-      await afterDelegationChange();
-    }
-  };
-
-  // Дедлайн задачи ДОСКИ через её собственный useTasks.update (локальный стейт доски
-  // обновится сам) + самоделегирование (дроп в верхний канбан = «мне делегировалось»).
+  // Дедлайн задачи ДОСКИ меняется через её собственный useTasks.update. Верхняя личная
+  // карточка получает тот же обновлённый Task через snapshot KanbanBoard → InboxPage.
   const applyBoardDeadline = async (task: Task, deadline: string | null): Promise<void> => {
     const board = registry.current.board;
     if (!board) return;
@@ -184,16 +148,13 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
       toast.error(`Не удалось изменить срок: ${(e as Error).message}`);
       return;
     }
-    await refreshAfterBoardOp(task, await ensureSelfDelegated(task));
   };
 
   const dropBoardTaskOnBucket = (task: Task, bucket: string): void => {
-    // Дроп в свой же бакет — свойство не меняем, но самоделегирование всё равно делаем
-    // (смысл дропа в верхний канбан — «поручить мне»).
+    // Личная карточка уже автоматически есть сверху: дроп в свой бакет — честный no-op.
     const today = ymd(startOfDay(new Date()));
     const cur = task.deadline == null ? 'none' : task.deadline <= today ? 'today' : 'future';
     if (cur === bucket) {
-      void claimBoardTask(task, true);
       return;
     }
     if (bucket === 'none') void applyBoardDeadline(task, null);
@@ -201,12 +162,11 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
     else if (bucket === 'future') setFutureDrop(task);
   };
 
-  // Приоритет задачи ДОСКИ (дроп на колонку приоритета / выбор в пикере) + самоделегирование.
+  // Приоритет задачи ДОСКИ (дроп на колонку приоритета / выбор в пикере).
   const applyBoardPriority = async (task: Task, priority: TaskPriority | null): Promise<void> => {
     const board = registry.current.board;
     if (!board) return;
     if ((task.priority ?? null) === priority) {
-      void claimBoardTask(task, true);
       return;
     }
     try {
@@ -216,11 +176,10 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
       toast.error(`Не удалось изменить приоритет: ${(e as Error).message}`);
       return;
     }
-    await refreshAfterBoardOp(task, await ensureSelfDelegated(task));
   };
 
-  // Дроп пилюли БЛОКА на колонку нижней доски — задача переезжает вниз (правило «ровно
-  // один канбан»):
+  // Дроп пилюли БЛОКА на колонку нижней доски:
+  // • личное зеркало → только статус той же Task; обе карточки остаются на месте;
   // • задача СВОЕГО инбокса → снять делегацию (моя исходящая → withdraw; поручена мне →
   //   relinquish) + статус колонки;
   // • задача ИМЕНОВАННОГО проекта → перенос в мой инбокс (assignToProject; сервер сам
@@ -228,10 +187,18 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
   // • задача ЧУЖОГО инбокса → только relinquish (личное пространство делегатора — вытащить
   //   из него задачу нельзя, у владельца она остаётся).
   const dropBlockItemOnBoardColumn = async (
-    item: AssignedTask,
+    item: InboxBlockTask,
     status: TaskStatus,
   ): Promise<void> => {
     if (!user) return;
+    if (isPersonalInboxBlockTask(item)) {
+      try {
+        await registry.current.board?.moveTask(item.id, status);
+      } catch (e) {
+        toast.error(`Не удалось перенести в колонку: ${(e as Error).message}`);
+      }
+      return;
+    }
     const d = item.delegation;
     if (!item.isInbox) {
       try {
@@ -392,10 +359,6 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
         setProjectPick(info.task);
       } else if (overData?.type === 'phantom' && overData.kind === 'priority') {
         setPriorityPick(info.task);
-      } else if (overData?.type === 'phantom' && overData.kind === 'created') {
-        // Сортировка «по дате создания»: свойство не меняем (дату не изменить) —
-        // фантом «Забрать себе» просто поручает задачу мне, она встанет по своей дате.
-        void claimBoardTask(info.task, false);
       }
     } else if (info?.origin === 'block') {
       setActive(null); // пилюля блока без drop-анимации — прячем сразу

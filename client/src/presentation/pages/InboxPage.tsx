@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -8,6 +8,7 @@ import { InboxBreadcrumbs } from '@/presentation/layout/InboxBreadcrumbs';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
 import type { Project } from '@/domain/project/Project';
+import type { Task } from '@/domain/task/Task';
 import { KanbanBoard } from '@/presentation/components/tasks/KanbanBoard';
 import { AssignedToMeBlock } from '@/presentation/components/tasks/AssignedToMeBlock';
 import { InboxUnifiedDnd } from '@/presentation/components/tasks/InboxUnifiedDnd';
@@ -44,6 +45,12 @@ export function InboxPage(): React.ReactElement {
   // чтобы список inbox-задач сразу подтянул свежее состояние (acceptance публикует
   // SSE, но проще пересоздать board без задержки).
   const [refetchKey, setRefetchKey] = useState(0);
+  // null отличает «нижняя доска ещё грузится» от честного пустого inbox. После загрузки
+  // этот же snapshot питает виртуальные карточки верхней личной колонки.
+  const [boardTasks, setBoardTasks] = useState<readonly Task[] | null>(null);
+  const handleBoardTasksChange = useCallback((next: readonly Task[]): void => {
+    setBoardTasks(next);
+  }, []);
   // Реестр единого DnD (#5): доска и блок делегирования регистрируют сюда свои хендлеры,
   // InboxUnifiedDnd диспетчеризует. Ref (не state) — стабильная ссылка переживает ремаунты
   // KanbanBoard по refetchKey и не дёргает лишние рендеры.
@@ -126,6 +133,8 @@ export function InboxPage(): React.ReactElement {
             можно тащить в время-колонки (срок) и на кубики людей (делегировать). */}
         <InboxUnifiedDnd registry={dndRegistry} projectId={project.id}>
           <AssignedToMeBlock
+            boardTasks={boardTasks}
+            inboxProjectId={project.id}
             onChanged={() => setRefetchKey((k) => k + 1)}
             toolbarSlot={toolbarSlot}
             hideDone={hideDone}
@@ -150,6 +159,7 @@ export function InboxPage(): React.ReactElement {
               bleedNegClass={KANBAN_BLEED_NEG}
               bleedPadClass={KANBAN_BLEED_PAD}
               externalDnd={dndRegistry}
+              onBoardTasksChange={handleBoardTasksChange}
             />
           </motion.div>
         </InboxUnifiedDnd>

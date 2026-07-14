@@ -110,6 +110,9 @@ type Props = {
   // (их даёт InboxUnifiedDnd на странице), а регистрирует свои хендлеры и операции в этом
   // реестре. null/undefined (доски проектов) — прежнее поведение без изменений.
   externalDnd?: UnifiedDndRef | null;
+  // Снимок карточек, реально показанных на нижней inbox-доске. InboxPage использует его,
+  // чтобы отрисовать те же Task в верхней личной колонке без второго запроса.
+  onBoardTasksChange?: (tasks: readonly Task[]) => void;
   // Верхний офсет для sticky-шапок колонок (Notion: при скролле липнут заголовки
   // колонок, а не строка вкладок). undefined — не закрепляем (инбокс).
   stickyHeaderTop?: number;
@@ -249,7 +252,19 @@ function groupByStatus(tasks: Task[], doneOrder: DoneSortOrder): Record<TaskStat
   return out;
 }
 
-export function KanbanBoard({ projectId, showCommits = true, projectName, hideDone = false, memberCount, onOpenAutomation, bleedNegClass = '', bleedPadClass = '', externalDnd = null, stickyHeaderTop }: Props): React.ReactElement {
+export function KanbanBoard({
+  projectId,
+  showCommits = true,
+  projectName,
+  hideDone = false,
+  memberCount,
+  onOpenAutomation,
+  bleedNegClass = '',
+  bleedPadClass = '',
+  externalDnd = null,
+  onBoardTasksChange,
+  stickyHeaderTop,
+}: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const { user } = useCurrentUser();
   const { projectRepository } = useContainer();
@@ -529,15 +544,16 @@ export function KanbanBoard({ projectId, showCommits = true, projectName, hideDo
   );
 
   const { order: doneOrder, toggle: toggleDoneOrder } = useDoneSortOrder();
-  // Инбокс: задача живёт РОВНО в одном канбане (без дублей верх/низ). Активно-делегированные
-  // задачи показываются в верхнем блоке делегирования — с нижней доски они скрываются.
-  // Перетащил вверх (делегация появилась) → карточка исчезает снизу; перетащил пилюлю вниз
-  // (делегация снята) → возвращается на доску. undefined = делегации не загружены (не inbox
-  // list-endpoint) — ничего не фильтруем. Доски проектов не трогаем.
+  // Нижняя inbox-доска по-прежнему содержит неделегированные задачи. Теперь каждая из них
+  // дополнительно имеет виртуальную копию в верхней личной колонке; это две проекции одной
+  // Task, а не две серверные записи. Делегированные карточки остаются только в верхнем блоке.
   const boardTasks = useMemo(
     () => (isInbox ? tasks.filter((t) => !t.delegation) : tasks),
     [isInbox, tasks],
   );
+  useEffect(() => {
+    if (!loading) onBoardTasksChange?.(boardTasks);
+  }, [boardTasks, loading, onBoardTasksChange]);
   const grouped = useMemo(() => groupByStatus(boardTasks, doneOrder), [boardTasks, doneOrder]);
   const activeTask = activeId ? tasks.find((t) => t.id === activeId) ?? null : null;
   // Открытая в drawer'е задача — её карточку подсвечиваем синим бордером (E4).
