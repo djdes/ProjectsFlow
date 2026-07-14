@@ -434,7 +434,7 @@ export function groupKeyFor(task: Task, grouping: StandardGrouping): string {
     case 'priority':
       return String(task.priority ?? 'none');
     case 'assignee':
-      return task.delegation?.delegateUserId ?? 'none';
+      return task.assignee.userId;
   }
 }
 
@@ -445,9 +445,7 @@ export function groupLabelFor(key: string, grouping: StandardGrouping, sample?: 
     case 'priority':
       return key === 'none' ? 'Без приоритета' : PRIORITY_META[Number(key) as TaskPriority].label;
     case 'assignee':
-      return key === 'none'
-        ? 'Без ответственного'
-        : (sample?.delegation?.delegateDisplayName ?? 'Участник');
+      return sample?.assignee.displayName ?? 'Участник';
   }
 }
 

@@ -3,7 +3,7 @@ import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core'
 import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 
 // === Контракт единого DnD «Входящих» (#5) ===
-// Во «Входящих» доска (KanbanBoard) и блок делегирования (AssignedToMeBlock) живут в ОДНОМ
+// Во «Входящих» доска (KanbanBoard) и блок ответственных (AssignedToMeBlock) живут в ОДНОМ
 // <DndContext> уровня страницы (InboxUnifiedDnd): dnd-kit не «наследует» контексты, draggable
 // одного не видит droppable другого. Каждый компонент в external-режиме НЕ рендерит свой
 // DndContext/DragOverlay, а регистрирует свои хендлеры и операции в этом реестре (мутабельный
@@ -19,12 +19,12 @@ export type BoardDndApi = {
   onDragEnd(e: DragEndEvent): Promise<void>;
   onDragCancel(): void;
   // Операции для диспетчера: дроп доски-карточки на время-колонку (дедлайн) / колонку
-  // приоритета, и рефетч после делегирования/переноса (бейдж/список на доске).
+  // приоритета, и рефетч после смены ответственного/переноса.
   updateTask(
     taskId: string,
     input: { deadline?: string | null; priority?: TaskPriority | null },
   ): Promise<Task>;
-  // Перенос задачи в колонку доски (дроп пилюли блока: снять делегацию + статус).
+  // Перенос задачи в колонку доски (дроп карточки верхнего блока + статус).
   // Кладёт в НАЧАЛО видимой порции колонки (как «Перенести» из TaskDrawer).
   moveTask(taskId: string, targetStatus: TaskStatus): Promise<void>;
   refetch(): Promise<void>;
@@ -35,7 +35,7 @@ export type BlockDndApi = {
   onDragStart(e: DragStartEvent): void;
   onDragEnd(e: DragEndEvent): void;
   onDragCancel(): void;
-  // Перефетч поручений после кросс-операций (делегирование/дедлайн задачи с доски).
+  // Перефетч назначенных задач после кросс-операций (ответственный/дедлайн).
   refresh(): Promise<void>;
 };
 

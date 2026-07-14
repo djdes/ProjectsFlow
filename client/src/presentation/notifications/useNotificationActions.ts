@@ -10,10 +10,10 @@ import { useWorkspacesContext } from '@/presentation/hooks/WorkspacesProvider';
 import { NOTIFICATIONS_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { OPEN_CHAT_EVENT } from '@/presentation/chat/openChatEvent';
 
-export type DelegationUiState = 'busy' | 'accepted' | 'declined' | 'resolved';
+export type NotificationActionUiState = 'busy' | 'accepted' | 'declined' | 'resolved';
 
 export type NotificationActions = {
-  readonly delegationUi: Record<string, DelegationUiState>;
+  readonly actionUi: Record<string, NotificationActionUiState>;
   readonly markRead: (n: Notification) => Promise<void>;
   readonly handleClick: (n: Notification) => void;
   readonly handleAcceptInvite: (n: Notification) => void;
@@ -35,7 +35,7 @@ export function useNotificationActions(opts?: {
   const { refresh: refreshBadge } = useUnreadNotificationsCount();
   const { applyAppend, refresh: refreshProjects } = useProjectsContext();
   const { refresh: refreshWorkspaces } = useWorkspacesContext();
-  const [delegationUi, setDelegationUi] = useState<Record<string, DelegationUiState>>({});
+  const [actionUi, setActionUi] = useState<Record<string, NotificationActionUiState>>({});
 
   const markRead = async (n: Notification): Promise<void> => {
     if (n.readAt !== null) return;
@@ -58,6 +58,8 @@ export function useNotificationActions(opts?: {
       if (p.type === 'comment_mention')
         navigate(`/projects/${p.projectId}?task=${p.taskId}#comment-${p.commentId}`);
       else if (p.type === 'join_request') navigate(`/projects/${p.projectId}`);
+      else if (p.type === 'task_assignee_changed')
+        navigate(p.isInbox ? '/inbox' : `/projects/${p.projectId}`);
       else if (p.type === 'task_delegation' || p.type === 'task_delegation_resolved') navigate('/inbox');
       else if (p.type === 'task_assigned_to_project') navigate(`/projects/${p.projectId}`);
       else if (p.type === 'server_alert') navigate(`/projects/${p.projectId}/monitoring`);
@@ -79,17 +81,17 @@ export function useNotificationActions(opts?: {
   };
 
   const handleResolveJoin = (n: Notification, accept: boolean): void => {
-    if (n.payload.type !== 'join_request' || delegationUi[n.id]) return;
+    if (n.payload.type !== 'join_request' || actionUi[n.id]) return;
     const { joinRequestId } = n.payload;
-    setDelegationUi((s) => ({ ...s, [n.id]: 'busy' }));
+    setActionUi((s) => ({ ...s, [n.id]: 'busy' }));
     void (async () => {
       try {
         await projectRepository.resolveJoinRequest(joinRequestId, accept);
-        setDelegationUi((s) => ({ ...s, [n.id]: accept ? 'accepted' : 'declined' }));
+        setActionUi((s) => ({ ...s, [n.id]: accept ? 'accepted' : 'declined' }));
         await markRead(n);
         toast.success(accept ? 'Доступ предоставлен' : 'Запрос отклонён');
       } catch (e) {
-        setDelegationUi((s) => {
+        setActionUi((s) => {
           const next = { ...s };
           delete next[n.id];
           return next;
@@ -100,15 +102,15 @@ export function useNotificationActions(opts?: {
   };
 
   const handleAcceptInvite = (n: Notification): void => {
-    if (n.payload.type !== 'project_invite' || delegationUi[n.id]) return;
+    if (n.payload.type !== 'project_invite' || actionUi[n.id]) return;
     const { token, projectId, projectName } = n.payload;
-    setDelegationUi((s) => ({ ...s, [n.id]: 'busy' }));
+    setActionUi((s) => ({ ...s, [n.id]: 'busy' }));
     void (async () => {
       try {
         await inviteRepository.accept(token);
         // Помечаем принятым сразу — кнопка «Принять» в строке сменяется на «✓ Принято»
         // (иначе уведомление оставалось «как действие» даже после принятия).
-        setDelegationUi((s) => ({ ...s, [n.id]: 'accepted' }));
+        setActionUi((s) => ({ ...s, [n.id]: 'accepted' }));
         await markRead(n);
         const project = await projectRepository.getById(projectId).catch(() => null);
         if (project) applyAppend(project);
@@ -119,12 +121,12 @@ export function useNotificationActions(opts?: {
         // гасим уведомление (mark read + «Уже обработано»), чтобы оно не висело неактивным
         // действием и не раздувало счётчик. Прочие ошибки (сеть и т.п.) — оставляем кнопку.
         if (e instanceof HttpError && (e.status === 410 || e.status === 409)) {
-          setDelegationUi((s) => ({ ...s, [n.id]: 'resolved' }));
+          setActionUi((s) => ({ ...s, [n.id]: 'resolved' }));
           await markRead(n);
           toast.success('Приглашение уже использовано — убрал из действий');
           return;
         }
-        setDelegationUi((s) => {
+        setActionUi((s) => {
           const next = { ...s };
           delete next[n.id];
           return next;
@@ -135,13 +137,13 @@ export function useNotificationActions(opts?: {
   };
 
   const handleAcceptWorkspaceInvite = (n: Notification): void => {
-    if (n.payload.type !== 'workspace_invite' || delegationUi[n.id]) return;
+    if (n.payload.type !== 'workspace_invite' || actionUi[n.id]) return;
     const { token, workspaceName } = n.payload;
-    setDelegationUi((s) => ({ ...s, [n.id]: 'busy' }));
+    setActionUi((s) => ({ ...s, [n.id]: 'busy' }));
     void (async () => {
       try {
         await inviteRepository.accept(token);
-        setDelegationUi((s) => ({ ...s, [n.id]: 'accepted' }));
+        setActionUi((s) => ({ ...s, [n.id]: 'accepted' }));
         await markRead(n);
         // Приглашённый видит новое пространство и его проекты сразу.
         refreshWorkspaces();
@@ -149,12 +151,12 @@ export function useNotificationActions(opts?: {
         toast.success(`Вы присоединились к пространству «${workspaceName}»`);
       } catch (e) {
         if (e instanceof HttpError && (e.status === 410 || e.status === 409)) {
-          setDelegationUi((s) => ({ ...s, [n.id]: 'resolved' }));
+          setActionUi((s) => ({ ...s, [n.id]: 'resolved' }));
           await markRead(n);
           toast.success('Приглашение уже использовано — убрал из действий');
           return;
         }
-        setDelegationUi((s) => {
+        setActionUi((s) => {
           const next = { ...s };
           delete next[n.id];
           return next;
@@ -165,7 +167,7 @@ export function useNotificationActions(opts?: {
   };
 
   return {
-    delegationUi,
+    actionUi,
     markRead,
     handleClick,
     handleAcceptInvite,

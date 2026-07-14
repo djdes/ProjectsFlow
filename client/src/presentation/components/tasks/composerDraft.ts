@@ -8,7 +8,7 @@ export type ComposerDraft = {
   readonly ralphMode: RalphMode;
   readonly priority: TaskPriority | null;
   readonly deadline: string | null;
-  readonly delegateUserId: string | null;
+  readonly assigneeUserId: string | null;
 };
 
 export const EMPTY_COMPOSER_DRAFT: ComposerDraft = {
@@ -16,7 +16,7 @@ export const EMPTY_COMPOSER_DRAFT: ComposerDraft = {
   ralphMode: 'normal',
   priority: null,
   deadline: null,
-  delegateUserId: null,
+  assigneeUserId: null,
 };
 
 // Пустой черновик не храним и не предлагаем восстанавливать.
@@ -25,8 +25,7 @@ export function isEmptyComposerDraft(d: ComposerDraft): boolean {
     d.text.trim() === '' &&
     d.ralphMode === 'normal' &&
     d.priority === null &&
-    d.deadline === null &&
-    d.delegateUserId === null
+    d.deadline === null
   );
 }
 
@@ -34,14 +33,15 @@ export function readComposerDraft(key: string): ComposerDraft | null {
   try {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
-    const d = JSON.parse(raw) as Partial<ComposerDraft>;
+    const d = JSON.parse(raw) as Partial<ComposerDraft> & { delegateUserId?: string | null };
     if (typeof d?.text !== 'string') return null;
     return {
       text: d.text,
       ralphMode: (d.ralphMode as RalphMode) ?? 'normal',
       priority: (d.priority as TaskPriority) ?? null,
       deadline: d.deadline ?? null,
-      delegateUserId: d.delegateUserId ?? null,
+      // Старые локальные черновики мигрируют без потери выбранного человека.
+      assigneeUserId: d.assigneeUserId ?? d.delegateUserId ?? null,
     };
   } catch {
     return null;

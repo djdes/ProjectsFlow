@@ -3,8 +3,10 @@ import type { RalphMode, Task, TaskPriority, TaskStatus } from '../../domain/tas
 export type CreateTaskInput = {
   readonly id: string;
   readonly projectId: string;
-  // Кто создал («кто отдал воркеру») — инициатор для метеринга/гейта расхода (db/088).
+  // Кто создал — серверная атрибуция для аудита/метеринга (db/088).
   readonly createdBy: string | null;
+  // Обязательный ответственный новой задачи. CreateTask по умолчанию передаёт actor'а.
+  readonly assigneeUserId: string;
   readonly description: string;
   // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL. null/undefined = без иконки. См. db/093.
   readonly icon?: string | null;
@@ -27,6 +29,7 @@ export type CreateTaskInput = {
 };
 
 export type UpdateTaskPatch = {
+  readonly assigneeUserId?: string;
   readonly description?: string | null;
   // null = очистить иконку. undefined = не менять. См. db/093.
   readonly icon?: string | null;
@@ -49,23 +52,19 @@ export type UpdateTaskPatch = {
 
 export interface TaskRepository {
   listByProject(projectId: string): Promise<Task[]>;
-  // Батч-выборка задач по id (для блока «Поручено мне» — задачи из разных проектов).
+  // Батч-выборка задач по id (для верхнего личного канбана — задачи из разных проектов).
   // Порядок результата не гарантируется; вызывающий строит Map по id.
   listByIds(taskIds: readonly string[]): Promise<Task[]>;
-  /**
-   * Inbox-задачи (из ЧУЖИХ inbox-проектов), где caller — accepted-делегат.
-   * Используется ListTasks для inbox-view'а делегата: он должен видеть в своём
-   * /inbox список задачи, которые ему делегированы, хотя физически они живут
-   * в inbox-проекте создателя.
-   */
-  listAcceptedDelegatedTo(userId: string): Promise<Task[]>;
+  // Все задачи, где userId — текущий ответственный (в любых проектах).
+  listAssignedTo(userId: string): Promise<Task[]>;
   getById(taskId: string): Promise<Task | null>;
   create(input: CreateTaskInput): Promise<Task>;
   update(taskId: string, patch: UpdateTaskPatch): Promise<Task | null>;
   delete(taskId: string): Promise<boolean>;
   /**
    * Удалить задачу вместе со ВСЕМИ её child-строками (комментарии, аттачи, коммиты,
-   * версии, делегации, live-сессии/события, telegram-маппинги, email-токены) в одной
+   * версии, legacy-история назначений, live-сессии/события, telegram-маппинги,
+   * email-токены) в одной
    * транзакции. Без этого удаление задачи оставляло сироты (FK на схеме нет). Возвращает
    * true, если задача существовала.
    */
@@ -98,5 +97,9 @@ export interface TaskRepository {
    * Position не пересчитываем — задача попадает в проект с её текущим position
    * и status (как правило 'todo'/'done'); UI отсортирует.
    */
-  moveToProject(taskId: string, targetProjectId: string): Promise<Task | null>;
+  moveToProject(
+    taskId: string,
+    targetProjectId: string,
+    assigneeUserId: string,
+  ): Promise<Task | null>;
 }

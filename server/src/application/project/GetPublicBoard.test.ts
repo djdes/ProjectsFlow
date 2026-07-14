@@ -22,12 +22,14 @@ function makeProject(over: Partial<Project> = {}): Project {
 
 function makeTask(over: Partial<Task> = {}): Task {
   return {
-    id: 't1', projectId: 'p1', createdBy: 'u1', description: 'Задача\nтело',
+    id: 't1', projectId: 'p1', createdBy: 'u1',
+    assignee: { userId: 'u1', displayName: 'Пользователь', avatarUrl: null },
+    description: 'Задача\nтело',
     icon: null, cover: null, coverPosition: 50, status: 'todo', statusBeforeDone: null,
     position: 1, ralphMode: 'normal', ralphCancelRequestedAt: null,
     ralphCancelRequestedBy: null, ralphCancelRequestedByDisplayName: null,
     deadline: null, priority: null, createdAt: new Date('2026-01-01'),
-    updatedAt: new Date('2026-01-01'), delegation: null,
+    updatedAt: new Date('2026-01-01'),
     ...over,
   };
 }
@@ -83,6 +85,7 @@ test('GetPublicBoard: приватные поля задачи не утекаю
     'cover', 'coverPosition', 'deadline', 'description', 'icon', 'id', 'priority', 'status',
   ]);
   assert.ok(!('createdBy' in task));
+  assert.ok(!('assignee' in task));
   assert.ok(!('ralphMode' in task));
   assert.ok(!('position' in task));
 });

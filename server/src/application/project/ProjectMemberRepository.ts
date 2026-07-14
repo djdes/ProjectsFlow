@@ -71,7 +71,7 @@ export interface ProjectMemberRepository {
   ): Promise<void>;
 
   // Дедуплицированный список user'ов, с которыми caller состоит в общих проектах.
-  // Без caller'а самого. Используется для дропдауна «делегировать» во входящих.
+  // Без caller'а самого. Используется для выбора ответственного во входящих.
   listSharedUsers(userId: string): Promise<SharedUser[]>;
 }
 

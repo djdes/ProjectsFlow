@@ -3,8 +3,8 @@ import type { Notification } from '../../domain/notifications/Notification.js';
 import type { ActivityRepository } from './ActivityRepository.js';
 
 // Уведомления, требующие действия (кнопка «Принять»). Только они формируют вкладку
-// «Требуется действие». task_delegation сюда НЕ входит: делегирование принимается
-// автоматически (спека §4), уведомление о нём — информационное.
+// «Требуется действие». Назначение ответственного и старые task_delegation-события
+// информационные и сюда не входят.
 // Зеркало: DrizzleNotificationRepository.countActionableUnread — менять СИНХРОННО.
 const ACTIONABLE_TYPES: ReadonlySet<string> = new Set([
   'workspace_invite',

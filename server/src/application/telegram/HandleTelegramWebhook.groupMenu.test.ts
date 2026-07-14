@@ -27,14 +27,13 @@ function makeHarness(opts?: {
     },
     tasks: {
       async listByProject() {
-        return [{ id: 't1', description: 'Задача владельца', status: 'todo', deadline: null }];
-      },
-    },
-    delegations: {
-      async listActiveForTasks() {
-        return new Map([
-          ['t1', { id: 'd1', taskId: 't1', status: 'accepted', delegateUserId: 'u-oleg', delegateDisplayName: 'Олег' }],
-        ]);
+        return [{
+          id: 't1',
+          description: 'Задача владельца',
+          status: 'todo',
+          deadline: null,
+          assignee: { userId: 'u-oleg', displayName: 'Олег', avatarUrl: null },
+        }];
       },
     },
     client: {

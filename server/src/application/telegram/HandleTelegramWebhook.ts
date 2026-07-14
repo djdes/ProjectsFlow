@@ -8,7 +8,6 @@ import type { TaskRepository } from '../task/TaskRepository.js';
 import type { CreateTaskComment } from '../task/CreateTaskComment.js';
 import type { MoveTask } from '../task/MoveTask.js';
 import type { MaybeReopenForClarification } from '../task/MaybeReopenForClarification.js';
-import type { TaskDelegationRepository } from '../task/TaskDelegationRepository.js';
 import { buildAssigneeMenu, buildAssigneeTaskCards } from './assigneeBrowse.js';
 import {
   taskActionKeyboard,
@@ -75,9 +74,6 @@ type Deps = {
   readonly users: UserRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
-  // Активные делегации задач — меню /tasks «по ответственным» (ba:-callbacks). Узкий Pick:
-  // билдерам assigneeBrowse нужен только listActiveForTasks.
-  readonly delegations: Pick<TaskDelegationRepository, 'listActiveForTasks'>;
   readonly client: TelegramClient;
   readonly appUrl: string;
   // Секрет для подписи URL картинок задачи (альбом при открытии задачи в TG, без сессии).
@@ -97,7 +93,7 @@ type Deps = {
   readonly dismissCloseProposal: DismissCloseProposal;
   // Рассылка email+TG участникам по комментарию (как HTTP-роут). Best-effort.
   readonly dispatchCommentNotifications: DispatchCommentNotifications;
-  // Конструктор задач (+проект текст @делегат) + обработка кнопок конструктора/делегирования.
+  // Конструктор задач (+проект текст @ответственный) + обработка его кнопок.
   readonly composer: TelegramComposerService;
   readonly maybeReopenForClarification: MaybeReopenForClarification;
   // Live-обновление UI после auto-create комментария / auto-return статуса.
@@ -201,7 +197,7 @@ export class HandleTelegramWebhook {
     // Неизвестная slash-команда — не превращаем в задачу.
     if (cmd.startsWith('/')) return this.handleHelp(chatId);
     // Любой прочий текст → черновик задачи (фаза «любой текст = задача»). Без `+проекта`
-    // уходит во «Входящие»; с `+проект`/`@делегат` — конструктор уточнит кнопками. В группе
+    // уходит во «Входящие»; с `+проект`/`@ответственный` — конструктор уточнит кнопками. В группе
     // передаём groupCtx: композер решает — создавать «как отправитель» или уронить в «Входящие»
     // владельца группы (гибрид-маршрутизация, см. spec telegram-group-multi-user-tasks).
     if (isGroup) {
@@ -232,7 +228,7 @@ export class HandleTelegramWebhook {
     const mapping = await this.deps.ralphQuestionMessages.findByMessage(chatId, replyToMessageId);
     if (!mapping) {
       // Не ralph-question → пробуем как обычный комментарий к задаче (reply на карточку
-      // конструктора / делегирования / /tasks). См. handleTaskReplyComment.
+      // конструктора / назначения ответственного / /tasks). См. handleTaskReplyComment.
       return this.handleTaskReplyComment(tgUserId, chatId, replyToMessageId, text);
     }
 
@@ -715,9 +711,9 @@ export class HandleTelegramWebhook {
         `📁 <b>В конкретный проект</b> — добавь <code>+Проект</code> в начало:\n` +
         `   <code>+ScanFlow поправить парсинг чеков</code>\n` +
         `   <i>имя подскажу кнопками, если совпадёт несколько</i>\n\n` +
-        `👤 <b>Делегировать коллеге</b> — добавь <code>@Имя</code> в конец:\n` +
+        `👤 <b>Назначить ответственного</b> — добавь <code>@Имя</code> в конец:\n` +
         `   <code>+DocsFlow обновить шаблон @Олег</code>\n` +
-        `   <i>коллега получит кнопки «Принять / Отказать»</i>\n\n` +
+        `   <i>задача сразу появится у коллеги; он сможет выполнить её или сменить ответственного</i>\n\n` +
         `⚡ <b>Из любого чата</b> — набери <code>${bot} текст задачи</code> и выбери проект из списка.\n\n` +
         `💬 <b>Комментарий</b> — ответь (reply) на карточку задачи от бота. Участники получат уведомление.\n\n` +
         `<b>Команды:</b>\n` +
@@ -741,7 +737,7 @@ export class HandleTelegramWebhook {
     if (!map) {
       await this.reply(
         chatId,
-        '↩️ Это сообщение не привязано к задаче. Reply работает на карточки задач, делегирование и уточнения бота.',
+        '↩️ Это сообщение не привязано к задаче. Reply работает на карточки задач, назначения ответственного и уточнения бота.',
       );
       return;
     }
@@ -843,7 +839,6 @@ export class HandleTelegramWebhook {
     return {
       members: this.deps.members,
       tasks: this.deps.tasks,
-      delegations: this.deps.delegations,
     };
   }
 
@@ -865,7 +860,7 @@ export class HandleTelegramWebhook {
     await this.reply(chatId, `📂 <b>Выбери проект:</b>${note}`, { inline_keyboard: rows });
   }
 
-  // ba:<userId> | ba:none — карточки открытых задач выбранного ответственного (экран 2).
+  // ba:<userId> — карточки открытых задач выбранного ответственного (экран 2).
   // Охват — проекты НАЖАВШЕГО (гейт членства встроен: listProjectsForUser). Каждая карточка
   // регистрируется в telegram_task_messages → reply на неё = комментарий (handleTaskReplyComment).
   private async handleAssigneeCallback(cq: TelegramCallbackQuery): Promise<void> {
@@ -875,8 +870,7 @@ export class HandleTelegramWebhook {
       await this.answerNeedsLink(cq.id);
       return;
     }
-    const arg = (cq.data ?? '').slice('ba:'.length);
-    const assigneeUserId = arg === 'none' ? null : arg;
+    const assigneeUserId = (cq.data ?? '').slice('ba:'.length);
     const result = await buildAssigneeTaskCards(
       this.assigneeDeps(),
       userId,
@@ -890,7 +884,7 @@ export class HandleTelegramWebhook {
       });
       return;
     }
-    const who = assigneeUserId === null ? 'Без ответственного' : (result.assigneeName ?? 'Ответственный');
+    const who = result.assigneeName ?? 'Ответственный';
     const extra =
       result.totalCount > result.cards.length
         ? ` (первые ${result.cards.length} из ${result.totalCount})`
@@ -1026,7 +1020,7 @@ export class HandleTelegramWebhook {
     await this.deps.client.answerCallbackQuery(cq.id);
   }
 
-  // Inline-режим (Phase D): живой dropdown проектов/делегатов.
+  // Inline-режим (Phase D): живой dropdown проектов и ответственных.
   private async handleInlineQuery(
     inlineQueryId: string,
     tgUserId: number,

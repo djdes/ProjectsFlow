@@ -2,7 +2,7 @@ import type { TaskStatus, TaskPriority } from '../task/Task.js';
 
 // Публичная выдача доски (Publish to web, db/096). ЕДИНСТВЕННАЯ граница приватности:
 // только перечисленные здесь поля покидают периметр. Внутренние поля задачи (createdBy,
-// ralph*, delegation, statusBeforeDone, position) и всё project-internal (финансы,
+// assignee, ralph*, statusBeforeDone, position) и всё project-internal (финансы,
 // участники, креды, LIVE, ownerId) сюда НЕ попадают.
 
 export type PublicTask = {
@@ -40,7 +40,7 @@ export type PublicBoard = {
 
 // Read-only деталь задачи для окна на публичной доске. Расширяет карточную выдачу телом
 // (с переписанными URL картинок) и комментариями (только человеческие, read-only). НЕ содержит
-// делегаций/ralph/коммитов/LIVE/списка участников. См. spec public-task-detail-and-gate.
+// ответственного/ralph/коммитов/LIVE/списка участников. См. spec public-task-detail-and-gate.
 export type PublicComment = {
   readonly id: string;
   readonly authorDisplayName: string;

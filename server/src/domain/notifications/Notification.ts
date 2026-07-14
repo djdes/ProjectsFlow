@@ -65,8 +65,7 @@ export type JoinRequestPayload = {
   readonly actorDisplayName: string;
 };
 
-// Поручение задачи. Прилетает делегату; информационное — делегирование принимается
-// автоматически (спека §4), кнопок Принять/Отклонить нет.
+// Legacy-контракт сохранённых уведомлений до перехода на task_assignee_changed.
 export type TaskDelegationPayload = {
   readonly type: 'task_delegation';
   readonly delegationId: string;
@@ -76,10 +75,20 @@ export type TaskDelegationPayload = {
   readonly actorDisplayName: string;
 };
 
-// Ответ делегата на task_delegation. Прилетает создателю.
-// resolution: 'accepted' — статус и так виден в UI (только in-app notification);
-// resolution: 'declined' — отправляем также email (важная инфо).
-// actor = делегат (тот, кто принял/отклонил).
+// Новый единый контракт назначения: у задачи всегда один ответственный, без пары
+// «делегатор → делегат». actor хранится только как аудит события.
+export type TaskAssigneeChangedPayload = {
+  readonly type: 'task_assignee_changed';
+  readonly taskId: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly isInbox: boolean;
+  readonly taskExcerpt: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
+// Legacy-контракт старого accept/decline-флоу; новые события такого типа не создаются.
 export type TaskDelegationResolvedPayload = {
   readonly type: 'task_delegation_resolved';
   readonly delegationId: string;
@@ -90,8 +99,7 @@ export type TaskDelegationResolvedPayload = {
   readonly actorDisplayName: string;
 };
 
-// Создатель перенёс делегированную задачу в реальный проект — делегат теряет
-// доступ (если не member проекта). Прилетает делегату.
+// Legacy-контракт старого уведомления о переносе; новые события такого типа не создаются.
 export type TaskAssignedToProjectPayload = {
   readonly type: 'task_assigned_to_project';
   readonly taskId: string;
@@ -170,6 +178,7 @@ export type NotificationPayload =
   | WorkspaceInvitePayload
   | JoinRequestPayload
   | TaskDelegationPayload
+  | TaskAssigneeChangedPayload
   | TaskDelegationResolvedPayload
   | TaskAssignedToProjectPayload
   | ServerAlertPayload

@@ -72,7 +72,7 @@ type Row = {
   title: string;
   projectId: string | null;
   include: boolean;
-  // Исполнитель (делегат), резолвнутый AI или выбранный вручную; null = без исполнителя.
+  // Ответственный, резолвнутый AI или выбранный вручную; null = текущий пользователь.
   assigneeUserId: string | null;
   // Сырое имя из текста — подсказка, когда assigneeUserId не сматчился.
   assigneeName: string | null;
@@ -107,12 +107,12 @@ function RoundCheck({
   );
 }
 
-type DelegateOption = { userId: string; displayName: string };
+type AssigneeOption = { userId: string; displayName: string };
 
-// Презентационный селект исполнителя для строки распределения. Список участников
-// (editor+ без себя / shared-members для inbox) грузит и валидирует родитель
+// Презентационный селект ответственного для строки распределения. Список участников
+// (все участники проекта / shared-members для inbox) грузит и валидирует родитель
 // (нужно для проверки перед созданием). options === undefined → ещё грузится.
-// Пустой пункт показывает подсказку с именем, когда AI назвал исполнителя, но id
+// Пустой пункт показывает подсказку с именем, когда AI назвал ответственного, но id
 // не сматчился (или его сменили).
 function RowAssigneeSelect({
   options,
@@ -122,7 +122,7 @@ function RowAssigneeSelect({
   onChange,
   className,
 }: {
-  options: DelegateOption[] | undefined;
+  options: AssigneeOption[] | undefined;
   value: string | null;
   hintName: string | null;
   disabled?: boolean;
@@ -136,7 +136,7 @@ function RowAssigneeSelect({
   return (
     <div
       className={cn('flex items-center gap-1.5 rounded-md border bg-background pl-2', className)}
-      title="Исполнитель (делегировать)"
+      title="Ответственный"
     >
       <UserRound className="size-3.5 shrink-0 text-muted-foreground" />
       <select
@@ -146,7 +146,7 @@ function RowAssigneeSelect({
         className="min-w-0 flex-1 cursor-pointer rounded-md bg-transparent py-1 pr-1.5 text-xs focus:outline-none disabled:opacity-60"
       >
         <option value="">
-          {showHint ? `Без исполнителя — AI предлагал «${hintName}»` : 'Без исполнителя'}
+          {showHint ? `Вы — AI предлагал «${hintName}»` : 'Вы (по умолчанию)'}
         </option>
         {/* value от AI, но его нет в списке (сменили проект/устарело) — не теряем выбор. */}
         {value && !inList && <option value={value}>{hintName ?? 'Выбранный участник'}</option>}
@@ -162,7 +162,7 @@ function RowAssigneeSelect({
 
 // Кнопка «AI» в композере: открывает диалог с ДВУМЯ вариантами переработки
 // («Простой»/«Продвинутый») на вкладках, переключателем режима «в поле / распределить»
-// и списком-ревью для распределения разбитых задач по проектам/исполнителям/срокам.
+// и списком-ревью для распределения разбитых задач по проектам/ответственным/срокам.
 export function AiComposeDialog({
   text,
   projectId,
@@ -197,8 +197,8 @@ export function AiComposeDialog({
   const { user: me } = useCurrentUser();
   const meId = me?.id;
   // Кэш eligible-участников по ключу проекта (projectId | INBOX_VALUE). undefined = не загружено.
-  // Нужен и для дропдаунов строк, и для валидации исполнителя ПЕРЕД созданием.
-  const [membersByKey, setMembersByKey] = useState<Record<string, DelegateOption[] | undefined>>({});
+  // Нужен и для дропдаунов строк, и для валидации ответственного ПЕРЕД созданием.
+  const [membersByKey, setMembersByKey] = useState<Record<string, AssigneeOption[] | undefined>>({});
   const loadingKeysRef = useRef<Set<string>>(new Set());
 
   const realProjects = useMemo(() => (projects ?? []).filter((p) => !p.isInbox), [projects]);
@@ -216,16 +216,18 @@ export function AiComposeDialog({
               .listSharedMembers()
               .then((list) => list.map((m) => ({ userId: m.id, displayName: m.displayName })))
           : projectRepository.listMembers(key).then((list) =>
-              list
-                .filter((m) => (m.role === 'editor' || m.role === 'owner') && m.userId !== meId)
-                .map((m) => ({ userId: m.userId, displayName: m.user.displayName })),
+              list.map((m) => ({ userId: m.userId, displayName: m.user.displayName })),
             );
       load
-        .then((opts) => setMembersByKey((p) => ({ ...p, [key]: opts })))
+        .then((opts) => {
+          const byId = new Map(opts.map((option) => [option.userId, option]));
+          if (me) byId.set(me.id, { userId: me.id, displayName: me.displayName });
+          setMembersByKey((p) => ({ ...p, [key]: [...byId.values()] }));
+        })
         .catch(() => setMembersByKey((p) => ({ ...p, [key]: [] })))
         .finally(() => loadingKeysRef.current.delete(key));
     }
-  }, [phase, distribute, rows, membersByKey, projectRepository, meId]);
+  }, [phase, distribute, rows, membersByKey, projectRepository, me]);
 
   const trimmed = text.trim();
   // Тикаем счётчик ожидания только в фазе loading; сбрасываем при выходе из неё.
@@ -400,17 +402,17 @@ export function AiComposeDialog({
       const description = title ? `**${title}**\n\n${body}` : body;
       const targetId = r.projectId ?? inboxId!;
       const updatesCurrent = !!editTask && !currentUpdated && targetId === editTask.projectId;
-      // Делегируем только когда исполнитель реально в eligible-списке проекта. Иначе сервер
-      // создаст задачу, но завалит делегирование (orphan + дубль при повторе). Если участники
-      // ещё не догрузились (undefined) — доверяем AI (он брал id из того же eligible-контекста).
+      // Явный ответственный должен входить в eligible-список. Для новой задачи
+      // fallback — текущий пользователь; у существующей null сохраняет прежнего.
       const eligible = membersByKey[r.projectId ?? INBOX_VALUE];
-      const validAssignee =
+      const explicitAssignee =
         r.assigneeUserId == null
           ? null
           : eligible === undefined || eligible.some((o) => o.userId === r.assigneeUserId)
             ? r.assigneeUserId
             : null;
-      if (r.assigneeUserId != null && validAssignee == null) droppedAssignees += 1;
+      if (r.assigneeUserId != null && explicitAssignee == null) droppedAssignees += 1;
+      const createAssignee = explicitAssignee ?? meId;
       try {
         if (updatesCurrent) {
           await taskRepository.update(editTask!.projectId, editTask!.taskId, {
@@ -418,22 +420,21 @@ export function AiComposeDialog({
             // null дедлайн = не трогаем существующий (undefined), а не очищаем.
             deadline: r.deadline ?? undefined,
           });
-          // Делегирование существующей задачи — отдельным вызовом (update его не умеет).
-          if (validAssignee) {
+          if (explicitAssignee) {
             try {
-              await taskRepository.delegate(editTask!.projectId, editTask!.taskId, validAssignee);
+              await taskRepository.assign(editTask!.projectId, editTask!.taskId, explicitAssignee);
             } catch (de) {
-              // Не валим распределение, но честно сообщаем (напр. задача уже делегирована).
-              toast.error(`Исполнитель не назначен: ${(de as Error).message}`);
+              toast.error(`Ответственный не изменён: ${(de as Error).message}`);
             }
           }
           currentUpdated = true;
         } else {
+          if (!createAssignee) throw new Error('Не удалось определить ответственного');
           await taskRepository.create(targetId, {
             description,
             status: 'todo',
             ralphMode,
-            delegateUserId: validAssignee ?? undefined,
+            assigneeUserId: createAssignee,
             deadline: r.deadline ?? undefined,
           });
         }
@@ -446,7 +447,7 @@ export function AiComposeDialog({
     }
     if (droppedAssignees > 0) {
       toast.error(
-        `Исполнитель не определён для задач: ${droppedAssignees} — назначьте вручную в карточке.`,
+        `Ответственный из запроса недоступен для задач: ${droppedAssignees}; назначен текущий пользователь.`,
       );
     }
 
@@ -480,7 +481,7 @@ export function AiComposeDialog({
 
   const headerHint =
     phase === 'preview'
-      ? 'Сравни варианты — примени в поле или распредели по проектам, исполнителям и срокам.'
+      ? 'Сравни варианты — примени в поле или распредели по проектам, ответственным и срокам.'
       : phase === 'creating'
         ? 'Создаём выбранные задачи…'
         : phase === 'error'
@@ -723,7 +724,7 @@ export function AiComposeDialog({
                                                 ...r,
                                                 projectId:
                                                   e.target.value === INBOX_VALUE ? null : e.target.value,
-                                                // Сменили проект — прежняя привязка исполнителя
+                                                // Сменили проект — прежний ответственный
                                                 // (и подсказка-имя) для него уже не релевантна.
                                                 assigneeUserId: null,
                                                 assigneeName: null,
@@ -758,7 +759,7 @@ export function AiComposeDialog({
                                   className="sm:min-w-0 sm:flex-1"
                                 />
 
-                                {/* Дедлайн в едином бордер-боксе, как проект/исполнитель;
+                                {/* Дедлайн в едином бордер-боксе, как проект/ответственный;
                                     shrink-0 на обёртке (className пикера уходит на кнопку). */}
                                 <div className="flex shrink-0 items-center rounded-md border bg-background px-0.5">
                                   <DeadlinePicker

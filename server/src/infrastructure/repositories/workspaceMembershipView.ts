@@ -30,7 +30,7 @@ export type WorkspaceMemberAccessRow = {
  * НО создатель проекта (projects.owner_id) — 'owner' СВОЕГО проекта поверх ws-роли: после
  * workspace-merge пространство может принадлежать другому, а создатель всё равно вправе
  * удалить/настроить свой проект (delete_project и прочая danger zone, см. permissions.ts).
- * Делегаты видят отдельные inbox-задачи через taskAuthorization, но НЕ через членство.
+ * Ответственные видят отдельные inbox-задачи через taskAuthorization, но НЕ через членство.
  */
 export function projectRowVisibility(
   project: Pick<ProjectAccessRow, 'isInbox' | 'ownerId'>,

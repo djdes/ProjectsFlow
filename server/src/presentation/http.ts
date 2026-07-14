@@ -122,16 +122,13 @@ import type { UpdateTaskComment } from '../application/task/UpdateTaskComment.js
 import type { DeleteTaskComment } from '../application/task/DeleteTaskComment.js';
 import type { RequestRalphCancel } from '../application/task/RequestRalphCancel.js';
 import type { RevokeRalphCancel } from '../application/task/RevokeRalphCancel.js';
-import type { WithdrawTaskDelegation } from '../application/task/WithdrawTaskDelegation.js';
-import type { RelinquishTaskDelegation } from '../application/task/RelinquishTaskDelegation.js';
 import type { BoardViewRepository } from '../application/project/BoardViewRepository.js';
 import type { TaskTemplateRepository } from '../application/task/TaskTemplateRepository.js';
 import type { TaskPropertyRepository } from '../application/task/TaskPropertyRepository.js';
 import type { ListTasksAssignedToMe } from '../application/task/ListTasksAssignedToMe.js';
-import type { ListTasksDelegatedToOthers } from '../application/task/ListTasksDelegatedToOthers.js';
+import type { ListTasksAssignedToOthers } from '../application/task/ListTasksAssignedToOthers.js';
 import type { MoveTaskToProject } from '../application/task/MoveTaskToProject.js';
-import type { DelegateExistingTask } from '../application/task/DelegateExistingTask.js';
-import type { ReassignTaskDelegation } from '../application/task/ReassignTaskDelegation.js';
+import type { ChangeTaskAssignee } from '../application/task/ChangeTaskAssignee.js';
 import type { ListNotifications } from '../application/notifications/ListNotifications.js';
 import type { CountUnreadNotifications } from '../application/notifications/CountUnreadNotifications.js';
 import type { MarkNotificationRead } from '../application/notifications/MarkNotificationRead.js';
@@ -204,7 +201,7 @@ import { meUiPrefsRouter } from './me/uiPrefsRoutes.js';
 import { sharedMembersRouter } from './me/sharedMembersRoutes.js';
 import { telegramWebhookRouter } from './telegram/webhookRoutes.js';
 import { invitesRouter } from './invites/routes.js';
-import { delegationsRouter } from './delegations/routes.js';
+import { taskAssigneesRouter } from './assignees/routes.js';
 import { notificationsRouter } from './notifications/routes.js';
 import { recentTaskViewsRouter } from './recent-task-views/routes.js';
 import { projectAnalyticsRouter } from './project/analyticsRoutes.js';
@@ -529,14 +526,11 @@ type AppDeps = {
     readonly save: SaveDigestSettings;
     readonly sendNow: TriggerDailyDigestNow;
   };
-  readonly delegations: {
-    readonly withdraw: WithdrawTaskDelegation;
-    readonly relinquish: RelinquishTaskDelegation;
+  readonly assignees: {
     readonly listAssignedToMe: ListTasksAssignedToMe;
-    readonly listDelegatedToOthers: ListTasksDelegatedToOthers;
+    readonly listAssignedToOthers: ListTasksAssignedToOthers;
     readonly assignToProject: MoveTaskToProject;
-    readonly delegateExisting: DelegateExistingTask;
-    readonly reassignDelegation: ReassignTaskDelegation;
+    readonly changeAssignee: ChangeTaskAssignee;
   };
   readonly agent: {
     readonly createAgentToken: CreateAgentToken;
@@ -770,9 +764,8 @@ export function createApp(deps: AppDeps): CreatedApp {
     tasksRouter({
       ...deps.tasks,
       notifier: deps.notifications.projectNotifier,
-      assignToProject: deps.delegations.assignToProject,
-      delegateExisting: deps.delegations.delegateExisting,
-      reassignDelegation: deps.delegations.reassignDelegation,
+      assignToProject: deps.assignees.assignToProject,
+      changeAssignee: deps.assignees.changeAssignee,
     }),
   );
   // LIVE-вкладка (cookie requireAuth + requireProjectAccess внутри): read + SSE /stream.
@@ -787,7 +780,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   );
   // Настройки дайджеста проекта: Telegram-группа + ежедневная сводка.
   app.use('/api/projects', digestRouter(deps.digest));
-  app.use('/api/delegations', delegationsRouter(deps.delegations));
+  app.use('/api/assignees', taskAssigneesRouter(deps.assignees));
   app.use('/api/search', searchRouter(deps.search));
   app.use('/api/admin', adminRouter(deps.admin));
   app.use('/api/employees', employeesRouter({ manage: deps.finance.manageEmployees }));

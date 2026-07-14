@@ -1,24 +1,24 @@
 import type { CheckBudget } from './CheckBudget.js';
-import type { TaskDelegationRepository } from '../task/TaskDelegationRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
+import type { TaskBillingAttributionRepository } from './TaskBillingAttributionRepository.js';
 
 export type DispatchAllowedReason = 'ok' | 'plan_required' | 'budget_exceeded';
 
 export type DispatchAllowedResult = {
   readonly allowed: boolean;
   readonly reason: DispatchAllowedReason;
-  // Инициатор (делегатор задачи), по чьему тарифу принято решение. null — не резолвится.
+  // Создатель задачи, по чьему тарифу принято решение. null — не резолвится.
   readonly billedUserId: string | null;
 };
 
 type Deps = {
   readonly tasks: TaskRepository;
-  readonly taskDelegations: TaskDelegationRepository;
+  readonly legacyAttribution: TaskBillingAttributionRepository;
   readonly checkBudget?: CheckBudget;
 };
 
 // НЕ-бросающая проверка «можно ли диспетчеру запускать воркер по этой задаче». Резолвит
-// инициатора (делегатора) и смотрит его тариф/бюджет. Диспетчер зовёт её ПЕРЕД запуском
+// создателя и смотрит его тариф/бюджет. Диспетчер зовёт её ПЕРЕД запуском
 // claude -p и пропускает задачу, если !allowed (оставляет в очереди до отката окна / апгрейда).
 // Это единственная точка enforcement воркера: у kanban-воркера нет серверного claim, диспетчер
 // сам выбирает todo-задачу и тратит подписку локально — поэтому гейт ДО запуска, здесь.
@@ -28,8 +28,10 @@ export class CheckDispatchAllowed {
 
   async execute(taskId: string): Promise<DispatchAllowedResult> {
     const task = await this.deps.tasks.getById(taskId);
-    const delegation = await this.deps.taskDelegations.findActiveForTask(taskId);
-    const billedUserId = task?.createdBy ?? delegation?.creatorUserId ?? null;
+    const legacyCreator = task?.createdBy
+      ? null
+      : await this.deps.legacyAttribution.findLegacyCreatorForTask(taskId);
+    const billedUserId = task?.createdBy ?? legacyCreator;
     if (!billedUserId || !this.deps.checkBudget) {
       return { allowed: true, reason: 'ok', billedUserId };
     }

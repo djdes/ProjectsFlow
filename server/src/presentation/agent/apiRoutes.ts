@@ -703,7 +703,7 @@ export function agentApiRouter(deps: Deps): Router {
   router.use(requireAgentToken(deps.authenticate));
 
   // Гейт воркера: можно ли диспетчеру запускать claude -p по задаче. Резолвит инициатора
-  // (делегатора) и смотрит его тариф/бюджет. Диспетчер зовёт ПЕРЕД запуском и пропускает
+  // (создателя задачи) и смотрит его тариф/бюджет. Диспетчер зовёт ПЕРЕД запуском и пропускает
   // задачу, если allowed=false (over-limit/free). НЕ бросает 402 — отдаёт статус, чтобы
   // диспетчер чисто пропустил задачу без ретрай-шторма. См. CheckDispatchAllowed.
   router.get('/dispatch-allowed/:taskId', async (req: Request, res: Response, next: NextFunction) => {

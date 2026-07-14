@@ -1,4 +1,4 @@
-import type { TaskDelegation } from './TaskDelegation';
+import type { TaskAssignee } from './TaskAssignee';
 
 // 'awaiting_clarification' — активная задача на паузе до действия человека (ответ на
 // ralph-question, разбор после maxAttempts retry, переформулировка). Между in_progress
@@ -59,6 +59,9 @@ export const RALPH_MODE_META: Record<RalphMode, { label: string; description: st
 export type Task = {
   readonly id: string;
   readonly projectId: string;
+  // Единственный обязательный ответственный (db/113). Создатель задачи не участвует
+  // в назначении и остаётся только серверным audit/metering-полем.
+  readonly assignee: TaskAssignee;
   readonly description: string | null;
   // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL картинки. null = без иконки. См. db/093.
   readonly icon: string | null;
@@ -93,9 +96,6 @@ export type Task = {
   readonly parentTaskId: string | null;
   // Приоритет 1..4 (1=urgent, 4=low). null = без приоритета. См. db/041.
   readonly priority: TaskPriority | null;
-  // Активная (accepted) делегация — null если задача не делегирована.
-  // Заполняется list-endpoint'ом left-join'ом. Optional: undefined = «не загружено».
-  readonly delegation?: TaskDelegation | null;
 };
 
 // Короткий ID задачи (первые 8 hex-символов UUID без дефисов) — для вставки в commit

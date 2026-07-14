@@ -196,7 +196,7 @@ export interface ProjectRepository {
   setKanbanSettings(projectId: string, settings: KanbanBoardSettings): Promise<KanbanBoardSettings>;
 
   // Дедуплицированный список user'ов, с которыми caller состоит в общих проектах
-  // (без caller'а самого). Используется UI-дропдауном «делегировать» во входящих.
+  // (без caller'а самого). Используется UI-выбором ответственного во входящих.
   listSharedMembers(): Promise<SharedMember[]>;
 
   // Аналитика/активность проекта (окно активности проекта в шапке).

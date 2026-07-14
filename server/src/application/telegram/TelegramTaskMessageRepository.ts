@@ -1,5 +1,5 @@
 // Маппинг task-сообщений бота (карточка-подтверждение конструктора, сообщение
-// делегирования, карточка из /tasks) → task_id. Обобщает telegram_ralph_question_messages:
+// назначения ответственного, карточка из /tasks) → task_id. Обобщает telegram_ralph_question_messages:
 // reply на любое такое сообщение создаёт обычный комментарий к задаче. См. db/049.
 
 export type CreateTelegramTaskMessageInput = {

@@ -6,7 +6,6 @@ import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
-import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -15,7 +14,6 @@ type Deps = {
   readonly taskCommits: TaskCommitRepository;
   readonly attachments: TaskAttachmentRepository;
   readonly comments: TaskCommentRepository;
-  readonly delegations: TaskDelegationRepository;
 };
 
 export type TaskWithCounts = Task & {
@@ -28,38 +26,25 @@ export class ListTasks {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, ownerUserId: string): Promise<TaskWithCounts[]> {
-    const { project } = await requireProjectAccess(
+    await requireProjectAccess(
       this.deps,
       projectId,
       ownerUserId,
       'read_project',
     );
-    let tasks = await this.deps.tasks.listByProject(projectId);
+    const tasks = await this.deps.tasks.listByProject(projectId);
 
-    // Inbox-делегата: если caller-owner запрашивает свой inbox, добавим в результат
-    // задачи, которые ему делегированы (accepted) из чужих inbox-проектов. Без этого
-    // делегат не увидит принятую задачу в своих «Входящих» — она физически живёт
-    // в inbox создателя.
-    if (project.isInbox && project.ownerId === ownerUserId) {
-      const delegatedToMe = await this.deps.tasks.listAcceptedDelegatedTo(ownerUserId);
-      // Set-дедуп по id (защитно — источники не должны пересекаться, но страхуемся).
-      const seen = new Set(tasks.map((t) => t.id));
-      tasks = [...tasks, ...delegatedToMe.filter((t) => !seen.has(t.id))];
-    }
-
+    // Проектный endpoint возвращает только физические задачи этой доски. Общая выборка
+    // «назначено мне» живёт отдельно и не подмешивает чужие inbox-задачи вниз.
     const ids = tasks.map((t) => t.id);
     const commitCounts = await this.deps.taskCommits.countsByTasks(ids);
     const attachmentCounts = await this.deps.attachments.countsByTasks(ids);
     const commentCounts = await this.deps.comments.countsByTasks(ids);
-    // Активные (accepted) делегации — для inbox-задач. Для проектных
-    // задач map будет пустой (мы их не делегируем — см. spec out-of-scope).
-    const delegations = await this.deps.delegations.listActiveForTasks(ids);
     return tasks.map((t) => ({
       ...t,
       commitCount: commitCounts.get(t.id) ?? 0,
       attachmentCount: attachmentCounts.get(t.id) ?? 0,
       commentCount: commentCounts.get(t.id) ?? 0,
-      delegation: delegations.get(t.id) ?? null,
     }));
   }
 }

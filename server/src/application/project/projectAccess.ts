@@ -73,7 +73,7 @@ export async function requireProjectAccess(
 // Гейт «действовать как назначенный диспетчер проекта» (file-sync SP2). НЕ роль-based:
 // разрешено только если project.dispatcherUserId === userId (или admin-bypass). Используется
 // на байтовых операциях диспетчера (pull manifest/blob, record result, push events), чтобы
-// рядовой member не мог перенаправить чужую папку на свой исполнитель. См. дизайн §6.
+// рядовой member не мог перенаправить чужую папку на свой раннер. См. дизайн §6.
 export async function requireDispatcherAccess(
   deps: ProjectAccessDeps,
   projectId: string,

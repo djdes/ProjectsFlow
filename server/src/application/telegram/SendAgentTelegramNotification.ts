@@ -102,7 +102,7 @@ export class SendAgentTelegramNotification {
 
     // Задачное уведомление (kind ∈ allowlist + есть task/project) → авто-действия
     // «Завершить/Комментировать» + reply-комментирование. Явный replyMarkup от caller'а
-    // (например «Принять/Отказать» у делегирования) не перетираем.
+    // (например кастомную ссылку на задачу) не перетираем.
     const taskActions = Boolean(
       cmd.taskId && cmd.projectId && TASK_ACTION_KINDS.has(cmd.kind),
     );

@@ -6,7 +6,7 @@ type Props = {
     description: string;
     status?: TaskStatus;
     ralphMode?: RalphMode;
-    delegateUserId?: string | null;
+    assigneeUserId: string;
     deadline?: string | null;
     priority?: TaskPriority | null;
   }) => Promise<Task>;
@@ -19,7 +19,7 @@ type Props = {
 };
 
 // Floating quick-add (fixed снизу страницы). Тонкая обёртка над TaskComposer —
-// вся логика (textarea, файлы, Ralph-режим, делегирование, AI-improve) живёт в нём.
+// вся логика (textarea, файлы, Ralph-режим, ответственный, AI-improve) живёт в нём.
 export function QuickAddTodo({
   onCreate,
   projectId,

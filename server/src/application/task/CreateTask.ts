@@ -1,33 +1,29 @@
 import {
-  AlreadyDelegatedError,
-  DelegateNotInSharedMembersError,
-  DelegateNotProjectMemberError,
+  AssigneeNotProjectMemberError,
+  AssigneeNotSharedMemberError,
   TaskDescriptionEmptyError,
 } from '../../domain/task/errors.js';
-import { can } from '../../domain/project/permissions.js';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '../../domain/task/Task.js';
-import type { TaskDelegation } from '../../domain/task/TaskDelegation.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from './TaskRepository.js';
-import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { NotificationRepository } from '../notifications/NotificationRepository.js';
 import type { EmailSender } from '../notifications/EmailSender.js';
-import { renderDelegationEmail } from '../notifications/emails/delegationEmail.js';
+import { renderTaskAssigneeEmail } from '../notifications/emails/taskAssigneeEmail.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
+import type { Project } from '../../domain/project/Project.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
-  readonly delegations: TaskDelegationRepository;
   readonly users: UserRepository;
   readonly notifications: NotificationRepository;
   readonly email: EmailSender;
   readonly idGen: () => string;
-  // Base URL для accept/decline ссылки в письме. /inbox#delegation=<id>.
+  // Base URL для ссылки на задачу в уведомлении.
   readonly appUrl: string;
   // Лента действий (best-effort). Опционально — старые caller'ы/тесты не ломаются.
   readonly activityRecorder?: ActivityRecorder;
@@ -51,10 +47,9 @@ export type CreateTaskCommand = {
   readonly afterTaskId?: string | null;
   // Режим работы Ralph по задаче. Если не указан — БД проставит DEFAULT 'normal'.
   readonly ralphMode?: RalphMode;
-  // Опциональное one-to-one делегирование. Допустимо только для inbox-задач
-  // (project.isInbox=true) и только если delegateUserId в shared-members списке
-  // creator'а. null/undefined — обычная задача.
-  readonly delegateUserId?: string | null;
+  // Единственный ответственный. Если не указан — actor (для attributeToOwner automation
+  // это владелец проекта, чтобы системный админ не становился ответственным).
+  readonly assigneeUserId?: string | null;
   // Срок выполнения. ISO 'YYYY-MM-DD'. null/undefined — без deadline.
   readonly deadline?: string | null;
   // Дата начала (диапазон startDate → deadline). null/undefined — событие одного дня.
@@ -87,6 +82,8 @@ export class CreateTask {
     );
     // Создатель для метеринга: обычно actor; для автоматизации — владелец проекта.
     const createdBy = input.attributeToOwner ? project.ownerId : input.ownerUserId;
+    const assigneeUserId = input.assigneeUserId ?? createdBy;
+    await this.validateAssignee(project, assigneeUserId);
 
     // Кладём в самый верх колонки: position = min - STEP. Это даёт «свежее наверху»
     // в обоих UI-режимах (kanban и list — оба сортируют по position по возрастанию).
@@ -116,6 +113,7 @@ export class CreateTask {
       id: this.deps.idGen(),
       projectId: input.projectId,
       createdBy,
+      assigneeUserId,
       description,
       icon: input.icon ?? null,
       cover: input.cover ?? null,
@@ -139,113 +137,65 @@ export class CreateTask {
     // Первый снимок версии (best-effort).
     void this.deps.versions?.record(task, input.ownerUserId);
 
-    let delegation: TaskDelegation | null = null;
-    if (input.delegateUserId) {
-      delegation = await this.delegateOrThrow(
-        task.id,
-        description,
-        input.delegateUserId,
-        input.ownerUserId,
-        input.projectId,
-      );
-    }
-
-    return { ...task, delegation };
-  }
-
-  private async delegateOrThrow(
-    taskId: string,
-    description: string,
-    delegateUserId: string,
-    creatorUserId: string,
-    projectId: string,
-  ): Promise<TaskDelegation> {
-    // Самоделегирование РАЗРЕШЕНО (по образцу DelegateExistingTask): «назначить себя
-    // ответственным» — задача попадает в «Для меня». isSelf влияет только на валидацию
-    // (себя нет в shared-members / своё право уже проверено) и уведомления (себе не шлём);
-    // статус у всех делегирований одинаков — accepted сразу.
-    const isSelf = delegateUserId === creatorUserId;
-
-    const project = await this.deps.projects.getById(projectId);
-    if (project && !project.isInbox) {
-      // Именованный проект: делегатор — с правом delegate_task (editor+); делегат —
-      // участник-редактор этого проекта. Для isSelf делегат == делегатор — его право
-      // уже проверено requireProjectAccess, проверка членства делегата пропускается.
-      await requireProjectAccess(this.deps, project.id, creatorUserId, 'delegate_task');
-      if (!isSelf) {
-        const membership = await this.deps.members.findForProject(project.id, delegateUserId);
-        if (!membership || !can(membership.role, 'move_task')) {
-          throw new DelegateNotProjectMemberError();
-        }
-      }
-    } else if (!isSelf) {
-      // Inbox (или защитный фолбэк): делегат должен быть в shared-members caller'а.
-      // Себя в shared-members нет (сервер исключает) — для isSelf проверка пропускается.
-      const shared = await this.deps.members.listSharedUsers(creatorUserId);
-      if (!shared.find((u) => u.id === delegateUserId)) {
-        throw new DelegateNotInSharedMembersError();
-      }
-    }
-
-    // Гонка: ничтожно мала (новая задача только что создана), но check на всякий.
-    const active = await this.deps.delegations.findActiveForTask(taskId);
-    if (active) throw new AlreadyDelegatedError();
-
-    const created = await this.deps.delegations.create({
-      id: this.deps.idGen(),
-      taskId,
-      delegateUserId,
-      delegatorUserId: creatorUserId,
-      // Мгновенное делегирование: сразу accepted (спека §4), делегат видит задачу
-      // в «Поручено мне» и может завершать без «Принять».
-      status: 'accepted',
-    });
-
-    // Best-effort notification + email. Не блокируют успех create. Себе не уведомляем.
-    if (!isSelf) {
-      void this.notifyDelegated(created, description, creatorUserId).catch((err: unknown) => {
-        console.error('[delegation] notify failed:', err);
+    if (assigneeUserId !== input.ownerUserId) {
+      void this.notifyAssigned(task, input.ownerUserId, project).catch((err: unknown) => {
+        console.error('[task:assignee:create] notify failed:', err);
       });
     }
-
-    return created;
+    return task;
   }
 
-  private async notifyDelegated(
-    delegation: TaskDelegation,
-    taskDescription: string,
-    creatorUserId: string,
+  private async validateAssignee(project: Project, assigneeUserId: string): Promise<void> {
+    if (project.isInbox) {
+      if (assigneeUserId === project.ownerId) return;
+      const shared = await this.deps.members.listSharedUsers(project.ownerId);
+      if (!shared.some((u) => u.id === assigneeUserId)) {
+        throw new AssigneeNotSharedMemberError();
+      }
+      return;
+    }
+    // Создавать задачу по-прежнему может editor+, но ответственным может стать любой
+    // участник проекта, включая viewer.
+    const membership = await this.deps.members.findForProject(project.id, assigneeUserId);
+    if (!membership) throw new AssigneeNotProjectMemberError();
+  }
+
+  private async notifyAssigned(
+    task: Task,
+    actorUserId: string,
+    project: Project,
   ): Promise<void> {
-    const [delegate, creator] = await Promise.all([
-      this.deps.users.getById(delegation.delegateUserId),
-      this.deps.users.getById(creatorUserId),
+    const [assignee, actor] = await Promise.all([
+      this.deps.users.getById(task.assignee.userId),
+      this.deps.users.getById(actorUserId),
     ]);
-    if (!delegate) return;
+    if (!assignee) return;
 
-    const taskExcerpt = taskDescription.slice(0, 120);
-    const actorDisplayName = creator?.displayName ?? 'Кто-то';
-    const inboxUrl = `${this.deps.appUrl.replace(/\/$/, '')}/inbox#delegation=${delegation.id}`;
+    const taskExcerpt = (task.description ?? '').slice(0, 120);
+    const actorDisplayName = actor?.displayName ?? 'Кто-то';
+    const base = this.deps.appUrl.replace(/\/$/u, '');
+    const taskUrl = project.isInbox ? `${base}/inbox` : `${base}/projects/${project.id}`;
 
-    // 1) In-app notification — публикуется через SSE-хаб (PublishingNotificationRepository).
     await this.deps.notifications.create({
       id: this.deps.idGen(),
-      userId: delegate.id,
+      userId: assignee.id,
       payload: {
-        type: 'task_delegation',
-        delegationId: delegation.id,
-        taskId: delegation.taskId,
+        type: 'task_assignee_changed',
+        taskId: task.id,
+        projectId: project.id,
+        projectName: project.name,
+        isInbox: project.isInbox,
         taskExcerpt,
-        actorUserId: creatorUserId,
+        actorUserId,
         actorDisplayName,
       },
     });
 
-    // 2) Email.
-    const message = renderDelegationEmail({
-      to: delegate.email,
+    const message = renderTaskAssigneeEmail({
+      to: assignee.email,
       actorDisplayName,
       taskExcerpt,
-      inboxUrl,
+      taskUrl,
     });
     await this.deps.email.send(message);
   }

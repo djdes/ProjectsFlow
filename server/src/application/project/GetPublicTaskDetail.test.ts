@@ -23,12 +23,13 @@ function makeProject(over: Partial<Project> = {}): Project {
 function makeTask(over: Partial<Task> = {}): Task {
   return {
     id: 't1', projectId: 'p1', createdBy: 'u1',
+    assignee: { userId: 'u1', displayName: 'Пользователь', avatarUrl: null },
     description: 'Заголовок\nтело с картинкой /api/attachments/aaaa',
     icon: null, cover: null, coverPosition: 50, status: 'todo', statusBeforeDone: null,
     position: 1, ralphMode: 'normal', ralphCancelRequestedAt: null,
     ralphCancelRequestedBy: null, ralphCancelRequestedByDisplayName: null,
     deadline: null, priority: 2, createdAt: new Date('2026-01-01'),
-    updatedAt: new Date('2026-01-01'), delegation: null, ...over,
+    updatedAt: new Date('2026-01-01'), ...over,
   };
 }
 
@@ -88,6 +89,7 @@ test('GetPublicTaskDetail: приватные поля задачи не уте�
   const detail = await new GetPublicTaskDetail(deps({})).execute('cookie-opinion-k3f9q2', 't1');
   const keys = Object.keys(detail!).sort();
   assert.deepEqual(keys, ['comments', 'cover', 'coverPosition', 'deadline', 'description', 'icon', 'id', 'priority', 'status']);
+  assert.ok(!('assignee' in detail!));
 });
 
 test('GetPublicTaskAccess: аноним → isMember=false + projectId', async () => {

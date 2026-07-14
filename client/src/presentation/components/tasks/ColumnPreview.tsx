@@ -4,7 +4,7 @@ import { useTaskHiding } from './taskHidingSetting';
 // Порционный показ карточек канбан-колонки по всему сайту: первые 4, кнопка
 // «Показать ещё» добавляет по 4 — колонки не растягивают страницу километровым
 // скроллом. Общий примитив для KanbanColumn (доски проектов/входящих),
-// AssignedToMeBlock (блок делегирования) и PublicKanban (публичная доска).
+// AssignedToMeBlock (личный блок ответственных) и PublicKanban (публичная доска).
 export const COLUMN_PREVIEW_COUNT = 4;
 
 export type ColumnPreview = {

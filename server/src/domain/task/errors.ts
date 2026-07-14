@@ -12,6 +12,22 @@ export class TaskDescriptionEmptyError extends Error {
   }
 }
 
+export class AssigneeNotProjectMemberError extends Error {
+  readonly status = 403;
+  constructor() {
+    super('Ответственным можно назначить только участника проекта');
+    this.name = 'AssigneeNotProjectMemberError';
+  }
+}
+
+export class AssigneeNotSharedMemberError extends Error {
+  readonly status = 403;
+  constructor() {
+    super('Ответственным личной задачи можно назначить только общего участника');
+    this.name = 'AssigneeNotSharedMemberError';
+  }
+}
+
 export class TaskVersionNotFoundError extends Error {
   readonly status = 404;
   constructor(public readonly versionId: string) {
@@ -71,72 +87,11 @@ export class TaskCommentBodyEmptyError extends Error {
   }
 }
 
-// Делегирование inbox-задач (см. db/039, spec inbox-checkbox-and-delegation).
-
-export class SelfDelegationError extends Error {
-  readonly status = 400;
-  constructor() {
-    super('Нельзя делегировать задачу самому себе');
-    this.name = 'SelfDelegationError';
-  }
-}
-
-export class DelegateNotInSharedMembersError extends Error {
+export class InboxOwnerRequiredError extends Error {
   readonly status = 403;
   constructor() {
-    super('Этому пользователю нельзя делегировать (он не в общих проектах)');
-    this.name = 'DelegateNotInSharedMembersError';
-  }
-}
-
-// Делегирование задачи именованного проекта: делегат должен быть участником-редактором
-// этого проекта (editor+), иначе примет задачу, но получит 403 на move/выполнение
-// (см. requireTaskModifyAccess: non-inbox ветка = обычный requireProjectAccess('move_task')).
-export class DelegateNotProjectMemberError extends Error {
-  readonly status = 403;
-  constructor() {
-    super('Делегировать можно только участнику-редактору этого проекта');
-    this.name = 'DelegateNotProjectMemberError';
-  }
-}
-
-export class DelegationNotFoundError extends Error {
-  readonly status = 404;
-  constructor(public readonly delegationId: string) {
-    super(`Delegation not found: ${delegationId}`);
-    this.name = 'DelegationNotFoundError';
-  }
-}
-
-export class DelegationWrongStateError extends Error {
-  readonly status = 409;
-  constructor(public readonly got: string, public readonly expected: string) {
-    super(`Ожидался статус ${expected}, текущий: ${got}`);
-    this.name = 'DelegationWrongStateError';
-  }
-}
-
-export class NotDelegateError extends Error {
-  readonly status = 403;
-  constructor() {
-    super('Только делегат может выполнять это действие');
-    this.name = 'NotDelegateError';
-  }
-}
-
-export class NotCreatorError extends Error {
-  readonly status = 403;
-  constructor() {
-    super('Только создатель задачи может выполнять это действие');
-    this.name = 'NotCreatorError';
-  }
-}
-
-export class NotInboxTaskError extends Error {
-  readonly status = 400;
-  constructor() {
-    super('Это действие доступно только для inbox-задач');
-    this.name = 'NotInboxTaskError';
+    super('Перенести личную задачу в проект может только владелец личной доски');
+    this.name = 'InboxOwnerRequiredError';
   }
 }
 
@@ -153,13 +108,5 @@ export class TargetProjectIsInboxError extends Error {
   constructor() {
     super('Целевой проект — это inbox; такого переноса не делаем');
     this.name = 'TargetProjectIsInboxError';
-  }
-}
-
-export class AlreadyDelegatedError extends Error {
-  readonly status = 409;
-  constructor() {
-    super('Задача уже делегирована');
-    this.name = 'AlreadyDelegatedError';
   }
 }

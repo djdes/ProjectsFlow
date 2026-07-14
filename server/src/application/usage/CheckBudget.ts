@@ -31,7 +31,7 @@ export async function assertBudgetAllowed(
   throw new UsageBlockedError(w, win.resetsAt);
 }
 
-// Гейт доступа к диспетчеру для КОНКРЕТНОГО инициатора работы (кто нажал/делегировал).
+// Гейт доступа к диспетчеру для КОНКРЕТНОГО плательщика работы (создателя задачи).
 // free → PlanRequiredError (нет доступа к диспетчеру вовсе), исчерпал окно → UsageBlockedError.
 // Один вызов GetUserUsage покрывает обе проверки. undefined checkBudget → пропускаем (фича off).
 export async function assertDispatcherAllowed(

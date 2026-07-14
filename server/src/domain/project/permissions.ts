@@ -20,7 +20,7 @@ export type ProjectAction =
   | 'delete_own_comment'
   | 'delete_any_comment'
   | 'link_commit'
-  | 'delegate_task'
+  | 'assign_task'
   | 'manage_kb'
   // Чтение секретов/credential'ов проекта в plaintext (S2). Отдельно от read_project:
   // read-mostly viewer НЕ должен вытягивать пароли/API-ключи. Запись секретов —
@@ -66,11 +66,9 @@ const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   delete_own_comment: 'viewer',
   delete_any_comment: 'editor',
   link_commit: 'editor',
-  // Поручить задачу другому участнику проекта (человеку). Отдельно от
-  // delegate_task_to_agent (роутинг на Ralph) и move_task — чтобы правки одного
-  // не меняли молча другое. Делегатор — editor+; делегат тоже должен быть editor+
-  // (иначе примет, но не сможет двигать/выполнять). См. DelegateExistingTask.
-  delegate_task: 'editor',
+  // Сменить единственного ответственного или забрать задачу себе может любой участник.
+  // Это отдельно от delegate_task_to_agent (роутинг на Ralph) и move_task.
+  assign_task: 'viewer',
   manage_kb: 'editor',
   read_secret: 'editor',
   manage_attachments: 'editor',

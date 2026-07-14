@@ -1,11 +1,9 @@
 import type { EmailMessage } from '../notifications/EmailSender.js';
 import { renderInviteEmail } from '../notifications/emails/inviteEmail.js';
 import { renderActivityEmail } from '../notifications/emails/activityEmail.js';
-import { renderDelegationEmail } from '../notifications/emails/delegationEmail.js';
-import { renderDelegationDeclinedEmail } from '../notifications/emails/delegationDeclinedEmail.js';
+import { renderTaskAssigneeEmail } from '../notifications/emails/taskAssigneeEmail.js';
 import { renderProjectDeletedEmail } from '../notifications/emails/projectDeletedEmail.js';
 import { renderJoinRequestEmail } from '../notifications/emails/joinRequestEmail.js';
-import { renderTaskAssignedToProjectEmail } from '../notifications/emails/taskAssignedToProjectEmail.js';
 
 // Все шаблоны email-ов, зарегистрированные в системе. Используется admin-страницей
 // для предпросмотра и тестовой отправки.
@@ -17,11 +15,9 @@ export type EmailTemplateKey =
   | 'activity_member_changed'
   | 'activity_commit_linked'
   | 'activity_kb_updated'
-  | 'delegation'
-  | 'delegation_declined'
+  | 'task_assignee'
   | 'project_deleted'
-  | 'join_request'
-  | 'task_assigned_to_project';
+  | 'join_request';
 
 export type EmailTemplateMeta = {
   readonly key: EmailTemplateKey;
@@ -39,11 +35,9 @@ export const EMAIL_TEMPLATES: readonly EmailTemplateMeta[] = [
   { key: 'activity_member_changed', label: 'Изменение в команде', description: 'Уведомление об изменениях в составе команды' },
   { key: 'activity_commit_linked', label: 'Привязан коммит', description: 'Уведомление о привязке коммита к задаче' },
   { key: 'activity_kb_updated', label: 'Обновление базы знаний', description: 'Уведомление об обновлении KB проекта' },
-  { key: 'delegation', label: 'Делегирование задачи', description: 'Письмо о делегировании задачи другому пользователю' },
-  { key: 'delegation_declined', label: 'Делегирование отклонено', description: 'Письмо об отклонении делегированной задачи' },
+  { key: 'task_assignee', label: 'Новый ответственный', description: 'Письмо пользователю, назначенному ответственным за задачу' },
   { key: 'project_deleted', label: 'Проект удалён', description: 'Уведомление об удалении проекта' },
   { key: 'join_request', label: 'Запрос доступа', description: 'Письмо владельцу о запросе доступа к проекту' },
-  { key: 'task_assigned_to_project', label: 'Задача перенесена в проект', description: 'Письмо делегату о переносе задачи в проект' },
 ];
 
 // Рендерит email-шаблон с демо-данными для предпросмотра.
@@ -112,19 +106,12 @@ export function renderSampleEmail(key: EmailTemplateKey, to: string): EmailMessa
         detail: 'обновила документ «Архитектура API»',
         ctaUrl: SAMPLE_URL,
       });
-    case 'delegation':
-      return renderDelegationEmail({
+    case 'task_assignee':
+      return renderTaskAssigneeEmail({
         to,
         actorDisplayName: 'Иван Петров',
         taskExcerpt: 'Подготовить макеты для нового дашборда аналитики',
-        inboxUrl: SAMPLE_URL,
-      });
-    case 'delegation_declined':
-      return renderDelegationDeclinedEmail({
-        to,
-        delegateDisplayName: 'Анна Смирнова',
-        taskExcerpt: 'Подготовить макеты для нового дашборда аналитики',
-        inboxUrl: SAMPLE_URL,
+        taskUrl: SAMPLE_URL,
       });
     case 'project_deleted':
       return renderProjectDeletedEmail({
@@ -138,14 +125,6 @@ export function renderSampleEmail(key: EmailTemplateKey, to: string): EmailMessa
         to,
         projectName: 'Мой Проект',
         requesterDisplayName: 'Новый Коллега',
-        projectUrl: SAMPLE_URL,
-      });
-    case 'task_assigned_to_project':
-      return renderTaskAssignedToProjectEmail({
-        to,
-        actorDisplayName: 'Иван Петров',
-        taskExcerpt: 'Подготовить макеты для нового дашборда аналитики',
-        projectName: 'Мой Проект',
         projectUrl: SAMPLE_URL,
       });
   }

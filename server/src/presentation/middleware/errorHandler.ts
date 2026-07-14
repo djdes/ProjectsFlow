@@ -67,15 +67,10 @@ import {
   TaskCommentNotFoundError,
   TaskCommitNotFoundError,
   TaskDescriptionEmptyError,
+  AssigneeNotProjectMemberError,
+  AssigneeNotSharedMemberError,
   TaskNotFoundError,
-  DelegationNotFoundError,
-  DelegationWrongStateError,
-  NotDelegateError,
-  SelfDelegationError,
-  NotCreatorError,
-  AlreadyDelegatedError,
-  DelegateNotInSharedMembersError,
-  DelegateNotProjectMemberError,
+  InboxOwnerRequiredError,
 } from '../../domain/task/errors.js';
 import { TaskNotActiveError } from '../../application/task/RequestRalphCancel.js';
 import { RalphCancelNotRequestedByYouError } from '../../application/task/RevokeRalphCancel.js';
@@ -406,6 +401,14 @@ export function errorHandler(
     res.status(400).json({ error: 'task_description_empty', message: 'Введите описание задачи' });
     return;
   }
+  if (err instanceof AssigneeNotProjectMemberError) {
+    res.status(403).json({ error: 'assignee_not_project_member', message: err.message });
+    return;
+  }
+  if (err instanceof AssigneeNotSharedMemberError) {
+    res.status(403).json({ error: 'assignee_not_shared_member', message: err.message });
+    return;
+  }
   if (err instanceof TaskCommitNotFoundError) {
     res.status(404).json({ error: 'task_commit_not_found' });
     return;
@@ -441,44 +444,8 @@ export function errorHandler(
     return;
   }
 
-  // --- Делегирование задач (accept/decline/withdraw) ---
-  if (err instanceof DelegationNotFoundError) {
-    res.status(404).json({ error: 'delegation_not_found', message: 'Делегирование не найдено' });
-    return;
-  }
-  if (err instanceof NotDelegateError) {
-    res.status(403).json({ error: 'not_delegate', message: err.message });
-    return;
-  }
-  if (err instanceof DelegationWrongStateError) {
-    // Уже принято/отклонено/отозвано — не 500, а 409: клиент трактует как «уже обработано».
-    res.status(409).json({
-      error: 'delegation_wrong_state',
-      message: 'Это делегирование уже обработано (принято, отклонено или отозвано).',
-    });
-    return;
-  }
-  // --- Делегирование задач (create/reassign) ---
-  if (err instanceof SelfDelegationError) {
-    res.status(400).json({ error: 'self_delegation', message: err.message });
-    return;
-  }
-  if (err instanceof NotCreatorError) {
-    res.status(403).json({ error: 'not_creator', message: err.message });
-    return;
-  }
-  if (err instanceof AlreadyDelegatedError) {
-    res.status(409).json({ error: 'already_delegated', message: err.message });
-    return;
-  }
-  // Оба «не тот участник» отдают отдельные коды — клиент по ним открывает флоу
-  // приглашения человека в проект (drag-делегирование во «Входящих»).
-  if (err instanceof DelegateNotInSharedMembersError) {
-    res.status(403).json({ error: 'delegate_not_in_shared_members', message: err.message });
-    return;
-  }
-  if (err instanceof DelegateNotProjectMemberError) {
-    res.status(403).json({ error: 'delegate_not_project_member', message: err.message });
+  if (err instanceof InboxOwnerRequiredError) {
+    res.status(403).json({ error: 'inbox_owner_required', message: err.message });
     return;
   }
   if (err instanceof RalphCancelNotRequestedByYouError) {

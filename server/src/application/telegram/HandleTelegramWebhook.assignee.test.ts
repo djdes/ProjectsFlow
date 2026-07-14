@@ -2,13 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HandleTelegramWebhook, type TelegramUpdate } from './HandleTelegramWebhook.js';
 
-// Харнесс для /tasks + ba:/bt:root: фейки members/tasks/delegations с данными,
+// Харнесс для /tasks + ba:/bt:root: фейки members/tasks с данными,
 // клиент копит отправленные сообщения/ответы, taskMessages копит upsert'ы.
 function makeHarness(opts?: {
   userId?: string | null;
   projects?: { id: string; name: string }[];
   tasksByProject?: Record<string, any[]>;
-  delegations?: Record<string, { delegateUserId: string; delegateDisplayName: string }>;
 }) {
   const sent: { chatId: number; text: string; replyMarkup: any }[] = [];
   const answers: { id: string; text?: string; showAlert?: boolean }[] = [];
@@ -24,20 +23,13 @@ function makeHarness(opts?: {
     tasks: {
       async listByProject(pid: string) {
         return (opts?.tasksByProject?.[pid] ?? []).map((t: any) => ({
-          status: 'todo', deadline: null, ...t,
+          status: 'todo',
+          deadline: null,
+          ...t,
+          assignee: t.assignee ?? { userId: 'viewer1', displayName: 'Я', avatarUrl: null },
         }));
       },
       async getById() { return null; },
-    },
-    delegations: {
-      async listActiveForTasks(ids: readonly string[]) {
-        const m = new Map<string, any>();
-        for (const id of ids) {
-          const d = opts?.delegations?.[id];
-          if (d) m.set(id, { id: `d-${id}`, taskId: id, status: 'accepted', ...d });
-        }
-        return m;
-      },
     },
     client: {
       async sendMessage(i: any) {
@@ -97,20 +89,28 @@ const seed = {
   projects: [{ id: 'p1', name: 'Сайт' }],
   tasksByProject: {
     p1: [
-      { id: 't1', description: 'Делегированная Олегу' },
-      { id: 't2', description: 'Ничья задача' },
+      {
+        id: 't1',
+        description: 'Задача Олега',
+        assignee: { userId: 'u-oleg', displayName: 'Олег', avatarUrl: null },
+      },
+      {
+        id: 't2',
+        description: 'Моя задача',
+        assignee: { userId: 'viewer1', displayName: 'Я', avatarUrl: null },
+      },
     ],
   },
-  delegations: { t1: { delegateUserId: 'u-oleg', delegateDisplayName: 'Олег' } },
 };
 
-test('/tasks → меню по ответственным (ba:-кнопки, ba:none, bt:root), НЕ список проектов', async () => {
+test('/tasks → меню по ответственным (ba:-кнопки, bt:root), НЕ список проектов', async () => {
   const h = makeHarness(seed);
   await h.h.execute(tasksUpdate());
   assert.equal(h.sent.length, 1);
   const kb = h.sent[0]!.replyMarkup.inline_keyboard.flat();
   assert.ok(kb.some((b: any) => b.callback_data === 'ba:u-oleg'));
-  assert.ok(kb.some((b: any) => b.callback_data === 'ba:none'));
+  assert.ok(kb.some((b: any) => b.callback_data === 'ba:viewer1'));
+  assert.ok(!kb.some((b: any) => b.callback_data === 'ba:none'));
   assert.ok(kb.some((b: any) => b.callback_data === 'bt:root'));
   assert.ok(!kb.some((b: any) => (b.callback_data ?? '').startsWith('bt:p:')), 'проекты не на первом экране');
 });
@@ -135,7 +135,7 @@ test('ba:<uid> → заголовок + карточки с nd/nc/url, кажд�
   assert.equal(h.sent.length, 2);
   assert.ok(h.sent[0]!.text.includes('Олег'));
   const card = h.sent[1]!;
-  assert.ok(card.text.includes('Делегированная Олегу'));
+  assert.ok(card.text.includes('Задача Олега'));
   const kb = card.replyMarkup.inline_keyboard.flat();
   assert.ok(kb.some((b: any) => b.callback_data === 'nd:t1'));
   assert.ok(kb.some((b: any) => b.callback_data === 'nc:t1'));
@@ -149,12 +149,11 @@ test('ba:<uid> → заголовок + карточки с nd/nc/url, кажд�
   assert.ok(h.answers.some((a) => a.id === 'cq1'), 'callback подтверждён');
 });
 
-test('ba:none → задачи без делегации', async () => {
+test('устаревший ba:none → alert без сообщений', async () => {
   const h = makeHarness(seed);
   await h.h.execute(cbUpdate('ba:none'));
-  assert.equal(h.sent.length, 2);
-  assert.ok(h.sent[0]!.text.includes('Без ответственного'));
-  assert.ok(h.sent[1]!.text.includes('Ничья задача'));
+  assert.equal(h.sent.length, 0);
+  assert.ok(h.answers.some((a) => a.showAlert === true));
 });
 
 test('ba: у ответственного нет открытых задач → alert без сообщений', async () => {

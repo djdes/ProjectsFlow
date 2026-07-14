@@ -3,14 +3,14 @@
 // локальная тестовая БД недоступна, см. CLAUDE.md / memory «Local DB migrate broken at 054»).
 // Каждый метод select-чейна возвращает себя; результат резолвится либо терминальным `limit()`,
 // либо прямым `await` самого чейна (чейн — thenable): методы вроде
-// DrizzleTaskDelegationRepository.listAssignedTo/listDelegatedToOthers завершаются на `.where()`
+// Старые Drizzle-репозитории могли завершаться на `.where()`
 // БЕЗ `.limit()`, поэтому чейн должен резолвиться при await-е напрямую. chain-форма
 // (from/innerJoin/leftJoin/where/orderBy/limit) НЕ проверяется — только факт «что вернул select».
 // Достаточно для регресс-тестов блокеров #3/#4/#5 (полагаемость на порт для гейтинга) и
 // wiring-тестов блокеров #1/#2 (роль/членство берётся ИЗ ПОРТА, а не из project_members-select).
 //
 // selectRowsSeq — очередь наборов строк на последовательные вызовы `select()` (для методов с
-// несколькими выборками, напр. listDelegatedToOthers: named-ветка + inbox-ветка); при
+// несколькими выборками, например listAssignedTo; при
 // исчерпании очереди/если она не задана используется selectRows (общий набор на все select).
 export function fakeDb(opts: {
   readonly selectRows?: readonly unknown[];
@@ -33,7 +33,7 @@ export function fakeDb(opts: {
       orderBy: self,
       limit: resolve,
       // thenable: чейны, завершающиеся на .where()/.orderBy() без .limit(), резолвятся
-      // прямым await (см. listAssignedTo/listDelegatedToOthers). Плоский массив строк —
+      // прямым await (см. listAssignedTo). Плоский массив строк —
       // не thenable, поэтому рекурсивного разворачивания await не будет.
       then: (onF: (v: unknown) => unknown, onR?: (e: unknown) => unknown) => resolve().then(onF, onR),
     });

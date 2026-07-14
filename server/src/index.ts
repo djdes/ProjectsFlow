@@ -143,14 +143,11 @@ import { DrizzleTaskRepository } from './infrastructure/repositories/DrizzleTask
 import { DrizzleTaskCommitRepository } from './infrastructure/repositories/DrizzleTaskCommitRepository.js';
 import { DrizzleTaskAttachmentRepository } from './infrastructure/repositories/DrizzleTaskAttachmentRepository.js';
 import { DrizzleTaskCommentRepository } from './infrastructure/repositories/DrizzleTaskCommentRepository.js';
-import { DrizzleTaskDelegationRepository } from './infrastructure/repositories/DrizzleTaskDelegationRepository.js';
-import { WithdrawTaskDelegation } from './application/task/WithdrawTaskDelegation.js';
-import { RelinquishTaskDelegation } from './application/task/RelinquishTaskDelegation.js';
+import { DrizzleTaskBillingAttributionRepository } from './infrastructure/repositories/DrizzleTaskBillingAttributionRepository.js';
 import { ListTasksAssignedToMe } from './application/task/ListTasksAssignedToMe.js';
-import { ListTasksDelegatedToOthers } from './application/task/ListTasksDelegatedToOthers.js';
+import { ListTasksAssignedToOthers } from './application/task/ListTasksAssignedToOthers.js';
 import { MoveTaskToProject } from './application/task/MoveTaskToProject.js';
-import { DelegateExistingTask } from './application/task/DelegateExistingTask.js';
-import { ReassignTaskDelegation } from './application/task/ReassignTaskDelegation.js';
+import { ChangeTaskAssignee } from './application/task/ChangeTaskAssignee.js';
 import { FileSystemAttachmentStorage } from './infrastructure/storage/FileSystemAttachmentStorage.js';
 import { DrizzleAgentTokenRepository } from './infrastructure/repositories/DrizzleAgentTokenRepository.js';
 import { DrizzleAiPromptJobRepository } from './infrastructure/repositories/DrizzleAiPromptJobRepository.js';
@@ -476,7 +473,7 @@ const taskVersionRecorder = new TaskVersionRecorder({ versions: taskVersionRepo,
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
-const taskDelegationRepo = new DrizzleTaskDelegationRepository(db, projectMemberRepo);
+const taskBillingAttributionRepo = new DrizzleTaskBillingAttributionRepository(db);
 const digestSettingsRepo = new DrizzleDigestSettingsRepository(db, projectMemberRepo);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const aiPromptJobRepo = new DrizzleAiPromptJobRepository(db);
@@ -698,13 +695,12 @@ const createTaskCommentUseCase = new CreateTaskComment({
   tasks: taskRepo,
   comments: taskCommentRepo,
   notifications: notificationRepo,
-  delegations: taskDelegationRepo,
   idGen: idGenerator,
   activityRecorder,
 });
 const maybeReopenForClarification = new MaybeReopenForClarification({ tasks: taskRepo });
 
-// --- Telegram-конструктор задач (+проект текст @делегат) ---
+// --- Telegram-конструктор задач (+проект текст @ответственный) ---
 // Свои репо для черновиков конструктора (db/048) и маппинга task-сообщений (db/049).
 const telegramTaskDraftRepo = new DrizzleTelegramTaskDraftRepository(db);
 // Конструктору нужны те же use-case'ы что и HTTP/agent-роутерам; они собираются инлайн
@@ -737,7 +733,6 @@ const telegramComposer = new TelegramComposerService({
     projects: projectRepo,
     members: projectMemberRepo,
     tasks: taskRepo,
-    delegations: taskDelegationRepo,
     users: userRepo,
     notifications: notificationRepo,
     email: emailSender,
@@ -817,7 +812,6 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   users: userRepo,
   members: projectMemberRepo,
   tasks: taskRepo,
-  delegations: taskDelegationRepo,
   client: telegramClient,
   appUrl: appBaseUrl,
   signingSecret: repoAccessSecret,
@@ -831,7 +825,6 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
     projects: projectRepo,
     members: projectMemberRepo,
     tasks: taskRepo,
-    delegations: taskDelegationRepo,
     activityRecorder,
   }),
   // Инлайн «✅ Закрыть» / «✕ Не она» на предложениях закрыть (pd:/px:, db/101).
@@ -968,7 +961,7 @@ const liveService = new LiveService({
   idGen: idGenerator,
   recordUsage,
   checkBudget,
-  taskDelegations: taskDelegationRepo,
+  legacyAttribution: taskBillingAttributionRepo,
   tasks: taskRepo,
 });
 // Startup-sweep: зависшие running-сессии (процесс упал, finish не доехал) → timeout.
@@ -1308,7 +1301,6 @@ const emailActionService = new EmailActionService({
     projects: projectRepo,
     members: projectMemberRepo,
     tasks: taskRepo,
-    delegations: taskDelegationRepo,
     activityRecorder,
   }),
   createTaskComment: createTaskCommentUseCase,
@@ -1317,7 +1309,6 @@ const emailActionService = new EmailActionService({
 
 const sendDailyDigest = new SendDailyDigest({
   tasks: taskRepo,
-  delegations: taskDelegationRepo,
   comments: taskCommentRepo,
   projects: projectRepo,
   members: projectMemberRepo,
@@ -1611,7 +1602,6 @@ const { app, devProxyUpgrade } = createApp({
         projects: projectRepo,
         members: projectMemberRepo,
         tasks: taskRepo,
-        delegations: taskDelegationRepo,
         users: userRepo,
         notifications: notificationRepo,
         email: emailSender,
@@ -1768,13 +1758,11 @@ const { app, devProxyUpgrade } = createApp({
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,
       comments: taskCommentRepo,
-      delegations: taskDelegationRepo,
     }),
     createTask: new CreateTask({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
-      delegations: taskDelegationRepo,
       users: userRepo,
       notifications: notificationRepo,
       email: emailSender,
@@ -1787,7 +1775,6 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
-      delegations: taskDelegationRepo,
       activity: activityRecorder,
       versions: taskVersionRecorder,
     }),
@@ -1795,7 +1782,6 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
-      delegations: taskDelegationRepo,
       activityRecorder,
       versions: taskVersionRecorder,
     }),
@@ -1804,14 +1790,12 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
-      delegations: taskDelegationRepo,
       activityRecorder,
     }),
     getTaskVersions: new GetTaskVersions({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
-      delegations: taskDelegationRepo,
       versions: taskVersionRepo,
       users: userRepo,
       now: () => new Date(),
@@ -1820,7 +1804,6 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
-      delegations: taskDelegationRepo,
       versions: taskVersionRepo,
       users: userRepo,
       now: () => new Date(),
@@ -1848,7 +1831,6 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
-      delegations: taskDelegationRepo,
     }),
     syncTaskCommits: new SyncTaskCommits({
       projects: projectRepo,
@@ -1866,7 +1848,6 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
-      delegations: taskDelegationRepo,
       idGen: idGenerator,
       maxBytes: MAX_ATTACHMENT_BYTES,
     }),
@@ -1876,14 +1857,12 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
-      delegations: taskDelegationRepo,
     }),
     listAttachments: new ListTaskAttachments({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
-      delegations: taskDelegationRepo,
     }),
     getAttachment: new GetTaskAttachment({
       projects: projectRepo,
@@ -1891,7 +1870,6 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       attachments: taskAttachmentRepo,
       storage: attachmentStorage,
-      delegations: taskDelegationRepo,
     }),
     // Секрет для проверки подписанных URL картинок (письмо/Telegram — без сессии).
     signingSecret: repoAccessSecret,
@@ -1901,7 +1879,6 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       comments: taskCommentRepo,
       attachments: taskAttachmentRepo,
-      delegations: taskDelegationRepo,
     }),
     createComment: createTaskCommentUseCase,
     updateComment: new UpdateTaskComment({
@@ -1909,14 +1886,12 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
-      delegations: taskDelegationRepo,
     }),
     deleteComment: new DeleteTaskComment({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
-      delegations: taskDelegationRepo,
     }),
     requestRalphCancel: new RequestRalphCancel({
       projects: projectRepo,
@@ -1944,7 +1919,6 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       comments: taskCommentRepo,
       log: commentNotificationLogRepo,
-      delegations: taskDelegationRepo,
     }),
     exportDigest: new ExportTasksDigest({
       listTasks: new ListTasks({
@@ -1954,7 +1928,6 @@ const { app, devProxyUpgrade } = createApp({
         taskCommits: taskCommitRepo,
         attachments: taskAttachmentRepo,
         comments: taskCommentRepo,
-        delegations: taskDelegationRepo,
       }),
       projects: projectRepo,
       members: projectMemberRepo,
@@ -1986,26 +1959,17 @@ const { app, devProxyUpgrade } = createApp({
       send: sendDailyDigest,
     }),
   },
-  delegations: {
-    withdraw: new WithdrawTaskDelegation({ delegations: taskDelegationRepo }),
-    relinquish: new RelinquishTaskDelegation({
-      delegations: taskDelegationRepo,
-      tasks: taskRepo,
-      users: userRepo,
-      notifications: notificationRepo,
-      email: emailSender,
-      idGen: idGenerator,
-      appUrl: appBaseUrl,
-    }),
+  assignees: {
     listAssignedToMe: new ListTasksAssignedToMe({
-      delegations: taskDelegationRepo,
+      projects: projectRepo,
+      members: projectMemberRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,
       comments: taskCommentRepo,
     }),
-    listDelegatedToOthers: new ListTasksDelegatedToOthers({
-      delegations: taskDelegationRepo,
+    listAssignedToOthers: new ListTasksAssignedToOthers({
+      members: projectMemberRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,
@@ -2015,34 +1979,17 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       projects: projectRepo,
       members: projectMemberRepo,
-      delegations: taskDelegationRepo,
-      users: userRepo,
-      notifications: notificationRepo,
-      email: emailSender,
-      idGen: idGenerator,
-      appUrl: appBaseUrl,
     }),
-    delegateExisting: new DelegateExistingTask({
+    changeAssignee: new ChangeTaskAssignee({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
-      delegations: taskDelegationRepo,
       users: userRepo,
       notifications: notificationRepo,
       email: emailSender,
       idGen: idGenerator,
       appUrl: appBaseUrl,
-    }),
-    reassignDelegation: new ReassignTaskDelegation({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      tasks: taskRepo,
-      delegations: taskDelegationRepo,
-      users: userRepo,
-      notifications: notificationRepo,
-      email: emailSender,
-      idGen: idGenerator,
-      appUrl: appBaseUrl,
+      activityRecorder,
     }),
   },
   agent: {
@@ -2110,13 +2057,11 @@ const { app, devProxyUpgrade } = createApp({
       taskCommits: taskCommitRepo,
       attachments: taskAttachmentRepo,
       comments: taskCommentRepo,
-      delegations: taskDelegationRepo,
     }),
     createTask: new CreateTask({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
-      delegations: taskDelegationRepo,
       users: userRepo,
       notifications: notificationRepo,
       email: emailSender,
@@ -2140,7 +2085,6 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
-      delegations: taskDelegationRepo,
       activityRecorder,
       versions: taskVersionRecorder,
     }),
@@ -2194,7 +2138,11 @@ const { app, devProxyUpgrade } = createApp({
     listPendingCommitSyncJobs,
     claimCommitSyncJob,
     completeCommitSyncJob,
-    dispatchAllowed: new CheckDispatchAllowed({ tasks: taskRepo, taskDelegations: taskDelegationRepo, checkBudget }),
+    dispatchAllowed: new CheckDispatchAllowed({
+      tasks: taskRepo,
+      legacyAttribution: taskBillingAttributionRepo,
+      checkBudget,
+    }),
     getAiPromptKbBundle: new GetAiPromptKbBundle({
       aiPromptJobs: aiPromptJobRepo,
       projects: projectRepo,
@@ -2233,7 +2181,6 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       tasks: taskRepo,
-      delegations: taskDelegationRepo,
       activity: activityRecorder,
       versions: taskVersionRecorder,
     }),
@@ -2242,7 +2189,6 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       comments: taskCommentRepo,
-      delegations: taskDelegationRepo,
       activityRecorder,
     }),
     listTaskCommits: new ListTaskCommits({
@@ -2250,7 +2196,6 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       taskCommits: taskCommitRepo,
-      delegations: taskDelegationRepo,
     }),
     syncTaskCommits: new SyncTaskCommits({
       projects: projectRepo,
@@ -2394,7 +2339,6 @@ const eodReminderScheduler = new EodReminderScheduler({
     projects: projectRepo,
     members: projectMemberRepo,
     tasks: taskRepo,
-    delegations: taskDelegationRepo,
     tgSend: sendAgentTelegramNotification,
     appUrl: appBaseUrl,
     telegramClient,

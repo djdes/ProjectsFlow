@@ -7,7 +7,7 @@ type Deps = {
 };
 
 // GET /api/users/me/shared-members — список user'ов из общих пространств caller'а.
-// Используется UI-дропдауном «делегировать» при создании inbox-задачи.
+// Используется UI-выбором ответственного для личной Inbox-задачи.
 export function sharedMembersRouter(deps: Deps): Router {
   const r = Router();
   r.use(requireAuth);

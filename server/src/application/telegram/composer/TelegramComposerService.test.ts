@@ -9,7 +9,7 @@ type CreateTaskCall = {
   projectId: string;
   ownerUserId?: string;
   description: string;
-  delegateUserId?: string | null;
+  assigneeUserId?: string | null;
   deadline?: string | null;
   status?: string;
 };
@@ -55,7 +55,7 @@ function makeHarness(opts?: {
   const sent: { chatId: number; text: string }[] = [];
   const edits: { messageId: number; text: string; replyMarkup?: any }[] = [];
   const answers: { text?: string }[] = [];
-  const delegateMessages: { userId: string; buttons: string }[] = [];
+  const assigneeMessages: { userId: string; buttons: string; kind: string }[] = [];
   const inboxUserIds: string[] = [];
 
   const draftsRepo = {
@@ -67,8 +67,7 @@ function makeHarness(opts?: {
         tgChatId: input.tgChatId,
         taskText: input.taskText,
         projectId: input.projectId ?? null,
-        delegateUserId: input.delegateUserId ?? null,
-        delegationId: null,
+        assigneeUserId: input.assigneeUserId ?? null,
         offered: input.offered ?? null,
         segments: input.segments ?? null,
         targetStatus: input.targetStatus ?? null,
@@ -81,10 +80,6 @@ function makeHarness(opts?: {
     },
     async getById(id: string) {
       return drafts.get(id) ?? null;
-    },
-    async getByDelegationId(delegationId: string) {
-      for (const d of drafts.values()) if (d.delegationId === delegationId) return d;
-      return null;
     },
     async patch(id: string, patch: any) {
       const cur = drafts.get(id);
@@ -128,8 +123,24 @@ function makeHarness(opts?: {
       async listSharedUsers() {
         return shared as any;
       },
+      async listByProject(projectId: string) {
+        return [
+          {
+            projectId,
+            userId: 'u1',
+            role: 'owner',
+            user: { id: 'u1', displayName: 'Создатель', email: 'c@e.com' },
+          },
+          ...shared.map((user) => ({
+            projectId,
+            userId: user.id,
+            role: 'editor',
+            user,
+          })),
+        ] as any;
+      },
       async findForProject(projectId: string) {
-        return { projectId, userId: 'u2', role: 'editor' } as any; // делегат — участник
+        return { projectId, userId: 'u2', role: 'editor' } as any;
       },
     },
     projects: {
@@ -156,14 +167,18 @@ function makeHarness(opts?: {
           projectId: input.projectId,
           ownerUserId: input.ownerUserId,
           description: input.description,
-          delegateUserId: input.delegateUserId ?? null,
+          assigneeUserId: input.assigneeUserId ?? input.ownerUserId,
           deadline: input.deadline ?? null,
           status: input.status,
         });
         return {
           id: 't1',
           projectId: input.projectId,
-          delegation: input.delegateUserId ? { id: 'del1' } : null,
+          assignee: {
+            userId: input.assigneeUserId ?? input.ownerUserId,
+            displayName: input.assigneeUserId === 'u2' ? 'Вася' : 'Создатель',
+            avatarUrl: null,
+          },
         } as any;
       },
     },
@@ -175,9 +190,10 @@ function makeHarness(opts?: {
     },
     sendNotification: {
       async execute(cmd: any) {
-        delegateMessages.push({
+        assigneeMessages.push({
           userId: cmd.userId,
           buttons: JSON.stringify(cmd.replyMarkup ?? null),
+          kind: cmd.kind,
         });
         return { status: 'ok' as const, messageId: 5000, chatId: 999 };
       },
@@ -206,7 +222,7 @@ function makeHarness(opts?: {
   };
 
   const service = new TelegramComposerService(deps as any);
-  return { service, drafts, createTaskCalls, sent, edits, answers, delegateMessages, inboxUserIds };
+  return { service, drafts, createTaskCalls, sent, edits, answers, assigneeMessages, inboxUserIds };
 }
 
 function cq(draftIdOrData: string, tgUserId = 111): TelegramCallbackQuery {
@@ -281,7 +297,7 @@ test('голый текст → черновик во «Входящие», conf
   assert.equal(h.createTaskCalls.length, 1);
   assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1'); // ушло в inbox
   assert.equal(h.createTaskCalls[0]!.description, 'Купить кофе');
-  assert.equal(h.createTaskCalls[0]!.delegateUserId, null);
+  assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u1');
 });
 
 test('+Проект (уникальный) текст → createTask в этот проект', async () => {
@@ -310,24 +326,25 @@ test('+неоднозначный проект → пикер, выбор кно
   assert.equal(h.createTaskCalls[0]!.projectId, 'p2');
 });
 
-test('+Проект текст @делегат → задача СРАЗУ в проекте, делегату карточка Завершить/Комментировать', async () => {
+test('+Проект текст @ответственный → задача сразу в проекте, ответственному карточка действий', async () => {
   const h = makeHarness();
   await h.service.startFromMessage(111, 500, '+Альфа Обнови билд @Вася');
   const draftId = [...h.drafts.keys()][0]!;
   await h.service.handleCallback(cq(`tc:${draftId}`));
   assert.equal(h.createTaskCalls[0]!.projectId, 'p1'); // сразу в проект, без переноса-на-accept
-  assert.equal(h.createTaskCalls[0]!.delegateUserId, 'u2');
-  assert.equal(h.delegateMessages.length, 1);
-  assert.equal(h.delegateMessages[0]!.userId, 'u2');
+  assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u2');
+  assert.equal(h.assigneeMessages.length, 1);
+  assert.equal(h.assigneeMessages[0]!.userId, 'u2');
+  assert.equal(h.assigneeMessages[0]!.kind, 'task_assignee_changed');
   // Кнопки действий по задаче, НЕ «Принять/Отказать».
-  assert.ok(h.delegateMessages[0]!.buttons.includes('nd:t1'));
-  assert.ok(h.delegateMessages[0]!.buttons.includes('nc:t1'));
-  assert.ok(!h.delegateMessages[0]!.buttons.includes('da:'));
+  assert.ok(h.assigneeMessages[0]!.buttons.includes('nd:t1'));
+  assert.ok(h.assigneeMessages[0]!.buttons.includes('nc:t1'));
+  assert.ok(!h.assigneeMessages[0]!.buttons.includes('da:'));
   // Эррата #6: обязательна url-кнопка «Открыть в ProjectsFlow» (регрессия «кнопку убрали»).
-  assert.ok(h.delegateMessages[0]!.buttons.includes('Открыть в ProjectsFlow'));
+  assert.ok(h.assigneeMessages[0]!.buttons.includes('Открыть в ProjectsFlow'));
   const d = h.drafts.get(draftId)!;
   assert.equal(d.status, 'confirmed');
-  assert.equal(d.delegationId, 'del1');
+  assert.equal(d.assigneeUserId, 'u2');
 });
 
 test('+многословный проект → жадный матч имени, остаток = текст', async () => {
@@ -463,7 +480,7 @@ test('AI: правка проекта сегмента кнопкой → соз
   assert.equal(h.createTaskCalls[0]!.projectId, 'p2');
 });
 
-test('AI: сегмент с исполнителем → задача в проекте + делегирование с кнопками', async () => {
+test('AI: сегмент с ответственным → задача в проекте + уведомление с кнопками', async () => {
   const h = makeHarness({
     projects: [{ id: 'p1', name: 'Альфа' }],
     shared: [{ id: 'u2', displayName: 'Вася', email: 'v@e.com' }],
@@ -486,12 +503,12 @@ test('AI: сегмент с исполнителем → задача в про�
   await h.service.handleCallback(cq(`ac:${draftId}`));
   assert.equal(h.createTaskCalls.length, 1);
   assert.equal(h.createTaskCalls[0]!.projectId, 'p1'); // в проекте, не в inbox
-  assert.equal(h.createTaskCalls[0]!.delegateUserId, 'u2');
-  assert.equal(h.delegateMessages.length, 1);
-  assert.ok(h.delegateMessages[0]!.buttons.includes('nd:t1'));
-  assert.ok(!h.delegateMessages[0]!.buttons.includes('da:'));
+  assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u2');
+  assert.equal(h.assigneeMessages.length, 1);
+  assert.ok(h.assigneeMessages[0]!.buttons.includes('nd:t1'));
+  assert.ok(!h.assigneeMessages[0]!.buttons.includes('da:'));
   // Эррата #6: обязательна url-кнопка «Открыть в ProjectsFlow» (регрессия «кнопку убрали»).
-  assert.ok(h.delegateMessages[0]!.buttons.includes('Открыть в ProjectsFlow'));
+  assert.ok(h.assigneeMessages[0]!.buttons.includes('Открыть в ProjectsFlow'));
 });
 
 test('AI: таймаут → откат на ручной флоу (создаёт как есть)', async () => {

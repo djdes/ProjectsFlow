@@ -50,7 +50,7 @@ export type ActivityEventItem = {
   readonly hasVersions?: boolean;
 };
 
-// Адресное уведомление (делегирование/инвайт/упоминание) — переиспользует существующий тип.
+// Адресное уведомление (назначение/инвайт/упоминание) — переиспользует существующий тип.
 export type NotificationFeedItem = {
   readonly type: 'notification';
   readonly createdAt: Date;

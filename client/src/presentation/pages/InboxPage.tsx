@@ -29,7 +29,7 @@ function loadHideDone(): boolean {
 // «Входящие» — задачи без привязки к конкретному проекту. Под капотом обычный проект
 // с флагом isInbox=true; сервер создаёт его лениво при первом GET /api/inbox.
 // Отображение — только канбан (drag-drop по статусам); сортировку/группировку блока
-// делегирования выбирают в «Сортировке». Режим списка убран.
+// ответственных выбирают в «Сортировке». Режим списка убран.
 export function InboxPage(): React.ReactElement {
   const { projectRepository } = useContainer();
   const { animations } = useMotion();
@@ -37,11 +37,11 @@ export function InboxPage(): React.ReactElement {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hideDone, setHideDone] = useState<boolean>(loadHideDone);
-  // Слот в шапке для фильтров/сортировки блока делегирования: сам блок рендерит их сюда через
+  // Слот в шапке для фильтров/сортировки блока ответственных: сам блок рендерит их сюда через
   // portal (состояние остаётся в блоке, а визуально контролы стоят в строке с «Входящие»).
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   // refetchKey — простой механизм форсить пересоздание useTasks-хука в KanbanBoard/
-  // TaskListView. Меняется при accept/decline/toggle делегирования в AssignedToMeBlock,
+  // TaskListView. Меняется при смене ответственного/toggle в AssignedToMeBlock,
   // чтобы список inbox-задач сразу подтянул свежее состояние (acceptance публикует
   // SSE, но проще пересоздать board без задержки).
   const [refetchKey, setRefetchKey] = useState(0);
@@ -51,7 +51,7 @@ export function InboxPage(): React.ReactElement {
   const handleBoardTasksChange = useCallback((next: readonly Task[]): void => {
     setBoardTasks(next);
   }, []);
-  // Реестр единого DnD (#5): доска и блок делегирования регистрируют сюда свои хендлеры,
+  // Реестр единого DnD (#5): доска и блок ответственных регистрируют сюда свои хендлеры,
   // InboxUnifiedDnd диспетчеризует. Ref (не state) — стабильная ссылка переживает ремаунты
   // KanbanBoard по refetchKey и не дёргает лишние рендеры.
   const dndRegistry = useRef<UnifiedDndRegistry>({ board: null, block: null });
@@ -123,14 +123,14 @@ export function InboxPage(): React.ReactElement {
             <AnimatedInbox active className="size-5 text-primary" />
             <h1 className="text-xl font-semibold tracking-tight">Входящие</h1>
           </div>
-          {/* Сюда блок делегирования порталит единую кнопку «Фильтры» (сортировка +
+          {/* Сюда блок ответственных порталит единую кнопку «Фильтры» (сортировка +
               скрыть-выполненные + фильтры от/кому/проект на вкладке «Другим») — слева, сразу
               за заголовком, чтобы не «летала» в одиночестве у правого края. */}
           <div ref={setToolbarSlot} className="flex flex-wrap items-center gap-1" />
         </div>
 
-        {/* Единый DnD (#5): один DndContext на блок делегирования И доску — карточку доски
-            можно тащить в время-колонки (срок) и на кубики людей (делегировать). */}
+        {/* Единый DnD (#5): один DndContext на блок ответственных И доску — карточку доски
+            можно тащить в колонки срока и на участников (назначить ответственным). */}
         <InboxUnifiedDnd registry={dndRegistry} projectId={project.id}>
           <AssignedToMeBlock
             boardTasks={boardTasks}

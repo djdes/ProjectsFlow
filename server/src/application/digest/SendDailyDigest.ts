@@ -1,5 +1,4 @@
 import type { TaskRepository } from '../task/TaskRepository.js';
-import type { TaskDelegationRepository } from '../task/TaskDelegationRepository.js';
 import type { TaskCommentRepository } from '../task/TaskCommentRepository.js';
 import type { TaskWithCounts } from '../task/ListTasks.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
@@ -30,7 +29,6 @@ const IMG_URL_TTL_SECONDS = 14 * 24 * 60 * 60;
 
 type Deps = {
   readonly tasks: TaskRepository;
-  readonly delegations: TaskDelegationRepository;
   readonly comments: TaskCommentRepository;
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
@@ -72,16 +70,12 @@ export class SendDailyDigest {
     const selected = all.filter((t) => t.status !== 'done' && wanted.has(toVisibleStatus(t.status)));
     if (selected.length === 0) return { taskCount: 0 };
 
-    const [delegations, commentCounts] = await Promise.all([
-      this.deps.delegations.listActiveForTasks(selected.map((t) => t.id)),
-      this.deps.comments.countsByTasks(selected.map((t) => t.id)),
-    ]);
+    const commentCounts = await this.deps.comments.countsByTasks(selected.map((t) => t.id));
     const enriched: TaskWithCounts[] = selected.map((t) => ({
       ...t,
       commitCount: 0,
       attachmentCount: 0,
       commentCount: commentCounts.get(t.id) ?? 0,
-      delegation: delegations.get(t.id) ?? null,
     }));
 
     const model = buildDigestModel(enriched, {

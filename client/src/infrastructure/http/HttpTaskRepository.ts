@@ -20,18 +20,10 @@ import type {
 } from '@/application/task/TaskRepository';
 import { httpClient } from './httpClient';
 
-type DelegationDto = {
-  id: string;
-  taskId: string;
-  delegateUserId: string;
-  delegateDisplayName: string;
-  delegateAvatarUrl?: string | null;
-  creatorUserId: string;
-  creatorDisplayName: string;
-  creatorAvatarUrl?: string | null;
-  status: import('@/domain/task/TaskDelegation').TaskDelegationStatus;
-  createdAt: string;
-  respondedAt: string | null;
+type TaskAssigneeDto = {
+  userId: string;
+  displayName: string;
+  avatarUrl?: string | null;
 };
 
 export type TaskDto = Omit<
@@ -42,7 +34,7 @@ export type TaskDto = Omit<
   | 'ralphCancelRequestedAt'
   | 'ralphCancelRequestedBy'
   | 'ralphCancelRequestedByDisplayName'
-  | 'delegation'
+  | 'assignee'
   | 'deadline'
   | 'startDate'
   | 'parentTaskId'
@@ -54,6 +46,7 @@ export type TaskDto = Omit<
 > & {
   createdAt: string;
   updatedAt: string;
+  assignee: TaskAssigneeDto;
   // Optional — старый backend без db/093 не присылает.
   icon?: string | null;
   // Optional — старый backend без db/094 не присылает.
@@ -67,8 +60,6 @@ export type TaskDto = Omit<
   ralphCancelRequestedAt?: string | null;
   ralphCancelRequestedBy?: string | null;
   ralphCancelRequestedByDisplayName?: string | null;
-  // Optional — старый backend без db/039 не присылает.
-  delegation?: DelegationDto | null;
   // Optional — старый backend без db/041 не присылает.
   deadline?: string | null;
   // Optional — старый backend без db/106 не присылает.
@@ -96,6 +87,11 @@ type CommentDto = Omit<TaskComment, 'createdAt' | 'updatedAt' | 'attachments'> &
 export function fromDto(dto: TaskDto): Task {
   return {
     ...dto,
+    assignee: {
+      userId: dto.assignee.userId,
+      displayName: dto.assignee.displayName,
+      avatarUrl: dto.assignee.avatarUrl ?? null,
+    },
     createdAt: new Date(dto.createdAt),
     updatedAt: new Date(dto.updatedAt),
     icon: dto.icon ?? null,
@@ -113,13 +109,6 @@ export function fromDto(dto: TaskDto): Task {
     startDate: dto.startDate ?? null,
     parentTaskId: dto.parentTaskId ?? null,
     priority: dto.priority ?? null,
-    delegation: dto.delegation
-      ? {
-          ...dto.delegation,
-          createdAt: new Date(dto.delegation.createdAt),
-          respondedAt: dto.delegation.respondedAt ? new Date(dto.delegation.respondedAt) : null,
-        }
-      : null,
   };
 }
 
@@ -402,18 +391,10 @@ export class HttpTaskRepository implements TaskRepository {
     return fromDto(task);
   }
 
-  async delegate(projectId: string, taskId: string, delegateUserId: string): Promise<Task> {
-    const { task } = await httpClient.post<{ task: TaskDto }>(
-      `/projects/${projectId}/tasks/${taskId}/delegate`,
-      { delegateUserId },
-    );
-    return fromDto(task);
-  }
-
-  async reassign(projectId: string, taskId: string, delegateUserId: string): Promise<Task> {
-    const { task } = await httpClient.post<{ task: TaskDto }>(
-      `/projects/${projectId}/tasks/${taskId}/reassign`,
-      { delegateUserId },
+  async assign(projectId: string, taskId: string, assigneeUserId: string): Promise<Task> {
+    const { task } = await httpClient.put<{ task: TaskDto }>(
+      `/projects/${projectId}/tasks/${taskId}/assignee`,
+      { assigneeUserId },
     );
     return fromDto(task);
   }

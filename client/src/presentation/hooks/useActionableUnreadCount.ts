@@ -5,7 +5,7 @@ import { NOTIFICATIONS_CHANGED_EVENT } from './useNotificationStream';
 const POLL_MS = 60_000;
 
 // Счётчик непрочитанных actionable-уведомлений (инвайты в пространство/проект, join-request) —
-// для бейджа «Действие» в чат-ленте и сигнала на rail-кнопке «Чат». Делегирования сюда НЕ
+// для бейджа «Действие» в чат-ленте и сигнала на rail-кнопке «Чат». Назначения сюда НЕ
 // входят: с Task 14 они принимаются автоматически, уведомление о них — информационное.
 // Зеркало useUnreadNotificationsCount, но через countActionableUnread. Обновляется по
 // NOTIFICATIONS_CHANGED_EVENT + polling.

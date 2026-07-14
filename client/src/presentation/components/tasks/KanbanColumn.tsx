@@ -33,7 +33,7 @@ type InlineCreateInput = {
   // Позиция: поставить сразу ПОСЛЕ этой задачи (цепочка inline-создания, порядок создания).
   afterTaskId?: string | null;
   ralphMode?: RalphMode;
-  delegateUserId?: string | null;
+  assigneeUserId?: string;
   deadline?: string | null;
   priority?: TaskPriority | null;
 };
@@ -64,7 +64,7 @@ type Props = {
   showCheckbox?: boolean;
   lastDoneTaskId?: string | null;
   lastTodoTaskId?: string | null;
-  // Для DelegationBadge на карточках.
+  // id текущего пользователя для дочерних карточек.
   currentUserId?: string | null;
   // Drop indicator: id перетаскиваемой карточки (null = нет активного drag'а).
   activeId?: string | null;
@@ -89,7 +89,7 @@ type Props = {
   // Если задан — под колонкой появляется кнопка «Добавить задачу», раскрывающая
   // inline-композер (со всем функционалом быстрого создания). Создаёт задачу в этой колонке.
   onInlineCreate?: (input: InlineCreateInput) => Promise<Task>;
-  // Прокидывается в inline-композер (делегирование + AI-кнопка).
+  // Прокидывается в inline-композер (ответственный + AI-кнопка).
   isInbox?: boolean;
   isShared?: boolean;
   aiProjectId?: string | null;

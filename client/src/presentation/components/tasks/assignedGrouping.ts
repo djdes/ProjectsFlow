@@ -1,10 +1,7 @@
 import type { AssignedGrouping } from '@/domain/user/UiPrefs';
-import {
-  isPersonalInboxBlockTask,
-  type InboxBlockTask,
-} from './inboxBlockTasks';
+import type { InboxBlockTask } from './inboxBlockTasks';
 
-// Группа для рендера блока «Поручено мне». В отличие от прежней доменной AssignedGroup
+// Группа для рендера верхнего личного блока. В отличие от прежней доменной AssignedGroup
 // (всегда по проекту) — это результат произвольной группировки (проект/дата/дедлайн/
 // приоритет). `key` — стабильный React-key и id бакета; `isInbox` важен только для
 // project-режима (выбор иконки заголовка), иначе false.
@@ -15,9 +12,9 @@ export type AssignedDisplayGroup = {
   readonly items: InboxBlockTask[];
 };
 
-// Направление делегирования: 'toMe' — задачи, порученные мне; 'byMe' — порученные мной.
+// Направление ответственности: 'toMe' — отвечаю я; 'byMe' — отвечает другой участник.
 // Влияет только на project-группировку inbox-задач (чьим именем подписывать «Личные»).
-export type DelegationDirection = 'toMe' | 'byMe';
+export type AssigneeDirection = 'toMe' | 'byMe';
 
 // Чистая функция группировки — вся логика бакетов здесь (тестируется без React/DOM).
 // `now` передаётся явно, чтобы границы дней («сегодня/вчера/неделя») были детерминированы.
@@ -25,7 +22,7 @@ export function groupAssignedTasks(
   tasks: readonly InboxBlockTask[],
   mode: AssignedGrouping,
   now: Date,
-  direction: DelegationDirection = 'toMe',
+  direction: AssigneeDirection = 'toMe',
 ): AssignedDisplayGroup[] {
   switch (mode) {
     case 'created':
@@ -73,27 +70,23 @@ export function endOfMonthYmd(now: Date): string {
 
 function groupByProject(
   tasks: readonly InboxBlockTask[],
-  direction: DelegationDirection,
+  direction: AssigneeDirection,
 ): AssignedDisplayGroup[] {
   const map = new Map<string, AssignedDisplayGroup>();
   for (const t of tasks) {
-    // Inbox-задачи: в «Для меня» это чужие инбоксы — группа на делегатора («Личные ·
-    // <кто поручил>»); в «Другим» инбокс один (свой), подпись своим именем бессмысленна —
-    // группируем по делегату («Личные · <кому поручено>»), ключ дробится по человеку.
-    const key =
-      t.isInbox && direction === 'byMe' && !isPersonalInboxBlockTask(t)
-        ? `${t.projectId}:${t.delegation.delegateUserId}`
-        : t.projectId;
+    // Inbox в «Для меня» — единая личная группа без упоминания автора. Во
+    // вкладке «Другим» задачи группируются только по текущему ответственному.
+    const key = t.isInbox
+      ? direction === 'byMe'
+        ? `inbox:${t.assignee.userId}`
+        : 'inbox'
+      : t.projectId;
     let g = map.get(key);
     if (!g) {
       const label = t.isInbox
-        ? `Личные · ${
-            isPersonalInboxBlockTask(t)
-              ? t.personalOwnerDisplayName
-              : direction === 'byMe'
-                ? t.delegation.delegateDisplayName
-                : t.delegation.creatorDisplayName
-          }`
+        ? direction === 'byMe'
+          ? `Личные · ${t.assignee.displayName}`
+          : 'Личные'
         : t.projectName;
       g = { key, label, isInbox: t.isInbox, items: [] };
       map.set(key, g);
@@ -187,7 +180,7 @@ function groupByDeadline(tasks: readonly InboxBlockTask[], now: Date): AssignedD
   );
 }
 
-// Канбан «Поручено мне» по ВРЕМЕНИ: РОВНО 3 колонки, всегда все три (даже пустые — как
+// Личный канбан по ВРЕМЕНИ: РОВНО 3 колонки, всегда все три (даже пустые — как
 // колонки доски проекта). Бакет по дедлайну: нет дедлайна → «Без срока»; дедлайн сегодня или
 // раньше (включая просроченные) → «На сегодня»; дедлайн позже сегодня → «Будущее». `key` бакета
 // ('none'/'today'/'future') используется в UI для выбора иконки колонки.

@@ -37,13 +37,13 @@ export type BulkTaskActions = {
   setPriority: (ids: string[], priority: TaskPriority | null) => Promise<BulkResult>;
   setDeadline: (ids: string[], deadline: string | null) => Promise<BulkResult>;
   setRalphMode: (ids: string[], mode: RalphMode) => Promise<BulkResult>;
-  delegate: (ids: string[], delegateUserId: string) => Promise<BulkResult>;
+  assign: (ids: string[], assigneeUserId: string) => Promise<BulkResult>;
   moveToColumn: (ids: string[], targetStatus: TaskStatus) => Promise<BulkResult>;
   remove: (ids: string[]) => Promise<BulkResult>;
 };
 
 // Массовые действия над выбранными задачами поверх существующих one-task методов
-// useTasks (оптимистичные update/move/remove) + taskRepository.delegate. Серверных
+// useTasks (оптимистичные update/move/remove) + taskRepository.assign. Серверных
 // bulk-эндпоинтов нет — это осознанный trade-off (см. spec, Фаза 1, решение 4).
 export function useBulkTaskActions(args: {
   projectId: string;
@@ -79,12 +79,10 @@ export function useBulkTaskActions(args: {
     [update],
   );
 
-  const delegate = useCallback(
-    async (ids: string[], delegateUserId: string) => {
-      // taskRepository.delegate НЕ обновляет локальный стейт useTasks (delegation —
-      // отдельная сущность), поэтому после пачки делаем один refetch.
+  const assign = useCallback(
+    async (ids: string[], assigneeUserId: string) => {
       const res = await runPool(ids, async (id) => {
-        await taskRepository.delegate(projectId, id, delegateUserId);
+        await taskRepository.assign(projectId, id, assigneeUserId);
       });
       await refetch();
       return res;
@@ -124,5 +122,5 @@ export function useBulkTaskActions(args: {
     [remove],
   );
 
-  return { setPriority, setDeadline, setRalphMode, delegate, moveToColumn, remove: removeMany };
+  return { setPriority, setDeadline, setRalphMode, assign, moveToColumn, remove: removeMany };
 }

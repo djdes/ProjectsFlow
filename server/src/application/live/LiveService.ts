@@ -10,7 +10,7 @@ import type { LiveFileDiff, LiveFileChange } from '../../domain/live/LiveFileDif
 import { LiveSessionNotFoundError } from '../../domain/live/errors.js';
 import type { RecordUsage } from '../usage/RecordUsage.js';
 import { assertDispatcherAllowed, type CheckBudget } from '../usage/CheckBudget.js';
-import type { TaskDelegationRepository } from '../task/TaskDelegationRepository.js';
+import type { TaskBillingAttributionRepository } from '../usage/TaskBillingAttributionRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 
 export type LiveServiceDeps = {
@@ -25,13 +25,12 @@ export type LiveServiceDeps = {
   // Firehose live-событий для открытых SSE-вкладок (task-scoped, не per-user bus).
   readonly liveEventHub: LiveEventHub;
   readonly idGen: () => string;
-  // Метеринг расхода ИИ: списываем с профиля ИНИЦИАТОРА (делегатора задачи). Best-effort.
+  // Метеринг расхода ИИ: списываем с профиля создателя задачи. Best-effort.
   readonly recordUsage?: RecordUsage;
-  // Гейт лимитов: если у инициатора (делегатора) free-тариф или исчерпано окно → старт запрещён.
+  // Гейт лимитов: если у создателя free-тариф или исчерпано окно → старт запрещён.
   readonly checkBudget?: CheckBudget;
-  // Для резолва инициатора прогона: создатель задачи (tasks.created_by) — primary; делегатор
-  // (task_delegations) — fallback для задач, явно поручённых кому-то.
-  readonly taskDelegations: TaskDelegationRepository;
+  // Только legacy-фолбэк биллинга для строк до tasks.created_by; не участвует в назначении.
+  readonly legacyAttribution: TaskBillingAttributionRepository;
   readonly tasks: TaskRepository;
   // TTL retention сессии (lazy-GC по expires_at). default 30 дней.
   readonly sessionTtlSeconds?: number;
@@ -91,13 +90,15 @@ export class LiveService {
     input: StartSessionInput,
   ): Promise<{ sessionId: string; baseSeq: number }> {
     await this.authDispatcher(projectId, userId);
-    // Инициатор прогона = «кто отдал воркеру». Primary — создатель задачи (tasks.created_by,
-    // db/088); fallback — делегатор (для явно поручённых задач). Гейтим/метерим ЕГО, а не
+    // Плательщик прогона = создатель задачи (tasks.created_by, db/088). Для старых строк
+    // без created_by используем только billing-фолбэк из исторической таблицы. Гейтим ЕГО, а не
     // единого диспетчера. Нет ни того ни другого (старая задача) → billedUserId=null → не
     // гейтим и позже спишем на диспетчера (userId). См. спек 2026-07-01-per-user-dispatcher-limits.
     const task = await this.deps.tasks.getById(taskId);
-    const delegation = await this.deps.taskDelegations.findActiveForTask(taskId);
-    const billedUserId = task?.createdBy ?? delegation?.creatorUserId ?? null;
+    const legacyCreator = task?.createdBy
+      ? null
+      : await this.deps.legacyAttribution.findLegacyCreatorForTask(taskId);
+    const billedUserId = task?.createdBy ?? legacyCreator;
     if (billedUserId) {
       await assertDispatcherAllowed(this.deps.checkBudget, billedUserId);
     }
@@ -238,7 +239,7 @@ export class LiveService {
       tokensIn: input.tokensIn,
       tokensOut: input.tokensOut,
     });
-    // Метеринг: реальный cost_usd прогона списываем с профиля ИНИЦИАТОРА (делегатора),
+    // Метеринг: реальный cost_usd прогона списываем с профиля создателя,
     // зафиксированного на старте сессии. Fallback на диспетчера (userId), если инициатора нет.
     // Best-effort + идемпотентно (UNIQUE source+ref в ledger) — не должно валить завершение.
     void this.deps.recordUsage

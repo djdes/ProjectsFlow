@@ -32,7 +32,7 @@ import {
   AssignedDragPill,
   TaskDragPill,
   FutureDeadlineDialog,
-  DelegateConfirmDialog,
+  AssigneeConfirmDialog,
   dndCollision,
   snapToCursor,
 } from './AssignedToMeBlock';
@@ -47,13 +47,13 @@ type Props = {
   // Реестр хендлеров/операций детей (доска + блок). Живёт в ref у InboxPage — стабильная
   // ссылка переживает ремаунты KanbanBoard (key={refetchKey}).
   registry: UnifiedDndRef;
-  // id inbox-проекта — для delegate/reassign задач доски (у domain Task нет projectId).
+  // id текущего inbox-проекта для операций с задачами нижней доски.
   projectId: string;
   children: React.ReactNode;
 };
 
 // Происхождение активного drag'а: доска кладёт в data ключ `task` (KanbanCard/useSortable),
-// блок делегирования — ключ `item` (DraggableTask/useDraggable). Оба с type:'task'.
+// верхний личный блок — ключ `item` (DraggableTask/useDraggable). Оба с type:'task'.
 type ActiveDrag = { origin: 'board'; task: Task } | { origin: 'block'; item: InboxBlockTask };
 
 function detectActive(active: Active | null): ActiveDrag | null {
@@ -78,29 +78,28 @@ type OverData = {
   priority?: string; // '1'..'4' | 'none'
   // type='phantom': какой пикер открыть ('project' | 'priority').
   kind?: string;
-  // type='column' (колонка доски) — цель дропа пилюли блока: снять делегацию + статус.
+  // type='column' (колонка доски) — цель дропа задачи из верхнего блока: сменить статус.
   status?: TaskStatus;
   // type='task' (карточка доски как over-цель) — трактуем как её колонку.
   task?: Task;
 };
 
 // === Единый DnD «Входящих» (#5) ===
-// ОДИН <DndContext> на страницу: доска (нижний канбан статусов) и блок делегирования
+// ОДИН <DndContext> на страницу: доска (нижний канбан статусов) и блок ответственных
 // (время-канбаны + кубики людей) регистрируют в нём свои draggable/droppable, а этот
 // компонент диспетчеризует onDrag* по происхождению active и типу over:
 //   • доска-карточка → column/task  — родная логика доски (move/реордер);
 //   • доска-карточка → bucket      — дедлайн задаче (none/today; future — попап даты);
-//   • доска-карточка → user        — делегировать (свой кубик — забрать себе/withdraw);
+//   • доска-карточка → user        — назначить ответственного (свой кубик — забрать себе);
 //   • доска-карточка → group       — по сортировке блока: project → перенос в проект +
 //     назначение себе; priority → смена приоритета (план inbox-grouped-dnd);
 //   • доска-карточка → phantom     — пикеры «Другой проект…» / «Другой приоритет…»;
 //   • блок-карточка  → bucket/user — родная логика блока (срок/переназначение);
-//   • блок-карточка  → column/task доски — личному зеркалу сменить статус; у реального
-//     поручения снять делегацию (withdraw/relinquish) и при необходимости сменить статус.
+//   • блок-карточка  → column/task доски — задаче сменить статус.
 // Оверлей тоже один, вид зависит от происхождения: карточка доски с tilt (drop-анимация
 // как у KanbanBoard) либо пилюля-«комок» блока (без drop-анимации, липнет к курсору).
 export function InboxUnifiedDnd({ registry, projectId, children }: Props): React.ReactElement {
-  const { taskRepository, taskDelegationRepository } = useContainer();
+  const { taskRepository } = useContainer();
   const { user } = useCurrentUser();
   const navigate = useNavigate();
   // Мои проекты — цели переноса задач доски (пикер «Другой проект…» и резолв имени в тосте).
@@ -123,8 +122,8 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
   // Дроп доски-карточки на фантомные колонки → пикеры «Другой проект…» / «Другой приоритет…».
   const [projectPick, setProjectPick] = useState<Task | null>(null);
   const [priorityPick, setPriorityPick] = useState<Task | null>(null);
-  // Дроп доски-карточки на кубик ДРУГОГО участника → подтверждение делегирования (спека
-  // 2026-07-13): тот же диалог, что для карточек блока «Входящих» — дроп на один и тот же
+  // Дроп доски-карточки на кубик ДРУГОГО участника → подтверждение смены ответственного:
+  // тот же диалог, что для карточек блока «Входящих» — дроп на один и тот же
   // кубик подтверждается одинаково. Свой кубик (забрать себе) — без подтверждения. null = закрыт.
   const [pendingBoardReassign, setPendingBoardReassign] = useState<{
     task: Task;
@@ -132,7 +131,7 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
   } | null>(null);
 
   // После смены ответственного обновляем обе зоны: бейдж на карточке доски + списки блока.
-  const afterDelegationChange = async (): Promise<void> => {
+  const afterAssigneeChange = async (): Promise<void> => {
     await Promise.all([registry.current.board?.refetch(), registry.current.block?.refresh()]);
   };
 
@@ -178,20 +177,15 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
     }
   };
 
-  // Дроп пилюли БЛОКА на колонку нижней доски:
-  // • личное зеркало → только статус той же Task; обе карточки остаются на месте;
-  // • задача СВОЕГО инбокса → снять делегацию (моя исходящая → withdraw; поручена мне →
-  //   relinquish) + статус колонки;
-  // • задача ИМЕНОВАННОГО проекта → перенос в мой инбокс (assignToProject; сервер сам
-  //   архивирует делегацию, себя не уведомляет) + статус колонки;
-  // • задача ЧУЖОГО инбокса → только relinquish (личное пространство делегатора — вытащить
-  //   из него задачу нельзя, у владельца она остаётся).
+  // Дроп верхней карточки на колонку нижней доски меняет статус задачи своего
+  // Inbox. Задача именованного проекта сначала переносится в Inbox атомарно с
+  // валидным ответственным. Чужой Inbox физически переносить нельзя.
   const dropBlockItemOnBoardColumn = async (
     item: InboxBlockTask,
     status: TaskStatus,
   ): Promise<void> => {
     if (!user) return;
-    if (isPersonalInboxBlockTask(item)) {
+    if (isPersonalInboxBlockTask(item) || item.projectId === projectId) {
       try {
         await registry.current.board?.moveTask(item.id, status);
       } catch (e) {
@@ -199,7 +193,6 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
       }
       return;
     }
-    const d = item.delegation;
     if (!item.isInbox) {
       try {
         await taskRepository.assignToProject(item.projectId, item.id, projectId);
@@ -213,36 +206,14 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
         toast.error(`Перенесено, но поставить колонку не удалось: ${(e as Error).message}`);
       }
       toast.success(`Перенесено во «Входящие» из «${item.projectName}»`);
-      await afterDelegationChange();
+      await afterAssigneeChange();
       return;
     }
-    try {
-      if (d.creatorUserId === user.id) await taskDelegationRepository.withdraw(d.id);
-      else if (d.delegateUserId === user.id) await taskDelegationRepository.relinquish(d.id);
-      else {
-        toast.error('Снять можно только делегацию, где вы автор или исполнитель');
-        return;
-      }
-    } catch (e) {
-      toast.error(`Не удалось снять делегацию: ${(e as Error).message}`);
-      return;
-    }
-    if (item.projectId === projectId) {
-      try {
-        await registry.current.board?.moveTask(item.id, status);
-      } catch (e) {
-        toast.error(`Делегация снята, но перенести в колонку не удалось: ${(e as Error).message}`);
-      }
-    }
-    toast.success('Делегация снята');
-    await afterDelegationChange();
+    toast.info('Задачу из чужих личных входящих нельзя перенести на вашу доску');
   };
 
-  // Перенос задачи ДОСКИ в проект (дроп на колонку проекта / выбор в пикере) + назначение
-  // себя ответственным: верхний канбан показывает только делегации, без самоделегирования
-  // перенесённая задача «исчезла бы» со страницы. Старая делегация архивируется сервером
-  // (assignToProject), затем создаём accepted-самоделегирование (сервер разрешает, см.
-  // DelegateExistingTask). Фейл второго шага перенос НЕ откатывает — отдельный тост.
+  // Перенос задачи доски в проект. Сервер одной транзакцией сохраняет текущего
+  // ответственного, если он состоит в целевом проекте, иначе назначает actor'а.
   const moveBoardTaskToProject = async (task: Task, targetProjectId: string): Promise<void> => {
     if (!user) return;
     const target = myProjects.find((p) => p.id === targetProjectId);
@@ -252,68 +223,43 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
       toast.error(`Не удалось перенести: ${(e as Error).message}`);
       return;
     }
-    try {
-      await taskRepository.delegate(targetProjectId, task.id, user.id);
-    } catch (e) {
-      toast.error(`Перенесено, но не удалось назначить вас ответственным: ${(e as Error).message}`);
-    }
     toast.success(`Перенесено в «${target?.name ?? 'проект'}»`, {
       action: { label: 'Открыть', onClick: () => navigate(`/projects/${targetProjectId}`) },
     });
-    await afterDelegationChange();
+    await afterAssigneeChange();
   };
 
-  // Делегирование задачи ДОСКИ дропом на кубик человека. Логика — зеркало селектора
-  // «Ответственный» (DelegateTaskButton): есть активная делегация → reassign, нет → delegate;
-  // свой кубик → withdraw («забрать себе»); недоделегированная задача на своём кубике —
-  // честный no-op (она и так ваша, самоделегирование тут ничего не добавит).
-  // Делегирование ДРУГОМУ участнику не срабатывает сразу — открывает подтверждение (спека
-  // 2026-07-13), как и карточки блока. Свой кубик (забрать себе) — сразу, это не делегирование.
+  // Смена ответственного задачи доски дропом на участника. Себе назначаем
+  // сразу, для другого участника показываем подтверждение.
   const dropBoardTaskOnUser = async (task: Task, member: SharedMember): Promise<void> => {
     if (!user) return;
-    const d = task.delegation ?? null;
+    if (task.assignee.userId === member.id) {
+      toast.info(
+        member.id === user.id ? 'Задача уже назначена вам' : `Задача уже у ${member.displayName}`,
+      );
+      return;
+    }
     if (member.id === user.id) {
-      if (!d) {
-        toast.info('Задача и так ваша');
-        return;
-      }
-      if (d.delegateUserId === user.id) {
-        toast.info('Задача уже назначена вам');
-        return;
-      }
-      if (d.creatorUserId !== user.id) {
-        toast.error('Забрать себе можно только задачу, которую делегировали вы');
-        return;
-      }
       try {
-        await taskDelegationRepository.withdraw(d.id);
-        toast.success('Задача возвращена вам');
-        await afterDelegationChange();
+        await taskRepository.assign(projectId, task.id, user.id);
+        toast.success('Теперь вы ответственный');
+        await afterAssigneeChange();
       } catch (e) {
         toast.error(`Не удалось забрать: ${(e as Error).message}`);
       }
       return;
     }
-    if (d && d.delegateUserId === member.id) {
-      // Уже на нём — переназначать некуда, но не молчим: сообщаем тостом (диалог не нужен).
-      toast.info(`Задача уже у ${member.displayName}`);
-      return;
-    }
     setPendingBoardReassign({ task, member });
   };
 
-  // Фактический reassign/delegate задачи доски после подтверждения диалога. Есть активная
-  // делегация → reassign, нет → delegate. Кубики = shared-members caller'а, inbox-делегирование
-  // валидируется по ним же — любая ошибка остаётся честным тостом.
+  // Фактическая смена ответственного после подтверждения.
   const confirmBoardReassign = async (task: Task, member: SharedMember): Promise<void> => {
-    const d = task.delegation ?? null;
     try {
-      if (d) await taskRepository.reassign(projectId, task.id, member.id);
-      else await taskRepository.delegate(projectId, task.id, member.id);
+      await taskRepository.assign(projectId, task.id, member.id);
       toast.success(`Ответственный — ${member.displayName}`);
-      await afterDelegationChange();
+      await afterAssigneeChange();
     } catch (e) {
-      toast.error(`Не удалось делегировать: ${(e as Error).message}`);
+      toast.error(`Не удалось сменить ответственного: ${(e as Error).message}`);
     }
   };
 
@@ -397,7 +343,7 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
       >
         {children}
         {/* Один оверлей на страницу; вид и drop-анимация зависят от происхождения active. */}
-        {/* И доска, и блок делегирования тащат ОДИНАКОВО — полупрозрачной однострочной
+        {/* И доска, и верхний блок тащат ОДИНАКОВО — полупрозрачной однострочной
             пилюлей (запрос: drag из нижних канбанов тоже прозрачный и в строку). */}
         <DragOverlay dropAnimation={null} modifiers={[snapToCursor]}>
           {active?.origin === 'board' ? (
@@ -442,19 +388,18 @@ export function InboxUnifiedDnd({ registry, projectId, children }: Props): React
         }}
       />
 
-      {/* Дроп доски-карточки на кубик другого участника → подтверждение делегирования
-          (спека 2026-07-13): тот же диалог, что для карточек блока «Входящих». fromName —
-          текущий делегат, если задача уже делегирована; иначе (свежее делегирование) null. */}
-      <DelegateConfirmDialog
+      {/* Дроп доски-карточки на кубик другого участника → подтверждение смены ответственного.
+          from — текущий ответственный задачи. */}
+      <AssigneeConfirmDialog
         open={pendingBoardReassign !== null}
         taskTitle={
           pendingBoardReassign ? plainTaskTitle(pendingBoardReassign.task.description ?? '') : ''
         }
         from={
-          pendingBoardReassign?.task.delegation
+          pendingBoardReassign
             ? {
-                name: pendingBoardReassign.task.delegation.delegateDisplayName,
-                avatarUrl: pendingBoardReassign.task.delegation.delegateAvatarUrl ?? null,
+                name: pendingBoardReassign.task.assignee.displayName,
+                avatarUrl: pendingBoardReassign.task.assignee.avatarUrl,
               }
             : null
         }

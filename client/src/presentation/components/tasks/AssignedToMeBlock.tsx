@@ -35,7 +35,6 @@ import {
   Inbox as InboxIcon,
   ListFilter,
   MessageSquare,
-  Send,
   Users,
   X,
   type LucideIcon,
@@ -66,36 +65,36 @@ import {
   groupAssignedTasks,
   startOfDay,
   ymd,
-  type DelegationDirection,
+  type AssigneeDirection,
 } from './assignedGrouping';
 import { ColumnPreviewList } from './ColumnPreview';
 import { TaskTitleText } from './TaskTitleText';
 import { splitTitleBody, plainTaskTitle } from '@/lib/taskTitleBody';
 import { Markdown, MARKDOWN_COMPACT } from '@/presentation/components/markdown/Markdown';
 import { InboxCheckbox } from './InboxCheckbox';
-import { DelegationBadge } from './DelegationBadge';
+import { AssigneeBadge } from './AssigneeBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { DeadlineBadge } from './DeadlineBadge';
 import { RalphModeBadge } from './RalphMode';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import type { UnifiedDndRef } from './unifiedDndTypes';
 import {
-  asDelegatedInboxBlockTask,
+  asAssignedInboxBlockTask,
   buildToMeInboxBlockTasks,
   isPersonalInboxBlockTask,
-  type DelegatedInboxBlockTask,
+  type AssignedInboxBlockTask,
   type InboxBlockTask,
 } from './inboxBlockTasks';
 
 type Props = {
   // Снимок именно нижней inbox-доски. null = доска ещё не закончила первую загрузку.
-  // Эти задачи виртуально зеркалятся в верхнюю личную колонку без создания делегаций.
+  // Свои задачи виртуально зеркалятся в верхнюю личную колонку без дублирования в БД.
   boardTasks: readonly Task[] | null;
   inboxProjectId: string;
-  // Колбэк после смены делегации/toggle — InboxPage перефетчит доску ниже.
+  // Колбэк после смены ответственного/toggle — InboxPage перефетчит доску ниже.
   onChanged?: () => void;
   // Режим отображения (как у страницы «Входящие»): 'kanban' — группы становятся колонками
-  // канбана (карточки = поручения), 'list' — плоский список с заголовками групп.
+  // канбана, 'list' — плоский список с заголовками групп.
   // DOM-узел в шапке страницы, куда портализуются фильтры (от/кому/проект) + «Сортировка».
   // null (нет слота) → рендерим их на месте, в шапке блока (фолбэк).
   toolbarSlot?: HTMLElement | null;
@@ -113,9 +112,8 @@ type Props = {
   externalDnd?: UnifiedDndRef | null;
 };
 
-// Тип вкладки блока делегирования: «Для меня» (поручено мне) / «Другим» (все видимые
-// делегирования кому-то другому). Совпадает с направлением группировки.
-type DelegationTab = DelegationDirection;
+// Тип вкладки блока ответственных: «Для меня» / «Другим».
+type AssigneeTab = AssigneeDirection;
 
 // done-задачи прячутся Eye-toggle'ом страницы; фильтр общий для обеих вкладок.
 const notDone = (t: InboxBlockTask): boolean => t.status !== 'done';
@@ -149,18 +147,12 @@ export const snapToCursor: Modifier = ({ activatorEvent, draggingNodeRect, trans
 };
 
 // Верхний блок «Входящих», две вкладки: «Для меня» — личные зеркала нижней доски плюс
-// задачи, делегированные текущему пользователю по всем проектам; «Другим» — ВСЕ видимые
-// делегирования кому-то другому
-// (в именованных проектах-участниках — от любого любому, напр. «Олег → Ярослав»; в
-// инбоксе — только собственные исходящие), с фильтрами «от кого / кому / проект»
-// (по умолчанию все — видно, кто как справляется по всем проектам). Обе вкладки грузятся
-// вместе (счётчики в табах всегда актуальны). Группировка списка переключаемая
+// задачи текущего ответственного по всем проектам; «Другим» — видимые задачи, за которые
+// отвечает кто-то ещё. Фильтры — по ответственному и проекту. Обе вкладки грузятся вместе
+// (счётчики в табах всегда актуальны). Группировка списка переключаемая
 // (проект/дата создания/дедлайн/приоритет) и сохраняется за аккаунтом (users.ui_prefs).
-// Делегирование мгновенное (создаётся сразу accepted) — обе вкладки рисуют все строки в
-// «принятом» виде (AcceptedCard с чекбоксом «выполнено»), без кнопок принятия/отказа;
-// DelegationBadge показывает только направление для accepted-делегаций. Чекбокс доступен
-// по роли caller'а (canModify с сервера). Клик по задаче открывает TaskDrawer (read-access
-// гейтится на сервере).
+// Назначение ответственного мгновенное, без принятия/отказа. Чекбокс доступен по
+// task-scoped праву caller'а (canModify с сервера). Клик открывает TaskDrawer.
 // Горизонтальный скролл ряда канбанов «Входящих»: по умолчанию САМОЕ ЛЕВОЕ (0),
 // позиция переживает перезагрузку (sessionStorage). Запрос: «когда верхние канбаны
 // не вмещаются — не уезжать вправо, старт слева, скролл сохранять при reload».
@@ -204,7 +196,7 @@ function usePersistentScrollLeft(storageKey: string): {
 // перезагрузке открывается та же (просьба юзера). Grouping персистится серверно (ui_prefs),
 // вкладку держим локально, чтобы не слать серверный запрос на каждый клик по вкладке.
 const TAB_STORAGE_KEY = 'pf.inbox.assignedTab';
-function readStoredTab(): DelegationTab | null {
+function readStoredTab(): AssigneeTab | null {
   try {
     const v = localStorage.getItem(TAB_STORAGE_KEY);
     return v === 'toMe' || v === 'byMe' ? v : null;
@@ -224,19 +216,19 @@ export function AssignedToMeBlock({
   bleedPadClass = '',
   externalDnd = null,
 }: Props): React.ReactElement | null {
-  const { taskDelegationRepository, taskRepository, userRepository, projectRepository } =
+  const { taskAssigneeRepository, taskRepository, userRepository, projectRepository } =
     useContainer();
   const { user } = useCurrentUser();
   // data — для фантомной колонки «Другой проект…» (условие «видны не все мои проекты»).
   const { data: allProjects } = useProjectsContext();
   const [tasks, setTasks] = useState<AssignedTask[]>([]); // «Для меня»
   const [byMeTasks, setByMeTasks] = useState<AssignedTask[]>([]); // «Другим»
-  const [tab, setTab] = useState<DelegationTab>(() => readStoredTab() ?? 'toMe');
+  const [tab, setTab] = useState<AssigneeTab>(() => readStoredTab() ?? 'toMe');
   // Зафиксирован ли стартовый выбор вкладки: сохранённый выбор фиксирует его сразу,
   // иначе авто-переключение выполняется один раз после загрузки обоих источников.
   const tabSelectionResolvedRef = useRef(readStoredTab() !== null);
   // Явная смена вкладки юзером — персистим в localStorage и глушим авто-переключение.
-  const handleTabChange = useCallback((next: DelegationTab): void => {
+  const handleTabChange = useCallback((next: AssigneeTab): void => {
     tabSelectionResolvedRef.current = true;
     try {
       localStorage.setItem(TAB_STORAGE_KEY, next);
@@ -245,9 +237,7 @@ export function AssignedToMeBlock({
     }
     setTab(next);
   }, []);
-  // Фильтры вкладки «Другим»: от кого (creatorUserId) / кому (delegateUserId) /
-  // проект (projectId). null = все (дефолт).
-  const [filterFrom, setFilterFrom] = useState<string | null>(null);
+  // Фильтры вкладки «Другим»: ответственный и проект. null = все.
   const [filterTo, setFilterTo] = useState<string | null>(null);
   const [filterProject, setFilterProject] = useState<string | null>(null);
   const [grouping, setGrouping] = useState<AssignedGrouping>(DEFAULT_ASSIGNED_GROUPING);
@@ -269,15 +259,15 @@ export function AssignedToMeBlock({
   const refresh = useCallback(async (): Promise<void> => {
     try {
       const [mine, byMe] = await Promise.all([
-        taskDelegationRepository.listAssignedToMe(),
-        taskDelegationRepository.listDelegatedToOthers(),
+        taskAssigneeRepository.listMine(),
+        taskAssigneeRepository.listOthers(),
       ]);
       setTasks(mine);
       setByMeTasks(byMe);
     } catch (e) {
-      toast.error(`Не удалось загрузить поручения: ${(e as Error).message}`);
+      toast.error(`Не удалось загрузить задачи: ${(e as Error).message}`);
     }
-  }, [taskDelegationRepository]);
+  }, [taskAssigneeRepository]);
 
   useEffect(() => {
     let cancelled = false;
@@ -285,8 +275,8 @@ export function AssignedToMeBlock({
     // Обе вкладки + сохранённую группировку грузим вместе и гейтим первый рендер на всё —
     // блок не «мигает» дефолтной группировкой/счётчиками перед применением реальных.
     Promise.all([
-      taskDelegationRepository.listAssignedToMe(),
-      taskDelegationRepository.listDelegatedToOthers(),
+      taskAssigneeRepository.listMine(),
+      taskAssigneeRepository.listOthers(),
       userRepository.getUiPrefs(),
     ])
       .then(([mine, byMe, prefs]) => {
@@ -298,19 +288,19 @@ export function AssignedToMeBlock({
         if (prefs.inboxAssignedGrouping) setGrouping(prefs.inboxAssignedGrouping);
       })
       .catch((e: unknown) => {
-        if (!cancelled) toast.error(`Не удалось загрузить поручения: ${(e as Error).message}`);
+        if (!cancelled) toast.error(`Не удалось загрузить задачи: ${(e as Error).message}`);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    // Перефетч при возврате на вкладку — ловим новые поручения без ручного refresh.
+    // Перефетч при возврате на вкладку — ловим новые назначения без ручного refresh.
     const onFocus = (): void => void refresh();
     window.addEventListener('focus', onFocus);
     return () => {
       cancelled = true;
       window.removeEventListener('focus', onFocus);
     };
-  }, [taskDelegationRepository, userRepository, refresh]);
+  }, [taskAssigneeRepository, userRepository, refresh]);
 
   const handleGroupingChange = (next: AssignedGrouping): void => {
     // Оптимистично: сортировка применяется мгновенно, сохранение летит в фоне.
@@ -350,7 +340,7 @@ export function AssignedToMeBlock({
   const toMeTasks = useMemo(
     () =>
       buildToMeInboxBlockTasks({
-        delegatedTasks: tasks,
+        assignedTasks: tasks,
         boardTasks: boardTasks ?? [],
         inboxProjectId,
         owner: user ? { id: user.id, displayName: user.displayName } : null,
@@ -358,7 +348,7 @@ export function AssignedToMeBlock({
     [tasks, boardTasks, inboxProjectId, user],
   );
   const byMeDisplayTasks = useMemo(
-    () => byMeTasks.map(asDelegatedInboxBlockTask),
+    () => byMeTasks.map(asAssignedInboxBlockTask),
     [byMeTasks],
   );
   const toMeVisible = useMemo(
@@ -369,21 +359,20 @@ export function AssignedToMeBlock({
     () => (hideDone ? byMeDisplayTasks.filter(notDone) : byMeDisplayTasks),
     [byMeDisplayTasks, hideDone],
   );
-  // Фильтры «от кого / кому / проект» — только вкладка «Другим», поверх hide-done.
+  // Фильтры «ответственный / проект» — только вкладка «Другим», поверх hide-done.
   // Предикат вынесен: им же различаем причину пустоты (фильтры vs скрытые done).
   const matchesByMeFilters = useCallback(
-    (t: DelegatedInboxBlockTask): boolean =>
-      (!filterFrom || t.delegation.creatorUserId === filterFrom) &&
-      (!filterTo || t.delegation.delegateUserId === filterTo) &&
+    (t: AssignedInboxBlockTask): boolean =>
+      (!filterTo || t.assignee.userId === filterTo) &&
       (!filterProject || t.projectId === filterProject),
-    [filterFrom, filterTo, filterProject],
+    [filterTo, filterProject],
   );
   const byMeVisible = useMemo(
     () => byMeVisibleAll.filter(matchesByMeFilters),
     [byMeVisibleAll, matchesByMeFilters],
   );
   const visibleTasks = tab === 'toMe' ? toMeVisible : byMeVisible;
-  // Ждём оба независимых источника (делегации + нижнюю доску), иначе быстрый endpoint
+  // Ждём оба независимых источника (назначенные задачи + нижнюю доску), иначе быстрый endpoint
   // «Другим» успевал выбрать не ту стартовую вкладку до появления личных зеркал. Явный
   // сохранённый выбор пользователя при этом не перебиваем.
   useEffect(() => {
@@ -396,29 +385,27 @@ export function AssignedToMeBlock({
       : byMeDisplayTasks;
     setTab(mineShown.length === 0 && byMeShown.length > 0 ? 'byMe' : 'toMe');
   }, [loading, boardTasks, toMeTasks, byMeDisplayTasks]);
-  const anyByMeFilter = filterFrom !== null || filterTo !== null || filterProject !== null;
+  const anyByMeFilter = filterTo !== null || filterProject !== null;
   // Опции фильтров — уникальные значения из СЫРОГО списка «Другим» (не из
   // отфильтрованного — иначе выбор значения выкидывал бы остальные из меню).
   const filterOptions = useMemo(() => {
-    const from = new Map<string, string>();
     const to = new Map<string, string>();
     const projects = new Map<string, string>();
     for (const t of byMeTasks) {
-      from.set(t.delegation.creatorUserId, t.delegation.creatorDisplayName);
-      to.set(t.delegation.delegateUserId, t.delegation.delegateDisplayName);
+      to.set(t.assignee.userId, t.assignee.displayName);
       projects.set(t.projectId, t.isInbox ? 'Личные' : t.projectName);
     }
     const toArr = (m: Map<string, string>): { id: string; name: string }[] =>
       [...m.entries()]
         .map(([id, name]) => ({ id, name }))
         .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-    return { from: toArr(from), to: toArr(to), projects: toArr(projects) };
+    return { to: toArr(to), projects: toArr(projects) };
   }, [byMeTasks]);
   // Проект-фильтр сбрасываем, если проект исчез из данных (архив/удаление) — иначе вкладка
-  // выглядела бы пустой без причины. Фильтры «от кого»/«кому» НЕ сбрасываем: клик по аватару
-  // участника выставляет фильтр даже на того, у кого сейчас нет поручений — держим выбор
+  // выглядела бы пустой без причины. Фильтр ответственного НЕ сбрасываем: клик по аватару
+  // участника выставляет фильтр даже на того, у кого сейчас нет задач — держим выбор
   // активным и показываем пустое состояние. (Раньше сброс срабатывал сразу после клика по
-  // участнику без поручений → «фильтр сбрасывался, аватар не выделялся».)
+  // участнику без задач → «фильтр сбрасывался, аватар не выделялся».)
   useEffect(() => {
     if (filterProject && !byMeTasks.some((t) => t.projectId === filterProject)) {
       setFilterProject(null);
@@ -451,14 +438,13 @@ export function AssignedToMeBlock({
   // месяца / конкретный день). null = закрыта.
   const [futureDrop, setFutureDrop] = useState<InboxBlockTask | null>(null);
   // Дроп на кубик ДРУГОГО участника не переназначает сразу — открывает подтверждение
-  // (спека 2026-07-13): виден и текущий делегат, и новый. null = закрыта. Дроп на свой
-  // кубик (reclaimToSelf) и колонки-сроки — без подтверждения, это не делегирование.
+  // В подтверждении видны текущий и новый ответственные. null = диалог закрыт.
   const [pendingReassign, setPendingReassign] = useState<{
     item: InboxBlockTask;
     member: SharedMember;
   } | null>(null);
 
-  // Оптимистично проставить дедлайн реальной делегации в обоих endpoint-списках.
+  // Оптимистично проставить дедлайн задачи в обоих endpoint-списках.
   // Личное зеркало обновляется через useTasks нижней доски.
   const patchDeadlineLocal = useCallback((id: string, deadline: string | null): void => {
     const patch = (arr: AssignedTask[]): AssignedTask[] =>
@@ -493,7 +479,7 @@ export function AssignedToMeBlock({
   );
 
   // Кубики людей: все участники проектов пространства (shared-members) — цель для
-  // drag-делегирования. Грузим один раз; себя список уже не содержит (сервер исключает).
+  // drag-назначения. Грузим один раз; себя список уже не содержит (сервер исключает).
   const [members, setMembers] = useState<SharedMember[]>([]);
   useEffect(() => {
     let cancelled = false;
@@ -528,19 +514,14 @@ export function AssignedToMeBlock({
     grouping === 'priority' &&
     PRIORITY_BUCKET_KEYS.some((k) => !groups.some((g) => g.key === k));
 
-  // Назначить/переназначить ответственного (drop карточки на кубик человека). Для личного
-  // зеркала создаём делегацию, для реального поручения — reassign.
+  // Назначить ответственного дропом на участника. Операция одна для любого
+  // предыдущего ответственного и идемпотентна.
   const reassignTo = useCallback(
     async (item: InboxBlockTask, member: SharedMember): Promise<void> => {
-      if (!isPersonalInboxBlockTask(item) && member.id === item.delegation.delegateUserId) return;
+      if (member.id === item.assignee.userId) return;
       try {
-        if (isPersonalInboxBlockTask(item)) {
-          await taskRepository.delegate(item.projectId, item.id, member.id);
-          toast.success(`Ответственный — ${member.displayName}`);
-        } else {
-          await taskRepository.reassign(item.projectId, item.id, member.id);
-          toast.success(`Переназначено: ${member.displayName}`);
-        }
+        await taskRepository.assign(item.projectId, item.id, member.id);
+        toast.success(`Ответственный — ${member.displayName}`);
         await refresh();
         await externalDnd?.current.board?.refetch();
         onChanged?.();
@@ -551,34 +532,26 @@ export function AssignedToMeBlock({
     [taskRepository, refresh, externalDnd, onChanged],
   );
 
-  // Забрать задачу обратно себе (drop карточки на СВОЮ аватарку). Работает для задач, которые
-  // делегировал я (вкладка «Другим») — закрываем активную делегацию (withdraw, сервер разрешает
-  // и для accepted). Если задача уже назначена мне или делегировал не я — тихий тост.
+  // Забрать задачу себе — та же смена ответственного. В именованном проекте это
+  // может сделать любой участник; Inbox дополнительно проверяет сервер.
   const reclaimToSelf = useCallback(
     async (item: InboxBlockTask): Promise<void> => {
       if (!user) return;
-      if (isPersonalInboxBlockTask(item)) {
-        toast.info('Задача уже личная');
-        return;
-      }
-      if (item.delegation.delegateUserId === user.id) {
+      if (item.assignee.userId === user.id) {
         toast.info('Задача уже назначена вам');
         return;
       }
-      if (item.delegation.creatorUserId !== user.id) {
-        toast.error('Забрать себе можно только задачу, которую делегировали вы');
-        return;
-      }
       try {
-        await taskDelegationRepository.withdraw(item.delegation.id);
-        toast.success('Задача возвращена вам');
+        await taskRepository.assign(item.projectId, item.id, user.id);
+        toast.success('Теперь вы ответственный');
         await refresh();
+        await externalDnd?.current.board?.refetch();
         onChanged?.();
       } catch (e) {
         toast.error(`Не удалось забрать: ${(e as Error).message}`);
       }
     },
-    [user, taskDelegationRepository, refresh, onChanged],
+    [user, taskRepository, refresh, externalDnd, onChanged],
   );
 
   const handleDragStart = (e: DragStartEvent): void => {
@@ -595,16 +568,13 @@ export function AssignedToMeBlock({
       | undefined;
     const item = e.active.data.current?.item as InboxBlockTask | undefined;
     if (!over || !item || !data) return;
-    // Дроп на кубик человека → переназначить делегата (с подтверждением). Дроп на СВОЙ
-    // кубик → забрать себе, сразу (не делегирование, подтверждение не нужно).
+    // Дроп на кубик человека → сменить ответственного с подтверждением. Дроп на СВОЙ
+    // кубик → забрать себе сразу.
     if (data.type === 'user' && data.member) {
       if (user && data.member.id === user.id) void reclaimToSelf(item);
-      // Дроп на кубик текущего делегата — переназначать некуда, но тихо не проглатываем:
+      // Дроп на кубик текущего ответственного — менять не на кого, но тихо не проглатываем:
       // сообщаем тостом, что задача уже у него (не открываем зря подтверждение).
-      else if (
-        !isPersonalInboxBlockTask(item) &&
-        data.member.id === item.delegation.delegateUserId
-      )
+      else if (data.member.id === item.assignee.userId)
         toast.info(`Задача уже у ${data.member.displayName}`);
       else setPendingReassign({ item, member: data.member });
       return;
@@ -646,8 +616,8 @@ export function AssignedToMeBlock({
 
   if (loading || boardTasks === null) return null;
 
-  // #2: единая кнопка «Фильтры» в шапке страницы. Сортировка (когда есть поручения) +
-  // скрыть-выполненные (всегда) + фильтры от/кому/проект (только вкладка «Другим»).
+  // #2: единая кнопка «Фильтры» в шапке страницы. Сортировка (когда есть задачи) +
+  // скрыть-выполненные (всегда) + фильтры ответственного/проекта (только вкладка «Другим»).
   const hasAny = toMeVisible.length > 0 || byMeVisibleAll.length > 0;
   const filtersPopover = (
     <InboxFiltersPopover
@@ -658,14 +628,11 @@ export function AssignedToMeBlock({
       hideDone={hideDone}
       onHideDoneChange={onHideDoneChange}
       options={filterOptions}
-      from={filterFrom}
       to={filterTo}
       project={filterProject}
-      onFrom={setFilterFrom}
       onTo={setFilterTo}
       onProject={setFilterProject}
       onResetFilters={() => {
-        setFilterFrom(null);
         setFilterTo(null);
         setFilterProject(null);
       }}
@@ -677,8 +644,7 @@ export function AssignedToMeBlock({
   // кнопку «Фильтры» (скрыть-выполненные для доски ниже) в шапке страницы оставляем.
   if (!hasAny) return filtersToolbar;
 
-  const subtitleBase =
-    tab === 'toMe' ? 'Личные задачи и поручения' : 'Поручения в ваших проектах';
+  const subtitleBase = tab === 'toMe' ? 'Задачи, за которые отвечаете вы' : 'Задачи других участников';
   // Пустая видимая вкладка: сначала честно про фильтры, затем про скрытые done
   // (непустой СЫРОЙ список без фильтров = всё выполнено и скрыто Eye-toggle'ом),
   // и только при реально пустых данных — «ничего нет».
@@ -686,14 +652,14 @@ export function AssignedToMeBlock({
     tab === 'toMe'
       ? toMeTasks.length > 0
         ? 'Все задачи выполнены и скрыты («Скрыть выполненные»)'
-        : 'Личных задач и поручений пока нет'
+        : 'Назначенных вам задач пока нет'
       : byMeTasks.length === 0
-        ? 'Поручений пока нет'
+        ? 'Задач других участников пока нет'
         : anyByMeFilter && !byMeDisplayTasks.some(matchesByMeFilters)
           ? 'Под выбранные фильтры ничего не попадает'
           : // Фильтрам (если есть) в СЫРОМ списке что-то соответствует, но видимых нет —
             // значит, спрятал Eye-toggle, и говорим про него, а не виним фильтры.
-            'Все подходящие поручения выполнены и скрыты («Скрыть выполненные»)';
+            'Все подходящие задачи выполнены и скрыты («Скрыть выполненные»)';
 
   // Тело блока — общее для обоих режимов.
   // Персональная зона, Notion-стиль: НЕ карточка-в-рамке (рамка враждует с full-bleed
@@ -705,7 +671,7 @@ export function AssignedToMeBlock({
       <div className="flex items-start justify-between gap-3 px-0.5">
         <div className="flex min-w-0 items-center gap-2.5">
           {/* Своя ава (владелец зоны) — И drop-цель «забрать себе»: перетащи задачу сюда, чтобы
-              вернуть/назначить её себе (участники для делегирования — справа, без себя).
+              вернуть/назначить её себе (остальные участники — справа).
               size-8 крупнее аватаров в строках/карточках — иерархия масштабом. */}
           {user ? (
             <SelfDropAvatar user={user} dragging={dragActive} />
@@ -715,7 +681,7 @@ export function AssignedToMeBlock({
           <div className="min-w-0">
             {/* -ml-2 гасит внутренний px-2 первого таба — текст «Для меня» встаёт ровно
                 там, где стоял бы обычный заголовок (и подзаголовок под ним). */}
-            <DelegationTabs
+            <AssigneeTabs
               tab={tab}
               onChange={handleTabChange}
               toMeCount={toMeVisible.length}
@@ -727,9 +693,9 @@ export function AssignedToMeBlock({
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitleBase}</p>
           </div>
         </div>
-        {/* Кубики людей пространства — в ПРАВОМ крае строки с вкладками (цель drag-делегирования).
+        {/* Кубики людей пространства — в ПРАВОМ крае строки с вкладками (цель drag-назначения).
             Компактные аватары; при наведении перетаскиваемой задачи кубик раскрывается в
-            «Делегировать: <имя>». Ряд горизонтально скроллится на узких экранах. self-center —
+            «Назначить: <имя>». Ряд горизонтально скроллится на узких экранах. self-center —
             вертикально по центру относительно более высокой левой группы (вкладки + подзаголовок). */}
         {members.length > 0 && (
           <div className="flex min-w-0 items-center gap-1.5 self-center overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -763,7 +729,7 @@ export function AssignedToMeBlock({
         <p className="px-0.5 py-1 text-sm text-muted-foreground/60">{emptyText}</p>
       ) : grouping === 'deadline' ? (
         // Сортировка «по дедлайну» = 3 колонки по времени (Без срока / На сегодня / Будущее).
-        // Drag между колонками меняет дедлайн; drag на аватар участника — делегирует. Ряд
+        // Drag между колонками меняет дедлайн; drag на аватар участника — назначает его. Ряд
         // колонок full-bleed'ится за паддинг страницы (как доска проекта).
         <div
           ref={setHScrollRef}
@@ -775,7 +741,7 @@ export function AssignedToMeBlock({
           )}
         >
           {kanbanGroups.map((group) => (
-            // Дроп-зона (drag-срок/делегирование) + пагинация «первые 4 + Показать ещё» +
+            // Дроп-зона (drag-срок/ответственный) + пагинация «первые 4 + Показать ещё» +
             // перетаскиваемые карточки. Все три фичи вместе (мердж main ↔ feat/s2-usage).
             <TimeBucketColumn key={group.key} bucket={group.key} label={group.label} count={group.items.length}>
               {group.items.length === 0 ? (
@@ -784,13 +750,12 @@ export function AssignedToMeBlock({
                 <ColumnPreviewList
                   // key по вкладке+фильтрам: смена датасета ремаунтит список и
                   // сбрасывает раскрытие «Показать ещё» (не тащим его между вкладками).
-                  key={[tab, filterFrom ?? '', filterTo ?? '', filterProject ?? ''].join('|')}
+                  key={[tab, filterTo ?? '', filterProject ?? ''].join('|')}
                   items={group.items}
                   renderItem={(item) => (
                     <DraggableTask key={item.id} item={item} disabled={!item.canModify}>
                       <AcceptedCard
                         item={item}
-                        currentUserId={user?.id ?? null}
                         onOpen={() => setDrawerTask(item)}
                         onChanged={handleToggled}
                       />
@@ -865,7 +830,6 @@ export function AssignedToMeBlock({
                   <DraggableTask key={item.id} item={item} disabled={!item.canModify}>
                     <AcceptedCard
                       item={item}
-                      currentUserId={user?.id ?? null}
                       onOpen={() => setDrawerTask(item)}
                       onChanged={handleToggled}
                       showCreatedAt={grouping === 'created'}
@@ -922,17 +886,16 @@ export function AssignedToMeBlock({
         }}
       />
 
-      {/* Дроп на кубик другого участника → подтверждение делегирования (спека 2026-07-13):
-          единый диалог DelegateConfirmDialog (тот же используют карточки нижней доски —
-          InboxUnifiedDnd), показывает название, текущего делегата и нового. */}
-      <DelegateConfirmDialog
+      {/* Дроп на кубик другого участника → подтверждение смены ответственного. Тот же
+          диалог используется карточками нижней доски через InboxUnifiedDnd. */}
+      <AssigneeConfirmDialog
         open={pendingReassign !== null}
         taskTitle={pendingReassign ? plainTaskTitle(pendingReassign.item.description ?? '') : ''}
         from={
-          pendingReassign && !isPersonalInboxBlockTask(pendingReassign.item)
+          pendingReassign
             ? {
-                name: pendingReassign.item.delegation.delegateDisplayName,
-                avatarUrl: pendingReassign.item.delegation.delegateAvatarUrl ?? null,
+                name: pendingReassign.item.assignee.displayName,
+                avatarUrl: pendingReassign.item.assignee.avatarUrl,
               }
             : null
         }
@@ -963,7 +926,7 @@ export function AssignedToMeBlock({
 
   return (
     // Один DndContext на всю зону: и временные колонки (drag → срок), и кубики людей
-    // (drag → делегирование) — общие drop-цели одного перетаскивания карточки.
+    // (drag → смена ответственного) — общие drop-цели одного перетаскивания карточки.
     <>
       {filtersToolbar}
       <DndContext
@@ -982,10 +945,10 @@ export function AssignedToMeBlock({
   );
 }
 
-// Оверлей перетаскивания карточки поручения. Компактный «комок» под курсором вместо целой
+// Оверлей перетаскивания назначенной задачи. Компактный «комок» под курсором вместо целой
 // карточки: стартует крупнее → пружиной сжимается в маленькую пилюлю с названием.
 // ПОЛУПРОЗРАЧНЫЙ (~55%) — сквозь него видно кубик участника/колонку, на которую целишься
-// (запрос: «видно, кому делегирую»). Мелкий оверлей = легче целиться (+ коллизии по курсору,
+// (сразу видно, кого назначаем). Мелкий оверлей = легче целиться (+ коллизии по курсору,
 // см. dndCollision). Экспорт — его же рендерит InboxUnifiedDnd в общем контексте.
 export function AssignedDragPill({ item }: { item: InboxBlockTask }): React.ReactElement {
   return <TaskDragPill title={plainTaskTitle(item.description ?? '') || 'Задача'} />;
@@ -1114,7 +1077,7 @@ function PhantomDropColumn({
   );
 }
 
-// Обёртка-«ручка» drag'а вокруг карточки поручения. Клик (без сдвига ≥8px) проходит внутрь —
+// Обёртка-«ручка» drag'а вокруг карточки задачи. Клик (без сдвига ≥8px) проходит внутрь —
 // открывается drawer / тогается чекбокс; долгий тап на мобиле стартует драг (см. sensors).
 // disabled — нет прав менять задачу (canModify=false): карточка не таскается.
 function DraggableTask({
@@ -1146,10 +1109,10 @@ function DraggableTask({
   );
 }
 
-// Кубик участника пространства = drop-цель делегирования. В покое — компактная ава + имя
+// Кубик участника пространства = drop-цель смены ответственного. В покое — компактная ава + имя
 // (ховер раскрывает карточку UserAvatarHover). Во время drag'а кубик получает тихий
 // primary-ринг (сигнал «сюда можно»), а тот, что под курсором, плавно всплывает: лёгкий
-// scale + сплошной ринг + подпись сменяется на «Делегировать». Себя тут нет — «забрать себе»
+// scale + сплошной ринг + подпись сменяется на «Назначить». Себя тут нет — «забрать себе»
 // делается дропом на свою аву слева (SelfDropAvatar).
 // filterActive/onToggleFilter (спека 2026-07-13, только вкладка «Другим») — клик по кубику
 // (не по хвостовой ×) переключает single-фильтр «кому», общий с шапочным меню-фильтром.
@@ -1165,7 +1128,7 @@ function UserCube({
   onToggleFilter?: () => void;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id: `user-${member.id}`, data: { type: 'user', member } });
-  // Клик-фильтр доступен только вне drag'а (в drag-режиме кубик — цель делегирования, не
+  // Клик-фильтр доступен только вне drag'а (в drag-режиме кубик — цель назначения, не
   // клик-таргет) и только когда проп передан (т.е. на вкладке «Другим», см. место рендера).
   const clickable = !dragging && !!onToggleFilter;
   return (
@@ -1195,12 +1158,12 @@ function UserCube({
         <UserAvatarHover
           displayName={member.displayName}
           avatarUrl={member.avatarUrl}
-          subtitle="участник пространства · перетащите сюда задачу, чтобы делегировать"
+          subtitle="участник пространства · перетащите сюда задачу, чтобы назначить"
           triggerClassName="size-6 text-[10px]"
         />
       )}
       <span className="max-w-[7rem] truncate font-medium">
-        {dragging && isOver ? 'Делегировать' : member.displayName}
+        {dragging && isOver ? 'Назначить' : member.displayName}
       </span>
       {/* Активный фильтр — инлайновый × ВНУТРИ пилюли (не absolute: ряд аватаров в
           overflow-x-auto обрезал бы вынесенный badge — «крестик отображался фигово»).
@@ -1330,9 +1293,9 @@ export function FutureDeadlineDialog({
   );
 }
 
-// Один участник в диалоге делегирования: подпись-роль + аватар с hover-карточкой (наведи —
+// Один участник в диалоге смены ответственного: подпись-роль + аватар с hover-карточкой (наведи —
 // увидишь человека) + имя. highlight — получатель (primary-ринг, имя жирнее).
-function DelegatePerson({
+function AssigneePerson({
   name,
   avatarUrl,
   label,
@@ -1369,12 +1332,12 @@ function DelegatePerson({
   );
 }
 
-// Подтверждение делегирования дропом на кубик участника (спека 2026-07-13). Единый диалог
+// Подтверждение смены ответственного дропом на кубик участника. Единый диалог
 // для обоих происхождений драга: карточки блока «Входящих» (AssignedToMeBlock) и карточки
 // нижней доски (InboxUnifiedDnd → dropBoardTaskOnUser) — чтобы дроп на один и тот же кубик
-// вёл себя одинаково. Название задачи + визуальный «от кого → кому» с аватарами (from=null —
-// свежее делегирование, показываем только получателя). Кнопки блокируются на время запроса.
-export function DelegateConfirmDialog({
+// вёл себя одинаково. Название задачи + переход «текущий → новый ответственный» с аватарами
+// (from=null — новое назначение, показываем только ответственного). Кнопки блокируются на время запроса.
+export function AssigneeConfirmDialog({
   open,
   taskTitle,
   from,
@@ -1394,20 +1357,20 @@ export function DelegateConfirmDialog({
     <Dialog open={open} onOpenChange={(o) => !o && !busy && onCancel()}>
       <DialogContent className="max-w-sm gap-4 p-5">
         <DialogHeader>
-          <DialogTitle className="text-base">Делегировать задачу?</DialogTitle>
+          <DialogTitle className="text-base">Сменить ответственного?</DialogTitle>
         </DialogHeader>
         <p className="line-clamp-2 text-sm text-muted-foreground">{taskTitle || 'Задача'}</p>
         {/* «Сейчас у» → «Кому» с аватарами: наведи на аву — карточка человека. Свежее
-            делегирование (from=null) — только получатель. */}
+            назначение (from=null) — только получатель. */}
         <div className="flex items-center justify-center gap-2 rounded-lg border bg-muted/30 px-2 py-3">
           {from ? (
             <>
-              <DelegatePerson name={from.name} avatarUrl={from.avatarUrl} label="Сейчас у" />
+              <AssigneePerson name={from.name} avatarUrl={from.avatarUrl} label="Сейчас" />
               <ArrowRight className="size-4 shrink-0 self-center text-muted-foreground/50" />
-              <DelegatePerson name={to.name} avatarUrl={to.avatarUrl} label="Кому" highlight />
+              <AssigneePerson name={to.name} avatarUrl={to.avatarUrl} label="Новый" highlight />
             </>
           ) : (
-            <DelegatePerson name={to.name} avatarUrl={to.avatarUrl} label="Делегировать" highlight />
+            <AssigneePerson name={to.name} avatarUrl={to.avatarUrl} label="Ответственный" highlight />
           )}
         </div>
         <DialogFooter>
@@ -1425,7 +1388,7 @@ export function DelegateConfirmDialog({
               }
             }}
           >
-            Делегировать
+            Назначить
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1433,17 +1396,17 @@ export function DelegateConfirmDialog({
   );
 }
 
-// Вкладки блока делегирования: «Для меня» (поручено мне) / «Другим» (поручил я).
+// Вкладки блока ответственных: «Для меня» / «Другим».
 // Тихие текстовые табы в масштабе прежнего заголовка секции: активная — semibold +
 // primary-пилюля счётчика, неактивная — muted с hover.
-function DelegationTabs({
+function AssigneeTabs({
   tab,
   onChange,
   toMeCount,
   byMeCount,
 }: {
-  tab: DelegationTab;
-  onChange: (t: DelegationTab) => void;
+  tab: AssigneeTab;
+  onChange: (t: AssigneeTab) => void;
   toMeCount: number;
   byMeCount: number;
 }): React.ReactElement {
@@ -1505,8 +1468,8 @@ function TabButton({
 }
 
 // #2: единая кнопка «Фильтры» «Входящих» — поповер, куда собраны ВСЕ контролы шапки, чтобы
-// не «летали» по строке: сортировка блока (когда есть поручения), тумблер «скрыть выполненные»
-// (всегда — действует и на доску ниже) и фильтры От/Кому/Проект (только вкладка «Другим»).
+// не «летали» по строке: сортировка блока (когда есть задачи), тумблер «скрыть выполненные»
+// (всегда — действует и на доску ниже) и фильтры Ответственный/Проект (только вкладка «Другим»).
 // Инлайн-чипы/строки без вложенного DropdownMenu-портала — выбор не закрывает поповер.
 function InboxFiltersPopover({
   showSort,
@@ -1516,10 +1479,8 @@ function InboxFiltersPopover({
   hideDone,
   onHideDoneChange,
   options,
-  from,
   to,
   project,
-  onFrom,
   onTo,
   onProject,
   onResetFilters,
@@ -1531,19 +1492,16 @@ function InboxFiltersPopover({
   hideDone: boolean;
   onHideDoneChange?: (v: boolean) => void;
   options: {
-    from: { id: string; name: string }[];
     to: { id: string; name: string }[];
     projects: { id: string; name: string }[];
   };
-  from: string | null;
   to: string | null;
   project: string | null;
-  onFrom: (v: string | null) => void;
   onTo: (v: string | null) => void;
   onProject: (v: string | null) => void;
   onResetFilters: () => void;
 }): React.ReactElement {
-  const activeFilterCount = showFilters ? [from, to, project].filter((v) => v !== null).length : 0;
+  const activeFilterCount = showFilters ? [to, project].filter((v) => v !== null).length : 0;
   // Бейдж на кнопке = сколько «нестандартного» включено (фильтры + скрытие выполненных),
   // чтобы было видно активность, не открывая поповер. Сортировка — выбор, не «активный фильтр».
   const badgeCount = activeFilterCount + (hideDone ? 1 : 0);
@@ -1574,7 +1532,7 @@ function InboxFiltersPopover({
             <HideDoneRow value={hideDone} onChange={onHideDoneChange} />
           </div>
 
-          {/* Сортировка блока «Поручено мне» — когда есть поручения (иначе вкладок нет). */}
+          {/* Сортировка верхнего личного блока — когда есть задачи (иначе вкладок нет). */}
           {showSort && (
             <div className="mt-1 border-t px-2 pb-1 pt-2">
               <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
@@ -1591,7 +1549,7 @@ function InboxFiltersPopover({
             </div>
           )}
 
-          {/* Фильтры От/Кому/Проект — только вкладка «Другим». */}
+          {/* Фильтры по ответственному и проекту — только вкладка «Другим». */}
           {showFilters && (
             <>
               <div className="mt-1 flex items-center justify-between border-t px-3 pb-1 pt-2">
@@ -1610,15 +1568,8 @@ function InboxFiltersPopover({
                 )}
               </div>
               <InboxFilterSection
-                icon={Send}
-                label="От кого"
-                options={options.from}
-                value={from}
-                onChange={onFrom}
-              />
-              <InboxFilterSection
                 icon={Users}
-                label="Кому"
+                label="Ответственный"
                 options={options.to}
                 value={to}
                 onChange={onTo}
@@ -1751,7 +1702,7 @@ function GroupIcon({
   return <CalendarClock className="size-3.5 shrink-0" />;
 }
 
-// Иконка колонки канбана «Поручено мне» по времени: без срока / на сегодня / будущее.
+// Иконка колонки личного канбана по времени: без срока / на сегодня / будущее.
 function TimeBucketIcon({ bucket }: { bucket: string }): React.ReactElement {
   if (bucket === 'none') return <CalendarOff className="size-3.5 shrink-0" />;
   if (bucket === 'future') return <CalendarDays className="size-3.5 shrink-0" />;
@@ -1762,14 +1713,12 @@ function TimeBucketIcon({ bucket }: { bucket: string }): React.ReactElement {
 // Принятая задача-карточка: чекбокс «выполнено» + описание + мета-бейджи, клик открывает drawer.
 function AcceptedCard({
   item,
-  currentUserId,
   onOpen,
   onChanged,
   showCreatedAt = false,
   hideProjectLabel = false,
 }: {
   item: InboxBlockTask;
-  currentUserId: string | null;
   onOpen: () => void;
   onChanged: () => void;
   // При сортировке «по дате создания» показываем дату создания в мета-строке (по наведению).
@@ -1838,7 +1787,7 @@ function AcceptedCard({
           <p className="text-sm leading-snug text-muted-foreground">—</p>
         )}
       </div>
-      {/* Параметры (делегация/коммиты/вложения/комменты/приоритет/СРОК) — как на досках: локальная
+      {/* Параметры (ответственный/коммиты/вложения/комменты/приоритет/СРОК) — как на досках: локальная
           плашка снизу-слева, всплывает при наведении (запрос 4). Срок показываем ВСЕГДА (запрос 5). */}
       <div className="pointer-events-none absolute bottom-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-1.5 overflow-hidden rounded-md bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100 dark:ring-white/[0.08]">
         {/* Дата создания — при сортировке «по дате создания» (запрос: показывать её по наведению). */}
@@ -1848,9 +1797,7 @@ function AcceptedCard({
             {new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(item.createdAt)}
           </span>
         )}
-        {currentUserId && !isPersonalInboxBlockTask(item) && (
-          <DelegationBadge delegation={item.delegation} currentUserId={currentUserId} />
-        )}
+        <AssigneeBadge assignee={item.assignee} />
         {(item.commitCount ?? 0) > 0 && (
           <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-blue-600 dark:text-blue-400">
             <GitCommit className="size-3" />

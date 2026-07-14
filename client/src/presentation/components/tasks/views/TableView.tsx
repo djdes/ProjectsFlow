@@ -66,7 +66,7 @@ import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { STATUS_LABEL } from '../statusLabels';
 import { DeadlineBadge } from '../DeadlineBadge';
-import { DelegateTaskButton } from '../DelegateTaskButton';
+import { AssigneeTaskButton } from '../AssigneeTaskButton';
 import { type TaskDrawerState } from '../TaskDrawer';
 import { ymd, startOfDay, addDays } from '../assignedGrouping';
 import type { ViewCreateRequest } from './ProjectBoardViews';
@@ -1675,7 +1675,7 @@ function hasValue(task: Task, col: ViewColumn): boolean {
     case 'deadline':
       return Boolean(task.deadline);
     case 'assignee':
-      return Boolean(task.delegation);
+      return true;
     case 'created':
       return true;
   }
@@ -2045,11 +2045,11 @@ function TableRow({
       case 'assignee':
         return (
           <div key={col} {...cellProps('assignee')}>
-            <DelegateTaskButton
+            <AssigneeTaskButton
               task={task}
-              currentUserId={currentUserId}
               onChanged={onChanged}
               projectId={projectId}
+              disabled={!currentUserId}
               className="h-full min-h-8 w-full justify-start rounded-none px-2 text-sm hover:bg-accent"
             />
           </div>

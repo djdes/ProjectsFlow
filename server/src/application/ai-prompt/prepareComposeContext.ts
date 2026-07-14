@@ -9,7 +9,7 @@ const MAX_PROJECTS = 40;
 const MAX_TOTAL_CHARS = 60_000;
 // Короткий дайджест на проект: 1-2 верхних документа KB, ~800 симв. каждый, ~1800 итог.
 const DIGEST_LIMITS = { maxDocs: 2, maxPerDoc: 800, maxTotal: 1800 } as const;
-// Сколько участников максимум перечисляем на проект (для авто-делегирования).
+// Сколько участников максимум перечисляем на проект (варианты ответственного).
 const MAX_MEMBERS_PER_PROJECT = 20;
 // Отдельный потолок на ВСЕ строки участников: чтобы большие команды не вытесняли
 // KB-дайджесты из общего бюджета (они важнее для классификации проекта).
@@ -76,19 +76,17 @@ export async function prepareComposeContext(
       } catch {
         digest = null;
       }
-      // Участники, кому МОЖНО делегировать проектную задачу: editor+ и не сам автор.
-      // (сервер так и так требует editor+ при делегировании в реальный проект).
+      // Ответственным может быть любой участник проекта, включая viewer и автора.
       let memberLine = '';
       try {
         const list = await deps.members.listByProject(p.id);
         const eligible = list
-          .filter((m) => (m.role === 'editor' || m.role === 'owner') && m.userId !== userId)
           .slice(0, MAX_MEMBERS_PER_PROJECT)
           .map((m) => `[userId=${m.userId}] ${m.user.displayName}`);
         memberLine =
           eligible.length > 0
-            ? `Участники (кому можно делегировать): ${eligible.join('; ')}`
-            : 'Участники: делегировать некому';
+            ? `Участники (варианты ответственного): ${eligible.join('; ')}`
+            : 'Участники проекта не найдены';
       } catch {
         memberLine = '';
       }
@@ -115,7 +113,7 @@ export async function prepareComposeContext(
     const part = `[projectId=${d.projectId}] ${d.name}\n${memberPart}${body}`;
     if (total + part.length > MAX_TOTAL_CHARS) {
       // Дальше не лезем, но сам проект (хотя бы имя + участники) всё равно полезен —
-      // добавим усечённый заголовок без дайджеста, чтобы id/исполнители остались модели.
+      // добавим усечённый заголовок без дайджеста, чтобы id/ответственные остались модели.
       const header = `[projectId=${d.projectId}] ${d.name}\n${memberPart}(дайджест опущен — лимит контекста)`;
       if (total + header.length <= MAX_TOTAL_CHARS) {
         parts.push(header);

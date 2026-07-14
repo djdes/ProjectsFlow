@@ -18,8 +18,7 @@ function toDomain(r: TelegramTaskDraftRow): TelegramTaskDraft {
     tgChatId: Number(r.tgChatId),
     taskText: r.taskText,
     projectId: r.projectId,
-    delegateUserId: r.delegateUserId,
-    delegationId: r.delegationId,
+    assigneeUserId: r.assigneeUserId,
     offered: parseJsonCol<TelegramDraftOffered | null>(r.offered, null),
     // MariaDB отдаёт JSON-колонку строкой — обязательно через parseJsonCol (см. jsonCol.ts).
     segments: parseJsonCol<TelegramDraftSegment[] | null>(r.segments, null),
@@ -42,7 +41,7 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
       tgChatId: input.tgChatId,
       taskText: input.taskText,
       projectId: input.projectId ?? null,
-      delegateUserId: input.delegateUserId ?? null,
+      assigneeUserId: input.assigneeUserId ?? null,
       offered: input.offered ?? null,
       segments: input.segments ?? null,
       targetStatus: input.targetStatus ?? null,
@@ -64,41 +63,17 @@ export class DrizzleTelegramTaskDraftRepository implements TelegramTaskDraftRepo
     return r ? toDomain(r) : null;
   }
 
-  async getByDelegationId(delegationId: string): Promise<TelegramTaskDraft | null> {
-    const rows = await this.db
-      .select()
-      .from(telegramTaskDrafts)
-      .where(eq(telegramTaskDrafts.delegationId, delegationId))
-      .limit(1);
-    const r = rows[0];
-    return r ? toDomain(r) : null;
-  }
-
   async patch(id: string, patch: TelegramTaskDraftPatch): Promise<TelegramTaskDraft | null> {
     const set: Partial<typeof telegramTaskDrafts.$inferInsert> = {};
     if (patch.taskText !== undefined) set.taskText = patch.taskText;
     if (patch.projectId !== undefined) set.projectId = patch.projectId;
-    if (patch.delegateUserId !== undefined) set.delegateUserId = patch.delegateUserId;
-    if (patch.delegationId !== undefined) set.delegationId = patch.delegationId;
+    if (patch.assigneeUserId !== undefined) set.assigneeUserId = patch.assigneeUserId;
     if (patch.offered !== undefined) set.offered = patch.offered;
     if (patch.segments !== undefined) set.segments = patch.segments;
     if (patch.targetStatus !== undefined) set.targetStatus = patch.targetStatus;
     if (patch.status !== undefined) set.status = patch.status;
-    const touched = Object.keys(set).length > 0 || patch.extendTtlSeconds !== undefined;
-    if (touched) {
-      // expires_at — SQL-выражение (DATE_ADD от CURRENT_TIMESTAMP), поэтому передаём
-      // объект прямо в .set() (там тип значений допускает SQL, в отличие от $inferInsert).
-      await this.db
-        .update(telegramTaskDrafts)
-        .set(
-          patch.extendTtlSeconds !== undefined
-            ? {
-                ...set,
-                expiresAt: sql`DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${patch.extendTtlSeconds} SECOND)`,
-              }
-            : set,
-        )
-        .where(eq(telegramTaskDrafts.id, id));
+    if (Object.keys(set).length > 0) {
+      await this.db.update(telegramTaskDrafts).set(set).where(eq(telegramTaskDrafts.id, id));
     }
     return this.loadById(id);
   }

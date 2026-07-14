@@ -11,7 +11,8 @@ export type ComposeSegment = {
   readonly projectId: string | null;
   readonly projectName: string | null;
   readonly confidence: number;
-  // Исполнитель: userId, резолвнутый AI из списка участников проекта (editor+), или null.
+  // Ответственный: userId, резолвнутый AI из списка всех участников проекта, или null
+  // (при создании null означает текущего пользователя).
   readonly assigneeUserId: string | null;
   // Сырое имя из текста («Олег») — для подсказки, когда userId не сматчился.
   readonly assigneeName: string | null;

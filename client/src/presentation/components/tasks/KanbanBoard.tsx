@@ -45,8 +45,6 @@ import { toast } from '@/components/ui/sonner';
 import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { TASK_STATUSES, TASK_PRIORITIES } from '@/domain/task/Task';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
-import type { ProjectMember } from '@/domain/project/ProjectMembership';
-import { useContainer } from '@/infrastructure/di/container';
 import { ConfettiBurst } from './ConfettiBurst';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
@@ -96,7 +94,7 @@ type Props = {
   projectName?: string;
   // Скрыть выполненные (status='done'). Toggle на странице InboxPage.
   hideDone?: boolean;
-  // Количество участников проекта. > 1 ⇒ совместный — показываем блок делегирования.
+  // Количество участников проекта. > 1 ⇒ показываем фильтр по ответственному.
   memberCount?: number;
   // Открыть диалог «Автоматизация» (кнопка в пустом состоянии доски). Передаёт TasksPage.
   onOpenAutomation?: () => void;
@@ -267,7 +265,6 @@ export function KanbanBoard({
 }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const { user } = useCurrentUser();
-  const { projectRepository } = useContainer();
   // isInbox = это inbox-board (задаётся через showCommits=false — у inbox нет git-репо).
   // Чекбокс «выполнено» показываем на ВСЕХ досках (inbox и проекты): клик → done,
   // снятие → restore прежней колонки (status_before_done). Сервер сам гейтит право
@@ -544,13 +541,9 @@ export function KanbanBoard({
   );
 
   const { order: doneOrder, toggle: toggleDoneOrder } = useDoneSortOrder();
-  // Нижняя inbox-доска по-прежнему содержит неделегированные задачи. Теперь каждая из них
-  // дополнительно имеет виртуальную копию в верхней личной колонке; это две проекции одной
-  // Task, а не две серверные записи. Делегированные карточки остаются только в верхнем блоке.
-  const boardTasks = useMemo(
-    () => (isInbox ? tasks.filter((t) => !t.delegation) : tasks),
-    [isInbox, tasks],
-  );
+  // Нижняя доска остаётся физическим представлением проекта и показывает все
+  // его задачи независимо от того, кто сейчас ответственный.
+  const boardTasks = tasks;
   useEffect(() => {
     if (!loading) onBoardTasksChange?.(boardTasks);
   }, [boardTasks, loading, onBoardTasksChange]);
@@ -576,28 +569,20 @@ export function KanbanBoard({
   const [filterQuery, setFilterQuery] = useState('');
   const [filterPriority, setFilterPriority] = useState<TaskPriority | null>(null);
   const [filterDeadline, setFilterDeadline] = useState<'overdue' | 'week' | null>(null);
-  const [filterDelegate, setFilterDelegate] = useState<string | null>(null);
-  // Участники — для фильтра по делегату (только совместные проекты).
-  const [members, setMembers] = useState<ProjectMember[]>([]);
-  useEffect(() => {
-    if (!isShared) return;
-    let cancelled = false;
-    void projectRepository
-      .listMembers(projectId)
-      .then((list) => {
-        if (!cancelled) setMembers(list);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [isShared, projectId, projectRepository]);
+  const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
+  const assigneeOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const task of tasks) byId.set(task.assignee.userId, task.assignee.displayName);
+    return [...byId.entries()]
+      .map(([id, displayName]) => ({ id, displayName }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName, 'ru'));
+  }, [tasks]);
 
   const filterActive =
     filterQuery.trim().length > 0 ||
     filterPriority !== null ||
     filterDeadline !== null ||
-    filterDelegate !== null;
+    filterAssignee !== null;
 
   const filterTasks = useCallback(
     (list: Task[]): Task[] => {
@@ -613,18 +598,18 @@ export function KanbanBoard({
         } else if (filterDeadline === 'week') {
           if (!t.deadline || t.deadline > weekIso) return false;
         }
-        if (filterDelegate !== null && t.delegation?.delegateUserId !== filterDelegate) return false;
+        if (filterAssignee !== null && t.assignee.userId !== filterAssignee) return false;
         return true;
       });
     },
-    [filterActive, filterQuery, filterPriority, filterDeadline, filterDelegate],
+    [filterActive, filterQuery, filterPriority, filterDeadline, filterAssignee],
   );
 
   const resetFilters = (): void => {
     setFilterQuery('');
     setFilterPriority(null);
     setFilterDeadline(null);
-    setFilterDelegate(null);
+    setFilterAssignee(null);
   };
 
   // Конфетти при переносе карточки в «Готово» (key перезапускает анимацию).
@@ -860,16 +845,18 @@ export function KanbanBoard({
   const handleDialogSubmit = async (input: {
     description: string;
     ralphMode?: import('@/domain/task/Task').RalphMode;
-    delegateUserId?: string | null;
+    assigneeUserId?: string;
     deadline?: string | null;
     priority?: import('@/domain/task/Task').TaskPriority | null;
   }): Promise<Task> => {
     if (!dialog) throw new Error('Dialog state missing');
     if (dialog.mode === 'create') {
-      return create({ ...input, status: dialog.status });
+      const assigneeUserId = input.assigneeUserId ?? user?.id;
+      if (!assigneeUserId) throw new Error('Не удалось определить ответственного');
+      return create({ ...input, assigneeUserId, status: dialog.status });
     }
-    // edit-mode: TaskRepository.update не принимает delegateUserId — он только
-    // для create. Deadline/priority меняются через TaskPriorityChip/TaskDeadlineChip
+    // Ответственный в edit-mode меняется отдельным единым endpoint. Deadline/priority
+    // меняются через TaskPriorityChip/TaskDeadlineChip
     // в шапке drawer'а (отдельные PATCH).
     return update(dialog.task.id, { description: input.description, ralphMode: input.ralphMode });
   };
@@ -992,7 +979,7 @@ export function KanbanBoard({
     <div className="flex flex-[1_0_auto] flex-col">
       {confettiKey > 0 && <ConfettiBurst key={confettiKey} onDone={() => setConfettiKey(0)} />}
 
-      {/* Тихий ряд фильтров: поиск по проекту + приоритет + срок (+ делегат в совместных). */}
+      {/* Тихий ряд фильтров: поиск по проекту + приоритет + срок (+ ответственный в совместных). */}
       <div className="flex flex-wrap items-center gap-1 pb-2">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
@@ -1035,20 +1022,24 @@ export function KanbanBoard({
           ]}
           onSelect={(key) => setFilterDeadline(key === 'all' ? null : (key as 'overdue' | 'week'))}
         />
-        {isShared && members.length > 0 && (
+        {assigneeOptions.length > 1 && (
           <FilterDropdown
             icon={<Users className="size-3.5" />}
             label={
-              filterDelegate !== null
-                ? members.find((m) => m.userId === filterDelegate)?.user.displayName ?? 'Делегат'
-                : 'Делегат'
+              filterAssignee !== null
+                ? assigneeOptions.find((member) => member.id === filterAssignee)?.displayName ??
+                  'Ответственный'
+                : 'Ответственный'
             }
-            active={filterDelegate !== null}
+            active={filterAssignee !== null}
             options={[
               { key: 'all', label: 'Все участники' },
-              ...members.map((m) => ({ key: m.userId, label: m.user.displayName })),
+              ...assigneeOptions.map((member) => ({
+                key: member.id,
+                label: member.displayName,
+              })),
             ]}
-            onSelect={(key) => setFilterDelegate(key === 'all' ? null : key)}
+            onSelect={(key) => setFilterAssignee(key === 'all' ? null : key)}
           />
         )}
         {filterActive && (

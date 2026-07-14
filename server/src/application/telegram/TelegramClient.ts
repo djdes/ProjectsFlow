@@ -52,7 +52,7 @@ export type EditMessageTextInput = {
 };
 
 // Минимальный inline-результат (article) для Phase D. input_message_text отправляется
-// в чат при выборе — мы делаем его каноническим `+<Проект> <текст> @<Делегат>`, который
+// в чат при выборе — мы делаем его каноническим `+<Проект> <текст> @<Ответственный>`, который
 // затем проходит через тот же конструктор.
 export type InlineQueryResultArticle = {
   readonly type: 'article';

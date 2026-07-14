@@ -75,7 +75,7 @@ export const users = mysqlTable(
     defaultNotificationPrefs: json('default_notification_prefs').$type<NotificationPrefs | null>(),
     // Персональная карта дефолтных цветов канбан-колонок — fallback для всех проектов юзера. См. db/057.
     defaultKanbanColors: json('default_kanban_colors').$type<KanbanDefaultColors | null>(),
-    // Обобщённый bag клиентских UI-настроек (группировка «Поручено мне» и т.д.). См. db/069.
+    // Обобщённый bag клиентских UI-настроек (группировка личных задач и т.д.). См. db/069.
     uiPrefs: json('ui_prefs').$type<UiPrefs | null>(),
     // Активное пространство юзера — единый источник правды для скоупинга проектов. См. db/073.
     currentWorkspaceId: char('current_workspace_id', { length: 36 }),
@@ -142,7 +142,7 @@ export const telegramRalphQuestionMessages = mysqlTable(
 
 export type TelegramRalphQuestionRow = typeof telegramRalphQuestionMessages.$inferSelect;
 
-// Серверный стейт многошагового конструктора задач в TG-боте (+проект текст @делегат).
+// Серверный стейт многошагового конструктора задач в TG-боте (+проект текст @ответственный).
 // callback_data ≤ 64 байт → в кнопках только короткий id + индексы, полный контекст здесь.
 // См. db/048. TTL ~30 мин (expires_at); getById возвращает null если истёк.
 export const telegramTaskDrafts = mysqlTable(
@@ -153,7 +153,9 @@ export const telegramTaskDrafts = mysqlTable(
     tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
     taskText: text('task_text'),
     projectId: char('project_id', { length: 36 }),
-    delegateUserId: char('delegate_user_id', { length: 36 }),
+    // Имя физической колонки legacy; в приложении это единственный ответственный задачи.
+    assigneeUserId: char('delegate_user_id', { length: 36 }),
+    // Legacy-поле старого accept/decline-флоу. Новая логика его не читает и не пишет.
     delegationId: char('delegation_id', { length: 36 }),
     // Предложенные projects/members для резолва index→UUID из callback_data.
     offered: json('offered').$type<TelegramDraftOffered | null>(),
@@ -619,8 +621,10 @@ export const tasks = mysqlTable(
   {
     id: id(),
     projectId: char('project_id', { length: 36 }).notNull(),
-    // Кто создал задачу («кто отдал воркеру») — для пер-юзерной атрибуции расхода (db/088).
+    // Кто создал задачу — серверная атрибуция расхода (db/088).
     createdBy: char('created_by', { length: 36 }),
+    // Единственный обязательный ответственный задачи (db/113).
+    assigneeUserId: char('assignee_user_id', { length: 36 }).notNull(),
     description: text('description'),
     // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL картинки. TEXT — влезает data-URL. См. db/093.
     icon: text('icon'),
@@ -666,6 +670,7 @@ export const tasks = mysqlTable(
   (t) => [
     index('idx_tasks_project_status_position').on(t.projectId, t.status, t.position),
     index('idx_tasks_project').on(t.projectId),
+    index('idx_tasks_assignee').on(t.assigneeUserId),
     index('idx_tasks_ralph_cancel').on(t.ralphCancelRequestedAt),
   ],
 );
@@ -1599,7 +1604,7 @@ export const liveSessions = mysqlTable(
       .notNull()
       .default('running'),
     model: varchar('model', { length: 64 }),
-    // «Инициатор» прогона (делегатор задачи) — чей профиль платит за воркер (db/087).
+    // Плательщик прогона — создатель задачи; legacy fallback хранится для старых строк (db/087).
     billedUserId: char('billed_user_id', { length: 36 }),
     headBefore: char('head_before', { length: 40 }),
     headAfter: char('head_after', { length: 40 }),

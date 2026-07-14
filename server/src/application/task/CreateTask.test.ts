@@ -1,28 +1,29 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import type { CreateTaskInput } from './TaskRepository.js';
 import { CreateTask } from './CreateTask.js';
-
-// Фокусный тест ветки delegateOrThrow. requireProjectAccess проходит через owner-membership
-// фейка members.findForProject. Самоделегирование (delegateUserId === creator) РАЗРЕШЕНО:
-// делегация accepted, но себе уведомление НЕ шлётся (по образцу DelegateExistingTask).
 
 const OWNER_ID = 'u-owner';
 const OTHER_ID = 'u-other';
 
 function makeHarness(opts: { isInbox?: boolean } = {}) {
   const isInbox = opts.isInbox ?? true;
-  const createdDelegations: { status?: string; delegatorUserId?: string; delegateUserId?: string }[] =
-    [];
-  const counters = { notify: 0 };
+  const created: CreateTaskInput[] = [];
+  const counters = { notifications: 0, emails: 0 };
   const create = new CreateTask({
     projects: {
-      getById: async () => ({ id: 'p1', isInbox, ownerId: OWNER_ID }),
+      getById: async () => ({
+        id: 'p1',
+        name: isInbox ? 'Входящие' : 'Проект',
+        isInbox,
+        ownerId: OWNER_ID,
+      }),
     } as never,
     members: {
-      findForProject: async () => ({
-        projectId: 'p1',
-        userId: OWNER_ID,
-        role: 'owner',
+      findForProject: async (projectId: string, userId: string) => ({
+        projectId,
+        userId,
+        role: userId === OWNER_ID ? 'owner' : 'viewer',
         joinedAt: new Date(0),
       }),
       listSharedUsers: async () => [{ id: OTHER_ID }],
@@ -30,89 +31,84 @@ function makeHarness(opts: { isInbox?: boolean } = {}) {
     tasks: {
       getById: async () => null,
       getPositionBounds: async () => null,
-      create: async (input: unknown) => ({ ...(input as object), delegation: null }),
-    } as never,
-    delegations: {
-      findActiveForTask: async () => null,
-      create: async (input: { status?: string; delegatorUserId: string }) => {
-        createdDelegations.push(input);
+      create: async (input: CreateTaskInput) => {
+        created.push(input);
         return {
           ...input,
-          delegateDisplayName: '',
-          creatorUserId: input.delegatorUserId,
-          creatorDisplayName: '',
-          status: input.status ?? 'pending',
-          createdAt: new Date(0),
-          respondedAt: null,
-          revertToUserId: null,
+          assignee: {
+            userId: input.assigneeUserId,
+            displayName: input.assigneeUserId === OTHER_ID ? 'Другой' : 'Владелец',
+            avatarUrl: null,
+          },
         };
       },
     } as never,
     users: {
-      // notifyDelegated начинается с users.getById — считаем вход в notify по нему.
-      getById: async (id: string) => {
-        counters.notify += 1;
-        return { id, email: 'x@x', displayName: 'X' };
+      getById: async (id: string) => ({
+        id,
+        email: `${id}@example.test`,
+        displayName: id === OTHER_ID ? 'Другой' : 'Владелец',
+      }),
+    } as never,
+    notifications: {
+      create: async () => {
+        counters.notifications += 1;
       },
     } as never,
-    notifications: { create: async () => {} } as never,
-    email: { send: async () => {} } as never,
+    email: {
+      send: async () => {
+        counters.emails += 1;
+      },
+    } as never,
     idGen: () => 'id-1',
     appUrl: 'https://example.test',
   });
-  return {
-    create,
-    createdDelegations,
-    get notifyCalls() {
-      return counters.notify;
-    },
-  };
+  return { create, created, counters };
 }
 
-const flushAsync = async (): Promise<void> => new Promise((r) => setImmediate(r));
+const flushAsync = async (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
-test('создание задачи с делегатом: делегация сразу accepted', async () => {
+test('without an explicit assignee, the creator becomes the only assignee', async () => {
   const h = makeHarness();
   const task = await h.create.execute({
     projectId: 'p1',
     ownerUserId: OWNER_ID,
     description: 'demo',
     status: 'todo',
-    delegateUserId: OTHER_ID,
   });
   await flushAsync();
-  assert.equal(h.createdDelegations[0]?.status, 'accepted');
-  assert.equal(task.delegation?.status, 'accepted');
-  assert.ok(h.notifyCalls > 0); // другому — уведомление уходит
+
+  assert.equal(h.created[0]!.assigneeUserId, OWNER_ID);
+  assert.equal(task.assignee.userId, OWNER_ID);
+  assert.equal(h.counters.notifications, 0);
+  assert.equal(h.counters.emails, 0);
 });
 
-test('самоделегирование в инбоксе: accepted, БЕЗ уведомления себе', async () => {
+test('an Inbox task can be created for a shared user and notifies the assignee', async () => {
   const h = makeHarness();
   const task = await h.create.execute({
     projectId: 'p1',
     ownerUserId: OWNER_ID,
     description: 'demo',
     status: 'todo',
-    delegateUserId: OWNER_ID, // == creator
+    assigneeUserId: OTHER_ID,
   });
   await flushAsync();
-  assert.equal(task.delegation?.status, 'accepted');
-  assert.equal(h.createdDelegations[0]?.delegateUserId, OWNER_ID);
-  assert.equal(h.createdDelegations[0]?.delegatorUserId, OWNER_ID);
-  assert.equal(h.notifyCalls, 0); // себе не уведомляем
+
+  assert.equal(task.assignee.userId, OTHER_ID);
+  assert.equal(h.counters.notifications, 1);
+  assert.equal(h.counters.emails, 1);
 });
 
-test('самоделегирование в именованном проекте: accepted, БЕЗ уведомления (задача «на мне» → «Для меня»)', async () => {
+test('a viewer can be the assignee of a named-project task', async () => {
   const h = makeHarness({ isInbox: false });
   const task = await h.create.execute({
     projectId: 'p1',
     ownerUserId: OWNER_ID,
     description: 'demo',
     status: 'todo',
-    delegateUserId: OWNER_ID,
+    assigneeUserId: OTHER_ID,
   });
-  await flushAsync();
-  assert.equal(task.delegation?.status, 'accepted');
-  assert.equal(h.createdDelegations[0]?.delegateUserId, OWNER_ID);
-  assert.equal(h.notifyCalls, 0);
+
+  assert.equal(task.assignee.userId, OTHER_ID);
 });

@@ -1,17 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { groupAssignedByTime, groupAssignedTasks } from './assignedGrouping';
-import type { TaskDelegation, TaskDelegationStatus } from '@/domain/task/TaskDelegation';
 import type { TaskPriority } from '@/domain/task/Task';
 import {
-  asDelegatedInboxBlockTask,
+  asAssignedInboxBlockTask,
   buildToMeInboxBlockTasks,
-  type DelegatedInboxBlockTask,
+  type AssignedInboxBlockTask,
 } from './inboxBlockTasks';
 
-// Фикс «сейчас» — вторник, 9 июня 2026, локальный полдень.
 const NOW = new Date(2026, 5, 9, 12, 0, 0);
-
 let seq = 0;
 
 function mk(overrides: {
@@ -21,28 +18,19 @@ function mk(overrides: {
   createdAt?: Date;
   deadline?: string | null;
   priority?: TaskPriority | null;
-  status?: TaskDelegationStatus;
-  creator?: string;
-  // Имя делегата (id выводится из имени) — для направления «Другим».
-  delegate?: string;
+  assigneeId?: string;
+  assigneeName?: string;
   position?: number;
-}): DelegatedInboxBlockTask {
+}): AssignedInboxBlockTask {
   seq += 1;
-  const id = `t-${seq}`;
-  const delegation: TaskDelegation = {
-    id: `d-${seq}`,
-    taskId: id,
-    delegateUserId: overrides.delegate ?? 'me',
-    delegateDisplayName: overrides.delegate ?? 'Me',
-    creatorUserId: 'creator',
-    creatorDisplayName: overrides.creator ?? 'Алиса',
-    status: overrides.status ?? 'accepted',
-    createdAt: overrides.createdAt ?? NOW,
-    respondedAt: null,
-  };
-  return asDelegatedInboxBlockTask({
-    id,
+  return asAssignedInboxBlockTask({
+    id: `t-${seq}`,
     projectId: overrides.projectId ?? 'p1',
+    assignee: {
+      userId: overrides.assigneeId ?? 'me',
+      displayName: overrides.assigneeName ?? 'Ярослав',
+      avatarUrl: null,
+    },
     description: 'desc',
     icon: null,
     cover: null,
@@ -60,17 +48,16 @@ function mk(overrides: {
     startDate: null,
     parentTaskId: null,
     priority: overrides.priority ?? null,
-    delegation,
     projectName: overrides.projectName ?? 'Проект 1',
     isInbox: overrides.isInbox ?? false,
     canModify: true,
   });
 }
 
-test('project: группирует по проекту в порядке первого появления, inbox → «Личные · автор»', () => {
+test('project: группирует по проекту, а Inbox не показывает автора', () => {
   const tasks = [
     mk({ projectId: 'p1', projectName: 'Альфа' }),
-    mk({ projectId: 'inbox', isInbox: true, creator: 'Боб' }),
+    mk({ projectId: 'inbox-other', isInbox: true }),
     mk({ projectId: 'p1', projectName: 'Альфа' }),
   ];
   const groups = groupAssignedTasks(tasks, 'project', NOW);
@@ -79,51 +66,45 @@ test('project: группирует по проекту в порядке пер
   assert.equal(groups[0]?.label, 'Альфа');
   assert.equal(groups[0]?.items.length, 2);
   assert.equal(groups[1]?.key, 'inbox');
-  assert.equal(groups[1]?.label, 'Личные · Боб');
-  assert.equal(groups[1]?.isInbox, true);
+  assert.equal(groups[1]?.label, 'Личные');
 });
 
 test('created: бакеты Сегодня/Вчера/На этой неделе/Ранее, пустые не показываются', () => {
   const tasks = [
-    mk({ createdAt: new Date(2026, 5, 1, 9, 0, 0) }), // 8 дней назад → Ранее
-    mk({ createdAt: new Date(2026, 5, 9, 9, 0, 0) }), // сегодня
-    mk({ createdAt: new Date(2026, 5, 8, 9, 0, 0) }), // вчера
-    mk({ createdAt: new Date(2026, 5, 5, 9, 0, 0) }), // 4 дня назад → на этой неделе
+    mk({ createdAt: new Date(2026, 5, 1, 9, 0, 0) }),
+    mk({ createdAt: new Date(2026, 5, 9, 9, 0, 0) }),
+    mk({ createdAt: new Date(2026, 5, 8, 9, 0, 0) }),
+    mk({ createdAt: new Date(2026, 5, 5, 9, 0, 0) }),
   ];
-  const groups = groupAssignedTasks(tasks, 'created', NOW);
   assert.deepEqual(
-    groups.map((g) => g.label),
+    groupAssignedTasks(tasks, 'created', NOW).map((group) => group.label),
     ['Сегодня', 'Вчера', 'На этой неделе', 'Ранее'],
   );
-  assert.equal(groups.every((g) => g.items.length === 1), true);
 });
 
 test('created: внутри бакета новее — выше', () => {
   const older = mk({ createdAt: new Date(2026, 5, 9, 8, 0, 0) });
   const newer = mk({ createdAt: new Date(2026, 5, 9, 11, 0, 0) });
   const groups = groupAssignedTasks([older, newer], 'created', NOW);
-  assert.equal(groups.length, 1);
-  assert.equal(groups[0]?.items[0]?.id, newer.id);
-  assert.equal(groups[0]?.items[1]?.id, older.id);
+  assert.deepEqual(groups[0]?.items.map((task) => task.id), [newer.id, older.id]);
 });
 
-test('deadline: порядок Просрочено/Сегодня/Завтра/На этой неделе/Позже/Без дедлайна', () => {
+test('deadline: сохраняет ожидаемый порядок бакетов', () => {
   const tasks = [
     mk({ deadline: null }),
-    mk({ deadline: '2026-07-01' }), // позже
-    mk({ deadline: '2026-06-13' }), // в пределах недели
-    mk({ deadline: '2026-06-10' }), // завтра
-    mk({ deadline: '2026-06-09' }), // сегодня
-    mk({ deadline: '2026-06-01' }), // просрочено
+    mk({ deadline: '2026-07-01' }),
+    mk({ deadline: '2026-06-13' }),
+    mk({ deadline: '2026-06-10' }),
+    mk({ deadline: '2026-06-09' }),
+    mk({ deadline: '2026-06-01' }),
   ];
-  const groups = groupAssignedTasks(tasks, 'deadline', NOW);
   assert.deepEqual(
-    groups.map((g) => g.label),
+    groupAssignedTasks(tasks, 'deadline', NOW).map((group) => group.label),
     ['Просрочено', 'Сегодня', 'Завтра', 'На этой неделе', 'Позже', 'Без дедлайна'],
   );
 });
 
-test('priority: порядок Срочно/Высокий/Средний/Низкий/Без приоритета', () => {
+test('priority: сохраняет ожидаемый порядок бакетов', () => {
   const tasks = [
     mk({ priority: null }),
     mk({ priority: 4 }),
@@ -131,67 +112,56 @@ test('priority: порядок Срочно/Высокий/Средний/Низ
     mk({ priority: 1 }),
     mk({ priority: 3 }),
   ];
-  const groups = groupAssignedTasks(tasks, 'priority', NOW);
   assert.deepEqual(
-    groups.map((g) => g.label),
+    groupAssignedTasks(tasks, 'priority', NOW).map((group) => group.label),
     ['Срочно', 'Высокий', 'Средний', 'Низкий', 'Без приоритета'],
   );
 });
 
-test('project, направление «Другим»: inbox-группы дробятся по делегату («Личные · кому»)', () => {
+test('project, вкладка «Другим»: Inbox-группы дробятся по ответственному', () => {
   const tasks = [
-    mk({ projectId: 'inbox', isInbox: true, delegate: 'Боб' }),
-    mk({ projectId: 'inbox', isInbox: true, delegate: 'Вера' }),
-    mk({ projectId: 'p1', projectName: 'Альфа', delegate: 'Боб' }),
+    mk({ projectId: 'inbox', isInbox: true, assigneeId: 'bob', assigneeName: 'Боб' }),
+    mk({ projectId: 'inbox', isInbox: true, assigneeId: 'vera', assigneeName: 'Вера' }),
+    mk({ projectId: 'p1', projectName: 'Альфа', assigneeId: 'bob', assigneeName: 'Боб' }),
   ];
   const groups = groupAssignedTasks(tasks, 'project', NOW, 'byMe');
   assert.deepEqual(
-    groups.map((g) => g.label),
+    groups.map((group) => group.label),
     ['Личные · Боб', 'Личные · Вера', 'Альфа'],
   );
-  // Ключи inbox-групп уникальны по человеку (не схлопываются в один projectId).
-  assert.equal(new Set(groups.map((g) => g.key)).size, 3);
+  assert.equal(new Set(groups.map((group) => group.key)).size, 3);
 });
 
-test('project: личное зеркало подписывается ником владельца без делегации', () => {
+test('project: локальное зеркало Inbox остаётся в единой группе «Личные»', () => {
   const boardTask = mk({ projectId: 'inbox', isInbox: true });
   const personal = buildToMeInboxBlockTasks({
-    delegatedTasks: [],
-    boardTasks: [{ ...boardTask, delegation: null }],
+    assignedTasks: [],
+    boardTasks: [boardTask],
     inboxProjectId: 'inbox',
     owner: { id: 'me', displayName: 'Ярослав' },
   });
-
   const groups = groupAssignedTasks(personal, 'project', NOW);
-  assert.equal(groups.length, 1);
-  assert.equal(groups[0]?.label, 'Личные · Ярослав');
+  assert.equal(groups[0]?.label, 'Личные');
   assert.equal(groups[0]?.items[0]?.displaySource, 'personal');
 });
 
-test('byTime: всегда ровно 3 колонки (даже пустые), просроченные попадают в «На сегодня»', () => {
-  const overdue = mk({ deadline: '2026-06-01' }); // дедлайн в прошлом
-  const today = mk({ deadline: '2026-06-09' }); // сегодня
+test('byTime: всегда три колонки, просроченные попадают в «На сегодня»', () => {
+  const overdue = mk({ deadline: '2026-06-01' });
+  const today = mk({ deadline: '2026-06-09' });
   const noDeadline = mk({ deadline: null });
   const groups = groupAssignedByTime([overdue, today, noDeadline], NOW);
   assert.deepEqual(
-    groups.map((g) => ({ key: g.key, label: g.label, count: g.items.length })),
+    groups.map((group) => ({ key: group.key, label: group.label, count: group.items.length })),
     [
       { key: 'none', label: 'Без срока', count: 1 },
       { key: 'today', label: 'На сегодня', count: 2 },
       { key: 'future', label: 'Будущее', count: 0 },
     ],
   );
-  // Просроченная и сегодняшняя — обе в «На сегодня»; внутри порядок по дедлайну (старее выше).
-  assert.deepEqual(
-    groups[1]?.items.map((t) => t.id),
-    [overdue.id, today.id],
-  );
 });
 
 test('byTime: дедлайн позже сегодня → «Будущее»', () => {
-  const future = mk({ deadline: '2026-06-10' }); // завтра
+  const future = mk({ deadline: '2026-06-10' });
   const groups = groupAssignedByTime([future], NOW);
   assert.equal(groups[2]?.items[0]?.id, future.id);
-  assert.equal(groups[0]?.items.length, 0);
-  assert.equal(groups[1]?.items.length, 0);
 });

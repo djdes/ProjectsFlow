@@ -1,7 +1,6 @@
-import { and, asc, eq, inArray, max, min, sql } from 'drizzle-orm';
+import { aliasedTable, and, asc, eq, inArray, max, min, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
-  projects,
   taskDelegations,
   tasks,
   users,
@@ -32,6 +31,8 @@ import type {
 // Row shape с заджойненным display_name запросившего отмену Ralph.
 type TaskRowJoined = TaskRow & {
   cancelByDisplayName: string | null;
+  assigneeDisplayName: string | null;
+  assigneeAvatarUrl: string | null;
 };
 
 // status_before_done — VARCHAR в БД, поэтому валидируем против enum (а не голый cast):
@@ -45,6 +46,11 @@ function toTask(row: TaskRowJoined): Task {
     id: row.id,
     projectId: row.projectId,
     createdBy: row.createdBy ?? null,
+    assignee: {
+      userId: row.assigneeUserId,
+      displayName: row.assigneeDisplayName ?? 'Удалённый пользователь',
+      avatarUrl: row.assigneeAvatarUrl ?? null,
+    },
     description: row.description ?? null,
     icon: row.icon ?? null,
     cover: row.cover ?? null,
@@ -80,6 +86,7 @@ export class DrizzleTaskRepository implements TaskRepository {
   // Базовый SELECT с LEFT JOIN users для display name запросившего cancel.
   // LEFT JOIN — потому что флаг чаще NULL (стандартный кейс).
   private baseSelect() {
+    const assigneeUser = aliasedTable(users, 'task_assignee_user');
     return this.db
       .select({
         id: tasks.id,
@@ -87,6 +94,9 @@ export class DrizzleTaskRepository implements TaskRepository {
         // ВАЖНО: без этой строки row.createdBy = undefined → toTask даёт null → воркер метерит
         // на диспетчера, а не на создателя задачи (баг: `as TaskRowJoined` прятал это от tsc).
         createdBy: tasks.createdBy,
+        assigneeUserId: tasks.assigneeUserId,
+        assigneeDisplayName: assigneeUser.displayName,
+        assigneeAvatarUrl: assigneeUser.avatarUrl,
         description: tasks.description,
         icon: tasks.icon,
         cover: tasks.cover,
@@ -106,7 +116,8 @@ export class DrizzleTaskRepository implements TaskRepository {
         cancelByDisplayName: users.displayName,
       })
       .from(tasks)
-      .leftJoin(users, eq(users.id, tasks.ralphCancelRequestedBy));
+      .leftJoin(users, eq(users.id, tasks.ralphCancelRequestedBy))
+      .leftJoin(assigneeUser, eq(assigneeUser.id, tasks.assigneeUserId));
   }
 
   async listByProject(projectId: string): Promise<Task[]> {
@@ -122,20 +133,9 @@ export class DrizzleTaskRepository implements TaskRepository {
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
 
-  async listAcceptedDelegatedTo(userId: string): Promise<Task[]> {
-    // JOIN task_delegations + projects: фильтр accepted-делегации к userId на
-    // задачах, которые лежат в inbox-проектах (на всякий — out-of-scope:
-    // делегирование в проектные задачи мы не поддерживаем).
+  async listAssignedTo(userId: string): Promise<Task[]> {
     const rows = await this.baseSelect()
-      .innerJoin(taskDelegations, eq(taskDelegations.taskId, tasks.id))
-      .innerJoin(projects, eq(projects.id, tasks.projectId))
-      .where(
-        and(
-          eq(taskDelegations.delegateUserId, userId),
-          eq(taskDelegations.status, 'accepted'),
-          eq(projects.isInbox, true),
-        ),
-      )
+      .where(eq(tasks.assigneeUserId, userId))
       .orderBy(asc(tasks.status), asc(tasks.position), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
@@ -150,6 +150,7 @@ export class DrizzleTaskRepository implements TaskRepository {
       id: input.id,
       projectId: input.projectId,
       createdBy: input.createdBy,
+      assigneeUserId: input.assigneeUserId,
       description: input.description,
       icon: input.icon ?? null,
       cover: input.cover ?? null,
@@ -173,6 +174,7 @@ export class DrizzleTaskRepository implements TaskRepository {
       Pick<
         TaskRow,
         | 'description'
+        | 'assigneeUserId'
         | 'icon'
         | 'cover'
         | 'coverPosition'
@@ -185,6 +187,7 @@ export class DrizzleTaskRepository implements TaskRepository {
         | 'priority'
       >
     > = {};
+    if (patch.assigneeUserId !== undefined) set.assigneeUserId = patch.assigneeUserId;
     if (patch.description !== undefined) set.description = patch.description;
     if (patch.icon !== undefined) set.icon = patch.icon;
     if (patch.cover !== undefined) set.cover = patch.cover;
@@ -290,7 +293,11 @@ export class DrizzleTaskRepository implements TaskRepository {
     return resultPos;
   }
 
-  async moveToProject(taskId: string, targetProjectId: string): Promise<Task | null> {
+  async moveToProject(
+    taskId: string,
+    targetProjectId: string,
+    assigneeUserId: string,
+  ): Promise<Task | null> {
     // Снимок status_before_done относился к колонкам старого проекта — чистим при переносе.
     // Вместе с задачей АТОМАРНО перевешиваем task-scoped строки с денормализованным
     // project_id (версии, лента прогресса, live-сессии, «Недавнее»): иначе (а) чтение
@@ -301,7 +308,7 @@ export class DrizzleTaskRepository implements TaskRepository {
     await this.db.transaction(async (tx) => {
       await tx
         .update(tasks)
-        .set({ projectId: targetProjectId, statusBeforeDone: null })
+        .set({ projectId: targetProjectId, assigneeUserId, statusBeforeDone: null })
         .where(eq(tasks.id, taskId));
       await tx
         .update(taskVersions)

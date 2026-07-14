@@ -9,7 +9,7 @@ export type InsertLiveSessionInput = {
   readonly agentName: string | null;
   readonly attempt: number;
   readonly model: string | null;
-  // «Инициатор» прогона (делегатор задачи) — на него метеринг/гейт. null — fallback.
+  // Плательщик прогона (создатель задачи) — на него метеринг/гейт. null — fallback.
   readonly billedUserId: string | null;
   readonly headBefore: string | null;
   readonly baseSeq: number;

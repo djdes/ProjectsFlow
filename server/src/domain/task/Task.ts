@@ -1,4 +1,4 @@
-import type { TaskDelegation } from './TaskDelegation.js';
+import type { TaskAssignee } from './TaskAssignee.js';
 
 // 'awaiting_clarification' — активная работа на паузе до действия человека
 // (ответ на ralph-question, разбор после maxAttempts retry, переформулировка задачи,
@@ -42,9 +42,12 @@ export const TASK_PRIORITIES: readonly TaskPriority[] = [1, 2, 3, 4];
 export type Task = {
   readonly id: string;
   readonly projectId: string;
-  // Кто создал задачу («кто отдал воркеру») — инициатор для метеринга/гейта расхода. null для
-  // старых задач без делегации (db/088). Заполняется на create; репозиторий читает колонку.
+  // Кто создал задачу — серверная атрибуция для аудита/метеринга. null для
+  // старых задач (db/088). Заполняется на create; репозиторий читает колонку.
   readonly createdBy: string | null;
+  // Единственный обязательный ответственный. Не зависит от createdBy: любой участник
+  // проекта может переназначить задачу или забрать её себе (db/113).
+  readonly assignee: TaskAssignee;
   readonly description: string | null;
   // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL картинки. null = без иконки. См. db/093.
   readonly icon: string | null;
@@ -80,9 +83,4 @@ export type Task = {
   readonly priority: TaskPriority | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
-  // Активная (pending|accepted) делегация — null если задача не делегирована.
-  // Заполняется list/get-endpoint'ом left-join'ом на task_delegations (см. db/039).
-  // Optional: не все repository-call'ы джойнят (e.g. agent-internal getById),
-  // поэтому undefined трактуется как «не загружено», null — «гарантированно нет».
-  readonly delegation?: TaskDelegation | null;
 };

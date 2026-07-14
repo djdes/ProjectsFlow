@@ -18,7 +18,7 @@ export type DigestItem = {
   readonly name: string; // первая строка описания — текст анкора
   readonly body: string; // остальное описание (markdown, сохраняем вёрстку)
   readonly deadline: string | null;
-  readonly assignee: string | null;
+  readonly assignee: string;
   readonly openLink: string; // ?task=… — открыть задачу (карточка с комментариями)
   readonly doneLink: string; // ?task=…&done=1 — перенести в «Готово»
   readonly commentCount: number; // кол-во комментариев у задачи (для «Комментировать (N)»)
@@ -71,7 +71,7 @@ export function buildDigestModel(
       name,
       body,
       deadline: t.deadline ? formatDeadlineRu(t.deadline, opts.now) : null,
-      assignee: t.delegation?.delegateDisplayName ?? null,
+      assignee: t.assignee.displayName,
       openLink: linkBase,
       doneLink: `${linkBase}&done=1`,
       commentCount: t.commentCount ?? 0,

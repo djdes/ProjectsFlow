@@ -701,13 +701,11 @@ function ListRow({
               <span className={cn('size-1.5 rounded-full', STATUS_DOT[task.status])} />
               {STATUS_LABEL[task.status]}
             </span>
-            {task.delegation && (
-              <UserAvatar
-                displayName={task.delegation.delegateDisplayName}
-                avatarUrl={task.delegation.delegateAvatarUrl}
-                className="size-5 text-[9px]"
-              />
-            )}
+            <UserAvatar
+              displayName={task.assignee.displayName}
+              avatarUrl={task.assignee.avatarUrl}
+              className="size-5 text-[9px]"
+            />
           </span>
         </div>
       </ContextMenuTrigger>

@@ -3,7 +3,6 @@ import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireTaskReadAccess } from './taskAuthorization.js';
-import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
 
@@ -12,7 +11,6 @@ type Deps = {
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly taskCommits: TaskCommitRepository;
-  readonly delegations: TaskDelegationRepository;
 };
 
 export class ListTaskCommits {

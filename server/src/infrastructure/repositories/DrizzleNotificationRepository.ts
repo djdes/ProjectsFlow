@@ -72,9 +72,8 @@ export class DrizzleNotificationRepository implements NotificationRepository {
 
   async countActionableUnread(userId: string): Promise<number> {
     // Actionable-типы (кнопка «Принять») — те же, что формируют вкладку «Действие».
-    // Зеркало GetActivityFeed.ACTIONABLE_TYPES — менять СИНХРОННО. Делегирования
-    // (task_delegation) не actionable: принимаются автоматически. Сводки/упоминания
-    // сюда НЕ входят.
+    // Зеркало GetActivityFeed.ACTIONABLE_TYPES — менять СИНХРОННО. Назначение
+    // ответственного информационное; сводки/упоминания сюда НЕ входят.
     const rows = await this.db
       .select({ count: sql<number>`COUNT(*)` })
       .from(notifications)

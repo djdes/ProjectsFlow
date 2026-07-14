@@ -21,8 +21,7 @@ import type { DeleteTaskComment } from '../../application/task/DeleteTaskComment
 import type { RequestRalphCancel } from '../../application/task/RequestRalphCancel.js';
 import type { RevokeRalphCancel } from '../../application/task/RevokeRalphCancel.js';
 import type { MoveTaskToProject } from '../../application/task/MoveTaskToProject.js';
-import type { DelegateExistingTask } from '../../application/task/DelegateExistingTask.js';
-import type { ReassignTaskDelegation } from '../../application/task/ReassignTaskDelegation.js';
+import type { ChangeTaskAssignee } from '../../application/task/ChangeTaskAssignee.js';
 import type { ExportTasksDigest } from '../../application/task/ExportTasksDigest.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
@@ -39,9 +38,9 @@ import { markdownToTelegramHtml } from '../../application/telegram/telegramMarkd
 import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
 import {
   assignToProjectSchema,
+  changeTaskAssigneeSchema,
   createTaskCommentSchema,
   createTaskSchema,
-  delegateTaskSchema,
   exportDigestSchema,
   linkCommitSchema,
   moveTaskSchema,
@@ -71,8 +70,7 @@ type Deps = {
   readonly requestRalphCancel: RequestRalphCancel;
   readonly revokeRalphCancel: RevokeRalphCancel;
   readonly assignToProject: MoveTaskToProject;
-  readonly delegateExisting: DelegateExistingTask;
-  readonly reassignDelegation: ReassignTaskDelegation;
+  readonly changeAssignee: ChangeTaskAssignee;
   // Экспорт выбранных задач в дайджест (буфер/email/Telegram).
   readonly exportDigest: ExportTasksDigest;
   readonly maxAttachmentBytes: number;
@@ -113,23 +111,9 @@ type Deps = {
   readonly projectRepo: ProjectRepository;
 };
 
-type TaskDelegationDto = {
-  id: string;
-  taskId: string;
-  delegateUserId: string;
-  delegateDisplayName: string;
-  delegateAvatarUrl: string | null;
-  creatorUserId: string;
-  creatorDisplayName: string;
-  creatorAvatarUrl: string | null;
-  status: string;
-  createdAt: string;
-  respondedAt: string | null;
-};
-
 type TaskDto = Omit<
   Task,
-  'createdAt' | 'updatedAt' | 'ralphCancelRequestedAt' | 'delegation'
+  'createdBy' | 'createdAt' | 'updatedAt' | 'ralphCancelRequestedAt'
 > & {
   createdAt: string;
   updatedAt: string;
@@ -138,38 +122,18 @@ type TaskDto = Omit<
   commitCount?: number;
   attachmentCount?: number;
   commentCount?: number;
-  // Активная (accepted) делегация. null если задача не делегирована.
-  // undefined невозможен на проводе — backend всегда выдаёт null.
-  delegation: TaskDelegationDto | null;
 };
 
 export function toDto(t: Task | TaskWithCounts): TaskDto {
-  // Извлекаем delegation отдельно: дату надо отдельно сериализовать; rest нельзя
-  // спрэдить как есть (там Date-объекты).
-  const { delegation: _delegationOriginal, ...rest } = t;
+  // createdBy нужен только серверу для аудита/метеринга. Публичная модель задачи
+  // содержит ровно одного человека — текущего ответственного.
+  const { createdBy: _serverOnlyCreatedBy, ...publicTask } = t;
   const base: TaskDto = {
-    ...rest,
+    ...publicTask,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
     ralphCancelRequestedAt: t.ralphCancelRequestedAt
       ? t.ralphCancelRequestedAt.toISOString()
-      : null,
-    delegation: t.delegation
-      ? {
-          id: t.delegation.id,
-          taskId: t.delegation.taskId,
-          delegateUserId: t.delegation.delegateUserId,
-          delegateDisplayName: t.delegation.delegateDisplayName,
-          delegateAvatarUrl: t.delegation.delegateAvatarUrl ?? null,
-          creatorUserId: t.delegation.creatorUserId,
-          creatorDisplayName: t.delegation.creatorDisplayName,
-          creatorAvatarUrl: t.delegation.creatorAvatarUrl ?? null,
-          status: t.delegation.status,
-          createdAt: t.delegation.createdAt.toISOString(),
-          respondedAt: t.delegation.respondedAt
-            ? t.delegation.respondedAt.toISOString()
-            : null,
-        }
       : null,
   };
   if ('commitCount' in t) base.commitCount = t.commitCount;
@@ -305,7 +269,7 @@ export function tasksRouter(deps: Deps): Router {
         status: body.status ?? 'todo',
         afterTaskId: body.afterTaskId ?? null,
         ralphMode: body.ralphMode,
-        delegateUserId: body.delegateUserId ?? null,
+        assigneeUserId: body.assigneeUserId ?? null,
         deadline: body.deadline ?? null,
         startDate: body.startDate ?? null,
         parentTaskId: body.parentTaskId ?? null,
@@ -462,7 +426,7 @@ export function tasksRouter(deps: Deps): Router {
 
   // POST /:taskId/assign-to-project — перенос задачи в другой проект (из инбокса —
   // owner, из именованного — move_task; права гейтит use-case по task.projectId).
-  // Активная делегация (если есть) → archived; делегат получает email + notification.
+  // Ответственный сохраняется, если он состоит в целевом проекте; иначе им становится caller.
   router.post(
     '/:taskId/assign-to-project',
     async (req: Request, res: Response, next: NextFunction) => {
@@ -484,54 +448,22 @@ export function tasksRouter(deps: Deps): Router {
     },
   );
 
-  // POST /:taskId/delegate — делегировать уже созданную inbox-задачу.
-  // Возвращает обновлённую task (с delegation = pending). UI сам перерисует ярлык.
-  router.post(
-    '/:taskId/delegate',
+  // PUT /:taskId/assignee — один путь для назначения, переназначения и «забрать себе».
+  router.put(
+    '/:taskId/assignee',
     async (req: Request, res: Response, next: NextFunction) => {
       try {
+        const projectId = req.params['projectId'] as string;
         const taskId = req.params['taskId'] as string;
-        const body = delegateTaskSchema.parse(req.body);
-        const delegation = await deps.delegateExisting.execute(
+        const body = changeTaskAssigneeSchema.parse(req.body);
+        const task = await deps.changeAssignee.execute(
+          projectId,
           taskId,
-          body.delegateUserId,
           req.user!.id,
+          body.assigneeUserId,
         );
-        const task = await deps.tasks.getById(taskId);
-        if (!task) {
-          res.status(404).json({ error: 'task_not_found' });
-          return;
-        }
-        deps.notifyTaskChanged(req.params['projectId'] as string);
-        // Прикручиваем delegation к task — DrizzleTaskRepository.getById не джойнит.
-        res.json({ task: toDto({ ...task, delegation }) });
-      } catch (e) {
-        next(e);
-      }
-    },
-  );
-
-  // POST /:taskId/reassign — переназначить ответственного за уже делегированную задачу
-  // (drag на кубик человека во «Входящих»). Старая активная делегация архивируется,
-  // создаётся новая pending. См. ReassignTaskDelegation (область «Максимально»).
-  router.post(
-    '/:taskId/reassign',
-    async (req: Request, res: Response, next: NextFunction) => {
-      try {
-        const taskId = req.params['taskId'] as string;
-        const body = delegateTaskSchema.parse(req.body);
-        const delegation = await deps.reassignDelegation.execute(
-          taskId,
-          body.delegateUserId,
-          req.user!.id,
-        );
-        const task = await deps.tasks.getById(taskId);
-        if (!task) {
-          res.status(404).json({ error: 'task_not_found' });
-          return;
-        }
-        deps.notifyTaskChanged(req.params['projectId'] as string);
-        res.json({ task: toDto({ ...task, delegation }) });
+        deps.notifyTaskChanged(projectId);
+        res.json({ task: toDto(task) });
       } catch (e) {
         next(e);
       }

@@ -28,12 +28,13 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
 import { useProjects } from '@/presentation/hooks/useProjects';
+import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import {
   extractClipboardFiles,
   isImageMime,
 } from '@/presentation/components/attachments/files';
 import { RalphModeSelect } from '@/presentation/components/tasks/RalphMode';
-import { DelegateSelect } from '@/presentation/components/tasks/DelegateSelect';
+import { AssigneeSelect } from '@/presentation/components/tasks/AssigneeSelect';
 import { DeadlinePicker } from '@/presentation/components/tasks/DeadlinePicker';
 import { PrioritySelect } from '@/presentation/components/tasks/PrioritySelect';
 import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
@@ -61,7 +62,7 @@ type DraftStash = {
   description: string;
   projectId: string | null;
   ralphMode: RalphMode;
-  delegateUserId: string | null;
+  assigneeUserId: string | null;
   deadline: string | null;
   priority: TaskPriority | null;
   pending: PendingFile[];
@@ -79,7 +80,7 @@ type PersistedDraft = {
   description: string;
   projectId: string | null;
   ralphMode: RalphMode;
-  delegateUserId: string | null;
+  assigneeUserId: string | null;
   deadline: string | null;
   priority: TaskPriority | null;
 };
@@ -87,8 +88,10 @@ function readDraft(): PersistedDraft | null {
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (!raw) return null;
-    const d = JSON.parse(raw) as PersistedDraft;
-    return typeof d?.description === 'string' ? d : null;
+    const d = JSON.parse(raw) as PersistedDraft & { delegateUserId?: string | null };
+    return typeof d?.description === 'string'
+      ? { ...d, assigneeUserId: d.assigneeUserId ?? d.delegateUserId ?? null }
+      : null;
   } catch {
     return null;
   }
@@ -111,17 +114,17 @@ function clearDraft(): void {
 // Глобальное окно создания задачи (кнопка «Создать задачу» в левой панели). Как окно
 // создания по проекту: Tiptap rich-редактор (форматирование по выделению, WYSIWYG,
 // вставка картинок), плюсики «+ Подзадача»/«+ Файл», ряд icon-контролов (Приоритет,
-// Дедлайн, Делегат), внизу — выбор проекта (Входящие/проект) + RalphMode + AI + Submit.
+// Дедлайн, Ответственный), внизу — выбор проекта (Входящие/проект) + RalphMode + AI + Submit.
 // Файлы — chips над редактором; drag&drop и Ctrl+V на форме кладут их в аттачи.
 export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement {
   const navigate = useNavigate();
   const { taskRepository, projectRepository } = useContainer();
+  const { user } = useCurrentUser();
   const { data: projects } = useProjects();
   const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState<string | null>(null);
   const [ralphMode, setRalphMode] = useState<RalphMode>('normal');
-  // Делегат для inbox-задачи. Сбрасывается при смене проекта на «не-inbox».
-  const [delegateUserId, setDelegateUserId] = useState<string | null>(null);
+  const [assigneeUserId, setAssigneeUserId] = useState<string | null>(user?.id ?? null);
   const [deadline, setDeadline] = useState<string | null>(null);
   const [priority, setPriority] = useState<TaskPriority | null>(null);
   const [saving, setSaving] = useState(false);
@@ -151,8 +154,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     description.trim() !== '' ||
     pending.length > 0 ||
     deadline !== null ||
-    priority !== null ||
-    delegateUserId !== null;
+    priority !== null;
 
   // Освободить blob-URL'ы снимка и забыть его.
   const discardStash = (): void => {
@@ -173,14 +175,14 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       description,
       projectId,
       ralphMode,
-      delegateUserId,
+      assigneeUserId,
       deadline,
       priority,
       pending: [...pending],
       inlineImages: [...inlineImagesRef.current.entries()],
     };
     // Персистим сериализуемую часть — переживёт перезагрузку страницы (файлы/картинки — нет).
-    writeDraft({ description, projectId, ralphMode, delegateUserId, deadline, priority });
+    writeDraft({ description, projectId, ralphMode, assigneeUserId, deadline, priority });
   };
 
   // Закрытие пользователем (Esc / клик вне / крестик / «Отмена»): сохраняем черновик.
@@ -197,7 +199,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       setDescription(s.description);
       setProjectId(s.projectId);
       setRalphMode(s.ralphMode);
-      setDelegateUserId(s.delegateUserId);
+      setAssigneeUserId(s.assigneeUserId ?? user?.id ?? null);
       setDeadline(s.deadline);
       setPriority(s.priority);
       setPending(s.pending);
@@ -210,7 +212,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       setDescription(d.description);
       setProjectId(d.projectId);
       setRalphMode(d.ralphMode);
-      setDelegateUserId(d.delegateUserId);
+      setAssigneeUserId(d.assigneeUserId ?? user?.id ?? null);
       setDeadline(d.deadline);
       setPriority(d.priority);
     }
@@ -229,14 +231,14 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     setDescription('');
     setProjectId(null);
     setRalphMode('normal');
-    setDelegateUserId(null);
+    setAssigneeUserId(user?.id ?? null);
     setDeadline(null);
     setPriority(null);
     setError(null);
     setDragActive(false);
     setPending([]);
     inlineImagesRef.current = new Map();
-  }, [open]);
+  }, [open, user?.id]);
 
   // При открытии этого окна закрываем inline-композер на доске (единая поверхность
   // создания — см. KanbanBoard). Слушатель — в KanbanBoard.
@@ -244,10 +246,10 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
     if (open) window.dispatchEvent(new CustomEvent('pf:close-inline-composer'));
   }, [open]);
 
-  // При смене проекта на «не-inbox» сбрасываем делегата — он применим только к inbox.
+  // При смене проекта возвращаем безопасный default: текущего пользователя.
   useEffect(() => {
-    if (projectId !== null) setDelegateUserId(null);
-  }, [projectId]);
+    setAssigneeUserId(user?.id ?? null);
+  }, [projectId, user?.id]);
 
   const addFiles = (raw: FileList | File[]): void => {
     const list = Array.from(raw);
@@ -321,7 +323,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
       : (realProjects.find((p) => p.id === projectId)?.name ?? 'Без проекта (Входящие)');
 
   const trimmed = description.trim();
-  const disabled = saving || trimmed.length === 0;
+  const disabled = saving || trimmed.length === 0 || assigneeUserId === null;
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -335,7 +337,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
         description: trimmed,
         status: 'backlog',
         ralphMode,
-        delegateUserId: delegateUserId ?? null,
+        assigneeUserId,
         deadline,
         priority,
       });
@@ -559,7 +561,7 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                     value={projectId ?? INBOX_VALUE}
                     onValueChange={(v) => {
                       setProjectId(v === INBOX_VALUE ? null : v);
-                      setDelegateUserId(null);
+                      setAssigneeUserId(user?.id ?? null);
                     }}
                   >
                     <DropdownMenuRadioItem value={INBOX_VALUE}>
@@ -581,15 +583,13 @@ export function AddTaskDialog({ open, onOpenChange }: Props): React.ReactElement
                 iconOnly
                 className={cn('h-8', deadline === null ? 'w-8 px-0' : 'px-2')}
               />
-              {(projectId === null || (realProjects.find((p) => p.id === projectId)?.memberCount ?? 0) > 1) && (
-                <DelegateSelect
-                  value={delegateUserId}
-                  onChange={setDelegateUserId}
-                  disabled={saving}
-                  projectId={projectId ?? undefined}
-                  className="size-8"
-                />
-              )}
+              <AssigneeSelect
+                value={assigneeUserId}
+                onChange={setAssigneeUserId}
+                disabled={saving}
+                projectId={projectId ?? undefined}
+                className="size-8"
+              />
               <RalphModeSelect
                 value={ralphMode}
                 onChange={setRalphMode}

@@ -3,7 +3,6 @@ import type { ProjectMemberRepository } from '../project/ProjectMemberRepository
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
-import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import { requireTaskDeleteAccess } from './taskAuthorization.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 
@@ -12,7 +11,6 @@ type Deps = {
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly comments: TaskCommentRepository;
-  readonly delegations: TaskDelegationRepository;
   // Лента действий (best-effort). Опционально.
   readonly activityRecorder?: ActivityRecorder;
 };
@@ -27,7 +25,8 @@ export class DeleteTask {
     if (!task || task.projectId !== projectId) throw new TaskNotFoundError(taskId);
 
     // Атомарно: задача + все её child-строки (комментарии, аттачи, коммиты, версии,
-    // делегации, live-сессии/события, telegram-маппинги, email-токены) в одной TX (B2/B3).
+    // legacy-история назначений, live-сессии/события, telegram-маппинги,
+    // email-токены) в одной TX (B2/B3).
     // Раньше комментарии чистились отдельным запросом, а attachments/commits/versions
     // оставались сиротами; крэш между шагами оставлял несогласованное состояние.
     const ok = await this.deps.tasks.deleteWithChildren(taskId);

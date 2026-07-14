@@ -12,8 +12,8 @@ const roleLabel: Record<'editor' | 'viewer', string> = {
 };
 
 // Строка уведомления с действиями (принять инвайт в пространство/проект, join-request;
-// делегирование — информационное). Переиспользуется на странице /notifications и в ленте
-// «Все»/«Требуется действие».
+// старые уведомления о назначении — информационные). Переиспользуется на странице
+// /notifications и в ленте «Все»/«Требуется действие».
 export function NotificationItem({
   n,
   actions,
@@ -23,7 +23,7 @@ export function NotificationItem({
 }): React.ReactElement {
   const isUnread = n.readAt === null;
   const payload = n.payload;
-  const delegationUi = actions.delegationUi[n.id];
+  const actionUi = actions.actionUi[n.id];
 
   return (
     <li
@@ -94,17 +94,17 @@ export function NotificationItem({
               <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> приглашает вас в{' '}
               <span className="font-medium">«{payload.projectName}»</span> как {roleLabel[payload.role]}
             </p>
-            {delegationUi === 'accepted' ? (
+            {actionUi === 'accepted' ? (
               <p className="clear-left pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                 ✓ Принято
               </p>
-            ) : delegationUi === 'resolved' ? (
+            ) : actionUi === 'resolved' ? (
               <p className="clear-left pt-1 text-xs text-muted-foreground">Уже обработано</p>
             ) : (
               <div className="clear-left pt-1">
                 <Button
                   size="sm"
-                  disabled={delegationUi === 'busy'}
+                  disabled={actionUi === 'busy'}
                   onClick={(e) => {
                     e.stopPropagation();
                     actions.handleAcceptInvite(n);
@@ -124,17 +124,17 @@ export function NotificationItem({
               пространство <span className="font-medium">«{payload.workspaceName}»</span> как{' '}
               {roleLabel[payload.role]}
             </p>
-            {delegationUi === 'accepted' ? (
+            {actionUi === 'accepted' ? (
               <p className="clear-left pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                 ✓ Принято
               </p>
-            ) : delegationUi === 'resolved' ? (
+            ) : actionUi === 'resolved' ? (
               <p className="clear-left pt-1 text-xs text-muted-foreground">Уже обработано</p>
             ) : (
               <div className="clear-left pt-1">
                 <Button
                   size="sm"
-                  disabled={delegationUi === 'busy'}
+                  disabled={actionUi === 'busy'}
                   onClick={(e) => {
                     e.stopPropagation();
                     actions.handleAcceptWorkspaceInvite(n);
@@ -150,7 +150,20 @@ export function NotificationItem({
         {payload.type === 'task_delegation' && (
           <>
             <p className="text-sm leading-tight">
-              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> поручил вам задачу:
+              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> назначил(а) вас
+              ответственным за задачу:
+            </p>
+            <p className="line-clamp-2 text-xs italic text-muted-foreground">
+              «{payload.taskExcerpt || '(без описания)'}»
+            </p>
+          </>
+        )}
+
+        {payload.type === 'task_assignee_changed' && (
+          <>
+            <p className="text-sm leading-tight">
+              <span className="font-medium">{payload.actorDisplayName ?? 'Кто-то'}</span> назначил(а) вас
+              ответственным за задачу:
             </p>
             <p className="line-clamp-2 text-xs italic text-muted-foreground">
               «{payload.taskExcerpt || '(без описания)'}»
@@ -172,7 +185,8 @@ export function NotificationItem({
 
         {payload.type === 'task_assigned_to_project' && (
           <p className="text-sm leading-tight">
-            <span className="font-medium">{payload.actorDisplayName}</span> перенёс делегированную вам задачу в{' '}
+            <span className="font-medium">{payload.actorDisplayName}</span> перенёс задачу, за которую вы
+            отвечаете, в{' '}
             <span className="font-medium">«{payload.projectName}»</span>
             {payload.taskExcerpt && (
               <>
@@ -244,17 +258,17 @@ export function NotificationItem({
               <span className="font-medium">{payload.requesterDisplayName ?? 'Пользователь'}</span> просит доступ к
               проекту <span className="font-medium">«{payload.projectName}»</span>
             </p>
-            {delegationUi === 'accepted' ? (
+            {actionUi === 'accepted' ? (
               <p className="clear-left pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                 ✓ Доступ предоставлен
               </p>
-            ) : delegationUi === 'declined' ? (
+            ) : actionUi === 'declined' ? (
               <p className="clear-left pt-1 text-xs text-muted-foreground">Запрос отклонён</p>
             ) : (
               <div className="flex clear-left gap-2 pt-1">
                 <Button
                   size="sm"
-                  disabled={delegationUi === 'busy'}
+                  disabled={actionUi === 'busy'}
                   onClick={(e) => {
                     e.stopPropagation();
                     actions.handleResolveJoin(n, true);
@@ -265,7 +279,7 @@ export function NotificationItem({
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={delegationUi === 'busy'}
+                  disabled={actionUi === 'busy'}
                   onClick={(e) => {
                     e.stopPropagation();
                     actions.handleResolveJoin(n, false);

@@ -6,7 +6,6 @@ import type { ProjectMemberRepository } from '../project/ProjectMemberRepository
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
-import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
 import { parseMentions } from './parseMentions.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
@@ -17,7 +16,6 @@ type Deps = {
   readonly tasks: TaskRepository;
   readonly comments: TaskCommentRepository;
   readonly notifications: NotificationRepository;
-  readonly delegations: TaskDelegationRepository;
   readonly idGen: () => string;
   // Лента действий (best-effort). Опционально.
   readonly activityRecorder?: ActivityRecorder;

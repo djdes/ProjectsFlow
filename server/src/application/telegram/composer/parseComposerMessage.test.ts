@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { parseComposerMessage } from './parseComposerMessage.js';
 import { fuzzyMatch, greedyProjectPrefix } from './fuzzyMatch.js';
 
-test('parse: +проект текст @делегат', () => {
+test('parse: +проект текст @ответственный', () => {
   assert.deepEqual(parseComposerMessage('+ралф Обнови билд @вася'), {
     projectQuery: 'ралф',
     taskText: 'Обнови билд',
-    delegateQuery: 'вася',
+    assigneeQuery: 'вася',
   });
 });
 
@@ -15,7 +15,7 @@ test('parse: голый текст без + → проект null, текст ц
   assert.deepEqual(parseComposerMessage('Обнови билд'), {
     projectQuery: null,
     taskText: 'Обнови билд',
-    delegateQuery: null,
+    assigneeQuery: null,
   });
 });
 
@@ -23,7 +23,7 @@ test('parse: «+» без имени → пустой projectQuery (показа
   assert.deepEqual(parseComposerMessage('+ Обнови билд'), {
     projectQuery: '',
     taskText: 'Обнови билд',
-    delegateQuery: null,
+    assigneeQuery: null,
   });
 });
 
@@ -31,23 +31,23 @@ test('parse: «+проект» без текста', () => {
   assert.deepEqual(parseComposerMessage('+ралф'), {
     projectQuery: 'ралф',
     taskText: '',
-    delegateQuery: null,
+    assigneeQuery: null,
   });
 });
 
-test('parse: бара делегат без проекта → inbox + делегирование', () => {
+test('parse: ответственный без проекта → inbox + назначение', () => {
   assert.deepEqual(parseComposerMessage('@вася почини'), {
     projectQuery: null,
     taskText: 'почини',
-    delegateQuery: 'вася',
+    assigneeQuery: 'вася',
   });
 });
 
-test('parse: @ в середине текста выносится в делегата', () => {
+test('parse: @ в середине текста выносится в ответственного', () => {
   assert.deepEqual(parseComposerMessage('+ралф Обнови @вася билд'), {
     projectQuery: 'ралф',
     taskText: 'Обнови билд',
-    delegateQuery: 'вася',
+    assigneeQuery: 'вася',
   });
 });
 
@@ -55,7 +55,7 @@ test('parse: последний @ выигрывает, все @ убраны и
   assert.deepEqual(parseComposerMessage('@петя задача @вася'), {
     projectQuery: null,
     taskText: 'задача',
-    delegateQuery: 'вася',
+    assigneeQuery: 'вася',
   });
 });
 
@@ -63,7 +63,7 @@ test('parse: «+» только как первый токен (не в сере
   assert.deepEqual(parseComposerMessage('fix +bug crash'), {
     projectQuery: null,
     taskText: 'fix +bug crash',
-    delegateQuery: null,
+    assigneeQuery: null,
   });
 });
 
@@ -71,7 +71,7 @@ test('parse: пустая строка', () => {
   assert.deepEqual(parseComposerMessage('   '), {
     projectQuery: null,
     taskText: '',
-    delegateQuery: null,
+    assigneeQuery: null,
   });
 });
 

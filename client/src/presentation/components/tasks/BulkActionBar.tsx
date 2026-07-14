@@ -27,6 +27,7 @@ import {
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useContainer } from '@/infrastructure/di/container';
+import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import type { SharedMember } from '@/application/project/ProjectRepository';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import {
@@ -59,18 +60,18 @@ type Props = {
 };
 
 // Плавающая панель массовых действий (появляется при N ≥ 1 выбранных). Слева —
-// счётчик, далее мутации (делегировать/дедлайн/приоритет/в колонку/Ralph/удалить).
+// счётчик, далее мутации (ответственный/дедлайн/приоритет/в колонку/Ralph/удалить).
 // Кнопки экспорта (копировать/почта/Telegram) добавляются в Фазе 2.
 export function BulkActionBar({
   selectedIds,
   projectId,
   isInbox,
-  currentUserId,
   moveTargets,
   bulk,
   onExit,
 }: Props): React.ReactElement | null {
   const { projectRepository, taskRepository, digestSettingsRepository } = useContainer();
+  const { user } = useCurrentUser();
   const [members, setMembers] = useState<SharedMember[] | null>(null);
   const [group, setGroup] = useState<{ chatId: number | null; title: string | null }>({
     chatId: null,
@@ -84,16 +85,13 @@ export function BulkActionBar({
   const [exporting, setExporting] = useState(false);
   const { animations } = useMotion();
 
-  // Подгружаем участников для делегирования (как в DelegateTaskButton). Viewer'ов исключаем —
-  // сервер отвергает viewer'а как делегата (DelegateNotProjectMemberError).
+  // Любой участник проекта может стать ответственным, включая viewer и caller'а.
   useEffect(() => {
     let cancelled = false;
     const load = isInbox
       ? projectRepository.listSharedMembers()
       : projectRepository.listMembers(projectId).then((list) =>
-          list
-            .filter((m) => m.userId !== currentUserId && m.role !== 'viewer')
-            .map((m) => ({
+          list.map((m) => ({
               id: m.userId,
               displayName: m.user.displayName,
               email: m.user.email,
@@ -102,7 +100,18 @@ export function BulkActionBar({
         );
     load
       .then((list) => {
-        if (!cancelled) setMembers(list);
+        if (!cancelled) {
+          const byId = new Map(list.map((member) => [member.id, member]));
+          if (user) {
+            byId.set(user.id, {
+              id: user.id,
+              displayName: user.displayName,
+              email: user.email,
+              avatarUrl: user.avatarUrl,
+            });
+          }
+          setMembers([...byId.values()]);
+        }
       })
       .catch(() => {
         if (!cancelled) setMembers([]);
@@ -110,7 +119,7 @@ export function BulkActionBar({
     return () => {
       cancelled = true;
     };
-  }, [projectRepository, projectId, isInbox, currentUserId]);
+  }, [projectRepository, projectId, isInbox, user]);
 
   // Telegram-группа проекта (для опции «В группу» при отправке в Telegram).
   useEffect(() => {
@@ -208,12 +217,12 @@ export function BulkActionBar({
         </span>
         <span className="mx-0.5 h-5 w-px bg-border" aria-hidden />
 
-        {/* Делегировать */}
+        {/* Назначить ответственного */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" disabled={disabled} className="h-8 gap-1.5 px-2 text-xs">
               <Send className="size-3.5" />
-              Делегировать
+              Ответственный
               <ChevronDown className="size-3 opacity-60" />
             </Button>
           </DropdownMenuTrigger>
@@ -221,14 +230,16 @@ export function BulkActionBar({
             {(members ?? []).length > 0 ? (
               <>
                 <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Кому делегировать
+                  Назначить ответственного
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {(members ?? []).map((m) => (
                   <DropdownMenuItem
                     key={m.id}
                     className="gap-2"
-                    onClick={() => void run('Делегировано', () => bulk.delegate(selectedIds, m.id))}
+                    onClick={() =>
+                      void run('Ответственный изменён', () => bulk.assign(selectedIds, m.id))
+                    }
                   >
                     <span className="truncate">{m.displayName}</span>
                     <span className="ml-auto truncate text-[10px] text-muted-foreground">
@@ -239,7 +250,7 @@ export function BulkActionBar({
               </>
             ) : (
               <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                {members === null ? 'Загрузка…' : 'Нет участников для делегирования.'}
+                {members === null ? 'Загрузка…' : 'Нет доступных участников.'}
               </div>
             )}
           </DropdownMenuContent>

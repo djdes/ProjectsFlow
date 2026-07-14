@@ -69,7 +69,7 @@ export type ChatMentionPayload = {
   readonly actorDisplayName: string;
 };
 
-// Информационное: делегация создаётся сразу принятой, кнопок нет.
+// Legacy-контракт для уже сохранённых уведомлений до перехода на task_assignee_changed.
 export type TaskDelegationPayload = {
   readonly type: 'task_delegation';
   readonly delegationId: string;
@@ -79,8 +79,20 @@ export type TaskDelegationPayload = {
   readonly actorDisplayName: string;
 };
 
-// Делегат снял(а) с себя задачу (relinquish). resolution:'accepted' — легаси-записи старого
-// флоу. actor = делегат.
+// Текущий контракт назначения ответственного. Старые delegation-типы остаются в union,
+// чтобы исторические уведомления продолжали отображаться.
+export type TaskAssigneeChangedPayload = {
+  readonly type: 'task_assignee_changed';
+  readonly taskId: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly isInbox: boolean;
+  readonly taskExcerpt: string;
+  readonly actorUserId: string;
+  readonly actorDisplayName: string;
+};
+
+// Legacy-контракт старого accept/decline-флоу; нужен только для истории уведомлений.
 export type TaskDelegationResolvedPayload = {
   readonly type: 'task_delegation_resolved';
   readonly delegationId: string;
@@ -91,7 +103,7 @@ export type TaskDelegationResolvedPayload = {
   readonly actorDisplayName: string;
 };
 
-// Создатель перенёс делегированную задачу в реальный проект. Прилетает делегату.
+// Legacy-контракт старого уведомления о переносе; нужен только для истории.
 export type TaskAssignedToProjectPayload = {
   readonly type: 'task_assigned_to_project';
   readonly taskId: string;
@@ -140,6 +152,7 @@ export type NotificationPayload =
   | WorkspaceInvitePayload
   | JoinRequestPayload
   | TaskDelegationPayload
+  | TaskAssigneeChangedPayload
   | TaskDelegationResolvedPayload
   | TaskAssignedToProjectPayload
   | ServerAlertPayload

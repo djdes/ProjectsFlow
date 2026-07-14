@@ -3,6 +3,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { useRealtimeTaskRefresh } from './useRealtimeTaskRefresh';
+import { useCurrentUser } from './useCurrentUser';
 
 type State = {
   tasks: Task[];
@@ -20,7 +21,7 @@ export type UseTasks = State & {
     status: TaskStatus;
     afterTaskId?: string | null;
     ralphMode?: RalphMode;
-    delegateUserId?: string | null;
+    assigneeUserId?: string;
     deadline?: string | null;
     startDate?: string | null;
     parentTaskId?: string | null;
@@ -46,6 +47,7 @@ export type UseTasks = State & {
 
 export function useTasks(projectId: string): UseTasks {
   const { taskRepository } = useContainer();
+  const { user } = useCurrentUser();
   const [state, setState] = useState<State>({ tasks: [], loading: true, error: null });
 
   // refetch() НЕ сбрасывает loading=true и НЕ обнуляет tasks. Это критично для
@@ -89,7 +91,9 @@ export function useTasks(projectId: string): UseTasks {
   };
 
   const create: UseTasks['create'] = async (input) => {
-    const task = await taskRepository.create(projectId, input);
+    const assigneeUserId = input.assigneeUserId ?? user?.id;
+    if (!assigneeUserId) throw new Error('Не удалось определить ответственного');
+    const task = await taskRepository.create(projectId, { ...input, assigneeUserId });
     setState((s) => ({ ...s, tasks: [...s.tasks, task] }));
     notifyChanged();
     return task;

@@ -18,6 +18,8 @@ import {
 function task(partial: Partial<TaskWithCounts> & { id: string }): TaskWithCounts {
   return {
     projectId: 'p1',
+    createdBy: 'u1',
+    assignee: { userId: 'u1', displayName: 'Я', avatarUrl: null },
     description: null,
     icon: null,
     cover: null,
@@ -30,10 +32,11 @@ function task(partial: Partial<TaskWithCounts> & { id: string }): TaskWithCounts
     ralphCancelRequestedBy: null,
     ralphCancelRequestedByDisplayName: null,
     deadline: null,
+    startDate: null,
+    parentTaskId: null,
     priority: null,
     createdAt: new Date('2026-06-01T00:00:00Z'),
     updatedAt: new Date('2026-06-01T00:00:00Z'),
-    delegation: null,
     commitCount: 0,
     attachmentCount: 0,
     commentCount: 0,
@@ -133,13 +136,9 @@ test('buildDigestModel: inbox links + assignee + attachments', () => {
   const tasks = [
     task({
       id: 't1',
-      description: 'Делегированная',
+      description: 'Назначенная',
       priority: 2,
-      delegation: {
-        id: 'd1', taskId: 't1', delegateUserId: 'u2', delegateDisplayName: 'Анна',
-        creatorUserId: 'u1', creatorDisplayName: 'Я', status: 'pending',
-        createdAt: new Date('2026-06-01T00:00:00Z'), respondedAt: null, revertToUserId: null,
-      },
+      assignee: { userId: 'u2', displayName: 'Анна', avatarUrl: null },
     }),
   ];
   const m = buildDigestModel(tasks, { ...baseOpts, isInbox: true, attachmentsByTask: att });
@@ -207,20 +206,18 @@ test('status grouping: groups by visible column; in_progress folds into «Вор
   assert.deepEqual(m.groups[1]!.items.map((i) => i.name), ['В работе', 'Воркер ждёт']);
 });
 
-test('renderDigestTelegram: исполнитель в мете; без делегата — без 👤', () => {
+test('renderDigestTelegram: единственный ответственный всегда показан в мете', () => {
   const tasks = [
     task({
       id: 't1', description: 'Задача', priority: 1,
-      delegation: {
-        id: 'd', taskId: 't1', delegateUserId: 'u', delegateDisplayName: 'Борис',
-        creatorUserId: 'c', creatorDisplayName: 'Я', status: 'pending', createdAt: new Date(), respondedAt: null, revertToUserId: null,
-      },
+      assignee: { userId: 'u', displayName: 'Борис', avatarUrl: null },
     }),
     task({ id: 't2', description: 'Ничья', priority: 1 }),
   ];
   const tg = renderDigestTelegram(buildDigestModel(tasks, baseOpts))[0]!;
-  assert.ok(tg.includes('👤 Борис')); // исполнитель в мете
-  assert.ok(tg.includes('<b>Ничья</b>')); // вторая задача без делегата — заголовок есть
+  assert.ok(tg.includes('👤 Борис'));
+  assert.ok(tg.includes('👤 Я'));
+  assert.ok(tg.includes('<b>Ничья</b>'));
 });
 
 test('renderDigestHtml: жирный заголовок (не ссылка) + кнопки Комментировать/Завершить внизу', () => {

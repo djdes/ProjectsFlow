@@ -11,7 +11,7 @@ import { splitTitleBody } from '@/lib/taskTitleBody';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import type { Task } from '@/domain/task/Task';
 import { ClaudeIcon } from './ClaudeIcon';
-import { DelegationBadge } from './DelegationBadge';
+import { AssigneeBadge } from './AssigneeBadge';
 import { InboxCheckbox } from './InboxCheckbox';
 import { RalphModeBadge } from './RalphMode';
 import { DeadlineBadge } from './DeadlineBadge';
@@ -41,7 +41,7 @@ type Props = {
   showCheckbox?: boolean;
   lastDoneTaskId?: string | null;
   lastTodoTaskId?: string | null;
-  // Для DelegationBadge: чтобы определить «я создатель / я делегат».
+  // Оставлен в публичном контракте карточки для совместимости с представлениями.
   currentUserId?: string | null;
   // У задачи активна LIVE-сессия воркера — рисуем пульсирующую 🔴 точку в углу карточки.
   liveRunning?: boolean;
@@ -78,7 +78,6 @@ export function KanbanCard({
   showCheckbox = false,
   lastDoneTaskId = null,
   lastTodoTaskId = null,
-  currentUserId = null,
   liveRunning = false,
   open = false,
   recentlyMoved = false,
@@ -127,7 +126,7 @@ export function KanbanCard({
   // не затемняем текст и не рисуем пустую градиент-полосу на hover; кнопки действий
   // (корзина/стрелка) сами маскируют свой угол сплошным фоном.
   const hasMeta = Boolean(
-    (task.delegation && currentUserId) ||
+    task.assignee ||
       checklist ||
       (task.commentCount ?? 0) > 0 ||
       (task.attachmentCount ?? 0) > 0 ||
@@ -374,9 +373,7 @@ export function KanbanCard({
             )}
           >
             <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
-              {task.delegation && currentUserId && (
-                <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
-              )}
+              <AssigneeBadge assignee={task.assignee} />
               {checklist && (
                 <span
                   className={cn(

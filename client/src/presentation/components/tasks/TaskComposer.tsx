@@ -19,7 +19,7 @@ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useTextFieldFormatting } from '@/presentation/hooks/useTextFieldFormatting';
 import { useAutoGrowTextarea } from '@/presentation/hooks/useAutoGrowTextarea';
 import { RalphModeSelect } from './RalphMode';
-import { DelegateSelect } from './DelegateSelect';
+import { AssigneeSelect } from './AssigneeSelect';
 import { PrioritySelect } from './PrioritySelect';
 import { DeadlinePicker } from './DeadlinePicker';
 import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
@@ -55,7 +55,7 @@ type PendingFile = {
 const ICON_BTN =
   'grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:opacity-40';
 const ICON_GLYPH = 'size-3.5';
-// I2: пикеры (режим/приоритет/дедлайн/делегат) делим общую «пилюлю» с plain-кнопками —
+// I2: пикеры (режим/приоритет/дедлайн/ответственный) делим общую «пилюлю» с plain-кнопками —
 // size-7, rounded-md, тот же нейтральный hover-фон (bg-hover), чтобы нижний ряд был ровным.
 // Цвет иконки НЕ форсим (у пикеров он свой — приоритет/дедлайн бывают цветными).
 const ICON_BTN_ANIM =
@@ -69,7 +69,7 @@ type Props = {
     description: string;
     status?: TaskStatus;
     ralphMode?: RalphMode;
-    delegateUserId?: string | null;
+    assigneeUserId: string;
     deadline?: string | null;
     priority?: TaskPriority | null;
   }) => Promise<Task>;
@@ -78,9 +78,9 @@ type Props = {
   // Если задан — задача всегда создаётся в этом статусе, тоггл todo/backlog скрыт
   // (inline-композер в конкретной колонке).
   forcedStatus?: TaskStatus;
-  // Inbox-режим: показываем DelegateSelect.
+  // Inbox-режим: список ответственных включает пользователя и shared-members.
   isInbox?: boolean;
-  // Совместный проект (memberCount > 1, не inbox): DelegateSelect с участниками проекта.
+  // Для именованного проекта выбираются все его участники.
   isShared?: boolean;
   // projectId для AI-кнопки. null = дефолтный AI-диспетчер (Inbox).
   aiProjectId?: string | null;
@@ -93,14 +93,13 @@ type Props = {
   storageKey?: string;
 };
 
-// Композер задачи: авто-grow textarea, drop/paste/Ctrl+V файлов, Ralph-режим, делегирование,
+// Композер задачи: авто-grow textarea, drop/paste/Ctrl+V файлов, Ralph-режим, ответственный,
 // AI-improve, Ctrl/Cmd+Enter — submit. Питает и floating-виджет, и inline-композер колонки.
 export function TaskComposer({
   onCreate,
   variant,
   forcedStatus,
   isInbox = false,
-  isShared = false,
   aiProjectId = null,
   autoFocus = false,
   onClose,
@@ -109,25 +108,22 @@ export function TaskComposer({
   const { taskRepository } = useContainer();
   const { user } = useCurrentUser();
   const isInline = variant === 'inline';
-  // В именованном общем проекте новая задача по умолчанию «на мне» (accepted self-делегация)
-  // → попадает во «Входящие → Для меня». В inbox оставляем null (само-делегация увела бы
-  // задачу с inbox-доски в блок «Для меня»). Юзер может сменить ответственного/очистить.
-  const selfDelegateDefault = isShared && !isInbox ? (user?.id ?? null) : null;
+  const defaultAssigneeUserId = user?.id ?? null;
   // Плавающий композер `fixed` к вьюпорту → сам не наследует сужение <main>. Читаем ширину
   // открытой правой панели и отступаем на неё справа, чтобы не заезжать под окно задачи/аналитики.
   const rightPanelWidth = useRightPanelWidth();
   // Persist text across orientation changes on mobile (браузер может пересоздать layout).
   const STORAGE_KEY = storageKey ?? 'pf:quick-add-text';
   const STASH_KEY = stashKeyFor(STORAGE_KEY);
-  // Живой черновик (JSON: текст + режим + приоритет + дедлайн + делегат) — переживает
+  // Живой черновик (JSON: текст + режим + приоритет + дедлайн + ответственный) — переживает
   // перезагрузку. Файлы не сохраняются. На create/restore чистим явно.
   const [initialDraft] = useState<ComposerDraft>(() => readComposerDraft(STORAGE_KEY) ?? EMPTY_COMPOSER_DRAFT);
   const [text, setText] = useState(initialDraft.text);
   const [ralphMode, setRalphMode] = useState<RalphMode>(initialDraft.ralphMode);
   // По умолчанию — черновик (backlog): быстрое добавление кидает в бэклог, а не сразу воркеру.
   const [quickStatus, setQuickStatus] = useState<'todo' | 'backlog'>('backlog');
-  const [delegateUserId, setDelegateUserId] = useState<string | null>(
-    initialDraft.delegateUserId ?? selfDelegateDefault,
+  const [assigneeUserId, setAssigneeUserId] = useState<string | null>(
+    initialDraft.assigneeUserId ?? defaultAssigneeUserId,
   );
   const [priority, setPriority] = useState<TaskPriority | null>(initialDraft.priority);
   const [deadline, setDeadline] = useState<string | null>(initialDraft.deadline);
@@ -135,8 +131,11 @@ export function TaskComposer({
   // Только для inline-композера колонки. Стартовое значение — читаем stash при монтировании.
   const [hasStash, setHasStash] = useState(() => isInline && readComposerDraft(STASH_KEY) !== null);
   useEffect(() => {
-    writeComposerDraft(STORAGE_KEY, { text, ralphMode, priority, deadline, delegateUserId });
-  }, [STORAGE_KEY, text, ralphMode, priority, deadline, delegateUserId]);
+    writeComposerDraft(STORAGE_KEY, { text, ralphMode, priority, deadline, assigneeUserId });
+  }, [STORAGE_KEY, text, ralphMode, priority, deadline, assigneeUserId]);
+  useEffect(() => {
+    if (assigneeUserId === null && user) setAssigneeUserId(user.id);
+  }, [assigneeUserId, user]);
   const restoreDraft = (): void => {
     const d = readComposerDraft(STASH_KEY);
     setHasStash(false);
@@ -145,7 +144,7 @@ export function TaskComposer({
     setRalphMode(d.ralphMode);
     setPriority(d.priority);
     setDeadline(d.deadline);
-    setDelegateUserId(d.delegateUserId);
+    setAssigneeUserId(d.assigneeUserId ?? user?.id ?? null);
     clearComposerDraft(STASH_KEY);
   };
   const [pending, setPending] = useState<PendingFile[]>([]);
@@ -226,7 +225,7 @@ export function TaskComposer({
 
   const submit = async (): Promise<void> => {
     const trimmed = text.trim();
-    if (trimmed.length === 0 || submitting) return;
+    if (trimmed.length === 0 || submitting || !assigneeUserId) return;
     if (workerBlocked) {
       toast.error(aiBlockedReason ?? 'Лимит использования исчерпан');
       return;
@@ -237,7 +236,7 @@ export function TaskComposer({
         description: trimmed,
         status: forcedStatus ?? quickStatus,
         ralphMode,
-        delegateUserId,
+        assigneeUserId,
         priority,
         deadline,
       });
@@ -268,7 +267,7 @@ export function TaskComposer({
       setHasStash(false);
       setRalphMode('normal');
       setQuickStatus('backlog');
-      setDelegateUserId(selfDelegateDefault);
+      setAssigneeUserId(user?.id ?? null);
       setPriority(null);
       setDeadline(null);
     } catch (err) {
@@ -301,7 +300,7 @@ export function TaskComposer({
   }, []);
 
   const hasText = text.trim().length > 0;
-  const canSubmit = hasText && !submitting && !workerBlocked;
+  const canSubmit = hasText && Boolean(assigneeUserId) && !submitting && !workerBlocked;
   // Развёрнут, если: inline-композер (всегда), есть фокус, набран текст или есть вложения.
   const expanded = isInline || focused || hasText || pending.length > 0;
   const placeholder = isInline
@@ -494,16 +493,14 @@ export function TaskComposer({
         >
           <Paperclip className={cn(ICON_GLYPH, 'transition-transform duration-150 group-hover/at:-rotate-12 group-hover/at:scale-110')} />
         </button>
-        {/* Контролы режим/приоритет/дедлайн/делегат — все size-7, в один ряд. */}
-        {(isInbox || isShared) && (
-          <DelegateSelect
-            value={delegateUserId}
-            onChange={setDelegateUserId}
-            disabled={submitting}
-            projectId={isShared && aiProjectId ? aiProjectId : undefined}
-            className={ICON_BTN_PICKER}
-          />
-        )}
+        {/* Ответственный обязателен для каждой задачи. */}
+        <AssigneeSelect
+          value={assigneeUserId}
+          onChange={setAssigneeUserId}
+          disabled={submitting}
+          projectId={!isInbox && aiProjectId ? aiProjectId : undefined}
+          className={ICON_BTN_PICKER}
+        />
         <RalphModeSelect
           value={ralphMode}
           onChange={setRalphMode}

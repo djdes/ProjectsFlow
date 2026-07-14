@@ -4,26 +4,25 @@ import type { ProjectAction } from '../../domain/project/permissions.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
-import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
+import type { TaskRepository } from './TaskRepository.js';
 
 export type TaskAccessDeps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
-  readonly delegations: TaskDelegationRepository;
+  readonly tasks: TaskRepository;
 };
 
 export type TaskAccessResult = {
   readonly project: Project;
-  // true когда caller — accepted-delegate inbox-задачи (не creator).
-  // Use-case'ы могут использовать для логирования / различной семантики.
-  readonly isDelegate: boolean;
+  // true когда caller — текущий ответственный (независимо от creator/owner).
+  readonly isAssignee: boolean;
 };
 
-// Inbox-aware authorization для task-modify операций.
-// Для non-inbox проекта — обычная requireProjectAccess.
-// Для inbox-проекта — разрешён creator (owner) ИЛИ accepted-delegate.
+// Assignee-aware authorization для task-modify операций.
+// Для inbox разрешён owner или текущий ответственный. В именованном проекте editor+
+// сохраняет обычные права, а назначенный viewer получает task-scoped update/move.
 //
-// 404 (ProjectNotFoundError) когда caller не member и не accepted-delegate —
+// 404 (ProjectNotFoundError) когда caller не участник и не текущий ответственный —
 // семантика «не палим существование» (как в requireProjectAccess).
 export async function requireTaskModifyAccess(
   deps: TaskAccessDeps,
@@ -34,33 +33,32 @@ export async function requireTaskModifyAccess(
 ): Promise<TaskAccessResult> {
   const project = await deps.projects.getById(projectId);
   if (!project) throw new ProjectNotFoundError();
+  const task = await deps.tasks.getById(taskId);
+  if (!task || task.projectId !== projectId) throw new ProjectNotFoundError();
 
   if (project.isInbox) {
     if (project.ownerId === userId) {
-      return { project, isDelegate: false };
+      return { project, isAssignee: task.assignee.userId === userId };
     }
-    const delegation = await deps.delegations.findActiveForTask(taskId);
-    if (
-      delegation &&
-      delegation.status === 'accepted' &&
-      delegation.delegateUserId === userId
-    ) {
-      return { project, isDelegate: true };
+    if (task.assignee.userId === userId) {
+      return { project, isAssignee: true };
     }
     throw new ProjectNotFoundError();
   }
 
-  // Non-inbox: стандартный multi-tenant check.
+  if (task.assignee.userId === userId) {
+    // Назначение не раскрывает проект постороннему: хотя бы viewer-membership обязателен.
+    await requireProjectAccess(deps, projectId, userId, 'read_project');
+    return { project, isAssignee: true };
+  }
   await requireProjectAccess(deps, projectId, userId, action);
-  return { project, isDelegate: false };
+  return { project, isAssignee: false };
 }
 
 // Read-операции (комментарии, вложения, коммиты) — та же inbox-aware семантика, что и
-// modify: для inbox разрешён creator ИЛИ accepted-delegate, для именованного проекта —
-// обычный requireProjectAccess('read_project'). Чинит баг: inbox-делегат (никогда не member
-// inbox-проекта создателя) иначе получал 404 на ListTaskComments/Attachments/Commits, хотя
-// блок «Поручено мне» показывает их счётчики. Для именованных проектов делегат — editor+
-// member, поэтому requireProjectAccess проходит штатно.
+// modify: для inbox разрешён owner ИЛИ assignee, для именованного проекта —
+// обычный requireProjectAccess('read_project'). Ответственный личной задачи не состоит в
+// приватном Inbox-проекте владельца, поэтому получает доступ именно через assignee.
 export async function requireTaskReadAccess(
   deps: TaskAccessDeps,
   projectId: string,
@@ -69,25 +67,22 @@ export async function requireTaskReadAccess(
 ): Promise<TaskAccessResult> {
   const project = await deps.projects.getById(projectId);
   if (!project) throw new ProjectNotFoundError();
+  const task = await deps.tasks.getById(taskId);
+  if (!task || task.projectId !== projectId) throw new ProjectNotFoundError();
 
   if (project.isInbox) {
-    if (project.ownerId === userId) return { project, isDelegate: false };
-    const delegation = await deps.delegations.findActiveForTask(taskId);
-    if (
-      delegation &&
-      delegation.status === 'accepted' &&
-      delegation.delegateUserId === userId
-    ) {
-      return { project, isDelegate: true };
+    if (project.ownerId === userId) {
+      return { project, isAssignee: task.assignee.userId === userId };
     }
+    if (task.assignee.userId === userId) return { project, isAssignee: true };
     throw new ProjectNotFoundError();
   }
 
   await requireProjectAccess(deps, projectId, userId, 'read_project');
-  return { project, isDelegate: false };
+  return { project, isAssignee: task.assignee.userId === userId };
 }
 
-// Delete-операции для inbox-задач — только creator (не accepted-delegate).
+// Delete-операции для inbox-задач — только владелец Inbox, не текущий ответственный.
 export async function requireTaskDeleteAccess(
   deps: TaskAccessDeps,
   projectId: string,
@@ -98,10 +93,10 @@ export async function requireTaskDeleteAccess(
   if (!project) throw new ProjectNotFoundError();
 
   if (project.isInbox) {
-    if (project.ownerId === userId) return { project, isDelegate: false };
+    if (project.ownerId === userId) return { project, isAssignee: false };
     throw new ProjectNotFoundError();
   }
 
   await requireProjectAccess(deps, projectId, userId, action);
-  return { project, isDelegate: false };
+  return { project, isAssignee: false };
 }

@@ -3,7 +3,6 @@ import type { CommentNotifyMode } from '../../domain/task/TaskComment.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireTaskReadAccess } from './taskAuthorization.js';
-import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
 import type {
@@ -23,7 +22,6 @@ type Deps = {
   readonly tasks: TaskRepository;
   readonly comments: TaskCommentRepository;
   readonly log: CommentNotificationLogRepository;
-  readonly delegations: TaskDelegationRepository;
 };
 
 export class GetCommentNotifications {

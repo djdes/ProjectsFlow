@@ -71,9 +71,8 @@ type Deps = {
 };
 
 // composing-черновик по запросу владельца практически не истекает (~10 лет) — можно вернуться
-// к карточке «Новая задача» когда угодно. confirmed (делегирование) — тоже долго.
+// к карточке «Новая задача» когда угодно.
 const DRAFT_TTL_SECONDS = 3650 * 24 * 60 * 60;
-const CONFIRMED_TTL_SECONDS = 3650 * 24 * 60 * 60;
 const PAGE_SIZE = 6; // кнопок-вариантов на страницу пикера
 const EXCERPT_LIMIT = 120;
 
@@ -131,7 +130,7 @@ type ProjectSel =
   | { readonly type: 'inbox' }
   | { readonly type: 'choose' }
   | { readonly type: 'page'; readonly page: number };
-type DelegateSel =
+type AssigneeSel =
   | { readonly type: 'idx'; readonly idx: number }
   | { readonly type: 'none' }
   | { readonly type: 'page'; readonly page: number };
@@ -142,7 +141,7 @@ type AiProjSel =
   | { readonly type: 'inbox' }
   | { readonly type: 'open' }
   | { readonly type: 'page'; readonly page: number };
-type AiDelSel =
+type AiAssigneeSel =
   | { readonly type: 'idx'; readonly idx: number }
   | { readonly type: 'none' }
   | { readonly type: 'open' }
@@ -156,7 +155,7 @@ type ManStatusSel =
   | { readonly type: 'back' };
 type ParsedCallback =
   | { readonly kind: 'project'; readonly draftId: string; readonly sel: ProjectSel }
-  | { readonly kind: 'delegate'; readonly draftId: string; readonly sel: DelegateSel }
+  | { readonly kind: 'assignee'; readonly draftId: string; readonly sel: AssigneeSel }
   | { readonly kind: 'confirm'; readonly draftId: string }
   | { readonly kind: 'cancel'; readonly draftId: string }
   // --- AI-сегменты (compose) ---
@@ -171,7 +170,7 @@ type ParsedCallback =
       readonly preset: DeadlinePreset;
     }
   | { readonly kind: 'seg-project'; readonly draftId: string; readonly seg: number; readonly sel: AiProjSel }
-  | { readonly kind: 'seg-delegate'; readonly draftId: string; readonly seg: number; readonly sel: AiDelSel }
+  | { readonly kind: 'seg-assignee'; readonly draftId: string; readonly seg: number; readonly sel: AiAssigneeSel }
   | { readonly kind: 'seg-status'; readonly draftId: string; readonly seg: number; readonly sel: AiStatusSel }
   | { readonly kind: 'man-status'; readonly draftId: string; readonly sel: ManStatusSel }
   | null;
@@ -191,7 +190,7 @@ function parseCallback(data: string | undefined): ParsedCallback {
     case 'td': {
       const [draftId, sel] = splitOnce(rest);
       if (!draftId || sel === null) return null;
-      return { kind: 'delegate', draftId, sel: parseDelegateSel(sel) };
+      return { kind: 'assignee', draftId, sel: parseAssigneeSel(sel) };
     }
     case 'tc':
       return { kind: 'confirm', draftId: rest };
@@ -228,7 +227,7 @@ function parseCallback(data: string | undefined): ParsedCallback {
     case 'ad': {
       const [draftId, segStr, sel] = rest.split(':');
       if (!draftId || segStr === undefined || sel === undefined) return null;
-      return { kind: 'seg-delegate', draftId, seg: toIdx(segStr), sel: parseAiDelSel(sel) };
+      return { kind: 'seg-assignee', draftId, seg: toIdx(segStr), sel: parseAiAssigneeSel(sel) };
     }
     case 'as': {
       const [draftId, segStr, sel] = rest.split(':');
@@ -269,7 +268,7 @@ function parseAiProjSel(sel: string): AiProjSel {
   return { type: 'idx', idx: Math.max(0, Number(sel) || 0) };
 }
 
-function parseAiDelSel(sel: string): AiDelSel {
+function parseAiAssigneeSel(sel: string): AiAssigneeSel {
   if (sel === 'n') return { type: 'none' };
   if (sel === '?') return { type: 'open' };
   if (sel.startsWith('p')) return { type: 'page', page: Math.max(0, Number(sel.slice(1)) || 0) };
@@ -289,7 +288,7 @@ function parseProjectSel(sel: string): ProjectSel {
   return { type: 'idx', idx: Math.max(0, Number(sel) || 0) };
 }
 
-function parseDelegateSel(sel: string): DelegateSel {
+function parseAssigneeSel(sel: string): AssigneeSel {
   if (sel === 'n') return { type: 'none' };
   if (sel.startsWith('p')) return { type: 'page', page: Math.max(0, Number(sel.slice(1)) || 0) };
   return { type: 'idx', idx: Math.max(0, Number(sel) || 0) };
@@ -307,15 +306,15 @@ function clearMembers(o: TelegramDraftOffered | null): TelegramDraftOffered | nu
 
 type Card = { readonly text: string; readonly replyMarkup?: InlineKeyboardMarkup };
 
-// Конструктор задач: парсит `+проект текст @делегат`, ведёт многошаговый выбор кнопками,
-// создаёт задачу (и при наличии делегата — делегация мгновенно accepted, делегату шлётся
-// карточка с кнопками «Завершить»/«Комментировать»/«Открыть»).
+// Конструктор задач: парсит `+проект текст @ответственный`, ведёт многошаговый выбор кнопками,
+// создаёт задачу с одним ответственным и при назначении коллеге шлёт ему карточку с
+// кнопками «Завершить»/«Комментировать»/«Открыть».
 export class TelegramComposerService {
   constructor(private readonly deps: Deps) {}
 
   // Точка входа из HandleTelegramWebhook: не-командное, не-reply сообщение → задача.
   // Любое сообщение прогоняется через простой/быстрый AI-compose (перефраз + авто проект/
-  // исполнитель/дедлайн); пока AI думает — «Ожидайте, перефразирую…» со спиннером. Если AI
+  // ответственный/дедлайн); пока AI думает — «Ожидайте, перефразирую…» со спиннером. Если AI
   // недоступен (диспетчер офлайн / job упал / таймаут / битый JSON) — тихий откат на ручной
   // флоу. Все AI-вызовы best-effort: любая ошибка только логируется, бот остаётся рабочим.
   async startFromMessage(
@@ -357,7 +356,7 @@ export class TelegramComposerService {
     try {
       waitMsgId = await this.sendReturningId(chatId, WAIT_TEXT);
       const hint = await this.resolveProjectHint(userId, parsed);
-      const aiText = this.buildAiText(hint.taskText, parsed.delegateQuery);
+      const aiText = this.buildAiText(hint.taskText, parsed.assigneeQuery);
       const job = await this.deps.enqueueAiPromptJob.execute({
         userId,
         text: aiText,
@@ -394,7 +393,7 @@ export class TelegramComposerService {
   }
 
   // Развилка для группового сообщения. Каждый привязанный участник работает «как отправитель»
-  // (в свои проекты/«Входящие», со своим делегированием) — как в личке. Возвращает:
+  // (в свои проекты/«Входящие», со своим ответственным) — как в личке. Возвращает:
   //   'self'        — обычный флоу от лица отправителя (он привязан);
   //   'owner-inbox' — отправитель НЕ привязан, но группа привязана к владельцу → в его «Входящие»
   //                   (чтобы запрос не потерялся) + предложение привязать аккаунт;
@@ -451,7 +450,7 @@ export class TelegramComposerService {
     return '👋 Чтобы задачи от участников попадали в нужный аккаунт, владелец должен один раз отправить здесь /start.';
   }
 
-  // Ручной флоу (без AI): парсит `+проект текст @делегат`, ведёт многошаговый выбор кнопками.
+  // Ручной флоу (без AI): парсит `+проект текст @ответственный`, ведёт многошаговый выбор кнопками.
   // waitMsgId — если задан (осталось сообщение «Ожидайте…» от AI-попытки), первую карточку
   // рендерим редактированием этого сообщения, иначе шлём новое.
   private async manualFlow(
@@ -494,16 +493,21 @@ export class TelegramComposerService {
       return;
     }
 
-    // Резолв делегата.
-    let delegateUserId: string | null = null;
+    // Резолв ответственного.
+    let assigneeUserId: string | null = null;
     let offeredMembers: TelegramDraftOffered['members'] | undefined;
-    if (parsed.delegateQuery !== null) {
-      const shared = await this.deps.members.listSharedUsers(userId);
-      const r = fuzzyMatch(parsed.delegateQuery, shared, (u) => u.displayName);
+    if (parsed.assigneeQuery !== null) {
+      const candidates = projectId
+        ? (await this.deps.members.listByProject(projectId)).map((m) => ({
+            id: m.userId,
+            displayName: m.user.displayName,
+          }))
+        : await this.deps.members.listSharedUsers(userId);
+      const r = fuzzyMatch(parsed.assigneeQuery, candidates, (u) => u.displayName);
       if (r.unique) {
-        delegateUserId = r.unique.id;
+        assigneeUserId = r.unique.id;
       } else {
-        const list = r.matches.length > 0 ? r.matches : shared;
+        const list = r.matches.length > 0 ? r.matches : candidates;
         offeredMembers = list.map((u) => ({ id: u.id, displayName: u.displayName }));
       }
     }
@@ -519,7 +523,7 @@ export class TelegramComposerService {
       tgChatId: chatId,
       taskText,
       projectId,
-      delegateUserId,
+      assigneeUserId,
       offered,
       ttlSeconds: DRAFT_TTL_SECONDS,
     });
@@ -528,8 +532,8 @@ export class TelegramComposerService {
     await this.respond(chatId, waitMsgId ?? null, card.text, card.replyMarkup);
   }
 
-  // Phase D — inline-режим: `@ProjectsFlow_Bot текст задачи [@делегат]` показывает живой
-  // список проектов. Выбор отправляет канонический `+<Проект> текст @делегат` в чат, который
+  // Phase D — inline-режим: `@ProjectsFlow_Bot текст задачи [@ответственный]` показывает живой
+  // список проектов. Выбор отправляет канонический `+<Проект> текст @ответственный` в чат, который
   // затем проходит через тот же конструктор (startFromMessage) — без дублирования логики.
   async handleInlineQuery(inlineQueryId: string, tgUserId: number, query: string): Promise<void> {
     const userId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
@@ -548,7 +552,7 @@ export class TelegramComposerService {
 
     const parsed = parseComposerMessage(query);
     const taskText = parsed.taskText.trim();
-    const delegateSuffix = parsed.delegateQuery ? ` @${parsed.delegateQuery}` : '';
+    const assigneeSuffix = parsed.assigneeQuery ? ` @${parsed.assigneeQuery}` : '';
     const results: InlineQueryResultArticle[] = [];
 
     if (taskText.length === 0) {
@@ -575,7 +579,7 @@ export class TelegramComposerService {
       id: 'inbox',
       title: '📥 Во «Входящие»',
       description: taskText,
-      input_message_content: { message_text: `${taskText}${delegateSuffix}` },
+      input_message_content: { message_text: `${taskText}${assigneeSuffix}` },
     });
 
     // По проекту на вариант (cap 8 — лимит inline-результатов держим скромным).
@@ -586,7 +590,7 @@ export class TelegramComposerService {
         id: `p:${p.id}`,
         title: `📁 ${p.name}`,
         description: taskText,
-        input_message_content: { message_text: `+${p.name} ${taskText}${delegateSuffix}` },
+        input_message_content: { message_text: `+${p.name} ${taskText}${assigneeSuffix}` },
       });
     }
 
@@ -636,8 +640,8 @@ export class TelegramComposerService {
       }
       case 'project':
         return this.onProjectSel(cq, draft, userId, cb.sel, chatId, messageId);
-      case 'delegate':
-        return this.onDelegateSel(cq, draft, cb.sel, chatId, messageId);
+      case 'assignee':
+        return this.onAssigneeSel(cq, draft, cb.sel, chatId, messageId);
       case 'confirm':
         return this.finalize(draft, userId, chatId, messageId, cq.id);
       // --- AI-сегменты (compose) ---
@@ -653,8 +657,8 @@ export class TelegramComposerService {
         return this.onSegDeadline(cq, draft, cb.seg, cb.preset, chatId, messageId);
       case 'seg-project':
         return this.onSegProject(cq, draft, userId, cb.seg, cb.sel, chatId, messageId);
-      case 'seg-delegate':
-        return this.onSegDelegate(cq, draft, userId, cb.seg, cb.sel, chatId, messageId);
+      case 'seg-assignee':
+        return this.onSegAssignee(cq, draft, userId, cb.seg, cb.sel, chatId, messageId);
       case 'seg-status':
         return this.onSegStatus(cq, draft, cb.seg, cb.sel, chatId, messageId);
       case 'man-status':
@@ -706,10 +710,10 @@ export class TelegramComposerService {
     await this.advance(cq, updated ?? draft, chatId, messageId);
   }
 
-  private async onDelegateSel(
+  private async onAssigneeSel(
     cq: TelegramCallbackQuery,
     draft: TelegramTaskDraft,
-    sel: DelegateSel,
+    sel: AssigneeSel,
     chatId: number,
     messageId: number | undefined,
   ): Promise<void> {
@@ -721,16 +725,16 @@ export class TelegramComposerService {
       await this.deps.client.answerCallbackQuery(cq.id);
       return;
     }
-    const delegateUserId =
+    const assigneeUserId =
       sel.type === 'none' ? null : (draft.offered?.members?.[sel.idx]?.id ?? null);
     const updated = await this.deps.drafts.patch(draft.id, {
-      delegateUserId,
+      assigneeUserId,
       offered: clearMembers(draft.offered),
     });
     await this.advance(cq, updated ?? draft, chatId, messageId);
   }
 
-  // После выбора проекта/делегата — показать следующий шаг (пикер или подтверждение).
+  // После выбора проекта/ответственного — показать следующий шаг (пикер или подтверждение).
   private async advance(
     cq: TelegramCallbackQuery,
     draft: TelegramTaskDraft,
@@ -757,10 +761,9 @@ export class TelegramComposerService {
     }
 
     try {
-      if (draft.delegateUserId) {
-        // Мгновенное делегирование (спека §4): задача создаётся СРАЗУ в выбранном
-        // проекте (или во «Входящих», если проект не назван), делегация — accepted
-        // при создании. Ветки «перенос в проект после accept» больше нет.
+      if (draft.assigneeUserId) {
+        // Задача сразу создаётся в выбранном проекте (или во «Входящих») с единственным
+        // выбранным ответственным.
         const targetId =
           draft.projectId ?? (await this.deps.getOrCreateInbox.execute(userId)).id;
         const task = await this.deps.createTask.execute({
@@ -768,14 +771,9 @@ export class TelegramComposerService {
           ownerUserId: userId,
           description: text,
           status: draft.targetStatus ?? DEFAULT_COLUMN,
-          delegateUserId: draft.delegateUserId,
+          assigneeUserId: draft.assigneeUserId,
         });
-        const delegationId = task.delegation?.id ?? null;
-        await this.deps.drafts.patch(draft.id, {
-          status: 'confirmed',
-          delegationId,
-          extendTtlSeconds: CONFIRMED_TTL_SECONDS,
-        });
+        await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
         if (messageId) {
           await this.deps.taskMessages.upsert({
             tgChatId: chatId,
@@ -785,19 +783,19 @@ export class TelegramComposerService {
             projectId: targetId,
           });
         }
-        await this.notifyDelegate(draft, task.id, targetId, delegationId, userId, text);
+        await this.notifyAssignee(draft, task.id, targetId, userId, text);
 
-        const delegateName =
-          (await this.deps.users.getById(draft.delegateUserId))?.displayName ?? 'участнику';
+        const assigneeName =
+          (await this.deps.users.getById(draft.assigneeUserId))?.displayName ?? 'участнику';
         const projName = await this.projNameOf(draft.projectId);
         if (messageId) {
           await this.edit(
             chatId,
             messageId,
-            `✅ Задача создана в <b>${escapeHtml(projName)}</b> и поручена <b>${escapeHtml(delegateName)}</b>.\n📝 ${markdownToTelegramHtml(excerpt(text))}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
+            `✅ Задача создана в <b>${escapeHtml(projName)}</b>. Ответственный — <b>${escapeHtml(assigneeName)}</b>.\n📝 ${markdownToTelegramHtml(excerpt(text))}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
           );
         }
-        await this.deps.client.answerCallbackQuery(cqId, { text: 'Создано и поручено' });
+        await this.deps.client.answerCallbackQuery(cqId, { text: 'Создано и назначено' });
       } else {
         const targetId = draft.projectId ?? (await this.deps.getOrCreateInbox.execute(userId)).id;
         const task = await this.deps.createTask.execute({
@@ -837,30 +835,28 @@ export class TelegramComposerService {
     }
   }
 
-  // TG-карточка делегату: делегация уже принята автоматически — кнопки действий по
-  // задаче («Завершить»/«Комментировать»), НЕ «Принять/Отказать». Reply на карточку =
+  // TG-карточка новому ответственному: кнопки действий по задаче. Reply на карточку =
   // комментарий (существующий механизм telegram_task_messages).
-  private async notifyDelegate(
+  private async notifyAssignee(
     draft: TelegramTaskDraft,
     taskId: string,
     projectId: string,
-    delegationId: string | null,
     creatorUserId: string,
     text: string,
   ): Promise<void> {
-    if (!delegationId || !draft.delegateUserId) return;
+    if (!draft.assigneeUserId) return;
     const creator = await this.deps.users.getById(creatorUserId);
     const creatorName = creator?.displayName ?? 'Коллега';
     const projName = draft.projectId
       ? ((await this.deps.projects.getById(draft.projectId))?.name ?? null)
       : null;
     const ctx = projName ? ` Проект: <b>${escapeHtml(projName)}</b>.` : ' (во «Входящие»).';
-    const msg = `👤 <b>${escapeHtml(creatorName)}</b> поручил(а) тебе задачу:\n📝 <i>${mdToPlain(excerpt(text))}</i>.${ctx}`;
+    const msg = `👤 <b>${escapeHtml(creatorName)}</b> назначил(а) тебя ответственным:\n📝 <i>${mdToPlain(excerpt(text))}</i>.${ctx}`;
     const res = await this.deps.sendNotification.execute({
-      userId: draft.delegateUserId,
+      userId: draft.assigneeUserId,
       text: msg,
       parseMode: 'HTML',
-      kind: 'task_delegation',
+      kind: 'task_assignee_changed',
       taskId,
       replyMarkup: {
         inline_keyboard: [
@@ -875,7 +871,7 @@ export class TelegramComposerService {
       await this.deps.taskMessages.upsert({
         tgChatId: res.chatId,
         tgMessageId: res.messageId,
-        recipientUserId: draft.delegateUserId,
+        recipientUserId: draft.assigneeUserId,
         taskId,
         projectId,
       });
@@ -915,11 +911,11 @@ export class TelegramComposerService {
     }));
     rows.push(...this.navRow(all.length, page, (p) => `td:${draft.id}:p${p}`));
     rows.push([
-      { text: '🚫 Без делегирования', callback_data: `td:${draft.id}:n` },
+      { text: '👤 Оставить за мной', callback_data: `td:${draft.id}:n` },
       { text: '✖️ Отмена', callback_data: `tx:${draft.id}` },
     ]);
     return {
-      text: `🆕 <b>Новая задача</b>\n📝 ${markdownToTelegramHtml(excerpt(draft.taskText ?? ''))}\n\n👤 Кому делегировать?`,
+      text: `🆕 <b>Новая задача</b>\n📝 ${markdownToTelegramHtml(excerpt(draft.taskText ?? ''))}\n\n👤 Кто ответственный?`,
       replyMarkup: { inline_keyboard: rows },
     };
   }
@@ -928,8 +924,8 @@ export class TelegramComposerService {
     const projName = draft.projectId
       ? ((await this.deps.projects.getById(draft.projectId))?.name ?? 'проект')
       : 'Входящие';
-    const delegateName = draft.delegateUserId
-      ? ((await this.deps.users.getById(draft.delegateUserId))?.displayName ?? null)
+    const assigneeName = draft.assigneeUserId
+      ? ((await this.deps.users.getById(draft.assigneeUserId))?.displayName ?? null)
       : null;
     const columnName = await this.columnLabelFor(draft.projectId, draft.targetStatus);
     const lines = [
@@ -937,9 +933,9 @@ export class TelegramComposerService {
       `📁 Проект: <b>${escapeHtml(projName)}</b>`,
       `📊 Колонка: <b>${escapeHtml(columnName)}</b>`,
     ];
-    if (delegateName) lines.push(`👤 Делегат: <b>${escapeHtml(delegateName)}</b>`);
+    lines.push(`👤 Ответственный: <b>${escapeHtml(assigneeName ?? 'Вы')}</b>`);
     lines.push(`📝 ${markdownToTelegramHtml(excerpt(draft.taskText ?? ''))}`);
-    const createLabel = delegateName ? '✅ Создать и делегировать' : '✅ Создать';
+    const createLabel = '✅ Создать';
     return {
       text: lines.join('\n'),
       replyMarkup: {
@@ -1008,11 +1004,11 @@ export class TelegramComposerService {
     return { projectId: null, taskText };
   }
 
-  // Текст для AI: задача + (если в `@делегат` назван исполнитель) явная подсказка модели.
-  private buildAiText(taskText: string, delegateQuery: string | null): string {
+  // Текст для AI: задача + (если в `@ответственный` назван человек) явная подсказка модели.
+  private buildAiText(taskText: string, assigneeQuery: string | null): string {
     const t = taskText.trim();
-    if (delegateQuery && delegateQuery.trim().length > 0) {
-      return `${t}\n\nИсполнитель: ${delegateQuery.trim()}`;
+    if (assigneeQuery && assigneeQuery.trim().length > 0) {
+      return `${t}\n\nОтветственный: ${assigneeQuery.trim()}`;
     }
     return t;
   }
@@ -1032,7 +1028,7 @@ export class TelegramComposerService {
   }
 
   // Парсинг-результат → доменные сегменты черновика. hintProjectId (если задан +Проектом)
-  // пинит все сегменты в этот проект (исполнителя оставляем — провалидируется при создании).
+  // пинит все сегменты в этот проект (ответственного оставляем — провалидируется при создании).
   private toDraftSegments(
     parsed: ParsedComposeSegment[],
     hintProjectId: string | null,
@@ -1090,16 +1086,21 @@ export class TelegramComposerService {
     return resolveColumnLabel(settings?.[s], s);
   }
 
-  // Имя исполнителя для показа: по userId (если сматчился) или сырое имя-подсказка из текста.
-  private async assigneeLabelOf(seg: TelegramDraftSegment): Promise<string | null> {
+  // Имя ответственного для показа: по userId (если сматчился), сырое имя-подсказка
+  // из текста либо создатель как обязательный fallback.
+  private async assigneeLabelOf(
+    seg: TelegramDraftSegment,
+    fallbackUserId: string,
+  ): Promise<string> {
     if (seg.assigneeUserId) {
       return (
         (await this.deps.users.getById(seg.assigneeUserId))?.displayName ??
         seg.assigneeName ??
-        'исполнитель'
+        'Ответственный'
       );
     }
-    return seg.assigneeName;
+    if (seg.assigneeName) return seg.assigneeName;
+    return (await this.deps.users.getById(fallbackUserId))?.displayName ?? 'Вы';
   }
 
   // Главная карточка после перефраза: 1 сегмент → одиночная, N → сводная.
@@ -1113,10 +1114,10 @@ export class TelegramComposerService {
     const seg = draft.segments?.[0];
     if (!seg) return this.renderConfirm(draft); // защитный фолбэк
     const projName = await this.projNameOf(seg.projectId);
-    const assignee = await this.assigneeLabelOf(seg);
+    const assignee = await this.assigneeLabelOf(seg, draft.creatorUserId);
     const columnName = await this.columnLabelFor(seg.projectId, seg.targetStatus);
     const lines = ['🆕 <b>Новая задача</b>', `📁 Проект: <b>${escapeHtml(projName)}</b>`];
-    if (assignee) lines.push(`👤 Исполнитель: <b>${escapeHtml(assignee)}</b>`);
+    lines.push(`👤 Ответственный: <b>${escapeHtml(assignee)}</b>`);
     lines.push(`📊 Колонка: <b>${escapeHtml(columnName)}</b>`);
     if (seg.deadline) lines.push(`📅 Срок: <b>${escapeHtml(seg.deadline)}</b>`);
     if (seg.title.trim()) lines.push(`📝 <b>${mdToPlain(seg.title.trim())}</b>`);
@@ -1151,11 +1152,11 @@ export class TelegramComposerService {
       const seg = segs[i];
       if (!seg) continue;
       const projName = await this.projNameOf(seg.projectId);
-      const assignee = await this.assigneeLabelOf(seg);
+      const assignee = await this.assigneeLabelOf(seg, draft.creatorUserId);
       const colStatus = seg.targetStatus ?? DEFAULT_COLUMN;
       const columnName = resolveColumnLabel((await settingsFor(seg.projectId))?.[colStatus], colStatus);
       const meta = [`📁 ${escapeHtml(projName)}`, `📊 ${escapeHtml(columnName)}`];
-      if (assignee) meta.push(`👤 ${escapeHtml(assignee)}`);
+      meta.push(`👤 ${escapeHtml(assignee)}`);
       meta.push(`📅 ${seg.deadline ? escapeHtml(seg.deadline) : '—'}`);
       const titleText = seg.title.trim() || excerpt(seg.body, 60);
       const strike = seg.included ? '' : ' <i>(исключена)</i>';
@@ -1180,20 +1181,20 @@ export class TelegramComposerService {
     return { text: lines.join('\n'), replyMarkup: { inline_keyboard: rows } };
   }
 
-  // Под-карточка правки одного сегмента (проект / исполнитель / срок / включение).
+  // Под-карточка правки одного сегмента (проект / ответственный / срок / включение).
   private async renderSegmentEdit(draft: TelegramTaskDraft, idx: number): Promise<Card> {
     const segs = draft.segments ?? [];
     const seg = segs[idx];
     if (!seg) return this.renderSegmentsCard(draft);
     const multi = segs.length > 1;
     const projName = await this.projNameOf(seg.projectId);
-    const assignee = await this.assigneeLabelOf(seg);
+    const assignee = await this.assigneeLabelOf(seg, draft.creatorUserId);
     const columnName = await this.columnLabelFor(seg.projectId, seg.targetStatus);
     const lines = [
       `✏️ <b>Задача ${idx + 1}</b>`,
       `📁 Проект: <b>${escapeHtml(projName)}</b>`,
       `📊 Колонка: <b>${escapeHtml(columnName)}</b>`,
-      `👤 Исполнитель: <b>${assignee ? escapeHtml(assignee) : '—'}</b>`,
+      `👤 Ответственный: <b>${escapeHtml(assignee)}</b>`,
       `📅 Срок: <b>${seg.deadline ? escapeHtml(seg.deadline) : '—'}</b>`,
       '',
       `📝 ${markdownToTelegramHtml(excerpt(seg.body))}`,
@@ -1202,7 +1203,7 @@ export class TelegramComposerService {
     const rows: { text: string; callback_data: string }[][] = [
       [
         { text: '📁 Проект', callback_data: `ap:${draft.id}:${idx}:?` },
-        { text: '👤 Исполнитель', callback_data: `ad:${draft.id}:${idx}:?` },
+        { text: '👤 Ответственный', callback_data: `ad:${draft.id}:${idx}:?` },
       ],
       [{ text: '📊 Колонка', callback_data: `as:${draft.id}:${idx}:?` }],
       [
@@ -1245,10 +1246,10 @@ export class TelegramComposerService {
     }));
     rows.push(...this.navRow(all.length, page, (p) => `ad:${draft.id}:${idx}:p${p}`));
     rows.push([
-      { text: '🚫 Без исполнителя', callback_data: `ad:${draft.id}:${idx}:n` },
+      { text: '👤 Назначить меня', callback_data: `ad:${draft.id}:${idx}:n` },
       { text: '⬅️ Назад', callback_data: `ae:${draft.id}:${idx}` },
     ]);
-    return { text: `👤 Исполнитель для задачи ${idx + 1}?`, replyMarkup: { inline_keyboard: rows } };
+    return { text: `👤 Кто ответственный за задачу ${idx + 1}?`, replyMarkup: { inline_keyboard: rows } };
   }
 
   private async onSegEdit(
@@ -1376,20 +1377,26 @@ export class TelegramComposerService {
     await this.deps.client.answerCallbackQuery(cq.id);
   }
 
-  private async onSegDelegate(
+  private async onSegAssignee(
     cq: TelegramCallbackQuery,
     draft: TelegramTaskDraft,
     userId: string,
     idx: number,
-    sel: AiDelSel,
+    sel: AiAssigneeSel,
     chatId: number,
     messageId: number | undefined,
   ): Promise<void> {
     if (sel.type === 'open') {
-      const shared = await this.deps.members.listSharedUsers(userId);
+      const seg = draft.segments?.[idx];
+      const candidates = seg?.projectId
+        ? (await this.deps.members.listByProject(seg.projectId)).map((m) => ({
+            id: m.userId,
+            displayName: m.user.displayName,
+          }))
+        : await this.deps.members.listSharedUsers(userId);
       const offered: TelegramDraftOffered = {
         ...(draft.offered?.projects ? { projects: draft.offered.projects } : {}),
-        members: shared.map((u) => ({ id: u.id, displayName: u.displayName })),
+        members: candidates.map((u) => ({ id: u.id, displayName: u.displayName })),
       };
       const updated = await this.deps.drafts.patch(draft.id, { offered });
       if (messageId) {
@@ -1531,7 +1538,7 @@ export class TelegramComposerService {
           continue;
         }
         const targetId = seg.projectId ?? (await this.deps.getOrCreateInbox.execute(userId)).id;
-        const delegateUserId =
+        const assigneeUserId =
           seg.assigneeUserId && seg.assigneeUserId !== userId ? seg.assigneeUserId : null;
         const task = await this.deps.createTask.execute({
           projectId: targetId,
@@ -1539,15 +1546,14 @@ export class TelegramComposerService {
           description,
           status: seg.targetStatus ?? DEFAULT_COLUMN,
           deadline: seg.deadline,
-          delegateUserId,
+          assigneeUserId: assigneeUserId ?? userId,
         });
         created += 1;
         lastTaskId = task.id;
         lastProjectId = targetId;
         const projName = await this.projNameOf(seg.projectId);
-        const delegationId = task.delegation?.id ?? null;
-        if (delegateUserId && delegationId) {
-          await this.notifySegmentDelegate(seg, task.id, targetId, delegationId, userId, description);
+        if (assigneeUserId) {
+          await this.notifySegmentAssignee(seg, task.id, targetId, userId, description);
         }
         summary.push(`✅ ${escapeHtml(title || excerpt(body, 40))} → <b>${escapeHtml(projName)}</b>`);
       } catch (err) {
@@ -1573,12 +1579,11 @@ export class TelegramComposerService {
     await this.deps.client.answerCallbackQuery(cqId, { text: created > 0 ? 'Создано' : 'Не удалось' });
   }
 
-  // TG-уведомление делегату сегмента: кнопки Завершить/Комментировать (in-app/email шлёт CreateTask).
-  private async notifySegmentDelegate(
+  // TG-уведомление ответственному сегмента: кнопки Завершить/Комментировать.
+  private async notifySegmentAssignee(
     seg: TelegramDraftSegment,
     taskId: string,
     projectId: string,
-    delegationId: string,
     creatorUserId: string,
     description: string,
   ): Promise<void> {
@@ -1586,12 +1591,12 @@ export class TelegramComposerService {
     const creator = await this.deps.users.getById(creatorUserId);
     const creatorName = creator?.displayName ?? 'Коллега';
     const projName = await this.projNameOf(seg.projectId);
-    const msg = `👤 <b>${escapeHtml(creatorName)}</b> поручил(а) тебе задачу:\n📝 <i>${markdownToTelegramHtml(excerpt(description))}</i>. Проект: <b>${escapeHtml(projName)}</b>.`;
+    const msg = `👤 <b>${escapeHtml(creatorName)}</b> назначил(а) тебя ответственным:\n📝 <i>${markdownToTelegramHtml(excerpt(description))}</i>. Проект: <b>${escapeHtml(projName)}</b>.`;
     const res = await this.deps.sendNotification.execute({
       userId: seg.assigneeUserId,
       text: msg,
       parseMode: 'HTML',
-      kind: 'task_delegation',
+      kind: 'task_assignee_changed',
       taskId,
       replyMarkup: {
         inline_keyboard: [

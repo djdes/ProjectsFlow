@@ -3,7 +3,6 @@ import { TASK_STATUSES, type Task, type TaskStatus } from '../../domain/task/Tas
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
-import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 
@@ -11,7 +10,6 @@ type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
-  readonly delegations: TaskDelegationRepository;
   // Лента действий (best-effort). Опционально.
   readonly activityRecorder?: ActivityRecorder;
   // Снимок версии при смене статуса (для окна версий + restore).

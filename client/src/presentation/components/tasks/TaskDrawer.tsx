@@ -71,15 +71,14 @@ import {
 import { RalphModeSelect } from './RalphMode';
 import type { RalphMode, TaskStatus } from '@/domain/task/Task';
 import { TASK_STATUSES } from '@/domain/task/Task';
-import { DelegateSelect } from './DelegateSelect';
+import { AssigneeSelect } from './AssigneeSelect';
 import type { Project } from '@/domain/project/Project';
-import { DelegateTaskButton } from './DelegateTaskButton';
-import { DelegationBadge } from './DelegationBadge';
+import { AssigneeTaskButton } from './AssigneeTaskButton';
 import { DeadlinePicker } from './DeadlinePicker';
 import { PrioritySelect } from './PrioritySelect';
 import { TaskPriorityChip } from './TaskPriorityChip';
 import { TaskDeadlineChip } from './TaskDeadlineChip';
-import { PropertyRow, EmptyValue, PROPERTY_VALUE_CLASS } from './PropertyRow';
+import { PropertyRow, PROPERTY_VALUE_CLASS } from './PropertyRow';
 import { CopyTaskButton } from './CopyTaskButton';
 import { ReworkTaskButton } from './ReworkTaskButton';
 import { AiComposeDialog } from '@/presentation/components/ai/AiComposeDialog';
@@ -196,11 +195,11 @@ type Props = {
   // pending-аттачи после получения task.id.
   // ralphMode — режим работы Ralph, который пользователь выбрал в форме (см. RalphModeSelect).
   // Передаётся только в create-mode; в edit-mode смена режима идёт через отдельный PATCH.
-  // delegateUserId — опциональное one-to-one делегирование (только inbox-задачи).
+  // assigneeUserId обязателен при создании; в edit-mode меняется отдельным endpoint.
   onSubmit: (input: {
     description: string;
     ralphMode?: import('@/domain/task/Task').RalphMode;
-    delegateUserId?: string | null;
+    assigneeUserId?: string;
     deadline?: string | null;
     priority?: TaskPriority | null;
   }) => Promise<Task>;
@@ -213,11 +212,11 @@ type Props = {
   backlogTail?: { readonly id: string } | null;
   todoTail?: { readonly id: string } | null;
   // True когда drawer открыт в контексте inbox-проекта. Включает:
-  //  - DelegateSelect в create-mode форме
+  //  - AssigneeSelect в create-mode форме
   //  - AssignToProjectSelect в шапке edit-mode
   isInbox?: boolean;
   // True когда проект совместный (memberCount > 1, но НЕ inbox). Включает
-  // блок делегирования (DelegateSelect/DelegateTaskButton) с участниками проекта.
+  // выбор ответственного с участниками проекта.
   isShared?: boolean;
   // projectId для AI-кнопки. null = inbox/дефолтный диспетчер; UUID = диспетчер проекта.
   aiProjectId?: string | null;
@@ -261,7 +260,7 @@ function readPeekMode(): PeekMode {
 type CreateDraft = {
   description: string;
   ralphMode: RalphMode;
-  delegateUserId: string | null;
+  assigneeUserId: string | null;
   deadline: string | null;
   priority: TaskPriority | null;
 };
@@ -269,12 +268,12 @@ function readCreateDraft(key: string): CreateDraft | null {
   try {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
-    const d = JSON.parse(raw) as Partial<CreateDraft>;
+    const d = JSON.parse(raw) as Partial<CreateDraft> & { delegateUserId?: string | null };
     if (typeof d?.description !== 'string') return null;
     return {
       description: d.description,
       ralphMode: (d.ralphMode as RalphMode) ?? 'normal',
-      delegateUserId: d.delegateUserId ?? null,
+      assigneeUserId: d.assigneeUserId ?? d.delegateUserId ?? null,
       deadline: d.deadline ?? null,
       priority: (d.priority as TaskPriority) ?? null,
     };
@@ -289,7 +288,6 @@ function writeCreateDraft(key: string, draft: CreateDraft): void {
       draft.description.trim() === '' &&
       draft.deadline === null &&
       draft.priority === null &&
-      draft.delegateUserId === null &&
       draft.ralphMode === 'normal';
     if (empty) sessionStorage.removeItem(key);
     else sessionStorage.setItem(key, JSON.stringify(draft));
@@ -666,7 +664,7 @@ function TaskStatusChip({
 
 // Подменю «Перенести в проект» внутри ⋯-меню задачи (раньше было отдельной пилюлей в шапке —
 // теперь убрано в меню, чтобы не загромождать кластер кнопок). Сервер: MoveTaskToProject
-// (из именованного — move_task, из инбокса — owner; активная делегация архивируется).
+// (из именованного — move_task, из инбокса — owner); ответственный сохраняется, если допустим.
 function MoveToProjectSubmenu({
   task,
   onMoved,
@@ -733,7 +731,6 @@ export function TaskDrawer({
   backlogTail = null,
   todoTail = null,
   isInbox = false,
-  isShared = false,
   aiProjectId = null,
   onMove,
   canEdit: canEditProp = true,
@@ -835,7 +832,7 @@ export function TaskDrawer({
   };
   const { animations } = useMotion();
   // Фиксируем «юзер открыл задачу» — единая точка для всех мест, где открывается drawer
-  // (доска, «Поручено мне», блок «Недавнее»). Только edit-mode с реальной задачей; раз на
+  // (доска, личный верхний блок, блок «Недавнее»). Только edit-mode с реальной задачей; раз на
   // taskId. Fire-and-forget (ошибки глотаем), затем шлём 'pf:recent-changed' — блок
   // «Недавнее» в сайдбаре перефетчит без перезагрузки.
   // Поднимаем задачу в «Недавнее» ТОЛЬКО при реальной правке (а не при простом открытии):
@@ -874,8 +871,9 @@ export function TaskDrawer({
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   // Режим Ralph для create-mode (в edit-mode значение приходит из state.task).
   const [createRalphMode, setCreateRalphMode] = useState<RalphMode>('normal');
-  // Делегат для create-mode (только inbox). Очищаем после закрытия drawer'а.
-  const [createDelegateUserId, setCreateDelegateUserId] = useState<string | null>(null);
+  const [createAssigneeUserId, setCreateAssigneeUserId] = useState<string | null>(
+    currentUser?.id ?? null,
+  );
   // Срок и приоритет для create-mode (применимо к любому проекту).
   const [createDeadline, setCreateDeadline] = useState<string | null>(null);
   const [createPriority, setCreatePriority] = useState<TaskPriority | null>(null);
@@ -1181,7 +1179,7 @@ export function TaskDrawer({
     if (state.mode === 'edit') {
       setDescription(state.task.description ?? '');
       setCreateRalphMode('normal');
-      setCreateDelegateUserId(null);
+      setCreateAssigneeUserId(null);
       setCreateDeadline(null);
       setCreatePriority(null);
     } else {
@@ -1193,7 +1191,7 @@ export function TaskDrawer({
       setShowRestore(draft !== null);
       setDescription('');
       setCreateRalphMode('normal');
-      setCreateDelegateUserId(null);
+      setCreateAssigneeUserId(null);
       setCreateDeadline(null);
       setCreatePriority(null);
     }
@@ -1212,6 +1210,12 @@ export function TaskDrawer({
     });
   }, [state, createDraftKey]);
 
+  useEffect(() => {
+    if (state?.mode === 'create' && createAssigneeUserId === null && currentUser) {
+      setCreateAssigneeUserId(currentUser.id);
+    }
+  }, [state?.mode, createAssigneeUserId, currentUser]);
+
   // Сохраняем черновик create-формы при каждом изменении полей — чтобы при перезагрузке
   // страницы введённое не пропало. На пустой форме черновик удаляется (см. writeCreateDraft).
   useEffect(() => {
@@ -1224,7 +1228,7 @@ export function TaskDrawer({
         description.trim() === '' &&
         createDeadline === null &&
         createPriority === null &&
-        createDelegateUserId === null &&
+        createAssigneeUserId === (currentUser?.id ?? null) &&
         createRalphMode === 'normal';
       if (untouched) return;
       restoreArmedRef.current = false;
@@ -1233,7 +1237,7 @@ export function TaskDrawer({
     writeCreateDraft(createDraftKey, {
       description,
       ralphMode: createRalphMode,
-      delegateUserId: createDelegateUserId,
+      assigneeUserId: createAssigneeUserId,
       deadline: createDeadline,
       priority: createPriority,
     });
@@ -1241,20 +1245,21 @@ export function TaskDrawer({
     state?.mode,
     description,
     createRalphMode,
-    createDelegateUserId,
+    createAssigneeUserId,
     createDeadline,
     createPriority,
     createDraftKey,
+    currentUser?.id,
   ]);
 
   // «Восстановить»: возвращаем прошлый черновик create-формы (текст, дедлайн, приоритет,
-  // режим, делегат). Файлы/inline-картинки в персистентный черновик не входят.
+  // режим, ответственный). Файлы/inline-картинки в персистентный черновик не входят.
   const handleRestoreCreateDraft = (): void => {
     const d = createStashRef.current;
     if (!d) return;
     setDescription(d.description);
     setCreateRalphMode(d.ralphMode);
-    setCreateDelegateUserId(d.delegateUserId);
+    setCreateAssigneeUserId(d.assigneeUserId ?? currentUser?.id ?? null);
     setCreateDeadline(d.deadline);
     setCreatePriority(d.priority);
     restoreArmedRef.current = false;
@@ -1483,13 +1488,17 @@ export function TaskDrawer({
       setError('Введите описание');
       return;
     }
+    if (state?.mode === 'create' && !createAssigneeUserId) {
+      setError('Выберите ответственного');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       const task = await onSubmit({
         description: description.trim(),
         ralphMode: state?.mode === 'create' ? createRalphMode : undefined,
-        delegateUserId: state?.mode === 'create' ? createDelegateUserId : undefined,
+        assigneeUserId: state?.mode === 'create' ? (createAssigneeUserId ?? undefined) : undefined,
         deadline: state?.mode === 'create' ? createDeadline : undefined,
         priority: state?.mode === 'create' ? createPriority : undefined,
       });
@@ -2168,21 +2177,13 @@ export function TaskDrawer({
                   const propValues: Record<TaskPropertyKey, React.ReactNode> = {
                     assignee: (
                       <div className="flex min-h-7 flex-wrap items-center gap-1.5">
-                        {/* Ответственный — всегда: селектор (можно менять/выбрать себя), а для
-                            read-only — текущий ответственный (делегат или «Я»). */}
-                        {canEdit ? (
-                          <DelegateTaskButton
-                            task={task}
-                            currentUserId={currentUser?.id ?? null}
-                            onChanged={() => notifyChanged()}
-                            projectId={isInbox ? undefined : task.projectId}
-                            className={PROPERTY_VALUE_CLASS}
-                          />
-                        ) : task.delegation && currentUser?.id ? (
-                          <DelegationBadge delegation={task.delegation} currentUserId={currentUser.id} />
-                        ) : (
-                          <EmptyValue>Я</EmptyValue>
-                        )}
+                        <AssigneeTaskButton
+                          task={task}
+                          onChanged={() => notifyChanged()}
+                          projectId={isInbox ? undefined : task.projectId}
+                          disabled={!currentUser || (isInbox && !canEdit)}
+                          className={PROPERTY_VALUE_CLASS}
+                        />
                       </div>
                     ),
                     deadline: (
@@ -2525,20 +2526,17 @@ export function TaskDrawer({
                 {/* Ряд свойств (как в edit): Ответственный / Дедлайн / Приоритет / Режим /
                     Файлы. Без «Создано» и статуса — их нет до создания. */}
                 <div className="px-3 pb-2.5 pt-1">
-                  {/* Ответственный — только когда есть кого назначить (inbox/совместный). */}
-                  {(isInbox || isShared) && (
-                    <PropertyRow icon={UserPlus} label="Ответственный">
-                      <div className="flex min-h-7 flex-wrap items-center gap-1.5">
-                        <DelegateSelect
-                          value={createDelegateUserId}
-                          onChange={setCreateDelegateUserId}
-                          disabled={saving}
-                          projectId={isShared && aiProjectId ? aiProjectId : undefined}
-                          className={PROPERTY_VALUE_CLASS}
-                        />
-                      </div>
-                    </PropertyRow>
-                  )}
+                  <PropertyRow icon={UserPlus} label="Ответственный">
+                    <div className="flex min-h-7 flex-wrap items-center gap-1.5">
+                      <AssigneeSelect
+                        value={createAssigneeUserId}
+                        onChange={setCreateAssigneeUserId}
+                        disabled={saving}
+                        projectId={!isInbox && aiProjectId ? aiProjectId : undefined}
+                        className={PROPERTY_VALUE_CLASS}
+                      />
+                    </div>
+                  </PropertyRow>
 
                   <PropertyRow icon={CalendarClock} label="Дедлайн">
                     <DeadlinePicker

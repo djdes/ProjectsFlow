@@ -6,7 +6,6 @@ import type { ProjectMemberRepository } from '../project/ProjectMemberRepository
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
-import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import type { TaskVersionRepository } from './TaskVersionRepository.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
 
@@ -17,7 +16,6 @@ type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
-  readonly delegations: TaskDelegationRepository;
   readonly versions: TaskVersionRepository;
   readonly users: UserRepository;
   readonly now: () => Date;

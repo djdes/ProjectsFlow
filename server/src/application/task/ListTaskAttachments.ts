@@ -3,7 +3,6 @@ import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireTaskReadAccess } from './taskAuthorization.js';
-import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskAttachmentRepository } from './TaskAttachmentRepository.js';
 
@@ -12,7 +11,6 @@ type Deps = {
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly attachments: TaskAttachmentRepository;
-  readonly delegations: TaskDelegationRepository;
 };
 
 export class ListTaskAttachments {

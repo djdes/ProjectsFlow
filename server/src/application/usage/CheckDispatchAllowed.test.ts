@@ -19,11 +19,11 @@ function summary(p: Partial<UsageSummary>): UsageSummary {
   } as UsageSummary;
 }
 
-// Фабрика гейта: task.createdBy = billed user; checkBudget отдаёт заданный summary.
-function build(createdBy: string | null, s: UsageSummary | null) {
+// Фабрика гейта: task.createdBy = billed user; legacyCreator нужен только старым строкам.
+function build(createdBy: string | null, s: UsageSummary | null, legacyCreator: string | null = null) {
   return new CheckDispatchAllowed({
-    tasks: { getById: async () => (createdBy ? ({ createdBy } as never) : null) } as never,
-    taskDelegations: { findActiveForTask: async () => null } as never,
+    tasks: { getById: async () => ({ createdBy } as never) } as never,
+    legacyAttribution: { findLegacyCreatorForTask: async () => legacyCreator } as never,
     checkBudget: s
       ? ({ execute: async () => ({ allowed: !s.isBlocked, summary: s }) } as never)
       : undefined,
@@ -31,7 +31,7 @@ function build(createdBy: string | null, s: UsageSummary | null) {
 }
 
 describe('CheckDispatchAllowed — гейт воркера (нет бесплатного расхода подписки)', () => {
-  it('free-инициатор → заблокирован (plan_required)', async () => {
+  it('free-создатель → заблокирован (plan_required)', async () => {
     const r = await build('u1', summary({ plan: 'free' })).execute('t1');
     assert.equal(r.allowed, false);
     assert.equal(r.reason, 'plan_required');
@@ -56,8 +56,14 @@ describe('CheckDispatchAllowed — гейт воркера (нет беспла�
     assert.equal(r.reason, 'ok');
   });
 
-  it('нет инициатора (нет createdBy/делегации) → fallback allow', async () => {
-    const r = await build(null, summary({ plan: 'free' })).execute('t5');
+  it('legacy attribution используется только когда createdBy отсутствует', async () => {
+    const r = await build(null, summary({ plan: 'free' }), 'legacy-owner').execute('t5');
+    assert.equal(r.allowed, false);
+    assert.equal(r.billedUserId, 'legacy-owner');
+  });
+
+  it('нет создателя даже в legacy-данных → fallback allow', async () => {
+    const r = await build(null, summary({ plan: 'free' })).execute('t6');
     assert.equal(r.allowed, true);
     assert.equal(r.billedUserId, null);
   });

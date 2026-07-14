@@ -10,7 +10,6 @@ import type { ProjectMemberRepository } from '../project/ProjectMemberRepository
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommentRepository } from './TaskCommentRepository.js';
-import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
 
 type Deps = {
@@ -18,7 +17,6 @@ type Deps = {
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
   readonly comments: TaskCommentRepository;
-  readonly delegations: TaskDelegationRepository;
 };
 
 export class DeleteTaskComment {
@@ -30,9 +28,9 @@ export class DeleteTaskComment {
     taskId: string,
     commentId: string,
   ): Promise<void> {
-    // Inbox-aware authorization. Для inbox: creator или accepted-delegate
+    // Inbox-aware authorization. Для inbox: владелец или текущий ответственный
     // могут удалять ТОЛЬКО собственные комментарии (нет delete_any_comment
-    // в inbox — нет ролей кроме owner/delegate). Для проектов: editor+ может
+    // в inbox — нет ролей кроме owner/assignee). Для проектов: editor+ может
     // удалять любые (стандартная логика).
     const { project } = await requireTaskModifyAccess(
       this.deps,
@@ -47,7 +45,7 @@ export class DeleteTaskComment {
     if (!existing || existing.taskId !== taskId) throw new TaskCommentNotFoundError(commentId);
 
     if (project.isInbox) {
-      // Inbox: только свой комментарий. Чужой — нельзя ни creator'у, ни delegate'у.
+      // Inbox: только свой комментарий. Чужой нельзя удалять ни владельцу, ни ответственному.
       if (existing.ownerUserId !== ownerUserId) {
         throw new InsufficientProjectRoleError('viewer', 'delete_any_comment');
       }

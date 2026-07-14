@@ -21,10 +21,9 @@ export type CreateTaskInput = {
   readonly afterTaskId?: string | null;
   // Режим работы Ralph. Если не передан — backend дефолтит 'normal'.
   readonly ralphMode?: RalphMode;
-  // Опциональное one-to-one делегирование. Для inbox-задач делегат — из shared-members
-  // caller'а; для задачи реального проекта — участник проекта с ролью editor+ (сервер
-  // валидирует). null/undefined — без делегата.
-  readonly delegateUserId?: string | null;
+  // Единственный обязательный ответственный. Для inbox-задач это владелец inbox либо
+  // shared-member; для именованного проекта — его участник. Сервер валидирует доступность.
+  readonly assigneeUserId: string;
   // Срок выполнения 'YYYY-MM-DD'. null = без deadline.
   readonly deadline?: string | null;
   // Дата начала (диапазон startDate → deadline). null = событие одного дня.
@@ -149,17 +148,12 @@ export interface TaskRepository {
   // Запрос/отзыв отмены Ralph-работы (pull-based флаг, см. db/037).
   requestRalphCancel(projectId: string, taskId: string): Promise<Task>;
   revokeRalphCancel(projectId: string, taskId: string): Promise<Task>;
-  // Перенос inbox-задачи в реальный проект. Активная делегация (если была) →
-  // archived; делегат получает email + notification. Только creator (owner inbox).
+  // Перенос inbox-задачи в реальный проект. Сервер атомарно сохраняет валидного
+  // обязательного ответственного для целевого проекта.
   assignToProject(projectId: string, taskId: string, targetProjectId: string): Promise<Task>;
-  // Делегировать уже созданную задачу (UI «Делегировать» на карточке / AI-распределение).
-  // Для inbox delegateUserId — из shared-members caller'а; для реального проекта — участник
-  // с ролью editor+. Задача должна быть без активной делегации (иначе AlreadyDelegatedError).
-  delegate(projectId: string, taskId: string, delegateUserId: string): Promise<Task>;
-  // Переназначить ответственного за уже делегированную задачу (drag на кубик человека
-  // во «Входящих»). Прежняя активная делегация архивируется, создаётся новая (сразу accepted).
-  // Область «Максимально»: может делегатор ИЛИ текущий делегат («передать дальше»).
-  reassign(projectId: string, taskId: string, delegateUserId: string): Promise<Task>;
+  // Единая идемпотентная операция назначения: первичное назначение, переназначение и
+  // «забрать себе» используют один endpoint. Ответственный никогда не бывает null.
+  assign(projectId: string, taskId: string, assigneeUserId: string): Promise<Task>;
   // Экспорт выбранных задач в дайджест: вернуть текст (буфер) и/или отправить
   // на email / в Telegram. Сервер рендерит из авторитетных данных.
   digest(projectId: string, input: TaskDigestInput): Promise<TaskDigestResult>;

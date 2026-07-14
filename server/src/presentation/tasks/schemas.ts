@@ -46,9 +46,8 @@ export const createTaskSchema = z.object({
   // Позиция: поставить новую задачу сразу ПОСЛЕ этой (цепочка inline-создания). Только на create.
   afterTaskId: z.string().uuid().nullable().optional(),
   ralphMode: ralphModeSchema.optional(),
-  // Опциональное one-to-one делегирование (только для inbox-задач). UUID юзера.
-  // Сервер дополнительно валидирует: не self, в shared-members caller'а, проект isInbox.
-  delegateUserId: z.string().uuid().nullable().optional(),
+  // Единственный ответственный. Старые клиенты могут не прислать — сервер назначит actor'а.
+  assigneeUserId: z.string().uuid().nullable().optional(),
   deadline: deadlineSchema.optional(),
   // Дата начала (диапазон startDate → deadline). Тот же формат/семантика, что deadline.
   startDate: deadlineSchema.optional(),
@@ -120,9 +119,9 @@ export const assignToProjectSchema = z.object({
   targetProjectId: z.string().uuid(),
 });
 
-// POST /:taskId/delegate — делегировать уже созданную inbox-задачу.
-export const delegateTaskSchema = z.object({
-  delegateUserId: z.string().uuid(),
+// PUT /:taskId/assignee — единая идемпотентная смена ответственного.
+export const changeTaskAssigneeSchema = z.object({
+  assigneeUserId: z.string().uuid(),
 });
 
 // POST /digest — экспорт выбранных задач (буфер / email / Telegram).

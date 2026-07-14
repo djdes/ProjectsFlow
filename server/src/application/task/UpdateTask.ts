@@ -4,7 +4,6 @@ import type { ActivityFieldChange } from '../../domain/activity/ActivityEvent.js
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository, UpdateTaskPatch } from './TaskRepository.js';
-import type { TaskDelegationRepository } from './TaskDelegationRepository.js';
 import type { ActivityRecorder } from '../activity/ActivityRecorder.js';
 import type { TaskVersionRecorder } from './TaskVersionRecorder.js';
 import { requireTaskModifyAccess } from './taskAuthorization.js';
@@ -13,7 +12,6 @@ type Deps = {
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
-  readonly delegations: TaskDelegationRepository;
   // Логируем правки в ленту изменений (best-effort; опционально для обратной совместимости).
   readonly activity?: ActivityRecorder;
   // Снимок версии после правки (для окна версий + restore).

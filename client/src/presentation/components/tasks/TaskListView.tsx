@@ -18,7 +18,7 @@ import { TaskTitleText } from './TaskTitleText';
 import { splitTitleBody } from '@/lib/taskTitleBody';
 import { RalphModeBadge } from './RalphMode';
 import { InboxCheckbox } from './InboxCheckbox';
-import { DelegationBadge } from './DelegationBadge';
+import { AssigneeBadge } from './AssigneeBadge';
 import { DeadlineBadge } from './DeadlineBadge';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
@@ -143,13 +143,13 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
   const handleDialogSubmit = async (input: {
     description: string;
     ralphMode?: import('@/domain/task/Task').RalphMode;
-    delegateUserId?: string | null;
+    assigneeUserId?: string;
     deadline?: string | null;
     priority?: import('@/domain/task/Task').TaskPriority | null;
   }): Promise<Task> => {
     if (!dialog) throw new Error('Dialog state missing');
     if (dialog.mode === 'create') return create({ ...input, status: dialog.status });
-    // edit-mode: delegateUserId/deadline/priority — отдельные PATCH через chips.
+    // edit-mode: assignee/deadline/priority — отдельные PATCH через свойства.
     return update(dialog.task.id, { description: input.description, ralphMode: input.ralphMode });
   };
 
@@ -318,7 +318,6 @@ function TaskListRow({
   task,
   index,
   showCheckbox,
-  currentUserId,
   lastDoneTaskId,
   lastTodoTaskId,
   onEdit,
@@ -339,12 +338,11 @@ function TaskListRow({
   const isDone = task.status === 'done';
   // Заголовок/тело описания (см. I3): заголовок — plain, тело — markdown.
   const { title, body } = splitTitleBody(task.description ?? '');
-  const hasDelegation = task.delegation !== null && task.delegation !== undefined;
   const hasBadges =
     (task.attachmentCount ?? 0) > 0 ||
     (task.commentCount ?? 0) > 0 ||
     task.ralphMode !== 'normal' ||
-    hasDelegation ||
+    Boolean(task.assignee) ||
     task.deadline !== null;
 
   return (
@@ -394,13 +392,11 @@ function TaskListRow({
           <p className="text-sm leading-snug text-muted-foreground">—</p>
         )}
         {hasBadges && (
-          // Вторичная мета (дедлайн/счётчики/ralph/делегирование/относительная дата) —
+          // Вторичная мета (дедлайн/счётчики/ralph/ответственный/относительная дата) —
           // скрыта по умолчанию, проявляется на hover строки (Notion reveal-on-hover).
           // На таче (max-sm) и при фокусе внутри строки — всегда видна.
           <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
-            {task.delegation && currentUserId && (
-              <DelegationBadge delegation={task.delegation} currentUserId={currentUserId} />
-            )}
+            <AssigneeBadge assignee={task.assignee} />
             {(task.commentCount ?? 0) > 0 && (
               <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-violet-600 dark:bg-violet-400/15 dark:text-violet-400">
                 <MessageSquare className="size-2.5" />

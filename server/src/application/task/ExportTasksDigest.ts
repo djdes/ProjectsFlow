@@ -43,7 +43,7 @@ export type ExportTasksDigestResult = {
 };
 
 type Deps = {
-  // Access-check + delegation-обогащение задач делается внутри ListTasks.
+  // Access-check + загрузка ответственного делаются внутри ListTasks.
   readonly listTasks: ListTasks;
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
@@ -64,7 +64,7 @@ export class ExportTasksDigest {
   constructor(private readonly deps: Deps) {}
 
   async execute(cmd: ExportTasksDigestCommand): Promise<ExportTasksDigestResult> {
-    // ListTasks гейтит доступ (read_project) и джойнит активные делегации.
+    // ListTasks гейтит доступ (read_project) и возвращает обязательного ответственного.
     const all = await this.deps.listTasks.execute(cmd.projectId, cmd.ownerUserId);
     const wanted = new Set(cmd.taskIds);
     const selected = all.filter((t) => wanted.has(t.id));
@@ -113,7 +113,7 @@ export class ExportTasksDigest {
     const seen = new Set<string>();
 
     for (const r of cmd.recipients) {
-      // Telegram-группа: шлём напрямую в chat_id, с исполнителем в начале задачи.
+      // Telegram-группа: шлём напрямую в chat_id, с ответственным в начале задачи.
       if (r.kind === 'group') {
         if (cmd.channel !== 'telegram') {
           skipped.push({ userId: 'group', reason: 'group_telegram_only' });
