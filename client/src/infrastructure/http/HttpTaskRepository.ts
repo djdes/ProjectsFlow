@@ -1,7 +1,12 @@
 import type { Task } from '@/domain/task/Task';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
-import type { TaskSnapshot, TaskVersionsResult } from '@/domain/task/TaskVersion';
+import type {
+  TaskSnapshot,
+  TaskVersionActor,
+  TaskVersionField,
+  TaskVersionsResult,
+} from '@/domain/task/TaskVersion';
 import type { PlanId } from '@/domain/usage/Usage';
 import type {
   CommentNotification,
@@ -236,6 +241,8 @@ export class HttpTaskRepository implements TaskRepository {
         id: string;
         taskId: string;
         actorUserId: string | null;
+        actor: TaskVersionActor | null;
+        changedFields: TaskVersionField[];
         createdAt: string;
         snapshot: TaskSnapshot;
       }>;
