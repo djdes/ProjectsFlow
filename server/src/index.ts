@@ -1,5 +1,6 @@
 // Composition root: собираем зависимости + поднимаем HTTP-сервер.
 
+import { resolve as resolvePath } from 'node:path';
 import { db, pool } from './infrastructure/db/index.js';
 import { Argon2PasswordHasher } from './infrastructure/crypto/Argon2PasswordHasher.js';
 import { idGenerator, shortIdGenerator } from './infrastructure/id/idGenerator.js';
@@ -477,6 +478,12 @@ const taskVersionRecorder = new TaskVersionRecorder({
 const taskRepo = new DrizzleTaskRepository(db, taskVersionRecorder);
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
+// Бинарные вложения живут вне каталога релиза и переиспользуются HTTP-роутами и Telegram.
+const uploadsDir = resolvePath(process.env['UPLOADS_DIR'] ?? 'uploads');
+const attachmentStorage = new FileSystemAttachmentStorage(uploadsDir);
+const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024;
+const MAX_COVER_BYTES = 20 * 1024 * 1024;
+console.log(`[projectsflow] attachments dir: ${uploadsDir}`);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
 const taskBillingAttributionRepo = new DrizzleTaskBillingAttributionRepository(db);
 const digestSettingsRepo = new DrizzleDigestSettingsRepository(db, projectMemberRepo);
@@ -758,7 +765,40 @@ const telegramComposer = new TelegramComposerService({
   appUrl: appBaseUrl,
   enqueueAiPromptJob,
   waitForAiPromptJob,
+  uploadAttachment: new UploadTaskAttachment({
+    projects: projectRepo,
+    members: projectMemberRepo,
+    tasks: taskRepo,
+    attachments: taskAttachmentRepo,
+    storage: attachmentStorage,
+    idGen: idGenerator,
+    maxBytes: MAX_ATTACHMENT_BYTES,
+    versions: taskVersionRecorder,
+  }),
+  updateTask: new UpdateTask({
+    projects: projectRepo,
+    members: projectMemberRepo,
+    tasks: taskRepo,
+    activity: activityRecorder,
+  }),
 });
+let telegramDraftAutoCreateRunning = false;
+const runTelegramDraftAutoCreate = (): void => {
+  if (telegramDraftAutoCreateRunning) return;
+  telegramDraftAutoCreateRunning = true;
+  void telegramComposer
+    .processDueAutoCreate()
+    .then((count) => {
+      if (count > 0) console.log(`[tg-draft-auto-create] processed=${count}`);
+    })
+    .catch((err) => console.warn('[tg-draft-auto-create] failed:', err))
+    .finally(() => {
+      telegramDraftAutoCreateRunning = false;
+    });
+};
+// Первый проход подхватывает просроченные черновики сразу после рестарта, затем — каждые 15с.
+runTelegramDraftAutoCreate();
+setInterval(runTelegramDraftAutoCreate, 15_000).unref();
 // v2: fan-out по taskId — грузит задачу/members и переиспользует sendAgentTelegramNotification
 // per recipient (там уже все gates — link/started/prefs/dedup/audit).
 const broadcastTelegramByTask = new BroadcastTelegramNotificationByTask({
@@ -856,17 +896,6 @@ configureAdminBypass(async (userId) => {
   const u = await userRepo.getById(userId);
   return u?.isAdmin ?? false;
 });
-
-// Каталог с binary-аттачами. В dev: ./uploads (рядом с кодом), в prod: задаём
-// UPLOADS_DIR в .env (typically /var/www/.../uploads — снаружи tarball'а деплоя,
-// чтобы файлы переживали релизы).
-import { resolve as resolvePath } from 'node:path';
-const uploadsDir = resolvePath(process.env['UPLOADS_DIR'] ?? 'uploads');
-const attachmentStorage = new FileSystemAttachmentStorage(uploadsDir);
-console.log(`[projectsflow] attachments dir: ${uploadsDir}`);
-
-const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024; // 100 MB. Любой тип файла (валидация = размер).
-const MAX_COVER_BYTES = 20 * 1024 * 1024; // 20 MB. Обложка проекта — только картинки (jpg/png/webp/gif).
 
 // --- Задеплоенные статические сайты проектов (self-serve воркер-раннер, db/098) ---
 // SITE_ARTIFACTS_DIR в prod — вне tarball'а деплоя (переживает релизы). Поддомен собранного

@@ -1419,6 +1419,9 @@ export function TaskDrawer({
   // Если в буфере есть картинки — preventDefault (textarea не вставит binary-кашу) и роутим в нужную секцию.
   // Если картинок нет — просто пускаем дефолтное поведение (текст ↦ в textarea).
   const handleFormPaste = (e: ClipboardEvent<HTMLFormElement>): void => {
+    // RichTextEditor сам вставляет изображения отдельными figure-блоками. Не перехватываем
+    // его событие на уровне формы — иначе тот же скрин превращается ещё и в обычный файл.
+    if (e.target instanceof Element && e.target.closest('.ProseMirror')) return;
     const files = extractClipboardFiles(e.clipboardData);
     if (files.length === 0) return;
     e.preventDefault();

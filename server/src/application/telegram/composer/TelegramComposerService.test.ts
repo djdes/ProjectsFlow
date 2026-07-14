@@ -57,6 +57,7 @@ function makeHarness(opts?: {
   const answers: { text?: string }[] = [];
   const assigneeMessages: { userId: string; buttons: string; kind: string }[] = [];
   const inboxUserIds: string[] = [];
+  const updatedDescriptions: string[] = [];
 
   const draftsRepo = {
     async create(input: any): Promise<TelegramTaskDraft> {
@@ -65,14 +66,19 @@ function makeHarness(opts?: {
         id,
         creatorUserId: input.creatorUserId,
         tgChatId: input.tgChatId,
+        tgMessageId: input.tgMessageId ?? null,
         taskText: input.taskText,
         projectId: input.projectId ?? null,
         assigneeUserId: input.assigneeUserId ?? null,
         offered: input.offered ?? null,
         segments: input.segments ?? null,
+        photos: input.photos ?? [],
         targetStatus: input.targetStatus ?? null,
         status: 'composing',
         createdAt: new Date(0),
+        autoCreateAt:
+          input.autoCreateSeconds == null ? null : new Date(Date.now() + input.autoCreateSeconds * 1000),
+        confirmationStartedAt: null,
         expiresAt: new Date(8640000000000000),
       };
       drafts.set(id, d);
@@ -87,6 +93,42 @@ function makeHarness(opts?: {
       const next = { ...cur, ...patch } as TelegramTaskDraft;
       drafts.set(id, next);
       return next;
+    },
+    async listDueForAutoCreate() {
+      return [...drafts.values()].filter(
+        (d) => d.status === 'composing' && d.autoCreateAt && d.autoCreateAt <= new Date(),
+      );
+    },
+    async claimForConfirmation(id: string, dueOnly: boolean) {
+      const cur = drafts.get(id);
+      if (!cur || cur.status !== 'composing') return null;
+      if (dueOnly && (!cur.autoCreateAt || cur.autoCreateAt > new Date())) return null;
+      const next = {
+        ...cur,
+        status: 'confirming' as const,
+        confirmationStartedAt: new Date(),
+      };
+      drafts.set(id, next);
+      return next;
+    },
+    async releaseConfirmation(id: string, retrySeconds: number) {
+      const cur = drafts.get(id);
+      if (!cur || cur.status !== 'confirming') return;
+      drafts.set(id, {
+        ...cur,
+        status: 'composing',
+        confirmationStartedAt: null,
+        autoCreateAt: new Date(Date.now() + retrySeconds * 1000),
+      });
+    },
+    async cancelComposing(id: string) {
+      const cur = drafts.get(id);
+      if (!cur || cur.status !== 'composing') return false;
+      drafts.set(id, { ...cur, status: 'cancelled' });
+      return true;
+    },
+    async recoverStaleConfirmations() {
+      return 0;
     },
     async deleteExpired() {
       return 0;
@@ -110,6 +152,13 @@ function makeHarness(opts?: {
     async deleteWebhook() {},
     async getUpdates() {
       return [];
+    },
+    async downloadFile() {
+      return {
+        data: Buffer.from('image'),
+        filename: 'telegram.jpg',
+        mimeType: 'image/jpeg',
+      };
     },
   };
 
@@ -216,13 +265,34 @@ function makeHarness(opts?: {
       },
     },
     client,
+    uploadAttachment: {
+      async execute() {
+        return { id: 'att1' } as any;
+      },
+    },
+    updateTask: {
+      async execute(input: any) {
+        updatedDescriptions.push(input.description);
+        return {} as any;
+      },
+    },
     idGen: () => 'uuid',
     shortIdGen: () => `s${++seq}`,
     appUrl: 'https://pf.test',
   };
 
   const service = new TelegramComposerService(deps as any);
-  return { service, drafts, createTaskCalls, sent, edits, answers, assigneeMessages, inboxUserIds };
+  return {
+    service,
+    drafts,
+    createTaskCalls,
+    sent,
+    edits,
+    answers,
+    assigneeMessages,
+    inboxUserIds,
+    updatedDescriptions,
+  };
 }
 
 function cq(draftIdOrData: string, tgUserId = 111): TelegramCallbackQuery {
@@ -632,4 +702,33 @@ test('Колонка: многосегментная карточка показ
   // Сводная карточка — это edit поверх «Ожидайте». Колонка дефолт ЧЕРНОВИКИ у обоих.
   const card = h.edits[h.edits.length - 1]!;
   assert.match(card.text, /ЧЕРНОВИКИ/);
+});
+
+test('черновик автоматически создаётся после дедлайна ровно один раз', async () => {
+  const h = makeHarness({ aiOutcome: 'timeout' });
+  await h.service.startFromMessage(111, 500, 'автоматическая задача');
+  const draftId = [...h.drafts.keys()][0]!;
+  const draft = h.drafts.get(draftId)!;
+  h.drafts.set(draftId, { ...draft, autoCreateAt: new Date(Date.now() - 1_000) });
+
+  assert.equal(await h.service.processDueAutoCreate(), 1);
+  assert.equal(await h.service.processDueAutoCreate(), 0);
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.drafts.get(draftId)!.status, 'confirmed');
+  assert.match(h.edits[h.edits.length - 1]!.text, /автоматически через 10 минут/);
+});
+
+test('Telegram-фото прикрепляется и вставляется отдельным figure-блоком', async () => {
+  const h = makeHarness({ aiOutcome: 'timeout' });
+  await h.service.startFromMessage(111, 500, 'задача со скрином', undefined, [
+    { fileId: 'photo-1', fileUniqueId: 'unique-1', width: 1280, height: 720, fileSize: 42 },
+  ]);
+  const draftId = [...h.drafts.keys()][0]!;
+  await h.service.handleCallback(cq(`tc:${draftId}`));
+
+  assert.equal(h.updatedDescriptions.length, 1);
+  assert.match(
+    h.updatedDescriptions[0]!,
+    /задача со скрином\n\n<figure data-figure-image><img src="\/api\/attachments\/att1"/,
+  );
 });

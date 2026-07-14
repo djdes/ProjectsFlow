@@ -30,6 +30,7 @@ import type { ActivityPayload } from '../../domain/activity/ActivityEvent.js';
 import type { UiPrefs } from '../../domain/user/UiPrefs.js';
 import type {
   TelegramDraftOffered,
+  TelegramDraftPhoto,
   TelegramDraftSegment,
 } from '../../application/telegram/TelegramTaskDraftRepository.js';
 import type { VisibleKanbanStatus } from '../../domain/kanban/KanbanSettings.js';
@@ -151,6 +152,7 @@ export const telegramTaskDrafts = mysqlTable(
     id: char('id', { length: 12 }).primaryKey(),
     creatorUserId: char('creator_user_id', { length: 36 }).notNull(),
     tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
+    tgMessageId: bigint('tg_message_id', { mode: 'number' }),
     taskText: text('task_text'),
     projectId: char('project_id', { length: 36 }),
     // Имя физической колонки legacy; в приложении это единственный ответственный задачи.
@@ -161,17 +163,22 @@ export const telegramTaskDrafts = mysqlTable(
     offered: json('offered').$type<TelegramDraftOffered | null>(),
     // AI-распознанные сегменты-задачи (mode='compose'); null = ручной флоу. См. db/067.
     segments: json('segments').$type<TelegramDraftSegment[] | null>(),
+    // Входящие Telegram-фото (крупнейший PhotoSize каждого изображения). См. db/116.
+    photos: json('photos').$type<TelegramDraftPhoto[] | null>(),
     // Колонка канбана для ручного (одиночного) флоу; null = дефолт 'backlog'. См. db/068.
     targetStatus: varchar('target_status', { length: 20 }).$type<VisibleKanbanStatus | null>(),
-    status: mysqlEnum('status', ['composing', 'confirmed', 'cancelled', 'expired'])
+    status: mysqlEnum('status', ['composing', 'confirming', 'confirmed', 'cancelled', 'expired'])
       .notNull()
       .default('composing'),
     createdAt: createdAtCol(),
+    autoCreateAt: timestamp('auto_create_at'),
+    confirmationStartedAt: timestamp('confirmation_started_at'),
     expiresAt: timestamp('expires_at').notNull(),
   },
   (t) => [
     index('idx_ttd_creator').on(t.creatorUserId),
     index('idx_ttd_expires').on(t.expiresAt),
+    index('idx_ttd_auto_create').on(t.status, t.autoCreateAt),
   ],
 );
 

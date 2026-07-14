@@ -115,6 +115,12 @@ export type TelegramChatInfo = {
   readonly type: string; // 'group' | 'supergroup' | 'channel' | 'private'
 };
 
+export type TelegramDownloadedFile = {
+  readonly data: Buffer;
+  readonly filename: string;
+  readonly mimeType: string;
+};
+
 // Минимальный slice Telegram Update — то что polling/webhook читают. Совпадает с
 // типом в HandleTelegramWebhook (см. там полное описание). Тут — для возврата getUpdates.
 // callback_query (нажатия inline-кнопок) и inline_query (Phase D) парсятся в handler'е.
@@ -159,6 +165,9 @@ export interface TelegramClient {
   // тестовые фейки могут не реализовывать. null — бот не в чате / нет прав / ошибка
   // (мягкий фоллбэк, не кидаем — резолв имени не должен ронять сохранение настроек).
   getChat?(chatId: number): Promise<TelegramChatInfo | null>;
+  // Скачать входящее фото по file_id (getFile + /file/bot...). Опционально для тестовых
+  // клиентов; если реализации нет, текстовая задача всё равно создаётся без падения.
+  downloadFile?(fileId: string): Promise<TelegramDownloadedFile | null>;
   // Отправить картинки в чат: 1 → sendPhoto, 2..10 → sendMediaGroup (альбом), >10 → чанки.
   // photoUrls — публично доступные (подписанные) ссылки; Telegram сам их выкачивает.
   // Best-effort (картинки — дополнение к тексту). Опционально: тестовые фейки могут не иметь.

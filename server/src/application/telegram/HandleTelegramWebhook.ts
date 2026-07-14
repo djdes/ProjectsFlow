@@ -33,6 +33,7 @@ import {
   splitDescription,
 } from '../../domain/task/digestFormat.js';
 import { signAttachmentUrl } from '../attachments/signedAttachmentUrl.js';
+import type { TelegramDraftPhoto } from './TelegramTaskDraftRepository.js';
 
 // Подписанные URL картинок задачи (открытие задачи в TG → альбом) живут 14 дней.
 const TG_IMG_URL_TTL_SECONDS = 14 * 24 * 60 * 60;
@@ -53,6 +54,15 @@ export type TelegramUpdate = {
     // title — есть у group/supergroup (для атрибуции задачи-фолбэка).
     readonly chat: { readonly id: number; readonly type: string; readonly title?: string };
     readonly text?: string;
+    readonly caption?: string;
+    readonly media_group_id?: string;
+    readonly photo?: readonly {
+      readonly file_id: string;
+      readonly file_unique_id?: string;
+      readonly width: number;
+      readonly height: number;
+      readonly file_size?: number;
+    }[];
     // Reply на наше сообщение → ловим как ralph-answer ИЛИ комментарий к задаче. См. spec
     // C:/www/ralph/prompts/telegram-reply-to-ralph-answer.md.
     readonly reply_to_message?: {
@@ -69,6 +79,25 @@ export type TelegramUpdate = {
     readonly query: string;
   };
 };
+
+function largestPhoto(
+  photos: NonNullable<NonNullable<TelegramUpdate['message']>['photo']> | undefined,
+): TelegramDraftPhoto | null {
+  if (!photos?.length) return null;
+  const best = [...photos].sort((a, b) => {
+    const sizeDiff = (b.file_size ?? 0) - (a.file_size ?? 0);
+    return sizeDiff !== 0 ? sizeDiff : b.width * b.height - a.width * a.height;
+  })[0];
+  return best
+    ? {
+        fileId: best.file_id,
+        fileUniqueId: best.file_unique_id ?? null,
+        width: best.width,
+        height: best.height,
+        fileSize: best.file_size ?? null,
+      }
+    : null;
+}
 
 type Deps = {
   readonly users: UserRepository;
@@ -119,6 +148,15 @@ type Deps = {
 // Роутер команд бота. Сами reply'и шлём через TelegramClient.sendMessage — best-effort,
 // если отвалится — следующий /start попробует снова.
 export class HandleTelegramWebhook {
+  private readonly mediaGroups = new Map<
+    string,
+    {
+      message: NonNullable<TelegramUpdate['message']>;
+      photos: Map<string, TelegramDraftPhoto>;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+
   constructor(private readonly deps: Deps) {}
 
   async execute(update: TelegramUpdate): Promise<void> {
@@ -148,9 +186,22 @@ export class HandleTelegramWebhook {
     }
 
     const msg = update.message;
-    if (!msg || !msg.from || !msg.text) return;
+    if (!msg || !msg.from) return;
+    const photo = largestPhoto(msg.photo);
+    if (msg.media_group_id && photo) {
+      this.queueMediaGroup(msg, photo);
+      return;
+    }
+    return this.handleMessage(msg, photo ? [photo] : []);
+  }
 
-    let text = msg.text.trim();
+  private async handleMessage(
+    msg: NonNullable<TelegramUpdate['message']>,
+    photos: readonly TelegramDraftPhoto[],
+  ): Promise<void> {
+    if (!msg.from) return;
+
+    let text = (msg.text ?? msg.caption ?? '').trim();
     const tgUserId = msg.from.id;
     const chatId = msg.chat.id;
 
@@ -168,6 +219,13 @@ export class HandleTelegramWebhook {
       // вида «/help@BotName» (так TG шлёт команды в группах) распознавались как «/help».
       if (bu) text = text.replace(new RegExp('@' + bu, 'ig'), '').replace(/\s+/g, ' ').trim();
     }
+
+    // Стикеры/геолокации/служебные message без текста и без photo по-прежнему игнорируем.
+    if (!isGroup && text.length === 0 && photos.length === 0) return;
+
+    // В личке фото может прийти без подписи. Это всё равно полноценная задача: даём ей
+    // нейтральный текст, а изображение добавим отдельным блоком в описание.
+    if (text.length === 0 && photos.length > 0) text = 'Фото из Telegram';
 
     // Reply→ralph-answer / комментарий ловим ДО командного роутинга — юзер может reply'нуть
     // просто текстом, без слэш-префикса (типичный TG UX).
@@ -206,9 +264,42 @@ export class HandleTelegramWebhook {
         senderName: formatSenderName(msg.from),
         groupTitle: msg.chat.title ?? null,
       };
-      return this.deps.composer.startFromMessage(tgUserId, chatId, text, groupCtx);
+      return this.deps.composer.startFromMessage(tgUserId, chatId, text, groupCtx, photos);
     }
-    return this.deps.composer.startFromMessage(tgUserId, chatId, text);
+    return this.deps.composer.startFromMessage(tgUserId, chatId, text, undefined, photos);
+  }
+
+  // Telegram присылает альбом как несколько отдельных update с общим media_group_id, причём
+  // caption обычно есть только у первого. Небольшой debounce собирает их в один черновик.
+  private queueMediaGroup(
+    msg: NonNullable<TelegramUpdate['message']>,
+    photo: TelegramDraftPhoto,
+  ): void {
+    if (!msg.from || !msg.media_group_id) return;
+    const key = `${msg.chat.id}:${msg.from.id}:${msg.media_group_id}`;
+    const current = this.mediaGroups.get(key);
+    if (current) {
+      clearTimeout(current.timer);
+      current.photos.set(photo.fileUniqueId ?? photo.fileId, photo);
+      if (!current.message.caption && msg.caption) current.message = msg;
+      current.timer = setTimeout(() => this.flushMediaGroup(key), 1_000);
+      return;
+    }
+    const entry = {
+      message: msg,
+      photos: new Map([[photo.fileUniqueId ?? photo.fileId, photo]]),
+      timer: setTimeout(() => this.flushMediaGroup(key), 1_000),
+    };
+    this.mediaGroups.set(key, entry);
+  }
+
+  private flushMediaGroup(key: string): void {
+    const entry = this.mediaGroups.get(key);
+    if (!entry) return;
+    this.mediaGroups.delete(key);
+    void this.handleMessage(entry.message, [...entry.photos.values()]).catch((err) => {
+      console.warn('[tg-webhook] media group failed:', err);
+    });
   }
 
   // Reply на наше сообщение → ralph-answer комментарий в задаче. Шаги:

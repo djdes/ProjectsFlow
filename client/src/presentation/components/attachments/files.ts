@@ -24,12 +24,26 @@ export function isImageFile(mime: string | null | undefined, filename?: string |
 export function extractClipboardFiles(clipboardData: DataTransfer | null): File[] {
   if (!clipboardData) return [];
   const out: File[] = [];
+  const seen = new Set<string>();
+  const add = (file: File): void => {
+    const key = `${file.name}\u0000${file.type}\u0000${file.size}\u0000${file.lastModified}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(file);
+  };
   for (let i = 0; i < clipboardData.items.length; i += 1) {
     const it = clipboardData.items[i];
     if (it && it.kind === 'file') {
       const file = it.getAsFile();
-      if (file) out.push(file);
+      if (file) add(file);
     }
+  }
+  // Windows Snipping Tool, некоторые браузеры и Electron-приложения кладут скрин только
+  // в DataTransfer.files. Раньше такой Ctrl+V молча терялся. Объединяем оба источника и
+  // дедуплицируем: в Chrome один и тот же File часто присутствует одновременно в обоих.
+  for (let i = 0; i < clipboardData.files.length; i += 1) {
+    const file = clipboardData.files[i];
+    if (file) add(file);
   }
   return out;
 }

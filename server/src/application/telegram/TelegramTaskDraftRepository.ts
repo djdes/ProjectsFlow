@@ -6,7 +6,22 @@
 import type { VisibleKanbanStatus } from '../../domain/kanban/KanbanSettings.js';
 
 // Лайфцикл-статус черновика конструктора (НЕ путать с targetStatus = колонка канбана задачи).
-export type TelegramTaskDraftStatus = 'composing' | 'confirmed' | 'cancelled' | 'expired';
+export type TelegramTaskDraftStatus =
+  | 'composing'
+  | 'confirming'
+  | 'confirmed'
+  | 'cancelled'
+  | 'expired';
+
+// Telegram присылает несколько размеров одной фотографии. В черновике сохраняем только
+// самый большой file_id; сам бинарник скачивается непосредственно перед созданием задачи.
+export type TelegramDraftPhoto = {
+  readonly fileId: string;
+  readonly fileUniqueId: string | null;
+  readonly width: number;
+  readonly height: number;
+  readonly fileSize: number | null;
+};
 
 // Предложенные варианты в карточке конструктора: index в callback_data → id здесь.
 // offered.projects[idx] / offered.members[idx] резолвят кнопку в UUID без раздувания
@@ -43,16 +58,20 @@ export type TelegramTaskDraft = {
   readonly id: string;
   readonly creatorUserId: string;
   readonly tgChatId: number;
+  readonly tgMessageId: number | null;
   readonly taskText: string | null;
   readonly projectId: string | null;
   readonly assigneeUserId: string | null;
   readonly offered: TelegramDraftOffered | null;
   readonly segments: TelegramDraftSegment[] | null;
+  readonly photos: TelegramDraftPhoto[];
   // Колонка канбана для РУЧНОГО флоу (одиночная задача). null = дефолт 'backlog'.
   // Для AI-флоу колонка хранится per-segment в segments[].targetStatus. См. db/068.
   readonly targetStatus: VisibleKanbanStatus | null;
   readonly status: TelegramTaskDraftStatus;
   readonly createdAt: Date;
+  readonly autoCreateAt: Date | null;
+  readonly confirmationStartedAt: Date | null;
   readonly expiresAt: Date;
 };
 
@@ -60,14 +79,18 @@ export type CreateTelegramTaskDraftInput = {
   readonly id: string;
   readonly creatorUserId: string;
   readonly tgChatId: number;
+  readonly tgMessageId?: number | null;
   readonly taskText: string | null;
   readonly projectId?: string | null;
   readonly assigneeUserId?: string | null;
   readonly offered?: TelegramDraftOffered | null;
   readonly segments?: TelegramDraftSegment[] | null;
+  readonly photos?: readonly TelegramDraftPhoto[];
   readonly targetStatus?: VisibleKanbanStatus | null;
   // Срок жизни в секундах от now. Репо считает expires_at = now + ttl.
   readonly ttlSeconds: number;
+  // Через сколько секунд автоматически подтвердить черновик. null/undefined = не создавать.
+  readonly autoCreateSeconds?: number | null;
 };
 
 // Patch: undefined = не менять. null допустим для очистки nullable-полей.
@@ -77,6 +100,8 @@ export type TelegramTaskDraftPatch = {
   readonly assigneeUserId?: string | null;
   readonly offered?: TelegramDraftOffered | null;
   readonly segments?: TelegramDraftSegment[] | null;
+  readonly photos?: readonly TelegramDraftPhoto[];
+  readonly tgMessageId?: number | null;
   readonly targetStatus?: VisibleKanbanStatus | null;
   readonly status?: TelegramTaskDraftStatus;
 };
@@ -87,6 +112,13 @@ export interface TelegramTaskDraftRepository {
   // это делает deleteExpired (фоновая чистка), но трактуем как отсутствующие.
   getById(id: string): Promise<TelegramTaskDraft | null>;
   patch(id: string, patch: TelegramTaskDraftPatch): Promise<TelegramTaskDraft | null>;
+  listDueForAutoCreate(limit: number): Promise<TelegramTaskDraft[]>;
+  // Атомарный composing→confirming. dueOnly защищает фоновый тик от раннего запуска.
+  claimForConfirmation(id: string, dueOnly: boolean): Promise<TelegramTaskDraft | null>;
+  // При временной ошибке возвращаем черновик в очередь; при ручной отмене меняем только composing.
+  releaseConfirmation(id: string, retrySeconds: number): Promise<void>;
+  cancelComposing(id: string): Promise<boolean>;
+  recoverStaleConfirmations(staleSeconds: number, retrySeconds: number): Promise<number>;
   // Удалить истёкшие черновики. Возвращает число удалённых.
   deleteExpired(): Promise<number>;
 }

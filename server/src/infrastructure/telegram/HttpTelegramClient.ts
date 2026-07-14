@@ -40,6 +40,7 @@ type TgFetchInit = {
 
 export class HttpTelegramClient implements TelegramClient {
   private readonly base: string;
+  private readonly fileBase: string;
   private readonly dispatcher: Dispatcher | undefined;
 
   // apiBaseUrl — override https://api.telegram.org (если используется relay, например
@@ -54,6 +55,7 @@ export class HttpTelegramClient implements TelegramClient {
   ) {
     const cleaned = apiBaseUrl.replace(/\/$/, '');
     this.base = `${cleaned}/bot${botToken}`;
+    this.fileBase = `${cleaned}/file/bot${botToken}`;
     this.dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
   }
 
@@ -247,6 +249,34 @@ export class HttpTelegramClient implements TelegramClient {
       title: body.result.title ?? null,
       type: body.result.type,
     };
+  }
+
+  async downloadFile(fileId: string): Promise<{ data: Buffer; filename: string; mimeType: string } | null> {
+    try {
+      const metaRes = await this.tgFetch('/getFile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_id: fileId }),
+      });
+      const meta = (await metaRes.json().catch(() => null)) as TgResponse<{ file_path?: string }> | null;
+      const filePath = meta?.result?.file_path;
+      if (!metaRes.ok || !meta?.ok || !filePath) return null;
+
+      const init: { dispatcher?: Dispatcher } = {};
+      if (this.dispatcher) init.dispatcher = this.dispatcher;
+      const fileRes = await undiciFetch(`${this.fileBase}/${filePath}`, init);
+      if (!fileRes.ok) return null;
+      const data = Buffer.from(await fileRes.arrayBuffer());
+      const filename = filePath.split('/').pop() || 'telegram-photo.jpg';
+      const ext = filename.split('.').pop()?.toLowerCase();
+      const mimeType =
+        fileRes.headers.get('content-type')?.split(';', 1)[0] ||
+        (ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg');
+      return { data, filename, mimeType };
+    } catch (err) {
+      console.warn('[telegram] downloadFile failed:', err);
+      return null;
+    }
   }
 
   // Картинки в чат: 1 → sendPhoto, 2..10 → sendMediaGroup, >10 → чанки по 10. Best-effort:

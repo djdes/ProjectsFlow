@@ -7,6 +7,7 @@ import type {
   TelegramTaskDraft,
   TelegramTaskDraftRepository,
   TelegramDraftOffered,
+  TelegramDraftPhoto,
   TelegramDraftSegment,
 } from '../TelegramTaskDraftRepository.js';
 import type { EnqueueAiPromptJob } from '../../ai-prompt/EnqueueAiPromptJob.js';
@@ -18,6 +19,8 @@ import type { ProjectRepository } from '../../project/ProjectRepository.js';
 import type { UserRepository } from '../../user/UserRepository.js';
 import type { CreateTask } from '../../task/CreateTask.js';
 import type { GetOrCreateInbox } from '../../project/GetOrCreateInbox.js';
+import type { UploadTaskAttachment } from '../../task/UploadTaskAttachment.js';
+import type { UpdateTask } from '../../task/UpdateTask.js';
 import { taskActionKeyboard } from '../taskActionKeyboard.js';
 import { parseComposerMessage } from './parseComposerMessage.js';
 import { fuzzyMatch, greedyProjectPrefix } from './fuzzyMatch.js';
@@ -68,11 +71,16 @@ type Deps = {
   // диспетчер офлайн / job упал / таймаут — конструктор откатывается на ручной флоу.
   readonly enqueueAiPromptJob: EnqueueAiPromptJob;
   readonly waitForAiPromptJob: WaitForAiPromptJob;
+  readonly uploadAttachment?: UploadTaskAttachment;
+  readonly updateTask?: UpdateTask;
 };
 
 // composing-черновик по запросу владельца практически не истекает (~10 лет) — можно вернуться
 // к карточке «Новая задача» когда угодно.
 const DRAFT_TTL_SECONDS = 3650 * 24 * 60 * 60;
+const AUTO_CREATE_SECONDS = 10 * 60;
+const AUTO_RETRY_SECONDS = 60;
+const STALE_CONFIRMATION_SECONDS = 15 * 60;
 const PAGE_SIZE = 6; // кнопок-вариантов на страницу пикера
 const EXCERPT_LIMIT = 120;
 
@@ -312,6 +320,48 @@ type Card = { readonly text: string; readonly replyMarkup?: InlineKeyboardMarkup
 export class TelegramComposerService {
   constructor(private readonly deps: Deps) {}
 
+  // Фоновый тик. Дедлайн и claim живут в БД, поэтому рестарт/несколько инстансов безопасны:
+  // конкретный черновик из composing в confirming переведёт только один процесс.
+  async processDueAutoCreate(limit = 25): Promise<number> {
+    await this.deps.drafts.recoverStaleConfirmations(
+      STALE_CONFIRMATION_SECONDS,
+      AUTO_RETRY_SECONDS,
+    );
+    const due = await this.deps.drafts.listDueForAutoCreate(limit);
+    let processed = 0;
+    for (const candidate of due) {
+      const draft = await this.deps.drafts.claimForConfirmation(candidate.id, true);
+      if (!draft) continue;
+      processed += 1;
+      try {
+        const messageId = draft.tgMessageId ?? undefined;
+        if (draft.segments) {
+          await this.finalizeSegments(
+            draft,
+            draft.creatorUserId,
+            draft.tgChatId,
+            messageId,
+            null,
+            { alreadyClaimed: true, automatic: true },
+          );
+        } else {
+          await this.finalize(
+            draft,
+            draft.creatorUserId,
+            draft.tgChatId,
+            messageId,
+            null,
+            { alreadyClaimed: true, automatic: true },
+          );
+        }
+      } catch (err) {
+        console.warn(`[tg-composer] auto-create draft ${draft.id} failed:`, err);
+        await this.deps.drafts.releaseConfirmation(draft.id, AUTO_RETRY_SECONDS);
+      }
+    }
+    return processed;
+  }
+
   // Точка входа из HandleTelegramWebhook: не-командное, не-reply сообщение → задача.
   // Любое сообщение прогоняется через простой/быстрый AI-compose (перефраз + авто проект/
   // ответственный/дедлайн); пока AI думает — «Ожидайте, перефразирую…» со спиннером. Если AI
@@ -322,6 +372,7 @@ export class TelegramComposerService {
     chatId: number,
     rawText: string,
     groupCtx?: TelegramGroupContext,
+    photos: readonly TelegramDraftPhoto[] = [],
   ): Promise<void> {
     // Групповое сообщение: каждый привязанный участник работает «как отправитель» (в своё) —
     // продолжаем обычным флоу ниже. Непривязанный → в «Входящие» владельца (или просьба привязать).
@@ -329,7 +380,7 @@ export class TelegramComposerService {
       const route = await this.resolveGroupRouting(tgUserId, groupCtx.ownerUserId);
       if (route === 'owner-inbox') {
         // ownerUserId гарантированно задан, когда route === 'owner-inbox'.
-        return this.createInOwnerInbox(groupCtx.ownerUserId as string, chatId, rawText, groupCtx);
+        return this.createInOwnerInbox(groupCtx.ownerUserId as string, chatId, rawText, groupCtx, photos);
       }
       if (route === 'nudge') return this.send(chatId, this.bindHintText());
       // route === 'self' → обычный флоу ниже (отправитель точно привязан).
@@ -344,7 +395,7 @@ export class TelegramComposerService {
     const parsed = parseComposerMessage(rawText);
     // Нет текста задачи (например, один '+Проект') → ручной флоу покажет подсказку (без AI).
     if (parsed.taskText.trim().length === 0) {
-      await this.manualFlow(userId, chatId, rawText);
+      await this.manualFlow(userId, chatId, rawText, undefined, photos);
       return;
     }
 
@@ -376,11 +427,14 @@ export class TelegramComposerService {
         tgChatId: chatId,
         taskText: aiText,
         segments,
+        photos,
         ttlSeconds: DRAFT_TTL_SECONDS,
+        autoCreateSeconds: AUTO_CREATE_SECONDS,
       });
       aiDraftDone = true;
       const card = await this.renderSegmentsCard(draft);
-      await this.respond(chatId, waitMsgId, card.text, card.replyMarkup);
+      const tgMessageId = await this.respond(chatId, waitMsgId, card.text, card.replyMarkup);
+      if (tgMessageId !== null) await this.deps.drafts.patch(draft.id, { tgMessageId });
     } catch (err) {
       if (stopSpinner) stopSpinner();
       if (aiDraftDone) {
@@ -388,7 +442,7 @@ export class TelegramComposerService {
         return;
       }
       console.warn('[tg-composer] AI compose failed → ручной флоу:', err);
-      await this.manualFlow(userId, chatId, rawText, waitMsgId ?? undefined);
+      await this.manualFlow(userId, chatId, rawText, waitMsgId ?? undefined, photos);
     }
   }
 
@@ -416,17 +470,25 @@ export class TelegramComposerService {
     chatId: number,
     rawText: string,
     groupCtx: TelegramGroupContext,
+    photos: readonly TelegramDraftPhoto[],
   ): Promise<void> {
     const body = rawText.trim();
     if (body.length === 0) return;
     try {
       const inbox = await this.deps.getOrCreateInbox.execute(ownerUserId);
-      await this.deps.createTask.execute({
+      const task = await this.deps.createTask.execute({
         projectId: inbox.id,
         ownerUserId,
         description: this.buildOwnerInboxDescription(body, groupCtx),
         status: DEFAULT_COLUMN,
       });
+      await this.attachPhotos(
+        photos,
+        task.id,
+        inbox.id,
+        ownerUserId,
+        this.buildOwnerInboxDescription(body, groupCtx),
+      );
       const profileUrl = `${this.deps.appUrl.replace(/\/$/, '')}/profile`;
       await this.send(
         chatId,
@@ -458,6 +520,7 @@ export class TelegramComposerService {
     chatId: number,
     rawText: string,
     waitMsgId?: number,
+    photos: readonly TelegramDraftPhoto[] = [],
   ): Promise<void> {
     const parsed = parseComposerMessage(rawText);
 
@@ -525,11 +588,14 @@ export class TelegramComposerService {
       projectId,
       assigneeUserId,
       offered,
+      photos,
       ttlSeconds: DRAFT_TTL_SECONDS,
+      autoCreateSeconds: AUTO_CREATE_SECONDS,
     });
 
     const card = await this.nextCard(draft);
-    await this.respond(chatId, waitMsgId ?? null, card.text, card.replyMarkup);
+    const tgMessageId = await this.respond(chatId, waitMsgId ?? null, card.text, card.replyMarkup);
+    if (tgMessageId !== null) await this.deps.drafts.patch(draft.id, { tgMessageId });
   }
 
   // Phase D — inline-режим: `@ProjectsFlow_Bot текст задачи [@ответственный]` показывает живой
@@ -633,9 +699,11 @@ export class TelegramComposerService {
 
     switch (cb.kind) {
       case 'cancel': {
-        await this.deps.drafts.patch(draft.id, { status: 'cancelled' });
-        if (messageId) await this.edit(chatId, messageId, '✖️ Отменено.');
-        await this.deps.client.answerCallbackQuery(cq.id, { text: 'Отменено' });
+        const cancelled = await this.deps.drafts.cancelComposing(draft.id);
+        if (cancelled && messageId) await this.edit(chatId, messageId, '✖️ Отменено.');
+        await this.deps.client.answerCallbackQuery(cq.id, {
+          text: cancelled ? 'Отменено' : 'Этот черновик уже обрабатывается.',
+        });
         return;
       }
       case 'project':
@@ -751,87 +819,84 @@ export class TelegramComposerService {
     userId: string,
     chatId: number,
     messageId: number | undefined,
-    cqId: string,
+    cqId: string | null,
+    opts: { readonly alreadyClaimed?: boolean; readonly automatic?: boolean } = {},
   ): Promise<void> {
+    const claimed = opts.alreadyClaimed
+      ? draft
+      : await this.deps.drafts.claimForConfirmation(draft.id, false);
+    if (!claimed) {
+      if (cqId) {
+        await this.deps.client.answerCallbackQuery(cqId, { text: 'Этот черновик уже обработан.' });
+      }
+      return;
+    }
+    draft = claimed;
+    messageId ??= draft.tgMessageId ?? undefined;
     const text = (draft.taskText ?? '').trim();
     if (text.length === 0) {
       await this.deps.drafts.patch(draft.id, { status: 'cancelled' });
-      await this.deps.client.answerCallbackQuery(cqId, { text: 'Пустой текст задачи.', showAlert: true });
+      if (cqId) {
+        await this.deps.client.answerCallbackQuery(cqId, {
+          text: 'Пустой текст задачи.',
+          showAlert: true,
+        });
+      }
       return;
     }
 
     try {
-      if (draft.assigneeUserId) {
-        // Задача сразу создаётся в выбранном проекте (или во «Входящих») с единственным
-        // выбранным ответственным.
-        const targetId =
-          draft.projectId ?? (await this.deps.getOrCreateInbox.execute(userId)).id;
-        const task = await this.deps.createTask.execute({
+      const targetId = draft.projectId ?? (await this.deps.getOrCreateInbox.execute(userId)).id;
+      const task = await this.deps.createTask.execute({
+        projectId: targetId,
+        ownerUserId: userId,
+        description: text,
+        status: draft.targetStatus ?? DEFAULT_COLUMN,
+        assigneeUserId: draft.assigneeUserId ?? userId,
+      });
+      // Сразу закрываем claim после успешного createTask. Всё ниже — best-effort оформление;
+      // его сбой не должен вернуть уже созданную задачу в очередь и породить дубль.
+      await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
+      await this.attachPhotos(draft.photos, task.id, targetId, userId, text);
+      if (messageId) {
+        await this.deps.taskMessages.upsert({
+          tgChatId: chatId,
+          tgMessageId: messageId,
+          recipientUserId: userId,
+          taskId: task.id,
           projectId: targetId,
-          ownerUserId: userId,
-          description: text,
-          status: draft.targetStatus ?? DEFAULT_COLUMN,
-          assigneeUserId: draft.assigneeUserId,
         });
-        await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
-        if (messageId) {
-          await this.deps.taskMessages.upsert({
-            tgChatId: chatId,
-            tgMessageId: messageId,
-            recipientUserId: userId,
-            taskId: task.id,
-            projectId: targetId,
-          });
-        }
+      }
+      if (draft.assigneeUserId && draft.assigneeUserId !== userId) {
         await this.notifyAssignee(draft, task.id, targetId, userId, text);
+      }
 
-        const assigneeName =
-          (await this.deps.users.getById(draft.assigneeUserId))?.displayName ?? 'участнику';
-        const projName = await this.projNameOf(draft.projectId);
-        if (messageId) {
-          await this.edit(
-            chatId,
-            messageId,
-            `✅ Задача создана в <b>${escapeHtml(projName)}</b>. Ответственный — <b>${escapeHtml(assigneeName)}</b>.\n📝 ${markdownToTelegramHtml(excerpt(text))}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
-          );
-        }
-        await this.deps.client.answerCallbackQuery(cqId, { text: 'Создано и назначено' });
-      } else {
-        const targetId = draft.projectId ?? (await this.deps.getOrCreateInbox.execute(userId)).id;
-        const task = await this.deps.createTask.execute({
-          projectId: targetId,
-          ownerUserId: userId,
-          description: text,
-          status: draft.targetStatus ?? DEFAULT_COLUMN,
+      const projName = await this.projNameOf(draft.projectId);
+      const assigneeSuffix = draft.assigneeUserId
+        ? ` Ответственный — <b>${escapeHtml((await this.deps.users.getById(draft.assigneeUserId))?.displayName ?? 'участник')}</b>.`
+        : '';
+      const automatic = opts.automatic ? '\n\n⏱ Создано автоматически через 10 минут.' : '';
+      if (messageId) {
+        await this.edit(
+          chatId,
+          messageId,
+          `✅ Задача создана в <b>${escapeHtml(projName)}</b>.${assigneeSuffix}\n📝 ${markdownToTelegramHtml(excerpt(text))}${automatic}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
+        );
+      }
+      if (cqId) {
+        await this.deps.client.answerCallbackQuery(cqId, {
+          text: draft.assigneeUserId ? 'Создано и назначено' : 'Создано',
         });
-        await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
-        if (messageId) {
-          await this.deps.taskMessages.upsert({
-            tgChatId: chatId,
-            tgMessageId: messageId,
-            recipientUserId: userId,
-            taskId: task.id,
-            projectId: targetId,
-          });
-        }
-        const projName = draft.projectId
-          ? ((await this.deps.projects.getById(targetId))?.name ?? 'проект')
-          : 'Входящие';
-        if (messageId) {
-          await this.edit(
-            chatId,
-            messageId,
-            `✅ Задача создана в <b>${escapeHtml(projName)}</b>.\n📝 ${markdownToTelegramHtml(excerpt(text))}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
-          );
-        }
-        await this.deps.client.answerCallbackQuery(cqId, { text: 'Создано' });
       }
     } catch (err) {
       console.warn('[tg-composer] finalize failed:', err);
-      await this.deps.client.answerCallbackQuery(cqId, {
-        text: 'Не удалось создать задачу. Попробуй через интерфейс ProjectsFlow.',
-        showAlert: true,
-      });
+      await this.deps.drafts.releaseConfirmation(draft.id, AUTO_RETRY_SECONDS);
+      if (cqId) {
+        await this.deps.client.answerCallbackQuery(cqId, {
+          text: 'Не удалось создать задачу. Повторю автоматически через минуту.',
+          showAlert: true,
+        });
+      }
     }
   }
 
@@ -898,7 +963,7 @@ export class TelegramComposerService {
     ]);
     const hint = all.length === 0 ? '\nНе нашёл проект по запросу — выбери из списка.' : '';
     return {
-      text: `🆕 <b>Новая задача</b>\n📝 ${markdownToTelegramHtml(excerpt(draft.taskText ?? ''))}\n\n📁 В какой проект?${hint}`,
+      text: `🆕 <b>Новая задача</b>\n📝 ${markdownToTelegramHtml(excerpt(draft.taskText ?? ''))}\n\n📁 В какой проект?${hint}\n\n⏱ Без ответа создам автоматически через 10 минут.`,
       replyMarkup: { inline_keyboard: rows },
     };
   }
@@ -915,7 +980,7 @@ export class TelegramComposerService {
       { text: '✖️ Отмена', callback_data: `tx:${draft.id}` },
     ]);
     return {
-      text: `🆕 <b>Новая задача</b>\n📝 ${markdownToTelegramHtml(excerpt(draft.taskText ?? ''))}\n\n👤 Кто ответственный?`,
+      text: `🆕 <b>Новая задача</b>\n📝 ${markdownToTelegramHtml(excerpt(draft.taskText ?? ''))}\n\n👤 Кто ответственный?\n\n⏱ Без ответа создам автоматически через 10 минут.`,
       replyMarkup: { inline_keyboard: rows },
     };
   }
@@ -935,6 +1000,8 @@ export class TelegramComposerService {
     ];
     lines.push(`👤 Ответственный: <b>${escapeHtml(assigneeName ?? 'Вы')}</b>`);
     lines.push(`📝 ${markdownToTelegramHtml(excerpt(draft.taskText ?? ''))}`);
+    if (draft.photos.length > 0) lines.push(`🖼 Фото: <b>${draft.photos.length}</b>`);
+    lines.push('', '⏱ Без нажатия создам автоматически через 10 минут.');
     const createLabel = '✅ Создать';
     return {
       text: lines.join('\n'),
@@ -1122,6 +1189,8 @@ export class TelegramComposerService {
     if (seg.deadline) lines.push(`📅 Срок: <b>${escapeHtml(seg.deadline)}</b>`);
     if (seg.title.trim()) lines.push(`📝 <b>${mdToPlain(seg.title.trim())}</b>`);
     lines.push(markdownToTelegramHtml(excerpt(seg.body)));
+    if (draft.photos.length > 0) lines.push(`🖼 Фото: <b>${draft.photos.length}</b>`);
+    lines.push('', '⏱ Без нажатия создам автоматически через 10 минут.');
     return {
       text: lines.join('\n'),
       replyMarkup: {
@@ -1163,6 +1232,7 @@ export class TelegramComposerService {
       lines.push(`${i + 1}. ${seg.included ? '' : '🚫 '}<b>${mdToPlain(titleText)}</b>${strike}`);
       lines.push(`   ${meta.join(' · ')}`);
     }
+    if (draft.photos.length > 0) lines.push('', `🖼 Фото: <b>${draft.photos.length}</b>`);
     const rows: { text: string; callback_data: string }[][] = [
       [
         { text: `✅ Создать все (${includedCount})`, callback_data: `ac:${draft.id}` },
@@ -1178,6 +1248,7 @@ export class TelegramComposerService {
       }
     }
     if (row.length > 0) rows.push(row);
+    lines.push('', '⏱ Без нажатия создам автоматически через 10 минут.');
     return { text: lines.join('\n'), replyMarkup: { inline_keyboard: rows } };
   }
 
@@ -1513,20 +1584,36 @@ export class TelegramComposerService {
     userId: string,
     chatId: number,
     messageId: number | undefined,
-    cqId: string,
+    cqId: string | null,
+    opts: { readonly alreadyClaimed?: boolean; readonly automatic?: boolean } = {},
   ): Promise<void> {
+    const claimed = opts.alreadyClaimed
+      ? draft
+      : await this.deps.drafts.claimForConfirmation(draft.id, false);
+    if (!claimed) {
+      if (cqId) {
+        await this.deps.client.answerCallbackQuery(cqId, { text: 'Этот черновик уже обработан.' });
+      }
+      return;
+    }
+    draft = claimed;
+    messageId ??= draft.tgMessageId ?? undefined;
     const segs = (draft.segments ?? []).filter((s) => s.included);
     if (segs.length === 0) {
-      await this.deps.client.answerCallbackQuery(cqId, {
-        text: 'Нет задач для создания.',
-        showAlert: true,
-      });
+      await this.deps.drafts.patch(draft.id, { status: 'cancelled' });
+      if (cqId) {
+        await this.deps.client.answerCallbackQuery(cqId, {
+          text: 'Нет задач для создания.',
+          showAlert: true,
+        });
+      }
       return;
     }
     let created = 0;
     let failed = 0;
     let lastTaskId: string | null = null;
     let lastProjectId: string | null = null;
+    let photosAttached = false;
     const summary: string[] = [];
     for (const seg of segs) {
       try {
@@ -1549,6 +1636,14 @@ export class TelegramComposerService {
           assigneeUserId: assigneeUserId ?? userId,
         });
         created += 1;
+        if (created === 1) {
+          // Защита от дублей при падении на последующих сегментах/уведомлениях.
+          await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
+        }
+        if (!photosAttached && draft.photos.length > 0) {
+          await this.attachPhotos(draft.photos, task.id, targetId, userId, description);
+          photosAttached = true;
+        }
         lastTaskId = task.id;
         lastProjectId = targetId;
         const projName = await this.projNameOf(seg.projectId);
@@ -1562,7 +1657,7 @@ export class TelegramComposerService {
         summary.push(`⚠️ ${escapeHtml(seg.title.trim() || excerpt(seg.body, 40))} — не удалось`);
       }
     }
-    await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
+    if (created === 0) await this.deps.drafts.releaseConfirmation(draft.id, AUTO_RETRY_SECONDS);
     // reply→комментарий: маппим сообщение только когда создана РОВНО одна задача (для N задач
     // одно сообщение к нескольким задачам однозначно не привязать).
     if (created === 1 && lastTaskId && lastProjectId && messageId) {
@@ -1574,9 +1669,16 @@ export class TelegramComposerService {
         projectId: lastProjectId,
       });
     }
-    const header = failed === 0 ? `✅ Создано задач: ${created}` : `Создано: ${created}, ошибок: ${failed}`;
+    const autoSuffix = opts.automatic && created > 0 ? ' · автоматически через 10 минут' : '';
+    const header =
+      (failed === 0 ? `✅ Создано задач: ${created}` : `Создано: ${created}, ошибок: ${failed}`) +
+      autoSuffix;
     if (messageId) await this.edit(chatId, messageId, [header, '', ...summary].join('\n'));
-    await this.deps.client.answerCallbackQuery(cqId, { text: created > 0 ? 'Создано' : 'Не удалось' });
+    if (cqId) {
+      await this.deps.client.answerCallbackQuery(cqId, {
+        text: created > 0 ? 'Создано' : 'Не удалось — повторю через минуту',
+      });
+    }
   }
 
   // TG-уведомление ответственному сегмента: кнопки Завершить/Комментировать.
@@ -1618,14 +1720,66 @@ export class TelegramComposerService {
     }
   }
 
+  // Фото из Telegram становятся обычными вложениями задачи и отдельными figure-абзацами
+  // в описании. Ошибка одного фото не отменяет уже созданную текстовую задачу.
+  private async attachPhotos(
+    photos: readonly TelegramDraftPhoto[],
+    taskId: string,
+    projectId: string,
+    actorUserId: string,
+    description: string,
+  ): Promise<void> {
+    const download = this.deps.client.downloadFile?.bind(this.deps.client);
+    const upload = this.deps.uploadAttachment;
+    const update = this.deps.updateTask;
+    if (photos.length === 0 || !download || !upload || !update) return;
+
+    const figures: string[] = [];
+    for (const photo of photos) {
+      try {
+        const file = await download(photo.fileId);
+        if (!file) continue;
+        const attachment = await upload.execute({
+          projectId,
+          ownerUserId: actorUserId,
+          taskId,
+          filename: file.filename,
+          mimeType: file.mimeType,
+          data: file.data,
+        });
+        figures.push(
+          `<figure data-figure-image><img src="/api/attachments/${attachment.id}" alt="" /></figure>`,
+        );
+      } catch (err) {
+        console.warn('[tg-composer] photo attach failed:', err);
+      }
+    }
+    if (figures.length === 0) return;
+    try {
+      await update.execute({
+        projectId,
+        ownerUserId: actorUserId,
+        taskId,
+        description: `${description.trim()}\n\n${figures.join('\n\n')}`,
+      });
+    } catch (err) {
+      console.warn('[tg-composer] photo description update failed:', err);
+    }
+  }
+
   // Шлёт сообщение и возвращает messageId (для спиннера / последующего edit). null при ошибке.
-  private async sendReturningId(chatId: number, text: string): Promise<number | null> {
+  private async sendReturningId(
+    chatId: number,
+    text: string,
+    replyMarkup?: InlineKeyboardMarkup,
+  ): Promise<number | null> {
     try {
       const res = await this.deps.client.sendMessage({
         chatId,
         text,
         parseMode: 'HTML',
         disableWebPagePreview: true,
+        replyMarkup,
       });
       return res.kind === 'ok' ? res.messageId : null;
     } catch (err) {
@@ -1640,9 +1794,12 @@ export class TelegramComposerService {
     waitMsgId: number | null,
     text: string,
     replyMarkup?: InlineKeyboardMarkup,
-  ): Promise<void> {
-    if (waitMsgId !== null) await this.edit(chatId, waitMsgId, text, replyMarkup);
-    else await this.send(chatId, text, replyMarkup);
+  ): Promise<number | null> {
+    if (waitMsgId !== null) {
+      await this.edit(chatId, waitMsgId, text, replyMarkup);
+      return waitMsgId;
+    }
+    return this.sendReturningId(chatId, text, replyMarkup);
   }
 
   // Анимация ожидания: периодически редактирует сообщение кадрами брайля. Возвращает stop().
