@@ -47,6 +47,9 @@ import {
 
 // Signed task attachment URLs stay valid long enough for Telegram to fetch and cache media.
 const TG_ATTACHMENT_URL_TTL_SECONDS = 14 * 24 * 60 * 60;
+// Cloud Bot API limit for sendDocument. Larger website attachments remain visible as signed
+// links in the task card because Telegram can't accept them as native files.
+const TG_NATIVE_DOCUMENT_MAX_BYTES = 50 * 1024 * 1024;
 
 // Минимальный набор полей TG Update, которые мы реально обрабатываем (allowed_updates
 // = message + callback_query + inline_query). Структура совпадает с Telegram Bot API:
@@ -1353,6 +1356,30 @@ export class HandleTelegramWebhook {
           now,
         ),
       );
+      const regularFileParts = content.filter(
+        (part): part is Extract<(typeof content)[number], { kind: 'attachment' }> =>
+          part.kind === 'attachment' && !part.inline,
+      );
+      const sendDocuments = this.deps.client.sendDocuments?.bind(this.deps.client);
+      const nativeFileParts = sendDocuments
+        ? regularFileParts.filter((part) => part.sizeBytes <= TG_NATIVE_DOCUMENT_MAX_BYTES)
+        : [];
+      const nativeFileIds = new Set(nativeFileParts.map((part) => part.attachmentId));
+      const hasLinkedRegularFiles = regularFileParts.length > nativeFileParts.length;
+      // RichMessage 10.2 cannot contain InputMediaDocument. When the concrete client supports
+      // native document albums, keep ordinary task files out of the rich card entirely instead
+      // of duplicating them there as download links. Inline editor screenshots stay in-flow.
+      const cardContent = sendDocuments
+        ? content.filter(
+            (part) =>
+              !(part.kind === 'attachment' && nativeFileIds.has(part.attachmentId)) &&
+              !(
+                part.kind === 'text' &&
+                part.section === 'attachments_heading' &&
+                !hasLinkedRegularFiles
+              ),
+          )
+        : content;
 
       const registerMessage = async (messageId: number | null): Promise<void> => {
         if (messageId === null) return;
@@ -1369,10 +1396,82 @@ export class HandleTelegramWebhook {
         }
       };
 
+      const sendNativeTaskFiles = async (replyToMessageId: number | null): Promise<void> => {
+        if (!sendDocuments || replyToMessageId === null || nativeFileParts.length === 0) return;
+        let documents: {
+          attachmentId: string;
+          data: Buffer;
+          filename: string;
+          mimeType: string;
+        }[] = [];
+        let documentBytes = 0;
+        let readFailed = false;
+        let deliveryFailed = false;
+        const flushDocuments = async (): Promise<void> => {
+          if (documents.length === 0) return;
+          const sentDocuments = documents;
+          documents = [];
+          documentBytes = 0;
+          const results = await sendDocuments({
+            chatId,
+            documents: sentDocuments,
+            caption: '📎 Файлы задачи',
+            replyToMessageId,
+          }).catch((err) => {
+            console.warn('[tg-webhook] send native task documents failed:', err);
+            return [];
+          });
+          let delivered = 0;
+          for (const result of results) {
+            if (result.kind === 'ok') {
+              delivered += 1;
+              await registerMessage(result.messageId);
+              continue;
+            }
+            deliveryFailed = true;
+            const detail = result.kind === 'rate_limited'
+              ? `retry_after=${result.retryAfter}`
+              : result.description;
+            console.warn(`[tg-webhook] native task document rejected: ${result.kind}; ${detail}`);
+          }
+          if (delivered !== sentDocuments.length) deliveryFailed = true;
+          for (const document of sentDocuments) attachmentData.delete(document.attachmentId);
+        };
+        for (const file of nativeFileParts) {
+          const data = await readAttachment(file.attachmentId);
+          if (!data) {
+            readFailed = true;
+            continue;
+          }
+          // Keep multipart buffer duplication bounded. Telegram still receives a single album
+          // whenever the selected documents fit its 10-item/50 MB request envelope.
+          if (
+            documents.length >= 10 ||
+            (documents.length > 0 && documentBytes + data.byteLength > TG_NATIVE_DOCUMENT_MAX_BYTES)
+          ) {
+            await flushDocuments();
+          }
+          documents.push({
+            attachmentId: file.attachmentId,
+            data,
+            filename: file.filename,
+            mimeType: file.mimeType,
+          });
+          documentBytes += data.byteLength;
+        }
+        await flushDocuments();
+        if (readFailed || deliveryFailed) {
+          await this.reply(
+            chatId,
+            `⚠️ Часть файлов не удалось прикрепить. Их можно скачать из <a href="${escapeHtml(url)}">задачи в ProjectsFlow</a>.`,
+          );
+        }
+      };
+
       const richFooter =
         `<footer><a href="${escapeHtml(url)}">Открыть в ProjectsFlow</a><br/>` +
         `↩️ Ответь reply'ем на это сообщение, чтобы добавить комментарий.</footer>`;
-      const richContent = buildTaskTelegramRichContent(content, richFooter);
+      const richContent = buildTaskTelegramRichContent(cardContent, richFooter);
       if (richContent && this.deps.client.sendRichMessage) {
         const richMedia: SendRichMessageMediaInput[] = [];
         // Read sequentially: even within the aggregate upload budget, dozens of concurrent disk
@@ -1395,8 +1494,7 @@ export class HandleTelegramWebhook {
           });
         if (result?.kind === 'ok') {
           await registerMessage(result.messageId);
-          // The rich card contains the description, inline screenshots, supported native media,
-          // download links for general files and the footer. One task is therefore one message.
+          await sendNativeTaskFiles(result.messageId);
           return;
         } else if (result) {
           const detail = result.kind === 'rate_limited'
@@ -1421,11 +1519,14 @@ export class HandleTelegramWebhook {
         }
       }
 
-      // Compatibility fallback remains one physical Telegram message. Media becomes download
-      // links here because regular sendMessage can't carry files and rich media simultaneously.
-      await registerMessage(
-        await this.sendReturningId(chatId, buildTaskTelegramFallbackContent(content, url)),
+      // Compatibility fallback keeps the task text/card separate and sends ordinary task files
+      // as real Telegram documents replying to that card.
+      const fallbackMessageId = await this.sendReturningId(
+        chatId,
+        buildTaskTelegramFallbackContent(cardContent, url),
       );
+      await registerMessage(fallbackMessageId);
+      await sendNativeTaskFiles(fallbackMessageId);
       return;
     }
 

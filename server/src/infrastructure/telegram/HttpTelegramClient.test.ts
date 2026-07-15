@@ -88,6 +88,72 @@ test('unsupported photo codec falls back to a Telegram document', async () => {
   );
 });
 
+test('one task file is uploaded as a native document replying to the task card', async () => {
+  await withTelegramStub(
+    () => ({ status: 200, body: { ok: true, result: { message_id: 51 } } }),
+    async (baseUrl, requests) => {
+      const client = new HttpTelegramClient('secret', baseUrl);
+      const results = await client.sendDocuments({
+        chatId: 7,
+        replyToMessageId: 44,
+        caption: '📎 Файлы задачи',
+        documents: [
+          {
+            data: Buffer.from('pdf-bytes'),
+            filename: 'техническое-задание.pdf',
+            mimeType: 'application/pdf',
+          },
+        ],
+      });
+
+      assert.deepEqual(results, [{ kind: 'ok', messageId: 51 }]);
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]!.path, '/botsecret/sendDocument');
+      assert.match(requests[0]!.contentType, /^multipart\/form-data; boundary=/);
+      assert.match(requests[0]!.body, /техническое-задание\.pdf/);
+      assert.match(requests[0]!.body, /pdf-bytes/);
+      assert.match(requests[0]!.body, /"message_id":44/);
+      assert.match(requests[0]!.body, /disable_content_type_detection/);
+    },
+  );
+});
+
+test('multiple task files are uploaded together as one native document album', async () => {
+  await withTelegramStub(
+    () => ({
+      status: 200,
+      body: { ok: true, result: [{ message_id: 61 }, { message_id: 62 }] },
+    }),
+    async (baseUrl, requests) => {
+      const client = new HttpTelegramClient('secret', baseUrl);
+      const results = await client.sendDocuments({
+        chatId: 7,
+        replyToMessageId: 44,
+        caption: '📎 Файлы задачи',
+        documents: [
+          { data: Buffer.from('first-bytes'), filename: 'brief.pdf', mimeType: 'application/pdf' },
+          { data: Buffer.from('second-bytes'), filename: 'source.zip', mimeType: 'application/zip' },
+        ],
+      });
+
+      assert.deepEqual(results, [
+        { kind: 'ok', messageId: 61 },
+        { kind: 'ok', messageId: 62 },
+      ]);
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]!.path, '/botsecret/sendMediaGroup');
+      assert.match(requests[0]!.contentType, /^multipart\/form-data; boundary=/);
+      assert.match(requests[0]!.body, /attach:\/\/task_document_0/);
+      assert.match(requests[0]!.body, /attach:\/\/task_document_1/);
+      assert.match(requests[0]!.body, /brief\.pdf/);
+      assert.match(requests[0]!.body, /source\.zip/);
+      assert.match(requests[0]!.body, /first-bytes/);
+      assert.match(requests[0]!.body, /second-bytes/);
+      assert.match(requests[0]!.body, /"message_id":44/);
+    },
+  );
+});
+
 test('rich task message references a declared photo at its paragraph position', async () => {
   await withTelegramStub(
     () => ({ status: 200, body: { ok: true, result: { message_id: 44 } } }),

@@ -8,6 +8,7 @@ import {
   type AnswerInlineQueryInput,
   type EditMessageTextInput,
   type SendAttachmentInput,
+  type SendDocumentGroupInput,
   type SendMessageInput,
   type SendMessageResult,
   type SendRichMessageInput,
@@ -388,6 +389,87 @@ export class HttpTelegramClient implements TelegramClient {
       return sendUsing({ endpoint: '/sendDocument', field: 'document' });
     }
     return result;
+  }
+
+  async sendDocuments(input: SendDocumentGroupInput): Promise<readonly SendMessageResult[]> {
+    const results: SendMessageResult[] = [];
+    for (let offset = 0; offset < input.documents.length; offset += 10) {
+      const batch = input.documents.slice(offset, offset + 10);
+      if (batch.length === 0) continue;
+
+      let res: Awaited<ReturnType<typeof this.tgFetch>>;
+      try {
+        const form = new FormData();
+        form.set('chat_id', String(input.chatId));
+        if (input.replyToMessageId !== undefined) {
+          form.set('reply_parameters', JSON.stringify({ message_id: input.replyToMessageId }));
+        }
+        const caption = offset === 0 ? input.caption : undefined;
+        if (batch.length === 1) {
+          const document = batch[0]!;
+          form.set(
+            'document',
+            new File([new Uint8Array(document.data)], document.filename, {
+              type: document.mimeType || 'application/octet-stream',
+            }),
+          );
+          form.set('disable_content_type_detection', 'true');
+          if (caption) form.set('caption', caption);
+          res = await this.tgFetch('/sendDocument', { method: 'POST', body: form });
+        } else {
+          const media = batch.map((document, index) => ({
+            type: 'document',
+            media: `attach://task_document_${index}`,
+            ...(index === 0 && caption ? { caption } : {}),
+          }));
+          form.set('media', JSON.stringify(media));
+          batch.forEach((document, index) => {
+            form.set(
+              `task_document_${index}`,
+              new File([new Uint8Array(document.data)], document.filename, {
+                type: document.mimeType || 'application/octet-stream',
+              }),
+            );
+          });
+          res = await this.tgFetch('/sendMediaGroup', { method: 'POST', body: form });
+        }
+      } catch (err) {
+        // The upload can reach Telegram even if the response is lost. Do not fan out a retry as
+        // individual documents here, or the user can receive duplicate files.
+        results.push({
+          kind: 'error',
+          description: (err as Error).message,
+          deliveryUnknown: true,
+        });
+        continue;
+      }
+
+      const body = (await res.json().catch(() => null)) as TgResponse<
+        { message_id: number } | { message_id: number }[]
+      > | null;
+      if (res.ok && body?.ok && body.result) {
+        const messages = Array.isArray(body.result) ? body.result : [body.result];
+        results.push(...messages.map((message) => ({
+          kind: 'ok' as const,
+          messageId: message.message_id,
+        })));
+        continue;
+      }
+      if (res.status === 403) {
+        results.push({ kind: 'forbidden', description: body?.description ?? 'forbidden' });
+        continue;
+      }
+      if (res.status === 429) {
+        results.push({ kind: 'rate_limited', retryAfter: body?.parameters?.retry_after ?? 1 });
+        continue;
+      }
+      results.push({
+        kind: 'error',
+        description: body?.description ?? `HTTP ${res.status}`,
+        deliveryUnknown: res.ok || res.status >= 500,
+      });
+    }
+    return results;
   }
 
   // Картинки в чат: 1 → sendPhoto, 2..10 → sendMediaGroup, >10 → чанки по 10. Best-effort:

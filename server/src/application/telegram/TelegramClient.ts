@@ -59,6 +59,21 @@ export type SendAttachmentInput = {
   readonly caption?: string;
 };
 
+export type SendDocumentGroupItem = {
+  readonly data: Buffer;
+  readonly filename: string;
+  readonly mimeType: string;
+};
+
+export type SendDocumentGroupInput = {
+  readonly chatId: number;
+  readonly documents: readonly SendDocumentGroupItem[];
+  readonly caption?: string;
+  // Native task files are sent as a document album replying to the task card. Telegram then
+  // keeps the files visually attached to their task without turning them into rich-message links.
+  readonly replyToMessageId?: number;
+};
+
 export type EditMessageTextInput = {
   readonly chatId: number;
   readonly messageId: number;
@@ -195,6 +210,9 @@ export interface TelegramClient {
   // Send a native task attachment. Implementations choose photo, audio, video, animation, or
   // document by MIME and may upload bytes directly or let Telegram fetch a signed URL.
   sendAttachment?(input: SendAttachmentInput): Promise<SendMessageResult>;
+  // Send ordinary task files as Telegram documents. One file uses sendDocument; 2..10 use one
+  // sendMediaGroup document album; larger sets are split into Telegram-sized album chunks.
+  sendDocuments?(input: SendDocumentGroupInput): Promise<readonly SendMessageResult[]>;
 }
 
 // Набор update-типов, которые мы реально обрабатываем. Используется в allowed_updates

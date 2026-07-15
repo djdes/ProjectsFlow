@@ -15,6 +15,7 @@ function makeHarness(opts?: {
   const sent: { chatId: number; text: string; replyMarkup: any }[] = [];
   const sentRich: any[] = [];
   const sentAttachments: any[] = [];
+  const sentDocumentGroups: any[] = [];
   const events: string[] = [];
   const answers: { id: string; text?: string; showAlert?: boolean }[] = [];
   const upserts: any[] = [];
@@ -49,6 +50,14 @@ function makeHarness(opts?: {
         events.push(`attachment:${i.filename}`);
         sentAttachments.push(i);
         return { kind: 'ok' as const, messageId: 500 + sentAttachments.length };
+      },
+      async sendDocuments(i: any) {
+        events.push(`documents:${i.documents.length}`);
+        sentDocumentGroups.push(i);
+        return i.documents.map((_: any, index: number) => ({
+          kind: 'ok' as const,
+          messageId: 800 + index,
+        }));
       },
       ...(opts?.richResult === 'missing'
         ? {}
@@ -102,6 +111,7 @@ function makeHarness(opts?: {
     sent,
     sentRich,
     sentAttachments,
+    sentDocumentGroups,
     events,
     answers,
     upserts,
@@ -242,7 +252,7 @@ test('bt:p: кнопки задач подписаны plain-названием 
   assert.ok(!btn.text.includes('длинное тело'), 'тело не попало в лейбл');
 });
 
-test('bt:t: отправляет описание, скрин и остальные поддерживаемые файлы одним rich-сообщением', async () => {
+test('bt:t: вставленный скрин остаётся в тексте, а прикреплённые файлы уходят native-альбомом', async () => {
   const h = makeHarness({
     ...seed,
     task: {
@@ -279,6 +289,16 @@ test('bt:t: отправляет описание, скрин и остальн�
         storageKey: 'audio-1.mp3',
         uploadedAt: new Date(),
       },
+      {
+        id: 'doc-1',
+        taskId: 't1',
+        commentId: null,
+        filename: 'brief.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 30,
+        storageKey: 'doc-1.pdf',
+        uploadedAt: new Date(),
+      },
     ],
   });
 
@@ -286,24 +306,29 @@ test('bt:t: отправляет описание, скрин и остальн�
 
   assert.deepEqual(
     h.events.map((event) => event.split(':', 1)[0]),
-    ['rich'],
+    ['rich', 'documents'],
   );
   const rich = h.sentRich[0]!;
   assert.ok(rich.html.indexOf('До картинки') < rich.html.indexOf('tg://photo?id=task_photo_1'));
   assert.ok(rich.html.indexOf('tg://photo?id=task_photo_1') < rich.html.indexOf('После картинки'));
-  assert.equal(rich.media.length, 2);
+  assert.equal(rich.media.length, 1);
   assert.equal(rich.media[0].kind, 'photo');
   assert.match(rich.media[0].url, /\/api\/attachments\/img-1/);
   assert.ok(Buffer.isBuffer(rich.media[0].data), 'inline screenshot bytes are uploaded directly');
   assert.equal(rich.media[0].filename, 'screen.png');
   assert.equal(rich.media[0].mimeType, 'image/png');
-  assert.equal(rich.media[1].kind, 'audio');
-  assert.equal(rich.media[1].filename, 'track.mp3');
   assert.ok(rich.media.every((attachment: any) => Buffer.isBuffer(attachment.data)));
-  assert.match(rich.html, /track\.mp3/);
+  assert.doesNotMatch(rich.html, /track\.mp3/);
+  assert.doesNotMatch(rich.html, /brief\.pdf/);
   assert.match(rich.html, /Открыть в ProjectsFlow/);
-  assert.equal(h.sentAttachments.length, 0, 'all supported media is inside the rich message');
-  assert.equal(h.upserts.length, 1, 'reply maps the single rich message to the task');
+  assert.equal(h.sentAttachments.length, 0, 'legacy one-by-one sender is not used');
+  assert.equal(h.sentDocumentGroups.length, 1);
+  assert.equal(h.sentDocumentGroups[0].replyToMessageId, 701);
+  assert.deepEqual(
+    h.sentDocumentGroups[0].documents.map((file: any) => file.filename),
+    ['track.mp3', 'brief.pdf'],
+  );
+  assert.equal(h.upserts.length, 3, 'task card and every album item accept reply comments');
 });
 
 test('bt:t: rich rejection falls back to one message with the screenshot link', async () => {
@@ -330,6 +355,16 @@ test('bt:t: rich rejection falls back to one message with the screenshot link', 
         storageKey: 'img-1.png',
         uploadedAt: new Date(),
       },
+      {
+        id: 'doc-1',
+        taskId: 't1',
+        commentId: null,
+        filename: 'brief.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 20,
+        storageKey: 'doc-1.pdf',
+        uploadedAt: new Date(),
+      },
     ],
   });
 
@@ -337,13 +372,42 @@ test('bt:t: rich rejection falls back to one message with the screenshot link', 
 
   assert.deepEqual(
     h.events.map((event) => event.split(':', 1)[0]),
-    ['rich', 'text'],
+    ['rich', 'text', 'documents'],
   );
   assert.match(h.events[1]!, /До картинки/);
   assert.match(h.events[1]!, /После картинки/);
   assert.match(h.events[1]!, /screen\.png/);
+  assert.doesNotMatch(h.events[1]!, /brief\.pdf/);
   assert.equal(h.sentAttachments.length, 0);
-  assert.equal(h.upserts.length, 1, 'only the single fallback message is registered');
+  assert.equal(h.sentDocumentGroups.length, 1);
+  assert.equal(h.sentDocumentGroups[0].replyToMessageId, 101);
+  assert.equal(h.sentDocumentGroups[0].documents[0].filename, 'brief.pdf');
+  assert.equal(h.upserts.length, 2, 'fallback card and native document are registered');
+});
+
+test('bt:t: файл больше лимита Telegram остаётся доступен ссылкой и не грузится в album', async () => {
+  const h = makeHarness({
+    ...seed,
+    task: { id: 't1', projectId: 'p1', description: 'Большой архив' },
+    attachments: [
+      {
+        id: 'archive-1',
+        taskId: 't1',
+        commentId: null,
+        filename: 'sources.zip',
+        mimeType: 'application/zip',
+        sizeBytes: 50 * 1024 * 1024 + 1,
+        storageKey: 'sources.zip',
+        uploadedAt: new Date(),
+      },
+    ],
+  });
+
+  await h.h.execute(cbUpdate('bt:t:t1'));
+
+  assert.deepEqual(h.events.map((event) => event.split(':', 1)[0]), ['rich']);
+  assert.match(h.sentRich[0]!.html, /sources\.zip/);
+  assert.equal(h.sentDocumentGroups.length, 0);
 });
 
 for (const richResult of ['delivery_unknown', 'forbidden', 'rate_limited'] as const) {
