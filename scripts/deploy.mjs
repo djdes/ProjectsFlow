@@ -41,14 +41,16 @@ const ssh = (remoteCmd) =>
 const scp = (local, remote) =>
   run(`pscp -batch -hostkey ${HOSTKEY} -P ${PORT} -pw "${PASS}" "${local}" ${USER}@${HOST}:"${remote}"`);
 
-console.log("→ 1/5  Build client + landing + server");
+console.log("→ 1/4  Build client + landing + server");
 run("npm run build");
 
-console.log("→ 2/5  Pack tarball");
+console.log("→ 2/4  Pack tarball");
 const dist = resolve(root, ".deploy");
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
-const archive = resolve(dist, "release.tar.gz");
+const releaseName = `release-local-${Date.now()}-${process.pid}.tar.gz`;
+const stageName = `.deploy-stage-${releaseName.slice(0, -".tar.gz".length)}`;
+const archive = resolve(dist, releaseName);
 // Используем tar из Git for Windows (есть в %ProgramFiles%\Git\usr\bin\tar.exe).
 // --force-local нужен чтобы GNU tar не интерпретировал "C:" в пути архива
 // как remote-host (формат host:path) — иначе деплой из git-bash валится.
@@ -57,22 +59,27 @@ const archive = resolve(dist, "release.tar.gz");
 // (DB_SOCKET, prod DB_PASSWORD, NODE_ENV=production). Если шиппить локальный
 // .env — затрёшь прод-кред и сломаешь подключение к БД. См. docs/ONBOARDING.md §4.
 run(
-  `tar --force-local --exclude=node_modules --exclude=.deploy --exclude=.git -czf "${archive}" server/dist client/dist landing/dist db scripts package.json server/package.json ecosystem.config.cjs`,
+  `tar --force-local --exclude=node_modules --exclude=.deploy --exclude=.git -czf "${archive}" server/dist client/dist landing/dist db scripts package.json package-lock.json server/package.json ecosystem.config.cjs`,
 );
 
-console.log("→ 3/5  Upload + extract");
+console.log("→ 3/4  Upload unique release");
 ssh(`mkdir -p ${TARGET}`);
-scp(archive, `${TARGET}/release.tar.gz`);
-ssh(`cd ${TARGET} && tar -xzf release.tar.gz && rm release.tar.gz`);
+scp(archive, `${TARGET}/${releaseName}`);
 
-console.log("→ 4/5  Install prod deps + migrate");
+console.log("→ 4/4  Locked install + migrate + restart");
 ssh(
-  `cd ${TARGET} && . ~/.nvm/nvm.sh && nvm use 22 >/dev/null && npm install --omit=dev --no-audit --no-fund && node --env-file=.env scripts/migrate.mjs`,
-);
-
-console.log("→ 5/5  Restart via PM2");
-ssh(
-  `cd ${TARGET} && . ~/.nvm/nvm.sh && nvm use 22 >/dev/null && pm2 startOrReload ecosystem.config.cjs && pm2 save`,
+  `cd ${TARGET} && flock -w 900 .deploy.lock bash -c '` +
+    `set -euo pipefail; ` +
+    `release="$1"; stage="$2"; target="$3"; ` +
+    `cleanup() { rm -f "$release"; rm -rf "$stage"; }; trap cleanup EXIT; ` +
+    `test -f "$release"; rm -rf "$stage"; mkdir -p "$stage"; ` +
+    `tar -xzf "$release" -C "$stage"; ` +
+    `bash "$stage/scripts/install-release.sh" "$stage" "$target"; ` +
+    `. ~/.nvm/nvm.sh; nvm use 22 >/dev/null; ` +
+    `npm ci --omit=dev --no-audit --no-fund; ` +
+    `node --env-file=.env scripts/migrate.mjs; ` +
+    `pm2 startOrReload ecosystem.config.cjs; pm2 save` +
+    `' _ ${releaseName} ${stageName} ${TARGET}`,
 );
 
 console.log("\n✓ Deploy complete");
