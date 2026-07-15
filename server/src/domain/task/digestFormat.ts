@@ -81,6 +81,37 @@ export function formatDeadlineRu(iso: string, now: Date = new Date()): string {
   });
 }
 
+// Остаток до дедлайна для ежедневной сводки: пользователь сразу видит срочность, а не
+// пересчитывает календарную дату. Считаем по календарным дням через UTC-индекс дня, чтобы
+// переход на летнее/зимнее время не давал ошибку в один день.
+export function formatDeadlineRemainingRu(iso: string, now: Date = new Date()): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  const targetDay = Math.floor(
+    Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) / 86_400_000,
+  );
+  const todayDay = Math.floor(
+    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000,
+  );
+  const diffDays = targetDay - todayDay;
+  if (diffDays === 0) return 'истекает сегодня';
+  if (diffDays > 0) {
+    const prefix = diffDays === 1 ? 'остался' : 'осталось';
+    return `${prefix} ${diffDays} ${dayWordRu(diffDays)}`;
+  }
+  const overdueDays = Math.abs(diffDays);
+  return `просрочено на ${overdueDays} ${dayWordRu(overdueDays)}`;
+}
+
+function dayWordRu(value: number): 'день' | 'дня' | 'дней' {
+  const n = Math.abs(value) % 100;
+  if (n >= 11 && n <= 14) return 'дней';
+  const last = n % 10;
+  if (last === 1) return 'день';
+  if (last >= 2 && last <= 4) return 'дня';
+  return 'дней';
+}
+
 export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')

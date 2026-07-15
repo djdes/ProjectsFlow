@@ -29,6 +29,31 @@ export function taskActionKeyboard(taskId: string): InlineKeyboardMarkup {
   };
 }
 
+export type DigestTaskAction = {
+  readonly taskId: string;
+  readonly name: string;
+  readonly openLink: string;
+};
+
+// Кнопки под общей ежедневной сводкой: одна строка на задачу. Название в кнопке завершения
+// позволяет не перепутать одинаковые «Завершить», а URL-кнопка сразу открывает нужную задачу.
+export function digestTaskActionsKeyboard(
+  tasks: readonly DigestTaskAction[],
+  limit = 12,
+): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: tasks.slice(0, Math.max(0, limit)).map((task) => [
+      { text: `✅ Завершить · ${compactTaskName(task.name)}`, callback_data: `nd:${task.taskId}` },
+      { text: '↗ Перейти', url: task.openLink },
+    ]),
+  };
+}
+
+function compactTaskName(name: string): string {
+  const normalized = name.replace(/\s+/g, ' ').trim() || 'Задача';
+  return normalized.length <= 24 ? normalized : `${normalized.slice(0, 23).trimEnd()}…`;
+}
+
 // Клавиатура после завершения — только «Отменить» (персистентно, до нажатия).
 export function taskCompletedKeyboard(taskId: string): InlineKeyboardMarkup {
   return {

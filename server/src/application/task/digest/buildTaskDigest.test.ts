@@ -12,6 +12,7 @@ import {
   splitDescription,
   priorityHeading,
   formatDeadlineRu,
+  formatDeadlineRemainingRu,
   markdownToRich,
 } from '../../../domain/task/digestFormat.js';
 
@@ -75,6 +76,15 @@ test('formatDeadlineRu: relative for near, absolute otherwise', () => {
   assert.equal(formatDeadlineRu('2026-06-05', NOW), 'завтра');
   const sameYear = formatDeadlineRu('2026-06-20', NOW);
   assert.ok(sameYear.startsWith('20 ') && sameYear.includes('июн') && !sameYear.includes('2026'));
+});
+
+test('formatDeadlineRemainingRu: shows remaining or overdue calendar days', () => {
+  assert.equal(formatDeadlineRemainingRu('2026-06-04', NOW), 'истекает сегодня');
+  assert.equal(formatDeadlineRemainingRu('2026-06-05', NOW), 'остался 1 день');
+  assert.equal(formatDeadlineRemainingRu('2026-06-07', NOW), 'осталось 3 дня');
+  assert.equal(formatDeadlineRemainingRu('2026-06-20', NOW), 'осталось 16 дней');
+  assert.equal(formatDeadlineRemainingRu('2026-05-31', NOW), 'просрочено на 4 дня');
+  assert.equal(formatDeadlineRemainingRu('2026-05-24', NOW), 'просрочено на 11 дней');
 });
 
 test('markdownToRich telegram: escapes text, balanced inline tags only', () => {
@@ -156,6 +166,7 @@ test('renderDigestMarkdown: bold header, anchor + done link, body, attachments',
   assert.ok(md.includes('**🔴 Приоритет: Срочно**'));
   assert.ok(md.includes('1. **[Заголовок](https://projectsflow.ru/projects/p1?task=t1)** · [✓ Готово](https://projectsflow.ru/projects/p1?task=t1&done=1)'));
   assert.ok(md.includes('тело задачи'));
+  assert.ok(md.includes('осталось 16 дней'));
   assert.ok(md.includes('📎 [f.pdf](https://x/a/1)'));
 });
 

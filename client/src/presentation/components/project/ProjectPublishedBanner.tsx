@@ -34,26 +34,30 @@ const BTN =
 export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: Props): React.ReactElement | null {
   const { projectRepository } = useContainer();
   const rightPanelWidth = useRightPanelWidth();
-  // siteSlug есть у каждого проекта (db/100) — плашка показывается ПО УМОЛЧАНИЮ. deployed —
-  // задеплоил ли уже воркер (меняет текст «в разработке» → «результат»).
-  const [site, setSite] = useState<{ slug: string; deployed: boolean } | null>(null);
+  // siteSlug есть у каждого проекта ещё до первого результата, поэтому одного slug недостаточно:
+  // плашку показываем только после реального деплоя воркера (deployedAt).
+  const [site, setSite] = useState<{ slug: string } | null>(null);
 
   // Только in-memory: refresh страницы возвращает плашку.
   const [dismissed, setDismissed] = useState(() => dismissedProjects.has(projectId));
 
-  // Фетч сайта проекта. Пока не задеплоен — лёгкий поллинг, чтобы статус «в разработке» сам
-  // сменился на «результат», когда воркер до-деплоит (без ручного refresh).
+  // Пока результата нет — лёгкий поллинг. После первого деплоя плашка появляется сама,
+  // без перезагрузки страницы и без промежуточного состояния «в разработке».
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setInterval> | null = null;
+    setSite(null);
     const load = (): void => {
       projectRepository
         .getProjectSite(projectId)
         .then((s) => {
-          if (cancelled || !s.siteSlug) return;
-          const deployed = !!s.deployedAt;
-          setSite({ slug: s.siteSlug, deployed });
-          if (deployed && timer) {
+          if (cancelled) return;
+          if (!s.siteSlug || !s.deployedAt) {
+            setSite(null);
+            return;
+          }
+          setSite({ slug: s.siteSlug });
+          if (timer) {
             clearInterval(timer);
             timer = null;
           }
@@ -103,13 +107,12 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
         style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
       >
         <span className="truncate">
-          {site.deployed ? 'Результат проекта опубликован на ' : 'Сайт проекта: '}
+          Результат проекта опубликован на{' '}
           <span className="font-medium">{address}</span>
-          {!site.deployed && <span className="text-[#37352f]/50 dark:text-blue-100/50"> · в разработке</span>}
         </span>
         <a href={url} target="_blank" rel="noopener noreferrer" className={BTN}>
           <Globe className="size-3.5 opacity-80" />
-          {site.deployed ? 'Открыть результат' : 'Открыть сайт'}
+          Открыть результат
         </a>
       </div>
       <button

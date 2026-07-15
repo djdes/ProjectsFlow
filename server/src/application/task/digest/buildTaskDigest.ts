@@ -3,7 +3,7 @@ import type { TaskWithCounts } from '../ListTasks.js';
 import {
   STATUS_DIGEST_LABEL,
   escapeHtml,
-  formatDeadlineRu,
+  formatDeadlineRemainingRu,
   markdownToRich,
   priorityHeading,
   splitDescription,
@@ -70,7 +70,7 @@ export function buildDigestModel(
       taskId: t.id,
       name,
       body,
-      deadline: t.deadline ? formatDeadlineRu(t.deadline, opts.now) : null,
+      deadline: t.deadline ? formatDeadlineRemainingRu(t.deadline, opts.now) : null,
       assignee: t.assignee.displayName,
       openLink: linkBase,
       doneLink: `${linkBase}&done=1`,

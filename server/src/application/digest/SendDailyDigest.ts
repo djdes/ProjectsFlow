@@ -17,7 +17,13 @@ import {
   renderDigestRich,
   renderDigestTelegram,
 } from '../task/digest/buildTaskDigest.js';
-import { extractImageSrcs, stripFigureLines, toVisibleStatus } from '../../domain/task/digestFormat.js';
+import {
+  extractImageSrcs,
+  formatDeadlineRemainingRu,
+  stripFigureLines,
+  toVisibleStatus,
+} from '../../domain/task/digestFormat.js';
+import { digestTaskActionsKeyboard } from '../telegram/taskActionKeyboard.js';
 import {
   makeAttachmentImageResolver,
   signAttachmentUrl,
@@ -78,12 +84,14 @@ export class SendDailyDigest {
       commentCount: commentCounts.get(t.id) ?? 0,
     }));
 
+    const digestNow = new Date();
     const model = buildDigestModel(enriched, {
       projectName: project.name,
       appUrl: this.deps.appUrl,
       isInbox: project.isInbox,
       attachmentsByTask: new Map(),
       grouping: { by: 'status', statuses },
+      now: digestNow,
     });
 
     const subject = `Ежедневная сводка · ${project.name}`;
@@ -155,7 +163,12 @@ export class SendDailyDigest {
           await this.deps.telegram
             .execute({
               userId,
-              text: `📌 ${markdownToTelegramHtml(digestExcerpt(stripFigureLines(t.description)))}\n<i>${digestStatusLabel(t.status)}</i>`,
+              text:
+                `📌 ${markdownToTelegramHtml(digestExcerpt(stripFigureLines(t.description)))}\n` +
+                `<i>${digestStatusLabel(t.status)}</i>` +
+                (t.deadline
+                  ? `\n⏰ ${escapeDigestHtml(formatDeadlineRemainingRu(t.deadline, digestNow))}`
+                  : ''),
               parseMode: 'HTML',
               kind: 'task_digest_item',
               taskId: t.id,
@@ -189,12 +202,17 @@ export class SendDailyDigest {
       settings.telegramGroupChatId !== null
     ) {
       const groupChatId = settings.telegramGroupChatId;
+      const groupActions = digestTaskActionsKeyboard(
+        model.groups.flatMap((group) => group.items),
+        TG_DIGEST_ACTION_LIMIT,
+      );
       let richOk = false;
       if (this.deps.telegramClient.sendRichMessage) {
         try {
           const r = await this.deps.telegramClient.sendRichMessage({
             chatId: groupChatId,
             html: renderDigestRich(model),
+            replyMarkup: groupActions,
           });
           richOk = r.kind === 'ok';
         } catch (e) {
@@ -202,13 +220,14 @@ export class SendDailyDigest {
         }
       }
       if (!richOk) {
-        for (const chunk of tgChunks) {
+        for (const [index, chunk] of tgChunks.entries()) {
           await this.deps.telegramClient
             .sendMessage({
               chatId: groupChatId,
               text: chunk,
               parseMode: 'HTML',
               disableWebPagePreview: true,
+              replyMarkup: index === 0 ? groupActions : undefined,
             })
             .catch((e) => console.warn('[daily-digest] tg group failed', e));
         }
@@ -219,8 +238,8 @@ export class SendDailyDigest {
   }
 }
 
-// Личный TG-дайджест: сколько задач показать отдельными карточками-действиями (остальное —
-// ссылкой в приложение). Держим в разумных рамках, чтобы не спамить сообщениями.
+// Сколько задач снабжаем отдельными действиями в личной и групповой TG-сводке (остальное —
+// ссылкой в приложение). Держим в разумных рамках, чтобы не спамить сообщениями/кнопками.
 const TG_DIGEST_ACTION_LIMIT = 12;
 
 const VISIBLE_STATUS_LABEL: Record<string, string> = {
