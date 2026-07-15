@@ -90,15 +90,6 @@ function updateFigure(editor: Editor, uploadId: string, attrs: Record<string, un
   return true;
 }
 
-function removeFigure(editor: Editor, uploadId: string): void {
-  if (editor.isDestroyed) return;
-  const pos = findFigurePos(editor, uploadId);
-  if (pos === null) return;
-  const node = editor.state.doc.nodeAt(pos);
-  if (!node) return;
-  editor.view.dispatch(editor.state.tr.delete(pos, pos + node.nodeSize));
-}
-
 function insertLoadedFigureAtEnd(editor: Editor, src: string): void {
   if (editor.isDestroyed) return;
   editor.commands.insertContentAt(editor.state.doc.content.size, [
@@ -230,6 +221,9 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
   // Пока figure-плейсхолдер не получил постоянный URL, он отсутствует в markdown. Поэтому
   // внешняя синхронизация value не должна вызывать setContent: она бы удалила эту ноду.
   const pendingImageUploadsRef = React.useRef(new Set<string>());
+  // Локальные blob:-превью показывают скрин сразу после Ctrl+V, ещё до завершения upload.
+  // В markdown они не попадают и освобождаются после замены постоянным URL / unmount.
+  const imagePreviewUrlsRef = React.useRef(new Map<string, string>());
   // Набор src уже загруженных inline-картинок в документе — база для детекта удаления ноды.
   const prevImageSrcsRef = React.useRef<Set<string>>(new Set());
   React.useEffect(() => {
@@ -265,6 +259,13 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
     for (const file of images) {
       const uploadId = `up-${(uploadCounter += 1)}`;
       pendingImageUploadsRef.current.add(uploadId);
+      let previewSrc = '';
+      try {
+        previewSrc = URL.createObjectURL(file);
+        imagePreviewUrlsRef.current.set(uploadId, previewSrc);
+      } catch {
+        // В тестовом/встроенном браузере Blob URL может отсутствовать — останется прогресс-блок.
+      }
       // Вставляем картинку + пустой абзац ПОСЛЕ неё и оставляем курсор в абзаце — чтобы
       // можно было сразу продолжить печатать в следующем абзаце. Без абзаца выделение
       // оставалось бы на самой картинке (NodeSelection), и первый же символ её заменял бы
@@ -273,7 +274,17 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
         .chain()
         .focus()
         .insertContent([
-          { type: 'figureImage', attrs: { uploading: true, progress: 0, uploadId, src: null } },
+          {
+            type: 'figureImage',
+            attrs: {
+              uploading: true,
+              progress: 0,
+              uploadId,
+              src: null,
+              previewSrc: previewSrc || null,
+              uploadError: false,
+            },
+          },
           { type: 'paragraph' },
         ])
         .run();
@@ -290,8 +301,13 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
               progress: 100,
               uploadId: null,
               src: url,
+              previewSrc: null,
+              uploadError: false,
             });
             if (!replaced) insertLoadedFigureAtEnd(editor, url);
+            const preview = imagePreviewUrlsRef.current.get(uploadId);
+            imagePreviewUrlsRef.current.delete(uploadId);
+            if (preview) URL.revokeObjectURL(preview);
             // Персистим СРАЗУ: фигура теперь сериализуется в markdown (src проставлен). Без
             // этого инлайн-картинка живёт только в локальном состоянии редактора и теряется на
             // reload, а загруженный аттач «осиротеет» и вылезет отдельным файлом в «Файлы».
@@ -300,15 +316,36 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
             }
           } else {
             pendingImageUploadsRef.current.delete(uploadId);
-            removeFigure(editor, uploadId);
+            // Раньше нода молча удалялась и оставляла только пустой абзац. Сохраняем локальное
+            // превью и явно показываем ошибку, чтобы вставка не выглядела как несколько пустых строк.
+            updateFigure(editor, uploadId, { uploading: false, uploadError: true, progress: 0 });
           }
         } catch {
           pendingImageUploadsRef.current.delete(uploadId);
-          removeFigure(editor, uploadId);
+          updateFigure(editor, uploadId, { uploading: false, uploadError: true, progress: 0 });
         }
       })();
     }
   }, []);
+
+  const routeClipboardPaste = React.useCallback(
+    (event: ClipboardEvent): boolean => {
+      const files = extractClipboardFiles(event.clipboardData ?? null);
+      if (files.length === 0) return false;
+      const upload = onUploadImageRef.current;
+      const images = upload ? files.filter((file) => isImageFile(file.type, file.name)) : [];
+      const imageSet = new Set(images);
+      const others = files.filter((file) => !imageSet.has(file));
+      if (images.length === 0 && !onPasteFilesRef.current) return false;
+
+      event.preventDefault();
+      event.stopPropagation();
+      if (images.length > 0) handleImagePaste(images);
+      if (others.length > 0) onPasteFilesRef.current?.(others);
+      return true;
+    },
+    [handleImagePaste],
+  );
 
   // Позиция блока под drag-ручкой (обновляется @tiptap/extension-drag-handle-react при
   // наведении). Нужна кнопке «+»: вставить новый блок ПОД этим и открыть меню типов блоков.
@@ -429,25 +466,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
         return false;
       },
       handlePaste: (_view, event) => {
-        // ВАЖНО: картинки из буфера часто приходят в clipboardData.items (kind==='file'),
-        // а .files при этом ПУСТ (копирование картинки из браузера/приложения, а не скрин).
-        // Раньше читали только .files → такой Ctrl+V «не работал». Берём через items (как
-        // extractClipboardFiles) — тогда вставка работает для любого источника картинки.
-        const files = extractClipboardFiles(event.clipboardData ?? null);
-        if (files.length === 0) return false;
-        // Картинки → inline-блок в позицию (если задан onUploadImage); остальное → вложения.
-        // isImageFile ловит и webp/без-MIME (по расширению) — как в остальном приложении.
-        const upload = onUploadImageRef.current;
-        const images = upload ? files.filter((f) => isImageFile(f.type, f.name)) : [];
-        const others = files.filter((f) => !images.includes(f));
-        if (images.length === 0 && !onPasteFilesRef.current) return false;
-        event.preventDefault();
-        // stopPropagation — иначе native-событие всплывёт до form-level onPaste
-        // (TaskDrawer) и файл прикрепится дважды.
-        event.stopPropagation();
-        if (images.length > 0) handleImagePaste(images);
-        if (others.length > 0) onPasteFilesRef.current?.(others);
-        return true;
+        return routeClipboardPaste(event);
       },
     },
     onUpdate: ({ editor: e }) => {
@@ -487,6 +506,29 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
     // База для детекта удаления картинок — по начальному содержимому редактора.
     if (editor && !editor.isDestroyed) prevImageSrcsRef.current = collectImageSrcs(editor);
   }, [editor]);
+
+  // Capture Ctrl+V on the editable DOM itself before ProseMirror/default HTML paste. Some browser
+  // and Windows clipboard combinations do not pass their binary item through Tiptap's handlePaste,
+  // even though it is present on the native event. stopImmediatePropagation prevents a duplicate
+  // second pass through ProseMirror and the form-level attachment handler.
+  React.useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const dom = editor.view.dom;
+    const onNativePaste = (event: ClipboardEvent): void => {
+      if (!editor.isEditable) return;
+      if (routeClipboardPaste(event)) event.stopImmediatePropagation();
+    };
+    dom.addEventListener('paste', onNativePaste, true);
+    return () => dom.removeEventListener('paste', onNativePaste, true);
+  }, [editor, routeClipboardPaste]);
+
+  React.useEffect(
+    () => () => {
+      for (const preview of imagePreviewUrlsRef.current.values()) URL.revokeObjectURL(preview);
+      imagePreviewUrlsRef.current.clear();
+    },
+    [],
+  );
 
   // Синяя линия-dropcursor должна пропадать СРАЗУ после дропа. drag-handle перехватывает
   // `drop` на уровне document, поэтому drop/dragend не доходят до DOM редактора и

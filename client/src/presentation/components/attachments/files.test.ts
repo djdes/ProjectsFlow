@@ -26,3 +26,20 @@ test('extractClipboardFiles объединяет items и files без дубл�
     [screenshot, document],
   );
 });
+
+test('extractClipboardFiles converts an HTML data URL screenshot to a File', () => {
+  const data = {
+    items: [],
+    files: [],
+    getData: (type: string) =>
+      type === 'text/html'
+        ? '<p>clipboard</p><img src="data:image/png;base64,cG5n" alt="screenshot">'
+        : '',
+  } as unknown as DataTransfer;
+
+  const [file] = extractClipboardFiles(data);
+  assert.ok(file);
+  assert.equal(file.type, 'image/png');
+  assert.equal(file.name, 'pasted-image-1.png');
+  assert.equal(file.size, 3);
+});

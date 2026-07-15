@@ -28,6 +28,8 @@ export const FigureImage = Node.create({
       uploading: { default: false, rendered: false },
       progress: { default: 0, rendered: false },
       uploadId: { default: null as string | null, rendered: false },
+      previewSrc: { default: null as string | null, rendered: false },
+      uploadError: { default: false, rendered: false },
     };
   },
 

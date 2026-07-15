@@ -62,7 +62,17 @@ test('внешнее сохранение во время upload не удаля
   await act(async () => {
     editor.dispatchEvent(paste);
   });
+  assert.equal(paste.defaultPrevented, true, 'native Ctrl+V is intercepted by the editor');
   assert.ok(host.querySelector('[data-figure-image]'), 'плейсхолдер картинки вставлен');
+  assert.equal(
+    host.querySelectorAll('[data-figure-image]').length,
+    2,
+    'native capture and ProseMirror do not insert the same clipboard image twice',
+  );
+  assert.ok(
+    host.querySelector('[data-figure-image] img'),
+    'local screenshot preview is visible before upload completes',
+  );
 
   // Имитируем ответ более раннего blur-save/refetch, пока XHR картинки ещё выполняется.
   await act(async () => {
