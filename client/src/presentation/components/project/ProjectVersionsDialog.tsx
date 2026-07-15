@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowDownUp,
   Bot,
-  CalendarDays,
   ExternalLink,
   History,
   ListFilter,
@@ -24,10 +23,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import type { TaskVersion, TaskVersionField, TaskVersionsResult } from '@/domain/task/TaskVersion';
 import { useContainer } from '@/infrastructure/di/container';
+import { cn } from '@/lib/utils';
 import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
+import { TaskVersionPreview } from '@/presentation/components/tasks/TaskVersionsDialog';
 import {
   ALL_VERSION_FIELDS,
   VERSION_FIELD_OPTIONS,
@@ -62,19 +62,6 @@ function formatDateTime(date: Date): string {
   });
 }
 
-function formatTaskDates(startDate: string | null, deadline: string | null): string {
-  if (!startDate && !deadline) return 'Без дедлайна';
-  const format = (value: string): string =>
-    new Date(`${value}T00:00:00`).toLocaleDateString('ru-RU', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  if (startDate && deadline) return `${format(startDate)} — ${format(deadline)}`;
-  if (deadline) return `до ${format(deadline)}`;
-  return `с ${format(startDate!)}`;
-}
-
 function actorKey(version: TaskVersion): string {
   return version.actorUserId ?? 'system';
 }
@@ -95,6 +82,7 @@ export function ProjectVersionsDialog({
   const [taskFilter, setTaskFilter] = useState('all');
   const [actorFilter, setActorFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [visibleFields, setVisibleFields] = useState<Set<TaskVersionField>>(
     () => new Set(ALL_VERSION_FIELDS),
   );
@@ -104,6 +92,7 @@ export function ProjectVersionsDialog({
     let cancelled = false;
     let requestId = 0;
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let latestVersionId: string | null = null;
 
     setLoading(true);
     setLoadError(false);
@@ -112,6 +101,7 @@ export function ProjectVersionsDialog({
     setTaskFilter('all');
     setActorFilter('all');
     setSortOrder('newest');
+    setSelectedId(null);
     setVisibleFields(new Set(ALL_VERSION_FIELDS));
 
     const load = (initial: boolean): void => {
@@ -120,7 +110,15 @@ export function ProjectVersionsDialog({
         .getProjectVersions(projectId)
         .then((result) => {
           if (cancelled || currentRequestId !== requestId) return;
+          const previousLatestId = latestVersionId;
+          latestVersionId = result.versions[0]?.id ?? null;
           setData(result);
+          setSelectedId((current) => {
+            const stillExists =
+              !!current && result.versions.some((version) => version.id === current);
+            if (initial || !stillExists || current === previousLatestId) return latestVersionId;
+            return current;
+          });
           setLoadError(false);
         })
         .catch(() => {
@@ -213,6 +211,24 @@ export function ProjectVersionsDialog({
       !!data?.cutoffAt && version.createdAt.getTime() < data.cutoffAt.getTime(),
     [data],
   );
+  const selected =
+    visibleVersions.find((version) => version.id === selectedId && !isLocked(version)) ?? null;
+
+  useEffect(() => {
+    if (!data || selected) return;
+    const firstAvailable = visibleVersions.find((version) => !isLocked(version));
+    setSelectedId(firstAvailable?.id ?? null);
+  }, [data, isLocked, selected, visibleVersions]);
+
+  const previousSnapshot = useMemo(() => {
+    if (!data || !selected) return null;
+    const taskVersions = data.versions
+      .filter((version) => version.taskId === selected.taskId)
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+    const selectedIndex = taskVersions.findIndex((version) => version.id === selected.id);
+    return selectedIndex >= 0 ? taskVersions[selectedIndex + 1]?.snapshot ?? null : null;
+  }, [data, selected]);
+
   const hasLocked = (data?.versions ?? []).some(isLocked);
 
   const toggleField = (field: TaskVersionField, checked: boolean): void => {
@@ -365,125 +381,142 @@ export function ProjectVersionsDialog({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-muted/10 p-3 sm:p-5">
+        <div className="flex min-h-0 flex-1 bg-muted/10">
           {loading ? (
-            <div className="flex h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
+            <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" /> Загрузка истории…
             </div>
           ) : loadError ? (
-            <div className="flex h-40 flex-col items-center justify-center gap-3 text-center">
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
               <p className="text-sm text-muted-foreground">Не удалось загрузить историю версий.</p>
               <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
                 Закрыть
               </Button>
             </div>
           ) : visibleVersions.length === 0 ? (
-            <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
               Нет версий по выбранным фильтрам.
             </div>
           ) : (
-            <ol className="mx-auto max-w-4xl space-y-3">
-              {visibleVersions.map((version) => {
-                const locked = isLocked(version);
-                const priority = version.snapshot.priority
-                  ? PRIORITY_META[version.snapshot.priority]
-                  : null;
-                return (
-                  <li key={version.id}>
-                    <article className="rounded-xl border bg-background p-4 shadow-sm">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-start gap-3">
-                          {version.actor ? (
-                            <UserAvatar
-                              displayName={version.actor.displayName}
-                              avatarUrl={version.actor.avatarUrl}
-                              className="mt-0.5 size-8 text-[10px]"
-                            />
-                          ) : (
-                            <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
-                              <Bot className="size-4 text-muted-foreground" />
-                            </span>
-                          )}
-                          <div className="min-w-0">
-                            <h3 className="truncate text-sm font-semibold" title={snapshotTaskTitle(version.snapshot)}>
-                              {snapshotTaskTitle(version.snapshot)}
-                            </h3>
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              {version.actor?.displayName ?? 'Система'} · {formatDateTime(version.createdAt)}
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="shrink-0"
-                          onClick={() => onOpenTask(version.taskId)}
-                        >
-                          <ExternalLink className="size-4" />
-                          Открыть задачу
-                        </Button>
+            <>
+              <div className="min-w-0 flex-1 overflow-y-auto bg-background px-8 py-6 sm:px-12 sm:py-8">
+                {selected ? (
+                  <>
+                    <div className="mx-auto mb-6 flex max-w-2xl items-center justify-between gap-3 border-b pb-4">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {snapshotTaskTitle(selected.snapshot)}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {selected.actor?.displayName ?? 'Система'} ·{' '}
+                          {formatDateTime(selected.createdAt)} ·{' '}
+                          {changedFieldsLabel(selected.changedFields)}
+                        </p>
                       </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => onOpenTask(selected.taskId)}
+                      >
+                        <ExternalLink className="size-4" />
+                        Открыть задачу
+                      </Button>
+                    </div>
+                    <TaskVersionPreview
+                      snapshot={selected.snapshot}
+                      prev={previousSnapshot}
+                    />
+                  </>
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+                    <Lock className="size-5 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      Выберите доступную версию задачи.
+                    </p>
+                    {hasLocked && (
+                      <Button variant="outline" size="sm" onClick={() => upgrade.open()}>
+                        Улучшить план
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
 
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {version.changedFields.map((field) => {
-                          const label = VERSION_FIELD_OPTIONS.find(
-                            (option) => option.field === field,
-                          )?.label;
-                          return (
-                            <span
-                              key={field}
-                              className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-300"
-                            >
-                              {label ?? field}
-                            </span>
-                          );
-                        })}
-                      </div>
-
-                      {locked ? (
+              <div className="flex w-80 shrink-0 flex-col border-l bg-background xl:w-96">
+                <ol className="min-h-0 flex-1 overflow-y-auto p-1.5">
+                  {visibleVersions.map((version) => {
+                    const locked = isLocked(version);
+                    return (
+                      <li key={version.id}>
                         <button
                           type="button"
-                          onClick={() => upgrade.open()}
-                          className="mt-3 flex w-full items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted"
+                          disabled={locked}
+                          onClick={() => setSelectedId(version.id)}
+                          className={cn(
+                            'flex w-full items-start justify-between gap-2 rounded-md px-2.5 py-2.5 text-left text-sm transition-colors',
+                            locked
+                              ? 'cursor-not-allowed text-muted-foreground/60'
+                              : 'hover:bg-accent',
+                            version.id === selectedId && !locked && 'bg-accent',
+                          )}
                         >
-                          <Lock className="size-3.5" />
-                          Снимок этой версии старше 7 дней — открыть на тарифе Прайм или ВИП
+                          <span className="flex min-w-0 flex-1 flex-col gap-1">
+                            <span
+                              className="truncate font-semibold"
+                              title={snapshotTaskTitle(version.snapshot)}
+                            >
+                              {snapshotTaskTitle(version.snapshot)}
+                            </span>
+                            <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                              {version.actor ? (
+                                <UserAvatar
+                                  displayName={version.actor.displayName}
+                                  avatarUrl={version.actor.avatarUrl}
+                                  className="size-5 text-[8px]"
+                                />
+                              ) : (
+                                <span className="flex size-5 shrink-0 items-center justify-center rounded bg-muted">
+                                  <Bot className="size-3" />
+                                </span>
+                              )}
+                              <span className="truncate">
+                                {version.actor?.displayName ?? 'Система'}
+                              </span>
+                              <span className="shrink-0">{formatDateTime(version.createdAt)}</span>
+                            </span>
+                            <span
+                              className="truncate text-[11px] leading-4 text-muted-foreground"
+                              title={changedFieldsLabel(version.changedFields)}
+                            >
+                              {changedFieldsLabel(version.changedFields)}
+                            </span>
+                          </span>
+                          {locked && (
+                            <Lock className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
+                          )}
                         </button>
-                      ) : (
-                        <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
-                          <span className="rounded-lg bg-muted/50 px-3 py-2">
-                            <span className="block text-[10px] uppercase tracking-wide">Статус</span>
-                            <span className="mt-0.5 block truncate font-medium text-foreground">
-                              {STATUS_LABEL[version.snapshot.status]}
-                            </span>
-                          </span>
-                          <span className="rounded-lg bg-muted/50 px-3 py-2">
-                            <span className="block text-[10px] uppercase tracking-wide">Ответственный</span>
-                            <span className="mt-0.5 block truncate font-medium text-foreground">
-                              {version.snapshot.assignee.displayName}
-                            </span>
-                          </span>
-                          <span className="rounded-lg bg-muted/50 px-3 py-2">
-                            <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide">
-                              <CalendarDays className="size-3" /> Даты
-                            </span>
-                            <span className="mt-0.5 block truncate font-medium text-foreground">
-                              {formatTaskDates(version.snapshot.startDate, version.snapshot.deadline)}
-                            </span>
-                          </span>
-                          <span className="rounded-lg bg-muted/50 px-3 py-2">
-                            <span className="block text-[10px] uppercase tracking-wide">Приоритет</span>
-                            <span className="mt-0.5 block truncate font-medium text-foreground">
-                              {priority?.label ?? 'Не выбран'}
-                            </span>
-                          </span>
-                        </div>
-                      )}
-                    </article>
-                  </li>
-                );
-              })}
-            </ol>
+                      </li>
+                    );
+                  })}
+                </ol>
+                {hasLocked && (
+                  <div className="border-t p-3 text-center text-xs text-muted-foreground">
+                    <p className="mb-2">
+                      История 7 дней. Версии старше — на тарифе Прайм или ВИП.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => upgrade.open()}
+                    >
+                      Улучшить план
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       </DialogContent>

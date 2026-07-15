@@ -128,7 +128,7 @@ function ChangedMark({ changed, children }: { changed: boolean; children: React.
 // Превью выбранной версии — как «своё» окно задачи. Если есть предыдущая версия (prev),
 // подсвечиваем синим что именно поменялось: слова заголовка/тела (пословный diff) + кольцо
 // вокруг изменённых свойств (статус/приоритет/срок/режим). У самой первой версии diff'а нет.
-function VersionPreview({
+export function TaskVersionPreview({
   snapshot,
   prev,
 }: {
@@ -418,7 +418,7 @@ export function TaskVersionsDialog({
                 <Loader2 className="size-4 animate-spin" /> Загрузка…
               </div>
             ) : selected ? (
-              <VersionPreview snapshot={selected.snapshot} prev={prevSnapshot} />
+              <TaskVersionPreview snapshot={selected.snapshot} prev={prevSnapshot} />
             ) : (
               <p className="py-10 text-sm text-muted-foreground">Версий пока нет.</p>
             )}
