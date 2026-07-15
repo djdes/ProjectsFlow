@@ -24,7 +24,10 @@ import { CommentBody } from './CommentBody';
 import { DiffView } from '@/presentation/components/diff/DiffView';
 import { CancelWorkButton } from './CancelWorkButton';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
-import { LIVE_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
+import {
+  LIVE_CHANGED_EVENT,
+  REALTIME_CONNECTED_EVENT,
+} from '@/presentation/hooks/useNotificationStream';
 
 const DOM_CAP = 300;
 
@@ -81,6 +84,9 @@ export function LiveTab({
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Start-сигнал приходит по общему realtime раньше REST-рефетча. Держим его отдельно,
+  // чтобы 🔴 включалась в тот же тик, а не после сетевого round-trip списка сессий.
+  const [realtimeRunningSessionId, setRealtimeRunningSessionId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(DOM_CAP);
 
   const reloadSessions = useCallback(() => {
@@ -91,7 +97,10 @@ export function LiveTab({
       .then((list) => {
         if (cancelled) return;
         setSessions(list);
-        setSelectedId((prev) => prev ?? list[0]?.id ?? null);
+        setRealtimeRunningSessionId(list.find((s) => s.status === 'running')?.id ?? null);
+        setSelectedId((prev) =>
+          prev && list.some((session) => session.id === prev) ? prev : (list[0]?.id ?? null),
+        );
       })
       .catch(() => {
         /* tolerate */
@@ -108,28 +117,74 @@ export function LiveTab({
 
   useEffect(() => {
     const onChanged = (e: Event): void => {
-      const detail = (e as CustomEvent<{ projectId?: string; taskId?: string }>).detail;
-      if (detail?.projectId !== projectId || detail?.taskId !== taskId) return;
+      const detail = (
+        e as CustomEvent<{
+          projectId?: string;
+          taskId?: string;
+          sessionId?: string;
+          status?: LiveSession['status'];
+        }>
+      ).detail;
+      if (
+        e.type === LIVE_CHANGED_EVENT &&
+        (detail?.projectId !== projectId || detail?.taskId !== taskId)
+      ) {
+        return;
+      }
+
+      // Оптимистично применяем lifecycle-сигнал до GET /sessions. Это мгновенно
+      // включает/гасит красную точку и сразу выбирает новый активный прогон.
+      if (detail?.sessionId && detail.status) {
+        const sessionStatus = detail.status;
+        if (sessionStatus === 'running') {
+          setRealtimeRunningSessionId(detail.sessionId);
+          setSelectedId(detail.sessionId);
+        } else {
+          setRealtimeRunningSessionId((current) =>
+            current === detail.sessionId ? null : current,
+          );
+          setSessions((current) =>
+            current.map((session) =>
+              session.id === detail.sessionId ? { ...session, status: sessionStatus } : session,
+            ),
+          );
+        }
+      }
+
       void liveRepository
         .listSessions(projectId, taskId)
         .then((list) => {
           setSessions(list);
           const fresh = list.find((s) => s.status === 'running');
-          if (fresh) setSelectedId(fresh.id);
+          setRealtimeRunningSessionId(fresh?.id ?? null);
+          setSelectedId((current) => {
+            if (fresh) return fresh.id;
+            if (current && list.some((session) => session.id === current)) return current;
+            return list[0]?.id ?? null;
+          });
         })
         .catch(() => undefined);
     };
     window.addEventListener(LIVE_CHANGED_EVENT, onChanged);
-    return () => window.removeEventListener(LIVE_CHANGED_EVENT, onChanged);
+    window.addEventListener(REALTIME_CONNECTED_EVENT, onChanged);
+    return () => {
+      window.removeEventListener(LIVE_CHANGED_EVENT, onChanged);
+      window.removeEventListener(REALTIME_CONNECTED_EVENT, onChanged);
+    };
   }, [projectId, taskId, liveRepository]);
 
   const { events, session, fileDiffs, loading, running } = useLiveSession(
     projectId,
     taskId,
-    active ? selectedId : null,
+    // Лента должна продолжать наполняться, пока юзер читает «Обсуждение». TabsContent
+    // скрыт визуально, но forceMount сохраняет компонент и его task-scoped SSE.
+    selectedId,
   );
 
-  const anyRunning = useMemo(() => sessions.some((s) => s.status === 'running'), [sessions]);
+  const anyRunning = useMemo(
+    () => realtimeRunningSessionId !== null || sessions.some((s) => s.status === 'running'),
+    [realtimeRunningSessionId, sessions],
+  );
   useEffect(() => {
     onRunningChange?.(anyRunning);
   }, [anyRunning, onRunningChange]);

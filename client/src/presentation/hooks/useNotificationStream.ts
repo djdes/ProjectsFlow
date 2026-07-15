@@ -9,6 +9,10 @@ export const NOTIFICATIONS_CHANGED_EVENT = 'pf:notifications-changed';
 export const TASK_CHANGED_EVENT = 'pf:task-changed';
 export const PROJECT_CHANGED_EVENT = 'pf:project-changed';
 export const TASK_VERSION_CHANGED_EVENT = 'pf:task-version-changed';
+// Общий realtime-SSE подключился или восстановился после обрыва. Компоненты с
+// недолговечным состоянием перечитывают актуальный snapshot, чтобы не зависеть от
+// события, которое могло произойти во время реконнекта.
+export const REALTIME_CONNECTED_EVENT = 'pf:realtime-connected';
 // Сменилось состояние LIVE-сессии воркера (start/finish). Канбан рисует 🔴 на карточке,
 // открытая LIVE-вкладка обновляет список сессий. detail = {projectId,taskId,sessionId,status}.
 export const LIVE_CHANGED_EVENT = 'pf:live-changed';
@@ -73,6 +77,10 @@ function toastFor(payload: StreamPayload): void {
 export function useNotificationStream(): void {
   useEffect(() => {
     const source = new EventSource('/api/notifications/stream', { withCredentials: true });
+
+    source.addEventListener('open', () => {
+      window.dispatchEvent(new Event(REALTIME_CONNECTED_EVENT));
+    });
 
     source.addEventListener('notification', (event) => {
       try {

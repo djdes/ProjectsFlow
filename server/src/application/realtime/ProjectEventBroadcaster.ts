@@ -114,9 +114,26 @@ export class ProjectEventBroadcaster {
     taskId: string,
     sessionId: string,
     status: 'running' | 'completed' | 'failed' | 'timeout' | 'canceled',
+    recipientUserIds: readonly string[] = [],
   ): Promise<void> {
+    // Инициатор воркера получает сигнал синхронно, ещё до обращения к БД за полным
+    // списком участников. Это важно для его уже открытого drawer и также покрывает
+    // root-admin, который видит проект через admin-bypass, но не состоит в members.
+    const sent = new Set<string>();
+    for (const userId of recipientUserIds) {
+      sent.add(userId);
+      this.deps.publisher.publish(userId, {
+        kind: 'live_session_changed',
+        projectId,
+        taskId,
+        sessionId,
+        status,
+      });
+    }
+
     const members = await this.deps.members.listByProject(projectId);
     for (const m of members) {
+      if (sent.has(m.userId)) continue;
       this.deps.publisher.publish(m.userId, {
         kind: 'live_session_changed',
         projectId,

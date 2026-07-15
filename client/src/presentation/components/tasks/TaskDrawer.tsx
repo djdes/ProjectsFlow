@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, GripVertical, Loader2, Maximize2, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
+import { Activity, AppWindow, ArrowRight, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, GripVertical, Loader2, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Share2, Trash2, UploadCloud, UserPlus, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -2295,30 +2295,36 @@ export function TaskDrawer({
                     : 'flex flex-col',
                 )}
               >
-              {/* Центрированный переключатель Обсуждение | LIVE. Без собственного border —
-                  единственный разделитель идёт по нижнему краю шапки выше. Счётчик
-                  комментариев свёрнут в триггер «Обсуждение · N». */}
-              <div className="flex justify-center px-4 py-2.5">
-                <TabsList className="h-8 gap-0.5 rounded-full bg-muted/70 p-0.5">
+              {/* Лёгкие вкладки на разделителе: без вложенных «капсул», в том же стиле,
+                  что вкладки «Активность / Аналитика» в окне проекта. */}
+              <div className="px-4 pt-2.5">
+                <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-b border-border bg-transparent p-0">
                   <TabsTrigger
                     value="discussion"
-                    className="rounded-full px-4 text-xs font-medium text-muted-foreground transition-colors data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                    className="relative -mb-px h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-0 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
+                    <MessageSquare aria-hidden className="size-3.5" />
                     Обсуждение
                     {commentCount > 0 && (
-                      <span className="ml-1 tabular-nums opacity-60">· {commentCount}</span>
+                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] leading-none tabular-nums text-muted-foreground">
+                        {commentCount}
+                      </span>
                     )}
                   </TabsTrigger>
                   <TabsTrigger
                     value="live"
-                    className="gap-1.5 rounded-full px-4 text-xs font-medium text-muted-foreground transition-colors data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                    className="relative -mb-px h-10 gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-0 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
+                    <Activity aria-hidden className="size-3.5" />
                     LIVE
                     {liveRunning && (
-                      <span
-                        aria-hidden
-                        className="size-1.5 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.7)]"
-                      />
+                      <>
+                        <span
+                          aria-hidden
+                          className="size-1.5 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.7)]"
+                        />
+                        <span className="sr-only">LIVE-сессия запущена</span>
+                      </>
                     )}
                   </TabsTrigger>
                 </TabsList>

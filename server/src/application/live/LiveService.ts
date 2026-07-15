@@ -75,10 +75,11 @@ export class LiveService {
     taskId: string,
     sessionId: string,
     status: LiveSession['status'],
+    recipientUserIds: readonly string[] = [],
   ): void {
     // Best-effort: ошибка резолва участников не должна валить запрос.
     void this.deps.broadcaster
-      .broadcastLiveSessionChanged(projectId, taskId, sessionId, status)
+      .broadcastLiveSessionChanged(projectId, taskId, sessionId, status, recipientUserIds)
       .catch(() => {});
   }
 
@@ -116,7 +117,7 @@ export class LiveService {
       baseSeq,
       ttlSeconds: this.deps.sessionTtlSeconds ?? DEFAULT_TTL_SECONDS,
     });
-    this.broadcastChanged(projectId, taskId, sessionId, 'running');
+    this.broadcastChanged(projectId, taskId, sessionId, 'running', [userId]);
     return { sessionId, baseSeq };
   }
 
@@ -255,7 +256,7 @@ export class LiveService {
       })
       .catch(() => {});
     this.deps.liveEventHub.publishEnd(taskId, input.status);
-    this.broadcastChanged(projectId, taskId, sessionId, input.status);
+    this.broadcastChanged(projectId, taskId, sessionId, input.status, [userId]);
     return { ok: true };
   }
 
