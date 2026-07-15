@@ -38,6 +38,10 @@ const CASES: Array<[name: string, md: string]> = [
   ['task list', '- [ ] открыта\n- [x] закрыта'],
   ['quote', '> цитата'],
   ['link', '[Notion](https://notion.so)'],
+  [
+    'figure image',
+    '<figure data-figure-image><img src="/api/attachments/image-1" alt="" /></figure>',
+  ],
 ];
 
 for (const [name, md] of CASES) {

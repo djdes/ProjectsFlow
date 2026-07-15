@@ -80,13 +80,14 @@ function findFigurePos(editor: Editor, uploadId: string): number | null {
   return found;
 }
 
-function updateFigure(editor: Editor, uploadId: string, attrs: Record<string, unknown>): void {
-  if (editor.isDestroyed) return;
+function updateFigure(editor: Editor, uploadId: string, attrs: Record<string, unknown>): boolean {
+  if (editor.isDestroyed) return false;
   const pos = findFigurePos(editor, uploadId);
-  if (pos === null) return;
+  if (pos === null) return false;
   const node = editor.state.doc.nodeAt(pos);
-  if (!node) return;
+  if (!node) return false;
   editor.view.dispatch(editor.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...attrs }));
+  return true;
 }
 
 function removeFigure(editor: Editor, uploadId: string): void {
@@ -96,6 +97,14 @@ function removeFigure(editor: Editor, uploadId: string): void {
   const node = editor.state.doc.nodeAt(pos);
   if (!node) return;
   editor.view.dispatch(editor.state.tr.delete(pos, pos + node.nodeSize));
+}
+
+function insertLoadedFigureAtEnd(editor: Editor, src: string): void {
+  if (editor.isDestroyed) return;
+  editor.commands.insertContentAt(editor.state.doc.content.size, [
+    { type: 'figureImage', attrs: { uploading: false, progress: 100, uploadId: null, src } },
+    { type: 'paragraph' },
+  ]);
 }
 
 // Императивный handle редактора — для действий извне (напр. кнопка «+ Подзадача»
@@ -218,6 +227,9 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
   const onUploadImageRef = React.useRef(onUploadImage);
   const onImageRemovedRef = React.useRef(onImageRemoved);
   const onImageUploadedRef = React.useRef(onImageUploaded);
+  // Пока figure-плейсхолдер не получил постоянный URL, он отсутствует в markdown. Поэтому
+  // внешняя синхронизация value не должна вызывать setContent: она бы удалила эту ноду.
+  const pendingImageUploadsRef = React.useRef(new Set<string>());
   // Набор src уже загруженных inline-картинок в документе — база для детекта удаления ноды.
   const prevImageSrcsRef = React.useRef<Set<string>>(new Set());
   React.useEffect(() => {
@@ -252,6 +264,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
     if (!editor || editor.isDestroyed || !upload) return;
     for (const file of images) {
       const uploadId = `up-${(uploadCounter += 1)}`;
+      pendingImageUploadsRef.current.add(uploadId);
       // Вставляем картинку + пустой абзац ПОСЛЕ неё и оставляем курсор в абзаце — чтобы
       // можно было сразу продолжить печатать в следующем абзаце. Без абзаца выделение
       // оставалось бы на самой картинке (NodeSelection), и первый же символ её заменял бы
@@ -268,13 +281,29 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
         try {
           const url = await upload(file, (pct) => updateFigure(editor, uploadId, { progress: pct }));
           if (url) {
-            updateFigure(editor, uploadId, { uploading: false, progress: 100, src: url });
+            // Убираем pending ДО финальной транзакции: её onUpdate уже должен отдать наружу
+            // markdown с постоянной figure. Если ноду всё же удалил сторонний transaction,
+            // не теряем загруженный файл — вставляем картинку отдельным блоком в конец.
+            pendingImageUploadsRef.current.delete(uploadId);
+            const replaced = updateFigure(editor, uploadId, {
+              uploading: false,
+              progress: 100,
+              uploadId: null,
+              src: url,
+            });
+            if (!replaced) insertLoadedFigureAtEnd(editor, url);
             // Персистим СРАЗУ: фигура теперь сериализуется в markdown (src проставлен). Без
             // этого инлайн-картинка живёт только в локальном состоянии редактора и теряется на
             // reload, а загруженный аттач «осиротеет» и вылезет отдельным файлом в «Файлы».
-            if (!editor.isDestroyed) onImageUploadedRef.current?.(editor.getMarkdown());
-          } else removeFigure(editor, uploadId);
+            if (!editor.isDestroyed && pendingImageUploadsRef.current.size === 0) {
+              onImageUploadedRef.current?.(editor.getMarkdown());
+            }
+          } else {
+            pendingImageUploadsRef.current.delete(uploadId);
+            removeFigure(editor, uploadId);
+          }
         } catch {
+          pendingImageUploadsRef.current.delete(uploadId);
           removeFigure(editor, uploadId);
         }
       })();
@@ -388,13 +417,13 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
         if (variant === 'comment') {
           if (event.shiftKey) return false; // Shift+Enter → перенос строки
           event.preventDefault();
-          onSubmitRef.current?.();
+          if (pendingImageUploadsRef.current.size === 0) onSubmitRef.current?.();
           return true;
         }
         // description: отправка по Ctrl/Cmd+Enter
         if (event.metaKey || event.ctrlKey) {
           event.preventDefault();
-          onSubmitRef.current?.();
+          if (pendingImageUploadsRef.current.size === 0) onSubmitRef.current?.();
           return true;
         }
         return false;
@@ -441,6 +470,9 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       // случае blur НЕ считаем настоящим уходом из поля.
       window.setTimeout(() => {
         if (e.isDestroyed) return;
+        // Плейсхолдер ещё не сериализуется в markdown. Blur-save в этот момент сохранил бы
+        // описание без картинки и мог бы гоняться с финальным save после upload.
+        if (pendingImageUploadsRef.current.size > 0) return;
         if (e.isFocused) return;
         const activeEl = document.activeElement;
         if (activeEl && activeEl.closest('.bg-popover')) return;
@@ -558,6 +590,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
   // Внешнее изменение value (AI-improve, сброс формы) → синхронизируем без эха onUpdate.
   React.useEffect(() => {
     if (!editor || editor.isDestroyed) return;
+    if (pendingImageUploadsRef.current.size > 0) return;
     if (value !== editor.getMarkdown()) {
       editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
       // Внешняя замена контента (AI-переработка / сброс формы) — обновляем базу картинок БЕЗ
