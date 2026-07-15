@@ -463,6 +463,28 @@ export class HttpTelegramClient implements TelegramClient {
         results.push({ kind: 'rate_limited', retryAfter: body?.parameters?.retry_after ?? 1 });
         continue;
       }
+      // Telegram occasionally rejects a valid mixed-codec document album with a confirmed 400
+      // ("failed to send message #N ... Wrong file identifier/HTTP URL specified") even though
+      // every upload works through sendDocument. This confirmed 400 means the album wasn't accepted,
+      // safe to retry its files one by one. Never do this for 5xx/transport failures: the album
+      // may already have reached Telegram and a fallback would duplicate it.
+      if (batch.length > 1 && res.status === 400) {
+        for (let index = 0; index < batch.length; index += 1) {
+          results.push(
+            ...(await this.sendDocuments({
+              chatId: input.chatId,
+              documents: [batch[index]!],
+              ...(offset === 0 && index === 0 && input.caption
+                ? { caption: input.caption }
+                : {}),
+              ...(input.replyToMessageId !== undefined
+                ? { replyToMessageId: input.replyToMessageId }
+                : {}),
+            })),
+          );
+        }
+        continue;
+      }
       results.push({
         kind: 'error',
         description: body?.description ?? `HTTP ${res.status}`,

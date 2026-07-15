@@ -154,6 +154,53 @@ test('multiple task files are uploaded together as one native document album', a
   );
 });
 
+test('confirmed album rejection falls back to native sendDocument for every file', async () => {
+  await withTelegramStub(
+    (path) =>
+      path.endsWith('/sendMediaGroup')
+        ? {
+            status: 400,
+            body: {
+              ok: false,
+              description:
+                'Bad Request: failed to send message #1 with the error message "Wrong file identifier/HTTP URL specified"',
+            },
+          }
+        : { status: 200, body: { ok: true, result: { message_id: 70 } } },
+    async (baseUrl, requests) => {
+      const client = new HttpTelegramClient('secret', baseUrl);
+      const results = await client.sendDocuments({
+        chatId: 7,
+        replyToMessageId: 44,
+        caption: '📎 Файлы задачи',
+        documents: [
+          { data: Buffer.from('video'), filename: 'ролик.mp4', mimeType: 'video/mp4' },
+          { data: Buffer.from('image'), filename: 'screen.webp', mimeType: 'image/webp' },
+        ],
+      });
+
+      assert.deepEqual(results, [
+        { kind: 'ok', messageId: 70 },
+        { kind: 'ok', messageId: 70 },
+      ]);
+      assert.deepEqual(
+        requests.map((request) => request.path),
+        [
+          '/botsecret/sendMediaGroup',
+          '/botsecret/sendDocument',
+          '/botsecret/sendDocument',
+        ],
+      );
+      assert.match(requests[1]!.body, /ролик\.mp4/);
+      assert.match(requests[2]!.body, /screen\.webp/);
+      assert.match(requests[1]!.body, /Файлы задачи/);
+      assert.doesNotMatch(requests[2]!.body, /Файлы задачи/);
+      assert.match(requests[1]!.body, /"message_id":44/);
+      assert.match(requests[2]!.body, /"message_id":44/);
+    },
+  );
+});
+
 test('rich task message references a declared photo at its paragraph position', async () => {
   await withTelegramStub(
     () => ({ status: 200, body: { ok: true, result: { message_id: 44 } } }),
