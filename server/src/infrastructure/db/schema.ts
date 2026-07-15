@@ -29,6 +29,7 @@ import type { TelegramNotificationPrefs } from '../../domain/telegram/TelegramNo
 import type { ActivityPayload } from '../../domain/activity/ActivityEvent.js';
 import type { UiPrefs } from '../../domain/user/UiPrefs.js';
 import type {
+  TelegramDraftAttachment,
   TelegramDraftOffered,
   TelegramDraftPhoto,
   TelegramDraftSegment,
@@ -153,6 +154,7 @@ export const telegramTaskDrafts = mysqlTable(
     creatorUserId: char('creator_user_id', { length: 36 }).notNull(),
     tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
     tgMessageId: bigint('tg_message_id', { mode: 'number' }),
+    sourceKey: varchar('source_key', { length: 191 }),
     taskText: text('task_text'),
     projectId: char('project_id', { length: 36 }),
     // Имя физической колонки legacy; в приложении это единственный ответственный задачи.
@@ -165,6 +167,9 @@ export const telegramTaskDrafts = mysqlTable(
     segments: json('segments').$type<TelegramDraftSegment[] | null>(),
     // Входящие Telegram-фото (крупнейший PhotoSize каждого изображения). См. db/116.
     photos: json('photos').$type<TelegramDraftPhoto[] | null>(),
+    // Generalized incoming Telegram media and its many-to-many assignment to AI segments.
+    // NULL means a legacy row whose media must be lazily read from photos; [] means no files.
+    attachments: json('attachments').$type<TelegramDraftAttachment[] | null>(),
     // Колонка канбана для ручного (одиночного) флоу; null = дефолт 'backlog'. См. db/068.
     targetStatus: varchar('target_status', { length: 20 }).$type<VisibleKanbanStatus | null>(),
     status: mysqlEnum('status', ['composing', 'confirming', 'confirmed', 'cancelled', 'expired'])
@@ -179,6 +184,7 @@ export const telegramTaskDrafts = mysqlTable(
     index('idx_ttd_creator').on(t.creatorUserId),
     index('idx_ttd_expires').on(t.expiresAt),
     index('idx_ttd_auto_create').on(t.status, t.autoCreateAt),
+    uniqueIndex('uq_ttd_source_key').on(t.sourceKey),
   ],
 );
 

@@ -38,7 +38,7 @@ import {
   splitDescription,
 } from '../../domain/task/digestFormat.js';
 import { signAttachmentUrl } from '../attachments/signedAttachmentUrl.js';
-import type { TelegramDraftPhoto } from './TelegramTaskDraftRepository.js';
+import type { TelegramDraftAttachment } from './TelegramTaskDraftRepository.js';
 import {
   buildTaskTelegramContent,
   buildTaskTelegramFallbackContent,
@@ -73,6 +73,55 @@ export type TelegramUpdate = {
       readonly height: number;
       readonly file_size?: number;
     }[];
+    readonly document?: {
+      readonly file_id: string;
+      readonly file_unique_id?: string;
+      readonly file_name?: string;
+      readonly mime_type?: string;
+      readonly file_size?: number;
+    };
+    readonly video?: {
+      readonly file_id: string;
+      readonly file_unique_id?: string;
+      readonly width: number;
+      readonly height: number;
+      readonly duration: number;
+      readonly file_name?: string;
+      readonly mime_type?: string;
+      readonly file_size?: number;
+    };
+    readonly audio?: {
+      readonly file_id: string;
+      readonly file_unique_id?: string;
+      readonly duration: number;
+      readonly file_name?: string;
+      readonly mime_type?: string;
+      readonly file_size?: number;
+    };
+    readonly voice?: {
+      readonly file_id: string;
+      readonly file_unique_id?: string;
+      readonly duration: number;
+      readonly mime_type?: string;
+      readonly file_size?: number;
+    };
+    readonly animation?: {
+      readonly file_id: string;
+      readonly file_unique_id?: string;
+      readonly width: number;
+      readonly height: number;
+      readonly duration: number;
+      readonly file_name?: string;
+      readonly mime_type?: string;
+      readonly file_size?: number;
+    };
+    readonly video_note?: {
+      readonly file_id: string;
+      readonly file_unique_id?: string;
+      readonly length: number;
+      readonly duration: number;
+      readonly file_size?: number;
+    };
     // Reply на наше сообщение → ловим как ralph-answer ИЛИ комментарий к задаче. См. spec
     // C:/www/ralph/prompts/telegram-reply-to-ralph-answer.md.
     readonly reply_to_message?: {
@@ -90,9 +139,43 @@ export type TelegramUpdate = {
   };
 };
 
+type TelegramMessage = NonNullable<TelegramUpdate['message']>;
+type TelegramAttachmentKind = TelegramDraftAttachment['kind'];
+
+function extensionForMime(mimeType: string): string {
+  const normalized = mimeType.split(';', 1)[0]?.trim().toLowerCase();
+  switch (normalized) {
+    case 'image/jpeg':
+      return 'jpg';
+    case 'image/png':
+      return 'png';
+    case 'image/gif':
+      return 'gif';
+    case 'video/mp4':
+    case 'audio/mp4':
+      return 'mp4';
+    case 'audio/mpeg':
+      return 'mp3';
+    case 'audio/ogg':
+      return 'ogg';
+    default:
+      return '';
+  }
+}
+
+function fallbackFilename(
+  kind: TelegramAttachmentKind,
+  messageId: number,
+  mimeType: string,
+): string {
+  const ext = extensionForMime(mimeType);
+  return `telegram-${kind}-${messageId}${ext ? `.${ext}` : ''}`;
+}
+
 function largestPhoto(
   photos: NonNullable<NonNullable<TelegramUpdate['message']>['photo']> | undefined,
-): TelegramDraftPhoto | null {
+  messageId: number,
+): TelegramDraftAttachment | null {
   if (!photos?.length) return null;
   const best = [...photos].sort((a, b) => {
     const sizeDiff = (b.file_size ?? 0) - (a.file_size ?? 0);
@@ -100,13 +183,108 @@ function largestPhoto(
   })[0];
   return best
     ? {
+        key: best.file_unique_id ?? best.file_id,
+        kind: 'photo',
         fileId: best.file_id,
         fileUniqueId: best.file_unique_id ?? null,
+        filename: fallbackFilename('photo', messageId, 'image/jpeg'),
+        mimeType: 'image/jpeg',
         width: best.width,
         height: best.height,
+        duration: null,
         fileSize: best.file_size ?? null,
+        targetSegmentIndexes: [],
       }
     : null;
+}
+
+function messageAttachments(msg: TelegramMessage): TelegramDraftAttachment[] {
+  const out: TelegramDraftAttachment[] = [];
+  const seen = new Set<string>();
+  const add = (attachment: TelegramDraftAttachment | null): void => {
+    if (!attachment) return;
+    const key = attachment.fileUniqueId ?? attachment.fileId;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(attachment);
+  };
+
+  add(largestPhoto(msg.photo, msg.message_id));
+
+  const addFile = (
+    kind: TelegramAttachmentKind,
+    file: {
+      readonly file_id: string;
+      readonly file_unique_id?: string;
+      readonly file_name?: string;
+      readonly mime_type?: string;
+      readonly file_size?: number;
+      readonly width?: number;
+      readonly height?: number;
+      readonly duration?: number;
+    } | undefined,
+    fallbackMimeType: string,
+  ): void => {
+    if (!file) return;
+    const mimeType = file.mime_type?.trim() || fallbackMimeType;
+    add({
+      key: file.file_unique_id ?? file.file_id,
+      kind,
+      fileId: file.file_id,
+      fileUniqueId: file.file_unique_id ?? null,
+      filename: file.file_name?.trim() || fallbackFilename(kind, msg.message_id, mimeType),
+      mimeType,
+      fileSize: file.file_size ?? null,
+      width: file.width ?? null,
+      height: file.height ?? null,
+      duration: file.duration ?? null,
+      targetSegmentIndexes: [],
+    });
+  };
+
+  // Telegram also exposes an animation as `document` for backwards compatibility. Add the
+  // richer animation field first and deduplicate by file_unique_id/file_id.
+  addFile('animation', msg.animation, msg.animation?.file_name?.toLowerCase().endsWith('.gif')
+    ? 'image/gif'
+    : 'video/mp4');
+  addFile('video', msg.video, 'video/mp4');
+  addFile('audio', msg.audio, 'audio/mpeg');
+  addFile('voice', msg.voice, 'audio/ogg');
+  if (msg.video_note) {
+    add({
+      key: msg.video_note.file_unique_id ?? msg.video_note.file_id,
+      kind: 'video_note',
+      fileId: msg.video_note.file_id,
+      fileUniqueId: msg.video_note.file_unique_id ?? null,
+      filename: fallbackFilename('video_note', msg.message_id, 'video/mp4'),
+      mimeType: 'video/mp4',
+      fileSize: msg.video_note.file_size ?? null,
+      width: msg.video_note.length,
+      height: msg.video_note.length,
+      duration: msg.video_note.duration,
+      targetSegmentIndexes: [],
+    });
+  }
+  addFile('document', msg.document, 'application/octet-stream');
+  return out;
+}
+
+function neutralMediaText(attachments: readonly TelegramDraftAttachment[]): string {
+  if (attachments.length !== 1) return 'Файлы из Telegram';
+  switch (attachments[0]?.kind) {
+    case 'photo':
+      return 'Фото из Telegram';
+    case 'video':
+    case 'video_note':
+      return 'Видео из Telegram';
+    case 'audio':
+    case 'voice':
+      return 'Аудио из Telegram';
+    case 'animation':
+      return 'Анимация из Telegram';
+    default:
+      return 'Файл из Telegram';
+  }
 }
 
 type Deps = {
@@ -163,9 +341,13 @@ export class HandleTelegramWebhook {
   private readonly mediaGroups = new Map<
     string,
     {
-      message: NonNullable<TelegramUpdate['message']>;
-      photos: Map<string, TelegramDraftPhoto>;
+      message: TelegramMessage;
+      attachments: Map<
+        string,
+        { readonly attachment: TelegramDraftAttachment; readonly messageId: number }
+      >;
       timer: ReturnType<typeof setTimeout>;
+      waiters: Array<{ readonly resolve: () => void; readonly reject: (error: unknown) => void }>;
     }
   >();
 
@@ -199,17 +381,21 @@ export class HandleTelegramWebhook {
 
     const msg = update.message;
     if (!msg || !msg.from) return;
-    const photo = largestPhoto(msg.photo);
-    if (msg.media_group_id && photo) {
-      this.queueMediaGroup(msg, photo);
-      return;
+    const attachments = messageAttachments(msg);
+    if (msg.media_group_id && attachments.length > 0) {
+      return this.queueMediaGroup(msg, attachments);
     }
-    return this.handleMessage(msg, photo ? [photo] : []);
+    return this.handleMessage(
+      msg,
+      attachments,
+      `m:${msg.chat.id}:${msg.message_id}`,
+    );
   }
 
   private async handleMessage(
-    msg: NonNullable<TelegramUpdate['message']>,
-    photos: readonly TelegramDraftPhoto[],
+    msg: TelegramMessage,
+    attachments: readonly TelegramDraftAttachment[],
+    sourceKey: string,
   ): Promise<void> {
     if (!msg.from) return;
 
@@ -232,12 +418,13 @@ export class HandleTelegramWebhook {
       if (bu) text = text.replace(new RegExp('@' + bu, 'ig'), '').replace(/\s+/g, ' ').trim();
     }
 
-    // Стикеры/геолокации/служебные message без текста и без photo по-прежнему игнорируем.
-    if (!isGroup && text.length === 0 && photos.length === 0) return;
+    // Стикеры/геолокации/служебные message без текста и без поддерживаемого файла игнорируем.
+    if (!isGroup && text.length === 0 && attachments.length === 0) return;
 
-    // В личке фото может прийти без подписи. Это всё равно полноценная задача: даём ей
-    // нейтральный текст, а изображение добавим отдельным блоком в описание.
-    if (text.length === 0 && photos.length > 0) text = 'Фото из Telegram';
+    // Медиа может прийти без caption. Это всё равно полноценная задача: даём ей нейтральный
+    // текст, а бинарник сохраняем как обычное вложение. В группе делаем это после удаления
+    // @упоминания, чтобы «@Bot + файл» не превратился в меню задач.
+    if (text.length === 0 && attachments.length > 0) text = neutralMediaText(attachments);
 
     // Reply→ralph-answer / комментарий ловим ДО командного роутинга — юзер может reply'нуть
     // просто текстом, без слэш-префикса (типичный TG UX).
@@ -249,7 +436,7 @@ export class HandleTelegramWebhook {
     // «по ответственным» в охвате ВЛАДЕЛЬЦА привязки группы (telegram_group_owners).
     // Сюда попадаем только если бот был упомянут/reply'нут (гейт isGroup выше), а после
     // вырезания @упоминания текст пуст. Упоминание с текстом — ниже, composer как раньше.
-    if (isGroup && text.length === 0) {
+    if (isGroup && text.length === 0 && attachments.length === 0) {
       return this.handleGroupAssigneeMenu(chatId);
     }
 
@@ -276,42 +463,83 @@ export class HandleTelegramWebhook {
         senderName: formatSenderName(msg.from),
         groupTitle: msg.chat.title ?? null,
       };
-      return this.deps.composer.startFromMessage(tgUserId, chatId, text, groupCtx, photos);
+      return this.deps.composer.startFromMessage(tgUserId, chatId, text, groupCtx, attachments, {
+        sourceKey,
+        background: true,
+      });
     }
-    return this.deps.composer.startFromMessage(tgUserId, chatId, text, undefined, photos);
+    return this.deps.composer.startFromMessage(tgUserId, chatId, text, undefined, attachments, {
+      sourceKey,
+      background: true,
+    });
   }
 
-  // Telegram присылает альбом как несколько отдельных update с общим media_group_id, причём
-  // caption обычно есть только у первого. Небольшой debounce собирает их в один черновик.
+  // Telegram присылает альбом как несколько update с общим media_group_id, причём caption
+  // обычно есть только у одного. Небольшой debounce собирает фото/видео/аудио/документы в один
+  // durable intake. Promise каждого update завершается только после handleMessage: вызывающий
+  // webhook/poller может подтверждать update уже после сохранения черновика.
   private queueMediaGroup(
-    msg: NonNullable<TelegramUpdate['message']>,
-    photo: TelegramDraftPhoto,
-  ): void {
-    if (!msg.from || !msg.media_group_id) return;
+    msg: TelegramMessage,
+    attachments: readonly TelegramDraftAttachment[],
+  ): Promise<void> {
+    if (!msg.from || !msg.media_group_id) return Promise.resolve();
     const key = `${msg.chat.id}:${msg.from.id}:${msg.media_group_id}`;
-    const current = this.mediaGroups.get(key);
-    if (current) {
-      clearTimeout(current.timer);
-      current.photos.set(photo.fileUniqueId ?? photo.fileId, photo);
-      if (!current.message.caption && msg.caption) current.message = msg;
-      current.timer = setTimeout(() => this.flushMediaGroup(key), 1_000);
-      return;
-    }
-    const entry = {
-      message: msg,
-      photos: new Map([[photo.fileUniqueId ?? photo.fileId, photo]]),
-      timer: setTimeout(() => this.flushMediaGroup(key), 1_000),
-    };
-    this.mediaGroups.set(key, entry);
+    return new Promise<void>((resolve, reject) => {
+      const current = this.mediaGroups.get(key);
+      if (current) {
+        clearTimeout(current.timer);
+        for (const attachment of attachments) {
+          const attachmentKey = attachment.fileUniqueId ?? attachment.fileId;
+          if (!current.attachments.has(attachmentKey)) {
+            current.attachments.set(attachmentKey, {
+              attachment,
+              messageId: msg.message_id,
+            });
+          }
+        }
+        if (!current.message.caption && msg.caption) current.message = msg;
+        current.waiters.push({ resolve, reject });
+        current.timer = setTimeout(() => void this.flushMediaGroup(key), 1_000);
+        return;
+      }
+      const media = new Map<
+        string,
+        { readonly attachment: TelegramDraftAttachment; readonly messageId: number }
+      >();
+      for (const attachment of attachments) {
+        media.set(attachment.fileUniqueId ?? attachment.fileId, {
+          attachment,
+          messageId: msg.message_id,
+        });
+      }
+      const entry = {
+        message: msg,
+        attachments: media,
+        timer: setTimeout(() => void this.flushMediaGroup(key), 1_000),
+        waiters: [{ resolve, reject }],
+      };
+      this.mediaGroups.set(key, entry);
+    });
   }
 
-  private flushMediaGroup(key: string): void {
+  private async flushMediaGroup(key: string): Promise<void> {
     const entry = this.mediaGroups.get(key);
     if (!entry) return;
     this.mediaGroups.delete(key);
-    void this.handleMessage(entry.message, [...entry.photos.values()]).catch((err) => {
+    const attachments = [...entry.attachments.values()]
+      .sort((a, b) => a.messageId - b.messageId)
+      .map(({ attachment }) => attachment);
+    try {
+      await this.handleMessage(
+        entry.message,
+        attachments,
+        `g:${key}`,
+      );
+      for (const waiter of entry.waiters) waiter.resolve();
+    } catch (err) {
       console.warn('[tg-webhook] media group failed:', err);
-    });
+      for (const waiter of entry.waiters) waiter.reject(err);
+    }
   }
 
   // Reply на наше сообщение → ralph-answer комментарий в задаче. Шаги:

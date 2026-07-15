@@ -23,6 +23,35 @@ export type TelegramDraftPhoto = {
   readonly fileSize: number | null;
 };
 
+// Generalized incoming Telegram media kept in a draft until the user confirms task creation.
+// Only Telegram identifiers and metadata are persisted here; binaries are downloaded immediately
+// before UploadTaskAttachment runs. targetSegmentIndexes implements a many-to-many file-to-task
+// assignment for AI-composed messages containing several task segments.
+export type TelegramDraftAttachmentKind =
+  | 'photo'
+  | 'document'
+  | 'video'
+  | 'audio'
+  | 'voice'
+  | 'animation'
+  | 'video_note';
+
+export type TelegramDraftAttachment = {
+  // Stable inside one draft. Telegram identifiers are intentionally not put into callback_data;
+  // the composer addresses attachments by their array index to stay below Telegram's 64-byte cap.
+  readonly key: string;
+  readonly kind: TelegramDraftAttachmentKind;
+  readonly fileId: string;
+  readonly fileUniqueId: string | null;
+  readonly filename: string;
+  readonly mimeType: string;
+  readonly fileSize: number | null;
+  readonly width: number | null;
+  readonly height: number | null;
+  readonly duration: number | null;
+  readonly targetSegmentIndexes: readonly number[];
+};
+
 // Предложенные варианты в карточке конструктора: index в callback_data → id здесь.
 // offered.projects[idx] / offered.members[idx] резолвят кнопку в UUID без раздувания
 // callback_data (UUID = 36 символов, не влезает рядом с draft id в 64 байта).
@@ -59,12 +88,16 @@ export type TelegramTaskDraft = {
   readonly creatorUserId: string;
   readonly tgChatId: number;
   readonly tgMessageId: number | null;
+  // Globally unique normalized Telegram source, for example a chat/message or chat/media-group
+  // tuple. null is retained for legacy drafts created before inbound idempotency was introduced.
+  readonly sourceKey: string | null;
   readonly taskText: string | null;
   readonly projectId: string | null;
   readonly assigneeUserId: string | null;
   readonly offered: TelegramDraftOffered | null;
   readonly segments: TelegramDraftSegment[] | null;
   readonly photos: TelegramDraftPhoto[];
+  readonly attachments: TelegramDraftAttachment[];
   // Колонка канбана для РУЧНОГО флоу (одиночная задача). null = дефолт 'backlog'.
   // Для AI-флоу колонка хранится per-segment в segments[].targetStatus. См. db/068.
   readonly targetStatus: VisibleKanbanStatus | null;
@@ -80,12 +113,14 @@ export type CreateTelegramTaskDraftInput = {
   readonly creatorUserId: string;
   readonly tgChatId: number;
   readonly tgMessageId?: number | null;
+  readonly sourceKey?: string | null;
   readonly taskText: string | null;
   readonly projectId?: string | null;
   readonly assigneeUserId?: string | null;
   readonly offered?: TelegramDraftOffered | null;
   readonly segments?: TelegramDraftSegment[] | null;
   readonly photos?: readonly TelegramDraftPhoto[];
+  readonly attachments?: readonly TelegramDraftAttachment[];
   readonly targetStatus?: VisibleKanbanStatus | null;
   // Срок жизни в секундах от now. Репо считает expires_at = now + ttl.
   readonly ttlSeconds: number;
@@ -101,7 +136,9 @@ export type TelegramTaskDraftPatch = {
   readonly offered?: TelegramDraftOffered | null;
   readonly segments?: TelegramDraftSegment[] | null;
   readonly photos?: readonly TelegramDraftPhoto[];
+  readonly attachments?: readonly TelegramDraftAttachment[];
   readonly tgMessageId?: number | null;
+  readonly sourceKey?: string | null;
   readonly targetStatus?: VisibleKanbanStatus | null;
   readonly status?: TelegramTaskDraftStatus;
 };
@@ -111,7 +148,13 @@ export interface TelegramTaskDraftRepository {
   // NULL если черновик не найден ИЛИ истёк (expires_at < now). Истёкшие не удаляем здесь —
   // это делает deleteExpired (фоновая чистка), но трактуем как отсутствующие.
   getById(id: string): Promise<TelegramTaskDraft | null>;
+  // Reads regardless of expiry/status. A repeated Telegram update must stay idempotent while its
+  // draft row exists, including after that draft has already been confirmed or cancelled.
+  findBySourceKey(sourceKey: string): Promise<TelegramTaskDraft | null>;
   patch(id: string, patch: TelegramTaskDraftPatch): Promise<TelegramTaskDraft | null>;
+  // Atomic guard for AI enrichment: auto-create/cancel may change the lifecycle status while
+  // the model is running, so a stale result must never overwrite a processed draft/card.
+  patchComposing(id: string, patch: TelegramTaskDraftPatch): Promise<TelegramTaskDraft | null>;
   listDueForAutoCreate(limit: number): Promise<TelegramTaskDraft[]>;
   // Атомарный composing→confirming. dueOnly защищает фоновый тик от раннего запуска.
   claimForConfirmation(id: string, dueOnly: boolean): Promise<TelegramTaskDraft | null>;

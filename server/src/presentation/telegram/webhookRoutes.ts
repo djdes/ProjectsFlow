@@ -11,8 +11,7 @@ type Deps = {
 };
 
 // /api/telegram/webhook — без requireAuth, т.к. зовёт Telegram-сервер. Защита через
-// secret_token header (https://core.telegram.org/bots/api#setwebhook). Всегда отвечаем
-// 200 — Telegram retry'ит ВСЁ что не 2xx, лавиной; ошибку обработки логируем, не отдаём.
+// secret_token header (https://core.telegram.org/bots/api#setwebhook).
 export function telegramWebhookRouter(deps: Deps): Router {
   const router = Router();
 
@@ -25,14 +24,18 @@ export function telegramWebhookRouter(deps: Deps): Router {
         return;
       }
     }
-    // Не блокируем response — handler гоняем fire-and-forget.
-    res.status(200).json({ ok: true });
+    // Telegram treats a 2xx response as acknowledgement. Wait until durable intake finishes.
+    // On a transient DB/handler failure return 503 so Telegram retries; source_key makes that
+    // delivery idempotent after a successful insert. A silent 200 here would lose the task.
     try {
       const update = req.body as TelegramUpdate;
       await deps.handler.execute(update);
     } catch (err) {
       console.warn('[tg-webhook] handler failed', err);
+      res.status(503).json({ ok: false });
+      return;
     }
+    res.status(200).json({ ok: true });
   });
 
   return router;

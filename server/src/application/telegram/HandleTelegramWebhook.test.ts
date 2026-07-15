@@ -4,13 +4,18 @@ import { HandleTelegramWebhook, type TelegramUpdate } from './HandleTelegramWebh
 
 // Фокусный тест: гейт групповых чатов (бот реагирует только на обращение к нему).
 // Минимальные in-memory стабы (tsx + node:test).
-function makeHarness(opts?: { senderUserId?: string | null; boundOwner?: string | null }) {
+function makeHarness(opts?: {
+  senderUserId?: string | null;
+  boundOwner?: string | null;
+  composerGate?: Promise<void>;
+}) {
   const composerCalls: {
     tgUserId: number;
     chatId: number;
     text: string;
     groupCtx: any;
-    photos: any[];
+    attachments: any[];
+    options: any;
   }[] = [];
   const sent: { chatId: number; text: string }[] = [];
   const bindCalls: { tgChatId: number; ownerUserId: string }[] = [];
@@ -53,9 +58,11 @@ function makeHarness(opts?: { senderUserId?: string | null; boundOwner?: string 
         chatId: number,
         text: string,
         groupCtx?: any,
-        photos: any[] = [],
+        attachments: any[] = [],
+        options?: any,
       ) {
-        composerCalls.push({ tgUserId, chatId, text, groupCtx, photos });
+        composerCalls.push({ tgUserId, chatId, text, groupCtx, attachments, options });
+        await opts?.composerGate;
       },
       async handleCallback() {},
       async handleInlineQuery() {},
@@ -124,7 +131,13 @@ test('личное фото с подписью передаётся в конс
   });
   assert.equal(x.composerCalls.length, 1);
   assert.equal(x.composerCalls[0]!.text, 'Проверить этот экран');
-  assert.equal(x.composerCalls[0]!.photos[0]!.fileId, 'large');
+  assert.deepEqual(x.composerCalls[0]!.options, {
+    sourceKey: 'm:500:11',
+    background: true,
+  });
+  assert.equal(x.composerCalls[0]!.attachments[0]!.fileId, 'large');
+  assert.equal(x.composerCalls[0]!.attachments[0]!.kind, 'photo');
+  assert.equal(x.composerCalls[0]!.attachments[0]!.filename, 'telegram-photo-11.jpg');
 });
 
 test('личный альбом собирается в одну задачу со всеми фото', async () => {
@@ -134,7 +147,7 @@ test('личный альбом собирается в одну задачу с
     chat: { id: 500, type: 'private' },
     media_group_id: 'album-1',
   } as const;
-  await x.h.execute({
+  const first = x.h.execute({
     update_id: 3,
     message: {
       ...base,
@@ -143,7 +156,7 @@ test('личный альбом собирается в одну задачу с
       photo: [{ file_id: 'one', file_unique_id: 'one-u', width: 800, height: 600 }],
     },
   });
-  await x.h.execute({
+  const second = x.h.execute({
     update_id: 4,
     message: {
       ...base,
@@ -151,13 +164,262 @@ test('личный альбом собирается в одну задачу с
       photo: [{ file_id: 'two', file_unique_id: 'two-u', width: 800, height: 600 }],
     },
   });
-  await new Promise((resolve) => setTimeout(resolve, 1_100));
+  await Promise.all([first, second]);
   assert.equal(x.composerCalls.length, 1);
   assert.equal(x.composerCalls[0]!.text, 'Два экрана');
   assert.deepEqual(
-    x.composerCalls[0]!.photos.map((p) => p.fileId),
+    x.composerCalls[0]!.attachments.map((p) => p.fileId),
     ['one', 'two'],
   );
+  assert.deepEqual(x.composerCalls[0]!.options, {
+    sourceKey: 'g:500:111:album-1',
+    background: true,
+  });
+});
+
+test('media-group execute resolves only after durable composer intake completes', async () => {
+  let releaseComposer!: () => void;
+  const composerGate = new Promise<void>((resolve) => {
+    releaseComposer = resolve;
+  });
+  const x = makeHarness({ senderUserId: 'u1', composerGate });
+  let settled = false;
+  const execution = x.h
+    .execute({
+      update_id: 5,
+      message: {
+        message_id: 14,
+        from: { id: 111, first_name: 'U' },
+        chat: { id: 500, type: 'private' },
+        media_group_id: 'durable-1',
+        caption: 'Сохранить надёжно',
+        photo: [{ file_id: 'durable-photo', width: 800, height: 600 }],
+      },
+    })
+    .finally(() => {
+      settled = true;
+    });
+
+  await new Promise((resolve) => setTimeout(resolve, 1_050));
+  assert.equal(x.composerCalls.length, 1, 'debounce flushed into composer');
+  assert.equal(settled, false, 'update must not be acknowledged before durable intake');
+  releaseComposer();
+  await execution;
+  assert.equal(settled, true);
+});
+
+test('document/video/audio/voice/animation/video_note сохраняют Telegram-метаданные', async () => {
+  const x = makeHarness({ senderUserId: 'u1' });
+  const base = {
+    from: { id: 111, first_name: 'U' },
+    chat: { id: 500, type: 'private' },
+  } as const;
+  const updates: TelegramUpdate[] = [
+    {
+      update_id: 10,
+      message: {
+        ...base,
+        message_id: 20,
+        caption: 'Документ',
+        document: {
+          file_id: 'doc-1',
+          file_unique_id: 'doc-u',
+          file_name: 'Техническое задание.pdf',
+          mime_type: 'application/pdf',
+          file_size: 123_456,
+        },
+      },
+    },
+    {
+      update_id: 11,
+      message: {
+        ...base,
+        message_id: 21,
+        caption: 'Видео',
+        video: {
+          file_id: 'video-1',
+          file_unique_id: 'video-u',
+          file_name: 'demo.mp4',
+          mime_type: 'video/mp4',
+          file_size: 234_567,
+          width: 1920,
+          height: 1080,
+          duration: 42,
+        },
+      },
+    },
+    {
+      update_id: 12,
+      message: {
+        ...base,
+        message_id: 22,
+        caption: 'Аудио',
+        audio: {
+          file_id: 'audio-1',
+          file_unique_id: 'audio-u',
+          file_name: 'track.mp3',
+          mime_type: 'audio/mpeg',
+          file_size: 345_678,
+          duration: 180,
+        },
+      },
+    },
+    {
+      update_id: 13,
+      message: {
+        ...base,
+        message_id: 23,
+        voice: {
+          file_id: 'voice-1',
+          file_unique_id: 'voice-u',
+          mime_type: 'audio/ogg',
+          file_size: 456_789,
+          duration: 9,
+        },
+      },
+    },
+    {
+      update_id: 14,
+      message: {
+        ...base,
+        message_id: 24,
+        caption: 'Анимация',
+        animation: {
+          file_id: 'animation-1',
+          file_unique_id: 'animation-u',
+          file_name: 'demo.gif',
+          mime_type: 'image/gif',
+          file_size: 567_890,
+          width: 640,
+          height: 360,
+          duration: 5,
+        },
+        // Telegram exposes the same animation as document for backwards compatibility.
+        document: {
+          file_id: 'animation-1',
+          file_unique_id: 'animation-u',
+          file_name: 'demo.gif',
+          mime_type: 'image/gif',
+          file_size: 567_890,
+        },
+      },
+    },
+    {
+      update_id: 15,
+      message: {
+        ...base,
+        message_id: 25,
+        video_note: {
+          file_id: 'note-1',
+          file_unique_id: 'note-u',
+          length: 384,
+          duration: 7,
+          file_size: 678_901,
+        },
+      },
+    },
+  ];
+
+  for (const update of updates) await x.h.execute(update);
+
+  assert.equal(x.composerCalls.length, 6);
+  assert.deepEqual(
+    x.composerCalls.map((call) => call.attachments.map((attachment) => attachment.kind)),
+    [['document'], ['video'], ['audio'], ['voice'], ['animation'], ['video_note']],
+  );
+  assert.deepEqual(x.composerCalls[0]!.attachments[0], {
+    key: 'doc-u',
+    kind: 'document',
+    fileId: 'doc-1',
+    fileUniqueId: 'doc-u',
+    filename: 'Техническое задание.pdf',
+    mimeType: 'application/pdf',
+    fileSize: 123_456,
+    width: null,
+    height: null,
+    duration: null,
+    targetSegmentIndexes: [],
+  });
+  assert.deepEqual(
+    {
+      filename: x.composerCalls[1]!.attachments[0]!.filename,
+      mimeType: x.composerCalls[1]!.attachments[0]!.mimeType,
+      width: x.composerCalls[1]!.attachments[0]!.width,
+      height: x.composerCalls[1]!.attachments[0]!.height,
+      duration: x.composerCalls[1]!.attachments[0]!.duration,
+    },
+    { filename: 'demo.mp4', mimeType: 'video/mp4', width: 1920, height: 1080, duration: 42 },
+  );
+  assert.equal(x.composerCalls[3]!.text, 'Аудио из Telegram');
+  assert.equal(x.composerCalls[3]!.attachments[0]!.filename, 'telegram-voice-23.ogg');
+  assert.equal(x.composerCalls[4]!.attachments.length, 1, 'animation/document duplicate');
+  assert.equal(x.composerCalls[5]!.text, 'Видео из Telegram');
+  assert.equal(x.composerCalls[5]!.attachments[0]!.width, 384);
+  assert.equal(x.composerCalls[5]!.attachments[0]!.height, 384);
+});
+
+test('generalized media group uses caption from any update, sorts and deduplicates files', async () => {
+  const x = makeHarness({ senderUserId: 'u1' });
+  const base = {
+    from: { id: 111, first_name: 'U' },
+    chat: { id: 500, type: 'private' },
+    media_group_id: 'mixed-1',
+  } as const;
+
+  // Arrival order is intentionally reversed. Both updates use the same unique id once, so the
+  // duplicate must not create a third attachment.
+  const later = x.h.execute({
+    update_id: 31,
+    message: {
+      ...base,
+      message_id: 32,
+      caption: 'Проверить материалы',
+      document: {
+        file_id: 'doc-2',
+        file_unique_id: 'doc-2-u',
+        file_name: 'brief.pdf',
+        mime_type: 'application/pdf',
+        file_size: 20,
+      },
+    },
+  });
+  const earlier = x.h.execute({
+    update_id: 30,
+    message: {
+      ...base,
+      message_id: 31,
+      video: {
+        file_id: 'video-2',
+        file_unique_id: 'video-2-u',
+        file_name: 'walkthrough.mp4',
+        mime_type: 'video/mp4',
+        file_size: 10,
+        width: 1280,
+        height: 720,
+        duration: 12,
+      },
+      document: {
+        file_id: 'doc-duplicate-path',
+        file_unique_id: 'doc-2-u',
+        file_name: 'brief-copy.pdf',
+        mime_type: 'application/pdf',
+        file_size: 20,
+      },
+    },
+  });
+
+  await Promise.all([later, earlier]);
+
+  assert.equal(x.composerCalls.length, 1);
+  assert.equal(x.composerCalls[0]!.text, 'Проверить материалы');
+  assert.deepEqual(
+    x.composerCalls[0]!.attachments.map((attachment) => attachment.kind),
+    ['video', 'document'],
+  );
+  assert.deepEqual(x.composerCalls[0]!.options, {
+    sourceKey: 'g:500:111:mixed-1',
+    background: true,
+  });
 });
 
 test('группа: @упоминание + текст → задача из очищенного текста', async () => {
