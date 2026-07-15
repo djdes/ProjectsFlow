@@ -88,6 +88,16 @@ test('внешнее сохранение во время upload не удаля
   const images = host.querySelectorAll<HTMLImageElement>('[data-figure-image] img');
   assert.equal(images.length, 2);
   assert.equal(images[0]?.getAttribute('src'), '/api/attachments/image-1');
+  assert.equal(
+    images[0]?.getAttribute('draggable'),
+    'true',
+    'the screenshot itself moves as a block',
+  );
+  assert.equal(
+    images[0]?.hasAttribute('data-drag-handle'),
+    true,
+    'Tiptap receives direct image drag events',
+  );
   assert.equal(uploadedCallbacks, 1, 'альбом сохраняется одним финальным markdown');
   assert.match(uploadedMarkdown, /<figure data-figure-image>/);
   assert.match(uploadedMarkdown, /src="\/api\/attachments\/image-1"/);

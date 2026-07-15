@@ -52,14 +52,18 @@ export function FigureImageView({ node, deleteNode }: NodeViewProps): React.Reac
           <img
             src={displaySrc}
             alt=""
-            draggable={false}
+            // The image itself is a drag handle for its atom node. The global six-dot handle also
+            // remains available, but users naturally grab the screenshot body when moving it.
+            // Tiptap converts this drag into a NodeSelection, so the whole figure moves as one block.
+            data-drag-handle=""
+            draggable
             onLoad={() => setFailedSrc('')}
             onError={() => setFailedSrc(displaySrc)}
             onClick={() => {
               if (!uploading) setLightbox(true);
             }}
             className={`my-0 block max-h-[70vh] max-w-full rounded-xl border border-border object-contain ${
-              uploading ? 'cursor-default opacity-90' : 'cursor-zoom-in'
+              uploading ? 'cursor-grabbing opacity-90' : 'cursor-grab active:cursor-grabbing'
             }`}
           />
           {uploading ? (
