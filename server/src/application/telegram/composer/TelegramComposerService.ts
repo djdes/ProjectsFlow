@@ -1657,7 +1657,7 @@ export class TelegramComposerService {
       rows.push(nav);
     }
     rows.push([
-      { text: '✅ Ко всем', callback_data: `fg:${draft.id}:${file}:a:p${page}` },
+      { text: '🔗 Ко всем', callback_data: `fg:${draft.id}:${file}:a:p${page}` },
       { text: '🧹 Очистить', callback_data: `fg:${draft.id}:${file}:n:p${page}` },
     ]);
     const filesNav: { text: string; callback_data: string }[] = [];

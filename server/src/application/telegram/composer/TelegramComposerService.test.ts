@@ -937,6 +937,9 @@ test('5 задач и 2 файла: каждый файл назначается
   await h.service.handleCallback(cq(`fs:${draftId}:0:p0`));
   const picker = h.edits[h.edits.length - 1]!;
   assert.match(picker.text, /К каким задачам прикрепить/);
+  const pickerButtons = picker.replyMarkup.inline_keyboard.flat();
+  assert.ok(pickerButtons.some((button: any) => button.text === '🔗 Ко всем'));
+  assert.ok(!pickerButtons.some((button: any) => button.text === '✅ Ко всем'));
   for (const row of picker.replyMarkup.inline_keyboard) {
     for (const button of row) {
       if (button.callback_data) assert.ok(Buffer.byteLength(button.callback_data, 'utf8') <= 64);
