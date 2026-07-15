@@ -858,6 +858,8 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   users: userRepo,
   members: projectMemberRepo,
   tasks: taskRepo,
+  attachments: taskAttachmentRepo,
+  attachmentStorage,
   client: telegramClient,
   appUrl: appBaseUrl,
   signingSecret: repoAccessSecret,

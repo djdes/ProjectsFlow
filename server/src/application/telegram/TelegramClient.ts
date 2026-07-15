@@ -32,13 +32,28 @@ export type SendMessageInput = {
   readonly replyMarkup?: unknown;
 };
 
-// Bot API 10.1 sendRichMessage: «богатая» нативная вёрстка (заголовки h1..h6, таблицы
-// с рамками/чередованием, вложенные списки, b/i, blockquote, pre) — ВЫДЕЛЯЕМЫЙ текст, не
-// картинка. На вход идёт HTML-строка (Telegram сам парсит её в блоки). Так печатает Hermes.
+// Bot API 10.2 rich message. Declared media can be referenced from the HTML with
+// tg://photo, tg://video, or tg://audio links and rendered between text blocks.
 export type SendRichMessageInput = {
   readonly chatId: number;
   readonly html: string;
+  readonly media?: readonly SendRichMessageMediaInput[];
   readonly replyMarkup?: unknown;
+};
+
+export type SendRichMessageMediaInput = {
+  readonly id: string;
+  readonly kind: 'photo' | 'video' | 'audio' | 'animation' | 'voice_note';
+  readonly url: string;
+};
+
+export type SendAttachmentInput = {
+  readonly chatId: number;
+  readonly url?: string;
+  readonly data?: Buffer;
+  readonly filename: string;
+  readonly mimeType: string;
+  readonly caption?: string;
 };
 
 export type EditMessageTextInput = {
@@ -134,9 +149,8 @@ export type TelegramUpdate = {
 export interface TelegramClient {
   // Возвращает дискриминированный результат — caller сам решает что логировать/повторять.
   sendMessage(input: SendMessageInput): Promise<SendMessageResult>;
-  // Bot API 10.1 sendRichMessage — нативная «богатая» вёрстка HTML-строкой (rich_message.html).
-  // Тот же дискриминированный результат. Опционально (тестовые фейки/старые API могут не иметь;
-  // caller делает фоллбэк на sendMessage при отсутствии/ошибке метода).
+  // Native rich HTML with optional in-flow media. Callers fall back to regular messages when
+  // a test client, relay, or Telegram deployment doesn't support the method yet.
   sendRichMessage?(input: SendRichMessageInput): Promise<SendMessageResult>;
   // Редактирование ранее отправленного сообщения (текст + inline-кнопки). Best-effort —
   // используется конструктором чтобы превратить карточку в «✅ Создано» и убрать кнопки.
@@ -172,6 +186,9 @@ export interface TelegramClient {
   // photoUrls — публично доступные (подписанные) ссылки; Telegram сам их выкачивает.
   // Best-effort (картинки — дополнение к тексту). Опционально: тестовые фейки могут не иметь.
   sendPhotos?(chatId: number, photoUrls: readonly string[]): Promise<void>;
+  // Send a native task attachment. Implementations choose photo, audio, video, animation, or
+  // document by MIME and may upload bytes directly or let Telegram fetch a signed URL.
+  sendAttachment?(input: SendAttachmentInput): Promise<SendMessageResult>;
 }
 
 // Набор update-типов, которые мы реально обрабатываем. Используется в allowed_updates

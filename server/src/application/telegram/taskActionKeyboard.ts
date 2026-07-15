@@ -24,6 +24,7 @@ export function taskActionKeyboard(taskId: string): InlineKeyboardMarkup {
         { text: '✅ Завершить', callback_data: `nd:${taskId}` },
         { text: '💬 Комментировать', callback_data: `nc:${taskId}` },
       ],
+      [{ text: '👁 Посмотреть задачу', callback_data: `bt:t:${taskId}` }],
     ],
   };
 }

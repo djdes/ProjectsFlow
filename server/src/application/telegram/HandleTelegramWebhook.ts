@@ -5,6 +5,8 @@ import type { TelegramGroupOwnerRepository } from './TelegramGroupOwnerRepositor
 import type { UserRepository } from '../user/UserRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
+import type { TaskAttachmentRepository } from '../task/TaskAttachmentRepository.js';
+import type { AttachmentStorage } from '../task/AttachmentStorage.js';
 import type { CreateTaskComment } from '../task/CreateTaskComment.js';
 import type { MoveTask } from '../task/MoveTask.js';
 import type { MaybeReopenForClarification } from '../task/MaybeReopenForClarification.js';
@@ -28,15 +30,18 @@ import {
 } from '../../domain/telegram/TelegramNotificationPrefs.js';
 import {
   stripAllMarkdown,
-  markdownToRich,
   extractImageSrcs,
   splitDescription,
 } from '../../domain/task/digestFormat.js';
 import { signAttachmentUrl } from '../attachments/signedAttachmentUrl.js';
 import type { TelegramDraftPhoto } from './TelegramTaskDraftRepository.js';
+import {
+  buildTaskTelegramContent,
+  buildTaskTelegramRichContent,
+} from './taskTelegramContent.js';
 
-// Подписанные URL картинок задачи (открытие задачи в TG → альбом) живут 14 дней.
-const TG_IMG_URL_TTL_SECONDS = 14 * 24 * 60 * 60;
+// Signed task attachment URLs stay valid long enough for Telegram to fetch and cache media.
+const TG_ATTACHMENT_URL_TTL_SECONDS = 14 * 24 * 60 * 60;
 
 // Минимальный набор полей TG Update, которые мы реально обрабатываем (allowed_updates
 // = message + callback_query + inline_query). Структура совпадает с Telegram Bot API:
@@ -103,9 +108,11 @@ type Deps = {
   readonly users: UserRepository;
   readonly members: ProjectMemberRepository;
   readonly tasks: TaskRepository;
+  readonly attachments: TaskAttachmentRepository;
+  readonly attachmentStorage: Pick<AttachmentStorage, 'read'>;
   readonly client: TelegramClient;
   readonly appUrl: string;
-  // Секрет для подписи URL картинок задачи (альбом при открытии задачи в TG, без сессии).
+  // Signs task attachment URLs because Telegram fetches them without an app session.
   readonly signingSecret: string;
   readonly botUsername: string | null;
   // Reply→ralph-answer ветка. См. spec telegram-reply-to-ralph-answer.md.
@@ -1078,37 +1085,128 @@ export class HandleTelegramWebhook {
         await this.deps.client.answerCallbackQuery(cq.id, { text: 'Нет доступа к задаче.', showAlert: true });
         return;
       }
+      await this.deps.client.answerCallbackQuery(cq.id);
       const base = this.deps.appUrl.replace(/\/$/, '');
       const url = `${base}/projects/${task.projectId}?task=${task.id}`;
-      // Полное тело задачи с сохранением абзацев (каждый абзац на сайте = абзац в TG),
-      // markdown → TG-теги, картинки-фигуры из текста срезаны (уйдут альбомом ниже). Режем
-      // сырой markdown с запасом под TG-лимит (4096) — теги остаются сбалансированными.
-      const rawBody = (task.description ?? '').replace(/\r/g, '');
-      const capped = rawBody.length > 3200 ? rawBody.slice(0, 3200).trimEnd() + '…' : rawBody;
-      const rendered = markdownToRich(capped, 'telegram').trim();
-      const body2 =
-        `📋 <b>Задача</b>\n\n` +
-        (rendered ? `${rendered}\n\n` : '') +
-        `<a href="${url}">Открыть в ProjectsFlow</a>\n\n` +
-        `↩️ Ответь reply'ем на это сообщение, чтобы добавить комментарий.`;
-      const messageId = await this.sendReturningId(chatId, body2);
-      if (messageId !== null) {
-        await this.deps.taskMessages.upsert({
-          tgChatId: chatId,
-          tgMessageId: messageId,
-          recipientUserId: userId,
-          taskId: task.id,
-          projectId: task.projectId,
+      const taskAttachments = await this.deps.attachments.listByTask(task.id).catch((err) => {
+        console.warn('[tg-webhook] list task attachments failed:', err);
+        return [];
+      });
+      const attachmentsById = new Map(
+        taskAttachments.map((attachment) => [attachment.id, attachment]),
+      );
+      const attachmentData = new Map<string, Buffer | null>();
+      const readAttachment = async (attachmentId: string): Promise<Buffer | undefined> => {
+        if (attachmentData.has(attachmentId)) {
+          return attachmentData.get(attachmentId) ?? undefined;
+        }
+        const attachment = attachmentsById.get(attachmentId);
+        if (!attachment) return undefined;
+        const stored = await this.deps.attachmentStorage.read(attachment.storageKey).catch((err) => {
+          console.warn('[tg-webhook] read task attachment failed:', err);
+          return null;
         });
+        const data = stored?.data ?? null;
+        attachmentData.set(attachmentId, data);
+        return data ?? undefined;
+      };
+      const now = Date.now();
+      const content = buildTaskTelegramContent(task.description, taskAttachments, (attachmentId) =>
+        signAttachmentUrl(
+          base,
+          `/api/attachments/${attachmentId}`,
+          this.deps.signingSecret,
+          TG_ATTACHMENT_URL_TTL_SECONDS,
+          now,
+        ),
+      );
+
+      const registerMessage = async (messageId: number | null): Promise<void> => {
+        if (messageId === null) return;
+        try {
+          await this.deps.taskMessages.upsert({
+            tgChatId: chatId,
+            tgMessageId: messageId,
+            recipientUserId: userId,
+            taskId: task.id,
+            projectId: task.projectId,
+          });
+        } catch (err) {
+          console.warn('[tg-webhook] task content message upsert failed:', err);
+        }
+      };
+
+      let introSent = false;
+      let remainingContent = content;
+      const richContent = buildTaskTelegramRichContent(content);
+      if (richContent && this.deps.client.sendRichMessage) {
+        const result = await this.deps.client
+          .sendRichMessage({
+            chatId,
+            html: richContent.html,
+            media: richContent.media,
+          })
+          .catch((err) => {
+            console.warn('[tg-webhook] send task rich content failed:', err);
+            return null;
+          });
+        if (result?.kind === 'ok') {
+          await registerMessage(result.messageId);
+          introSent = true;
+          remainingContent = content.slice(richContent.consumedParts);
+        }
       }
-      // Картинки задачи — альбомом после текста (подписанные URL; в текст TG их не вставить).
-      const imgUrls = extractImageSrcs(task.description)
-        .map((s) => signAttachmentUrl(base, s, this.deps.signingSecret, TG_IMG_URL_TTL_SECONDS, Date.now()))
-        .filter((u): u is string => u !== null);
-      if (imgUrls.length > 0) {
-        await this.deps.client.sendPhotos?.(chatId, imgUrls).catch(() => {});
+
+      for (const part of remainingContent) {
+        if (part.kind === 'text') {
+          const text = introSent ? part.html : `📋 <b>Задача</b>\n\n${part.html}`;
+          introSent = true;
+          await registerMessage(await this.sendReturningId(chatId, text));
+          continue;
+        }
+        if (!introSent) {
+          introSent = true;
+          await registerMessage(await this.sendReturningId(chatId, '📋 <b>Задача</b>'));
+        }
+
+        if (this.deps.client.sendAttachment) {
+          const sent = await this.deps.client
+            .sendAttachment({
+              chatId,
+              url: part.url,
+              data: await readAttachment(part.attachmentId),
+              filename: part.filename,
+              mimeType: part.mimeType,
+              caption: part.inline ? undefined : part.filename,
+            })
+            .catch((err) => {
+              console.warn('[tg-webhook] send task attachment failed:', err);
+              return null;
+            });
+          if (sent?.kind === 'ok') {
+            await registerMessage(sent.messageId);
+            continue;
+          }
+        } else if (part.mimeType.startsWith('image/') && this.deps.client.sendPhotos) {
+          await this.deps.client.sendPhotos(chatId, [part.url]).catch(() => {});
+          continue;
+        }
+
+        const label = part.inline ? '🖼 Открыть изображение' : `📎 ${part.filename}`;
+        await registerMessage(
+          await this.sendReturningId(
+            chatId,
+            `<a href="${escapeHtml(part.url)}">${escapeHtml(label)}</a>`,
+          ),
+        );
       }
-      await this.deps.client.answerCallbackQuery(cq.id);
+      if (!introSent) {
+        await registerMessage(await this.sendReturningId(chatId, '📋 <b>Задача</b>'));
+      }
+      const footer =
+        `<a href="${escapeHtml(url)}">Открыть в ProjectsFlow</a>\n\n` +
+        `↩️ Ответь reply'ем на любое сообщение этой задачи, чтобы добавить комментарий.`;
+      await registerMessage(await this.sendReturningId(chatId, footer));
       return;
     }
 

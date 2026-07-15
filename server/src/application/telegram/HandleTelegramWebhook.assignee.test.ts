@@ -8,8 +8,14 @@ function makeHarness(opts?: {
   userId?: string | null;
   projects?: { id: string; name: string }[];
   tasksByProject?: Record<string, any[]>;
+  task?: any;
+  attachments?: any[];
+  richResult?: 'ok' | 'error' | 'missing';
 }) {
   const sent: { chatId: number; text: string; replyMarkup: any }[] = [];
+  const sentRich: any[] = [];
+  const sentAttachments: any[] = [];
+  const events: string[] = [];
   const answers: { id: string; text?: string; showAlert?: boolean }[] = [];
   const upserts: any[] = [];
   const userId = opts && 'userId' in opts ? opts.userId! : 'viewer1';
@@ -29,13 +35,32 @@ function makeHarness(opts?: {
           assignee: t.assignee ?? { userId: 'viewer1', displayName: 'Я', avatarUrl: null },
         }));
       },
-      async getById() { return null; },
+      async getById() { return opts?.task ?? null; },
     },
+    attachments: { async listByTask() { return opts?.attachments ?? []; } },
+    attachmentStorage: { async read() { return { data: Buffer.from('file'), mimeType: 'application/octet-stream' }; } },
     client: {
       async sendMessage(i: any) {
+        events.push(`text:${i.text}`);
         sent.push({ chatId: i.chatId, text: i.text, replyMarkup: i.replyMarkup });
         return { kind: 'ok' as const, messageId: 100 + sent.length };
       },
+      async sendAttachment(i: any) {
+        events.push(`attachment:${i.filename}`);
+        sentAttachments.push(i);
+        return { kind: 'ok' as const, messageId: 500 + sentAttachments.length };
+      },
+      ...(opts?.richResult === 'missing'
+        ? {}
+        : {
+            async sendRichMessage(i: any) {
+              events.push(`rich:${i.html}`);
+              sentRich.push(i);
+              return opts?.richResult === 'error'
+                ? { kind: 'error' as const, description: 'rich unavailable' }
+                : { kind: 'ok' as const, messageId: 700 + sentRich.length };
+            },
+          }),
       async answerCallbackQuery(id: string, o?: any) { answers.push({ id, ...(o ?? {}) }); },
     },
     appUrl: 'https://pf.test',
@@ -58,7 +83,15 @@ function makeHarness(opts?: {
     notifyCommentAdded() {},
     notifyStatusChanged() {},
   };
-  return { h: new HandleTelegramWebhook(deps as any), sent, answers, upserts };
+  return {
+    h: new HandleTelegramWebhook(deps as any),
+    sent,
+    sentRich,
+    sentAttachments,
+    events,
+    answers,
+    upserts,
+  };
 }
 
 function tasksUpdate(): TelegramUpdate {
@@ -193,4 +226,102 @@ test('bt:p: кнопки задач подписаны plain-названием 
   assert.ok(btn);
   assert.ok(btn.text.includes('Название задачи'), 'markdown снят');
   assert.ok(!btn.text.includes('длинное тело'), 'тело не попало в лейбл');
+});
+
+test('bt:t: отправляет скрин между абзацами и прикладывает остальные файлы нативно', async () => {
+  const h = makeHarness({
+    ...seed,
+    task: {
+      id: 't1',
+      projectId: 'p1',
+      description: [
+        'Заголовок',
+        '',
+        'До картинки',
+        '',
+        '<figure data-figure-image><img src="/api/attachments/img-1" alt="" /></figure>',
+        '',
+        'После картинки',
+      ].join('\n'),
+    },
+    attachments: [
+      {
+        id: 'img-1',
+        taskId: 't1',
+        commentId: null,
+        filename: 'screen.png',
+        mimeType: 'image/png',
+        sizeBytes: 10,
+        storageKey: 'img-1.png',
+        uploadedAt: new Date(),
+      },
+      {
+        id: 'audio-1',
+        taskId: 't1',
+        commentId: null,
+        filename: 'track.mp3',
+        mimeType: 'audio/mpeg',
+        sizeBytes: 20,
+        storageKey: 'audio-1.mp3',
+        uploadedAt: new Date(),
+      },
+    ],
+  });
+
+  await h.h.execute(cbUpdate('bt:t:t1'));
+
+  assert.deepEqual(
+    h.events.map((event) => event.split(':', 1)[0]),
+    ['rich', 'text', 'attachment', 'text'],
+  );
+  const rich = h.sentRich[0]!;
+  assert.ok(rich.html.indexOf('До картинки') < rich.html.indexOf('tg://photo?id=task_photo_1'));
+  assert.ok(rich.html.indexOf('tg://photo?id=task_photo_1') < rich.html.indexOf('После картинки'));
+  assert.equal(rich.media.length, 1);
+  assert.equal(rich.media[0].kind, 'photo');
+  assert.match(rich.media[0].url, /\/api\/attachments\/img-1/);
+  assert.equal(h.events[2], 'attachment:track.mp3');
+  assert.equal(h.sentAttachments.length, 1, 'inline screenshot is inside the rich message');
+  assert.equal(h.sentAttachments[0]!.caption, 'track.mp3');
+  assert.ok(h.sentAttachments.every((attachment) => Buffer.isBuffer(attachment.data)));
+  assert.equal(h.upserts.length, h.events.length, 'reply работает на любой части задачи');
+});
+
+test('bt:t: falls back to ordered text and photo messages when rich media is unavailable', async () => {
+  const h = makeHarness({
+    ...seed,
+    richResult: 'error',
+    task: {
+      id: 't1',
+      projectId: 'p1',
+      description: [
+        'До картинки',
+        '<figure data-figure-image><img src="/api/attachments/img-1" alt="" /></figure>',
+        'После картинки',
+      ].join('\n'),
+    },
+    attachments: [
+      {
+        id: 'img-1',
+        taskId: 't1',
+        commentId: null,
+        filename: 'screen.png',
+        mimeType: 'image/png',
+        sizeBytes: 10,
+        storageKey: 'img-1.png',
+        uploadedAt: new Date(),
+      },
+    ],
+  });
+
+  await h.h.execute(cbUpdate('bt:t:t1'));
+
+  assert.deepEqual(
+    h.events.map((event) => event.split(':', 1)[0]),
+    ['rich', 'text', 'attachment', 'text', 'text'],
+  );
+  assert.match(h.events[1]!, /До картинки/);
+  assert.equal(h.events[2], 'attachment:screen.png');
+  assert.match(h.events[3]!, /После картинки/);
+  assert.equal(h.upserts.length, 4, 'the failed rich attempt is not registered');
 });

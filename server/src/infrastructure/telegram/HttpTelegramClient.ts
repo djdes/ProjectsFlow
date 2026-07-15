@@ -1,11 +1,13 @@
 // ВАЖНО: undici fetch + ProxyAgent — не глобальный fetch (он использует встроенный
 // в Node 22 undici 6.x, и dispatcher от внешнего undici 8.x даёт «invalid onRequestStart
 // method»). Используем undici.fetch напрямую.
-import { fetch as undiciFetch, ProxyAgent, type Dispatcher } from 'undici';
+import { File } from 'node:buffer';
+import { fetch as undiciFetch, FormData, ProxyAgent, type Dispatcher } from 'undici';
 import {
   TELEGRAM_ALLOWED_UPDATES,
   type AnswerInlineQueryInput,
   type EditMessageTextInput,
+  type SendAttachmentInput,
   type SendMessageInput,
   type SendMessageResult,
   type SendRichMessageInput,
@@ -34,7 +36,7 @@ type TgResponse<T> = {
 type TgFetchInit = {
   method?: string;
   headers?: Record<string, string>;
-  body?: string;
+  body?: string | FormData;
   dispatcher?: Dispatcher;
 };
 
@@ -110,9 +112,8 @@ export class HttpTelegramClient implements TelegramClient {
     };
   }
 
-  // Bot API 10.1 sendRichMessage: rich_message.html → нативная богатая вёрстка (заголовки,
-  // таблицы с рамками, вложенные списки), выделяемый текст. Зеркало sendMessage по обработке
-  // статусов. Если API старее и метода нет — вернётся error, caller делает фоллбэк.
+  // Bot API 10.2 rich messages support native structured HTML and media blocks. If a relay or
+  // API deployment doesn't support them, the caller falls back to ordinary ordered messages.
   async sendRichMessage(input: SendRichMessageInput): Promise<SendMessageResult> {
     let res: Awaited<ReturnType<typeof this.tgFetch>>;
     try {
@@ -121,7 +122,16 @@ export class HttpTelegramClient implements TelegramClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: input.chatId,
-          rich_message: { html: input.html },
+          rich_message: {
+            html: input.html,
+            media: input.media?.map((item) => ({
+              id: item.id,
+              media: {
+                type: item.kind,
+                media: item.url,
+              },
+            })),
+          },
           reply_markup: input.replyMarkup,
         }),
       });
@@ -277,6 +287,75 @@ export class HttpTelegramClient implements TelegramClient {
       console.warn('[telegram] downloadFile failed:', err);
       return null;
     }
+  }
+
+  async sendAttachment(input: SendAttachmentInput): Promise<SendMessageResult> {
+    const mime = input.mimeType.toLowerCase();
+    const preferred = mime === 'image/gif'
+      ? { endpoint: '/sendAnimation', field: 'animation' }
+      : mime === 'image/jpeg' || mime === 'image/png' || mime === 'image/webp'
+        ? { endpoint: '/sendPhoto', field: 'photo' }
+        : mime.startsWith('audio/')
+          ? { endpoint: '/sendAudio', field: 'audio' }
+          : mime.startsWith('video/')
+            ? { endpoint: '/sendVideo', field: 'video' }
+            : { endpoint: '/sendDocument', field: 'document' };
+
+    const sendUsing = async (target: { endpoint: string; field: string }): Promise<SendMessageResult> => {
+      let res: Awaited<ReturnType<typeof this.tgFetch>>;
+      try {
+        let init: TgFetchInit;
+        if (input.data) {
+          const form = new FormData();
+          form.set('chat_id', String(input.chatId));
+          form.set(
+            target.field,
+            new File([new Uint8Array(input.data)], input.filename, {
+              type: input.mimeType || 'application/octet-stream',
+            }),
+          );
+          if (input.caption) form.set('caption', input.caption);
+          init = { method: 'POST', body: form };
+        } else if (input.url) {
+          init = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: input.chatId,
+              [target.field]: input.url,
+              caption: input.caption,
+            }),
+          };
+        } else {
+          return { kind: 'error', description: 'attachment source is missing' };
+        }
+        res = await this.tgFetch(target.endpoint, init);
+      } catch (err) {
+        return { kind: 'error', description: (err as Error).message };
+      }
+
+      const body = (await res.json().catch(() => null)) as TgResponse<{
+        message_id: number;
+      }> | null;
+      if (res.ok && body?.ok && body.result) {
+        return { kind: 'ok', messageId: body.result.message_id };
+      }
+      if (res.status === 403) {
+        return { kind: 'forbidden', description: body?.description ?? 'forbidden' };
+      }
+      if (res.status === 429) {
+        return { kind: 'rate_limited', retryAfter: body?.parameters?.retry_after ?? 1 };
+      }
+      return { kind: 'error', description: body?.description ?? `HTTP ${res.status}` };
+    };
+
+    const result = await sendUsing(preferred);
+    // Telegram accepts fewer codecs as playable media than browsers do. Preserve delivery by
+    // retrying an unsupported photo/audio/video/animation as a regular document.
+    if (result.kind === 'error' && preferred.field !== 'document') {
+      return sendUsing({ endpoint: '/sendDocument', field: 'document' });
+    }
+    return result;
   }
 
   // Картинки в чат: 1 → sendPhoto, 2..10 → sendMediaGroup, >10 → чанки по 10. Best-effort:
