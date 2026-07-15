@@ -160,6 +160,23 @@ test('regular MP4 and audio attachments produce one rich card even without an in
   assert.match(rich.html, /track\.m4a/);
 });
 
+test('regular MP4 and WEBP attachments are embedded in the same rich task message', () => {
+  const parts = buildTaskTelegramContent(
+    'Описание задачи',
+    [
+      attachment('video-1', 'demo.mp4', 'video/mp4'),
+      attachment('image-1', 'reference.webp', 'image/webp'),
+    ],
+    resolveUrl,
+  );
+
+  const rich = buildTaskTelegramRichContent(parts);
+  assert.ok(rich);
+  assert.deepEqual(rich.media.map((item) => item.kind), ['video', 'photo']);
+  assert.match(rich.html, /demo\.mp4/);
+  assert.match(rich.html, /reference\.webp/);
+});
+
 test('repeated inline references reuse one upload while preserving both positions', () => {
   const figure = '<figure data-figure-image><img src="/api/attachments/img-1" alt="" /></figure>';
   const parts = buildTaskTelegramContent(

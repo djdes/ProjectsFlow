@@ -252,7 +252,7 @@ test('bt:p: кнопки задач подписаны plain-названием 
   assert.ok(!btn.text.includes('длинное тело'), 'тело не попало в лейбл');
 });
 
-test('bt:t: вставленный скрин остаётся в тексте, а прикреплённые файлы уходят native-альбомом', async () => {
+test('bt:t: скрин и поддерживаемые файлы остаются внутри одного rich-сообщения задачи', async () => {
   const h = makeHarness({
     ...seed,
     task: {
@@ -306,29 +306,62 @@ test('bt:t: вставленный скрин остаётся в тексте, 
 
   assert.deepEqual(
     h.events.map((event) => event.split(':', 1)[0]),
-    ['rich', 'documents'],
+    ['rich'],
   );
   const rich = h.sentRich[0]!;
   assert.ok(rich.html.indexOf('До картинки') < rich.html.indexOf('tg://photo?id=task_photo_1'));
   assert.ok(rich.html.indexOf('tg://photo?id=task_photo_1') < rich.html.indexOf('После картинки'));
-  assert.equal(rich.media.length, 1);
+  assert.equal(rich.media.length, 2);
   assert.equal(rich.media[0].kind, 'photo');
   assert.match(rich.media[0].url, /\/api\/attachments\/img-1/);
   assert.ok(Buffer.isBuffer(rich.media[0].data), 'inline screenshot bytes are uploaded directly');
   assert.equal(rich.media[0].filename, 'screen.png');
   assert.equal(rich.media[0].mimeType, 'image/png');
+  assert.equal(rich.media[1].kind, 'audio');
+  assert.equal(rich.media[1].filename, 'track.mp3');
   assert.ok(rich.media.every((attachment: any) => Buffer.isBuffer(attachment.data)));
-  assert.doesNotMatch(rich.html, /track\.mp3/);
-  assert.doesNotMatch(rich.html, /brief\.pdf/);
+  assert.match(rich.html, /track\.mp3/);
+  assert.match(rich.html, /brief\.pdf/);
   assert.match(rich.html, /Открыть в ProjectsFlow/);
   assert.equal(h.sentAttachments.length, 0, 'legacy one-by-one sender is not used');
-  assert.equal(h.sentDocumentGroups.length, 1);
-  assert.equal(h.sentDocumentGroups[0].replyToMessageId, 701);
-  assert.deepEqual(
-    h.sentDocumentGroups[0].documents.map((file: any) => file.filename),
-    ['track.mp3', 'brief.pdf'],
-  );
-  assert.equal(h.upserts.length, 3, 'task card and every album item accept reply comments');
+  assert.equal(h.sentDocumentGroups.length, 0, 'task files must not fan out into replies');
+  assert.equal(h.upserts.length, 1, 'only the single task card accepts reply comments');
+});
+
+test('bt:t: MP4 и WEBP прикрепляются непосредственно к одному сообщению задачи', async () => {
+  const h = makeHarness({
+    ...seed,
+    task: { id: 't1', projectId: 'p1', description: 'Описание задачи' },
+    attachments: [
+      {
+        id: 'video-1',
+        taskId: 't1',
+        commentId: null,
+        filename: 'demo.mp4',
+        mimeType: 'video/mp4',
+        sizeBytes: 20,
+        storageKey: 'demo.mp4',
+        uploadedAt: new Date(),
+      },
+      {
+        id: 'image-1',
+        taskId: 't1',
+        commentId: null,
+        filename: 'reference.webp',
+        mimeType: 'image/webp',
+        sizeBytes: 30,
+        storageKey: 'reference.webp',
+        uploadedAt: new Date(),
+      },
+    ],
+  });
+
+  await h.h.execute(cbUpdate('bt:t:t1'));
+
+  assert.deepEqual(h.events.map((event) => event.split(':', 1)[0]), ['rich']);
+  assert.deepEqual(h.sentRich[0]!.media.map((item: any) => item.kind), ['video', 'photo']);
+  assert.equal(h.sentDocumentGroups.length, 0);
+  assert.equal(h.upserts.length, 1);
 });
 
 test('bt:t: rich rejection falls back to one message with the screenshot link', async () => {
@@ -372,17 +405,15 @@ test('bt:t: rich rejection falls back to one message with the screenshot link', 
 
   assert.deepEqual(
     h.events.map((event) => event.split(':', 1)[0]),
-    ['rich', 'text', 'documents'],
+    ['rich', 'text'],
   );
   assert.match(h.events[1]!, /До картинки/);
   assert.match(h.events[1]!, /После картинки/);
   assert.match(h.events[1]!, /screen\.png/);
-  assert.doesNotMatch(h.events[1]!, /brief\.pdf/);
+  assert.match(h.events[1]!, /brief\.pdf/);
   assert.equal(h.sentAttachments.length, 0);
-  assert.equal(h.sentDocumentGroups.length, 1);
-  assert.equal(h.sentDocumentGroups[0].replyToMessageId, 101);
-  assert.equal(h.sentDocumentGroups[0].documents[0].filename, 'brief.pdf');
-  assert.equal(h.upserts.length, 2, 'fallback card and native document are registered');
+  assert.equal(h.sentDocumentGroups.length, 0);
+  assert.equal(h.upserts.length, 1, 'fallback remains one registered task message');
 });
 
 test('bt:t: файл больше лимита Telegram остаётся доступен ссылкой и не грузится в album', async () => {

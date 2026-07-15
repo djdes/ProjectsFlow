@@ -335,8 +335,8 @@ function richMediaKind(
   const mimeType = part.mimeType.toLowerCase();
   const filename = part.filename.toLowerCase();
   const isTelegramPhoto =
-    ['image/jpeg', 'image/png'].includes(mimeType) ||
-    /\.(?:jpe?g|png)$/.test(filename);
+    ['image/jpeg', 'image/png', 'image/webp'].includes(mimeType) ||
+    /\.(?:jpe?g|png|webp)$/.test(filename);
 
   if (part.inline) {
     return isTelegramPhoto && part.sizeBytes <= TELEGRAM_PHOTO_UPLOAD_LIMIT_BYTES
