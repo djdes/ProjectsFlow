@@ -22,12 +22,15 @@ import {
   Flag,
   GripVertical,
   ListFilter,
+  Loader2,
   MoreHorizontal,
   PanelRight,
   Plus,
+  RefreshCw,
   Snowflake,
   Trash2,
   User,
+  WifiOff,
   WrapText,
 } from 'lucide-react';
 import {
@@ -103,6 +106,7 @@ import {
   type ViewSortKey,
 } from './viewShared';
 import { ContextEntries, DropdownEntries, type MenuEntry } from './menuEntries';
+import { ConfirmDeleteDialog } from '../ConfirmDeleteDialog';
 
 type Props = {
   projectId: string;
@@ -215,11 +219,31 @@ export function TableView({
   const isShared = (memberCount ?? 0) > 1;
   const [drawer, setDrawer] = useState<TaskDrawerState | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const [retrying, setRetrying] = useState(false);
+  const [online, setOnline] = useState(() =>
+    typeof navigator === 'undefined' ? true : navigator.onLine,
+  );
+  const [liveMessage, setLiveMessage] = useState('');
+  const [deleteIntent, setDeleteIntent] = useState<
+    { kind: 'single'; task: Task } | { kind: 'bulk'; ids: string[] } | null
+  >(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   // Выделение ячеек как в Excel (Notion): mousedown — якорь, drag по ячейкам — диапазон.
   // Координаты: row — индекс в rows, col — 0 (название) или индекс в visibleCols + 1.
   const [selRange, setSelRange] = useState<{ a: CellCoord; h: CellCoord } | null>(null);
   const selDragging = useRef(false);
   const bulk = useBulkTaskActions({ projectId, update, move, remove, refetch });
+
+  useEffect(() => {
+    const markOnline = (): void => setOnline(true);
+    const markOffline = (): void => setOnline(false);
+    window.addEventListener('online', markOnline);
+    window.addEventListener('offline', markOffline);
+    return () => {
+      window.removeEventListener('online', markOnline);
+      window.removeEventListener('offline', markOffline);
+    };
+  }, []);
 
   // Пустота значения кастомного свойства (multi_select '[]' — тоже пусто).
   const propValueEmpty = (raw: string, type: TaskProperty['type']): boolean => {
@@ -526,23 +550,50 @@ export function TableView({
   // Inline-редактирование названия по клику в ячейку (Notion: клик = правка, открыть — OPEN).
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-  const commitEdit = (task: Task): void => {
-    const title = editValue.trim();
-    setEditingId(null);
-    if (!title || title === taskTitle(task)) return;
-    const { body } = splitTitleBody(task.description ?? '');
-    void update(task.id, { description: body ? `${title}\n${body}` : title }).catch((e: unknown) =>
-      toast.error(`Не удалось: ${(e as Error).message}`),
-    );
-  };
-  // Enter в редакторе названия — как в Excel: коммит и выделение клетки ниже.
-  const commitEditAndMoveDown = (task: Task): void => {
-    commitEdit(task);
+  const [editPendingId, setEditPendingId] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const editPendingRef = useRef<string | null>(null);
+  const moveSelectionDown = (task: Task): void => {
     const idx = rows.findIndex((t) => t.id === task.id);
     if (idx >= 0 && idx + 1 < rows.length) {
       const c = { row: idx + 1, col: 0 };
       setSelRange({ a: c, h: c });
     }
+  };
+  const commitEdit = async (task: Task, moveDown = false): Promise<void> => {
+    if (editPendingRef.current === task.id) return;
+    const title = editValue.trim();
+    if (!title) {
+      setEditError('Название задачи не может быть пустым.');
+      return;
+    }
+    if (title === taskTitle(task)) {
+      setEditingId(null);
+      setEditError(null);
+      if (moveDown) moveSelectionDown(task);
+      return;
+    }
+    const { body } = splitTitleBody(task.description ?? '');
+    editPendingRef.current = task.id;
+    setEditPendingId(task.id);
+    setEditError(null);
+    try {
+      await update(task.id, { description: body ? `${title}\n${body}` : title });
+      setEditingId(null);
+      setLiveMessage(`Название задачи «${title}» сохранено.`);
+      if (moveDown) moveSelectionDown(task);
+    } catch (e) {
+      const message = (e as Error).message || 'Неизвестная ошибка';
+      setEditError(`Не удалось сохранить название: ${message}`);
+      toast.error(`Не удалось: ${message}`);
+    } finally {
+      editPendingRef.current = null;
+      setEditPendingId(null);
+    }
+  };
+  // Enter в редакторе названия — как в Excel: коммит и выделение клетки ниже.
+  const commitEditAndMoveDown = (task: Task): void => {
+    void commitEdit(task, true);
   };
 
   // Excel type-to-edit: при единственной выделенной клетке названия печать сразу
@@ -868,9 +919,45 @@ export function TableView({
   const selectedIds = rows.filter((t) => selected.has(t.id)).map((t) => t.id);
 
   const reportBulk = (label: string) => (res: BulkResult) => {
-    if (res.failed > 0) toast.error(`${label}: ${res.ok} из ${res.ok + res.failed}`);
+    if (res.failed > 0) {
+      const message = `${label}: выполнено ${res.ok} из ${res.ok + res.failed}.`;
+      toast.error(message);
+      setLiveMessage(message);
+    } else setLiveMessage(`${label}: изменено задач — ${res.ok}.`);
     setSelected(new Set());
     setSelRange(null);
+  };
+
+  const retryLoad = async (): Promise<void> => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await refetch();
+      setLiveMessage('Запрос обновления таблицы завершён.');
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  const confirmDelete = async (): Promise<void> => {
+    if (!deleteIntent || deleteBusy) return;
+    setDeleteBusy(true);
+    try {
+      if (deleteIntent.kind === 'single') {
+        const title = taskTitle(deleteIntent.task);
+        await remove(deleteIntent.task.id);
+        toast.success('Задача удалена');
+        setLiveMessage(`Задача «${title}» удалена.`);
+      } else {
+        const result = await bulk.remove(deleteIntent.ids);
+        reportBulk('Удаление')(result);
+      }
+      setDeleteIntent(null);
+    } catch (e) {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+    } finally {
+      setDeleteBusy(false);
+    }
   };
 
   // ПКМ по одной из НЕСКОЛЬКИХ выбранных строк — bulk-меню над всеми (Notion):
@@ -937,24 +1024,87 @@ export function TableView({
         label: `Удалить ${n} задач${n % 10 === 1 && n % 100 !== 11 ? 'у' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'и' : ''}`,
         icon: Trash2,
         destructive: true,
-        onSelect: () => void bulk.remove(selectedIds).then(reportBulk('Удаление')),
+        onSelect: () => setDeleteIntent({ kind: 'bulk', ids: [...selectedIds] }),
       },
     ];
   };
 
-  if (loading) return <div className="h-64 animate-pulse rounded-xl bg-muted/60" />;
-  if (error) return <p className="text-sm text-destructive">{error}</p>;
+  if (loading) {
+    return (
+      <div role="status" aria-live="polite" aria-label="Загрузка таблицы задач" className="space-y-px">
+        <span className="sr-only">Загружаем таблицу задач…</span>
+        <div className="h-9 animate-pulse rounded-t-md bg-muted/70 motion-reduce:animate-none" aria-hidden />
+        {Array.from({ length: 6 }, (_, index) => (
+          <div
+            key={index}
+            className="h-9 animate-pulse border-b bg-muted/40 motion-reduce:animate-none"
+            aria-hidden
+          />
+        ))}
+      </div>
+    );
+  }
+  if (error && tasks.length === 0) {
+    return (
+      <div role="alert" className="flex min-h-44 flex-col items-center justify-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-6 py-8 text-center">
+        <p className="text-sm text-destructive">Не удалось загрузить таблицу: {error}</p>
+        <button
+          type="button"
+          onClick={() => void retryLoad()}
+          disabled={retrying}
+          className="inline-flex min-h-11 items-center gap-2 rounded-md border bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60"
+        >
+          {retrying ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <RefreshCw className="size-4" />}
+          Повторить
+        </button>
+      </div>
+    );
+  }
 
   const innerPadClass = bleedPadClass ? 'pr-6 sm:pr-14 lg:pl-10 lg:pr-24' : 'pr-8';
 
   return (
-    <div ref={tableRootRef} className="flex min-h-0 flex-1 flex-col">
+    <div
+      ref={tableRootRef}
+      aria-busy={retrying}
+      className="flex min-h-0 flex-1 flex-col"
+    >
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {liveMessage}
+      </span>
+      {!online && (
+        <div role="status" className="flex min-h-11 items-center gap-2 border-b border-amber-300/60 bg-amber-50 px-3 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100">
+          <WifiOff className="size-4 shrink-0" />
+          Нет сети. Последние загруженные данные доступны; изменения можно повторить после подключения.
+        </div>
+      )}
+      {error && (
+        <div role="alert" className="flex min-h-11 items-center gap-3 border-b border-destructive/30 bg-destructive/5 px-3 text-sm text-destructive">
+          <span className="min-w-0 flex-1 truncate">Не удалось обновить таблицу: {error}</span>
+          <button
+            type="button"
+            onClick={() => void retryLoad()}
+            disabled={retrying}
+            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md px-2 font-medium hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60 [@media(hover:none)]:min-h-11"
+          >
+            {retrying ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <RefreshCw className="size-4" />}
+            Повторить
+          </button>
+        </div>
+      )}
       <DndContext
         sensors={dndSensors}
         collisionDetection={pointerWithin}
         onDragStart={(e) => setDragTask(rows.find((t) => t.id === String(e.active.id)) ?? null)}
         onDragEnd={handleRowDragEnd}
         onDragCancel={() => setDragTask(null)}
+      >
+      <div
+        role="grid"
+        aria-label={`Задачи проекта${projectName ? ` «${projectName}»` : ''}`}
+        aria-rowcount={rows.length + 3}
+        aria-colcount={orderedKeys.length + 3}
+        className="contents"
       >
       {/* Sticky-шапка колонок (Notion): липнет под строкой вкладок при вертикальном
           скролле; горизонтальный скролл синхронизируется с телом (onScroll ниже). */}
@@ -981,6 +1131,7 @@ export function TableView({
               на ячейках, НЕ на контейнере: зона контролов слева чистая. */}
           <div
             ref={headGridRef}
+            role="row"
             className="group/head relative grid text-sm text-muted-foreground"
             style={gridStyle}
           >
@@ -988,6 +1139,7 @@ export function TableView({
                 закреплено; иначе едет вместе с таблицей (Notion: без freeze таблица
                 скроллится целиком). */}
             <div
+              role="columnheader"
               className={cn(
                 'flex items-center justify-end bg-background pr-2.5',
                 tableState.freezeTitle && 'sticky left-0 z-30',
@@ -1127,7 +1279,7 @@ export function TableView({
                 />
               );
             })}
-            <div className="border-b border-l border-t" aria-hidden />
+            <div role="columnheader" className="border-b border-l border-t" aria-label="Действия таблицы" />
             {/* Хвост шапки (Notion): «+» — новое свойство (правая панель со сдвигом
                 таблицы, если родитель дал onRequestNewProperty; иначе попап),
                 «⋯» — «Видимость свойств» (глазки/поиск/Скрыть все). */}
@@ -1282,15 +1434,22 @@ export function TableView({
                 rowColor={rowColorFor(task, colorRules)}
                 frozenTitle={tableState.freezeTitle}
                 editing={editingId === task.id}
+                editPending={editPendingId === task.id}
+                editError={editingId === task.id ? editError : null}
                 editValue={editValue}
                 onEditValue={setEditValue}
                 onStartEdit={() => {
                   setEditingId(task.id);
                   setEditValue(taskTitle(task));
+                  setEditError(null);
                 }}
-                onCommitEdit={() => commitEdit(task)}
+                onCommitEdit={() => void commitEdit(task)}
                 onCommitEnter={() => commitEditAndMoveDown(task)}
-                onCancelEdit={() => setEditingId(null)}
+                onCancelEdit={() => {
+                  if (editPendingId === task.id) return;
+                  setEditingId(null);
+                  setEditError(null);
+                }}
                 selected={selected.has(task.id)}
                 anySelected={selected.size > 0}
                 bulkEntries={
@@ -1345,11 +1504,7 @@ export function TableView({
                     priority: task.priority ?? undefined,
                   }).catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`))
                 }
-                onDelete={() =>
-                  void remove(task.id)
-                    .then(() => toast.success('Задача удалена'))
-                    .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`))
-                }
+                onDelete={() => setDeleteIntent({ kind: 'single', task })}
                 currentUserId={user?.id ?? null}
                 projectId={projectId}
                 onChanged={() => void refetch()}
@@ -1376,7 +1531,7 @@ export function TableView({
           })}
 
           {rows.length === 0 && (
-            <p className="py-6 pl-14 pr-2 text-sm text-muted-foreground">
+            <p role="status" aria-live="polite" className="py-6 pl-14 pr-2 text-sm text-muted-foreground">
               {filters.query || hasActiveFilters(filters)
                 ? 'Под фильтр ничего не попадает.'
                 : 'Задач пока нет.'}
@@ -1387,7 +1542,7 @@ export function TableView({
               граница — только под контентной частью (Notion). */}
           {/* Notion New page: компактная строка 28px; Enter создаёт, закрывает ввод
               и выделяет клетку названия созданной строки. */}
-          <div className="pl-14">
+          <div role="row" className="pl-14">
             <div className="flex h-7 items-center border-b">
               <NewTaskRow
                 create={async (input) => {
@@ -1402,7 +1557,7 @@ export function TableView({
           </div>
           {/* Строка подсчётов (Notion Calculate): «Всего» под названием; под каждой
               колонкой — свой подсчёт по клику (появляется при наведении). */}
-          <div className="group/calc grid" style={gridStyle}>
+          <div role="row" className="group/calc grid" style={gridStyle}>
             {/* Пустая ячейка под sticky-gutter контролов. */}
             <div aria-hidden />
             <p className="px-2 pt-1.5 text-[11px] text-muted-foreground/60">
@@ -1436,6 +1591,8 @@ export function TableView({
         </div>
       </div>
 
+      </div>
+
       {/* Призрак перетаскиваемой строки. */}
       <DragOverlay dropAnimation={null}>
         {dragTask ? (
@@ -1464,9 +1621,25 @@ export function TableView({
           onStatus={(s) => void bulk.moveToColumn(selectedIds, s).then(reportBulk('Статус'))}
           onPriority={(p) => void bulk.setPriority(selectedIds, p).then(reportBulk('Приоритет'))}
           onDeadline={(d) => void bulk.setDeadline(selectedIds, d).then(reportBulk('Срок'))}
-          onDelete={() => void bulk.remove(selectedIds).then(reportBulk('Удаление'))}
+          onDelete={() => setDeleteIntent({ kind: 'bulk', ids: [...selectedIds] })}
         />
       )}
+
+      <ConfirmDeleteDialog
+        open={deleteIntent !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteBusy) setDeleteIntent(null);
+        }}
+        taskLabel={deleteIntent?.kind === 'single' ? taskTitle(deleteIntent.task) : null}
+        title={deleteIntent?.kind === 'bulk' ? 'Удалить выбранные задачи?' : undefined}
+        description={
+          deleteIntent?.kind === 'bulk'
+            ? `${deleteIntent.ids.length} задач будут удалены безвозвратно.`
+            : undefined
+        }
+        busy={deleteBusy}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 }
@@ -1556,6 +1729,7 @@ function HeaderCell({
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div
+      role="columnheader"
       data-colkey={colKey}
       className={cn(
         'relative flex min-w-0 border-b border-t',
@@ -1594,7 +1768,7 @@ function HeaderCell({
                   }
                 : undefined
             }
-            className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left transition-colors hover:bg-accent/60"
+            className="flex min-h-9 min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [@media(hover:none)]:min-h-11"
           >
             {iconNode}
             <span className="truncate">{label}</span>
@@ -1635,10 +1809,11 @@ function InsertRow({
 }): React.ReactElement {
   const [value, setValue] = useState('');
   return (
-    <div style={gridStyle} className="grid border-b bg-accent/30">
+    <div role="row" style={gridStyle} className="grid border-b bg-accent/30">
       {/* Gutter без фона строки вставки. */}
       <div className="bg-background" aria-hidden />
       <div
+        role="gridcell"
         className="flex items-center gap-1.5 px-2 py-1"
         style={indent > 0 ? { paddingLeft: 8 + indent } : undefined}
       >
@@ -1722,7 +1897,7 @@ function CalcCell({
       })),
   ];
   return (
-    <div className="flex justify-end border-l border-transparent px-1 pt-0.5">
+    <div role="gridcell" className="flex justify-end border-l border-transparent px-1 pt-0.5">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -1822,7 +1997,7 @@ function PropCalcCell({
     })),
   ];
   return (
-    <div className="flex justify-end border-l border-transparent px-1 pt-0.5">
+    <div role="gridcell" className="flex justify-end border-l border-transparent px-1 pt-0.5">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -1860,6 +2035,8 @@ function TableRow({
   rowColor,
   frozenTitle,
   editing,
+  editPending,
+  editError,
   editValue,
   onEditValue,
   onStartEdit,
@@ -1904,6 +2081,8 @@ function TableRow({
   rowColor: string | null;
   frozenTitle: boolean;
   editing: boolean;
+  editPending: boolean;
+  editError: string | null;
   editValue: string;
   onEditValue: (v: string) => void;
   onStartEdit: () => void;
@@ -1952,12 +2131,14 @@ function TableRow({
     col: ViewColumn,
   ): {
     className: string;
+    role: 'gridcell';
     'data-cell': string;
     onMouseEnter: () => void;
   } => ({
     // Без внутренних отступов: значение-кнопка занимает ВСЮ клетку, hover
     // подсвечивает её от края до края (Notion).
     className: cn('relative flex border-b border-l', rangeClassFor(rowIdx, col)),
+    role: 'gridcell',
     'data-cell': col,
     onMouseEnter: () => onCellEnter(rowIdx, col),
   });
@@ -1971,7 +2152,8 @@ function TableRow({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex h-full min-h-8 w-full items-center gap-1 px-2 text-sm transition-colors hover:bg-accent"
+                  aria-label={`Изменить статус задачи «${taskTitle(task)}». Сейчас: ${STATUS_LABEL[task.status]}`}
+                  className="flex h-full min-h-8 w-full items-center gap-1 px-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [@media(hover:none)]:min-h-11"
                 >
                   {/* Значение статуса — цветная пилюля (Notion select pill). */}
                   <span
@@ -2004,7 +2186,8 @@ function TableRow({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex h-full min-h-8 w-full items-center gap-1.5 px-2 text-sm transition-colors hover:bg-accent"
+                  aria-label={`Изменить приоритет задачи «${taskTitle(task)}»`}
+                  className="flex h-full min-h-8 w-full items-center gap-1.5 px-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [@media(hover:none)]:min-h-11"
                 >
                   {task.priority !== null && task.priority !== undefined ? (
                     <span
@@ -2051,7 +2234,7 @@ function TableRow({
               onChanged={onChanged}
               projectId={projectId}
               disabled={!currentUserId}
-              className="h-full min-h-8 w-full justify-start rounded-none px-2 text-sm hover:bg-accent"
+              className="h-full min-h-8 w-full justify-start rounded-none px-2 text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset [@media(hover:none)]:min-h-11"
             />
           </div>
         );
@@ -2086,6 +2269,9 @@ function TableRow({
       <ContextMenuTrigger asChild>
         <div
           ref={dropRef}
+          role="row"
+          aria-selected={selected}
+          aria-label={`Задача: ${taskTitle(task)}`}
           style={gridStyle}
           // Capture: якорь Excel-выделения ставится с любого места ячейки (включая
           // кнопки-значения — Notion выделяет ячейку и при открытии её редактора).
@@ -2112,7 +2298,7 @@ function TableRow({
           }}
           className={cn(
             // Границы — на ячейках (см. cellProps/title): зона контролов слева чистая.
-            'group relative grid transition-colors hover:bg-accent/40',
+            'group relative grid transition-colors hover:bg-accent/40 focus-within:bg-accent/30 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring/50',
             // Условный цвет (Notion Conditional color) — до selected/moved подсветок.
             rowColor,
             selected && 'bg-primary/5',
@@ -2126,11 +2312,11 @@ function TableRow({
       {/* Gutter строки (Notion): «+»/«⋮⋮»/чекбокс. Sticky — только при закреплённом
           «Названии»; иначе едет вместе с таблицей. Фон — на ячейке ВСЕГДА (иначе
           уезжающий текст просвечивает), прозрачность до hover — только на контролах. */}
-      <div className={cn('bg-background', frozenTitle && 'sticky left-0 z-20')}>
+      <div role="gridcell" className={cn('bg-background', frozenTitle && 'sticky left-0 z-20')}>
       <div
         className={cn(
           'flex h-full items-center justify-end gap-0 pr-1 transition-opacity duration-100',
-          selected || anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+          selected || anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100',
         )}
       >
         <button
@@ -2188,9 +2374,10 @@ function TableRow({
           ячейке редактирует, открытие — кнопкой «ОТКРЫТЬ»). Отступ и стрелка — дерево
           подзадач (Notion sub-items). */}
       <div
+        role="gridcell"
         data-cell="title"
         className={cn(
-          'relative flex min-w-0 items-center gap-1.5 border-b px-2 py-1',
+          'relative flex min-h-8 min-w-0 items-center gap-1.5 border-b px-2 py-1 [@media(hover:none)]:min-h-11',
           // Freeze: липнет ПОСЛЕ sticky-gutter'а контролов (3.5rem).
           frozenTitle && 'sticky left-14 z-10 border-r bg-background',
           rangeClassFor(rowIdx, 'title'),
@@ -2207,7 +2394,9 @@ function TableRow({
             autoFocus
             value={editValue}
             onChange={(e) => onEditValue(e.target.value)}
-            onBlur={onCommitEdit}
+            onBlur={() => {
+              if (!editPending) onCommitEdit();
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
@@ -2218,7 +2407,10 @@ function TableRow({
               }
             }}
             aria-label="Название задачи"
-            className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none"
+            aria-invalid={Boolean(editError)}
+            aria-errormessage={editError ? `table-title-error-${task.id}` : undefined}
+            readOnly={editPending}
+            className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none read-only:cursor-wait"
           />
         ) : (
           <>
@@ -2251,7 +2443,7 @@ function TableRow({
               type="button"
               onClick={onStartEdit}
               className={cn(
-                'min-w-0 text-left text-sm font-medium',
+                'flex min-w-0 self-stretch items-center rounded-sm text-left text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 wrapTitle ? 'whitespace-normal break-words' : 'truncate',
                 // Notion: безымянная страница — серый плейсхолдер.
                 isUntitledTask(task) && 'font-normal text-muted-foreground/60',
@@ -2262,12 +2454,21 @@ function TableRow({
             <button
               type="button"
               onClick={onOpen}
-              className="ml-auto hidden shrink-0 items-center gap-1 rounded-md border bg-card px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground group-hover:inline-flex"
+              aria-label={`Открыть задачу «${taskTitle(task)}»`}
+              className="ml-auto hidden min-h-8 shrink-0 items-center gap-1 rounded-md border bg-card px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:inline-flex group-focus-within:inline-flex [@media(hover:none)]:inline-flex [@media(hover:none)]:min-h-11"
             >
               <PanelRight className="size-3" />
               Открыть
             </button>
           </>
+        )}
+        {editing && editPending && (
+          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" aria-label="Сохранение" />
+        )}
+        {editing && editError && (
+          <span id={`table-title-error-${task.id}`} className="sr-only">
+            {editError}
+          </span>
         )}
       </div>
 
@@ -2291,7 +2492,7 @@ function TableRow({
         }
         return cellFor(k as ViewColumn);
       })}
-      <div className="border-b border-l" aria-hidden />
+      <div role="gridcell" className="border-b border-l" aria-label="" />
         </div>
       </ContextMenuTrigger>
       {/* Правый клик по строке — контекстное меню задачи (Notion-style); по строке
@@ -2335,7 +2536,8 @@ function DeadlineCell({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex h-full min-h-8 w-full items-center gap-1.5 px-2 text-sm transition-colors hover:bg-accent"
+            aria-label={`Изменить срок задачи «${taskTitle(task)}»`}
+            className="flex h-full min-h-8 w-full items-center gap-1.5 px-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [@media(hover:none)]:min-h-11"
           >
             {/* Пустой срок — чистая ячейка (Notion). */}
             {task.deadline ? <DeadlineBadge deadline={task.deadline} status={task.status} /> : null}

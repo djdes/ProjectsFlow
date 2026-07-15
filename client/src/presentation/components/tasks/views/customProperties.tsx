@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { ConfirmDeleteDialog } from '../ConfirmDeleteDialog';
 import {
   TASK_PROPERTY_TYPES,
   TASK_PROPERTY_TYPE_LABELS,
@@ -340,6 +341,7 @@ export function PropertyHeaderCell({
   onHide?: () => void;
 }): React.ReactElement {
   const [name, setName] = useState(property.name);
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   // ПКМ по заголовку открывает то же меню, что и клик (Notion).
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => setName(property.name), [property.name]);
@@ -351,6 +353,7 @@ export function PropertyHeaderCell({
   };
   return (
     <div
+      role="columnheader"
       data-colkey={colKey}
       className={cn(
         'relative flex min-w-0 border-b border-l border-t',
@@ -391,7 +394,7 @@ export function PropertyHeaderCell({
                   }
                 : undefined
             }
-            className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left transition-colors hover:bg-accent/60"
+            className="flex min-h-9 min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [@media(hover:none)]:min-h-11"
           >
             <Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
             <span className="truncate">{property.name}</span>
@@ -513,7 +516,7 @@ export function PropertyHeaderCell({
           <DropdownMenuSeparator />
           <DropdownMenuItem
             className="gap-2 text-destructive focus:text-destructive"
-            onSelect={onRemove}
+            onSelect={() => setRemoveConfirmOpen(true)}
           >
             <Trash2 className="size-4" />
             Удалить свойство
@@ -530,6 +533,17 @@ export function PropertyHeaderCell({
           className="absolute -right-[3px] top-0 z-10 h-full w-[6px] cursor-col-resize rounded transition-colors hover:bg-primary/40"
         />
       )}
+      <ConfirmDeleteDialog
+        open={removeConfirmOpen}
+        onOpenChange={setRemoveConfirmOpen}
+        taskLabel={null}
+        title="Удалить свойство?"
+        description={`Столбец «${property.name}» и все его значения будут удалены безвозвратно.`}
+        onConfirm={() => {
+          onRemove();
+          setRemoveConfirmOpen(false);
+        }}
+      />
     </div>
   );
 }
@@ -880,7 +894,7 @@ export function PropertyValueCell({
               : 'text';
     if (editing) {
       return (
-        <div {...selAttrs} className={cn('relative border-b border-l', rangeClass)}>
+        <div role="gridcell" {...selAttrs} className={cn('relative border-b border-l', rangeClass)}>
           {/* Notion: редактор раскрывается ПОВЕРХ ячейки РОВНО по её ширине (w-full),
               текст растёт вниз не двигая строки. Тонкая рамка + мягкая тень как в
               Notion (не «плавающий» широкий бокс). Enter — коммит (Shift+Enter —
@@ -950,7 +964,7 @@ export function PropertyValueCell({
           setEditing(true);
         }}
         className={cn(
-          'relative min-w-0 border-b border-l px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/40',
+          'relative min-h-8 min-w-0 border-b border-l px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [@media(hover:none)]:min-h-11',
           rangeClass,
         )}
       >
@@ -969,7 +983,7 @@ export function PropertyValueCell({
 
   if (property.type === 'checkbox') {
     return (
-      <div {...selAttrs} className={cn('relative flex items-center border-b border-l px-2 py-1.5', rangeClass)}>
+      <div role="gridcell" {...selAttrs} className={cn('relative flex min-h-8 items-center border-b border-l px-2 py-1.5 [@media(hover:none)]:min-h-11', rangeClass)}>
         <input
           type="checkbox"
           checked={value === '1'}
@@ -991,7 +1005,7 @@ export function PropertyValueCell({
             {...selAttrs}
             type="button"
             className={cn(
-              'relative flex min-w-0 items-center gap-1.5 border-b border-l px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/40',
+              'relative flex min-h-8 min-w-0 items-center gap-1.5 border-b border-l px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [@media(hover:none)]:min-h-11',
               rangeClass,
             )}
           >
@@ -1066,7 +1080,7 @@ export function PropertyValueCell({
           {...selAttrs}
           type="button"
           className={cn(
-            'relative flex min-w-0 flex-wrap items-center gap-1 border-b border-l px-2 py-1.5 text-left transition-colors hover:bg-accent/40',
+            'relative flex min-h-8 min-w-0 flex-wrap items-center gap-1 border-b border-l px-2 py-1.5 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [@media(hover:none)]:min-h-11',
             rangeClass,
           )}
         >
