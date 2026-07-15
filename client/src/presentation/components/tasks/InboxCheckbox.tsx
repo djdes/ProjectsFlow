@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, Loader2, Undo2 } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
@@ -16,6 +16,9 @@ type Props = {
   // Заблокировать чекбокс (нет прав менять статус). Рисуем неактивным с тултипом.
   disabled?: boolean;
   disabledTitle?: string;
+  // На канбан-карточке действие живёт в общей hover-панели и выглядит как обычная
+  // квадратная icon-кнопка. В списке сохраняем привычный круглый чекбокс.
+  variant?: 'circle' | 'toolbar';
 };
 
 // Круглый чекбокс «выполнено» в строке inbox-задачи. Optimistic UI: тиково
@@ -29,6 +32,7 @@ export function InboxCheckbox({
   onChanged,
   disabled = false,
   disabledTitle,
+  variant = 'circle',
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const [optimistic, setOptimistic] = useState<boolean | null>(null);
@@ -81,17 +85,28 @@ export function InboxCheckbox({
       aria-pressed={isDone}
       title={disabled ? (disabledTitle ?? 'Нет прав менять статус') : isDone ? 'Снять отметку' : 'Выполнено'}
       className={cn(
-        'grid size-5 shrink-0 place-items-center rounded-full border-2 transition-colors',
-        isDone
-          ? 'border-emerald-500 bg-emerald-500 text-white'
-          : 'border-muted-foreground/40 hover:border-emerald-500',
+        'grid shrink-0 place-items-center transition-colors',
+        variant === 'toolbar'
+          ? cn(
+              'size-6 rounded text-muted-foreground hover:bg-emerald-500/10 hover:text-emerald-600 max-sm:size-8 dark:hover:text-emerald-400',
+              isDone &&
+                'bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400',
+            )
+          : cn(
+              'size-5 rounded-full border-2',
+              isDone
+                ? 'border-emerald-500 bg-emerald-500 text-white'
+                : 'border-muted-foreground/40 hover:border-emerald-500',
+            ),
         (pending || disabled) && 'opacity-60',
         disabled && 'cursor-not-allowed',
       )}
     >
       {pending ? (
         <Loader2 className="size-3 animate-spin" />
-      ) : isDone ? (
+      ) : variant === 'toolbar' && isDone ? (
+        <Undo2 className="size-3.5" strokeWidth={2.25} />
+      ) : isDone || variant === 'toolbar' ? (
         <Check className="size-3" strokeWidth={3} />
       ) : null}
     </button>

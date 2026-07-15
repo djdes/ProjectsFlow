@@ -36,7 +36,7 @@ type Props = {
   // Вызывается после изменения состояния agent-job (enqueue / cancel) — триггерит
   // refetch tasks в родителе чтобы обновить бейдж.
   onTaskChanged?: () => void;
-  // Показывать круглый чекбокс «выполнено» слева от описания. Только для inbox
+  // Показывать действие «выполнено» первым в hover-панели карточки. Только для inbox
   // и только если задача не в работе у Ralph.
   showCheckbox?: boolean;
   lastDoneTaskId?: string | null;
@@ -262,6 +262,15 @@ export function KanbanCard({
             className="pointer-events-none absolute right-2 top-4 z-20 flex -translate-y-1/2 items-center gap-0.5 rounded-md bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:gap-1 max-sm:opacity-100 dark:ring-white/[0.08]"
             {...stopDragProps}
           >
+            {showCheckbox && (
+              <InboxCheckbox
+                task={task}
+                lastDoneTaskId={lastDoneTaskId}
+                lastTodoTaskId={lastTodoTaskId}
+                onChanged={onTaskChanged}
+                variant="toolbar"
+              />
+            )}
             {onQuickPromote && promoteNext && (
               <Button
                 variant="ghost"
@@ -305,28 +314,7 @@ export function KanbanCard({
           >
             {selected && <Check className="size-3" strokeWidth={3} />}
           </span>
-        ) : (
-          showCheckbox &&
-          !preview && (
-            // Чекбокс-«кружок» — hover-оверлей в ЛЕВОМ ВЕРХНЕМ углу (симметрично действиям
-            // справа-сверху и мете снизу): в покое скрыт, текст занимает всю ширину; при
-            // наведении плавно наслаивается на начало текста. На тач всегда виден (max-sm).
-            // rounded-full bg-card маскирует символ под кружком.
-            <div
-              // Кружок «выполнено» центрируется на первой строке (top-4 + -translate-y-1/2),
-              // симметрично плашке действий справа — на однострочной карточке ровно по центру.
-              className="pointer-events-none absolute left-2 top-4 z-20 -translate-y-1/2 rounded-full bg-card opacity-0 shadow-sm ring-1 ring-black/[0.06] transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:opacity-100 dark:ring-white/[0.08]"
-              {...stopDragProps}
-            >
-              <InboxCheckbox
-                task={task}
-                lastDoneTaskId={lastDoneTaskId}
-                lastTodoTaskId={lastTodoTaskId}
-                onChanged={onTaskChanged}
-              />
-            </div>
-          )
-        )}
+        ) : null}
         <div className="min-w-0 flex-1">
           {/* Текст карточки НЕ затемняем: мета/действия всплывают как локальные плашки со
               своим фоном (снизу-слева и сверху-справа), маскируя только свою область. */}
