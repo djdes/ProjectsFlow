@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Calendar, Check, ChevronDown, ChevronsRight, HelpCircle, Loader2, Settings } from 'lucide-react';
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,25 @@ const DEFAULT_WINDOW_DAYS = 28;
 const WINDOW_OPTIONS = [7, 28, 90, 3650] as const;
 const windowLabel = (days: number): string => (days >= 365 ? 'Всё время' : `За ${days} дней`);
 const initial = (name: string | null): string => (name?.trim()[0] ?? '?').toUpperCase();
+
+const activityDayKey = (value: Date): string => {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+};
+
+const activityDayLabel = (value: Date): string => {
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (activityDayKey(date) === activityDayKey(today)) return 'Сегодня';
+  if (activityDayKey(date) === activityDayKey(yesterday)) return 'Вчера';
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric',
+  }).format(date);
+};
 
 // Ширина панели (px), тянется ручкой у левого края; хранится в localStorage.
 const PANEL_WIDTH_KEY = 'pf-project-activity-width';
@@ -302,10 +321,25 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
             ) : !activity || activity.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">Пока нет активности.</p>
             ) : (
-              <ul className="divide-y">
-                {activity.map((item) => (
-                  <ActivityItem key={item.id} item={item} onOpenVersions={setVersionsFor} />
-                ))}
+              <ul className="pb-4">
+                {activity.map((item, index) => {
+                  const showDay =
+                    index === 0 ||
+                    activityDayKey(activity[index - 1]!.createdAt) !== activityDayKey(item.createdAt);
+                  return (
+                    <Fragment key={item.id}>
+                      {showDay ? (
+                        <li
+                          role="presentation"
+                          className="sticky top-0 z-20 border-b bg-background/95 px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground backdrop-blur"
+                        >
+                          {activityDayLabel(item.createdAt)}
+                        </li>
+                      ) : null}
+                      <ActivityItem item={item} onOpenVersions={setVersionsFor} />
+                    </Fragment>
+                  );
+                })}
               </ul>
             )}
           </TabsContent>

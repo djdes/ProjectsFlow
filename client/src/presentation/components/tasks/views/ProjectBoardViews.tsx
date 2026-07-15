@@ -66,7 +66,6 @@ import {
   type BoardView,
   type BoardViewType,
 } from '@/domain/project/BoardView';
-import { createPortal } from 'react-dom';
 import { useContainer } from '@/infrastructure/di/container';
 import { PROJECT_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
 import { useRightPanelWidth } from '@/presentation/layout/rightPanelContext';
@@ -999,7 +998,10 @@ export function ProjectBoardViews({
       {/* Активный вид. key по вью — смена вкладки пересоздаёт вид (свой useTasks/стейт).
           Панель «Настройки отображения» — В ПОТОКЕ справа (Notion): контент поджимается. */}
       <div className="flex min-h-0 flex-1 items-start gap-4">
-      <div className="min-w-0 flex-1">
+      <div
+        className="min-w-0 flex-1 transition-[width] motion-reduce:transition-none"
+        style={{ transitionDuration: '240ms', transitionTimingFunction: 'cubic-bezier(.2,.8,.2,1)' }}
+      >
       {isKanban ? (
         <KanbanBoard
           key={`${projectId}:${activeId}`}
@@ -1017,8 +1019,6 @@ export function ProjectBoardViews({
           projectId={projectId}
           projectName={projectName}
           memberCount={memberCount}
-          bleedNegClass={bleedNegClass}
-          bleedPadClass={bleedPadClass}
           filters={state.filters}
           onFiltersChange={setFilters}
           sort={state.sort}
@@ -1031,6 +1031,7 @@ export function ProjectBoardViews({
           onGroupingChange={setGrouping}
           colorRules={state.colorRules}
           createRequest={createReq}
+          sidePanelOpen={panel !== null}
           onRequestNewProperty={() => setPanel('newprop')}
           onSetHiddenCols={setHiddenCols}
         />
@@ -1191,13 +1192,17 @@ function BoardSidePanel({
   onClose: () => void;
   children: React.ReactNode;
 }): React.ReactElement | null {
-  // Позиция: под строкой вкладок, правый край выровнен с её правым краем.
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLElement | null>(
+    typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null),
+  );
+  // Desktop-позиция: под строкой вкладок; на tablet/mobile CSS разворачивает панель на весь экран.
+  const [pos, setPos] = useState<{ top: number } | null>(null);
   useEffect(() => {
     const tabs = document.getElementById('pf-views-tabs-row');
     const r = tabs?.getBoundingClientRect();
-    if (r) setPos({ top: Math.round(r.bottom + 6), right: Math.max(12, Math.round(window.innerWidth - r.right)) });
-    else setPos({ top: 100, right: 16 });
+    if (r) setPos({ top: Math.round(r.bottom + 6) });
+    else setPos({ top: 100 });
     // Блокируем прокрутку страницы и горизонтальную прокрутку таблицы, пока панель открыта.
     const locked: Array<{ el: HTMLElement; prev: string }> = [];
     const lock = (el: HTMLElement | null): void => {
@@ -1211,28 +1216,60 @@ function BoardSidePanel({
       .forEach((el) => lock(el));
     return () => locked.forEach(({ el, prev }) => (el.style.overflow = prev));
   }, []);
-  // Esc / клик вне закрывают.
+  // Escape закрывает верхний слой; на tablet/mobile Tab остаётся внутри полноэкранной панели.
   useEffect(() => {
+    const trigger = triggerRef.current;
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || window.innerWidth >= 1024) return;
+      const focusable = Array.from(
+        panelRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((node) => node.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      requestAnimationFrame(() => trigger?.isConnected && trigger.focus());
+    };
   }, [onClose]);
   if (typeof document === 'undefined' || !pos) return null;
-  return createPortal(
+  return (
     <div
+      ref={panelRef}
       role="dialog"
+      aria-label="Настройки отображения"
       style={{
         top: pos.top,
-        right: pos.right,
         maxHeight: `calc(100dvh - ${pos.top + 12}px)`,
+        transitionDuration: '240ms',
+        transitionTimingFunction: 'cubic-bezier(.2,.8,.2,1)',
       }}
-      className="fixed z-40 flex w-80 flex-col overflow-y-auto overscroll-contain rounded-lg border bg-popover shadow-xl duration-150 animate-in fade-in slide-in-from-top-1 max-md:hidden"
+      className={cn(
+        'fixed inset-x-3 bottom-3 z-[60] flex flex-col overflow-y-auto overscroll-contain rounded-[20px] border bg-popover shadow-2xl',
+        'max-lg:!inset-0 max-lg:!top-0 max-lg:!max-h-none max-lg:rounded-none',
+        'animate-in fade-in slide-in-from-right-3 motion-reduce:animate-none',
+        'lg:sticky lg:inset-auto lg:z-30 lg:w-[480px] lg:shrink-0',
+        'motion-reduce:transition-none',
+      )}
     >
       {children}
-    </div>,
-    document.body,
+    </div>
   );
 }
 
@@ -1248,18 +1285,19 @@ function NewPropertyPanel({
   const props = useTaskProperties(projectId);
   return (
     <div className="flex flex-col">
-      <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b bg-popover px-3 py-2.5">
+      <div className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b bg-popover px-3">
         <p className="text-sm font-semibold">Новое свойство</p>
         <button
           type="button"
           aria-label="Закрыть панель"
+          title="Закрыть"
           onClick={onClose}
-          className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="grid size-10 place-items-center rounded-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <X className="size-4" />
         </button>
       </div>
-      <div className="p-3">
+      <div className="p-4">
         <NewPropertyForm
           fullWidth
           onCreate={(t, name) => {

@@ -307,6 +307,7 @@ export function PropertyHeaderCell({
   onInsert,
   onChangeType,
   onResizeStart,
+  onResizeBy,
   colKey,
   dropSide = null,
   onColDragStart,
@@ -325,6 +326,7 @@ export function PropertyHeaderCell({
   onInsert?: (side: 'left' | 'right') => void;
   onChangeType?: (type: TaskPropertyType) => void;
   onResizeStart?: (e: React.MouseEvent) => void;
+  onResizeBy?: (delta: number) => void;
   // Drag-перестановка колонки (Notion) — см. HeaderCell в TableView.
   colKey?: string;
   dropSide?: 'left' | 'right' | null;
@@ -354,9 +356,10 @@ export function PropertyHeaderCell({
   return (
     <div
       role="columnheader"
+      aria-sort={sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none'}
       data-colkey={colKey}
       className={cn(
-        'relative flex min-w-0 border-b border-l border-t',
+        'relative flex h-12 min-w-0 border-b border-l bg-muted/25',
         dropSide === 'left' && 'shadow-[inset_2px_0_0_hsl(var(--primary))]',
         dropSide === 'right' && 'shadow-[inset_-2px_0_0_hsl(var(--primary))]',
       )}
@@ -394,7 +397,7 @@ export function PropertyHeaderCell({
                   }
                 : undefined
             }
-            className="flex min-h-9 min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [@media(hover:none)]:min-h-11"
+            className="flex h-12 min-w-0 flex-1 items-center gap-2 px-4 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             <Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
             <span className="truncate">{property.name}</span>
@@ -527,10 +530,17 @@ export function PropertyHeaderCell({
       {onResizeStart && (
         <div
           role="separator"
+          tabIndex={0}
+          aria-orientation="vertical"
           aria-label={`Изменить ширину колонки ${property.name}`}
           onMouseDown={onResizeStart}
           onPointerDown={(e) => e.stopPropagation()}
-          className="absolute -right-[3px] top-0 z-10 h-full w-[6px] cursor-col-resize rounded transition-colors hover:bg-primary/40"
+          onKeyDown={(e) => {
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            e.preventDefault();
+            onResizeBy?.(e.key === 'ArrowLeft' ? -16 : 16);
+          }}
+          className="absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize rounded transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         />
       )}
       <ConfirmDeleteDialog
@@ -574,7 +584,7 @@ export function NewPropertyForm({
         onChange={(e) => setName(e.target.value)}
         placeholder="Введите имя свойства…"
         aria-label="Имя свойства"
-        className="mb-2 h-9 w-full rounded-md border bg-background px-2.5 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
+        className="mb-4 h-11 w-full rounded-[10px] border bg-background px-3 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
       />
       <div className="flex items-center justify-between gap-2 px-0.5 pb-1.5">
         <p className="shrink-0 text-[11px] font-medium text-muted-foreground">Выбрать тип</p>
@@ -592,7 +602,7 @@ export function NewPropertyForm({
               }}
               placeholder="Поиск типа…"
               aria-label="Поиск типа"
-              className="h-7 w-full rounded-md border bg-background pl-7 pr-2 text-xs outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
+              className="h-11 w-full rounded-[10px] border bg-background pl-8 pr-3 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
             />
           </div>
         ) : (
@@ -600,7 +610,7 @@ export function NewPropertyForm({
             type="button"
             aria-label="Поиск типа"
             onClick={() => setSearchOpen(true)}
-            className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+            className="grid size-11 shrink-0 place-items-center rounded-[10px] text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Search className="size-3.5" />
           </button>
@@ -614,7 +624,7 @@ export function NewPropertyForm({
               key={t}
               type="button"
               onClick={() => onCreate(t, name)}
-              className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-accent/60"
+              className="flex min-h-11 items-center gap-2 rounded-[10px] px-3 py-2 text-left text-sm transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Icon className="size-4 text-muted-foreground" />
               {TASK_PROPERTY_TYPE_LABELS[t]}
@@ -894,7 +904,7 @@ export function PropertyValueCell({
               : 'text';
     if (editing) {
       return (
-        <div role="gridcell" {...selAttrs} className={cn('relative border-b border-l', rangeClass)}>
+        <div role="gridcell" {...selAttrs} className={cn('relative min-h-[52px] border-b border-l', rangeClass)}>
           {/* Notion: редактор раскрывается ПОВЕРХ ячейки РОВНО по её ширине (w-full),
               текст растёт вниз не двигая строки. Тонкая рамка + мягкая тень как в
               Notion (не «плавающий» широкий бокс). Enter — коммит (Shift+Enter —
@@ -951,7 +961,7 @@ export function PropertyValueCell({
             )}
           </div>
           {/* Держит высоту строки под оверлеем. */}
-          <div className="min-h-8" aria-hidden />
+          <div className="min-h-[52px]" aria-hidden />
         </div>
       );
     }
@@ -964,7 +974,7 @@ export function PropertyValueCell({
           setEditing(true);
         }}
         className={cn(
-          'relative min-h-8 min-w-0 border-b border-l px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [@media(hover:none)]:min-h-11',
+          'relative min-h-[52px] min-w-0 border-b border-l px-4 py-2 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
           rangeClass,
         )}
       >
@@ -983,7 +993,7 @@ export function PropertyValueCell({
 
   if (property.type === 'checkbox') {
     return (
-      <div role="gridcell" {...selAttrs} className={cn('relative flex min-h-8 items-center border-b border-l px-2 py-1.5 [@media(hover:none)]:min-h-11', rangeClass)}>
+      <div role="gridcell" {...selAttrs} className={cn('relative flex min-h-[52px] items-center border-b border-l px-4 py-2', rangeClass)}>
         <input
           type="checkbox"
           checked={value === '1'}
@@ -1005,7 +1015,7 @@ export function PropertyValueCell({
             {...selAttrs}
             type="button"
             className={cn(
-              'relative flex min-h-8 min-w-0 items-center gap-1.5 border-b border-l px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [@media(hover:none)]:min-h-11',
+              'relative flex min-h-[52px] min-w-0 items-center gap-2 border-b border-l px-4 py-2 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
               rangeClass,
             )}
           >
@@ -1080,7 +1090,7 @@ export function PropertyValueCell({
           {...selAttrs}
           type="button"
           className={cn(
-            'relative flex min-h-8 min-w-0 flex-wrap items-center gap-1 border-b border-l px-2 py-1.5 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [@media(hover:none)]:min-h-11',
+            'relative flex min-h-[52px] min-w-0 flex-wrap items-center gap-1 border-b border-l px-4 py-2 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
             rangeClass,
           )}
         >

@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom';
-import { CalendarDays, Clock } from 'lucide-react';
+import { ArrowRight, CalendarDays, Clock } from 'lucide-react';
 import { relativeTime } from '@/lib/relativeTime';
 import { formatExactDateTime } from '@/lib/datetime';
+import { cn } from '@/lib/utils';
 import { parseTitleHeading, splitTitleBody, stripInlineMarkdown } from '@/lib/taskTitleBody';
 
 // Полная очистка текста от markdown для минималистичной ленты (Notion): инлайн-разметка
@@ -43,11 +44,16 @@ function statusLabel(s: string | undefined): string {
 // Человекочитаемые подписи изменённых полей + значений (для Notion-style диффа).
 const FIELD_LABEL: Record<string, string> = {
   description: 'Описание',
+  status: 'Статус',
   deadline: 'Дедлайн',
   priority: 'Приоритет',
+  assigneeUserId: 'Ответственный',
+  assignee: 'Ответственный',
   ralphMode: 'Режим',
   name: 'Название',
   cover: 'Обложка',
+  attachments: 'Файлы',
+  startDate: 'Дата начала',
 };
 const PRIORITY_LABEL: Record<string, string> = {
   '1': 'Срочный',
@@ -58,6 +64,7 @@ const PRIORITY_LABEL: Record<string, string> = {
 function humanizeValue(field: string, v: string | null): string {
   if (field === 'cover') return v ? 'обновлена' : 'убрана';
   if (v == null || v === '') return '—';
+  if (field === 'status') return statusLabel(v);
   if (field === 'priority') return PRIORITY_LABEL[v] ?? v;
   // Текстовые поля (описание/название) — полная чистка markdown и короткая обрезка (Notion).
   const clean = cleanText(v);
@@ -76,30 +83,45 @@ function ChangesDiff({
   return (
     <div
       onClick={onOpen ? () => onOpen() : undefined}
-      className="-mx-1 mt-1 space-y-1 rounded px-1 py-0.5 transition-colors hover:bg-muted/60"
+      className={cn(
+        'mt-2.5 overflow-hidden rounded-xl border border-border/70 bg-muted/20 transition-colors',
+        onOpen && 'cursor-pointer hover:border-border hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+      )}
       role={onOpen ? 'button' : undefined}
       tabIndex={onOpen ? 0 : undefined}
-      onKeyDown={onOpen ? (e) => (e.key === 'Enter' ? onOpen() : undefined) : undefined}
+      onKeyDown={onOpen ? (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        onOpen();
+      } : undefined}
     >
       {changes.map((c, i) => (
-        <div key={`${c.field}-${i}`} className="text-xs leading-snug">
-          <span className="text-muted-foreground">{FIELD_LABEL[c.field] ?? c.field}: </span>
+        <div
+          key={`${c.field}-${i}`}
+          className="grid gap-1.5 border-b border-border/50 px-3 py-2.5 text-xs last:border-b-0 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-start"
+        >
+          <span className="font-medium text-muted-foreground">{FIELD_LABEL[c.field] ?? c.field}</span>
           {c.field === 'description' ? (
-            c.new ? (
-              <span className="rounded bg-primary/10 px-1 text-foreground">{humanizeValue(c.field, c.new)}</span>
-            ) : (
-              <span className="text-muted-foreground">очищено</span>
-            )
+            <span className="grid min-w-0 gap-1.5">
+              {c.old ? (
+                <span className="min-w-0 rounded-md bg-background/80 px-2 py-1.5 text-muted-foreground line-through decoration-muted-foreground/50">
+                  {humanizeValue(c.field, c.old)}
+                </span>
+              ) : null}
+              <span className="min-w-0 rounded-md bg-primary/10 px-2 py-1.5 font-medium text-foreground">
+                {c.new ? humanizeValue(c.field, c.new) : 'Очищено'}
+              </span>
+            </span>
           ) : (
-            <>
-              {c.old != null && c.old !== '' && (
-                <span className="text-muted-foreground line-through">{humanizeValue(c.field, c.old)}</span>
-              )}{' '}
-              <span aria-hidden className="text-muted-foreground">→</span>{' '}
-              <span className="rounded bg-primary/10 px-1 font-medium text-primary">
+            <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <span className="max-w-full truncate rounded-md bg-background/80 px-2 py-1 text-muted-foreground line-through decoration-muted-foreground/50">
+                {humanizeValue(c.field, c.old)}
+              </span>
+              <ArrowRight aria-hidden className="size-3.5 shrink-0 text-muted-foreground/60" />
+              <span className="max-w-full truncate rounded-md bg-primary/10 px-2 py-1 font-medium text-primary">
                 {humanizeValue(c.field, c.new)}
               </span>
-            </>
+            </span>
           )}
         </div>
       ))}
@@ -157,7 +179,7 @@ function renderText(item: ActivityEventItem, nav: NavHandlers): React.ReactNode 
     case 'task_status_changed':
       return (
         <>
-          <b>{actor}</b> перенёс {taskLink}: {statusLabel(p.oldStatus)} → <b>{statusLabel(p.newStatus)}</b>
+          <b>{actor}</b> изменил статус {taskLink}
         </>
       );
     case 'task_updated':
@@ -255,11 +277,11 @@ export function ActivityItem({
   };
   return (
     <TooltipProvider delayDuration={300}>
-      <li className="group flex gap-3 px-4 py-3 transition-colors hover:bg-muted/40">
+      <li className="group relative flex gap-3.5 px-5 py-3.5 transition-colors before:absolute before:bottom-0 before:left-[33px] before:top-0 before:w-px before:bg-border/70 first:before:top-7 last:before:bottom-7 hover:bg-muted/30">
         {/* Аватар автора — hover: карточка с именем и текущим местным временем (как в Notion). */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="mt-0.5 shrink-0">
+            <span className="relative z-10 mt-0.5 shrink-0 rounded-full bg-background ring-4 ring-background">
               <UserAvatar
                 displayName={actor}
                 avatarUrl={item.actorAvatarUrl}
@@ -288,14 +310,14 @@ export function ActivityItem({
         </Tooltip>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-2">
-            <p className="min-w-0 flex-1 select-text text-sm leading-snug">
+          <div className="flex min-h-8 items-start gap-2">
+            <p className="min-w-0 flex-1 select-text pt-0.5 text-sm leading-relaxed">
               {renderText(item, { openTask: () => openTask(), openProject })}
             </p>
             {/* Правый слот ФИКСИРОВАННОЙ ширины под кнопку версии — резервируется всегда, чтобы
                 текст НИКОГДА не доходил до правого края (там кнопка), одинаково у всех сообщений
                 (как в Notion). Кнопка появляется, если у задачи есть версии; иначе слот пустой. */}
-            <div className="flex w-7 shrink-0 justify-end">
+            <div className="flex w-9 shrink-0 justify-end">
               {versionTaskId && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -306,7 +328,7 @@ export function ActivityItem({
                         onOpenVersions?.(versionTaskId);
                       }}
                       aria-label="История версий"
-                      className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+                      className="grid size-9 shrink-0 place-items-center rounded-[10px] text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <Clock className="size-4" />
                     </button>
@@ -338,6 +360,18 @@ export function ActivityItem({
               onOpen={() =>
                 taskId ? openTask(item.payload?.changes?.[0]?.field) : openProject()
               }
+            />
+          ) : null}
+          {item.kind === 'task_status_changed' ? (
+            <ChangesDiff
+              changes={[
+                {
+                  field: 'status',
+                  old: item.payload?.oldStatus ?? null,
+                  new: item.payload?.newStatus ?? null,
+                },
+              ]}
+              onOpen={() => openTask('status')}
             />
           ) : null}
         </div>
