@@ -1,6 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import type { GetTaskAttachment } from '../../application/task/GetTaskAttachment.js';
 import { verifyAttachmentToken } from '../../application/attachments/signedAttachmentUrl.js';
+import { contentDisposition } from '../contentDisposition.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 type Deps = {
@@ -70,15 +71,11 @@ export function attachmentBinaryRouter(deps: Deps): Router {
       // Картинку определяем по mimeType ИЛИ по расширению (фолбэк для .webp с кривым MIME).
       const inlineMime = inlineImageMime(attachment.mimeType, attachment.filename);
       const isInlineImage = inlineMime !== null;
-      // RFC5987-имя: кириллица ок, вырезаем CR/LF/кавычки/backslash.
-      const safeName = attachment.filename.replace(/[\r\n"\\]/g, '_');
-      const encodedName = encodeURIComponent(attachment.filename).replace(/['()]/g, escape);
-
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Content-Type', isInlineImage ? inlineMime : 'application/octet-stream');
       res.setHeader(
         'Content-Disposition',
-        `${isInlineImage ? 'inline' : 'attachment'}; filename="${safeName}"; filename*=UTF-8''${encodedName}`,
+        contentDisposition(attachment.filename, isInlineImage),
       );
       res.setHeader('Content-Length', data.data.byteLength.toString());
       res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');

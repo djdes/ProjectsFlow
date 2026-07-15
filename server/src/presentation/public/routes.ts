@@ -9,6 +9,7 @@ import {
 } from '../../application/project/ClonePublicBoard.js';
 import type { ProjectRepository } from '../../application/project/ProjectRepository.js';
 import type { AttachmentStorage } from '../../application/task/AttachmentStorage.js';
+import { contentDisposition } from '../contentDisposition.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 type Deps = {
@@ -153,7 +154,7 @@ export function publicBoardRouter(deps: Deps): Router {
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader(
         'Content-Disposition',
-        `${inlineOk ? 'inline' : 'attachment'}; filename="${encodeURIComponent(result.attachment.filename)}"`,
+        contentDisposition(result.attachment.filename, inlineOk),
       );
       res.setHeader('Cache-Control', 'public, max-age=3600');
       res.send(result.data.data);

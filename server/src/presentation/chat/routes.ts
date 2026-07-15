@@ -5,6 +5,7 @@ import type { ChatService, SendAttachmentDescriptor } from '../../application/ch
 import type { ChatEventHub } from '../../infrastructure/realtime/ChatEventHub.js';
 import type { AttachmentStorage } from '../../application/task/AttachmentStorage.js';
 import type { ChatStreamEvent } from '../../domain/chat/ChatEvent.js';
+import { contentDisposition } from '../contentDisposition.js';
 import { editMessageSchema, reactionSchema, markReadSchema } from './schemas.js';
 
 export type ChatRouterDeps = {
@@ -181,14 +182,9 @@ export function chatRouter(deps: ChatRouterDeps): Router {
       }
       const isInlineImage =
         att.mimeType.startsWith('image/') && att.mimeType !== 'image/svg+xml';
-      const safeName = att.filename.replace(/[\r\n"\\]/g, '_');
-      const encodedName = encodeURIComponent(att.filename).replace(/['()]/g, escape);
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Content-Type', isInlineImage ? att.mimeType : 'application/octet-stream');
-      res.setHeader(
-        'Content-Disposition',
-        `${isInlineImage ? 'inline' : 'attachment'}; filename="${safeName}"; filename*=UTF-8''${encodedName}`,
-      );
+      res.setHeader('Content-Disposition', contentDisposition(att.filename, isInlineImage));
       res.setHeader('Content-Length', data.data.byteLength.toString());
       res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
       res.send(data.data);
