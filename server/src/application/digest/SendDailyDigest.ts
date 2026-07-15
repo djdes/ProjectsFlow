@@ -23,7 +23,6 @@ import {
   stripFigureLines,
   toVisibleStatus,
 } from '../../domain/task/digestFormat.js';
-import { digestTaskActionsKeyboard } from '../telegram/taskActionKeyboard.js';
 import {
   makeAttachmentImageResolver,
   signAttachmentUrl,
@@ -142,9 +141,8 @@ export class SendDailyDigest {
           .catch((e) => console.warn('[daily-digest] notification failed', userId, e));
       }
       if (cfg.channels.includes('telegram') && cfg.tgTargets.includes('personal')) {
-        // Личный TG — как письмо-дайджест: заголовок + карточка на задачу с инлайн-кнопками
-        // «Завершить/Комментировать». Кнопки и reply→комментарий цепляет
-        // SendAgentTelegramNotification по kind='task_digest_item' (+ taskId/projectId).
+        // Личный TG — заголовок + карточка на задачу. Действия живут компактными ссылками
+        // прямо в тексте, без большой inline-клавиатуры под каждым сообщением.
         const base = this.deps.appUrl.replace(/\/$/, '');
         await this.deps.telegram
           .execute({
@@ -157,6 +155,7 @@ export class SendDailyDigest {
           .catch((e) => console.warn('[daily-digest] tg personal header failed', userId, e));
         for (const t of selected.slice(0, TG_DIGEST_ACTION_LIMIT)) {
           // Картинки задачи — альбомом после карточки (подписанные URL); из текста срезаны.
+          const taskUrl = `${base}/${project.isInbox ? 'inbox' : `projects/${projectId}`}?task=${t.id}`;
           const imgUrls = extractImageSrcs(t.description)
             .map((s) => signAttachmentUrl(base, s, this.deps.signingSecret, IMG_URL_TTL_SECONDS, nowMs))
             .filter((u): u is string => u !== null);
@@ -168,7 +167,9 @@ export class SendDailyDigest {
                 `<i>${digestStatusLabel(t.status)}</i>` +
                 (t.deadline
                   ? `\n⏰ ${escapeDigestHtml(formatDeadlineRemainingRu(t.deadline, digestNow))}`
-                  : ''),
+                  : '') +
+                `\n<a href="${escapeDigestHtml(taskUrl)}">Открыть задачу</a>` +
+                ` · <a href="${escapeDigestHtml(`${taskUrl}&done=1`)}">✓ Завершить</a>`,
               parseMode: 'HTML',
               kind: 'task_digest_item',
               taskId: t.id,
@@ -202,17 +203,12 @@ export class SendDailyDigest {
       settings.telegramGroupChatId !== null
     ) {
       const groupChatId = settings.telegramGroupChatId;
-      const groupActions = digestTaskActionsKeyboard(
-        model.groups.flatMap((group) => group.items),
-        TG_DIGEST_ACTION_LIMIT,
-      );
       let richOk = false;
       if (this.deps.telegramClient.sendRichMessage) {
         try {
           const r = await this.deps.telegramClient.sendRichMessage({
             chatId: groupChatId,
             html: renderDigestRich(model),
-            replyMarkup: groupActions,
           });
           richOk = r.kind === 'ok';
         } catch (e) {
@@ -220,14 +216,13 @@ export class SendDailyDigest {
         }
       }
       if (!richOk) {
-        for (const [index, chunk] of tgChunks.entries()) {
+        for (const chunk of tgChunks) {
           await this.deps.telegramClient
             .sendMessage({
               chatId: groupChatId,
               text: chunk,
               parseMode: 'HTML',
               disableWebPagePreview: true,
-              replyMarkup: index === 0 ? groupActions : undefined,
             })
             .catch((e) => console.warn('[daily-digest] tg group failed', e));
         }
@@ -238,8 +233,8 @@ export class SendDailyDigest {
   }
 }
 
-// Сколько задач снабжаем отдельными действиями в личной и групповой TG-сводке (остальное —
-// ссылкой в приложение). Держим в разумных рамках, чтобы не спамить сообщениями/кнопками.
+// Личный TG-дайджест: сколько задач показать отдельными карточками-действиями (остальное —
+// ссылкой в приложение). Держим в разумных рамках, чтобы не спамить сообщениями.
 const TG_DIGEST_ACTION_LIMIT = 12;
 
 const VISIBLE_STATUS_LABEL: Record<string, string> = {

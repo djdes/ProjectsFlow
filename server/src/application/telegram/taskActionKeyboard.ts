@@ -4,14 +4,14 @@ import type { InlineKeyboardMarkup } from './TelegramClient.js';
 // «Завершить/Комментировать» и регистрируем reply→комментарий. НЕ включаем:
 //  - task_done (завершать нечего), ralph_* (свой reply-поток), server_alert (не задача).
 //  Карточка назначения ответственного шлётся композером с этой же клавиатурой явно.
-// task_digest_item — карточка задачи из ежедневной сводки (личный TG).
+//  task_digest_item намеренно не включён: в ежедневной сводке действия — компактные ссылки
+//  внутри самого сообщения, а не большая inline-клавиатура под ним.
 export const TASK_ACTION_KINDS: ReadonlySet<string> = new Set([
   'comment',
   'comment_on_my_task',
   'mention',
   'status_change',
   'task_assignee_changed',
-  'task_digest_item',
 ]);
 
 // callback_data ≤ 64 байт: 'nd:'/'nc:'/'nu:' (3) + UUID(36) = 39 байт. Префиксы nd/nc/nu
@@ -27,31 +27,6 @@ export function taskActionKeyboard(taskId: string): InlineKeyboardMarkup {
       [{ text: '👁 Посмотреть задачу', callback_data: `bt:t:${taskId}` }],
     ],
   };
-}
-
-export type DigestTaskAction = {
-  readonly taskId: string;
-  readonly name: string;
-  readonly openLink: string;
-};
-
-// Кнопки под общей ежедневной сводкой: одна строка на задачу. Название в кнопке завершения
-// позволяет не перепутать одинаковые «Завершить», а URL-кнопка сразу открывает нужную задачу.
-export function digestTaskActionsKeyboard(
-  tasks: readonly DigestTaskAction[],
-  limit = 12,
-): InlineKeyboardMarkup {
-  return {
-    inline_keyboard: tasks.slice(0, Math.max(0, limit)).map((task) => [
-      { text: `✅ Завершить · ${compactTaskName(task.name)}`, callback_data: `nd:${task.taskId}` },
-      { text: '↗ Перейти', url: task.openLink },
-    ]),
-  };
-}
-
-function compactTaskName(name: string): string {
-  const normalized = name.replace(/\s+/g, ' ').trim() || 'Задача';
-  return normalized.length <= 24 ? normalized : `${normalized.slice(0, 23).trimEnd()}…`;
 }
 
 // Клавиатура после завершения — только «Отменить» (персистентно, до нажатия).

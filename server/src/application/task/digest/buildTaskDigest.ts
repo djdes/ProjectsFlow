@@ -212,12 +212,12 @@ export function renderDigestHtml(
   return p.join('');
 }
 
-// Блок одной задачи для Telegram: жирный заголовок (НЕ ссылка) → мета (👤/⏰) → тело →
+// Блок одной задачи для Telegram: кликабельный жирный заголовок → мета (👤/⏰) → тело →
 // вложения → футер «Комментировать (N) | Завершить» (гиперссылки на сайт). Если блок не
 // влезает в maxBlock — усекаем ТОЛЬКО тело (по сырому markdown, затем re-render, чтобы HTML
 // остался сбалансированным и Telegram не отбил parse_mode).
 function digestItemBlockTg(it: DigestItem, maxBlock: number): string {
-  const title = `<b>${escapeHtml(it.name)}</b>`;
+  const title = `<a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>`;
   const meta: string[] = [];
   if (it.assignee) meta.push(`👤 ${escapeHtml(it.assignee)}`);
   if (it.deadline) meta.push(`⏰ ${escapeHtml(it.deadline)}`);
@@ -225,7 +225,7 @@ function digestItemBlockTg(it: DigestItem, maxBlock: number): string {
     it.commentCount > 0 ? `Комментировать (${it.commentCount})` : 'Комментировать';
   const footer =
     `<a href="${escapeHtml(it.openLink)}">${commentLabel}</a>` +
-    ` | <a href="${escapeHtml(it.doneLink)}">Завершить</a>`;
+    ` | <a href="${escapeHtml(it.doneLink)}">✓ Завершить</a>`;
   const attach = it.attachments.length
     ? it.attachments.map((a) => `📎 <a href="${escapeHtml(a.url)}">${escapeHtml(a.name)}</a>`).join(' · ')
     : '';
@@ -291,12 +291,14 @@ export function renderDigestRich(m: DigestModel): string {
   for (const g of m.groups) {
     h.push(`<h3>${escapeHtml(g.heading)}</h3>`);
     h.push('<table bordered striped>');
-    h.push('<tr><th>Задача</th><th>Кто</th><th>Дедлайн</th></tr>');
+    h.push('<tr><th>Задача</th><th>Кто</th><th>Дедлайн</th><th></th></tr>');
     for (const it of g.items) {
       const who = it.assignee ? escapeHtml(it.assignee) : '—';
       const dl = it.deadline ? escapeHtml(it.deadline) : '—';
       h.push(
-        `<tr><td><b>${escapeHtml(it.name)}</b></td><td>${who}</td><td>${dl}</td></tr>`,
+        `<tr><td><a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a></td>` +
+          `<td>${who}</td><td>${dl}</td>` +
+          `<td><a href="${escapeHtml(it.doneLink)}">✓ Завершить</a></td></tr>`,
       );
     }
     h.push('</table>');

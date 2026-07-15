@@ -5,6 +5,7 @@ import {
   buildDigestModel,
   renderDigestMarkdown,
   renderDigestHtml,
+  renderDigestRich,
   renderDigestTelegram,
   type DigestAttachment,
 } from './buildTaskDigest.js';
@@ -170,20 +171,32 @@ test('renderDigestMarkdown: bold header, anchor + done link, body, attachments',
   assert.ok(md.includes('📎 [f.pdf](https://x/a/1)'));
 });
 
-test('renderDigestTelegram: жирный заголовок (не ссылка) + футер Комментировать (N)|Завершить', () => {
+test('renderDigestTelegram: название открывает задачу + компактное завершение в тексте', () => {
   const tasks = [task({ id: 't1', description: 'A & <b> тест', priority: 1, commentCount: 3 })];
   const chunks = renderDigestTelegram(buildDigestModel(tasks, baseOpts));
   assert.equal(chunks.length, 1);
   const tg = chunks[0]!;
   assert.ok(tg.startsWith('<b>Задачи — 1 · '));
-  assert.ok(tg.includes('<b>A &amp;')); // заголовок жирный + экранирован
-  // заголовок НЕ гиперссылка (нет <a> вокруг имени задачи)
-  assert.ok(!tg.includes('<a href="https://projectsflow.ru/projects/p1?task=t1">A'));
+  assert.ok(tg.includes('<a href="https://projectsflow.ru/projects/p1?task=t1"><b>A &amp;'));
   // футер: Комментировать (3) → openLink, Завершить → doneLink
   assert.ok(tg.includes('<a href="https://projectsflow.ru/projects/p1?task=t1">Комментировать (3)</a>'));
-  assert.ok(tg.includes('<a href="https://projectsflow.ru/projects/p1?task=t1&amp;done=1">Завершить</a>'));
+  assert.ok(tg.includes('<a href="https://projectsflow.ru/projects/p1?task=t1&amp;done=1">✓ Завершить</a>'));
   // старого «✓ Готово» больше нет
   assert.ok(!tg.includes('✓ Готово'));
+});
+
+test('renderDigestRich: actions live inside each table row without an inline keyboard', () => {
+  const tasks = [task({ id: 't1', description: 'Проверить отчёт', priority: 1, deadline: '2026-06-07' })];
+  const rich = renderDigestRich(buildDigestModel(tasks, baseOpts));
+
+  assert.ok(rich.includes('<th>Задача</th><th>Кто</th><th>Дедлайн</th><th></th>'));
+  assert.ok(rich.includes(
+    '<a href="https://projectsflow.ru/projects/p1?task=t1"><b>Проверить отчёт</b></a>',
+  ));
+  assert.ok(rich.includes(
+    '<a href="https://projectsflow.ru/projects/p1?task=t1&amp;done=1">✓ Завершить</a>',
+  ));
+  assert.ok(rich.includes('осталось 3 дня'));
 });
 
 test('renderDigestTelegram: длинная сводка → несколько сообщений, все задачи целиком', () => {
