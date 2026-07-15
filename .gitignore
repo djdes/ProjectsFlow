@@ -24,6 +24,8 @@ coverage/
 .playwright-mcp/
 # Claude Code state
 .claude/
+# Local Notion reference materials
+/primer/
 # Task attachments (картинки/скриншоты — хранятся на диске, не коммитим)
 uploads/
 */uploads/
