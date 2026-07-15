@@ -28,8 +28,14 @@ export type TelegramTaskContentPart =
 
 export type TelegramTaskRichContent = {
   readonly html: string;
-  readonly media: readonly SendRichMessageMediaInput[];
+  readonly media: readonly TelegramTaskRichMedia[];
   readonly consumedParts: number;
+};
+
+type TelegramTaskRichMedia = SendRichMessageMediaInput & {
+  readonly attachmentId: string;
+  readonly filename: string;
+  readonly mimeType: string;
 };
 
 function splitDescription(description: string | null): RawDescriptionPart[] {
@@ -193,19 +199,47 @@ export function buildTaskTelegramRichContent(
   );
   if (inlineMedia.length === 0 || inlineMedia.length > TELEGRAM_RICH_MEDIA_LIMIT) return null;
 
-  const media: SendRichMessageMediaInput[] = [];
+  const media: TelegramTaskRichMedia[] = [];
   const htmlParts = ['<h3>📋 Задача</h3>'];
   for (const part of descriptionParts) {
     if (part.kind === 'text') {
-      htmlParts.push(part.html);
+      htmlParts.push(toRichHtmlBlocks(part.html));
       continue;
     }
     const id = `task_photo_${media.length + 1}`;
-    media.push({ id, kind: 'photo', url: part.url });
+    media.push({
+      id,
+      kind: 'photo',
+      url: part.url,
+      attachmentId: part.attachmentId,
+      filename: part.filename,
+      mimeType: part.mimeType,
+    });
     htmlParts.push(`<img src="tg://photo?id=${id}"/>`);
   }
 
   const html = htmlParts.join('\n\n');
   if (html.length > TELEGRAM_RICH_TEXT_LIMIT) return null;
   return { html, media, consumedParts };
+}
+
+function toRichHtmlBlocks(html: string): string {
+  const blocks: string[] = [];
+  const blockTag = /(<pre>[\s\S]*?<\/pre>|<blockquote>[\s\S]*?<\/blockquote>)/g;
+  let offset = 0;
+  for (const match of html.matchAll(blockTag)) {
+    const index = match.index ?? 0;
+    appendParagraphBlocks(blocks, html.slice(offset, index));
+    blocks.push(match[0]);
+    offset = index + match[0].length;
+  }
+  appendParagraphBlocks(blocks, html.slice(offset));
+  return blocks.join('\n');
+}
+
+function appendParagraphBlocks(target: string[], html: string): void {
+  for (const line of html.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed) target.push(`<p>${trimmed}</p>`);
+  }
 }

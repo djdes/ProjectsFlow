@@ -96,6 +96,8 @@ test('rich content keeps a pasted screenshot between its surrounding paragraphs'
 
   const rich = buildTaskTelegramRichContent(parts);
   assert.ok(rich);
+  assert.match(rich.html, /<p>До скриншота<\/p>/);
+  assert.match(rich.html, /<p>После скриншота<\/p>/);
   assert.ok(rich.html.indexOf('До скриншота') < rich.html.indexOf('tg://photo?id=task_photo_1'));
   assert.ok(rich.html.indexOf('tg://photo?id=task_photo_1') < rich.html.indexOf('После скриншота'));
   assert.deepEqual(rich.media, [
@@ -103,6 +105,9 @@ test('rich content keeps a pasted screenshot between its surrounding paragraphs'
       id: 'task_photo_1',
       kind: 'photo',
       url: resolveUrl('img-1'),
+      attachmentId: 'img-1',
+      filename: 'screenshot.png',
+      mimeType: 'image/png',
     },
   ]);
   assert.equal(parts[rich.consumedParts]!.kind, 'text');

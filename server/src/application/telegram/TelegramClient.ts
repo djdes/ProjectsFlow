@@ -45,6 +45,9 @@ export type SendRichMessageMediaInput = {
   readonly id: string;
   readonly kind: 'photo' | 'video' | 'audio' | 'animation' | 'voice_note';
   readonly url: string;
+  readonly data?: Buffer;
+  readonly filename?: string;
+  readonly mimeType?: string;
 };
 
 export type SendAttachmentInput = {

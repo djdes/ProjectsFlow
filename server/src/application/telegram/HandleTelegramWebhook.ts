@@ -1140,11 +1140,17 @@ export class HandleTelegramWebhook {
       let remainingContent = content;
       const richContent = buildTaskTelegramRichContent(content);
       if (richContent && this.deps.client.sendRichMessage) {
+        const richMedia = await Promise.all(
+          richContent.media.map(async (media) => ({
+            ...media,
+            data: await readAttachment(media.attachmentId),
+          })),
+        );
         const result = await this.deps.client
           .sendRichMessage({
             chatId,
             html: richContent.html,
-            media: richContent.media,
+            media: richMedia,
           })
           .catch((err) => {
             console.warn('[tg-webhook] send task rich content failed:', err);
@@ -1154,6 +1160,14 @@ export class HandleTelegramWebhook {
           await registerMessage(result.messageId);
           introSent = true;
           remainingContent = content.slice(richContent.consumedParts);
+        } else if (result) {
+          const detail = result.kind === 'rate_limited'
+            ? `retry_after=${result.retryAfter}`
+            : result.description;
+          console.warn(
+            `[tg-webhook] task rich content rejected: kind=${result.kind}; ${detail}; ` +
+              `media_count=${richContent.media.length}`,
+          );
         }
       }
 

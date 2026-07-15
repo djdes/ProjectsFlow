@@ -117,24 +117,45 @@ export class HttpTelegramClient implements TelegramClient {
   async sendRichMessage(input: SendRichMessageInput): Promise<SendMessageResult> {
     let res: Awaited<ReturnType<typeof this.tgFetch>>;
     try {
-      res = await this.tgFetch('/sendRichMessage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: input.chatId,
-          rich_message: {
-            html: input.html,
-            media: input.media?.map((item) => ({
-              id: item.id,
-              media: {
-                type: item.kind,
-                media: item.url,
-              },
-            })),
+      const richMessage = {
+        html: input.html,
+        media: input.media?.map((item, index) => ({
+          id: item.id,
+          media: {
+            type: item.kind,
+            media: item.data ? `attach://rich_media_${index}` : item.url,
           },
-          reply_markup: input.replyMarkup,
-        }),
-      });
+        })),
+      };
+      const hasUploads = input.media?.some((item) => item.data !== undefined) ?? false;
+      if (hasUploads) {
+        const form = new FormData();
+        form.set('chat_id', String(input.chatId));
+        form.set('rich_message', JSON.stringify(richMessage));
+        if (input.replyMarkup !== undefined) {
+          form.set('reply_markup', JSON.stringify(input.replyMarkup));
+        }
+        input.media?.forEach((item, index) => {
+          if (!item.data) return;
+          form.set(
+            `rich_media_${index}`,
+            new File([new Uint8Array(item.data)], item.filename ?? `${item.id}.bin`, {
+              type: item.mimeType ?? 'application/octet-stream',
+            }),
+          );
+        });
+        res = await this.tgFetch('/sendRichMessage', { method: 'POST', body: form });
+      } else {
+        res = await this.tgFetch('/sendRichMessage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: input.chatId,
+            rich_message: richMessage,
+            reply_markup: input.replyMarkup,
+          }),
+        });
+      }
     } catch (err) {
       return { kind: 'error', description: (err as Error).message };
     }

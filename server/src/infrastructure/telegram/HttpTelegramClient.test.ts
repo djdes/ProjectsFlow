@@ -122,3 +122,35 @@ test('rich task message references a declared photo at its paragraph position', 
     },
   );
 });
+
+test('rich task message uploads an inline screenshot with attach:// multipart media', async () => {
+  await withTelegramStub(
+    () => ({ status: 200, body: { ok: true, result: { message_id: 45 } } }),
+    async (baseUrl, requests) => {
+      const client = new HttpTelegramClient('secret', baseUrl);
+      const result = await client.sendRichMessage({
+        chatId: 7,
+        html: '<p>Before</p><img src="tg://photo?id=task_photo_1"/><p>After</p>',
+        media: [
+          {
+            id: 'task_photo_1',
+            kind: 'photo',
+            url: 'https://pf.test/api/attachments/img-1?sig=x',
+            data: Buffer.from('png-image-bytes'),
+            filename: 'скриншот.png',
+            mimeType: 'image/png',
+          },
+        ],
+      });
+
+      assert.deepEqual(result, { kind: 'ok', messageId: 45 });
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]!.path, '/botsecret/sendRichMessage');
+      assert.match(requests[0]!.contentType, /^multipart\/form-data; boundary=/);
+      assert.match(requests[0]!.body, /attach:\/\/rich_media_0/);
+      assert.match(requests[0]!.body, /task_photo_1/);
+      assert.match(requests[0]!.body, /скриншот\.png/);
+      assert.match(requests[0]!.body, /png-image-bytes/);
+    },
+  );
+});
