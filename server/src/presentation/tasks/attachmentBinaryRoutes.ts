@@ -26,6 +26,40 @@ const IMAGE_MIME_BY_EXT: Record<string, string> = {
   apng: 'image/apng',
 };
 
+// MP4 is the only video format we currently preview inline. Keeping the allow-list narrow is
+// intentional: unlike arbitrary uploads, MP4 is passive media and is safe to expose to a
+// same-origin <video> element with nosniff enabled.
+function inlineVideoMime(mimeType: string, filename: string): string | null {
+  if (mimeType.split(';', 1)[0]?.trim().toLowerCase() === 'video/mp4') return 'video/mp4';
+  return filename.toLowerCase().endsWith('.mp4') ? 'video/mp4' : null;
+}
+
+type ByteRange = { readonly start: number; readonly end: number };
+
+function parseSingleByteRange(value: string, size: number): ByteRange | null {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(value.trim());
+  if (!match || size <= 0 || (!match[1] && !match[2])) return null;
+
+  if (!match[1]) {
+    const suffixLength = Number(match[2]);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return null;
+    return { start: Math.max(0, size - suffixLength), end: size - 1 };
+  }
+
+  const start = Number(match[1]);
+  const requestedEnd = match[2] ? Number(match[2]) : size - 1;
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(requestedEnd) ||
+    start < 0 ||
+    start >= size ||
+    requestedEnd < start
+  ) {
+    return null;
+  }
+  return { start, end: Math.min(requestedEnd, size - 1) };
+}
+
 // Эффективный image-MIME для inline-отдачи: по mimeType, иначе по расширению имени.
 // null → не картинка (отдаём как download).
 function inlineImageMime(mimeType: string, filename: string): string | null {
@@ -66,19 +100,42 @@ export function attachmentBinaryRouter(deps: Deps): Router {
 
       // Любой тип файла разрешён к загрузке, поэтому отдаём безопасно:
       // - nosniff, чтобы браузер не «угадывал» MIME (анти-XSS на same-origin).
-      // - inline только для растровых картинок (нужно для превью); SVG и всё остальное —
+      // - inline только для растровых картинок и MP4 (нужно для превью); SVG и всё остальное —
       //   принудительно скачиванием (SVG может нести скрипт; html/прочее — тоже).
-      // Картинку определяем по mimeType ИЛИ по расширению (фолбэк для .webp с кривым MIME).
-      const inlineMime = inlineImageMime(attachment.mimeType, attachment.filename);
-      const isInlineImage = inlineMime !== null;
+      // Медиа определяем по mimeType ИЛИ по расширению (фолбэк для криво сохранённого MIME).
+      const imageMime = inlineImageMime(attachment.mimeType, attachment.filename);
+      const videoMime = inlineVideoMime(attachment.mimeType, attachment.filename);
+      const inlineMime = imageMime ?? videoMime;
+      const isInlineMedia = inlineMime !== null;
       res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('Content-Type', isInlineImage ? inlineMime : 'application/octet-stream');
+      res.setHeader('Content-Type', inlineMime ?? 'application/octet-stream');
       res.setHeader(
         'Content-Disposition',
-        contentDisposition(attachment.filename, isInlineImage),
+        contentDisposition(attachment.filename, isInlineMedia),
       );
-      res.setHeader('Content-Length', data.data.byteLength.toString());
       res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+
+      if (videoMime) {
+        const size = data.data.byteLength;
+        res.setHeader('Accept-Ranges', 'bytes');
+        const requestedRange = req.headers.range;
+        if (requestedRange) {
+          const range = parseSingleByteRange(requestedRange, size);
+          if (!range) {
+            res.setHeader('Content-Range', `bytes */${size}`);
+            res.status(416).end();
+            return;
+          }
+          const chunk = data.data.subarray(range.start, range.end + 1);
+          res.status(206);
+          res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
+          res.setHeader('Content-Length', chunk.byteLength.toString());
+          res.send(chunk);
+          return;
+        }
+      }
+
+      res.setHeader('Content-Length', data.data.byteLength.toString());
       res.send(data.data);
     } catch (e) {
       next(e);

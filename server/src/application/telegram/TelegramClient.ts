@@ -116,6 +116,9 @@ export type SendMessageRateLimited = {
 export type SendMessageError = {
   readonly kind: 'error';
   readonly description: string;
+  // True when the request may have reached Telegram but its response was lost (timeout/reset).
+  // Callers must not immediately retry with different content or they can create duplicates.
+  readonly deliveryUnknown?: boolean;
 };
 
 export type SendMessageResult =

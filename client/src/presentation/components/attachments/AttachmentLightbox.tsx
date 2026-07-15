@@ -2,10 +2,10 @@ import { Download, FileText, X } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
-import { formatBytes, isImageFile } from './files';
+import { formatBytes, isImageFile, isMp4File } from './files';
 
-// Превью вложения с увеличением. Картинки — полноразмерный <img>; не-картинки —
-// иконка + кнопка скачать (бинарь отдаётся сервером как attachment).
+// Превью вложения с увеличением. Картинки — полноразмерный <img>, MP4 — видеоплеер,
+// остальные файлы — иконка + кнопка скачать.
 export function AttachmentLightbox({
   attachment,
   onClose,
@@ -14,6 +14,7 @@ export function AttachmentLightbox({
   onClose: () => void;
 }): React.ReactElement {
   const image = attachment ? isImageFile(attachment.mimeType, attachment.filename) : false;
+  const mp4 = attachment ? isMp4File(attachment.mimeType, attachment.filename) : false;
   return (
     <Dialog open={attachment !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="grid max-h-[90dvh] max-w-4xl gap-0 overflow-hidden p-0">
@@ -36,6 +37,18 @@ export function AttachmentLightbox({
               className="max-h-[75dvh] max-w-full cursor-default object-contain"
               onClick={(e) => e.stopPropagation()}
             />
+          ) : attachment && mp4 ? (
+            <video
+              src={attachment.url}
+              controls
+              playsInline
+              preload="metadata"
+              className="max-h-[72dvh] max-w-full cursor-default rounded bg-black"
+              aria-label={`Видео ${attachment.filename}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              Ваш браузер не поддерживает просмотр MP4.
+            </video>
           ) : attachment ? (
             <div
               className="flex cursor-default flex-col items-center gap-3 py-10 text-center"

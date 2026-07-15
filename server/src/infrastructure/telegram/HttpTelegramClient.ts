@@ -157,7 +157,11 @@ export class HttpTelegramClient implements TelegramClient {
         });
       }
     } catch (err) {
-      return { kind: 'error', description: (err as Error).message };
+      return {
+        kind: 'error',
+        description: (err as Error).message,
+        deliveryUnknown: true,
+      };
     }
 
     const body = (await res.json().catch(() => null)) as TgResponse<{
@@ -173,7 +177,14 @@ export class HttpTelegramClient implements TelegramClient {
     if (res.status === 429) {
       return { kind: 'rate_limited', retryAfter: body?.parameters?.retry_after ?? 1 };
     }
-    return { kind: 'error', description: body?.description ?? `HTTP ${res.status}` };
+    return {
+      kind: 'error',
+      description: body?.description ?? `HTTP ${res.status}`,
+      // A relay can forward the rich message to Telegram and then fail while returning the
+      // upstream response. Only an explicit 4xx is a confirmed rejection that is safe to
+      // replace with a fallback message.
+      deliveryUnknown: res.ok || res.status >= 500,
+    };
   }
 
   // Редактирование текста+кнопок ранее отправленного сообщения. Best-effort: ошибки

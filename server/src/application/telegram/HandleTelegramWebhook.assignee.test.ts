@@ -10,7 +10,7 @@ function makeHarness(opts?: {
   tasksByProject?: Record<string, any[]>;
   task?: any;
   attachments?: any[];
-  richResult?: 'ok' | 'error' | 'missing';
+  richResult?: 'ok' | 'error' | 'delivery_unknown' | 'forbidden' | 'rate_limited' | 'missing';
 }) {
   const sent: { chatId: number; text: string; replyMarkup: any }[] = [];
   const sentRich: any[] = [];
@@ -56,9 +56,23 @@ function makeHarness(opts?: {
             async sendRichMessage(i: any) {
               events.push(`rich:${i.html}`);
               sentRich.push(i);
-              return opts?.richResult === 'error'
-                ? { kind: 'error' as const, description: 'rich unavailable' }
-                : { kind: 'ok' as const, messageId: 700 + sentRich.length };
+              if (opts?.richResult === 'error') {
+                return { kind: 'error' as const, description: 'rich unavailable' };
+              }
+              if (opts?.richResult === 'delivery_unknown') {
+                return {
+                  kind: 'error' as const,
+                  description: 'connection reset',
+                  deliveryUnknown: true,
+                };
+              }
+              if (opts?.richResult === 'forbidden') {
+                return { kind: 'forbidden' as const, description: 'bot blocked' };
+              }
+              if (opts?.richResult === 'rate_limited') {
+                return { kind: 'rate_limited' as const, retryAfter: 30 };
+              }
+              return { kind: 'ok' as const, messageId: 700 + sentRich.length };
             },
           }),
       async answerCallbackQuery(id: string, o?: any) { answers.push({ id, ...(o ?? {}) }); },
@@ -228,7 +242,7 @@ test('bt:p: кнопки задач подписаны plain-названием 
   assert.ok(!btn.text.includes('длинное тело'), 'тело не попало в лейбл');
 });
 
-test('bt:t: отправляет скрин между абзацами и прикладывает остальные файлы нативно', async () => {
+test('bt:t: отправляет описание, скрин и остальные поддерживаемые файлы одним rich-сообщением', async () => {
   const h = makeHarness({
     ...seed,
     task: {
@@ -272,25 +286,27 @@ test('bt:t: отправляет скрин между абзацами и пр�
 
   assert.deepEqual(
     h.events.map((event) => event.split(':', 1)[0]),
-    ['rich', 'text', 'attachment', 'text'],
+    ['rich'],
   );
   const rich = h.sentRich[0]!;
   assert.ok(rich.html.indexOf('До картинки') < rich.html.indexOf('tg://photo?id=task_photo_1'));
   assert.ok(rich.html.indexOf('tg://photo?id=task_photo_1') < rich.html.indexOf('После картинки'));
-  assert.equal(rich.media.length, 1);
+  assert.equal(rich.media.length, 2);
   assert.equal(rich.media[0].kind, 'photo');
   assert.match(rich.media[0].url, /\/api\/attachments\/img-1/);
   assert.ok(Buffer.isBuffer(rich.media[0].data), 'inline screenshot bytes are uploaded directly');
   assert.equal(rich.media[0].filename, 'screen.png');
   assert.equal(rich.media[0].mimeType, 'image/png');
-  assert.equal(h.events[2], 'attachment:track.mp3');
-  assert.equal(h.sentAttachments.length, 1, 'inline screenshot is inside the rich message');
-  assert.equal(h.sentAttachments[0]!.caption, 'track.mp3');
-  assert.ok(h.sentAttachments.every((attachment) => Buffer.isBuffer(attachment.data)));
-  assert.equal(h.upserts.length, h.events.length, 'reply работает на любой части задачи');
+  assert.equal(rich.media[1].kind, 'audio');
+  assert.equal(rich.media[1].filename, 'track.mp3');
+  assert.ok(rich.media.every((attachment: any) => Buffer.isBuffer(attachment.data)));
+  assert.match(rich.html, /track\.mp3/);
+  assert.match(rich.html, /Открыть в ProjectsFlow/);
+  assert.equal(h.sentAttachments.length, 0, 'all supported media is inside the rich message');
+  assert.equal(h.upserts.length, 1, 'reply maps the single rich message to the task');
 });
 
-test('bt:t: falls back to ordered text and photo messages when rich media is unavailable', async () => {
+test('bt:t: rich rejection falls back to one message with the screenshot link', async () => {
   const h = makeHarness({
     ...seed,
     richResult: 'error',
@@ -321,10 +337,28 @@ test('bt:t: falls back to ordered text and photo messages when rich media is una
 
   assert.deepEqual(
     h.events.map((event) => event.split(':', 1)[0]),
-    ['rich', 'text', 'attachment', 'text', 'text'],
+    ['rich', 'text'],
   );
   assert.match(h.events[1]!, /До картинки/);
-  assert.equal(h.events[2], 'attachment:screen.png');
-  assert.match(h.events[3]!, /После картинки/);
-  assert.equal(h.upserts.length, 4, 'the failed rich attempt is not registered');
+  assert.match(h.events[1]!, /После картинки/);
+  assert.match(h.events[1]!, /screen\.png/);
+  assert.equal(h.sentAttachments.length, 0);
+  assert.equal(h.upserts.length, 1, 'only the single fallback message is registered');
 });
+
+for (const richResult of ['delivery_unknown', 'forbidden', 'rate_limited'] as const) {
+  test(`bt:t: ${richResult} does not fan out a duplicate fallback`, async () => {
+    const h = makeHarness({
+      ...seed,
+      richResult,
+      task: { id: 't1', projectId: 'p1', description: 'Описание задачи' },
+    });
+
+    await h.h.execute(cbUpdate('bt:t:t1'));
+
+    assert.equal(h.sentRich.length, 1);
+    assert.equal(h.sent.length, 0);
+    assert.equal(h.sentAttachments.length, 0);
+    assert.equal(h.upserts.length, 0);
+  });
+}

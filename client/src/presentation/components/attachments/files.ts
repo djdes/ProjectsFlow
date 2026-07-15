@@ -9,6 +9,7 @@ export function isImageMime(mime: string): boolean {
 // Растровые расширения — фолбэк, когда MIME пустой/кривой (часто у .webp и файлов из
 // мессенджеров). Тогда определяем картинку по имени и всё равно показываем превью.
 const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico', 'jfif', 'apng'];
+const MP4_EXT = 'mp4';
 
 const DATA_IMAGE_EXT_BY_MIME: Record<string, string> = {
   'image/png': 'png',
@@ -77,6 +78,16 @@ export function isImageFile(mime: string | null | undefined, filename?: string |
   if (mime && mime.startsWith('image/')) return true;
   const ext = (filename ?? '').split('.').pop()?.toLowerCase() ?? '';
   return IMAGE_EXTS.includes(ext);
+}
+
+// MP4 may arrive with a generic or missing MIME (for example after upload from a messenger),
+// so use the filename as a fallback. Keep this intentionally MP4-only: the lightbox promises a
+// format browsers can play consistently instead of treating every video/* attachment as playable.
+export function isMp4File(mime: string | null | undefined, filename?: string | null): boolean {
+  const normalizedMime = mime?.split(';', 1)[0]?.trim().toLowerCase();
+  if (normalizedMime === 'video/mp4') return true;
+  const ext = (filename ?? '').split('.').pop()?.toLowerCase() ?? '';
+  return ext === MP4_EXT;
 }
 
 // Извлекает ВСЕ файлы из буфера обмена (любой тип, не только картинки). Возвращает []

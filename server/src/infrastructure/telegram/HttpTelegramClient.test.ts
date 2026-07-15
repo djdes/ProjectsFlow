@@ -154,3 +154,76 @@ test('rich task message uploads an inline screenshot with attach:// multipart me
     },
   );
 });
+
+test('one rich multipart request carries mixed task photo, video, animation and audio', async () => {
+  await withTelegramStub(
+    () => ({ status: 200, body: { ok: true, result: { message_id: 46 } } }),
+    async (baseUrl, requests) => {
+      const client = new HttpTelegramClient('secret', baseUrl);
+      const media = [
+        { id: 'photo_1', kind: 'photo' as const, filename: 'screen.png', mimeType: 'image/png' },
+        { id: 'video_1', kind: 'video' as const, filename: 'demo.mp4', mimeType: 'video/mp4' },
+        { id: 'animation_1', kind: 'animation' as const, filename: 'demo.gif', mimeType: 'image/gif' },
+        { id: 'audio_1', kind: 'audio' as const, filename: 'track.mp3', mimeType: 'audio/mpeg' },
+      ].map((item, index) => ({
+        ...item,
+        url: `https://pf.test/${item.filename}`,
+        data: Buffer.from(`media-bytes-${index}`),
+      }));
+
+      const result = await client.sendRichMessage({
+        chatId: 7,
+        html:
+          '<img src="tg://photo?id=photo_1"/>' +
+          '<video src="tg://video?id=video_1"></video>' +
+          '<video src="tg://video?id=animation_1"></video>' +
+          '<audio src="tg://audio?id=audio_1"></audio>',
+        media,
+      });
+
+      assert.deepEqual(result, { kind: 'ok', messageId: 46 });
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]!.path, '/botsecret/sendRichMessage');
+      for (const [index, item] of media.entries()) {
+        assert.match(requests[0]!.body, new RegExp(`attach:\\/\\/rich_media_${index}`));
+        assert.match(requests[0]!.body, new RegExp(`"type":"${item.kind}"`));
+        assert.match(requests[0]!.body, new RegExp(item.filename.replace('.', '\\.')));
+        assert.match(requests[0]!.body, new RegExp(`media-bytes-${index}`));
+      }
+    },
+  );
+});
+
+test('ambiguous rich responses are marked delivery-unknown to prevent duplicate fallback', async () => {
+  for (const response of [
+    { status: 502, body: { ok: false, description: 'upstream disconnected' } },
+    { status: 200, body: { unexpected: true } },
+  ]) {
+    await withTelegramStub(
+      () => response,
+      async (baseUrl) => {
+        const client = new HttpTelegramClient('secret', baseUrl);
+        const result = await client.sendRichMessage({ chatId: 7, html: '<p>Task</p>' });
+
+        assert.equal(result.kind, 'error');
+        assert.equal(result.kind === 'error' && result.deliveryUnknown, true);
+      },
+    );
+  }
+});
+
+test('explicit rich 400 rejection remains safe for a single fallback message', async () => {
+  await withTelegramStub(
+    () => ({ status: 400, body: { ok: false, description: 'rich messages unsupported' } }),
+    async (baseUrl) => {
+      const client = new HttpTelegramClient('secret', baseUrl);
+      const result = await client.sendRichMessage({ chatId: 7, html: '<p>Task</p>' });
+
+      assert.deepEqual(result, {
+        kind: 'error',
+        description: 'rich messages unsupported',
+        deliveryUnknown: false,
+      });
+    },
+  );
+});

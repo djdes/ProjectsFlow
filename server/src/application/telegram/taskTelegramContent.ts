@@ -1,11 +1,18 @@
 import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
-import { figureImageSrc, markdownToRich } from '../../domain/task/digestFormat.js';
+import { escapeHtml, figureImageSrc, markdownToRich } from '../../domain/task/digestFormat.js';
 import { attachmentIdFromSrc } from '../attachments/signedAttachmentUrl.js';
 import type { SendRichMessageMediaInput } from './TelegramClient.js';
 
 const TELEGRAM_TEXT_LIMIT = 3_200;
+const TELEGRAM_SINGLE_MESSAGE_RAW_LIMIT = 3_900;
 const TELEGRAM_RICH_TEXT_LIMIT = 32_768;
 const TELEGRAM_RICH_MEDIA_LIMIT = 50;
+const TELEGRAM_RICH_BLOCK_LIMIT = 500;
+const TELEGRAM_PHOTO_UPLOAD_LIMIT_BYTES = 10 * 1024 * 1024;
+const TELEGRAM_OTHER_UPLOAD_LIMIT_BYTES = 50 * 1024 * 1024;
+// Multipart FormData duplicates buffers internally. Keep one task safely below the Node heap
+// even though Telegram's per-message media counter would allow a much larger aggregate payload.
+const TELEGRAM_RICH_TOTAL_UPLOAD_LIMIT_BYTES = 50 * 1024 * 1024;
 
 type RawDescriptionPart =
   | { readonly kind: 'text'; readonly markdown: string }
@@ -23,6 +30,7 @@ export type TelegramTaskContentPart =
       readonly url: string;
       readonly filename: string;
       readonly mimeType: string;
+      readonly sizeBytes: number;
       readonly inline: boolean;
     };
 
@@ -149,13 +157,21 @@ export function buildTaskTelegramContent(
       attachmentId: attachment.id,
       url,
       filename: attachment.filename,
-      mimeType: attachment.mimeType.startsWith('image/') ? attachment.mimeType : 'image/png',
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
       inline: true,
     });
   }
 
+  const regularAttachmentIds = new Set<string>();
   const regularAttachments = attachments
-    .filter((attachment) => !inlineAttachmentIds.has(attachment.id))
+    .filter((attachment) => {
+      if (inlineAttachmentIds.has(attachment.id) || regularAttachmentIds.has(attachment.id)) {
+        return false;
+      }
+      regularAttachmentIds.add(attachment.id);
+      return true;
+    })
     .map((attachment) => ({ attachment, url: resolveAttachmentUrl(attachment.id) }))
     .filter(
       (item): item is { attachment: TaskAttachment; url: string } => item.url !== null,
@@ -174,53 +190,207 @@ export function buildTaskTelegramContent(
       url,
       filename: attachment.filename,
       mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
       inline: false,
     });
   }
   return parts;
 }
 
-// Bot API 10.2 can render task screenshots as real media blocks between text paragraphs.
-// Return null when the task exceeds Telegram rich-message limits so the caller can use the
-// ordered text/photo fallback without losing content.
+// Bot API 10.2 can render photos, videos, animations, audio and voice notes inside one rich
+// message. It deliberately doesn't accept InputMediaDocument, so general files are kept in the
+// same message as download links instead of being emitted as additional Telegram messages.
+// Return null only when the whole task can't fit Telegram's rich-message text/block limits.
 export function buildTaskTelegramRichContent(
   parts: readonly TelegramTaskContentPart[],
+  footerHtml?: string,
 ): TelegramTaskRichContent | null {
-  const firstAttachmentsPart = parts.findIndex(
-    (part) =>
-      (part.kind === 'text' && part.section === 'attachments_heading') ||
-      (part.kind === 'attachment' && !part.inline),
-  );
-  const consumedParts = firstAttachmentsPart === -1 ? parts.length : firstAttachmentsPart;
-  const descriptionParts = parts.slice(0, consumedParts);
-  const inlineMedia = descriptionParts.filter(
-    (part): part is Extract<TelegramTaskContentPart, { kind: 'attachment' }> =>
-      part.kind === 'attachment' && part.inline,
-  );
-  if (inlineMedia.length === 0 || inlineMedia.length > TELEGRAM_RICH_MEDIA_LIMIT) return null;
-
   const media: TelegramTaskRichMedia[] = [];
+  const mediaByAttachmentId = new Map<string, TelegramTaskRichMedia>();
   const htmlParts = ['<h3>📋 Задача</h3>'];
-  for (const part of descriptionParts) {
+  let blockCount = 1;
+  let uploadBytes = 0;
+  for (const part of parts) {
     if (part.kind === 'text') {
-      htmlParts.push(toRichHtmlBlocks(part.html));
+      const html = toRichHtmlBlocks(part.html);
+      htmlParts.push(html);
+      blockCount += countRichBlocks(html);
       continue;
     }
-    const id = `task_photo_${media.length + 1}`;
-    media.push({
+
+    const kind = richMediaKind(part);
+    const declaredMedia = mediaByAttachmentId.get(part.attachmentId);
+    if (kind && declaredMedia) {
+      htmlParts.push(renderRichMediaBlock(part, declaredMedia.kind, declaredMedia.id));
+      blockCount += 1;
+      continue;
+    }
+    if (
+      !kind ||
+      media.length >= TELEGRAM_RICH_MEDIA_LIMIT ||
+      uploadBytes + part.sizeBytes > TELEGRAM_RICH_TOTAL_UPLOAD_LIMIT_BYTES
+    ) {
+      htmlParts.push(renderAttachmentLink(part));
+      blockCount += 1;
+      continue;
+    }
+
+    const id = `task_${kind}_${media.length + 1}`;
+    const declared: TelegramTaskRichMedia = {
       id,
-      kind: 'photo',
+      kind,
       url: part.url,
       attachmentId: part.attachmentId,
       filename: part.filename,
       mimeType: part.mimeType,
-    });
-    htmlParts.push(`<img src="tg://photo?id=${id}"/>`);
+    };
+    media.push(declared);
+    mediaByAttachmentId.set(part.attachmentId, declared);
+    uploadBytes += part.sizeBytes;
+    htmlParts.push(renderRichMediaBlock(part, kind, id));
+    blockCount += 1;
+  }
+
+  if (footerHtml) {
+    htmlParts.push(footerHtml);
+    blockCount += countRichBlocks(footerHtml);
   }
 
   const html = htmlParts.join('\n\n');
-  if (html.length > TELEGRAM_RICH_TEXT_LIMIT) return null;
-  return { html, media, consumedParts };
+  if (
+    countRichTextCharacters(html) > TELEGRAM_RICH_TEXT_LIMIT ||
+    blockCount > TELEGRAM_RICH_BLOCK_LIMIT
+  ) {
+    const truncatedHtml = [
+      '<h3>📋 Задача</h3>',
+      '<p>Содержимое задачи не поместилось в лимиты Telegram. Полная версия доступна в ProjectsFlow.</p>',
+      footerHtml ?? '',
+    ].filter(Boolean).join('\n\n');
+    return { html: truncatedHtml, media: [], consumedParts: parts.length };
+  }
+  return { html, media, consumedParts: parts.length };
+}
+
+// A relay or an older Telegram deployment can reject sendRichMessage. Keep that exceptional
+// path one-task/one-message too: supported formatting is preserved where it fits, every possible
+// attachment is represented by a link, and the permanent task link is always retained.
+export function buildTaskTelegramFallbackContent(
+  parts: readonly TelegramTaskContentPart[],
+  taskUrl: string,
+): string {
+  const header = '📋 <b>Задача</b>';
+  const footer =
+    `<a href="${escapeHtml(taskUrl)}">Открыть в ProjectsFlow</a>\n\n` +
+    `↩️ Ответь reply'ем на это сообщение, чтобы добавить комментарий.`;
+  const uniqueAttachments = new Map<string, Extract<TelegramTaskContentPart, { kind: 'attachment' }>>();
+  for (const part of parts) {
+    if (part.kind === 'attachment' && !uniqueAttachments.has(part.attachmentId)) {
+      uniqueAttachments.set(part.attachmentId, part);
+    }
+  }
+
+  const selectedFileLines: string[] = [];
+  let omittedFiles = false;
+  for (const part of uniqueAttachments.values()) {
+    const line = `📎 <a href="${escapeHtml(part.url)}">${escapeHtml(part.filename)}</a>`;
+    const candidateFiles = ['<b>📎 Файлы</b>', ...selectedFileLines, line].join('\n');
+    const candidate = [header, candidateFiles, footer].join('\n\n');
+    if (candidate.length <= TELEGRAM_SINGLE_MESSAGE_RAW_LIMIT) selectedFileLines.push(line);
+    else omittedFiles = true;
+  }
+
+  const fileSection = selectedFileLines.length > 0
+    ? ['<b>📎 Файлы</b>', ...selectedFileLines].join('\n')
+    : '';
+  const omission = omittedFiles ? '… Остальные файлы доступны в ProjectsFlow.' : '';
+  const selectedDescription: string[] = [];
+  let omittedDescription = false;
+  for (const part of parts) {
+    if (part.kind !== 'text' || part.section !== 'description') continue;
+    const candidate = [
+      header,
+      ...selectedDescription,
+      part.html,
+      fileSection,
+      omission,
+      footer,
+    ].filter(Boolean).join('\n\n');
+    if (candidate.length <= TELEGRAM_SINGLE_MESSAGE_RAW_LIMIT) selectedDescription.push(part.html);
+    else omittedDescription = true;
+  }
+
+  return [
+    header,
+    ...selectedDescription,
+    omittedDescription ? '… Полное описание доступно в ProjectsFlow.' : '',
+    fileSection,
+    omission,
+    footer,
+  ].filter(Boolean).join('\n\n');
+}
+
+function richMediaKind(
+  part: Extract<TelegramTaskContentPart, { kind: 'attachment' }>,
+): SendRichMessageMediaInput['kind'] | null {
+  const mimeType = part.mimeType.toLowerCase();
+  const filename = part.filename.toLowerCase();
+  const isTelegramPhoto =
+    ['image/jpeg', 'image/png'].includes(mimeType) ||
+    /\.(?:jpe?g|png)$/.test(filename);
+
+  if (part.inline) {
+    return isTelegramPhoto && part.sizeBytes <= TELEGRAM_PHOTO_UPLOAD_LIMIT_BYTES
+      ? 'photo'
+      : null;
+  }
+  if (mimeType === 'image/gif' || filename.endsWith('.gif')) {
+    return part.sizeBytes <= TELEGRAM_OTHER_UPLOAD_LIMIT_BYTES ? 'animation' : null;
+  }
+  if (isTelegramPhoto) {
+    return part.sizeBytes <= TELEGRAM_PHOTO_UPLOAD_LIMIT_BYTES ? 'photo' : null;
+  }
+  if (mimeType === 'video/mp4' || filename.endsWith('.mp4')) {
+    return part.sizeBytes <= TELEGRAM_OTHER_UPLOAD_LIMIT_BYTES ? 'video' : null;
+  }
+  if (
+    ['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/x-m4a'].includes(mimeType) ||
+    /\.(?:mp3|m4a)$/.test(filename)
+  ) {
+    return part.sizeBytes <= TELEGRAM_OTHER_UPLOAD_LIMIT_BYTES ? 'audio' : null;
+  }
+  return null;
+}
+
+function renderRichMediaBlock(
+  part: Extract<TelegramTaskContentPart, { kind: 'attachment' }>,
+  kind: SendRichMessageMediaInput['kind'],
+  id: string,
+): string {
+  const tag = kind === 'photo'
+    ? `<img src="tg://photo?id=${id}"/>`
+    : kind === 'video' || kind === 'animation'
+      ? `<video src="tg://video?id=${id}"></video>`
+      : `<audio src="tg://audio?id=${id}"></audio>`;
+  if (part.inline) return tag;
+  return `<figure>${tag}<figcaption>${escapeHtml(part.filename)}</figcaption></figure>`;
+}
+
+function renderAttachmentLink(
+  part: Extract<TelegramTaskContentPart, { kind: 'attachment' }>,
+): string {
+  const icon = part.inline ? '🖼' : '📎';
+  return `<p>${icon} <a href="${escapeHtml(part.url)}">${escapeHtml(part.filename)}</a></p>`;
+}
+
+function countRichBlocks(html: string): number {
+  return html.match(/<(?:h[1-6]|p|pre|footer|blockquote|aside|figure|img|video|audio)\b/g)?.length ?? 0;
+}
+
+function countRichTextCharacters(html: string): number {
+  const text = html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(?:#\d+|#x[\da-f]+|lt|gt|amp|quot|apos|nbsp|hellip|mdash|ndash|lsquo|rsquo|ldquo|rdquo);/gi, 'x');
+  return [...text].length;
 }
 
 function toRichHtmlBlocks(html: string): string {

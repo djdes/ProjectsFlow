@@ -1,4 +1,8 @@
-import type { TelegramClient, InlineKeyboardMarkup } from './TelegramClient.js';
+import type {
+  TelegramClient,
+  InlineKeyboardMarkup,
+  SendRichMessageMediaInput,
+} from './TelegramClient.js';
 import type { TelegramRalphQuestionRepository } from './TelegramRalphQuestionRepository.js';
 import type { TelegramTaskMessageRepository } from './TelegramTaskMessageRepository.js';
 import type { TelegramGroupOwnerRepository } from './TelegramGroupOwnerRepository.js';
@@ -37,6 +41,7 @@ import { signAttachmentUrl } from '../attachments/signedAttachmentUrl.js';
 import type { TelegramDraftPhoto } from './TelegramTaskDraftRepository.js';
 import {
   buildTaskTelegramContent,
+  buildTaskTelegramFallbackContent,
   buildTaskTelegramRichContent,
 } from './taskTelegramContent.js';
 
@@ -1136,16 +1141,20 @@ export class HandleTelegramWebhook {
         }
       };
 
-      let introSent = false;
-      let remainingContent = content;
-      const richContent = buildTaskTelegramRichContent(content);
+      const richFooter =
+        `<footer><a href="${escapeHtml(url)}">Открыть в ProjectsFlow</a><br/>` +
+        `↩️ Ответь reply'ем на это сообщение, чтобы добавить комментарий.</footer>`;
+      const richContent = buildTaskTelegramRichContent(content, richFooter);
       if (richContent && this.deps.client.sendRichMessage) {
-        const richMedia = await Promise.all(
-          richContent.media.map(async (media) => ({
+        const richMedia: SendRichMessageMediaInput[] = [];
+        // Read sequentially: even within the aggregate upload budget, dozens of concurrent disk
+        // reads and Buffer copies create avoidable heap spikes under parallel Telegram requests.
+        for (const media of richContent.media) {
+          richMedia.push({
             ...media,
             data: await readAttachment(media.attachmentId),
-          })),
-        );
+          });
+        }
         const result = await this.deps.client
           .sendRichMessage({
             chatId,
@@ -1158,8 +1167,9 @@ export class HandleTelegramWebhook {
           });
         if (result?.kind === 'ok') {
           await registerMessage(result.messageId);
-          introSent = true;
-          remainingContent = content.slice(richContent.consumedParts);
+          // The rich card contains the description, inline screenshots, supported native media,
+          // download links for general files and the footer. One task is therefore one message.
+          return;
         } else if (result) {
           const detail = result.kind === 'rate_limited'
             ? `retry_after=${result.retryAfter}`
@@ -1168,59 +1178,26 @@ export class HandleTelegramWebhook {
             `[tg-webhook] task rich content rejected: kind=${result.kind}; ${detail}; ` +
               `media_count=${richContent.media.length}`,
           );
-        }
-      }
-
-      for (const part of remainingContent) {
-        if (part.kind === 'text') {
-          const text = introSent ? part.html : `📋 <b>Задача</b>\n\n${part.html}`;
-          introSent = true;
-          await registerMessage(await this.sendReturningId(chatId, text));
-          continue;
-        }
-        if (!introSent) {
-          introSent = true;
-          await registerMessage(await this.sendReturningId(chatId, '📋 <b>Задача</b>'));
-        }
-
-        if (this.deps.client.sendAttachment) {
-          const sent = await this.deps.client
-            .sendAttachment({
-              chatId,
-              url: part.url,
-              data: await readAttachment(part.attachmentId),
-              filename: part.filename,
-              mimeType: part.mimeType,
-              caption: part.inline ? undefined : part.filename,
-            })
-            .catch((err) => {
-              console.warn('[tg-webhook] send task attachment failed:', err);
-              return null;
-            });
-          if (sent?.kind === 'ok') {
-            await registerMessage(sent.messageId);
-            continue;
+          // A forbidden/rate-limited delivery can't be fixed by another immediate send. A
+          // transport failure may have reached Telegram despite the lost response, so sending a
+          // fallback would risk duplicating the task.
+          if (
+            result.kind === 'forbidden' ||
+            result.kind === 'rate_limited' ||
+            (result.kind === 'error' && result.deliveryUnknown)
+          ) {
+            return;
           }
-        } else if (part.mimeType.startsWith('image/') && this.deps.client.sendPhotos) {
-          await this.deps.client.sendPhotos(chatId, [part.url]).catch(() => {});
-          continue;
+        } else {
+          return;
         }
+      }
 
-        const label = part.inline ? '🖼 Открыть изображение' : `📎 ${part.filename}`;
-        await registerMessage(
-          await this.sendReturningId(
-            chatId,
-            `<a href="${escapeHtml(part.url)}">${escapeHtml(label)}</a>`,
-          ),
-        );
-      }
-      if (!introSent) {
-        await registerMessage(await this.sendReturningId(chatId, '📋 <b>Задача</b>'));
-      }
-      const footer =
-        `<a href="${escapeHtml(url)}">Открыть в ProjectsFlow</a>\n\n` +
-        `↩️ Ответь reply'ем на любое сообщение этой задачи, чтобы добавить комментарий.`;
-      await registerMessage(await this.sendReturningId(chatId, footer));
+      // Compatibility fallback remains one physical Telegram message. Media becomes download
+      // links here because regular sendMessage can't carry files and rich media simultaneously.
+      await registerMessage(
+        await this.sendReturningId(chatId, buildTaskTelegramFallbackContent(content, url)),
+      );
       return;
     }
 

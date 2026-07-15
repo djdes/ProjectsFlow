@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractClipboardFiles } from './files';
+import { extractClipboardFiles, isMp4File } from './files';
 
 function clipboard(items: File[], files: File[]): DataTransfer {
   return {
@@ -42,4 +42,16 @@ test('extractClipboardFiles converts an HTML data URL screenshot to a File', () 
   assert.equal(file.type, 'image/png');
   assert.equal(file.name, 'pasted-image-1.png');
   assert.equal(file.size, 3);
+});
+
+test('isMp4File recognizes MP4 by MIME or filename fallback', () => {
+  assert.equal(isMp4File('video/mp4', 'recording.bin'), true);
+  assert.equal(isMp4File('VIDEO/MP4; codecs=avc1', 'recording.bin'), true);
+  assert.equal(isMp4File('application/octet-stream', 'recording.MP4'), true);
+  assert.equal(isMp4File('', 'recording.mp4'), true);
+});
+
+test('isMp4File does not treat other video and document formats as MP4', () => {
+  assert.equal(isMp4File('video/webm', 'recording.webm'), false);
+  assert.equal(isMp4File('application/pdf', 'recording.pdf'), false);
 });
