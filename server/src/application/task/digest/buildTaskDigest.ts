@@ -280,7 +280,9 @@ export function renderDigestTelegram(m: DigestModel, opts: { maxLen?: number } =
 }
 
 // Богатый рендер для sendRichMessage (Bot API 10.1): заголовки разного размера + таблицы
-// задач по группам (рамки/чередование). ВЫДЕЛЯЕМЫЙ текст, не картинка — тот самый Hermes-вид.
+// задач по группам (рамки/чередование). Таблица намеренно одноколоночная: на телефоне
+// несколько колонок заставляют карточку скроллиться вбок. Мета и действие живут под задачей.
+// ВЫДЕЛЯЕМЫЙ текст, не картинка — тот самый Hermes-вид.
 // Возвращает ОДНУ HTML-строку (Telegram сам парсит её в блоки). Для очень длинных сводок
 // caller делает фоллбэк на renderDigestTelegram, если sendRichMessage вернёт ошибку.
 export function renderDigestRich(m: DigestModel): string {
@@ -291,14 +293,14 @@ export function renderDigestRich(m: DigestModel): string {
   for (const g of m.groups) {
     h.push(`<h3>${escapeHtml(g.heading)}</h3>`);
     h.push('<table bordered striped>');
-    h.push('<tr><th>Задача</th><th>Кто</th><th>Дедлайн</th><th></th></tr>');
+    h.push('<tr><th>Задача</th></tr>');
     for (const it of g.items) {
       const who = it.assignee ? escapeHtml(it.assignee) : '—';
       const dl = it.deadline ? escapeHtml(it.deadline) : '—';
       h.push(
-        `<tr><td><a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a></td>` +
-          `<td>${who}</td><td>${dl}</td>` +
-          `<td><a href="${escapeHtml(it.doneLink)}">✓ Завершить</a></td></tr>`,
+        `<tr><td><a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>` +
+          `<br>👤 ${who} · ⏰ ${dl}` +
+          `<br><a href="${escapeHtml(it.doneLink)}">✓ Завершить</a></td></tr>`,
       );
     }
     h.push('</table>');
