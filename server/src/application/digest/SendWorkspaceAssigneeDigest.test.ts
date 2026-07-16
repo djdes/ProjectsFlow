@@ -106,10 +106,10 @@ test('workspace assignee digest uses the same rich layout as regular Telegram di
   assert.match(message, /<h3>📁 DocsFlow<\/h3>/);
   assert.match(message, /<h3>📁 Banana<\/h3>/);
   assert.match(message, /projects\/project-a\?task=task-a/);
-  assert.match(message, /api\/telegram-digest-actions\/a{64}">○<\/a>/);
+  assert.match(message, /api\/telegram-digest-actions\/a{64}">✓ Завершить<\/a>/);
   assert.match(message, /⏰ осталось 2 дня/);
-  assert.match(message, />○<\/a>/);
-  assert.doesNotMatch(message, /✓ Завершить/);
+  assert.match(message, />✓ Завершить<\/a>/);
+  assert.doesNotMatch(message, />○<\/a>/);
   assert.doesNotMatch(message, /👤 Денис/);
   assert.match(message, /<\/details>$/);
 });

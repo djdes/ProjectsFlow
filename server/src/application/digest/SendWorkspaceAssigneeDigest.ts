@@ -288,8 +288,8 @@ export function buildWorkspaceAssigneeDigestMessage(input: {
       const completeLink =
         input.completeActionLinks?.get(task.id) ?? `${taskUrl}&done=1`;
       const taskLine =
-        `<a href="${escapeHtml(completeLink)}">○</a> ` +
-        `<a href="${escapeHtml(taskUrl)}"><b>${escapeHtml(name)}</b></a>${deadline}`;
+        `• <a href="${escapeHtml(taskUrl)}"><b>${escapeHtml(name)}</b></a>${deadline}` +
+        ` · <a href="${escapeHtml(completeLink)}">✓ Завершить</a>`;
       const candidate = [...lines, ...projectLines, taskLine].join('\n');
       const remainingTail = `\n\n<i>Ещё ${total - included - 1} задач — откройте проекты выше.</i>`;
       if (

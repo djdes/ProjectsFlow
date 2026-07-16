@@ -71,7 +71,7 @@ export function extractTelegramDigestActionTokens(html: string): string[] {
 export function markTelegramDigestTaskCompleted(html: string, token: string): string {
   const safeToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const actionPattern = new RegExp(
-    `<a href="[^"]*\\/api\\/telegram-digest-actions\\/${safeToken}">○<\\/a>`,
+    `<a href="[^"]*\\/api\\/telegram-digest-actions\\/${safeToken}">(?:○|✓ Завершить)<\\/a>`,
     'i',
   );
   const match = actionPattern.exec(html);
@@ -84,7 +84,7 @@ export function markTelegramDigestTaskCompleted(html: string, token: string): st
     const nextBreak = html.indexOf('\n', match.index);
     const lineEnd = nextBreak < 0 ? html.length : nextBreak;
     const line = html.slice(lineStart, lineEnd);
-    let updatedLine = line.replace(actionPattern, '<b>●</b>');
+    let updatedLine = line.replace(actionPattern, '<b>✅ Завершено</b>');
     updatedLine = updatedLine.replace(
       /<a href="([^"]+)"><b>([\s\S]*?)<\/b><\/a>/,
       '<a href="$1"><s><b>$2</b></s></a>',
@@ -94,7 +94,7 @@ export function markTelegramDigestTaskCompleted(html: string, token: string): st
 
   const end = itemEnd + '</li>'.length;
   const item = html.slice(itemStart, end);
-  let updatedItem = item.replace(actionPattern, '<b>●</b>');
+  let updatedItem = item.replace(actionPattern, '<b>✅ Завершено</b>');
   updatedItem = updatedItem.replace(
     /<a href="([^"]+)"><b>([\s\S]*?)<\/b><\/a>/,
     '<a href="$1"><s><b>$2</b></s></a>',

@@ -110,7 +110,7 @@ test('manual group test deletes its predecessor and remembers one collapsed assi
   assert.ok(richHtml.includes('<details><summary>Показать задачи (1)</summary>'));
   assert.ok(richHtml.includes('@anna_pf · Анна'));
   assert.ok(richHtml.includes('<ul>'));
-  assert.ok(richHtml.includes('>○</a>'));
-  assert.ok(!richHtml.includes('✓ Завершить'));
+  assert.ok(richHtml.includes('>✓ Завершить</a>'));
+  assert.ok(!richHtml.includes('>○</a>'));
   assert.ok(!richHtml.includes('<table'));
 });

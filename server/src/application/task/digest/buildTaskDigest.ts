@@ -60,8 +60,8 @@ export type BuildDigestOptions = {
   // Привязки Telegram нужны только рендерам групповой сводки; обычные email/markdown
   // используют displayName и не получают технические идентификаторы.
   readonly telegramAssignees?: ReadonlyMap<string, DigestTelegramAssignee>;
-  // Одноразовые ссылки завершения из Telegram. Круг перед названием вызывает действие,
-  // после которого сервер обновляет исходное rich-сообщение.
+  // Одноразовые ссылки завершения из Telegram. Явная ссылка «✓ Завершить» вызывает
+  // действие, после которого сервер обновляет исходное rich-сообщение.
   readonly completeActionLinks?: ReadonlyMap<string, string>;
   // Подменяемое «сейчас» для детерминированных тестов RU-дат.
   readonly now?: Date;
@@ -256,21 +256,21 @@ export function renderDigestHtml(
   return p.join('');
 }
 
-// Блок одной задачи для Telegram: кликабельный круг завершения + жирный заголовок →
-// мета (👤/⏰) → тело → вложения → ссылка «Комментировать (N)». Если блок не
+// Блок одной задачи для Telegram: жирный заголовок → мета (👤/⏰) → тело →
+// вложения → футер «Комментировать (N) | Завершить». Если блок не
 // влезает в maxBlock — усекаем ТОЛЬКО тело (по сырому markdown, затем re-render, чтобы HTML
 // остался сбалансированным и Telegram не отбил parse_mode).
 function digestItemBlockTg(it: DigestItem, maxBlock: number): string {
   const completeLink = it.completeActionLink ?? it.doneLink;
-  const title =
-    `<a href="${escapeHtml(completeLink)}">○</a> ` +
-    `<a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>`;
+  const title = `<a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>`;
   const meta: string[] = [];
   if (it.assignee) meta.push(`👤 ${escapeHtml(it.assignee)}`);
   if (it.deadline) meta.push(`⏰ ${escapeHtml(it.deadline)}`);
   const commentLabel =
     it.commentCount > 0 ? `Комментировать (${it.commentCount})` : 'Комментировать';
-  const footer = `<a href="${escapeHtml(it.openLink)}">${commentLabel}</a>`;
+  const footer =
+    `<a href="${escapeHtml(it.openLink)}">${commentLabel}</a>` +
+    ` | <a href="${escapeHtml(completeLink)}">✓ Завершить</a>`;
   const attach = it.attachments.length
     ? it.attachments.map((a) => `📎 <a href="${escapeHtml(a.url)}">${escapeHtml(a.name)}</a>`).join(' · ')
     : '';
@@ -366,10 +366,9 @@ export function renderDigestRich(
       }
       meta.push(`⏰ ${it.deadline ? escapeHtml(it.deadline) : 'без дедлайна'}`);
       h.push(
-        `<li><a href="${escapeHtml(completeLink)}">○</a> ` +
-          `<a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>` +
+        `<li><a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>` +
           `<br><i>${meta.join(' · ')}</i>` +
-          `</li>`,
+          `<br><a href="${escapeHtml(completeLink)}">✓ Завершить</a></li>`,
       );
     }
     h.push('</ul>');
