@@ -56,7 +56,6 @@ import { VISIBLE_KANBAN_STATUSES } from '@/domain/kanban/KanbanSettings';
 import { useContainer } from '@/infrastructure/di/container';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import {
-  NewPropertyForm,
   PROPERTY_TYPE_ICONS,
   PropertyHeaderCell,
   PropertyValueCell,
@@ -107,6 +106,12 @@ import {
 } from './viewShared';
 import { ContextEntries, DropdownEntries, type MenuEntry } from './menuEntries';
 import { ConfirmDeleteDialog } from '../ConfirmDeleteDialog';
+import {
+  primaryPointerActivatesCell,
+  rangeBounds,
+  rowsForContextMenu,
+  type TableCellRange,
+} from './tableSelection';
 
 type Props = {
   projectId: string;
@@ -126,18 +131,12 @@ type Props = {
   onGroupingChange?: (g: ViewGrouping | null) => void;
   colorRules: ViewColorRule[];
   createRequest: ViewCreateRequest | null;
-  // «+» в шапке: открыть правую панель «Новое свойство» (сдвигает таблицу).
-  onRequestNewProperty?: () => void;
   // «Скрыть все»/«Показать все» в панели «Видимость свойств».
   onSetHiddenCols?: (keys: string[]) => void;
   // Открытая правая панель уже резервирует 496px в родительском rail; таблица не должна
   // заходить отрицательным правым отступом в 16px gutter перед панелью.
   sidePanelOpen?: boolean;
 };
-
-// Координата ячейки для Excel-выделения: row — индекс в rows, col — 0 (название)
-// или индекс видимой колонки + 1.
-type CellCoord = { row: number; col: number };
 
 // Ширины колонок; сетка собирается из видимых (скрытие свойств — как в Notion).
 const COLUMN_WIDTH: Record<ViewColumn, string> = {
@@ -187,7 +186,6 @@ export function TableView({
   onGroupingChange,
   colorRules,
   createRequest,
-  onRequestNewProperty,
   onSetHiddenCols,
   sidePanelOpen = false,
 }: Props): React.ReactElement {
@@ -196,7 +194,9 @@ export function TableView({
   const { taskTemplateRepository } = useContainer();
   // Кастомные свойства (db/109): колонки после стандартных, «+» в шапке создаёт новое.
   const customProps = useTaskProperties(projectId);
-  const [addPropOpen, setAddPropOpen] = useState(false);
+  const [creatingProperty, setCreatingProperty] = useState(false);
+  const [propertyPendingScrollId, setPropertyPendingScrollId] = useState<string | null>(null);
+  const [openPropertyMenuId, setOpenPropertyMenuId] = useState<string | null>(null);
 
   // Sticky-шапка колонок: top = высота sticky-стека страницы (крошки + плашки +
   // строка вкладок); гор. скролл тела транслируется в шапку (refs ниже).
@@ -230,9 +230,52 @@ export function TableView({
   const [deleteBusy, setDeleteBusy] = useState(false);
   // Выделение ячеек как в Excel (Notion): mousedown — якорь, drag по ячейкам — диапазон.
   // Координаты: row — индекс в rows, col — 0 (название) или индекс в visibleCols + 1.
-  const [selRange, setSelRange] = useState<{ a: CellCoord; h: CellCoord } | null>(null);
+  const [selRange, setSelRange] = useState<TableCellRange | null>(null);
   const selDragging = useRef(false);
+  // Контекстное меню и выбор строк — отдельный слой состояния. Первый левый клик
+  // вне открытого меню только закрывает его; выбранные строки остаются до следующего
+  // клика, как в Notion.
+  const contextMenuOpenRef = useRef(false);
+  const contextMenuDismissClickRef = useRef(false);
+  const handleContextMenuOpenChange = (open: boolean): void => {
+    contextMenuOpenRef.current = open;
+  };
+  const preserveContextMenuSelection = (): boolean => {
+    if (!contextMenuOpenRef.current && !contextMenuDismissClickRef.current) return false;
+    contextMenuDismissClickRef.current = true;
+    window.setTimeout(() => {
+      contextMenuDismissClickRef.current = false;
+    }, 0);
+    return true;
+  };
+  const consumeContextMenuDismissClick = (): boolean => {
+    const consume = contextMenuDismissClickRef.current;
+    contextMenuDismissClickRef.current = false;
+    return consume;
+  };
   const bulk = useBulkTaskActions({ projectId, update, move, remove, refetch });
+
+  // Ставим защитный флаг в capture-фазе раньше Radix DismissableLayer. Поэтому даже
+  // если меню успеет закрыться между pointerdown и mousedown, первый внешний клик
+  // не снимет строки и не активирует лежащий под меню control.
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent): void => {
+      if (e.button !== 0 || !contextMenuOpenRef.current) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest(
+          '[data-radix-popper-content-wrapper], [role="menu"], [role="menuitem"]',
+        )
+      )
+        return;
+      contextMenuDismissClickRef.current = true;
+      window.setTimeout(() => {
+        contextMenuDismissClickRef.current = false;
+      }, 0);
+    };
+    window.addEventListener('pointerdown', onPointerDown, true);
+    return () => window.removeEventListener('pointerdown', onPointerDown, true);
+  }, []);
 
   useEffect(() => {
     const markOnline = (): void => setOnline(true);
@@ -452,6 +495,48 @@ export function TableView({
   }, [visibleCols, customProps.properties, tableState.colOrder, hiddenCols]);
   const propByKey = (k: string): TaskProperty | undefined =>
     customProps.properties.find((p) => `p:${p.id}` === k);
+
+  // Notion: «+» не открывает пустую форму отдельно от таблицы. Сначала появляется
+  // реальная текстовая колонка, затем таблица плавно доезжает до её заголовка и
+  // открывает меню новой колонки для имени/типа. Повторный клик во время запроса
+  // игнорируется, чтобы один жест не создавал несколько одинаковых свойств.
+  const createPropertyFromHeader = async (): Promise<void> => {
+    if (creatingProperty) return;
+    setCreatingProperty(true);
+    try {
+      const property = await customProps.createProperty('text', 'Новое свойство');
+      if (!property) return;
+      const key = `p:${property.id}`;
+      onTableState({ colOrder: [...orderedKeys, key] });
+      setPropertyPendingScrollId(property.id);
+    } finally {
+      setCreatingProperty(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!propertyPendingScrollId) return;
+    if (!customProps.properties.some((property) => property.id === propertyPendingScrollId)) return;
+    let secondFrame = 0;
+    let openTimer = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        bodyScrollRef.current?.scrollTo({
+          left: bodyScrollRef.current.scrollWidth,
+          behavior: 'smooth',
+        });
+        openTimer = window.setTimeout(() => {
+          setOpenPropertyMenuId(propertyPendingScrollId);
+          setPropertyPendingScrollId(null);
+        }, 180);
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+      if (openTimer) window.clearTimeout(openTimer);
+    };
+  }, [customProps.properties, propertyPendingScrollId]);
 
   // Все колонки для панели «Видимость свойств» — в ПОРЯДКЕ таблицы (orderedKeys),
   // затем скрытые; drag за ⋮⋮ в панели переставляет colOrder.
@@ -855,15 +940,16 @@ export function TableView({
     return () => window.removeEventListener('mouseup', up);
   }, []);
 
-  // Notion: клик В ЛЮБОЕ другое место (вне таблицы) сбрасывает и выбор строк,
-  // и Excel-выделение. Порталы (меню/диалоги/панель «Выбрано» во вкладках) —
-  // не сбрасывают: клики по ним — действия над выбранным.
+  // Клик вне таблицы сбрасывает выбор, кроме клика, которым закрывается открытое
+  // контекстное меню: он только закрывает слой, а следующий клик уже снимает выбор.
+  // Порталы других меню/диалогов/панели «Выбрано» тоже не меняют контекст таблицы.
   const tableRootRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const onDown = (e: MouseEvent): void => {
       const t = e.target as HTMLElement | null;
       if (!t) return;
       if (tableRootRef.current?.contains(t)) return;
+      if (contextMenuOpenRef.current || contextMenuDismissClickRef.current) return;
       if (
         t.closest(
           '[data-radix-popper-content-wrapper], [role="dialog"], [role="menu"], [role="menuitem"], #pf-views-tabs-row',
@@ -880,31 +966,35 @@ export function TableView({
   const colIndexOf = (k: 'title' | ViewColumn): number =>
     k === 'title' ? 0 : orderedKeys.indexOf(k) + 1;
   const cellDown = (row: number, k: 'title' | ViewColumn, rightButton = false): void => {
-    // Notion: при существующем диапазоне клик/ПКМ ВНУТРЬ него выбирает все его
-    // строки (панель действий сверху); клик/ПКМ МИМО — только строку под курсором.
-    if (selRange) {
-      const [r1, r2] = [Math.min(selRange.a.row, selRange.h.row), Math.max(selRange.a.row, selRange.h.row)];
-      const [c1, c2] = [Math.min(selRange.a.col, selRange.h.col), Math.max(selRange.a.col, selRange.h.col)];
-      const multi = r1 !== r2 || c1 !== c2;
-      if (multi) {
-        const col = colIndexOf(k);
-        const inRect = row >= r1 && row <= r2 && col >= c1 && col <= c2;
-        setSelRange(null);
-        setSelected(
-          inRect
-            ? new Set(rows.slice(r1, r2 + 1).map((t) => t.id))
-            : new Set(rows[row] ? [rows[row].id] : []),
-        );
-        return;
-      }
-    }
-    // ПКМ (вне диапазона): сброс прошлых выбранных и выбор строки под курсором.
-    // Если строка УЖЕ в выборе — выбор сохраняется (действия над несколькими).
-    // Протяжку диапазона ПКМ не начинает.
+    // ПКМ по выделенному диапазону превращает диапазон ячеек в выбранные строки.
+    // ПКМ вне диапазона выбирает только строку под курсором. Сам диапазон после
+    // открытия меню больше не нужен, а выбор строк сохраняется после закрытия меню.
     if (rightButton) {
       const id = rows[row]?.id;
+      if (!id) return;
+      if (selRange) {
+        const col = colIndexOf(k);
+        const ids = rowsForContextMenu(
+          selRange,
+          row,
+          col,
+          rows.map((task) => task.id),
+        );
+        setSelRange(null);
+        setSelected(new Set(ids));
+        return;
+      }
+      if (!selected.has(id)) setSelected(new Set([id]));
+      return;
+    }
+
+    // Любой обычный левый клик после диапазона/выбора строк сначала снимает выбор
+    // и проходит в редактор нажатой ячейки. Он не создаёт новый диапазон и не требует
+    // второго клика для изменения статуса, срока, участника или другого свойства.
+    if (primaryPointerActivatesCell(selRange, selected.size)) {
+      selDragging.current = false;
       setSelRange(null);
-      if (id && !selected.has(id)) setSelected(new Set([id]));
+      setSelected(new Set());
       return;
     }
     selDragging.current = true;
@@ -917,22 +1007,13 @@ export function TableView({
     document.getSelection()?.removeAllRanges();
     setSelRange((prev) => (prev ? { a: prev.a, h: { row, col: colIndexOf(k) } } : prev));
   };
-  // Клетка = ЕДИНСТВЕННАЯ активно-выделенная (диапазон 1×1 с якорем на ней). Нужно,
-  // чтобы ПЕРВЫЙ клик по ячейке-«выборке» (статус/приоритет/срок/участник/select) её
-  // ВЫДЕЛЯЛ (как в Excel), а не открывал выпадашку; редактор открывается ВТОРЫМ кликом
-  // по уже выделенной (Notion). Так же с неё можно начать протяжку диапазона.
-  const isCellActiveSingle = (row: number, k: 'title' | ViewColumn): boolean => {
-    if (!selRange) return false;
-    const single = selRange.a.row === selRange.h.row && selRange.a.col === selRange.h.col;
-    return single && selRange.a.row === row && selRange.a.col === colIndexOf(k);
-  };
   // Стиль ячейки в диапазоне: одиночная — синяя рамка с уголком (как раньше),
   // диапазон — заливка Excel-style.
   const rangeClassFor = (row: number, k: 'title' | ViewColumn): string | null => {
     if (!selRange) return null;
     const c = colIndexOf(k);
-    const [r1, r2] = [Math.min(selRange.a.row, selRange.h.row), Math.max(selRange.a.row, selRange.h.row)];
-    const [c1, c2] = [Math.min(selRange.a.col, selRange.h.col), Math.max(selRange.a.col, selRange.h.col)];
+    const { firstRow: r1, lastRow: r2, firstCol: c1, lastCol: c2 } =
+      rangeBounds(selRange);
     if (row < r1 || row > r2 || c < c1 || c > c2) return null;
     const single = r1 === r2 && c1 === c2;
     if (single)
@@ -1073,7 +1154,7 @@ export function TableView({
 
   if (loading) {
     return (
-      <div role="status" aria-live="polite" aria-label="Загрузка таблицы задач" className="overflow-hidden rounded-2xl border bg-background">
+      <div role="status" aria-live="polite" aria-label="Загрузка таблицы задач" className="overflow-hidden bg-background">
         <span className="sr-only">Загружаем таблицу задач…</span>
         <div className="h-12 animate-pulse border-b bg-muted/70 motion-reduce:animate-none" aria-hidden />
         {Array.from({ length: 6 }, (_, index) => (
@@ -1108,7 +1189,7 @@ export function TableView({
       ref={tableRootRef}
       aria-busy={retrying}
       className={cn(
-        '-ml-2 flex min-h-0 flex-1 flex-col rounded-2xl border border-border/80 bg-background shadow-sm sm:-ml-8 lg:-ml-16',
+        '-ml-2 flex min-h-0 flex-1 flex-col bg-background sm:-ml-8 lg:-ml-16',
         sidePanelOpen ? 'mr-0' : '-mr-2 sm:-mr-8 lg:-mr-16',
       )}
     >
@@ -1152,7 +1233,7 @@ export function TableView({
       {/* Sticky-шапка колонок (Notion): липнет под строкой вкладок при вертикальном
           скролле; горизонтальный скролл синхронизируется с телом (onScroll ниже). */}
       <div
-        className="sticky z-20 rounded-t-2xl bg-background"
+        className="sticky z-20 bg-background"
         style={{ top: headerTop }}
       >
         {/* Шапка скроллится и ЮЗЕРОМ (колесо/трекпад над ней), скроллбар скрыт;
@@ -1163,7 +1244,7 @@ export function TableView({
             if (bodyScrollRef.current)
               bodyScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
           }}
-          className="overflow-x-auto rounded-t-2xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
         {/* w-max: контейнер (и грид-строки в нём) растягивается на ПОЛНУЮ ширину
             колонок — иначе грид переполняет собственный бокс и sticky-«Название»
@@ -1302,6 +1383,10 @@ export function TableView({
                         : undefined
                     }
                     onHide={() => onToggleCol(k)}
+                    openMenu={openPropertyMenuId === prop.id}
+                    onOpenMenuClosed={() =>
+                      setOpenPropertyMenuId((current) => (current === prop.id ? null : current))
+                    }
                   />
                 );
               }
@@ -1326,42 +1411,24 @@ export function TableView({
               );
             })}
             <div role="columnheader" className="h-12 border-b border-l bg-muted/25" aria-label="Действия таблицы" />
-            {/* Хвост шапки (Notion): «+» — новое свойство (правая панель со сдвигом
-                таблицы, если родитель дал onRequestNewProperty; иначе попап),
-                «⋯» — «Видимость свойств» (глазки/поиск/Скрыть все). */}
+            {/* Хвост шапки (Notion): «+» сразу создаёт колонку, плавно доводит
+                горизонтальный scroller до неё и открывает её меню; «⋯» —
+                «Видимость свойств» (глазки/поиск/Скрыть все). */}
             <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-1">
-              {onRequestNewProperty ? (
-                <button
-                  type="button"
-                  aria-label="Добавить свойство"
-                  title="Добавить свойство"
-                  onClick={onRequestNewProperty}
-                  className="grid size-10 place-items-center rounded-[10px] text-muted-foreground/70 transition-[background-color,color,transform] hover:bg-accent hover:text-foreground active:scale-[.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transform-none"
-                >
+              <button
+                type="button"
+                aria-label="Добавить свойство"
+                title="Добавить свойство"
+                onClick={() => void createPropertyFromHeader()}
+                disabled={creatingProperty}
+                className="grid size-10 place-items-center rounded-[10px] text-muted-foreground/70 transition-[background-color,color,transform] hover:bg-accent hover:text-foreground active:scale-[.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-50 motion-reduce:transform-none"
+              >
+                {creatingProperty ? (
+                  <Loader2 className="size-[18px] animate-spin motion-reduce:animate-none" />
+                ) : (
                   <Plus className="size-[18px]" />
-                </button>
-              ) : (
-                <Popover open={addPropOpen} onOpenChange={setAddPropOpen}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label="Добавить свойство"
-                      title="Добавить свойство"
-                      className="grid size-10 place-items-center rounded-[10px] text-muted-foreground/70 transition-[background-color,color,transform] hover:bg-accent hover:text-foreground active:scale-[.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transform-none"
-                    >
-                      <Plus className="size-[18px]" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" className="w-auto p-1.5">
-                    <NewPropertyForm
-                      onCreate={(t, name) => {
-                        customProps.createProperty(t, name);
-                        setAddPropOpen(false);
-                      }}
-                    />
-                  </PopoverContent>
-                </Popover>
-              )}
+                )}
+              </button>
               <Popover>
                 <PopoverTrigger asChild>
                   <button
@@ -1398,7 +1465,7 @@ export function TableView({
           if (headScrollRef.current)
             headScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
         }}
-        className="overflow-x-auto overscroll-x-contain rounded-b-2xl"
+        className="overflow-x-auto overscroll-x-contain"
       >
         {/* w-max min-w-full — см. комментарий у шапки (sticky-freeze «Название»). */}
         <div className="w-max min-w-full">
@@ -1505,7 +1572,10 @@ export function TableView({
                 onCellDown={cellDown}
                 onCellEnter={cellEnter}
                 rangeClassFor={rangeClassFor}
-                isCellActiveSingle={isCellActiveSingle}
+                selectionActive={selRange !== null || selected.size > 0}
+                onContextMenuOpenChange={handleContextMenuOpenChange}
+                preserveContextMenuSelection={preserveContextMenuSelection}
+                consumeContextMenuDismissClick={consumeContextMenuDismissClick}
                 onToggleSelected={(shift) => toggleWithRange(idx, shift)}
                 onOpen={() => setDrawer({ mode: 'edit', task })}
                 onCreateBelow={(above) => setInsertAt({ taskId: task.id, above })}
@@ -2106,7 +2176,10 @@ function TableRow({
   onCellDown,
   onCellEnter,
   rangeClassFor,
-  isCellActiveSingle,
+  selectionActive,
+  onContextMenuOpenChange,
+  preserveContextMenuSelection,
+  consumeContextMenuDismissClick,
   onToggleSelected,
   onOpen,
   onCreateBelow,
@@ -2154,7 +2227,10 @@ function TableRow({
   onCellDown: (row: number, col: 'title' | ViewColumn, rightButton?: boolean) => void;
   onCellEnter: (row: number, col: 'title' | ViewColumn) => void;
   rangeClassFor: (row: number, col: 'title' | ViewColumn) => string | null;
-  isCellActiveSingle: (row: number, col: 'title' | ViewColumn) => boolean;
+  selectionActive: boolean;
+  onContextMenuOpenChange: (open: boolean) => void;
+  preserveContextMenuSelection: () => boolean;
+  consumeContextMenuDismissClick: () => boolean;
   onToggleSelected: (shift: boolean) => void;
   onOpen: () => void;
   onCreateBelow: (above: boolean) => void;
@@ -2321,7 +2397,7 @@ function TableRow({
   });
 
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={onContextMenuOpenChange}>
       <ContextMenuTrigger asChild>
         <div
           ref={dropRef}
@@ -2334,22 +2410,30 @@ function TableRow({
           // ПКМ тоже участвует: внутрь диапазона — выбор его строк, мимо — одной.
           onMouseDownCapture={(e) => {
             if (e.button !== 0 && e.button !== 2) return;
+            if (e.button === 0 && preserveContextMenuSelection()) return;
             const cellEl = (e.target as HTMLElement).closest('[data-cell]');
             const key = cellEl?.getAttribute('data-cell');
             if (key) onCellDown(rowIdx, key as 'title' | ViewColumn, e.button === 2);
           }}
-          // Первый левый клик по ячейке-«выборке» её ВЫДЕЛЯЕТ, а не открывает выпадашку:
-          // гасим pointerdown ДО того, как он дойдёт до Radix-триггера значения (Radix
-          // открывается на pointerdown). Выделение отработает на mousedown (выше). Если
-          // ячейка УЖЕ активна (второй клик) — не мешаем: редактор открывается. Título/
-          // created пропускаем (текст правится своим кликом / read-only), gutter (+/⋮⋮/
-          // чекбокс) — вне [data-cell], его не трогаем (drag ручки-грипа не ломаем).
+          // Пока ничего не выбрано, первый pointerdown начинает диапазон и не открывает
+          // Radix-редактор. Если диапазон/строки уже выбраны, событие проходит в ячейку:
+          // mousedown снимает выбор, а этот же клик сразу открывает редактор. Первый клик
+          // вне открытого context menu только закрывает меню и поглощается целиком.
           onPointerDownCapture={(e) => {
             if (e.button !== 0) return;
+            if (preserveContextMenuSelection()) {
+              e.stopPropagation();
+              return;
+            }
             const cellEl = (e.target as HTMLElement).closest('[data-cell]');
             const key = cellEl?.getAttribute('data-cell');
             if (!key || key === 'title' || key === 'created') return;
-            if (isCellActiveSingle(rowIdx, key as 'title' | ViewColumn)) return;
+            if (selectionActive) return;
+            e.stopPropagation();
+          }}
+          onClickCapture={(e) => {
+            if (!consumeContextMenuDismissClick()) return;
+            e.preventDefault();
             e.stopPropagation();
           }}
           className={cn(

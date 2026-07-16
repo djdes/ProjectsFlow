@@ -101,7 +101,6 @@ import {
 } from './viewShared';
 import { DropdownEntries, ContextEntries, type MenuEntry } from './menuEntries';
 import {
-  NewPropertyForm,
   PROPERTY_TYPE_ICONS,
   PropertyVisibilityPanel,
   useTaskProperties,
@@ -216,9 +215,9 @@ export function ProjectBoardViews({
   };
   const [deleteTarget, setDeleteTarget] = useState<BoardView | null>(null);
   // 'newview' — правая панель сразу после создания вью (Notion New view → Done →
-  // View settings); 'settings' — полные настройки; 'newprop' — «Новое свойство»
-  // (по «+» в шапке таблицы — таблица плавно поджимается).
-  const [panel, setPanel] = useState<'settings' | 'newview' | 'newprop' | null>(null);
+  // View settings); 'settings' — полные настройки. Новое свойство создаётся прямо
+  // в таблице и открывает меню собственного заголовка.
+  const [panel, setPanel] = useState<'settings' | 'newview' | null>(null);
   // Фильтры/сортировка — пер-вью, живут в памяти вкладки (смена вью не сбрасывает).
   const [perView, setPerView] = useState<Record<string, PerViewState>>({});
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1032,7 +1031,6 @@ export function ProjectBoardViews({
           colorRules={state.colorRules}
           createRequest={createReq}
           sidePanelOpen={panel !== null}
-          onRequestNewProperty={() => setPanel('newprop')}
           onSetHiddenCols={setHiddenCols}
         />
       ) : activeType === 'list' ? (
@@ -1061,14 +1059,6 @@ export function ProjectBoardViews({
       )}
 
       </div>
-      {/* Панель «Новое свойство» (Notion New property): по «+» в шапке таблицы — вся
-          страница плавно съезжает влево (BoardSidePanel сужает <main>), панель встаёт
-          справа на всю высоту и скроллится сама. */}
-      {panel === 'newprop' && (
-        <BoardSidePanel onClose={() => setPanel(null)}>
-          <NewPropertyPanel projectId={projectId} onClose={() => setPanel(null)} />
-        </BoardSidePanel>
-      )}
       {/* Панель «Новое отображение» (Notion): сразу после создания — имя/тип → «Готово»
           открывает полные настройки вью. */}
       {panel === 'newview' && active && (
@@ -1269,43 +1259,6 @@ function BoardSidePanel({
       )}
     >
       {children}
-    </div>
-  );
-}
-
-// Правая панель «Новое свойство» (Notion New property): имя + поиск типа + сетка
-// типов. Свой useTaskProperties — живёт только пока панель открыта.
-function NewPropertyPanel({
-  projectId,
-  onClose,
-}: {
-  projectId: string;
-  onClose: () => void;
-}): React.ReactElement {
-  const props = useTaskProperties(projectId);
-  return (
-    <div className="flex flex-col">
-      <div className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b bg-popover px-3">
-        <p className="text-sm font-semibold">Новое свойство</p>
-        <button
-          type="button"
-          aria-label="Закрыть панель"
-          title="Закрыть"
-          onClick={onClose}
-          className="grid size-10 place-items-center rounded-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <X className="size-4" />
-        </button>
-      </div>
-      <div className="p-4">
-        <NewPropertyForm
-          fullWidth
-          onCreate={(t, name) => {
-            props.createProperty(t, name);
-            onClose();
-          }}
-        />
-      </div>
     </div>
   );
 }

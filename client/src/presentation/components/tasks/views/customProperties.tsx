@@ -100,7 +100,7 @@ export type UseTaskPropertiesResult = {
   members: PropertyMember[];
   valueFor: (taskId: string, propertyId: string) => string;
   setValue: (taskId: string, propertyId: string, value: string) => void;
-  createProperty: (type: TaskPropertyType, name?: string) => void;
+  createProperty: (type: TaskPropertyType, name?: string) => Promise<TaskProperty | null>;
   renameProperty: (propertyId: string, name: string) => void;
   addOption: (property: TaskProperty, label: string) => Promise<TaskPropertyOption | null>;
   removeProperty: (propertyId: string) => void;
@@ -184,11 +184,21 @@ export function useTaskProperties(projectId: string): UseTaskPropertiesResult {
     });
   };
 
-  const createProperty = (type: TaskPropertyType, name?: string): void => {
-    void taskPropertyRepository
-      .create(projectId, { name: name?.trim() || TASK_PROPERTY_TYPE_LABELS[type], type })
-      .then((p) => setProperties((prev) => [...prev, p]))
-      .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`));
+  const createProperty = async (
+    type: TaskPropertyType,
+    name?: string,
+  ): Promise<TaskProperty | null> => {
+    try {
+      const property = await taskPropertyRepository.create(projectId, {
+        name: name?.trim() || TASK_PROPERTY_TYPE_LABELS[type],
+        type,
+      });
+      setProperties((prev) => [...prev, property]);
+      return property;
+    } catch (e) {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+      return null;
+    }
   };
 
   const renameProperty = (propertyId: string, name: string): void => {
@@ -318,6 +328,8 @@ export function PropertyHeaderCell({
   grouped = false,
   onToggleGroup,
   onHide,
+  openMenu,
+  onOpenMenuClosed,
 }: {
   property: TaskProperty;
   onRename: (name: string) => void;
@@ -341,12 +353,20 @@ export function PropertyHeaderCell({
   onToggleGroup?: () => void;
   // «Скрыть в отображении» (Notion Hide in view).
   onHide?: () => void;
+  // Только что созданная колонка сразу прокручивается в видимую область и открывает
+  // собственное меню.
+  openMenu?: boolean;
+  onOpenMenuClosed?: () => void;
 }): React.ReactElement {
   const [name, setName] = useState(property.name);
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   // ПКМ по заголовку открывает то же меню, что и клик (Notion).
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => setName(property.name), [property.name]);
+  useEffect(() => {
+    if (!openMenu) return;
+    setMenuOpen(true);
+  }, [openMenu]);
   const Icon = PROPERTY_TYPE_ICONS[property.type];
   const commit = (): void => {
     const trimmed = name.trim();
@@ -369,6 +389,7 @@ export function PropertyHeaderCell({
         onOpenChange={(o) => {
           if (!o) commit();
           setMenuOpen(o);
+          if (!o && openMenu) onOpenMenuClosed?.();
         }}
       >
         <DropdownMenuTrigger asChild>
@@ -405,7 +426,25 @@ export function PropertyHeaderCell({
             {sorted === 'desc' && <ArrowDown className="size-3 shrink-0" />}
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="min-w-[13rem]">
+        <DropdownMenuContent
+          align="start"
+          className={openMenu ? 'w-auto p-1.5' : 'min-w-[13rem]'}
+        >
+          {openMenu ? (
+            <NewPropertyForm
+              initialName={property.name}
+              currentType={property.type}
+              onNameChange={setName}
+              onCreate={(type, nextName) => {
+                const trimmed = nextName?.trim();
+                if (trimmed && trimmed !== property.name) onRename(trimmed);
+                if (type !== property.type) onChangeType?.(type);
+                setMenuOpen(false);
+                onOpenMenuClosed?.();
+              }}
+            />
+          ) : (
+            <>
           {/* Имя свойства редактируется прямо в меню (Notion). stopPropagation:
               иначе Radix-typeahead перехватывает буквы. */}
           <div className="flex items-center gap-1.5 px-1 pb-1.5 pt-0.5">
@@ -413,6 +452,7 @@ export function PropertyHeaderCell({
               <Icon className="size-3.5" />
             </span>
             <input
+              autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => {
@@ -524,6 +564,8 @@ export function PropertyHeaderCell({
             <Trash2 className="size-4" />
             Удалить свойство
           </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       {/* Ручка resize на правой кромке (Notion). */}
@@ -563,12 +605,18 @@ export function PropertyHeaderCell({
 export function NewPropertyForm({
   onCreate,
   fullWidth = false,
+  initialName = '',
+  currentType,
+  onNameChange,
 }: {
   onCreate: (type: TaskPropertyType, name?: string) => void;
   // В полноэкранной панели «Новое свойство» — на всю ширину (не фикс 18rem попапа).
   fullWidth?: boolean;
+  initialName?: string;
+  currentType?: TaskPropertyType;
+  onNameChange?: (name: string) => void;
 }): React.ReactElement {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(initialName);
   const [typeQuery, setTypeQuery] = useState('');
   // Поиск типа: по умолчанию иконка, по клику раскрывается в поле (Notion Search types).
   const [searchOpen, setSearchOpen] = useState(false);
@@ -581,7 +629,16 @@ export function NewPropertyForm({
       <input
         autoFocus
         value={name}
-        onChange={(e) => setName(e.target.value)}
+        onChange={(e) => {
+          setName(e.target.value);
+          onNameChange?.(e.target.value);
+        }}
+        onFocus={(e) => e.currentTarget.select()}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' || !currentType) return;
+          e.preventDefault();
+          onCreate(currentType, name);
+        }}
         placeholder="Введите имя свойства…"
         aria-label="Имя свойства"
         className="mb-4 h-11 w-full rounded-[10px] border bg-background px-3 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
@@ -624,7 +681,10 @@ export function NewPropertyForm({
               key={t}
               type="button"
               onClick={() => onCreate(t, name)}
-              className="flex min-h-11 items-center gap-2 rounded-[10px] px-3 py-2 text-left text-sm transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={cn(
+                'flex min-h-11 items-center gap-2 rounded-[10px] px-3 py-2 text-left text-sm transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                currentType === t && 'bg-accent/60 text-foreground',
+              )}
             >
               <Icon className="size-4 text-muted-foreground" />
               {TASK_PROPERTY_TYPE_LABELS[t]}
