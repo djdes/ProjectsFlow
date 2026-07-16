@@ -818,116 +818,121 @@ export function ProjectBoardViews({
           )}
         </div>
 
-        {/* Тулбар вью — только для табличного/списочного/календарного (у канбана свой).
-            На узком экране (как в Notion) остаются только настройки и «Создать». */}
-        {!isKanban && (
-          <div className="flex shrink-0 items-center gap-0.5">
-            <div className="hidden items-center gap-0.5 md:flex">
-            <FilterMenu filters={state.filters} onChange={setFilters} active={filtersActive} />
-            <SortMenu sort={state.sort} onChange={setSort} />
+        {/* Общий правый toolbar отображений. У канбана собственные фильтры и поиск
+            находятся строкой ниже, но действия проекта/настройки/«Создать» должны
+            оставаться справа так же, как в таблице. На узком экране остаются
+            настройки и «Создать». */}
+        <div className="flex shrink-0 items-center gap-0.5">
+          <div className="hidden items-center gap-0.5 md:flex">
+            {!isKanban && (
+              <>
+                <FilterMenu filters={state.filters} onChange={setFilters} active={filtersActive} />
+                <SortMenu sort={state.sort} onChange={setSort} />
+              </>
+            )}
             {onOpenAutomation && (
               <ToolbarIcon label="Автоматизации" onClick={onOpenAutomation}>
                 <Zap className="size-4" />
               </ToolbarIcon>
             )}
-            {searchOpen ? (
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
-                <input
-                  autoFocus
-                  value={state.filters.query}
-                  onChange={(e) => setFilters({ query: e.target.value })}
-                  onBlur={() => {
-                    if (!state.filters.query) setSearchOpen(false);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      setFilters({ query: '' });
-                      setSearchOpen(false);
-                    }
-                  }}
-                  placeholder="Поиск…"
-                  aria-label="Поиск задач"
-                  className="h-7 w-36 rounded-md bg-accent/60 pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/60"
-                />
-              </div>
-            ) : (
-              <ToolbarIcon
-                label="Поиск"
-                onClick={() => setSearchOpen(true)}
-                active={state.filters.query.length > 0}
-              >
-                <Search className="size-4" />
-              </ToolbarIcon>
-            )}
-            </div>
-            {active && (
-              <ToolbarIcon label="Настройки отображения" onClick={() => setPanel('settings')}>
-                <Settings2 className="size-4" />
-              </ToolbarIcon>
-            )}
-            <div className="ml-1 inline-flex overflow-hidden rounded-md">
-              <Button
-                size="sm"
-                className="h-7 rounded-r-none px-2.5 text-xs"
-                onClick={() => requestCreate('backlog')}
-              >
-                Создать
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    size="sm"
-                    aria-label="Создать в колонке…"
-                    className="h-7 rounded-l-none border-l border-primary-foreground/20 px-1.5"
-                  >
-                    <ChevronDown className="size-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[13rem]">
-                  {VISIBLE_KANBAN_STATUSES.map((s) => (
-                    <DropdownMenuItem key={s} className="gap-2" onClick={() => requestCreate(s)}>
-                      <span className={cn('size-2 rounded-full', STATUS_DOT[s])} />
-                      {STATUS_LABEL[s]}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
-                    Шаблоны
-                  </DropdownMenuLabel>
-                  {templates.length === 0 ? (
-                    <div className="px-2 pb-1.5 text-xs text-muted-foreground">
-                      Нет — «Сохранить как шаблон» в меню задачи
-                    </div>
-                  ) : (
-                    templates.map((t) => (
-                      <DropdownMenuItem
-                        key={t.id}
-                        className="group/tpl gap-2"
-                        onClick={() => requestCreate(t.status, t)}
-                      >
-                        <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1 truncate">{t.name}</span>
-                        <button
-                          type="button"
-                          aria-label={`Удалить шаблон «${t.name}»`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            removeTemplate(t);
-                          }}
-                          className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-destructive group-hover/tpl:opacity-100"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      </DropdownMenuItem>
-                    ))
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            {!isKanban &&
+              (searchOpen ? (
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
+                  <input
+                    autoFocus
+                    value={state.filters.query}
+                    onChange={(e) => setFilters({ query: e.target.value })}
+                    onBlur={() => {
+                      if (!state.filters.query) setSearchOpen(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setFilters({ query: '' });
+                        setSearchOpen(false);
+                      }
+                    }}
+                    placeholder="Поиск…"
+                    aria-label="Поиск задач"
+                    className="h-7 w-36 rounded-md bg-accent/60 pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/60"
+                  />
+                </div>
+              ) : (
+                <ToolbarIcon
+                  label="Поиск"
+                  onClick={() => setSearchOpen(true)}
+                  active={state.filters.query.length > 0}
+                >
+                  <Search className="size-4" />
+                </ToolbarIcon>
+              ))}
           </div>
-        )}
+          {(active || isKanban) && (
+            <ToolbarIcon label="Настройки отображения" onClick={() => setPanel('settings')}>
+              <Settings2 className="size-4" />
+            </ToolbarIcon>
+          )}
+          <div className="ml-1 inline-flex overflow-hidden rounded-md">
+            <Button
+              size="sm"
+              className="h-7 rounded-r-none px-2.5 text-xs"
+              onClick={() => requestCreate('backlog')}
+            >
+              Создать
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  aria-label="Создать в колонке…"
+                  className="h-7 rounded-l-none border-l border-primary-foreground/20 px-1.5"
+                >
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[13rem]">
+                {VISIBLE_KANBAN_STATUSES.map((s) => (
+                  <DropdownMenuItem key={s} className="gap-2" onClick={() => requestCreate(s)}>
+                    <span className={cn('size-2 rounded-full', STATUS_DOT[s])} />
+                    {STATUS_LABEL[s]}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                  Шаблоны
+                </DropdownMenuLabel>
+                {templates.length === 0 ? (
+                  <div className="px-2 pb-1.5 text-xs text-muted-foreground">
+                    Нет — «Сохранить как шаблон» в меню задачи
+                  </div>
+                ) : (
+                  templates.map((t) => (
+                    <DropdownMenuItem
+                      key={t.id}
+                      className="group/tpl gap-2"
+                      onClick={() => requestCreate(t.status, t)}
+                    >
+                      <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                      <button
+                        type="button"
+                        aria-label={`Удалить шаблон «${t.name}»`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          removeTemplate(t);
+                        }}
+                        className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-destructive group-hover/tpl:opacity-100"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </DropdownMenuItem>
+                  ))
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
       </div>
 
       {/* Строка активных фильтров/сортировки (chips, Notion-style): клик по chip —
@@ -1011,6 +1016,7 @@ export function ProjectBoardViews({
           bleedNegClass={bleedNegClass}
           bleedPadClass={bleedPadClass}
           stickyHeaderTop={stickyTop}
+          createRequest={createReq}
         />
       ) : activeType === 'table' ? (
         <TableView

@@ -84,6 +84,7 @@ import {
 import type { UnifiedDndRef } from './unifiedDndTypes';
 import { TaskDragPill, snapToCursor } from './AssignedToMeBlock';
 import { plainTaskTitle } from '@/lib/taskTitleBody';
+import type { ViewCreateRequest } from './views/ProjectBoardViews';
 
 type Props = {
   projectId: string;
@@ -114,6 +115,9 @@ type Props = {
   // Верхний офсет для sticky-шапок колонок (Notion: при скролле липнут заголовки
   // колонок, а не строка вкладок). undefined — не закрепляем (инбокс).
   stickyHeaderTop?: number;
+  // Запрос из общего правого toolbar отображений. Нужен проектной доске, чтобы
+  // «Создать» и выбор колонки работали так же, как в таблице/списке/календаре.
+  createRequest?: ViewCreateRequest | null;
 };
 
 // Локальная ISO-дата 'YYYY-MM-DD' (без UTC-сдвига) — для сравнения с deadline.
@@ -262,6 +266,7 @@ export function KanbanBoard({
   externalDnd = null,
   onBoardTasksChange,
   stickyHeaderTop,
+  createRequest,
 }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const { user } = useCurrentUser();
@@ -400,6 +405,27 @@ export function KanbanBoard({
   useEffect(() => {
     if (dialog) closeComposer();
   }, [dialog, closeComposer]);
+
+  // «Создать» из общего toolbar отображений. Шаблон, как и в остальных видах,
+  // создаёт задачу сразу; обычная кнопка открывает полноценный drawer в выбранной колонке.
+  useEffect(() => {
+    if (!createRequest) return;
+    const tpl = createRequest.template;
+    if (tpl) {
+      void create({
+        description: tpl.description || tpl.name,
+        status: tpl.status,
+        priority: tpl.priority,
+        icon: tpl.icon,
+      })
+        .then(() => toast.success(`Создано из шаблона «${tpl.name}»`))
+        .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`));
+    } else {
+      setDialog({ mode: 'create', status: createRequest.status });
+    }
+    // create меняется вместе с useTasks; seq в request гарантирует один запуск клика.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createRequest]);
   // Открытие глобального «Добавить задачу» (левая панель) шлёт событие — тоже закрываем.
   useEffect(() => {
     const onClose = (): void => closeComposer();
