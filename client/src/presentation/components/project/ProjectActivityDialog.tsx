@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { Calendar, Check, ChevronDown, ChevronsRight, HelpCircle, Loader2, Settings } from 'lucide-react';
+import { Check, ChevronDown, ChevronsRight, HelpCircle, Loader2, Settings } from 'lucide-react';
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ import {
 import { useContainer } from '@/infrastructure/di/container';
 import { relativeTime } from '@/lib/relativeTime';
 import { ActivityItem } from '@/presentation/activity/ActivityItem';
+import { ProjectChangesAnalytics } from './ProjectChangesAnalytics';
 import { ProjectViewsChart } from './ProjectViewsChart';
 import { TaskVersionsDialog } from '@/presentation/components/tasks/TaskVersionsDialog';
 import type { ActivityEventItem } from '@/domain/activity/ActivityFeedItem';
@@ -40,9 +41,6 @@ const UNDERLINE_TAB =
   'relative -mb-px rounded-none border-b-2 border-transparent bg-transparent px-0 pb-2 pt-1 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none';
 
 const DEFAULT_WINDOW_DAYS = 28;
-// 3650 = «Всё время» (график ограничит ленту годом). Остальные — окна в днях.
-const WINDOW_OPTIONS = [7, 28, 90, 3650] as const;
-const windowLabel = (days: number): string => (days >= 365 ? 'Всё время' : `За ${days} дней`);
 const initial = (name: string | null): string => (name?.trim()[0] ?? '?').toUpperCase();
 
 const activityDayKey = (value: Date): string => {
@@ -83,6 +81,9 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
   const [summary, setSummary] = useState<ProjectActivitySummary | null>(null);
   const [analytics, setAnalytics] = useState<ProjectAnalytics | null>(null);
   const [loadingActivity, setLoadingActivity] = useState(true);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
+  const [activityReload, setActivityReload] = useState(0);
   const [loadingAnalytics, setLoadingAnalytics] = useState(true);
   // Задача, для которой открыто окно версий (из часы-кнопки события). null = закрыто.
   const [versionsFor, setVersionsFor] = useState<string | null>(null);
@@ -183,6 +184,8 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
   };
 
   // Лента активности + сводка (создатель/редактор) — не зависят от окна графика.
+  // Первая страница появляется сразу; оставшаяся история догружается курсором в фоне.
+  // Составной курсор createdAt+id не пропускает события, созданные в одну миллисекунду.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -191,24 +194,64 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     const load = (withSpinner: boolean): void => {
       const currentRequestId = ++requestId;
-      if (withSpinner) setLoadingActivity(true);
-      projectRepository
-        .getProjectActivity(projectId, 40)
-        .then((r) => {
+      if (withSpinner) {
+        setLoadingActivity(true);
+        setActivityError(null);
+      }
+      setLoadingHistory(true);
+      void (async () => {
+        let cursor: Awaited<ReturnType<typeof projectRepository.getProjectActivity>>['nextCursor'] = null;
+        let collected: ActivityEventItem[] = [];
+        let firstPage = true;
+        const seenCursors = new Set<string>();
+        try {
+          do {
+            const result = await projectRepository.getProjectActivity(projectId, 100, cursor ?? undefined);
+            if (cancelled || currentRequestId !== requestId) return;
+            collected = [...collected, ...result.items];
+            if (firstPage) {
+              setSummary(result.summary);
+              setLoadingActivity(false);
+              setActivity((current) => {
+                if (withSpinner || !current) return collected;
+                const byId = new Map(
+                  [...collected, ...current].map((item) => [item.id, item]),
+                );
+                return [...byId.values()].sort(
+                  (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+                );
+              });
+              firstPage = false;
+            } else {
+              setActivity([...collected]);
+            }
+            cursor = result.nextCursor;
+            if (cursor) {
+              const cursorKey = `${cursor.createdAt.toISOString()}:${cursor.id}`;
+              if (seenCursors.has(cursorKey)) break;
+              seenCursors.add(cursorKey);
+            }
+          } while (cursor);
           if (!cancelled && currentRequestId === requestId) {
-            setActivity(r.items);
-            setSummary(r.summary);
+            setActivity([...collected]);
+            setActivityError(null);
           }
-        })
-        .catch(() => {
-          if (!cancelled && currentRequestId === requestId && withSpinner) {
+        } catch {
+          if (cancelled || currentRequestId !== requestId) return;
+          if (firstPage) {
             setActivity([]);
             setSummary(null);
+            setActivityError('Не удалось загрузить историю изменений.');
+          } else {
+            setActivityError('Часть старой истории не загрузилась. Уже загруженные изменения сохранены.');
           }
-        })
-        .finally(() => {
-          if (!cancelled && currentRequestId === requestId) setLoadingActivity(false);
-        });
+        } finally {
+          if (!cancelled && currentRequestId === requestId) {
+            setLoadingActivity(false);
+            setLoadingHistory(false);
+          }
+        }
+      })();
     };
     load(true);
     // Открытое окно моментально подхватывает новые события (создали/перенесли задачу).
@@ -245,7 +288,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
       window.removeEventListener(TASK_CHANGED_EVENT, onChanged);
       window.removeEventListener(PROJECT_CHANGED_EVENT, onChanged);
     };
-  }, [open, projectId, projectRepository]);
+  }, [activityReload, open, projectId, projectRepository]);
 
   // Аналитика просмотров — перезапрашивается при смене окна (7/28/90).
   useEffect(() => {
@@ -318,29 +361,63 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" /> Загрузка…
               </div>
+            ) : activityError && (!activity || activity.length === 0) ? (
+              <div className="grid min-h-48 place-items-center px-6 text-center">
+                <div>
+                  <p className="text-sm font-medium">История не загрузилась</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{activityError}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 h-10"
+                    onClick={() => setActivityReload((value) => value + 1)}
+                  >
+                    Повторить
+                  </Button>
+                </div>
+              </div>
             ) : !activity || activity.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">Пока нет активности.</p>
             ) : (
-              <ul className="pb-4">
-                {activity.map((item, index) => {
-                  const showDay =
-                    index === 0 ||
-                    activityDayKey(activity[index - 1]!.createdAt) !== activityDayKey(item.createdAt);
-                  return (
-                    <Fragment key={item.id}>
-                      {showDay ? (
-                        <li
-                          role="presentation"
-                          className="sticky top-0 z-20 border-b bg-background/95 px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground backdrop-blur"
-                        >
-                          {activityDayLabel(item.createdAt)}
-                        </li>
-                      ) : null}
-                      <ActivityItem item={item} onOpenVersions={setVersionsFor} />
-                    </Fragment>
-                  );
-                })}
-              </ul>
+              <>
+                {activityError ? (
+                  <div className="flex items-center justify-between gap-3 border-b border-destructive/20 bg-destructive/5 px-5 py-2">
+                    <p className="text-xs text-destructive">{activityError}</p>
+                    <button
+                      type="button"
+                      className="shrink-0 text-xs font-medium text-destructive underline-offset-2 hover:underline"
+                      onClick={() => setActivityReload((value) => value + 1)}
+                    >
+                      Повторить
+                    </button>
+                  </div>
+                ) : loadingHistory ? (
+                  <div className="flex items-center gap-2 border-b px-5 py-2 text-xs text-muted-foreground">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Загружаем старые изменения…
+                  </div>
+                ) : null}
+                <ul className="pb-4">
+                  {activity.map((item, index) => {
+                    const showDay =
+                      index === 0 ||
+                      activityDayKey(activity[index - 1]!.createdAt) !== activityDayKey(item.createdAt);
+                    return (
+                      <Fragment key={item.id}>
+                        {showDay ? (
+                          <li
+                            role="presentation"
+                            className="sticky top-0 z-20 border-b bg-background/95 px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground backdrop-blur"
+                          >
+                            {activityDayLabel(item.createdAt)}
+                          </li>
+                        ) : null}
+                        <ActivityItem item={item} onOpenVersions={setVersionsFor} />
+                      </Fragment>
+                    );
+                  })}
+                </ul>
+              </>
             )}
           </TabsContent>
 
@@ -353,205 +430,200 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
             value="analytics"
             className="min-h-0 flex-1 flex-col data-[state=active]:flex"
           >
-            {loadingAnalytics ? (
-              <div className="flex flex-1 items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" /> Загрузка…
-              </div>
-            ) : !analytics ? (
-              <p className="flex-1 py-10 text-center text-sm text-muted-foreground">Нет данных.</p>
-            ) : (
-              <>
-                <div className="pf-scroll-visible min-h-0 flex-1 space-y-6 px-5 py-4">
-                  {/* Просмотры + селектор окна (7/28/90 дней). */}
-                  <section className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm">
-                        Просмотры{' '}
-                        <span className="text-muted-foreground">({analytics.totalViews} всего)</span>
-                      </span>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="h-7 gap-1.5 rounded-full px-3 text-xs font-normal text-primary"
-                          >
-                            <Calendar className="size-3.5" />
-                            {windowLabel(windowDays)}
-                            <ChevronDown className="size-3.5 opacity-60" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {WINDOW_OPTIONS.map((d) => (
-                            <DropdownMenuItem key={d} onClick={() => setWindowDays(d)}>
-                              {windowLabel(d)}
-                              {windowDays === d && <Check className="ml-auto size-4" />}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+            <div className="pf-scroll-visible min-h-0 flex-1 space-y-8 px-5 py-4">
+              <ProjectChangesAnalytics
+                projectId={projectId}
+                activity={activity ?? []}
+                loading={loadingActivity}
+                loadingHistory={loadingHistory}
+                error={activityError}
+                windowDays={windowDays}
+                onWindowDaysChange={setWindowDays}
+                onRetry={() => setActivityReload((value) => value + 1)}
+              />
+
+              <div className="border-t" />
+
+              {/* Аналитика просмотров остаётся отдельным блоком и использует тот же период. */}
+              <section className="space-y-3">
+                <div>
+                  <h2 className="text-sm font-semibold">Просмотры</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Посещения проекта за выбранный период
+                  </p>
+                </div>
+                {loadingAnalytics ? (
+                  <div className="flex h-44 items-center justify-center gap-2 rounded-2xl border text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" /> Загрузка просмотров…
+                  </div>
+                ) : !analytics ? (
+                  <div className="grid h-32 place-items-center rounded-2xl border px-6 text-center">
+                    <p className="text-xs text-muted-foreground">
+                      Не удалось загрузить аналитику просмотров.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      {analytics.totalViews} просмотров всего
+                    </p>
                     <ProjectViewsChart perDay={analytics.perDay} windowDays={windowDays} />
-                  </section>
+                  </>
+                )}
+              </section>
 
-                  {/* Зрители + карточка приватности истории просмотров. */}
-                  <section className="space-y-2.5">
-                    <p className="text-sm font-medium">Зрители</p>
-
-                    <div className="flex items-start justify-between gap-3 rounded-lg bg-muted/50 px-3.5 py-3">
-                      <div className="min-w-0 space-y-0.5">
-                        <p className="text-sm font-medium">Показывать историю ваших просмотров</p>
-                        <p className="text-xs text-muted-foreground">
-                          Редакторы страницы видят, когда вы её открывали.{' '}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              window.dispatchEvent(
-                                new CustomEvent('pf:open-help', {
-                                  detail: {
-                                    tab: 'assistant',
-                                    prefill: 'Как работает история просмотров проекта?',
-                                  },
-                                }),
-                              )
-                            }
-                            className="underline underline-offset-2 hover:text-foreground"
-                          >
-                            Подробнее
-                          </button>
-                        </p>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 shrink-0 gap-1.5 px-2.5 text-xs font-normal"
-                          >
-                            {viewHistory === 'allow' ? 'Разрешить' : 'Запретить'}
-                            <ChevronDown className="size-3.5 opacity-60" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="min-w-[180px]">
-                          <DropdownMenuItem onClick={() => changeViewHistory('allow')}>
-                            Разрешить
-                            {viewHistory === 'allow' && <Check className="ml-auto size-4" />}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => changeViewHistory('deny')}>
-                            Запретить
-                            {viewHistory === 'deny' && <Check className="ml-auto size-4" />}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+              {analytics ? (
+                <section className="space-y-2.5">
+                  <p className="text-sm font-medium">Зрители</p>
+                  <div className="flex items-start justify-between gap-3 rounded-2xl border border-border/70 px-4 py-3">
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="text-sm font-medium">Показывать историю ваших просмотров</p>
+                      <p className="text-xs text-muted-foreground">
+                        Редакторы страницы видят, когда вы её открывали.{' '}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            window.dispatchEvent(
+                              new CustomEvent('pf:open-help', {
+                                detail: {
+                                  tab: 'assistant',
+                                  prefill: 'Как работает история просмотров проекта?',
+                                },
+                              }),
+                            )
+                          }
+                          className="underline underline-offset-2 hover:text-foreground"
+                        >
+                          Подробнее
+                        </button>
+                      </p>
                     </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-10 shrink-0 gap-1.5 rounded-xl px-3 text-xs font-normal"
+                        >
+                          {viewHistory === 'allow' ? 'Разрешить' : 'Запретить'}
+                          <ChevronDown className="size-3.5 opacity-60" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-[180px]">
+                        <DropdownMenuItem onClick={() => changeViewHistory('allow')}>
+                          Разрешить
+                          {viewHistory === 'allow' && <Check className="ml-auto size-4" />}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => changeViewHistory('deny')}>
+                          Запретить
+                          {viewHistory === 'deny' && <Check className="ml-auto size-4" />}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
 
-                    {analytics.viewers.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Пока никто не заходил.</p>
-                    ) : (
-                      <ul className="space-y-0.5">
-                        {analytics.viewers.map((v) => (
-                          <li key={v.userId} className="flex items-center gap-2.5 rounded-md px-1 py-1">
-                            <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-muted-foreground">
-                              {v.avatarUrl ? (
-                                <img src={v.avatarUrl} alt="" className="size-full object-cover" />
-                              ) : (
-                                initial(v.displayName)
-                              )}
-                            </span>
-                            <span className="min-w-0 flex-1 truncate text-sm">{v.displayName}</span>
-                            <span className="shrink-0 text-xs text-muted-foreground">
-                              {relativeTime(v.lastViewedAt)}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </section>
-
-                  {/* Редакторы: Создатель / Недавно изменил — с аватарами (инициалы). */}
-                  {summary && (
-                    <section className="space-y-3">
-                      <p className="text-sm font-medium">Редакторы</p>
-
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Создатель</p>
-                        <div className="flex items-center gap-2.5">
-                          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
-                            {initial(summary.createdByName)}
+                  {analytics.viewers.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Пока никто не заходил.</p>
+                  ) : (
+                    <ul className="space-y-0.5">
+                      {analytics.viewers.map((viewer) => (
+                        <li key={viewer.userId} className="flex min-h-11 items-center gap-2.5 rounded-xl px-2 hover:bg-muted/40">
+                          <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                            {viewer.avatarUrl ? (
+                              <img src={viewer.avatarUrl} alt="" className="size-full object-cover" />
+                            ) : (
+                              initial(viewer.displayName)
+                            )}
                           </span>
-                          <span className="min-w-0 flex-1 truncate text-sm">
-                            {summary.createdByName ?? '—'}
-                          </span>
+                          <span className="min-w-0 flex-1 truncate text-sm">{viewer.displayName}</span>
                           <span className="shrink-0 text-xs text-muted-foreground">
-                            {relativeTime(summary.createdAt)}
+                            {relativeTime(viewer.lastViewedAt)}
                           </span>
-                        </div>
-                      </div>
-
-                      {summary.lastEditedByName && summary.lastEditedAt && (
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground">Недавно изменил</p>
-                          <div className="flex items-center gap-2.5">
-                            <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
-                              {initial(summary.lastEditedByName)}
-                            </span>
-                            <span className="min-w-0 flex-1 truncate text-sm">
-                              {summary.lastEditedByName}
-                            </span>
-                            <span className="shrink-0 text-xs text-muted-foreground">
-                              {relativeTime(summary.lastEditedAt)}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </section>
+                        </li>
+                      ))}
+                    </ul>
                   )}
-                </div>
+                </section>
+              ) : null}
 
-                {/* Нижняя панель: «Настройки» (приватность истории) слева, «Справка» справа. */}
-                <div className="flex shrink-0 items-center justify-between border-t px-4 py-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 gap-1.5 px-2 text-xs font-normal text-muted-foreground"
-                      >
-                        <Settings className="size-3.5" />
-                        Настройки
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="min-w-[220px]">
-                      <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                        История ваших просмотров
+              {summary && (
+                <section className="space-y-3">
+                  <p className="text-sm font-medium">Редакторы</p>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Создатель</p>
+                    <div className="flex min-h-11 items-center gap-2.5 rounded-xl px-2">
+                      <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                        {initial(summary.createdByName)}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm">
+                        {summary.createdByName ?? '—'}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {relativeTime(summary.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                  {summary.lastEditedByName && summary.lastEditedAt && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Недавно изменил</p>
+                      <div className="flex min-h-11 items-center gap-2.5 rounded-xl px-2">
+                        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                          {initial(summary.lastEditedByName)}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm">
+                          {summary.lastEditedByName}
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {relativeTime(summary.lastEditedAt)}
+                        </span>
                       </div>
-                      <DropdownMenuItem onClick={() => changeViewHistory('allow')}>
-                        Разрешить
-                        {viewHistory === 'allow' && <Check className="ml-auto size-4" />}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => changeViewHistory('deny')}>
-                        Запретить
-                        {viewHistory === 'deny' && <Check className="ml-auto size-4" />}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      window.dispatchEvent(
-                        new CustomEvent('pf:open-help', {
-                          detail: { tab: 'assistant' },
-                        }),
-                      )
-                    }
-                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    </div>
+                  )}
+                </section>
+              )}
+            </div>
+
+            <div className="flex shrink-0 items-center justify-between border-t px-4 py-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 gap-1.5 px-2 text-xs font-normal text-muted-foreground"
                   >
-                    <HelpCircle className="size-3.5" />
-                    Справка
-                  </button>
-                </div>
-              </>
-            )}
+                    <Settings className="size-3.5" />
+                    Настройки
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-[220px]">
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                    История ваших просмотров
+                  </div>
+                  <DropdownMenuItem onClick={() => changeViewHistory('allow')}>
+                    Разрешить
+                    {viewHistory === 'allow' && <Check className="ml-auto size-4" />}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => changeViewHistory('deny')}>
+                    Запретить
+                    {viewHistory === 'deny' && <Check className="ml-auto size-4" />}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <button
+                type="button"
+                onClick={() =>
+                  window.dispatchEvent(
+                    new CustomEvent('pf:open-help', {
+                      detail: { tab: 'assistant' },
+                    }),
+                  )
+                }
+                className="inline-flex min-h-10 items-center gap-1.5 px-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <HelpCircle className="size-3.5" />
+                Справка
+              </button>
+            </div>
           </TabsContent>
         </Tabs>
       </SheetContent>

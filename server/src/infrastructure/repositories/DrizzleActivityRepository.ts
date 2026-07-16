@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, or } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { activityEvents, type ActivityEventRow } from '../db/schema.js';
 import type { ActivityEvent, ActivityKind, ActivityPayload } from '../../domain/activity/ActivityEvent.js';
@@ -71,15 +71,27 @@ export class DrizzleActivityRepository implements ActivityRepository {
 
   async listForProject(
     projectId: string,
-    opts: { before?: Date; limit: number },
+    opts: { before?: Date; beforeId?: string; limit: number },
   ): Promise<ActivityEvent[]> {
     const conds = [eq(activityEvents.projectId, projectId)];
-    if (opts.before) conds.push(lt(activityEvents.createdAt, opts.before));
+    if (opts.before) {
+      conds.push(
+        opts.beforeId
+          ? or(
+              lt(activityEvents.createdAt, opts.before),
+              and(
+                eq(activityEvents.createdAt, opts.before),
+                lt(activityEvents.id, opts.beforeId),
+              ),
+            )!
+          : lt(activityEvents.createdAt, opts.before),
+      );
+    }
     const rows = await this.db
       .select()
       .from(activityEvents)
       .where(and(...conds))
-      .orderBy(desc(activityEvents.createdAt))
+      .orderBy(desc(activityEvents.createdAt), desc(activityEvents.id))
       .limit(opts.limit);
     return rows.map((r) => toEvent(r));
   }

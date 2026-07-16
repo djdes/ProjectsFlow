@@ -29,6 +29,8 @@ export type ProjectActivitySummary = {
 export type ProjectActivityResult = {
   readonly summary: ProjectActivitySummary;
   readonly items: ProjectActivityItem[];
+  readonly hasMore: boolean;
+  readonly nextCursor: { readonly createdAt: Date; readonly id: string } | null;
 };
 
 type Deps = ProjectAccessDeps & {
@@ -45,13 +47,18 @@ export class GetProjectActivity {
   async execute(
     projectId: string,
     userId: string,
-    opts: { before?: Date; limit: number },
+    opts: { before?: Date; beforeId?: string; limit: number },
   ): Promise<ProjectActivityResult> {
     const { project } = await requireProjectAccess(this.deps, projectId, userId, 'read_project');
-    const [events, latestVersion] = await Promise.all([
-      this.deps.activity.listForProject(projectId, opts),
+    const [page, latestEvents, latestVersion] = await Promise.all([
+      this.deps.activity.listForProject(projectId, { ...opts, limit: opts.limit + 1 }),
+      opts.before
+        ? this.deps.activity.listForProject(projectId, { limit: 1 })
+        : Promise.resolve([]),
       this.deps.taskVersions.getLatestForProject(projectId),
     ]);
+    const hasMore = page.length > opts.limit;
+    const events = hasMore ? page.slice(0, opts.limit) : page;
 
     // Резолвим имена акторов/таргетов + владельца проекта (для «создан»).
     const ids = new Set<string>([project.ownerId]);
@@ -60,6 +67,7 @@ export class GetProjectActivity {
       const target = e.payload?.targetUserId;
       if (target) ids.add(target);
     }
+    if (latestEvents[0]?.actorUserId) ids.add(latestEvents[0].actorUserId);
     if (latestVersion?.actorUserId) ids.add(latestVersion.actorUserId);
     const users = ids.size > 0 ? await this.deps.users.getManyByIds([...ids]) : [];
     const byId = new Map(users.map((u) => [u.id, u]));
@@ -91,7 +99,7 @@ export class GetProjectActivity {
     });
 
     // Последнее событие (события пришли DESC) → «изменён». Владелец + createdAt → «создан».
-    const latestEvent = events[0] ?? null;
+    const latestEvent = (opts.before ? latestEvents[0] : events[0]) ?? null;
     const latestIsVersion = !!latestVersion && (
       !latestEvent || latestVersion.createdAt.getTime() > latestEvent.createdAt.getTime()
     );
@@ -104,6 +112,12 @@ export class GetProjectActivity {
       lastEditedByName: lastEditorId ? (byId.get(lastEditorId)?.displayName ?? null) : null,
     };
 
-    return { summary, items };
+    const last = events.at(-1) ?? null;
+    return {
+      summary,
+      items,
+      hasMore,
+      nextCursor: hasMore && last ? { createdAt: last.createdAt, id: last.id } : null,
+    };
   }
 }

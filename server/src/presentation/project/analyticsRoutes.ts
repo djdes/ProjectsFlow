@@ -20,6 +20,10 @@ function activityToDto(r: ProjectActivityResult): unknown {
       lastEditedByName: r.summary.lastEditedByName,
     },
     items: r.items.map((it) => ({ ...it, createdAt: it.createdAt.toISOString() })),
+    hasMore: r.hasMore,
+    nextCursor: r.nextCursor
+      ? { createdAt: r.nextCursor.createdAt.toISOString(), id: r.nextCursor.id }
+      : null,
   };
 }
 
@@ -69,10 +73,12 @@ export function projectAnalyticsRouter(deps: Deps): Router {
       const limitParam = Number(req.query['limit'] ?? 30);
       const limit = Number.isFinite(limitParam) ? Math.min(100, Math.max(1, limitParam)) : 30;
       const beforeParam = req.query['before'];
+      const beforeIdParam = req.query['beforeId'];
       const before = typeof beforeParam === 'string' ? new Date(beforeParam) : undefined;
       const result = await deps.getActivity.execute(req.params['projectId'] as string, req.user!.id, {
         limit,
         before: before && !Number.isNaN(before.getTime()) ? before : undefined,
+        beforeId: typeof beforeIdParam === 'string' ? beforeIdParam : undefined,
       });
       res.json(activityToDto(result));
     } catch (e) {

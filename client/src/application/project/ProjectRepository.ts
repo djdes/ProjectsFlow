@@ -1,5 +1,9 @@
 import type { Project, ProjectStatus, PublicAppearance } from '@/domain/project/Project';
-import type { ProjectAnalytics, ProjectActivity } from '@/domain/project/ProjectAnalytics';
+import type {
+  ProjectAnalytics,
+  ProjectActivity,
+  ProjectActivityCursor,
+} from '@/domain/project/ProjectAnalytics';
 import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 import type { KanbanBoardSettings } from '@/domain/kanban/KanbanSettings';
@@ -204,7 +208,11 @@ export interface ProjectRepository {
   // recordProjectView — fire-and-forget при открытии проекта (сервер троттлит).
   recordProjectView(projectId: string): Promise<void>;
   getProjectAnalytics(projectId: string, days: number): Promise<ProjectAnalytics>;
-  getProjectActivity(projectId: string, limit: number): Promise<ProjectActivity>;
+  getProjectActivity(
+    projectId: string,
+    limit: number,
+    before?: ProjectActivityCursor,
+  ): Promise<ProjectActivity>;
 }
 
 export type SharedMember = {

@@ -33,4 +33,11 @@ export type ProjectActivitySummary = {
 export type ProjectActivity = {
   readonly summary: ProjectActivitySummary;
   readonly items: ActivityEventItem[];
+  readonly hasMore: boolean;
+  readonly nextCursor: ProjectActivityCursor | null;
+};
+
+export type ProjectActivityCursor = {
+  readonly createdAt: Date;
+  readonly id: string;
 };

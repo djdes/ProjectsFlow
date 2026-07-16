@@ -20,7 +20,11 @@ import type {
 import type { UpdateProjectInput } from '@/application/project/ProjectRepository';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
 import type { KanbanBoardSettings } from '@/domain/kanban/KanbanSettings';
-import type { ProjectAnalytics, ProjectActivity } from '@/domain/project/ProjectAnalytics';
+import type {
+  ProjectAnalytics,
+  ProjectActivity,
+  ProjectActivityCursor,
+} from '@/domain/project/ProjectAnalytics';
 import type { ActivityKind, ActivityPayload } from '@/domain/activity/ActivityFeedItem';
 import { HttpError, httpClient } from './httpClient';
 
@@ -409,7 +413,11 @@ export class HttpProjectRepository implements ProjectRepository {
     };
   }
 
-  async getProjectActivity(projectId: string, limit: number): Promise<ProjectActivity> {
+  async getProjectActivity(
+    projectId: string,
+    limit: number,
+    before?: ProjectActivityCursor,
+  ): Promise<ProjectActivity> {
     const res = await httpClient.get<{
       summary: {
         createdAt: string;
@@ -429,7 +437,15 @@ export class HttpProjectRepository implements ProjectRepository {
         createdAt: string;
         hasVersions?: boolean;
       }>;
-    }>(`/projects/${projectId}/activity?limit=${limit}`);
+      hasMore: boolean;
+      nextCursor: { createdAt: string; id: string } | null;
+    }>(
+      `/projects/${projectId}/activity?limit=${limit}${
+        before
+          ? `&before=${encodeURIComponent(before.createdAt.toISOString())}&beforeId=${encodeURIComponent(before.id)}`
+          : ''
+      }`,
+    );
     return {
       summary: {
         createdAt: new Date(res.summary.createdAt),
@@ -438,6 +454,10 @@ export class HttpProjectRepository implements ProjectRepository {
         lastEditedByName: res.summary.lastEditedByName,
       },
       items: res.items.map((it) => ({ type: 'activity' as const, ...it, createdAt: new Date(it.createdAt) })),
+      hasMore: res.hasMore,
+      nextCursor: res.nextCursor
+        ? { createdAt: new Date(res.nextCursor.createdAt), id: res.nextCursor.id }
+        : null,
     };
   }
 }
