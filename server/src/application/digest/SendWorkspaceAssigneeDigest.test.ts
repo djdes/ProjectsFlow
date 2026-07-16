@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildWorkspaceAssigneeDigestMessage } from './SendWorkspaceAssigneeDigest.js';
+import {
+  buildWorkspaceAssigneeDigestMessage,
+  buildWorkspaceAssigneeDigestRichMessage,
+} from './SendWorkspaceAssigneeDigest.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 
@@ -73,4 +76,34 @@ test('workspace assignee digest renders one compact message with mention and pro
   assert.match(message, /projects\/project-a\?task=task-a/);
   assert.match(message, /осталось 2 дня/);
   assert.ok(message.length <= 3800);
+});
+
+test('workspace assignee digest uses the same rich layout as regular Telegram digests', () => {
+  const message = buildWorkspaceAssigneeDigestRichMessage({
+    displayName: 'Денис',
+    telegramLink: link,
+    appUrl: 'https://projectsflow.ru',
+    now: new Date('2026-07-16T09:00:00.000Z'),
+    projects: [
+      {
+        project: { id: 'project-a', name: 'DocsFlow' },
+        tasks: [task('task-a', 'project-a', 'Проверить документы\nПодробности', '2026-07-18')],
+      },
+      {
+        project: { id: 'project-b', name: 'Banana' },
+        tasks: [task('task-b', 'project-b', 'Собрать релиз', null)],
+      },
+    ],
+  });
+
+  assert.match(message, /^<h2>🗒 Ежедневные задачи для @denis_pf<\/h2>/);
+  assert.match(message, /<p>Открытых задач: <b>2<\/b><\/p>/);
+  assert.match(message, /<details><summary>Показать задачи \(2\)<\/summary>/);
+  assert.match(message, /<h3>📁 DocsFlow<\/h3>/);
+  assert.match(message, /<h3>📁 Banana<\/h3>/);
+  assert.match(message, /projects\/project-a\?task=task-a/);
+  assert.match(message, /⏰ осталось 2 дня/);
+  assert.match(message, /✓ Завершить/);
+  assert.doesNotMatch(message, /👤 Денис/);
+  assert.match(message, /<\/details>$/);
 });

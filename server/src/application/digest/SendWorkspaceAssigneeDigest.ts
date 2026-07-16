@@ -1,7 +1,10 @@
 import type { AutomationRepository } from '../automation/AutomationRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
-import type { TelegramClient } from '../telegram/TelegramClient.js';
+import type {
+  SendMessageResult,
+  TelegramClient,
+} from '../telegram/TelegramClient.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { WorkspaceRepository } from '../workspace/WorkspaceRepository.js';
 import type {
@@ -10,6 +13,12 @@ import type {
 import type { WorkspaceAssigneeDigestRepository } from './WorkspaceAssigneeDigestRepository.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
+import type { TaskWithCounts } from '../task/ListTasks.js';
+import {
+  buildDigestModel,
+  renderDigestRich,
+  type DigestModel,
+} from '../task/digest/buildTaskDigest.js';
 import {
   escapeHtml,
   formatDeadlineRemainingRu,
@@ -131,14 +140,41 @@ export class SendWorkspaceAssigneeDigest {
         appUrl: this.deps.appUrl,
         now,
       });
-      const result = await this.deps.telegram
-        .sendMessage({
-          chatId: settings.telegramGroupChatId,
-          text: message,
-          parseMode: 'HTML',
-          disableWebPagePreview: true,
-        })
-        .catch(() => null);
+      const richMessage = buildWorkspaceAssigneeDigestRichMessage({
+        displayName: member.displayName ?? member.email ?? 'Участник',
+        telegramLink,
+        projects: grouped,
+        appUrl: this.deps.appUrl,
+        now,
+      });
+      let result: SendMessageResult | null = null;
+      let fallbackAllowed = !this.deps.telegram.sendRichMessage;
+      if (this.deps.telegram.sendRichMessage) {
+        try {
+          const richResult = await this.deps.telegram.sendRichMessage({
+            chatId: settings.telegramGroupChatId,
+            html: richMessage,
+          });
+          if (richResult.kind === 'ok') result = richResult;
+          fallbackAllowed =
+            richResult.kind === 'error' && richResult.deliveryUnknown !== true;
+        } catch (error) {
+          console.warn('[workspace-assignee-digest] rich message failed', error);
+          // Сетевой сбой неоднозначен: запрос мог попасть в Telegram. Не отправляем
+          // fallback следом, чтобы не создать дубликат участнику.
+          fallbackAllowed = false;
+        }
+      }
+      if (!result && fallbackAllowed) {
+        result = await this.deps.telegram
+          .sendMessage({
+            chatId: settings.telegramGroupChatId,
+            text: message,
+            parseMode: 'HTML',
+            disableWebPagePreview: true,
+          })
+          .catch(() => null);
+      }
       if (result?.kind === 'ok') {
         sentCount += 1;
         if (opts.force) testMessageIds.push(result.messageId);
@@ -235,6 +271,49 @@ export function buildWorkspaceAssigneeDigestMessage(input: {
   const body = lines.join('\n').trim();
   const tail = hidden > 0 ? `\n\n<i>Ещё ${hidden} задач — откройте проекты выше.</i>` : '';
   return `${header}\n<blockquote expandable>${body}${tail}</blockquote>`;
+}
+
+export function buildWorkspaceAssigneeDigestRichMessage(input: {
+  readonly displayName: string;
+  readonly telegramLink: TelegramLink;
+  readonly projects: readonly ProjectTasks[];
+  readonly appUrl: string;
+  readonly now?: Date;
+}): string {
+  const groups: DigestModel['groups'] = input.projects.map((group) => {
+    const tasks: TaskWithCounts[] = group.tasks.map((task) => ({
+      ...task,
+      commitCount: 0,
+      attachmentCount: 0,
+      commentCount: 0,
+    }));
+    const projectModel = buildDigestModel(tasks, {
+      projectName: group.project.name,
+      appUrl: input.appUrl,
+      isInbox: false,
+      attachmentsByTask: new Map(),
+      grouping: { by: 'priority' },
+      now: input.now,
+    });
+    return {
+      priority: null,
+      heading: `📁 ${group.project.name}`,
+      items: projectModel.groups.flatMap((projectGroup) => projectGroup.items),
+      telegramAssignee: null,
+    };
+  });
+  const model: DigestModel = {
+    projectName: '',
+    count: input.projects.reduce((sum, project) => sum + project.tasks.length, 0),
+    groups,
+  };
+  return renderDigestRich(model, {
+    titleHtml: `🗒 Ежедневные задачи для ${telegramMention(
+      input.displayName,
+      input.telegramLink,
+    )}`,
+    showAssignee: false,
+  });
 }
 
 function telegramMention(displayName: string, link: TelegramLink): string {

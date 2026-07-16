@@ -331,9 +331,21 @@ export function renderDigestTelegram(m: DigestModel, opts: { maxLen?: number } =
 // ВЫДЕЛЯЕМЫЙ текст, не картинка — тот самый Hermes-вид.
 // Возвращает ОДНУ HTML-строку (Telegram сам парсит её в блоки). Для очень длинных сводок
 // caller делает фоллбэк на renderDigestTelegram, если sendRichMessage вернёт ошибку.
-export function renderDigestRich(m: DigestModel): string {
+export type DigestRichRenderOptions = {
+  // Доверенный HTML заголовка, собранный сервером. Нужен workspace-сводке для
+  // кликабельного tg:// mention при отсутствии публичного @username.
+  readonly titleHtml?: string;
+  // В персональной сводке ответственный уже указан в заголовке, поэтому его можно
+  // не дублировать у каждой задачи.
+  readonly showAssignee?: boolean;
+};
+
+export function renderDigestRich(
+  m: DigestModel,
+  opts: DigestRichRenderOptions = {},
+): string {
   const h: string[] = [
-    `<h2>🗒 Ежедневная сводка · «${escapeHtml(m.projectName)}»</h2>`,
+    `<h2>${opts.titleHtml ?? `🗒 Ежедневная сводка · «${escapeHtml(m.projectName)}»`}</h2>`,
     `<p>Открытых задач: <b>${m.count}</b></p>`,
     `<details><summary>Показать задачи (${m.count})</summary>`,
   ];
@@ -341,11 +353,14 @@ export function renderDigestRich(m: DigestModel): string {
     h.push(`<h3>${telegramGroupHeading(g)}</h3>`);
     h.push('<ul>');
     for (const it of g.items) {
-      const who = it.assignee ? escapeHtml(it.assignee) : '—';
-      const dl = it.deadline ? escapeHtml(it.deadline) : 'без дедлайна';
+      const meta: string[] = [];
+      if (opts.showAssignee !== false) {
+        meta.push(`👤 ${it.assignee ? escapeHtml(it.assignee) : '—'}`);
+      }
+      meta.push(`⏰ ${it.deadline ? escapeHtml(it.deadline) : 'без дедлайна'}`);
       h.push(
         `<li><a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>` +
-          `<br><i>👤 ${who} · ⏰ ${dl}</i>` +
+          `<br><i>${meta.join(' · ')}</i>` +
           `<br><a href="${escapeHtml(it.doneLink)}">✓ Завершить</a></li>`,
       );
     }
