@@ -2389,7 +2389,12 @@ export function TaskDrawer({
                   // элементов создаёт лишний неявный flex-ребёнок и ломает раскладку.
                   // В narrow (общий скролл) композер липнет к низу окна, чтобы оставаться
                   // под рукой; в split — обычный футер колонки.
-                  <div className={cn('shrink-0', !isSplit && 'sticky bottom-0 z-10 bg-background')}>
+                  <div
+                    className={cn(
+                      'shrink-0 pb-[env(safe-area-inset-bottom)] sm:pb-0',
+                      !isSplit && 'sticky bottom-0 z-10 bg-background',
+                    )}
+                  >
                     {/* На awaiting_clarification — композер для ralph-answer'а + cancel над ним. */}
                     {task.status === 'awaiting_clarification' && (
                       <CancelWorkButton task={task} onChanged={() => notifyChanged()} />
@@ -2607,7 +2612,7 @@ export function TaskDrawer({
               </form>
 
               {/* Футер: AI слева, Отмена/Создать справа. */}
-              <div className="flex flex-col gap-2 border-t bg-background px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-2 border-t bg-background px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 sm:flex-row sm:items-center sm:justify-between sm:pb-3">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <AiImproveButton
                     text={description}

@@ -28,14 +28,17 @@ import type { DeleteProject } from '../application/project/DeleteProject.js';
 import type { PublishProject } from '../application/project/PublishProject.js';
 import type { UnpublishProject } from '../application/project/UnpublishProject.js';
 import type { SetPublicIndexing } from '../application/project/SetPublicIndexing.js';
+import type { SetPublicAppearance } from '../application/project/SetPublicAppearance.js';
 import type { EnsureProjectAppRepo } from '../application/project/EnsureProjectAppRepo.js';
 import type { CreateProjectRepo } from '../application/project/CreateProjectRepo.js';
 import type { GetPublicBoard } from '../application/project/GetPublicBoard.js';
 import type { ClonePublicBoard } from '../application/project/ClonePublicBoard.js';
+import type { ProductTelemetryRepository } from '../application/telemetry/ProductTelemetryRepository.js';
 import type { GetPublicTaskDetail } from '../application/project/GetPublicTaskDetail.js';
 import type { GetPublicTaskAccess } from '../application/project/GetPublicTaskAccess.js';
 import type { GetPublicAttachment } from '../application/project/GetPublicAttachment.js';
 import { publicBoardRouter } from './public/routes.js';
+import { telemetryRouter } from './telemetry/routes.js';
 import type { SetProjectDispatcher } from '../application/project/SetProjectDispatcher.js';
 import type { SetProjectMultiTaskWorker } from '../application/project/SetProjectMultiTaskWorker.js';
 import type { ListDispatcherCandidates } from '../application/project/ListDispatcherCandidates.js';
@@ -310,6 +313,7 @@ type AppDeps = {
     readonly publishProject: PublishProject;
     readonly unpublishProject: UnpublishProject;
     readonly setPublicIndexing: SetPublicIndexing;
+    readonly setPublicAppearance: SetPublicAppearance;
     readonly ensureAppRepo: EnsureProjectAppRepo;
     readonly createProjectRepo: CreateProjectRepo;
     readonly getProjectSite: GetProjectSite;
@@ -386,6 +390,9 @@ type AppDeps = {
     // Для отдачи обложки-картинки опубликованной доски анониму (lookup проекта по slug).
     readonly projects: ProjectRepository;
     readonly coverStorage: AttachmentStorage;
+  };
+  readonly telemetry: {
+    readonly repo: ProductTelemetryRepository;
   };
   readonly search: {
     readonly searchTasks: SearchTasks;
@@ -733,6 +740,7 @@ export function createApp(deps: AppDeps): CreatedApp {
     }),
   );
   app.use('/api/workspaces', workspacesRouter(deps.workspaces));
+  app.use('/api/telemetry', telemetryRouter(deps.telemetry));
   app.use(
     '/api/workspaces/:workspaceId/feed',
     activityFeedRouter({

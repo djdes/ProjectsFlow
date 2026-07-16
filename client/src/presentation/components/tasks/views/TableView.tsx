@@ -136,6 +136,7 @@ type Props = {
   // Открытая правая панель уже резервирует 496px в родительском rail; таблица не должна
   // заходить отрицательным правым отступом в 16px gutter перед панелью.
   sidePanelOpen?: boolean;
+  canEdit?: boolean;
 };
 
 // Ширины колонок; сетка собирается из видимых (скрытие свойств — как в Notion).
@@ -188,6 +189,7 @@ export function TableView({
   createRequest,
   onSetHiddenCols,
   sidePanelOpen = false,
+  canEdit = true,
 }: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
   const { tasks, loading, error, create, update, move, remove, refetch } = tasksApi;
@@ -501,6 +503,7 @@ export function TableView({
   // открывает меню новой колонки для имени/типа. Повторный клик во время запроса
   // игнорируется, чтобы один жест не создавал несколько одинаковых свойств.
   const createPropertyFromHeader = async (): Promise<void> => {
+    if (!canEdit) return;
     if (creatingProperty) return;
     setCreatingProperty(true);
     try {
@@ -688,6 +691,7 @@ export function TableView({
     }
   };
   const commitEdit = async (task: Task, moveDown = false): Promise<void> => {
+    if (!canEdit) return;
     if (editPendingRef.current === task.id) return;
     const title = editValue.trim();
     if (!title) {
@@ -773,6 +777,7 @@ export function TableView({
   // Enter коммитит строку и СРАЗУ открывает ввод следующей ниже (Notion/канбан);
   // Esc или пустой ввод закрывают цепочку.
   const submitInsert = async (anchor: Task, above: boolean, title: string, asSub = false): Promise<void> => {
+    if (!canEdit) return;
     const name = title.trim();
     if (!name) {
       setInsertAt(null);
@@ -859,6 +864,7 @@ export function TableView({
   // а это отменяет синтезированные mouse-события — MouseSensor не стартовал бы.
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const handleRowDragEnd = (e: DragEndEvent): void => {
+    if (!canEdit) return;
     setDragTask(null);
     const activeId = String(e.active.id);
     const overId = e.over ? String(e.over.id) : null;
@@ -906,7 +912,7 @@ export function TableView({
   // «Создать» из тулбара вью: открыть окно новой задачи в выбранной колонке.
   // С шаблоном (db/108) — задача создаётся сразу, без окна (Notion Templates).
   useEffect(() => {
-    if (!createRequest) return;
+    if (!createRequest || !canEdit) return;
     const tpl = createRequest.template;
     if (tpl) {
       void create({
@@ -921,7 +927,7 @@ export function TableView({
       setDrawer({ mode: 'create', status: createRequest.status });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createRequest]);
+  }, [createRequest, canEdit]);
 
   // Esc снимает выделение ячеек; mouseup завершает протяжку диапазона.
   useEffect(() => {
@@ -1217,7 +1223,7 @@ export function TableView({
         </div>
       )}
       <DndContext
-        sensors={dndSensors}
+        sensors={canEdit ? dndSensors : []}
         collisionDetection={pointerWithin}
         onDragStart={(e) => setDragTask(rows.find((t) => t.id === String(e.active.id)) ?? null)}
         onDragEnd={handleRowDragEnd}
@@ -1233,7 +1239,7 @@ export function TableView({
       {/* Sticky-шапка колонок (Notion): липнет под строкой вкладок при вертикальном
           скролле; горизонтальный скролл синхронизируется с телом (onScroll ниже). */}
       <div
-        className="sticky z-20 bg-background"
+        className="pf-sticky-surface sticky z-20 bg-background"
         style={{ top: headerTop }}
       >
         {/* Шапка скроллится и ЮЗЕРОМ (колесо/трекпад над ней), скроллбар скрыт;
@@ -1726,6 +1732,7 @@ export function TableView({
         projectName={projectName}
         isShared={isShared}
         tasksApi={tasksApi}
+        canEdit={canEdit}
       />
 
       {/* Плавающая панель выбранных — поверх строки вкладок (Notion). ТОЛЬКО от
@@ -2401,6 +2408,7 @@ function TableRow({
       <ContextMenuTrigger asChild>
         <div
           ref={dropRef}
+          data-pf-task-id={task.id}
           role="row"
           aria-selected={selected}
           aria-label={`Задача: ${taskTitle(task)}`}

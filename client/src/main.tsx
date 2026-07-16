@@ -32,7 +32,7 @@ ReactDOM.createRoot(root).render(
                   них падал «Tooltip must be used within TooltipProvider» (напр. в lazy-чанках/
                   диалогах). Один провайдер на корень покрывает всё; локальные вложенные — их
                   настройки перекрывают этот дефолт для своих поддеревьев. */}
-              <TooltipProvider delayDuration={300}>
+              <TooltipProvider delayDuration={550} skipDelayDuration={120}>
                 <RouterProvider router={router} />
                 <Toaster />
               </TooltipProvider>

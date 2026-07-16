@@ -48,6 +48,11 @@ const COLLAPSE_KEY = 'pf_sidebar_collapsed';
 export function AppShell(): React.ReactElement {
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mainScrolled, setMainScrolled] = useState(false);
+  const handleMainScroll = useCallback((event: React.UIEvent<HTMLElement>): void => {
+    const next = event.currentTarget.scrollTop > 8;
+    setMainScrolled((current) => (current === next ? current : next));
+  }, []);
   // Ширина открытого справа окна. Основной <main> остаётся неизменным; значение используют
   // только элементы, которым разрешено сужаться под панелью (плашка и строка отображений).
   const [rightPanelWidth, setRightPanelWidth] = useState(0);
@@ -219,7 +224,7 @@ export function AppShell(): React.ReactElement {
                 Контент (обложка, синяя плашка) при этом растянут до левого края. */}
             {collapsed && (
               <>
-                <TooltipProvider delayDuration={300}>
+                <TooltipProvider delayDuration={550} skipDelayDuration={120}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -269,7 +274,11 @@ export function AppShell(): React.ReactElement {
                 </AnimatePresence>
               </>
             )}
-            <main className="relative min-h-0 overflow-y-auto">
+            <main
+              className="relative min-h-0 overflow-y-auto"
+              data-pf-scrolled={mainScrolled ? 'true' : 'false'}
+              onScroll={handleMainScroll}
+            >
               <PageTransition>
                 <Outlet />
               </PageTransition>
@@ -289,7 +298,11 @@ export function AppShell(): React.ReactElement {
               <MobileWorkspaceTitle />
             </header>
             <InstallAppPrompt variant="banner" />
-            <main className="flex-1 overflow-y-auto">
+            <main
+              className="flex-1 overflow-y-auto"
+              data-pf-scrolled={mainScrolled ? 'true' : 'false'}
+              onScroll={handleMainScroll}
+            >
               <PageTransition>
                 <Outlet />
               </PageTransition>

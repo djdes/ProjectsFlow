@@ -55,6 +55,7 @@ export class GetPublicBoard {
       coverUrl: publicCoverUrl(project.publicSlug, project.coverUrl),
       coverPosition: project.coverPosition,
       indexing: project.publicIndexing,
+      appearance: project.publicAppearance,
       columns,
     };
   }

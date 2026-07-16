@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GetPublicBoard, publicCoverUrl } from './GetPublicBoard.js';
-import type { Project } from '../../domain/project/Project.js';
+import {
+  DEFAULT_PUBLIC_APPEARANCE,
+  type Project,
+} from '../../domain/project/Project.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { ProjectRepository } from './ProjectRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
@@ -13,6 +16,7 @@ function makeProject(over: Partial<Project> = {}): Project {
     dispatcherUserId: null, multiTaskWorker: false, isInbox: false,
     description: 'desc', coverUrl: 'gradient:sky', coverPosition: 50,
     publicSlug: 'cookie-opinion-k3f9q2', isPublic: true, publicIndexing: false,
+    publicAppearance: DEFAULT_PUBLIC_APPEARANCE,
     appRepoFullName: null,
     siteSlug: null,
     createdAt: new Date('2026-01-01'),
@@ -58,6 +62,7 @@ test('GetPublicBoard: опубликованный проект → доска �
   assert.ok(board);
   assert.equal(board!.name, 'Persona');
   assert.equal(board!.slug, 'cookie-opinion-k3f9q2');
+  assert.deepEqual(board!.appearance, DEFAULT_PUBLIC_APPEARANCE);
   const todo = board!.columns.find((c) => c.status === 'todo')!;
   assert.deepEqual(todo.tasks.map((t) => t.id), ['a', 'c']);
   const inProgress = board!.columns.find((c) => c.status === 'in_progress')!;

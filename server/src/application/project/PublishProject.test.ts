@@ -3,8 +3,13 @@ import assert from 'node:assert/strict';
 import { PublishProject } from './PublishProject.js';
 import { UnpublishProject } from './UnpublishProject.js';
 import { SetPublicIndexing } from './SetPublicIndexing.js';
+import { SetPublicAppearance } from './SetPublicAppearance.js';
 import { InsufficientProjectRoleError } from '../../domain/project/errors.js';
-import type { Project } from '../../domain/project/Project.js';
+import {
+  DEFAULT_PUBLIC_APPEARANCE,
+  type Project,
+  type PublicAppearance,
+} from '../../domain/project/Project.js';
 import type { ProjectRepository } from './ProjectRepository.js';
 import type { ProjectMemberRepository } from './ProjectMemberRepository.js';
 import type { ProjectRole } from '../../domain/project/ProjectMembership.js';
@@ -29,6 +34,7 @@ function makeProject(over: Partial<Project> = {}): Project {
     publicSlug: null,
     isPublic: false,
     publicIndexing: false,
+    publicAppearance: DEFAULT_PUBLIC_APPEARANCE,
     appRepoFullName: null,
     siteSlug: null,
     createdAt: new Date('2026-01-01'),
@@ -40,6 +46,7 @@ type Calls = {
   publish: Array<{ id: string; slug: string }>;
   unpublish: string[];
   setIndexing: Array<{ id: string; on: boolean }>;
+  setAppearance: Array<{ id: string; appearance: PublicAppearance }>;
 };
 
 // Фейки репозиториев: фиксируем вызовы, эмулируем slug_taken по набору «занятых» slug'ов.
@@ -48,7 +55,7 @@ function makeDeps(opts: {
   role: ProjectRole | null; // null = юзер не member (findForProject → null)
   takenSlugs?: Set<string>;
 }): { deps: { projects: ProjectRepository; members: ProjectMemberRepository }; calls: Calls } {
-  const calls: Calls = { publish: [], unpublish: [], setIndexing: [] };
+  const calls: Calls = { publish: [], unpublish: [], setIndexing: [], setAppearance: [] };
   const taken = opts.takenSlugs ?? new Set<string>();
 
   const projects = {
@@ -67,6 +74,10 @@ function makeDeps(opts: {
     },
     async setPublicIndexing(id: string, on: boolean) {
       calls.setIndexing.push({ id, on });
+    },
+    async update(id: string, patch: { publicAppearance?: PublicAppearance }) {
+      if (patch.publicAppearance) calls.setAppearance.push({ id, appearance: patch.publicAppearance });
+      return opts.project;
     },
   } as unknown as ProjectRepository;
 
@@ -141,4 +152,31 @@ test('SetPublicIndexing: owner → проставляет флаг', async () =>
   const { deps, calls } = makeDeps({ project, role: 'owner' });
   await new SetPublicIndexing(deps).execute({ id: 'p1', ownerId: 'u1', indexing: true });
   assert.deepEqual(calls.setIndexing, [{ id: 'p1', on: true }]);
+});
+
+test('SetPublicAppearance: owner → сохраняет только whitelisted-настройки оформления', async () => {
+  const project = makeProject({ publicSlug: 'cookie-opinion-k3f9q2', isPublic: true });
+  const { deps, calls } = makeDeps({ project, role: 'owner' });
+  const appearance: PublicAppearance = {
+    accentColor: '#7c3aed',
+    showCover: false,
+    showIcon: true,
+    showDescription: false,
+    showTaskMeta: true,
+  };
+  await new SetPublicAppearance(deps).execute({ id: 'p1', userId: 'u1', appearance });
+  assert.deepEqual(calls.setAppearance, [{ id: 'p1', appearance }]);
+});
+
+test('SetPublicAppearance: editor не может менять публичное оформление', async () => {
+  const { deps } = makeDeps({ project: makeProject(), role: 'editor' });
+  await assert.rejects(
+    () =>
+      new SetPublicAppearance(deps).execute({
+        id: 'p1',
+        userId: 'u2',
+        appearance: DEFAULT_PUBLIC_APPEARANCE,
+      }),
+    InsufficientProjectRoleError,
+  );
 });

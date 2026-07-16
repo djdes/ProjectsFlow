@@ -6,6 +6,7 @@ import type {
   PublicTaskAccess,
   PublicTaskDetail,
 } from '@/domain/public/PublicBoard';
+import { DEFAULT_PUBLIC_APPEARANCE } from '@/domain/project/Project';
 
 // null при 404 — общий хелпер для всех публичных GET'ов.
 async function getOrNull<T>(path: string): Promise<T | null> {
@@ -24,7 +25,15 @@ export class HttpPublicBoardRepository implements PublicBoardRepository {
     const res = await getOrNull<{ board: PublicBoard }>(
       `/public/boards/${encodeURIComponent(slug)}`,
     );
-    return res ? res.board : null;
+    return res
+      ? {
+          ...res.board,
+          appearance: {
+            ...DEFAULT_PUBLIC_APPEARANCE,
+            ...(res.board.appearance ?? {}),
+          },
+        }
+      : null;
   }
 
   async getTaskDetail(slug: string, taskId: string): Promise<PublicTaskDetail | null> {

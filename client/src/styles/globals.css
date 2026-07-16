@@ -217,6 +217,51 @@
   }
 }
 
+/* Единая глубина липких слоёв страницы проекта появляется только после реального скролла.
+   До 8px шапки остаются плоскими, поэтому интерфейс не выглядит «разрезанным» в исходном
+   положении. Маркер выставляет единственный scroll-контейнер AppShell. */
+main[data-pf-scrolled='true'] .pf-sticky-surface {
+  box-shadow: 0 1px 0 hsl(var(--border) / 0.75), 0 6px 18px rgb(15 23 42 / 0.055);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button,
+  [role='button'] {
+    transform: none !important;
+  }
+}
+
+@keyframes pf-created-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, hsl(var(--primary)) 0%, transparent);
+  }
+  22%,
+  72% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, hsl(var(--primary)) 42%, transparent);
+  }
+}
+
+.pf-created-flash {
+  animation: pf-created-flash 1.8s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-created-flash {
+    animation: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, hsl(var(--primary)) 42%, transparent);
+  }
+}
+
+/* Raw icon/action buttons inherit the same keyboard affordance as the shared Button.
+   :focus-visible keeps the ring out of mouse interactions. */
+button:focus-visible,
+[role='button']:focus-visible,
+a:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
 /* Claude-стилизация комментария актора 'agent'. Принципиально не через
    Tailwind-arbitrary values — keyframe-анимация и :where-host для контейнера хотят
    нормальный CSS. Используется в TaskDialog CommentItem; см. spec comment-actor-kind.md. */

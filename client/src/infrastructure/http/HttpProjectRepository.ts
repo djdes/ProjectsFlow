@@ -1,4 +1,9 @@
-import type { Project, ProjectStatus } from '@/domain/project/Project';
+import {
+  DEFAULT_PUBLIC_APPEARANCE,
+  type Project,
+  type ProjectStatus,
+  type PublicAppearance,
+} from '@/domain/project/Project';
 import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
 import { ProjectNameAlreadyExistsError } from '@/domain/project/errors';
 import type {
@@ -62,6 +67,7 @@ type ProjectDto = {
   publicSlug?: string | null;
   isPublic?: boolean;
   publicIndexing?: boolean;
+  publicAppearance?: Partial<PublicAppearance> | null;
   appRepoFullName?: string | null;
   createdAt: string;
 };
@@ -93,6 +99,10 @@ function fromDto(dto: ProjectDto): Project {
     publicSlug: dto.publicSlug ?? null,
     isPublic: dto.isPublic ?? false,
     publicIndexing: dto.publicIndexing ?? false,
+    publicAppearance: {
+      ...DEFAULT_PUBLIC_APPEARANCE,
+      ...(dto.publicAppearance ?? {}),
+    },
     appRepoFullName: dto.appRepoFullName ?? null,
     createdAt: new Date(dto.createdAt),
   };
@@ -242,6 +252,10 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async setPublicIndexing(projectId: string, indexing: boolean): Promise<void> {
     await httpClient.patch<void>(`/projects/${projectId}/publish`, { indexing });
+  }
+
+  async setPublicAppearance(projectId: string, appearance: PublicAppearance): Promise<void> {
+    await httpClient.patch<void>(`/projects/${projectId}/public-appearance`, { appearance });
   }
 
   async ensureAppRepo(projectId: string): Promise<{ appRepoFullName: string }> {

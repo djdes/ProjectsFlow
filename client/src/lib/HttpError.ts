@@ -1,7 +1,12 @@
 // HttpError — cross-layer тип ошибки HTTP. Живёт в lib, чтобы presentation
 // мог type-check'ать ошибки от репозиториев без нарушения boundaries.
 
-export type HttpErrorBody = { error: string; message?: string; details?: unknown };
+export type HttpErrorBody = {
+  error: string;
+  message?: string;
+  details?: unknown;
+  requestId?: string;
+};
 
 export class HttpError extends Error {
   constructor(

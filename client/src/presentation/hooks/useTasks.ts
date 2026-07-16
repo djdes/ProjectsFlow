@@ -4,6 +4,7 @@ import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Ta
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { useRealtimeTaskRefresh } from './useRealtimeTaskRefresh';
 import { useCurrentUser } from './useCurrentUser';
+import { trackProjectAction } from '@/lib/productAnalytics';
 
 type State = {
   tasks: Task[];
@@ -91,12 +92,24 @@ export function useTasks(projectId: string): UseTasks {
   };
 
   const create: UseTasks['create'] = async (input) => {
+    const startedAt = performance.now();
     const assigneeUserId = input.assigneeUserId ?? user?.id;
     if (!assigneeUserId) throw new Error('Не удалось определить ответственного');
-    const task = await taskRepository.create(projectId, { ...input, assigneeUserId });
-    setState((s) => ({ ...s, tasks: [...s.tasks, task] }));
-    notifyChanged();
-    return task;
+    try {
+      const task = await taskRepository.create(projectId, { ...input, assigneeUserId });
+      setState((s) => ({ ...s, tasks: [...s.tasks, task] }));
+      notifyChanged();
+      window.dispatchEvent(
+        new CustomEvent('pf:task-created', {
+          detail: { projectId, taskId: task.id },
+        }),
+      );
+      trackProjectAction({ projectId, action: 'create_task', result: 'success', startedAt });
+      return task;
+    } catch (error) {
+      trackProjectAction({ projectId, action: 'create_task', result: 'failure', startedAt });
+      throw error;
+    }
   };
 
   const update: UseTasks['update'] = async (taskId, input) => {

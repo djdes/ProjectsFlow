@@ -35,6 +35,8 @@ import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { useContainer } from '@/infrastructure/di/container';
 import { ProjectVersionsDialog } from './ProjectVersionsDialog';
+import { actionErrorMessage } from '@/lib/actionFeedback';
+import { trackProjectAction } from '@/lib/productAnalytics';
 
 type Props = {
   project: Project;
@@ -43,6 +45,7 @@ type Props = {
   monitoringAlerts: number;
   onOpenAutomation: () => void;
   onOpenTaskFromHistory?: () => void;
+  compact?: boolean;
 };
 
 type Action = {
@@ -64,6 +67,7 @@ export function ProjectActionsMenu({
   monitoringAlerts,
   onOpenAutomation,
   onOpenTaskFromHistory,
+  compact = false,
 }: Props): React.ReactElement {
   const navigate = useNavigate();
   const { projectRepository, taskRepository } = useContainer();
@@ -72,6 +76,7 @@ export function ProjectActionsMenu({
   const taskHiding = useTaskHiding();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [busyAction, setBusyAction] = useState<'archive' | 'delete' | 'export' | null>(null);
   const projectId = project.id;
   const isOwner = project.role === 'owner';
   const canEdit = isOwner || project.role === 'editor';
@@ -85,6 +90,8 @@ export function ProjectActionsMenu({
 
   // Экспорт задач в CSV (Notion Export): название;статус;приоритет;срок;создана.
   const exportCsv = async (): Promise<void> => {
+    if (busyAction) return;
+    setBusyAction('export');
     try {
       const tasks = await taskRepository.list(projectId);
       const esc = (s: string): string => `"${s.replaceAll('"', '""')}"`;
@@ -109,28 +116,44 @@ export function ProjectActionsMenu({
       URL.revokeObjectURL(a.href);
       toast.success(`Экспортировано задач: ${tasks.length}`);
     } catch (e) {
-      toast.error(`Не удалось экспортировать: ${(e as Error).message}`);
+      toast.error(actionErrorMessage(e, 'Не удалось экспортировать проект'));
+    } finally {
+      setBusyAction(null);
     }
   };
 
-  const toggleArchive = (): void => {
+  const toggleArchive = async (): Promise<void> => {
+    if (busyAction) return;
     const next = project.status === 'archived' ? 'active' : 'archived';
-    void projectRepository
-      .update(projectId, { status: next })
-      .then(() =>
-        toast.success(next === 'archived' ? 'Проект в архиве' : 'Проект возвращён из архива'),
-      )
-      .catch((e: unknown) => toast.error(`Не удалось: ${(e as Error).message}`));
+    const startedAt = performance.now();
+    setBusyAction('archive');
+    try {
+      await projectRepository.update(projectId, { status: next });
+      toast.success(next === 'archived' ? 'Проект в архиве' : 'Проект возвращён из архива');
+      trackProjectAction({ projectId, action: 'archive_project', result: 'success', startedAt });
+    } catch (error) {
+      toast.error(actionErrorMessage(error));
+      trackProjectAction({ projectId, action: 'archive_project', result: 'failure', startedAt });
+    } finally {
+      setBusyAction(null);
+    }
   };
 
-  const deleteProject = (): void => {
-    void projectRepository
-      .delete(projectId)
-      .then(() => {
-        toast.success('Проект удалён');
-        navigate('/');
-      })
-      .catch((e: unknown) => toast.error(`Не удалось удалить: ${(e as Error).message}`));
+  const deleteProject = async (): Promise<void> => {
+    if (busyAction) return;
+    setBusyAction('delete');
+    const startedAt = performance.now();
+    trackProjectAction({ projectId, action: 'delete_project', result: 'started' });
+    try {
+      await projectRepository.delete(projectId);
+      trackProjectAction({ projectId, action: 'delete_project', result: 'success', startedAt });
+      toast.success('Проект удалён');
+      navigate('/');
+    } catch (error) {
+      trackProjectAction({ projectId, action: 'delete_project', result: 'failure', startedAt });
+      toast.error(actionErrorMessage(error, 'Не удалось удалить проект'));
+      setBusyAction(null);
+    }
   };
 
   const actions = useMemo<Action[]>(() => {
@@ -196,7 +219,7 @@ export function ProjectActionsMenu({
         key: 'archive',
         label: project.status === 'archived' ? 'Вернуть из архива' : 'Архивировать',
         icon: project.status === 'archived' ? ArchiveRestore : Archive,
-        onSelect: toggleArchive,
+        onSelect: () => void toggleArchive(),
         section: 3,
       });
     if (isOwner && !project.isInbox)
@@ -234,7 +257,11 @@ export function ProjectActionsMenu({
           <Button
             variant="ghost"
             size="icon"
-            className="size-8 text-muted-foreground hover:text-foreground"
+            className={cn(
+              compact ? 'size-10 sm:size-9' : 'size-8',
+              'text-muted-foreground hover:text-foreground',
+            )}
+            disabled={busyAction !== null}
             aria-label="Ещё"
           >
             <MoreHorizontal className="size-4" />
@@ -340,8 +367,12 @@ export function ProjectActionsMenu({
             <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
               Отмена
             </Button>
-            <Button variant="destructive" onClick={deleteProject}>
-              Удалить
+            <Button
+              variant="destructive"
+              disabled={busyAction === 'delete'}
+              onClick={() => void deleteProject()}
+            >
+              {busyAction === 'delete' ? 'Удаляем…' : 'Удалить'}
             </Button>
           </div>
         </DialogContent>

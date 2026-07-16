@@ -18,6 +18,7 @@ import { DispatchChatMentionNotifications } from './application/chat/DispatchCha
 import { DrizzleUserRepository } from './infrastructure/repositories/DrizzleUserRepository.js';
 import { DrizzleSessionRepository } from './infrastructure/repositories/DrizzleSessionRepository.js';
 import { DrizzleProjectRepository } from './infrastructure/repositories/DrizzleProjectRepository.js';
+import { DrizzleProductTelemetryRepository } from './infrastructure/repositories/DrizzleProductTelemetryRepository.js';
 import { DrizzleProjectMemberRepository } from './infrastructure/repositories/DrizzleProjectMemberRepository.js';
 import { DrizzleWorkspaceRepository } from './infrastructure/repositories/DrizzleWorkspaceRepository.js';
 import { WorkspaceService } from './application/workspace/WorkspaceService.js';
@@ -68,6 +69,7 @@ import { UpdateProject } from './application/project/UpdateProject.js';
 import { PublishProject } from './application/project/PublishProject.js';
 import { UnpublishProject } from './application/project/UnpublishProject.js';
 import { SetPublicIndexing } from './application/project/SetPublicIndexing.js';
+import { SetPublicAppearance } from './application/project/SetPublicAppearance.js';
 import { EnsureProjectAppRepo } from './application/project/EnsureProjectAppRepo.js';
 import { CreateProjectRepo } from './application/project/CreateProjectRepo.js';
 import { GetPublicBoard } from './application/project/GetPublicBoard.js';
@@ -308,6 +310,7 @@ const now = (): Date => new Date();
 const userRepo = new DrizzleUserRepository(db);
 const sessionRepo = new DrizzleSessionRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
+const productTelemetryRepo = new DrizzleProductTelemetryRepository(db);
 const projectMemberRepo = new DrizzleProjectMemberRepository(db);
 const projectInviteRepo = new DrizzleProjectInviteRepository(db);
 const workspaceInviteRepo = new DrizzleWorkspaceInviteRepository(db);
@@ -1412,6 +1415,7 @@ const { app, devProxyUpgrade } = createApp({
     publishProject: new PublishProject({ projects: projectRepo, members: projectMemberRepo }),
     unpublishProject: new UnpublishProject({ projects: projectRepo, members: projectMemberRepo }),
     setPublicIndexing: new SetPublicIndexing({ projects: projectRepo, members: projectMemberRepo }),
+    setPublicAppearance: new SetPublicAppearance({ projects: projectRepo, members: projectMemberRepo }),
     ensureAppRepo: new EnsureProjectAppRepo({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -2005,6 +2009,9 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       send: sendDailyDigest,
     }),
+  },
+  telemetry: {
+    repo: productTelemetryRepo,
   },
   assignees: {
     listAssignedToMe: new ListTasksAssignedToMe({

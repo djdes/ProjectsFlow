@@ -6,6 +6,22 @@ export type FinanceVisibility = 'owner' | 'members';
 
 export type KbKind = 'none' | 'github' | 'local';
 
+export type PublicAppearance = {
+  readonly accentColor: string;
+  readonly showCover: boolean;
+  readonly showIcon: boolean;
+  readonly showDescription: boolean;
+  readonly showTaskMeta: boolean;
+};
+
+export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
+  accentColor: '#2383e2',
+  showCover: true,
+  showIcon: true,
+  showDescription: true,
+  showTaskMeta: true,
+};
+
 export type Project = {
   readonly id: string;
   // Создатель проекта (projects.owner_id). Для не-inbox после workspace-merge пространство
@@ -54,6 +70,7 @@ export type Project = {
   readonly publicSlug: string | null;
   readonly isPublic: boolean;
   readonly publicIndexing: boolean;
+  readonly publicAppearance: PublicAppearance;
   // GitHub-репо приложения проекта (self-serve воркер-раннер). "owner/repo" или null,
   // если GitHub ещё не привязан / репо не создан. Используется для гейта колонки «Воркер».
   readonly appRepoFullName: string | null;

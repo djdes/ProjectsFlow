@@ -25,16 +25,18 @@ function fmtDeadline(iso: string): string {
 function PublicCard({
   task,
   onOpen,
+  showMeta,
 }: {
   task: PublicTask;
   onOpen: (taskId: string) => void;
+  showMeta: boolean;
 }): React.ReactElement {
   const { title } = splitTitleBody(task.description ?? '');
   return (
     <button
       type="button"
       onClick={() => onOpen(task.id)}
-      className="w-full overflow-hidden rounded-lg border border-black/[0.06] bg-white text-left shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-shadow hover:shadow-[0_2px_6px_rgba(15,23,42,0.12)] dark:border-white/[0.08] dark:bg-white/[0.04]"
+      className="w-full overflow-hidden rounded-lg border border-black/[0.06] bg-white text-left shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-shadow hover:border-[var(--pf-public-accent)] hover:shadow-[0_2px_6px_rgba(15,23,42,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pf-public-accent)] dark:border-white/[0.08] dark:bg-white/[0.04]"
     >
       {task.cover && (
         <div className="h-16 w-full" style={coverStyle(task.cover, task.coverPosition)} aria-hidden />
@@ -48,7 +50,7 @@ function PublicCard({
         <span className="min-w-0 flex-1 break-words text-[13px] leading-snug text-[#37352f] dark:text-blue-50">
           {title || 'Без названия'}
         </span>
-        {task.priority && (
+        {showMeta && task.priority && (
           <span
             className="mt-[5px] size-2 shrink-0 rounded-full"
             style={{ backgroundColor: PRIORITY_COLOR[task.priority] }}
@@ -56,7 +58,7 @@ function PublicCard({
           />
         )}
       </div>
-      {task.deadline && (
+      {showMeta && task.deadline && (
         <div className="flex items-center gap-1 px-3 pb-2.5 text-[11px] text-[#37352f]/50 dark:text-blue-100/50">
           <Calendar className="size-3" />
           {fmtDeadline(task.deadline)}
@@ -71,9 +73,11 @@ function PublicCard({
 export function PublicKanban({
   columns,
   onOpenTask,
+  showTaskMeta = true,
 }: {
   columns: PublicColumn[];
   onOpenTask: (taskId: string) => void;
+  showTaskMeta?: boolean;
 }): React.ReactElement {
   const visible = columns.filter((c) => c.tasks.length > 0);
 
@@ -95,7 +99,9 @@ export function PublicKanban({
             {/* Порциями по 4 + «Показать ещё» — как на внутренних досках. */}
             <ColumnPreviewList
               items={col.tasks}
-              renderItem={(t) => <PublicCard key={t.id} task={t} onOpen={onOpenTask} />}
+              renderItem={(t) => (
+                <PublicCard key={t.id} task={t} onOpen={onOpenTask} showMeta={showTaskMeta} />
+              )}
             />
           </div>
         </section>

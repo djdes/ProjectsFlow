@@ -5,6 +5,22 @@ export type FinanceVisibility = 'owner' | 'members';
 // Где живёт База знаний проекта: нет / GitHub-репо / локально (в БД, без git).
 export type KbKind = 'none' | 'github' | 'local';
 
+export type PublicAppearance = {
+  readonly accentColor: string;
+  readonly showCover: boolean;
+  readonly showIcon: boolean;
+  readonly showDescription: boolean;
+  readonly showTaskMeta: boolean;
+};
+
+export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
+  accentColor: '#2383e2',
+  showCover: true,
+  showIcon: true,
+  showDescription: true,
+  showTaskMeta: true,
+};
+
 export type Project = {
   readonly id: string;
   readonly ownerId: string;
@@ -42,6 +58,7 @@ export type Project = {
   readonly publicSlug: string | null;
   readonly isPublic: boolean;
   readonly publicIndexing: boolean;
+  readonly publicAppearance: PublicAppearance;
   // GitHub-репо приложения проекта (self-serve воркер-раннер, db/097). "owner/repo" куда
   // воркер пишет код; NULL = ещё не создан (GitHub не привязан / не инициализировали).
   readonly appRepoFullName: string | null;

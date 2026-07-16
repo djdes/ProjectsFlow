@@ -46,7 +46,7 @@ type Props = {
   // undefined — шапка не закрепляется.
   stickyHeaderTop?: number;
   tasks: Task[];
-  onCreate: (status: TaskStatus) => void;
+  onCreate?: (status: TaskStatus) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
   // Прокидывается в KanbanCard — управляет видимостью short-id [xxxxxxxx].
@@ -89,6 +89,7 @@ type Props = {
   // Если задан — под колонкой появляется кнопка «Добавить задачу», раскрывающая
   // inline-композер (со всем функционалом быстрого создания). Создаёт задачу в этой колонке.
   onInlineCreate?: (input: InlineCreateInput) => Promise<Task>;
+  readOnly?: boolean;
   // Прокидывается в inline-композер (ответственный + AI-кнопка).
   isInbox?: boolean;
   isShared?: boolean;
@@ -150,6 +151,7 @@ export function KanbanColumn({
   onRename,
   lockOffer,
   onInlineCreate,
+  readOnly = false,
   isInbox = false,
   isShared = false,
   aiProjectId = null,
@@ -256,7 +258,7 @@ export function KanbanColumn({
   // Единый рендер карточки (используется и в сессии, и в основном списке).
   // dropLine — синяя полоска-индикатор дропа в зазоре над/под карточкой (absolute).
   const renderCard = (t: Task, dropLine: 'before' | 'after' | null = null): React.ReactElement => (
-    <KanbanCard
+      <KanbanCard
       task={t}
       onEdit={onEdit}
       onDelete={onDelete}
@@ -273,7 +275,8 @@ export function KanbanColumn({
       selectionMode={selectionMode}
       selected={selectedIds?.has(t.id) ?? false}
       onSelectToggle={onSelectToggle}
-      dropLine={dropLine}
+        dropLine={dropLine}
+        readOnly={readOnly}
     />
   );
 
@@ -340,7 +343,7 @@ export function KanbanColumn({
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-6"
+                className="size-9 sm:size-6"
                 onClick={onExitSelection}
                 aria-label="Выйти из режима выделения"
                 title="Выйти (Esc)"
@@ -415,7 +418,7 @@ export function KanbanColumn({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="size-6"
+                    className="size-9 sm:size-6"
                     onClick={onEnterSelection}
                     aria-label="Выделить задачи"
                     title="Выделить задачи"
@@ -425,18 +428,20 @@ export function KanbanColumn({
                 )}
                 {columnMenu}
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8"
+              {!readOnly && onCreate && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
                 // Не крадём фокус у открытой карточки создания — иначе её blur-commit закроет
                 // сессию раньше, чем «+» успеет открыть новую сверху.
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => (onInlineCreate ? openInlineAtTop() : onCreate(status))}
-                aria-label="Добавить задачу"
-              >
-                <Plus className="size-5" />
-              </Button>
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => (onInlineCreate ? openInlineAtTop() : onCreate(status))}
+                  aria-label="Добавить задачу"
+                >
+                  <Plus className="size-5" />
+                </Button>
+              )}
             </div>
           </>
         )}

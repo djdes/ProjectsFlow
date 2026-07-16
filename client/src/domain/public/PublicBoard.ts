@@ -1,4 +1,5 @@
 import type { TaskStatus, TaskPriority } from '@/domain/task/Task';
+import type { PublicAppearance } from '@/domain/project/Project';
 
 // Публичная доска (Publish to web). Зеркалит серверный PublicBoard DTO — только whitelisted
 // поля (комментарии/финансы/участники сюда не приходят: граница приватности на сервере).
@@ -26,6 +27,7 @@ export type PublicBoard = {
   readonly coverUrl: string | null;
   readonly coverPosition: number;
   readonly indexing: boolean;
+  readonly appearance: PublicAppearance;
   readonly columns: PublicColumn[];
 };
 

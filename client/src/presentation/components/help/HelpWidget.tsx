@@ -9,6 +9,10 @@ import { HelpSupportPanel } from './HelpSupportPanel';
 import { ASSISTANT_PREVIEW_REPLY, type ChatMessage } from './assistantContent';
 
 type HelpTab = 'assistant' | 'support';
+type OpenHelpDetail = {
+  readonly tab?: HelpTab;
+  readonly prefill?: string;
+};
 
 const TABS: ReadonlyArray<{ value: HelpTab; label: string; icon: React.ReactNode }> = [
   { value: 'assistant', label: 'Помощник', icon: <Sparkles className="size-3.5" /> },
@@ -34,6 +38,19 @@ export function HelpWidget({
   // Лента AI-диалога живёт здесь, чтобы «Очистить» в шапке могла её сбросить.
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const seqRef = useRef(0);
+
+  // Остальные экраны открывают единый виджет помощи через DOM-событие, не создавая
+  // прямую зависимость между несвязанными presentation-компонентами.
+  useEffect(() => {
+    const onOpenHelp = (event: Event): void => {
+      const detail = (event as CustomEvent<OpenHelpDetail>).detail;
+      if (detail?.tab) setTab(detail.tab);
+      if (typeof detail?.prefill === 'string') setSupportPrefill(detail.prefill);
+      setOpen(true);
+    };
+    window.addEventListener('pf:open-help', onOpenHelp);
+    return () => window.removeEventListener('pf:open-help', onOpenHelp);
+  }, []);
 
   // Esc закрывает панель.
   useEffect(() => {

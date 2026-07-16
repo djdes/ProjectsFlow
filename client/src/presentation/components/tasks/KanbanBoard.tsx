@@ -85,6 +85,13 @@ import type { UnifiedDndRef } from './unifiedDndTypes';
 import { TaskDragPill, snapToCursor } from './AssignedToMeBlock';
 import { plainTaskTitle } from '@/lib/taskTitleBody';
 import type { ViewCreateRequest } from './views/ProjectBoardViews';
+import {
+  applyViewSort,
+  matchesFilters,
+  type ViewFilters,
+  type ViewSort,
+} from './views/viewShared';
+import { ViewLoadFeedback } from './views/ViewLoadFeedback';
 
 type Props = {
   projectId: string;
@@ -118,6 +125,9 @@ type Props = {
   // Запрос из общего правого toolbar отображений. Нужен проектной доске, чтобы
   // «Создать» и выбор колонки работали так же, как в таблице/списке/календаре.
   createRequest?: ViewCreateRequest | null;
+  viewFilters?: ViewFilters;
+  viewSort?: ViewSort | null;
+  canEdit?: boolean;
 };
 
 // Локальная ISO-дата 'YYYY-MM-DD' (без UTC-сдвига) — для сравнения с deadline.
@@ -147,7 +157,7 @@ function FilterDropdown({
 }): React.ReactElement {
   return (
     <DropdownMenu>
-      <TooltipProvider delayDuration={300}>
+      <TooltipProvider delayDuration={550} skipDelayDuration={120}>
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
@@ -267,6 +277,9 @@ export function KanbanBoard({
   onBoardTasksChange,
   stickyHeaderTop,
   createRequest,
+  viewFilters,
+  viewSort = null,
+  canEdit = true,
 }: Props): React.ReactElement {
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const { user } = useCurrentUser();
@@ -409,7 +422,7 @@ export function KanbanBoard({
   // «Создать» из общего toolbar отображений. Шаблон, как и в остальных видах,
   // создаёт задачу сразу; обычная кнопка открывает полноценный drawer в выбранной колонке.
   useEffect(() => {
-    if (!createRequest) return;
+    if (!createRequest || !canEdit) return;
     const tpl = createRequest.template;
     if (tpl) {
       void create({
@@ -425,7 +438,7 @@ export function KanbanBoard({
     }
     // create меняется вместе с useTasks; seq в request гарантирует один запуск клика.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createRequest]);
+  }, [createRequest, canEdit]);
   // Открытие глобального «Добавить задачу» (левая панель) шлёт событие — тоже закрываем.
   useEffect(() => {
     const onClose = (): void => closeComposer();
@@ -456,7 +469,7 @@ export function KanbanBoard({
     // ?done=1 — «✓ Готово»-ссылка из дайджеста: переносим задачу в «Готово».
     // С подтверждением: защита от случайного клика и префетча почтовых сканеров
     // (действие идёт в уже авторизованной сессии, право write_project гейтит сервер).
-    if (task && searchParams.get('done') === '1') {
+    if (task && canEdit && searchParams.get('done') === '1') {
       if (window.confirm('Перенести задачу в «Готово»?')) {
         void move(task.id, { targetStatus: 'done', beforeTaskId: null, afterTaskId: null })
           .then(() => toast.success('Задача перенесена в «Готово»'))
@@ -470,7 +483,7 @@ export function KanbanBoard({
     next.delete('task');
     next.delete('done');
     setSearchParams(next, { replace: true });
-  }, [loading, tasks, searchParams, setSearchParams, move]);
+  }, [loading, tasks, searchParams, setSearchParams, move, canEdit]);
   const [activeId, setActiveId] = useState<string | null>(null);
   // Множество taskId с активной (running) LIVE-сессией — для 🔴 точки на карточке.
   // Обновляется по realtime-событию 'pf:live-changed' (debounce 100мс коалесцирует пачку).
@@ -569,7 +582,14 @@ export function KanbanBoard({
   const { order: doneOrder, toggle: toggleDoneOrder } = useDoneSortOrder();
   // Нижняя доска остаётся физическим представлением проекта и показывает все
   // его задачи независимо от того, кто сейчас ответственный.
-  const boardTasks = tasks;
+  const boardTasks = useMemo(
+    () =>
+      applyViewSort(
+        viewFilters ? tasks.filter((task) => matchesFilters(task, viewFilters)) : tasks,
+        viewSort,
+      ),
+    [tasks, viewFilters, viewSort],
+  );
   useEffect(() => {
     if (!loading) onBoardTasksChange?.(boardTasks);
   }, [boardTasks, loading, onBoardTasksChange]);
@@ -713,6 +733,7 @@ export function KanbanBoard({
   const lastTodoTaskId = todoTail?.id ?? null;
 
   const handleDragStart = (e: DragStartEvent): void => {
+    if (!canEdit) return;
     // Если drop-таймер ещё висит от предыдущего перетаскивания — гасим, иначе он позже
     // обнулит activeId уже нового drag'а.
     if (dropTimerRef.current) {
@@ -726,6 +747,7 @@ export function KanbanBoard({
 
 
   const handleDragOver = (e: DragOverEvent): void => {
+    if (!canEdit) return;
     const { active, over } = e;
     if (!over || !active) {
       setDropTarget(null);
@@ -767,6 +789,7 @@ export function KanbanBoard({
   };
 
   const handleDragEnd = async (e: DragEndEvent): Promise<void> => {
+    if (!canEdit) return;
     setDropTarget(null);
     // activeId держим живым ровно до конца drop-таймера, чтобы source-карточка не
     // мигнула из opacity-30 в полную до применения move.
@@ -975,8 +998,15 @@ export function KanbanBoard({
     );
   }
 
-  if (error) {
-    return <p className="text-sm text-destructive">{error}</p>;
+  if (error && tasks.length === 0) {
+    return (
+      <ViewLoadFeedback
+        error={error}
+        hasData={false}
+        onRetry={refetch}
+        label="доску"
+      />
+    );
   }
 
   // Скрытые колонки исключаем из рендера (задачи скрытых статусов остаются в `grouped`,
@@ -1004,9 +1034,10 @@ export function KanbanBoard({
         контенту при длинном (страница скроллится, sticky-скролл прилипает к низу вьюпорта). */}
     <div className="flex flex-[1_0_auto] flex-col">
       {confettiKey > 0 && <ConfettiBurst key={confettiKey} onDone={() => setConfettiKey(0)} />}
+      <ViewLoadFeedback error={error} hasData={tasks.length > 0} onRetry={refetch} label="доску" />
 
       {/* Тихий ряд фильтров: поиск по проекту + приоритет + срок (+ ответственный в совместных). */}
-      <div className="flex flex-wrap items-center gap-1 pb-2">
+      {!viewFilters && <div className="flex flex-wrap items-center gap-1 pb-2">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
           <input
@@ -1078,21 +1109,23 @@ export function KanbanBoard({
             Сбросить
           </button>
         )}
-      </div>
+      </div>}
 
       {/* Пустой проект: дружелюбный старт вместо четырёх голых колонок. */}
       {!loading && boardTasks.length === 0 && !filterActive && (
         <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-dashed px-4 py-3">
           <p className="text-sm text-muted-foreground">
-            Проект пуст — создайте первую задачу{onOpenAutomation ? ' или включите автоматизацию' : ''}.
+            {canEdit
+              ? `Проект пуст — создайте первую задачу${onOpenAutomation ? ' или включите автоматизацию' : ''}.`
+              : 'В проекте пока нет задач.'}
           </p>
           <div className="flex items-center gap-1.5">
-            <Button size="sm" className="h-7 gap-1.5 px-2.5 text-xs" onClick={() => setDialog({ mode: 'create', status: 'backlog' })}>
+            {canEdit && <Button size="sm" className="h-9 gap-1.5 px-2.5 text-xs" onClick={() => setDialog({ mode: 'create', status: 'backlog' })}>
               <Plus className="size-3.5" />
               Создать задачу
-            </Button>
-            {onOpenAutomation && (
-              <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground" onClick={onOpenAutomation}>
+            </Button>}
+            {canEdit && onOpenAutomation && (
+              <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground" onClick={onOpenAutomation}>
                 <Bot className="size-3.5" />
                 Автоматизация
               </Button>
@@ -1136,13 +1169,13 @@ export function KanbanBoard({
                 label={label}
                 stickyHeaderTop={stickyHeaderTop}
                 tasks={filterTasks(hideDone && status === 'done' ? [] : grouped[status])}
-                onCreate={(s) => setDialog({ mode: 'create', status: s })}
+                onCreate={canEdit ? (s) => setDialog({ mode: 'create', status: s }) : undefined}
                 onEdit={(t) => setDialog({ mode: 'edit', task: t })}
                 onDelete={handleDelete}
                 showShortId={showCommits}
-                onQuickPromote={handleQuickPromote}
+                onQuickPromote={canEdit ? handleQuickPromote : undefined}
                 onTaskChanged={() => void refetch()}
-                showCheckbox
+                showCheckbox={canEdit}
                 lastDoneTaskId={lastDoneTaskId}
                 lastTodoTaskId={lastTodoTaskId}
                 currentUserId={user?.id ?? null}
@@ -1152,13 +1185,18 @@ export function KanbanBoard({
                 dropTarget={dropTarget?.status === status ? dropTarget : null}
                 liveTaskIds={liveTaskIds}
                 colorClasses={KANBAN_COLOR_CLASSES[color]}
-                onRename={label.length > 0 ? (l) => setLabel(status, l) : undefined}
+                onRename={canEdit && label.length > 0 ? (l) => setLabel(status, l) : undefined}
                 lockOffer={
                   status === 'todo' && workerLocked ? (
                     <WorkerLockOffer onUpgrade={openUpgrade} />
                   ) : undefined
                 }
-                onInlineCreate={(input) => create({ ...input, status: input.status ?? status })}
+                onInlineCreate={
+                  canEdit
+                    ? (input) => create({ ...input, status: input.status ?? status })
+                    : undefined
+                }
+                readOnly={!canEdit}
                 isInbox={isInbox}
                 isShared={isShared}
                 aiProjectId={isInbox ? null : projectId}
@@ -1171,8 +1209,8 @@ export function KanbanBoard({
                 onSelectAll={handleSelectAll}
                 onSelectNone={handleSelectNone}
                 onExitSelection={exitSelection}
-                onEnterSelection={() => enterSelection(status)}
-                columnMenu={
+                onEnterSelection={canEdit ? () => enterSelection(status) : undefined}
+                columnMenu={canEdit ? (
                   <KanbanColumnMenu
                     status={status}
                     currentColor={color}
@@ -1182,7 +1220,7 @@ export function KanbanBoard({
                     onHide={() => setHidden(status, true)}
                     onSelect={() => enterSelection(status)}
                   />
-                }
+                ) : undefined}
                 headerExtra={
                   status === 'done' ? (
                     <Button
@@ -1224,7 +1262,7 @@ export function KanbanBoard({
         if (externalDnd) return boardBody;
         return (
           <DndContext
-            sensors={sensors}
+            sensors={canEdit ? sensors : []}
             collisionDetection={boardCollision}
             measuring={MEASURING_CONFIG}
             onDragStart={handleDragStart}
@@ -1249,6 +1287,7 @@ export function KanbanBoard({
         onClose={() => setDialog(null)}
         onSubmit={handleDialogSubmit}
         onCommitsChange={() => void refetch()}
+        canEdit={canEdit}
         projectName={projectName}
         backlogTail={backlogTail}
         todoTail={todoTail}

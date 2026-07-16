@@ -1,4 +1,4 @@
-import type { Project, ProjectStatus } from '@/domain/project/Project';
+import type { Project, ProjectStatus, PublicAppearance } from '@/domain/project/Project';
 import type { ProjectAnalytics, ProjectActivity } from '@/domain/project/ProjectAnalytics';
 import type { ProjectMember, ProjectRole } from '@/domain/project/ProjectMembership';
 import type { NotificationPrefs } from '@/domain/notifications/NotificationPrefs';
@@ -140,6 +140,7 @@ export interface ProjectRepository {
   publish(projectId: string): Promise<{ slug: string; url: string }>;
   unpublish(projectId: string): Promise<void>;
   setPublicIndexing(projectId: string, indexing: boolean): Promise<void>;
+  setPublicAppearance(projectId: string, appearance: PublicAppearance): Promise<void>;
   // Создать/привязать GitHub-репо приложения проекта (self-serve воркер-раннер, M1). Owner-only.
   // Требует привязанный GitHub (иначе сервер вернёт 409 github_not_connected).
   ensureAppRepo(projectId: string): Promise<{ appRepoFullName: string }>;

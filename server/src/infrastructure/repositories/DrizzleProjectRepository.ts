@@ -41,7 +41,12 @@ import {
   emailActionTokens,
   type ProjectRow,
 } from '../db/schema.js';
-import type { Project, ProjectStatus } from '../../domain/project/Project.js';
+import {
+  DEFAULT_PUBLIC_APPEARANCE,
+  type Project,
+  type ProjectStatus,
+  type PublicAppearance,
+} from '../../domain/project/Project.js';
 import { ProjectNameAlreadyExistsError } from '../../domain/project/errors.js';
 import type {
   CreateProjectInput,
@@ -71,6 +76,10 @@ function toProject(row: ProjectRow): Project {
     publicSlug: row.publicSlug ?? null,
     isPublic: row.isPublic,
     publicIndexing: row.publicIndexing,
+    publicAppearance: {
+      ...DEFAULT_PUBLIC_APPEARANCE,
+      ...parseJsonCol<Partial<PublicAppearance>>(row.publicAppearance, {}),
+    },
     appRepoFullName: row.appRepoFullName ?? null,
     siteSlug: row.siteSlug ?? null,
     createdAt: row.createdAt,
@@ -161,7 +170,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
   async update(id: string, patch: UpdateProjectInput): Promise<Project | null> {
     // Собираем set-объект только из реально переданных полей.
     // undefined = поле не указано клиентом (не трогаем), null = очистить.
-    const set: Partial<Pick<ProjectRow, 'name' | 'icon' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker' | 'status' | 'description' | 'coverUrl' | 'coverPosition' | 'appRepoFullName'>> = {};
+    const set: Partial<Pick<ProjectRow, 'name' | 'icon' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker' | 'status' | 'description' | 'coverUrl' | 'coverPosition' | 'appRepoFullName' | 'publicAppearance'>> = {};
     if (patch.name !== undefined) set.name = patch.name;
     if (patch.icon !== undefined) set.icon = patch.icon;
     if (patch.gitRepoUrl !== undefined) set.gitRepoUrl = patch.gitRepoUrl;
@@ -175,6 +184,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
     if (patch.coverUrl !== undefined) set.coverUrl = patch.coverUrl;
     if (patch.coverPosition !== undefined) set.coverPosition = patch.coverPosition;
     if (patch.appRepoFullName !== undefined) set.appRepoFullName = patch.appRepoFullName;
+    if (patch.publicAppearance !== undefined) set.publicAppearance = patch.publicAppearance;
 
     if (Object.keys(set).length > 0) {
       try {

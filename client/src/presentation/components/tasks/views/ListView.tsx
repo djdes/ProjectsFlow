@@ -60,6 +60,7 @@ import {
   type ViewSort,
 } from './viewShared';
 import { ContextEntries, DropdownEntries, type MenuEntry } from './menuEntries';
+import { ViewLoadFeedback } from './ViewLoadFeedback';
 
 type Props = {
   projectId: string;
@@ -70,6 +71,7 @@ type Props = {
   grouping: ViewGrouping | null;
   colorRules: ViewColorRule[];
   createRequest: ViewCreateRequest | null;
+  canEdit?: boolean;
 };
 
 // === Списочный вид доски (Notion-style) ===
@@ -85,6 +87,7 @@ export function ListView({
   grouping,
   colorRules,
   createRequest,
+  canEdit = true,
 }: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
   const { tasks, loading, error, create, update, move, remove, refetch } = tasksApi;
@@ -124,7 +127,7 @@ export function ListView({
 
   // «Создать» из тулбара; с шаблоном (db/108) — задача создаётся сразу, без окна.
   useEffect(() => {
-    if (!createRequest) return;
+    if (!createRequest || !canEdit) return;
     const tpl = createRequest.template;
     if (tpl) {
       void create({
@@ -139,7 +142,7 @@ export function ListView({
       setDrawer({ mode: 'create', status: createRequest.status });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createRequest]);
+  }, [createRequest, canEdit]);
 
   const toggleSelected = (id: string): void => {
     setSelected((prev) => {
@@ -157,6 +160,7 @@ export function ListView({
   const [insertParentId, setInsertParentId] = useState<string | null>(null);
   const [insertValue, setInsertValue] = useState('');
   const submitInsert = async (anchor: Task): Promise<void> => {
+    if (!canEdit) return;
     const name = insertValue.trim();
     const asSub = insertAsSub;
     setInsertValue('');
@@ -206,6 +210,7 @@ export function ListView({
     setEditValue(taskTitle(task));
   };
   const commitEdit = (task: Task): void => {
+    if (!canEdit) return;
     const title = editValue.trim();
     setEditingId(null);
     if (!title || title === taskTitle(task)) return;
@@ -284,6 +289,7 @@ export function ListView({
   }, [recentlyMovedId]);
 
   const handleRowDragEnd = (e: DragEndEvent): void => {
+    if (!canEdit) return;
     setDragTask(null);
     const activeId = String(e.active.id);
     const overId = e.over ? String(e.over.id) : null;
@@ -309,12 +315,15 @@ export function ListView({
   };
 
   if (loading) return <div className="h-64 animate-pulse rounded-xl bg-muted/60" />;
-  if (error) return <p className="text-sm text-destructive">{error}</p>;
+  if (error && tasks.length === 0) {
+    return <ViewLoadFeedback error={error} hasData={false} onRetry={refetch} label="список" />;
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <ViewLoadFeedback error={error} hasData={tasks.length > 0} onRetry={refetch} label="список" />
       <DndContext
-        sensors={dndSensors}
+        sensors={canEdit ? dndSensors : []}
         collisionDetection={pointerWithin}
         onDragStart={(e) => setDragTask(rows.find((t) => t.id === String(e.active.id)) ?? null)}
         onDragEnd={handleRowDragEnd}
@@ -450,6 +459,7 @@ export function ListView({
         projectName={projectName}
         isShared={isShared}
         tasksApi={tasksApi}
+        canEdit={canEdit}
       />
 
       {/* Панель действий над выбранными — СВЕРХУ, как в Notion (общая с таблицей). */}
@@ -529,6 +539,7 @@ function ListRow({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
+          data-pf-task-id={task.id}
           // Notion: строку списка можно тащить за ЛЮБОЕ место (не только за «⋮⋮») —
           // drag стартует после сдвига на 6px (PointerSensor distance), клик остаётся
           // кликом. Интерактивные элементы внутри строки drag не начинают.

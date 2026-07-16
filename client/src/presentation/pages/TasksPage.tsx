@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Image as ImageIcon, Text } from 'lucide-react';
+import { Image as ImageIcon, Loader2, Star, Text } from 'lucide-react';
 import { ProjectBreadcrumbs } from '@/presentation/layout/ProjectBreadcrumbs';
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -23,6 +23,8 @@ import { ProjectActivityButton } from '@/presentation/components/project/Project
 import { ProjectCover } from '@/presentation/components/project/ProjectCover';
 import { ProjectDescription } from '@/presentation/components/project/ProjectDescription';
 import { randomCover } from '@/presentation/components/project/coverGallery';
+import { useToggleProjectFavorite } from '@/presentation/hooks/useToggleProjectFavorite';
+import { actionErrorMessage } from '@/lib/actionFeedback';
 
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -71,7 +73,10 @@ export function TasksPage(): React.ReactElement {
   const [members, setMembers] = useState<ProjectMember[]>([]);
   // #3: описание можно скрыть/показать (Notion-style toggle над заголовком).
   const [descriptionHidden, setDescriptionHidden] = useState(false);
+  const [coverBusy, setCoverBusy] = useState(false);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
   const { submit: submitProject } = useUpdateProject();
+  const { toggle: toggleFavorite } = useToggleProjectFavorite();
 
   // Заголовок вкладки браузера = имя проекта (помогает ориентироваться в табах).
   useEffect(() => {
@@ -150,17 +155,33 @@ export function TasksPage(): React.ReactElement {
   }
 
   const canEdit = data.role === 'owner' || data.role === 'editor';
-  const addRandomCover = (): void => {
-    void submitProject(data.id, { coverUrl: randomCover() }).catch((e) =>
-      toast.error(`Не удалось добавить обложку: ${(e as Error).message}`),
-    );
+  const addRandomCover = async (): Promise<void> => {
+    if (coverBusy) return;
+    setCoverBusy(true);
+    try {
+      await submitProject(data.id, { coverUrl: randomCover() });
+    } catch (error) {
+      toast.error(actionErrorMessage(error, 'Не удалось добавить обложку'));
+    } finally {
+      setCoverBusy(false);
+    }
+  };
+
+  const handleFavorite = async (): Promise<void> => {
+    if (favoriteBusy) return;
+    setFavoriteBusy(true);
+    try {
+      await toggleFavorite(data.id, !data.isFavorite);
+    } finally {
+      setFavoriteBusy(false);
+    }
   };
 
   // Действия проекта (участники · Поделиться · ⋯) — один набор, рендерится и в шапке страницы,
   // и в правом верхнем углу окна активности (Notion-style).
-  const projectActions = (
+  const projectActions = (compact = false) => (
     <>
-      {members.length > 1 && (
+      {!compact && members.length > 1 && (
         <MemberAvatarStack
           members={members}
           canInvite={data.role === 'owner' || data.role === 'editor'}
@@ -172,7 +193,26 @@ export function TasksPage(): React.ReactElement {
         members={members}
         canInvite={data.role === 'owner' || data.role === 'editor'}
         isOwner={data.role === 'owner'}
+        compact={compact}
       />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className={cn(
+          compact ? 'size-10 sm:size-9' : 'size-8',
+          data.isFavorite ? 'text-amber-500' : 'text-muted-foreground hover:text-foreground',
+        )}
+        disabled={favoriteBusy}
+        onClick={() => void handleFavorite()}
+        aria-label={data.isFavorite ? 'Убрать проект из избранного' : 'Добавить проект в избранное'}
+      >
+        {favoriteBusy ? (
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
+        ) : (
+          <Star className={cn('size-4', data.isFavorite && 'fill-current')} />
+        )}
+      </Button>
       <ProjectActionsMenu
         project={data}
         financeVisible={financeVisible}
@@ -180,6 +220,7 @@ export function TasksPage(): React.ReactElement {
         monitoringAlerts={monitoringAlerts}
         onOpenAutomation={() => setAutomationOpen(true)}
         onOpenTaskFromHistory={() => setActivityOpen(false)}
+        compact={compact}
       />
     </>
   );
@@ -189,14 +230,32 @@ export function TasksPage(): React.ReactElement {
   return (
     // min-h-full (не h-full): страница растёт по контенту, вертикально скроллит её родительский
     // <main overflow-y-auto> целиком (Notion single-scroll — доска не скроллится отдельно).
-    <div className="flex min-h-full flex-col">
+    <div className="flex min-h-full flex-col" data-pf-project-page>
+      <div className="pf-sticky-surface sticky top-0 z-40 flex min-h-11 items-center justify-between gap-2 bg-background px-2 sm:hidden">
+        <div className="min-w-0 truncate text-sm font-medium">
+          {data.icon ? `${data.icon} ` : ''}
+          {data.name}
+        </div>
+        <TooltipProvider delayDuration={550}>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <ProjectActivityButton
+              projectId={data.id}
+              actions={projectActions(true)}
+              open={activityOpen}
+              onOpenChange={setActivityOpen}
+              compact
+            />
+            {projectActions(true)}
+          </div>
+        </TooltipProvider>
+      </div>
       {/* Хлебные крошки прячем на мобиле: имя проекта дублируется в заголовке ниже,
           навигация — в нижнем таб-баре/drawer. Это возвращает вертикальное место канбану.
           z-40: выше sticky-ячеек таблицы (gutter/frozen-title z-20) — иначе при
           вертикальном скролле строки рисуются ПОВЕРХ крошек/плашек. */}
       <div
         id="pf-project-crumbs"
-        className="sticky top-0 z-40 hidden h-11 items-center justify-between gap-2 bg-background px-2.5 sm:flex"
+        className="pf-sticky-surface sticky top-0 z-40 hidden h-11 items-center justify-between gap-2 bg-background px-2.5 sm:flex"
       >
         <ProjectBreadcrumbs
           projectId={data.id}
@@ -205,7 +264,7 @@ export function TasksPage(): React.ReactElement {
           view="board"
         />
         {/* #1: действия проекта — в строке крошек, по правому краю (Notion top-right). */}
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider delayDuration={550}>
           <div
             className={cn(
               // При активности блок полностью выпадает из layout; при окне задачи сохраняем
@@ -221,18 +280,18 @@ export function TasksPage(): React.ReactElement {
                 и кнопку «Изменено», и действия шапки прячем (они уже внутри окна). */}
             <ProjectActivityButton
               projectId={data.id}
-              actions={projectActions}
+              actions={projectActions()}
               open={activityOpen}
               onOpenChange={setActivityOpen}
             />
-            {projectActions}
+            {projectActions()}
           </div>
         </TooltipProvider>
       </div>
       {/* Синяя плашка «проект опубликован» (Notion-style, закрываемая) — ПОД крошками,
           тоже закреплена при скролле (сразу под sticky-строкой крошек, top-11 = её высота).
           shiftForOverlay: контент центрируется в видимой области, когда открыто окно задачи. */}
-      <div id="pf-sticky-banners" className="sticky top-11 z-40">
+      <div id="pf-sticky-banners" className="pf-sticky-surface sticky top-11 z-40">
         <ProjectPublishedBanner projectId={data.id} shiftForOverlay />
         {/* Липкий гейт готовности воркера (репо + делегация + KB) — пока в колонке «Воркер» есть задача. */}
         <ProjectWorkerGateBanner
@@ -272,9 +331,13 @@ export function TasksPage(): React.ReactElement {
               <ProjectIconPicker projectId={data.id} icon={data.icon} variant="head" />
             )}
             {!data.coverUrl && (
-              <HeadToolButton onClick={addRandomCover}>
-                <ImageIcon className="size-4" />
-                Добавить обложку
+              <HeadToolButton onClick={() => void addRandomCover()} disabled={coverBusy}>
+                {coverBusy ? (
+                  <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
+                ) : (
+                  <ImageIcon className="size-4" />
+                )}
+                {coverBusy ? 'Добавляем…' : 'Добавить обложку'}
               </HeadToolButton>
             )}
             <HeadToolButton onClick={() => setDescriptionHidden((h) => !h)}>
@@ -311,6 +374,7 @@ export function TasksPage(): React.ReactElement {
         projectId={data.id}
         projectName={data.name}
         memberCount={data.memberCount}
+        canEdit={canEdit}
         onOpenAutomation={() => setAutomationOpen(true)}
         // Full-bleed: доска и её нижний горизонтальный скролл во всю ширину окна (по краям
         // обложки/плашки). Первая колонка отступает как тело страницы (px-6/14/24), последняя
@@ -339,7 +403,7 @@ function HeadToolButton({
   return (
     <button
       type="button"
-      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-60 sm:min-h-9"
       {...props}
     >
       {children}

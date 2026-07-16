@@ -42,6 +42,7 @@ type Props = {
   iconFor?: (v: BoardView) => ViewIconLike;
   onCreate: (type: BoardViewType) => void;
   label: string;
+  canManage?: boolean;
 };
 
 // Ряд вью в списке: drag за ⋮⋮, клик — переключение, «…» при hover — меню вью.
@@ -53,6 +54,7 @@ function ViewRow({
   menu,
   onSelect,
   draggable,
+  canManage,
 }: {
   id: string;
   icon: ViewIconLike;
@@ -61,6 +63,7 @@ function ViewRow({
   menu: MenuEntry[];
   onSelect: () => void;
   draggable: boolean;
+  canManage: boolean;
 }): React.ReactElement {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -96,7 +99,7 @@ function ViewRow({
         <ViewIconGlyph icon={icon} className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate">{name}</span>
       </button>
-      <DropdownMenu>
+      {canManage && <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
@@ -109,7 +112,7 @@ function ViewRow({
         <DropdownMenuContent align="start" side="right" className="min-w-[12rem]">
           <DropdownEntries entries={menu} />
         </DropdownMenuContent>
-      </DropdownMenu>
+      </DropdownMenu>}
     </div>
   );
 }
@@ -126,6 +129,7 @@ export function ViewsOverflowMenu({
   iconFor,
   onCreate,
   label,
+  canManage = true,
 }: Props): React.ReactElement {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -265,6 +269,7 @@ export function ViewsOverflowMenu({
                       onSelect(defaultViewId);
                     }}
                     draggable={false}
+                    canManage={canManage}
                   />
                 )}
                 <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
@@ -285,7 +290,8 @@ export function ViewsOverflowMenu({
                           onSelect(v.id);
                         }}
                         // Reorder только без поиска — иначе индексы фильтра врут.
-                        draggable={!query.trim()}
+                        draggable={canManage && !query.trim()}
+                        canManage={canManage}
                       />
                     ))}
                   </SortableContext>
@@ -296,7 +302,7 @@ export function ViewsOverflowMenu({
                   </p>
                 )}
               </div>
-              <div className="mt-1 border-t pt-1">
+              {canManage && <div className="mt-1 border-t pt-1">
                 <button
                   type="button"
                   onClick={() => setCreating(true)}
@@ -305,7 +311,7 @@ export function ViewsOverflowMenu({
                   <Plus className="size-4" />
                   Новое отображение
                 </button>
-              </div>
+              </div>}
             </>
           )}
           </div>,

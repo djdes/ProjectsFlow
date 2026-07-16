@@ -7,6 +7,7 @@ import type { DeleteProject } from '../../application/project/DeleteProject.js';
 import type { PublishProject } from '../../application/project/PublishProject.js';
 import type { UnpublishProject } from '../../application/project/UnpublishProject.js';
 import type { SetPublicIndexing } from '../../application/project/SetPublicIndexing.js';
+import type { SetPublicAppearance } from '../../application/project/SetPublicAppearance.js';
 import type { EnsureProjectAppRepo } from '../../application/project/EnsureProjectAppRepo.js';
 import type { CreateProjectRepo } from '../../application/project/CreateProjectRepo.js';
 import type { GetProjectSite } from '../../application/site/GetProjectSite.js';
@@ -65,6 +66,7 @@ import {
   setDispatcherSchema,
   setMultiTaskWorkerSchema,
   setPublicIndexingSchema,
+  setPublicAppearanceSchema,
   setGitTokenDelegationSchema,
   toggleFavoriteSchema,
   updateProjectSchema,
@@ -80,6 +82,7 @@ type Deps = {
   readonly publishProject: PublishProject;
   readonly unpublishProject: UnpublishProject;
   readonly setPublicIndexing: SetPublicIndexing;
+  readonly setPublicAppearance: SetPublicAppearance;
   readonly ensureAppRepo: EnsureProjectAppRepo;
   readonly createProjectRepo: CreateProjectRepo;
   readonly getProjectSite: GetProjectSite;
@@ -364,6 +367,19 @@ export function projectsRouter(deps: Deps): Router {
       if (typeof id !== 'string') throw new ProjectNotFoundError();
       const { indexing } = setPublicIndexingSchema.parse(req.body);
       await deps.setPublicIndexing.execute({ id, ownerId: req.user!.id, indexing });
+      deps.notifyProjectChanged(id);
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.patch('/:id/public-appearance', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const { appearance } = setPublicAppearanceSchema.parse(req.body);
+      await deps.setPublicAppearance.execute({ id, userId: req.user!.id, appearance });
       deps.notifyProjectChanged(id);
       res.status(204).end();
     } catch (e) {

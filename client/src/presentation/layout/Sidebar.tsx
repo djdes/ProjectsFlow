@@ -136,7 +136,7 @@ export function Sidebar({
     const favorites = (projects ?? []).filter((p) => !p.isInbox && p.isFavorite);
     return (
       <aside className="flex h-full min-h-0 flex-col items-center gap-1 overflow-hidden bg-sidebar p-2">
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider delayDuration={550} skipDelayDuration={120}>
           {onToggleCollapse && (
             <RailButton onClick={onToggleCollapse} label="Развернуть панель">
               <ChevronsRight className="size-5" />
@@ -199,7 +199,7 @@ export function Sidebar({
         <WorkspaceSwitcher />
 
         {onToggleCollapse && (
-          <TooltipProvider delayDuration={300}>
+          <TooltipProvider delayDuration={550} skipDelayDuration={120}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button

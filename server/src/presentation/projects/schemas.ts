@@ -20,6 +20,16 @@ export const setPublicIndexingSchema = z.object({
   indexing: z.boolean(),
 });
 
+export const setPublicAppearanceSchema = z.object({
+  appearance: z.object({
+    accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    showCover: z.boolean(),
+    showIcon: z.boolean(),
+    showDescription: z.boolean(),
+    showTaskMeta: z.boolean(),
+  }),
+});
+
 // Мягкая валидация URL: пытаемся распарсить как URL.
 // Поддерживаем http(s) и git+ssh-форму (parse() это принимает с протоколом).
 const urlOrNullSchema = z

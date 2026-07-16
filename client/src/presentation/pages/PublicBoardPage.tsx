@@ -60,7 +60,7 @@ function SharePreview({ board }: { board: PublicBoard | null }): React.ReactElem
         aria-hidden
       />
       <div className="flex items-center gap-2 px-3 py-2.5">
-        {board?.icon && (
+        {board?.appearance.showIcon && board.icon && (
           <ProjectIconView icon={board.icon} pixelSize={18} className="shrink-0 text-lg leading-none" />
         )}
         <span className="truncate text-sm font-semibold">{board?.name ?? 'Доска'}</span>
@@ -386,7 +386,8 @@ function PublicTopBar({
         <MoreMenu onReport={() => setReportOpen(true)} />
         <a
           href={registerHref}
-          className="ml-1 rounded-md bg-foreground px-3 py-1.5 text-[13px] font-semibold text-background transition-opacity hover:opacity-90"
+          className="ml-1 rounded-md px-3 py-1.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+          style={{ backgroundColor: board?.appearance.accentColor ?? '#2383e2' }}
         >
           Попробовать ProjectsFlow
         </a>
@@ -434,14 +435,14 @@ function BoardView({
   return (
     <>
       {/* Обложка во всю ширину (как в приватном виде и на скрине публичной страницы). */}
-      {board.coverUrl && (
+      {board.appearance.showCover && board.coverUrl && (
         <div className="h-40 w-full sm:h-52" style={coverStyle(board.coverUrl, board.coverPosition)} aria-hidden />
       )}
 
       <div className="mx-auto w-full max-w-5xl px-4 sm:px-8">
         {/* Шапка: иконка + имя + описание. */}
-        <header className={board.coverUrl ? '-mt-8' : 'mt-8'}>
-          {board.icon && (
+        <header className={board.appearance.showCover && board.coverUrl ? '-mt-8' : 'mt-8'}>
+          {board.appearance.showIcon && board.icon && (
             <div className="mb-2 grid size-16 place-items-center rounded-xl bg-white text-[44px] leading-none shadow-[0_1px_3px_rgba(15,23,42,0.12)] dark:bg-[#202020]">
               <ProjectIconView icon={board.icon} pixelSize={40} className="text-[40px]" />
             </div>
@@ -449,7 +450,7 @@ function BoardView({
           <h1 className="text-3xl font-bold tracking-tight text-[#37352f] dark:text-blue-50">
             {board.name}
           </h1>
-          {board.description && (
+          {board.appearance.showDescription && board.description && (
             <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-[#37352f]/80 dark:text-blue-100/80">
               {board.description}
             </p>
@@ -458,7 +459,11 @@ function BoardView({
 
         {/* Канбан. */}
         <div className="mt-8">
-          <PublicKanban columns={board.columns} onOpenTask={onOpenTask} />
+          <PublicKanban
+            columns={board.columns}
+            onOpenTask={onOpenTask}
+            showTaskMeta={board.appearance.showTaskMeta}
+          />
         </div>
       </div>
     </>
@@ -485,7 +490,10 @@ export function PublicBoardPage(): React.ReactElement {
   };
 
   return (
-    <div className="min-h-dvh bg-background pb-16">
+    <div
+      className="min-h-dvh bg-background pb-16"
+      style={{ '--pf-public-accent': board?.appearance.accentColor ?? '#2383e2' } as React.CSSProperties}
+    >
       {/* Верхняя полоса — реплика публичной страницы Notion. */}
       <PublicTopBar board={board} slug={slug} onOpenTask={openTask} />
 

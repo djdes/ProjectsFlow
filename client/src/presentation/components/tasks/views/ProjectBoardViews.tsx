@@ -54,6 +54,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { trackProjectAction } from '@/lib/productAnalytics';
 import type { TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { TaskTemplate } from '@/domain/task/TaskTemplate';
 // (TaskStatus используется в редакторе условного цвета)
@@ -139,6 +140,7 @@ type Props = {
   projectId: string;
   projectName?: string;
   memberCount?: number;
+  canEdit?: boolean;
   onOpenAutomation?: () => void;
   // Full-bleed классы канбана (см. KanbanBoard) — остальные виды обычной ширины.
   bleedNegClass?: string;
@@ -176,6 +178,7 @@ export function ProjectBoardViews({
   projectId,
   projectName,
   memberCount,
+  canEdit = true,
   onOpenAutomation,
   bleedNegClass = '',
   bleedPadClass = '',
@@ -321,6 +324,29 @@ export function ProjectBoardViews({
   const isKanban = activeId === DEFAULT_VIEW_ID || activeType === 'kanban';
 
   const state: PerViewState = perView[activeId] ?? EMPTY_PER_VIEW_STATE;
+  useEffect(() => {
+    const onTaskCreated = (event: Event): void => {
+      const detail = (event as CustomEvent<{ projectId?: string; taskId?: string }>).detail;
+      if (detail?.projectId !== projectId || !detail.taskId) return;
+      window.setTimeout(() => {
+        const element = document.querySelector<HTMLElement>(
+          `[data-pf-task-id="${CSS.escape(detail.taskId!)}"]`,
+        );
+        if (!element) return;
+        element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        const hadTabIndex = element.hasAttribute('tabindex');
+        if (!hadTabIndex) element.tabIndex = -1;
+        element.focus({ preventScroll: true });
+        element.classList.add('pf-created-flash');
+        window.setTimeout(() => {
+          element.classList.remove('pf-created-flash');
+          if (!hadTabIndex) element.removeAttribute('tabindex');
+        }, 1800);
+      }, 80);
+    };
+    window.addEventListener('pf:task-created', onTaskCreated);
+    return () => window.removeEventListener('pf:task-created', onTaskCreated);
+  }, [projectId]);
   const setTableState = (patch: Partial<TableViewState>): void =>
     setPerView((prev) => ({
       ...prev,
@@ -356,6 +382,7 @@ export function ProjectBoardViews({
   // Автосохранение конфига активной вью на сервер (debounce; query не сохраняем).
   const lastSavedRef = useRef<Record<string, string>>({});
   useEffect(() => {
+    if (!canEdit) return;
     if (activeId === DEFAULT_VIEW_ID) return;
     if (!views?.some((v) => v.id === activeId)) return;
     const st = perView[activeId];
@@ -375,12 +402,16 @@ export function ProjectBoardViews({
         .catch(() => undefined);
     }, 800);
     return () => window.clearTimeout(t);
-  }, [perView, activeId, views, boardViewRepository, projectId]);
-  const setFilters = (patch: Partial<ViewFilters>): void =>
+  }, [perView, activeId, views, boardViewRepository, projectId, canEdit]);
+  const setFilters = (patch: Partial<ViewFilters>): void => {
     setPerView((prev) => ({
       ...prev,
       [activeId]: { ...state, filters: { ...state.filters, ...patch } },
     }));
+    if (Object.keys(patch).some((key) => key !== 'query')) {
+      trackProjectAction({ projectId, action: 'filter_tasks', result: 'success' });
+    }
+  };
   const setSort = (sort: ViewSort | null): void =>
     setPerView((prev) => ({ ...prev, [activeId]: { ...state, sort } }));
   // «Скрыть все» / «Показать все» в панели «Видимость свойств».
@@ -399,6 +430,10 @@ export function ProjectBoardViews({
     }));
 
   const handleCreate = async (name: string, type: BoardViewType): Promise<void> => {
+    if (!canEdit) {
+      toast.info('Наблюдатель может просматривать проект, но не менять представления.');
+      return;
+    }
     try {
       const view = await boardViewRepository.create(projectId, name, type);
       setViews((prev) => [...(prev ?? []), view]);
@@ -413,6 +448,7 @@ export function ProjectBoardViews({
   // Drag-reorder вкладок в окне «ещё…»: оптимистично переставляем локально,
   // затем PATCH sortOrder только изменившимся вью.
   const handleReorder = (orderedIds: string[]): void => {
+    if (!canEdit) return;
     const current = views ?? [];
     const byId = new Map(current.map((v) => [v.id, v]));
     const next = orderedIds
@@ -439,6 +475,7 @@ export function ProjectBoardViews({
     view: BoardView,
     patch: { name?: string; type?: BoardViewType },
   ): Promise<void> => {
+    if (!canEdit) return;
     try {
       const updated = await boardViewRepository.update(projectId, view.id, patch);
       setViews((prev) => (prev ?? []).map((v) => (v.id === view.id ? updated : v)));
@@ -449,6 +486,7 @@ export function ProjectBoardViews({
   };
 
   const handleDuplicate = async (view: BoardView): Promise<void> => {
+    if (!canEdit) return;
     try {
       const copy = await boardViewRepository.duplicate(projectId, view.id);
       setViews((prev) => [...(prev ?? []), copy]);
@@ -459,6 +497,7 @@ export function ProjectBoardViews({
   };
 
   const handleDelete = async (view: BoardView): Promise<void> => {
+    if (!canEdit) return;
     try {
       await boardViewRepository.remove(projectId, view.id);
       setViews((prev) => (prev ?? []).filter((v) => v.id !== view.id));
@@ -539,7 +578,7 @@ export function ProjectBoardViews({
   }, [views, activeId, fitCount]);
 
   const filtersActive = hasActiveFilters(state.filters);
-  const chipsVisible = !isKanban && (filtersActive || state.sort !== null);
+  const chipsVisible = filtersActive || state.sort !== null;
 
   const requestCreate = (status: TaskStatus, template?: TaskTemplate): void =>
     setCreateReq((prev) => ({ seq: (prev?.seq ?? 0) + 1, status, template }));
@@ -669,7 +708,7 @@ export function ProjectBoardViews({
         id="pf-views-tabs-row"
         style={{ top: stickyTop, marginRight: rightPanelWidth }}
         className={cn(
-          'group/tabs z-30 flex items-center gap-0.5 bg-background pb-1 transition-[margin] duration-300 ease-in-out',
+          'pf-sticky-surface group/tabs z-30 flex items-center gap-0.5 bg-background pb-1 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none',
           // На канбане строку вкладок НЕ закрепляем — при скролле липнут только шапки
           // колонок (запрос). В остальных видах — как раньше (нужна для панели выбора).
           !isKanban && 'sticky',
@@ -681,7 +720,8 @@ export function ProjectBoardViews({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="inline-flex min-w-0 items-center gap-1.5 rounded-md bg-accent py-1 pl-2 pr-1.5 text-[13px] font-medium text-foreground"
+                className="inline-flex min-h-10 min-w-0 items-center gap-1.5 rounded-md bg-accent py-1 pl-2 pr-1.5 text-[13px] font-medium text-foreground sm:min-h-9"
+                aria-haspopup="menu"
               >
                 {(() => {
                   const Icon = VIEW_TYPE_ICONS[activeType];
@@ -707,11 +747,69 @@ export function ProjectBoardViews({
                   <span className="min-w-0 flex-1 truncate">{v.name}</span>
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="gap-2" onClick={() => setPanel('settings')}>
+                <Settings2 className="size-4" />
+                Настройки отображения
+              </DropdownMenuItem>
+              {canEdit && (
+                <>
+                  <DropdownMenuItem
+                    className="gap-2"
+                    onClick={() => {
+                      if (active) setRenameTarget(active);
+                      else setBoardRenameOpen(true);
+                    }}
+                  >
+                    <Pencil className="size-4" />
+                    Переименовать
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="gap-2"
+                    onClick={() =>
+                      active
+                        ? void handleDuplicate(active)
+                        : void handleCreate('Доска (копия)', 'kanban')
+                    }
+                  >
+                    <Copy className="size-4" />
+                    Дублировать
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {BOARD_VIEW_TYPES.map((type) => {
+                    const Icon = VIEW_TYPE_ICONS[type];
+                    return (
+                      <DropdownMenuItem
+                        key={`mobile-new-${type}`}
+                        className="gap-2"
+                        onClick={() => void handleCreate(BOARD_VIEW_TYPE_LABELS[type], type)}
+                      >
+                        <Icon className="size-4" />
+                        Новое: {BOARD_VIEW_TYPE_LABELS[type]}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                  {active && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="gap-2 text-destructive focus:text-destructive"
+                        onClick={() => setDeleteTarget(active)}
+                      >
+                        <Trash2 className="size-4" />
+                        Удалить отображение
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
         <div
           ref={tabsWrapRef}
+          role="tablist"
+          aria-label="Отображения проекта"
           className="relative hidden min-w-0 flex-1 items-center gap-0.5 overflow-hidden md:flex"
         >
           {/* Линейка: невидимые реплики ВСЕХ вкладок + «ещё N…» + «+» — по ним
@@ -747,7 +845,7 @@ export function ProjectBoardViews({
             name={boardName}
             active={activeId === DEFAULT_VIEW_ID}
             onSelect={() => selectView(DEFAULT_VIEW_ID)}
-            menu={defaultTabMenuEntries()}
+            menu={canEdit ? defaultTabMenuEntries() : undefined}
             renameOpen={boardRenameOpen}
             onRenameClose={() => setBoardRenameOpen(false)}
             onRenameSubmit={renameBoard}
@@ -759,7 +857,7 @@ export function ProjectBoardViews({
               name={v.name}
               active={activeId === v.id}
               onSelect={() => selectView(v.id)}
-              menu={tabMenuEntries(v)}
+              menu={canEdit ? tabMenuEntries(v) : undefined}
               renameOpen={renameTarget?.id === v.id}
               onRenameClose={() => setRenameTarget(null)}
               onRenameSubmit={(name) => void handleUpdate(v, { name })}
@@ -779,9 +877,10 @@ export function ProjectBoardViews({
               boardMenu={defaultTabMenuEntries()}
               iconFor={(v) => perView[v.id]?.icon ?? VIEW_TYPE_ICONS[v.type]}
               onCreate={(t) => void handleCreate(BOARD_VIEW_TYPE_LABELS[t], t)}
+              canManage={canEdit}
               label={`ещё ${hiddenViews.length}…`}
             />
-          ) : (
+          ) : canEdit ? (
             /* «+» — только при наведении на строку вкладок (Notion): попап «Начать
                с нуля», клик по типу сразу создаёт вью с именем типа. */
             <Popover>
@@ -790,7 +889,7 @@ export function ProjectBoardViews({
                   type="button"
                   aria-label="Новое отображение"
                   title="Новое отображение"
-                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover/tabs:opacity-100 data-[state=open]:opacity-100"
+                  className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover/tabs:opacity-100 data-[state=open]:opacity-100"
                 >
                   <Plus className="size-4" />
                 </button>
@@ -815,7 +914,7 @@ export function ProjectBoardViews({
                 </div>
               </PopoverContent>
             </Popover>
-          )}
+          ) : null}
         </div>
 
         {/* Общий правый toolbar отображений. У канбана собственные фильтры и поиск
@@ -823,20 +922,18 @@ export function ProjectBoardViews({
             оставаться справа так же, как в таблице. На узком экране остаются
             настройки и «Создать». */}
         <div className="flex shrink-0 items-center gap-0.5">
+          <div className="md:hidden">
+            <FilterMenu filters={state.filters} onChange={setFilters} active={filtersActive} />
+          </div>
           <div className="hidden items-center gap-0.5 md:flex">
-            {!isKanban && (
-              <>
-                <FilterMenu filters={state.filters} onChange={setFilters} active={filtersActive} />
-                <SortMenu sort={state.sort} onChange={setSort} />
-              </>
-            )}
-            {onOpenAutomation && (
+            <FilterMenu filters={state.filters} onChange={setFilters} active={filtersActive} />
+            <SortMenu sort={state.sort} onChange={setSort} />
+            {canEdit && onOpenAutomation && (
               <ToolbarIcon label="Автоматизации" onClick={onOpenAutomation}>
                 <Zap className="size-4" />
               </ToolbarIcon>
             )}
-            {!isKanban &&
-              (searchOpen ? (
+            {searchOpen ? (
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
                   <input
@@ -865,17 +962,17 @@ export function ProjectBoardViews({
                 >
                   <Search className="size-4" />
                 </ToolbarIcon>
-              ))}
+              )}
           </div>
           {(active || isKanban) && (
             <ToolbarIcon label="Настройки отображения" onClick={() => setPanel('settings')}>
               <Settings2 className="size-4" />
             </ToolbarIcon>
           )}
-          <div className="ml-1 inline-flex overflow-hidden rounded-md">
+          {canEdit && <div className="ml-1 inline-flex overflow-hidden rounded-md">
             <Button
               size="sm"
-              className="h-7 rounded-r-none px-2.5 text-xs"
+              className="h-10 rounded-r-none px-3.5 text-sm sm:h-9 sm:text-xs"
               onClick={() => requestCreate('backlog')}
             >
               Создать
@@ -885,7 +982,7 @@ export function ProjectBoardViews({
                 <Button
                   size="sm"
                   aria-label="Создать в колонке…"
-                  className="h-7 rounded-l-none border-l border-primary-foreground/20 px-1.5"
+                  className="h-10 rounded-l-none border-l border-primary-foreground/20 px-2 sm:h-9"
                 >
                   <ChevronDown className="size-3.5" />
                 </Button>
@@ -931,14 +1028,14 @@ export function ProjectBoardViews({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
+          </div>}
         </div>
       </div>
 
       {/* Строка активных фильтров/сортировки (chips, Notion-style): клик по chip —
           попап значений (чекбоксы) + «Убрать фильтр»; «+ Фильтр» добавляет следующий. */}
       {chipsVisible && (
-        <div className="flex flex-wrap items-center gap-1 pb-2">
+        <div className="flex max-w-full items-center gap-1 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible">
           {state.sort && (
             <button
               type="button"
@@ -1017,6 +1114,9 @@ export function ProjectBoardViews({
           bleedPadClass={bleedPadClass}
           stickyHeaderTop={stickyTop}
           createRequest={createReq}
+          viewFilters={state.filters}
+          viewSort={state.sort}
+          canEdit={canEdit}
         />
       ) : activeType === 'table' ? (
         <TableView
@@ -1038,6 +1138,7 @@ export function ProjectBoardViews({
           createRequest={createReq}
           sidePanelOpen={panel !== null}
           onSetHiddenCols={setHiddenCols}
+          canEdit={canEdit}
         />
       ) : activeType === 'list' ? (
         <ListView
@@ -1050,6 +1151,7 @@ export function ProjectBoardViews({
           grouping={state.grouping}
           colorRules={state.colorRules}
           createRequest={createReq}
+          canEdit={canEdit}
         />
       ) : (
         <CalendarView
@@ -1061,6 +1163,7 @@ export function ProjectBoardViews({
           mode={state.calendarMode}
           onModeChange={setCalendarMode}
           createRequest={createReq}
+          canEdit={canEdit}
         />
       )}
 
@@ -1089,6 +1192,7 @@ export function ProjectBoardViews({
           {active ? (
             <ViewSettingsCard
               view={active}
+              canEdit={canEdit}
               onClose={() => setPanel(null)}
               onRename={(name) => void handleUpdate(active, { name })}
               onType={(type) => void handleUpdate(active, { type })}
@@ -1120,6 +1224,7 @@ export function ProjectBoardViews({
                 config: null,
                 createdAt: new Date(),
               }}
+              canEdit={canEdit}
               onClose={() => setPanel(null)}
               onRename={renameBoard}
               onType={(type) => {
@@ -1257,7 +1362,7 @@ function BoardSidePanel({
         transitionTimingFunction: 'cubic-bezier(.2,.8,.2,1)',
       }}
       className={cn(
-        'fixed inset-x-3 bottom-3 z-[60] flex flex-col overflow-y-auto overscroll-contain rounded-[20px] border bg-popover shadow-2xl',
+        'fixed inset-x-3 bottom-3 z-[60] flex flex-col overflow-y-auto overscroll-contain rounded-[20px] border bg-popover pb-[env(safe-area-inset-bottom)] shadow-2xl',
         'max-lg:!inset-0 max-lg:!top-0 max-lg:!max-h-none max-lg:rounded-none',
         'animate-in fade-in slide-in-from-right-3 motion-reduce:animate-none',
         'lg:sticky lg:inset-auto lg:z-30 lg:w-[480px] lg:shrink-0',
@@ -1337,7 +1442,7 @@ function NewViewPanel({
           type="button"
           aria-label="Закрыть"
           onClick={onClose}
-          className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="grid size-10 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:size-7"
         >
           <X className="size-4" />
         </button>
@@ -1535,7 +1640,7 @@ function ToolbarIcon({
       title={label}
       onClick={onClick}
       className={cn(
-        'inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent',
+        'inline-flex size-10 items-center justify-center rounded-md transition-colors hover:bg-accent sm:size-9',
         active ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
       )}
     >
@@ -1911,10 +2016,34 @@ function ViewTab({
   onRenameClose?: () => void;
   onRenameSubmit?: (name: string) => void;
 }): React.ReactElement {
+  const tabA11y = {
+    role: 'tab' as const,
+    'aria-selected': active,
+    tabIndex: active ? 0 : -1,
+    onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>): void => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      const tabs = Array.from(
+        event.currentTarget
+          .closest('[role="tablist"]')
+          ?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [],
+      );
+      if (tabs.length === 0) return;
+      const current = tabs.indexOf(event.currentTarget);
+      const next =
+        event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? tabs.length - 1
+            : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      event.preventDefault();
+      tabs[next]?.focus();
+      tabs[next]?.click();
+    },
+  };
   const tabClass = cn(
-    'inline-flex shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium transition-colors',
+    'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium transition-[background-color,color,box-shadow,transform] duration-150 motion-reduce:transition-none',
     active
-      ? 'bg-accent text-foreground'
+      ? 'scale-[1.01] bg-accent text-foreground shadow-sm'
       : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
   );
   const inner = (
@@ -1931,11 +2060,11 @@ function ViewTab({
     const btn = (
       <ContextMenuTrigger asChild>
         {active ? (
-          <button type="button" aria-label="Меню вью" title="Меню вью" className={tabClass}>
+          <button type="button" aria-label="Меню вью" title="Меню вью" className={tabClass} {...tabA11y}>
             {inner}
           </button>
         ) : (
-          <button type="button" onClick={onSelect} className={tabClass}>
+          <button type="button" onClick={onSelect} className={tabClass} {...tabA11y}>
             {inner}
           </button>
         )}
@@ -1969,7 +2098,7 @@ function ViewTab({
     );
   } else {
     tab = (
-      <button type="button" onClick={onSelect} className={tabClass}>
+      <button type="button" onClick={onSelect} className={tabClass} {...tabA11y}>
         {inner}
       </button>
     );
@@ -2068,6 +2197,7 @@ type SettingsPage = 'root' | 'layout' | 'props' | 'filter' | 'sort' | 'group' | 
 
 function ViewSettingsCard({
   view,
+  canEdit,
   onClose,
   onRename,
   onType,
@@ -2087,6 +2217,7 @@ function ViewSettingsCard({
   onColorRules,
 }: {
   view: BoardView;
+  canEdit: boolean;
   onClose: () => void;
   onRename: (name: string) => void;
   onType: (t: BoardViewType) => void;
@@ -2147,7 +2278,7 @@ function ViewSettingsCard({
           type="button"
           aria-label="Закрыть панель"
           onClick={onClose}
-          className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="grid size-10 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:size-7"
         >
           <X className="size-4" />
         </button>
@@ -2171,16 +2302,19 @@ function ViewSettingsCard({
                   }
                 }}
                 maxLength={64}
+                disabled={!canEdit}
                 aria-label="Название отображения"
                 className="h-8 w-full rounded-md border bg-background px-2.5 text-sm outline-none focus:border-foreground/30"
               />
             </div>
-            <NavRow
-              icon={TypeIcon}
-              label="Вид"
-              value={BOARD_VIEW_TYPE_LABELS[view.type]}
-              onClick={() => setPage('layout')}
-            />
+            {canEdit && (
+              <NavRow
+                icon={TypeIcon}
+                label="Вид"
+                value={BOARD_VIEW_TYPE_LABELS[view.type]}
+                onClick={() => setPage('layout')}
+              />
+            )}
             {onToggleColumn && (
               <NavRow
                 icon={Eye}
@@ -2201,7 +2335,7 @@ function ViewSettingsCard({
               value={sort ? sortKeyLabel(sort.key) : undefined}
               onClick={() => setPage('sort')}
             />
-            {view.type !== 'calendar' && (
+            {(view.type === 'table' || view.type === 'list') && (
               <NavRow
                 icon={Rows3}
                 label="Группировка"
@@ -2209,16 +2343,22 @@ function ViewSettingsCard({
                 onClick={() => setPage('group')}
               />
             )}
-            <NavRow
-              icon={Paintbrush}
-              label="Условный цвет"
-              value={colorRules.length > 0 ? String(colorRules.length) : undefined}
-              onClick={() => setPage('color')}
-            />
+            {(view.type === 'table' || view.type === 'list') && (
+              <NavRow
+                icon={Paintbrush}
+                label="Условный цвет"
+                value={colorRules.length > 0 ? String(colorRules.length) : undefined}
+                onClick={() => setPage('color')}
+              />
+            )}
             <PanelRow icon={LinkIcon} label="Скопировать ссылку на отображение" onClick={onCopyLink} />
-            <div className="my-0.5 border-t" />
-            <PanelRow icon={Copy} label="Дублировать отображение" onClick={onDuplicate} />
-            <PanelRow icon={Trash2} label="Удалить отображение" onClick={onDelete} destructive />
+            {canEdit && (
+              <>
+                <div className="my-0.5 border-t" />
+                <PanelRow icon={Copy} label="Дублировать отображение" onClick={onDuplicate} />
+                <PanelRow icon={Trash2} label="Удалить отображение" onClick={onDelete} destructive />
+              </>
+            )}
           </div>
         )}
         {page === 'layout' && (
@@ -2275,7 +2415,7 @@ function ViewSettingsCard({
             <FilterPicker filters={filters} onChange={onFilters} />
           </div>
         )}
-        {page === 'group' && (
+        {page === 'group' && (view.type === 'table' || view.type === 'list') && (
           <div className="flex flex-col gap-1">
             {backHeader('Группировка')}
             <button
@@ -2299,7 +2439,7 @@ function ViewSettingsCard({
             ))}
           </div>
         )}
-        {page === 'color' && (
+        {page === 'color' && (view.type === 'table' || view.type === 'list') && (
           <div className="flex flex-col gap-1">
             {backHeader('Условный цвет')}
             <ColorRulesEditor rules={colorRules} onChange={onColorRules} />

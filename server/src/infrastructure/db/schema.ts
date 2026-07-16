@@ -40,6 +40,7 @@ import type {
   LogTails,
   DbHealth,
 } from '../../domain/monitoring/ServerSnapshot.js';
+import type { PublicAppearance } from '../../domain/project/Project.js';
 
 // id-длина 36 = UUID v4 в строковой форме (8-4-4-4-12).
 const id = () => char('id', { length: 36 }).primaryKey();
@@ -286,6 +287,7 @@ export const projects = mysqlTable(
     publicSlug: varchar('public_slug', { length: 64 }),
     isPublic: boolean('is_public').notNull().default(false),
     publicIndexing: boolean('public_indexing').notNull().default(false),
+    publicAppearance: json('public_appearance').$type<PublicAppearance | null>(),
     publishedAt: timestamp('published_at'),
     // GitHub-репо приложения проекта (self-serve воркер-раннер, db/097). "owner/repo".
     appRepoFullName: varchar('app_repo_full_name', { length: 255 }),
@@ -306,6 +308,24 @@ export const projects = mysqlTable(
     uniqueIndex('uq_projects_public_slug').on(t.publicSlug),
     // Уникальность + lookup слага сайта для host-роутинга заглушки. См. db/100.
     uniqueIndex('uq_projects_site_slug').on(t.siteSlug),
+  ],
+);
+
+export const productActionEvents = mysqlTable(
+  'product_action_events',
+  {
+    id: id(),
+    userId: fkUserId('user_id'),
+    projectId: char('project_id', { length: 36 }),
+    action: varchar('action', { length: 40 }).notNull(),
+    result: mysqlEnum('result', ['started', 'success', 'failure']).notNull(),
+    durationMs: int('duration_ms', { unsigned: true }),
+    createdAt: createdAtCol(),
+  },
+  (t) => [
+    index('idx_product_action_created').on(t.createdAt),
+    index('idx_product_action_project').on(t.projectId, t.action, t.createdAt),
+    index('idx_product_action_user').on(t.userId, t.createdAt),
   ],
 );
 

@@ -38,6 +38,7 @@ import {
   type ViewFilters,
 } from './viewShared';
 import { ContextEntries, type MenuEntry } from './menuEntries';
+import { ViewLoadFeedback } from './ViewLoadFeedback';
 
 type Props = {
   projectId: string;
@@ -47,6 +48,7 @@ type Props = {
   mode: 'month' | 'week';
   onModeChange: (m: 'month' | 'week') => void;
   createRequest: ViewCreateRequest | null;
+  canEdit?: boolean;
 };
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -106,9 +108,10 @@ export function CalendarView({
   mode,
   onModeChange,
   createRequest,
+  canEdit = true,
 }: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
-  const { tasks: allTasks, loading, error, update, move, create, remove } = tasksApi;
+  const { tasks: allTasks, loading, error, update, move, create, remove, refetch } = tasksApi;
   const { taskTemplateRepository } = useContainer();
   const tasks = useMemo(() => allTasks.filter((t) => matchesFilters(t, filters)), [allTasks, filters]);
   const isShared = (memberCount ?? 0) > 1;
@@ -124,7 +127,7 @@ export function CalendarView({
   // «Создать» из тулбара вью (срок не задан — попадёт в «Без срока»).
   // С шаблоном (db/108) — задача создаётся сразу, без окна.
   useEffect(() => {
-    if (!createRequest) return;
+    if (!createRequest || !canEdit) return;
     const tpl = createRequest.template;
     if (tpl) {
       void create({
@@ -139,7 +142,7 @@ export function CalendarView({
       setDrawer({ mode: 'create', status: createRequest.status });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createRequest]);
+  }, [createRequest, canEdit]);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -301,6 +304,7 @@ export function CalendarView({
     });
 
   const handleDragEnd = (e: DragEndEvent): void => {
+    if (!canEdit) return;
     setActiveDrag(null);
     const data = e.active.data.current as
       | { type?: string; task?: Task; fromDay?: string }
@@ -348,10 +352,18 @@ export function CalendarView({
   };
 
   if (loading) return <div className="h-72 animate-pulse rounded-xl bg-muted/60" />;
-  if (error) return <p className="text-sm text-destructive">{error}</p>;
+  if (error && allTasks.length === 0) {
+    return <ViewLoadFeedback error={error} hasData={false} onRetry={refetch} label="календарь" />;
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <ViewLoadFeedback
+        error={error}
+        hasData={allTasks.length > 0}
+        onRetry={refetch}
+        label="календарь"
+      />
       {/* Шапка: месяц + «Без срока (N)» + навигация ‹ Сегодня ›. */}
       <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
         <p className="text-sm font-semibold capitalize">{monthLabel}</p>
@@ -447,7 +459,7 @@ export function CalendarView({
       </div>
 
       <DndContext
-        sensors={sensors}
+        sensors={canEdit ? sensors : []}
         collisionDetection={pointerWithin}
         onDragStart={(e) => setActiveDrag((e.active.data.current?.task as Task | undefined) ?? null)}
         onDragEnd={handleDragEnd}
@@ -509,6 +521,7 @@ export function CalendarView({
           isShared={isShared}
           tasksApi={tasksApi}
           deadline={pendingDeadline}
+          canEdit={canEdit}
         />
       ) : (
         <ViewTaskDrawer
@@ -518,13 +531,14 @@ export function CalendarView({
           projectName={projectName}
           isShared={isShared}
           tasksApi={tasksApi}
+          canEdit={canEdit}
         />
       )}
 
       {/* Быстрое создание без дня (попадёт в «Без срока»). */}
-      <div className="max-w-xs py-2">
+      {canEdit && <div className="max-w-xs py-2">
         <NewTaskRow create={tasksApi.create} />
-      </div>
+      </div>}
     </div>
   );
 }
@@ -537,6 +551,7 @@ function ViewTaskDrawerWithDeadline({
   isShared,
   tasksApi,
   deadline,
+  canEdit,
 }: {
   state: TaskDrawerState;
   onClose: () => void;
@@ -545,6 +560,7 @@ function ViewTaskDrawerWithDeadline({
   isShared: boolean;
   tasksApi: ReturnType<typeof useTasks>;
   deadline: string;
+  canEdit: boolean;
 }): React.ReactElement {
   // Обёртка над tasksApi: create получает дедлайн дня, из которого нажали «+».
   const patched = useMemo(
@@ -563,6 +579,7 @@ function ViewTaskDrawerWithDeadline({
       projectName={projectName}
       isShared={isShared}
       tasksApi={patched}
+      canEdit={canEdit}
     />
   );
 }
@@ -718,7 +735,7 @@ function TaskChip({
     data: { type: 'move', task, fromDay },
   });
   const chip = (
-    <div className="group/chip relative">
+    <div className="group/chip relative" data-pf-task-id={task.id}>
       <div
         ref={setNodeRef}
         {...listeners}

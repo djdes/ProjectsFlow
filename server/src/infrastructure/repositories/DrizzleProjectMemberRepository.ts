@@ -12,7 +12,12 @@ import type {
   ProjectMembership,
   ProjectRole,
 } from '../../domain/project/ProjectMembership.js';
-import type { Project, ProjectStatus } from '../../domain/project/Project.js';
+import {
+  DEFAULT_PUBLIC_APPEARANCE,
+  type Project,
+  type ProjectStatus,
+  type PublicAppearance,
+} from '../../domain/project/Project.js';
 import type { User } from '../../domain/user/User.js';
 import type { NotificationPrefs } from '../../domain/notifications/NotificationPrefs.js';
 import type {
@@ -67,6 +72,10 @@ function toProject(row: ProjectRow): Project {
     publicSlug: row.publicSlug ?? null,
     isPublic: row.isPublic,
     publicIndexing: row.publicIndexing,
+    publicAppearance: {
+      ...DEFAULT_PUBLIC_APPEARANCE,
+      ...parseJsonCol<Partial<PublicAppearance>>(row.publicAppearance, {}),
+    },
     appRepoFullName: row.appRepoFullName ?? null,
     siteSlug: row.siteSlug ?? null,
     createdAt: row.createdAt,

@@ -1,4 +1,5 @@
 import type { TaskStatus, TaskPriority } from '../task/Task.js';
+import type { PublicAppearance } from './Project.js';
 
 // Публичная выдача доски (Publish to web, db/096). ЕДИНСТВЕННАЯ граница приватности:
 // только перечисленные здесь поля покидают периметр. Внутренние поля задачи (createdBy,
@@ -34,6 +35,7 @@ export type PublicBoard = {
   readonly coverPosition: number;
   // Тоггл индексации: клиент ставит <meta robots noindex> пока false.
   readonly indexing: boolean;
+  readonly appearance: PublicAppearance;
   // Все статусы в порядке TASK_STATUSES; пустые колонки клиент может не рисовать.
   readonly columns: PublicColumn[];
 };

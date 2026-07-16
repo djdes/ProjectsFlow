@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { History } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -23,6 +24,7 @@ export function ProjectActivityButton({
   actions,
   open,
   onOpenChange,
+  compact = false,
 }: {
   projectId: string;
   // Действия проекта (участники · Поделиться · ⋯) — прокидываются в окно активности.
@@ -30,6 +32,7 @@ export function ProjectActivityButton({
   // Управляемое состояние окна — чтобы TasksPage прятал действия шапки, пока окно открыто.
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  compact?: boolean;
 }): React.ReactElement {
   const { projectRepository } = useContainer();
   const [summary, setSummary] = useState<ProjectActivitySummary | null>(null);
@@ -98,10 +101,13 @@ export function ProjectActivityButton({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 px-2 text-sm font-normal text-muted-foreground hover:text-foreground"
+            className={compact
+              ? 'size-10 px-0 text-muted-foreground hover:text-foreground sm:size-9'
+              : 'h-8 px-2 text-sm font-normal text-muted-foreground hover:text-foreground'}
             onClick={() => onOpenChange(true)}
+            aria-label={compact ? label : undefined}
           >
-            {label}
+            {compact ? <History className="size-4" /> : label}
           </Button>
         </TooltipTrigger>
         {summary && (

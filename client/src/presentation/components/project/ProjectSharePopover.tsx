@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ChevronDown, Link2, Loader2, Plus, Share2, UserPlus } from 'lucide-react';
+import { Check, ChevronDown, Link2, Loader2, Share2, UserPlus, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -13,6 +14,14 @@ import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { ProjectPublishTab } from './ProjectPublishTab';
 import { ProjectSiteTab } from './ProjectSiteTab';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { actionErrorMessage } from '@/lib/actionFeedback';
+import { trackProjectAction } from '@/lib/productAnalytics';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -27,6 +36,7 @@ type Props = {
   members: ProjectMember[];
   canInvite: boolean; // editor+ — может приглашать
   isOwner: boolean; // owner — может публиковать
+  compact?: boolean;
 };
 
 function Initial({ name }: { name: string }): React.ReactElement {
@@ -54,28 +64,38 @@ function ShareTab({ project, members, canInvite }: Omit<Props, 'isOwner'>): Reac
   const invite = async (): Promise<void> => {
     if (emails.length === 0 || !workspace) return;
     setSubmitting(true);
-    const settled = await Promise.allSettled(
-      emails.map((email) => workspaceRepository.createInvite(workspace.id, { role, email })),
-    );
-    setSubmitting(false);
-    const ok = settled.filter((s) => s.status === 'fulfilled').length;
-    if (ok === settled.length) {
-      toast.success(ok === 1 ? 'Приглашение отправлено' : `Отправлено приглашений: ${ok}`);
-      setDraft('');
-    } else {
-      toast.error(`${ok} ок, ${settled.length - ok} с ошибкой`);
+    try {
+      const settled = await Promise.allSettled(
+        emails.map((email) => workspaceRepository.createInvite(workspace.id, { role, email })),
+      );
+      const ok = settled.filter((s) => s.status === 'fulfilled').length;
+      if (ok === settled.length) {
+        toast.success(ok === 1 ? 'Приглашение отправлено' : `Отправлено приглашений: ${ok}`);
+        setDraft('');
+      } else {
+        const firstError = settled.find((item) => item.status === 'rejected');
+        toast.error(
+          firstError?.status === 'rejected'
+            ? actionErrorMessage(firstError.reason, `${ok} из ${settled.length} приглашений отправлено`)
+            : `${ok} из ${settled.length} приглашений отправлено`,
+        );
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const copyLink = (): void => {
-    void navigator.clipboard.writeText(`${window.location.origin}/projects/${project.id}`);
-    toast.success('Ссылка скопирована');
+    void navigator.clipboard
+      .writeText(`${window.location.origin}/projects/${project.id}`)
+      .then(() => toast.success('Ссылка скопирована'))
+      .catch((error) => toast.error(actionErrorMessage(error, 'Не удалось скопировать ссылку')));
   };
 
   return (
     <div className="px-4 py-3">
       {/* Email + Invite. */}
-      <div className="flex items-center gap-2">
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <Input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -89,16 +109,39 @@ function ShareTab({ project, members, canInvite }: Omit<Props, 'isOwner'>): Reac
           className="h-9"
           disabled={!canInvite}
         />
-        <div className="flex shrink-0 items-center gap-1">
-          {/* Роль будущего инвайта. */}
-          <button
-            type="button"
-            onClick={() => setRole((r) => (r === 'editor' ? 'viewer' : 'editor'))}
-            disabled={!canInvite}
-            className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
-          >
-            {role === 'editor' ? 'Редактор' : 'Наблюдатель'}
-          </button>
+        <div className="flex shrink-0 items-center justify-end gap-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                disabled={!canInvite}
+                className="inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
+              >
+                {role === 'editor' ? 'Редактор' : 'Наблюдатель'}
+                <ChevronDown className="size-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem className="items-start gap-2 py-2" onClick={() => setRole('editor')}>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">Редактор</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Может создавать и изменять задачи и представления.
+                  </span>
+                </span>
+                {role === 'editor' && <Check className="mt-0.5 size-4 text-primary" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem className="items-start gap-2 py-2" onClick={() => setRole('viewer')}>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">Наблюдатель</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Может только просматривать проект и обсуждение.
+                  </span>
+                </span>
+                {role === 'viewer' && <Check className="mt-0.5 size-4 text-primary" />}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             type="button"
             size="sm"
@@ -133,34 +176,32 @@ function ShareTab({ project, members, canInvite }: Omit<Props, 'isOwner'>): Reac
         })}
       </ul>
 
-      {/* General access — заглушка (серым). */}
+      {/* Проекты принадлежат пространству: доступ наследуется от его участников. */}
       <div className="mt-3 border-t pt-3">
         <p className="mb-1.5 text-xs font-medium text-muted-foreground">Общий доступ</p>
-        <div className="flex cursor-not-allowed items-center gap-2.5 text-muted-foreground/60" aria-disabled>
-          <span className="grid size-8 place-items-center rounded-full bg-muted/60 text-base">🌐</span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm">Все участники пространства</p>
-          </div>
-          <span className="flex items-center gap-0.5 text-xs">
-            Нет доступа <ChevronDown className="size-3.5" />
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-8 place-items-center rounded-full bg-muted text-muted-foreground">
+            <Users className="size-4" />
           </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm">
+              Все участники пространства{workspace ? ` «${workspace.name}»` : ''}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Доступ наследуется · {workspace?.memberCount ?? members.length} участн.
+            </p>
+          </div>
+          {workspace && (
+            <Button asChild variant="ghost" size="sm" className="h-9 px-2">
+              <Link to={`/workspaces/${workspace.id}/settings`}>Управлять</Link>
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Page-level access — заглушка (серым). */}
-      <button
-        type="button"
-        disabled
-        className="mt-3 flex w-full cursor-not-allowed items-center gap-2.5 rounded-md border border-dashed border-black/[0.1] px-2.5 py-2 text-left text-muted-foreground/60 dark:border-white/10"
-        aria-disabled
-      >
-        <Plus className="size-4" />
-        <span className="text-sm">Добавить правило доступа</span>
-      </button>
-
       <div className="mt-3 flex items-center justify-between border-t pt-2.5">
-        <span className="cursor-not-allowed text-xs text-muted-foreground/60">О совместном доступе</span>
-        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={copyLink}>
+        <span className="text-xs text-muted-foreground">Доступ управляется через пространство</span>
+        <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5" onClick={copyLink}>
           <Link2 className="size-3.5" />
           Копировать ссылку
         </Button>
@@ -178,21 +219,36 @@ const TAB_LABEL: Record<ShareTabId, string> = {
   site: 'Сайт проекта',
 };
 
-export function ProjectSharePopover({ project, members, canInvite, isOwner }: Props): React.ReactElement {
+export function ProjectSharePopover({ project, members, canInvite, isOwner, compact = false }: Props): React.ReactElement {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<ShareTabId>('share');
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) {
+          trackProjectAction({
+            projectId: project.id,
+            action: 'share_project',
+            result: 'success',
+          });
+        }
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+          className={cn(
+            'gap-1.5 text-muted-foreground hover:text-foreground',
+            compact ? 'size-10 px-0 sm:size-9' : 'h-8 px-2',
+          )}
           aria-label="Поделиться"
         >
           <Share2 className="size-4" />
-          <span className="text-sm">Поделиться</span>
+          {!compact && <span className="text-sm">Поделиться</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -203,12 +259,15 @@ export function ProjectSharePopover({ project, members, canInvite, isOwner }: Pr
         className="w-[420px] max-w-[calc(100vw-1rem)] p-0"
       >
         {/* Табы: Доступ · Публичная доска (канбан) · Сайт проекта (результат). */}
-        <div className="flex items-center gap-4 border-b px-4 pt-2.5">
+        <div className="flex items-center gap-4 border-b px-4 pt-2.5" role="tablist" aria-label="Поделиться проектом">
           {(['share', 'board', 'site'] as const).map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => setTab(t)}
+              role="tab"
+              aria-selected={tab === t}
+              tabIndex={tab === t ? 0 : -1}
               className={cn(
                 'relative whitespace-nowrap pb-2 text-sm transition-colors',
                 tab === t ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',

@@ -1,4 +1,7 @@
-import type { Project } from '@/domain/project/Project';
+import {
+  DEFAULT_PUBLIC_APPEARANCE,
+  type Project,
+} from '@/domain/project/Project';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { ProjectNameAlreadyExistsError } from '@/domain/project/errors';
 import type {
@@ -60,6 +63,7 @@ export class MockProjectRepository implements ProjectRepository {
       publicSlug: null,
       isPublic: false,
       publicIndexing: false,
+      publicAppearance: DEFAULT_PUBLIC_APPEARANCE,
       appRepoFullName: null,
       createdAt: new Date(),
     };
@@ -149,6 +153,7 @@ export class MockProjectRepository implements ProjectRepository {
       publicSlug: null,
       isPublic: false,
       publicIndexing: false,
+      publicAppearance: DEFAULT_PUBLIC_APPEARANCE,
       appRepoFullName: null,
       createdAt: new Date(),
     };
@@ -206,6 +211,9 @@ export class MockProjectRepository implements ProjectRepository {
   }
   setPublicIndexing(): Promise<never> {
     return Promise.reject(new Error('Mock.setPublicIndexing: not implemented'));
+  }
+  setPublicAppearance(): Promise<never> {
+    return Promise.reject(new Error('Mock.setPublicAppearance: not implemented'));
   }
   ensureAppRepo(): Promise<never> {
     return Promise.reject(new Error('Mock.ensureAppRepo: not implemented'));

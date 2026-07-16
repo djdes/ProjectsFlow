@@ -21,7 +21,7 @@ export function ResizeHandleHint({
   shortcut?: string;
 }): React.ReactElement {
   return (
-    <TooltipProvider delayDuration={350}>
+    <TooltipProvider delayDuration={550} skipDelayDuration={120}>
       <Tooltip>
         <TooltipTrigger asChild>{children}</TooltipTrigger>
         <TooltipContent

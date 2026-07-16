@@ -202,7 +202,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {
           </button>
 
           <div className="max-h-56 overflow-y-auto p-1">
-            <TooltipProvider delayDuration={200}>
+            <TooltipProvider delayDuration={550} skipDelayDuration={120}>
               {(workspaces ?? []).map((ws) => (
                 <Tooltip key={ws.id}>
                   {/* Триггер — вся строка: тултип встаёт у ПРАВОГО края всего окна. */}

@@ -405,6 +405,16 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                           Редакторы страницы видят, когда вы её открывали.{' '}
                           <button
                             type="button"
+                            onClick={() =>
+                              window.dispatchEvent(
+                                new CustomEvent('pf:open-help', {
+                                  detail: {
+                                    tab: 'assistant',
+                                    prefill: 'Как работает история просмотров проекта?',
+                                  },
+                                }),
+                              )
+                            }
                             className="underline underline-offset-2 hover:text-foreground"
                           >
                             Подробнее
@@ -527,6 +537,13 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                   </DropdownMenu>
                   <button
                     type="button"
+                    onClick={() =>
+                      window.dispatchEvent(
+                        new CustomEvent('pf:open-help', {
+                          detail: { tab: 'assistant' },
+                        }),
+                      )
+                    }
                     className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
                   >
                     <HelpCircle className="size-3.5" />

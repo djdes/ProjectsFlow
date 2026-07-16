@@ -276,7 +276,7 @@ export function ActivityItem({
     navigate(`/projects/${item.projectId}`);
   };
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider delayDuration={550} skipDelayDuration={120}>
       <li className="group relative flex gap-3.5 px-5 py-3.5 transition-colors before:absolute before:bottom-0 before:left-[33px] before:top-0 before:w-px before:bg-border/70 first:before:top-7 last:before:bottom-7 hover:bg-muted/30">
         {/* Аватар автора — hover: карточка с именем и текущим местным временем (как в Notion). */}
         <Tooltip>

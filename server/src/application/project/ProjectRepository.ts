@@ -1,4 +1,4 @@
-import type { Project } from '../../domain/project/Project.js';
+import type { Project, PublicAppearance } from '../../domain/project/Project.js';
 import type { KanbanBoardSettings } from '../../domain/kanban/KanbanSettings.js';
 
 export type CreateProjectInput = {
@@ -30,6 +30,7 @@ export type UpdateProjectInput = {
   readonly coverPosition?: number;
   // GitHub-репо приложения проекта (db/097). Ставится EnsureProjectAppRepo.
   readonly appRepoFullName?: string | null;
+  readonly publicAppearance?: PublicAppearance;
 };
 
 // Multi-tenancy: проверка доступа НЕ внутри ProjectRepository — она в use-case'ах через

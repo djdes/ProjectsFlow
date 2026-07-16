@@ -717,6 +717,7 @@ export function ViewTaskDrawer({
   projectName,
   isShared,
   tasksApi,
+  canEdit = true,
 }: {
   state: TaskDrawerState | null;
   onClose: () => void;
@@ -724,6 +725,7 @@ export function ViewTaskDrawer({
   projectName?: string;
   isShared: boolean;
   tasksApi: UseTasks;
+  canEdit?: boolean;
 }): React.ReactElement {
   return (
     <TaskDrawer
@@ -740,13 +742,18 @@ export function ViewTaskDrawer({
         });
       }}
       onCommitsChange={() => void tasksApi.refetch()}
+      canEdit={canEdit}
       projectName={projectName}
       isInbox={false}
       isShared={isShared}
       aiProjectId={projectId}
-      onMove={async (taskId, targetStatus) => {
-        await tasksApi.move(taskId, { targetStatus, beforeTaskId: null, afterTaskId: null });
-      }}
+      onMove={
+        canEdit
+          ? async (taskId, targetStatus) => {
+              await tasksApi.move(taskId, { targetStatus, beforeTaskId: null, afterTaskId: null });
+            }
+          : undefined
+      }
     />
   );
 }

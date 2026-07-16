@@ -59,6 +59,7 @@ type Props = {
   // Индикатор дропа (Notion): синяя полоска В ЗАЗОРЕ над/под карточкой — АБСОЛЮТНАЯ,
   // не занимает место в потоке (соседи НЕ раздвигаются). 'before'/'after'/null.
   dropLine?: 'before' | 'after' | null;
+  readOnly?: boolean;
 };
 
 // Кастомный transition для reflow соседей при drag. Out-quart — плавнее дефолтного
@@ -85,13 +86,14 @@ export function KanbanCard({
   selected = false,
   onSelectToggle,
   dropLine = null,
+  readOnly = false,
 }: Props): React.ReactElement {
   // В режиме выделения карточка не таскается и не открывает дравер — клик тогает выбор.
   const selecting = selectionMode && !preview;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: 'task', task },
-    disabled: preview || selecting,
+    disabled: preview || selecting || readOnly,
     transition: DND_TRANSITION,
   });
 
@@ -148,9 +150,10 @@ export function KanbanCard({
     <Wrapper layoutId={task.id}>
       <div
         ref={setNodeRef}
+        data-pf-task-id={task.id}
         style={style}
-        {...(selecting ? {} : attributes)}
-        {...(selecting ? {} : listeners)}
+        {...(selecting || readOnly ? {} : attributes)}
+        {...(selecting || readOnly ? {} : listeners)}
         onClick={(e) => {
           if (preview) return;
           // В режиме выделения клик тогает выбор (с учётом shift/ctrl/cmd), а не дравер.
@@ -253,7 +256,7 @@ export function KanbanCard({
         {/* Действия — в ПРАВОМ ВЕРХНЕМ углу карточки (на hover/тач). Вынесены из нижней
             мета-строки, чтобы кнопки и мета не конкурировали за место (дедлайн больше не
             сжимается). Сплошной bg-card маскирует текст под кнопками. */}
-        {!selecting && !preview && (
+        {!readOnly && !selecting && !preview && (
           <div
             // top-4 + -translate-y-1/2: центр плашки садится на центр ПЕРВОЙ строки
             // (~16px от края) НЕЗАВИСИМО от её высоты (24px desktop / 32px тач) — на

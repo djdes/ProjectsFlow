@@ -1,4 +1,4 @@
-import type { Project } from '@/domain/project/Project';
+import { DEFAULT_PUBLIC_APPEARANCE, type Project } from '@/domain/project/Project';
 import type { User } from '@/domain/user/User';
 
 export const seedProjects: Project[] = [
@@ -24,6 +24,7 @@ export const seedProjects: Project[] = [
     publicSlug: null,
     isPublic: false,
     publicIndexing: false,
+    publicAppearance: DEFAULT_PUBLIC_APPEARANCE,
     appRepoFullName: null,
     createdAt: new Date('2025-01-15'),
   },
@@ -49,6 +50,7 @@ export const seedProjects: Project[] = [
     publicSlug: null,
     isPublic: false,
     publicIndexing: false,
+    publicAppearance: DEFAULT_PUBLIC_APPEARANCE,
     appRepoFullName: null,
     createdAt: new Date('2025-03-20'),
   },
@@ -74,6 +76,7 @@ export const seedProjects: Project[] = [
     publicSlug: null,
     isPublic: false,
     publicIndexing: false,
+    publicAppearance: DEFAULT_PUBLIC_APPEARANCE,
     appRepoFullName: null,
     createdAt: new Date('2024-11-02'),
   },
@@ -99,6 +102,7 @@ export const seedProjects: Project[] = [
     publicSlug: null,
     isPublic: false,
     publicIndexing: false,
+    publicAppearance: DEFAULT_PUBLIC_APPEARANCE,
     appRepoFullName: null,
     createdAt: new Date('2024-05-10'),
   },

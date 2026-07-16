@@ -552,7 +552,7 @@ export function FormatMenu({
   };
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider delayDuration={550} skipDelayDuration={120}>
       {/* === Основное окно (всегда видно) === */}
       <div
         ref={mainRef}

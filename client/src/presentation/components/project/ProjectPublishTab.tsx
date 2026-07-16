@@ -14,11 +14,16 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/sonner';
 import type { Project } from '@/domain/project/Project';
+import type { PublicAppearance } from '@/domain/project/Project';
 import { useContainer } from '@/infrastructure/di/container';
 import { coverStyle } from '@/presentation/components/project/coverGallery';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { publicBoardUrl, publicBoardDisplayUrl } from '@/lib/publicBoardUrl';
 import { emitPublishChanged } from '@/presentation/lib/publishEvents';
+import { actionErrorMessage } from '@/lib/actionFeedback';
+import { trackProjectAction } from '@/lib/productAnalytics';
+
+const ACCENT_COLORS = ['#2383e2', '#7c3aed', '#059669', '#d97706', '#dc2626', '#db2777'] as const;
 
 type Props = {
   project: Project;
@@ -57,6 +62,9 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
   const [slug, setSlug] = useState<string | null>(project.publicSlug);
   const [indexing, setIndexing] = useState(project.publicIndexing);
   const [busy, setBusy] = useState(false);
+  const [appearance, setAppearance] = useState(project.publicAppearance);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [appearanceBusy, setAppearanceBusy] = useState(false);
 
   const emit = (next: { isPublic: boolean; slug: string | null; indexing: boolean }): void => {
     emitPublishChanged({
@@ -68,6 +76,7 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
   };
 
   const doPublish = async (): Promise<void> => {
+    const startedAt = performance.now();
     setBusy(true);
     try {
       const { slug: newSlug } = await projectRepository.publish(project.id);
@@ -75,8 +84,10 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
       setIsPublic(true);
       emit({ isPublic: true, slug: newSlug, indexing });
       toast.success('Проект опубликован');
+      trackProjectAction({ projectId: project.id, action: 'publish_project', result: 'success', startedAt });
     } catch {
       toast.error('Не удалось опубликовать');
+      trackProjectAction({ projectId: project.id, action: 'publish_project', result: 'failure', startedAt });
     } finally {
       setBusy(false);
     }
@@ -104,6 +115,22 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
     } catch {
       setIndexing(!v);
       toast.error('Не удалось изменить настройку');
+    }
+  };
+
+  const saveAppearance = async (next: PublicAppearance): Promise<void> => {
+    if (appearanceBusy || !isOwner) return;
+    const previous = appearance;
+    setAppearance(next);
+    setAppearanceBusy(true);
+    try {
+      await projectRepository.setPublicAppearance(project.id, next);
+      toast.success('Оформление сохранено');
+    } catch (error) {
+      setAppearance(previous);
+      toast.error(actionErrorMessage(error, 'Не удалось сохранить оформление'));
+    } finally {
+      setAppearanceBusy(false);
     }
   };
 
@@ -188,7 +215,80 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
       </div>
 
       <div className="mt-2 space-y-0.5">
-        <StubRow icon={<Paintbrush className="size-4" />} label="Настроить оформление сайта" />
+        <button
+          type="button"
+          onClick={() => setAppearanceOpen((open) => !open)}
+          aria-expanded={appearanceOpen}
+          className="flex min-h-10 w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/60"
+        >
+          <Paintbrush className="size-4 shrink-0 opacity-70" />
+          <span className="flex-1">Настроить оформление сайта</span>
+          {appearanceBusy && <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />}
+          <ChevronRight
+            className={`size-4 opacity-60 transition-transform motion-reduce:transition-none ${appearanceOpen ? 'rotate-90' : ''}`}
+          />
+        </button>
+
+        {appearanceOpen && (
+          <div className="mx-2 mb-2 space-y-2 rounded-lg border bg-muted/20 p-3">
+            <div>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Цвет акцента</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {ACCENT_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    disabled={!isOwner || appearanceBusy}
+                    onClick={() => void saveAppearance({ ...appearance, accentColor: color })}
+                    aria-label={`Цвет ${color}`}
+                    aria-pressed={appearance.accentColor.toLowerCase() === color}
+                    className="grid size-8 place-items-center rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 motion-reduce:transition-none"
+                    style={{ backgroundColor: color }}
+                  >
+                    {appearance.accentColor.toLowerCase() === color && (
+                      <span className="size-2 rounded-full bg-white shadow" />
+                    )}
+                  </button>
+                ))}
+                <label className="grid size-8 cursor-pointer place-items-center overflow-hidden rounded-full border bg-background">
+                  <span className="sr-only">Свой цвет</span>
+                  <input
+                    type="color"
+                    value={appearance.accentColor}
+                    disabled={!isOwner || appearanceBusy}
+                    onChange={(event) =>
+                      void saveAppearance({ ...appearance, accentColor: event.target.value })
+                    }
+                    className="size-12 cursor-pointer border-0 bg-transparent p-0"
+                  />
+                </label>
+              </div>
+            </div>
+            {(
+              [
+                ['showCover', 'Показывать обложку'],
+                ['showIcon', 'Показывать иконку'],
+                ['showDescription', 'Показывать описание'],
+                ['showTaskMeta', 'Показывать сроки и приоритеты'],
+              ] as const
+            ).map(([key, label]) => (
+              <label
+                key={key}
+                className="flex min-h-10 items-center justify-between gap-3 rounded-md px-1 text-sm"
+              >
+                <span>{label}</span>
+                <Switch
+                  checked={appearance[key]}
+                  disabled={!isOwner || appearanceBusy}
+                  onCheckedChange={(checked) =>
+                    void saveAppearance({ ...appearance, [key]: checked })
+                  }
+                  aria-label={label}
+                />
+              </label>
+            ))}
+          </div>
+        )}
 
         {/* Реальный тоггл индексации. */}
         <div className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-foreground">
