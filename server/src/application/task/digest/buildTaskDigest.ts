@@ -29,6 +29,12 @@ export type DigestGroup = {
   readonly priority: TaskPriority | null;
   readonly heading: string;
   readonly items: DigestItem[];
+  readonly telegramAssignee: DigestTelegramAssignee | null;
+};
+
+export type DigestTelegramAssignee = {
+  readonly telegramUserId: number;
+  readonly username: string | null;
 };
 
 export type DigestModel = {
@@ -40,7 +46,8 @@ export type DigestModel = {
 // Группировка: по приоритету (ручной экспорт) или по колонкам-статусам (сводка).
 export type DigestGrouping =
   | { readonly by: 'priority' }
-  | { readonly by: 'status'; readonly statuses: readonly TaskStatus[] };
+  | { readonly by: 'status'; readonly statuses: readonly TaskStatus[] }
+  | { readonly by: 'assignee' };
 
 export type BuildDigestOptions = {
   readonly projectName: string;
@@ -49,6 +56,9 @@ export type BuildDigestOptions = {
   readonly attachmentsByTask: ReadonlyMap<string, DigestAttachment[]>;
   // По умолчанию — по приоритету. Сводка использует { by: 'status', statuses }.
   readonly grouping?: DigestGrouping;
+  // Привязки Telegram нужны только рендерам групповой сводки; обычные email/markdown
+  // используют displayName и не получают технические идентификаторы.
+  readonly telegramAssignees?: ReadonlyMap<string, DigestTelegramAssignee>;
   // Подменяемое «сейчас» для детерминированных тестов RU-дат.
   readonly now?: Date;
 };
@@ -86,7 +96,31 @@ export function buildDigestModel(
         .filter((t) => toVisibleStatus(t.status) === st)
         .sort((a, b) => a.position - b.position);
       if (inGroup.length === 0) continue;
-      groups.push({ priority: null, heading: STATUS_DIGEST_LABEL[st], items: inGroup.map(mapItem) });
+      groups.push({
+        priority: null,
+        heading: STATUS_DIGEST_LABEL[st],
+        items: inGroup.map(mapItem),
+        telegramAssignee: null,
+      });
+    }
+  } else if (grouping.by === 'assignee') {
+    const byAssignee = new Map<string, TaskWithCounts[]>();
+    for (const t of tasks) {
+      const bucket = byAssignee.get(t.assignee.userId) ?? [];
+      bucket.push(t);
+      byAssignee.set(t.assignee.userId, bucket);
+    }
+    const entries = [...byAssignee.entries()].sort(([, a], [, b]) =>
+      a[0]!.assignee.displayName.localeCompare(b[0]!.assignee.displayName, 'ru'),
+    );
+    for (const [assigneeUserId, inGroup] of entries) {
+      inGroup.sort((a, b) => a.position - b.position);
+      groups.push({
+        priority: null,
+        heading: inGroup[0]!.assignee.displayName,
+        items: inGroup.map(mapItem),
+        telegramAssignee: opts.telegramAssignees?.get(assigneeUserId) ?? null,
+      });
     }
   } else {
     for (const pr of PRIORITY_ORDER) {
@@ -97,7 +131,12 @@ export function buildDigestModel(
           ? (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
           : (a, b) => a.position - b.position,
       );
-      groups.push({ priority: pr, heading: priorityHeading(pr), items: inGroup.map(mapItem) });
+      groups.push({
+        priority: pr,
+        heading: priorityHeading(pr),
+        items: inGroup.map(mapItem),
+        telegramAssignee: null,
+      });
     }
   }
   return { projectName: opts.projectName, count: tasks.length, groups };
@@ -252,36 +291,43 @@ export function renderDigestTelegram(m: DigestModel, opts: { maxLen?: number } =
   const maxLen = opts.maxLen ?? 3800;
   const header = `<b>Задачи — ${m.count} · ${escapeHtml(`Проект «${m.projectName}»`)}</b>`;
   const cont = '<b>…(продолжение)</b>';
+  const quoteOpen = '\n<blockquote expandable>';
+  const quoteClose = '</blockquote>';
   const chunks: string[] = [];
-  let cur = header;
-  let groupInChunk: string | null = null; // заголовок группы, уже добавленный в текущий чанк
+  let cur = header + quoteOpen;
+  let groupInChunk: string | null = null; // уникальный ключ группы, уже добавленной в чанк
 
   for (const g of m.groups) {
-    const heading = `<b>${escapeHtml(g.heading)}</b>`;
+    const heading = `<b>${telegramGroupHeading(g)}</b>`;
+    const groupKey = `${g.heading}\u0000${g.telegramAssignee?.telegramUserId ?? ''}`;
     for (const it of g.items) {
-      const block = digestItemBlockTg(it, maxLen - 120); // запас под cont+heading
-      const needHeading = groupInChunk !== g.heading;
+      // Внутри expandable blockquote второй blockquote запрещён Bot API. Цитаты из тела
+      // сохраняем как курсив, чтобы весь блок оставался валидным и раскрывался целиком.
+      const block = digestItemBlockTg(it, maxLen - 180)
+        .replace(/<blockquote>/g, '<i>')
+        .replace(/<\/blockquote>/g, '</i>');
+      const needHeading = groupInChunk !== groupKey;
       const addLen = (needHeading ? heading.length + 2 : 0) + block.length + 2;
       // Перенос на новое сообщение только если в текущем уже есть задачи (groupInChunk != null).
-      if (groupInChunk !== null && cur.length + addLen > maxLen) {
-        chunks.push(cur);
-        cur = cont;
+      if (groupInChunk !== null && cur.length + addLen + quoteClose.length > maxLen) {
+        chunks.push(cur + quoteClose);
+        cur = cont + quoteOpen;
         groupInChunk = null;
       }
-      if (groupInChunk !== g.heading) {
+      if (groupInChunk !== groupKey) {
         cur += '\n\n' + heading;
-        groupInChunk = g.heading;
+        groupInChunk = groupKey;
       }
       cur += '\n\n' + block;
     }
   }
-  chunks.push(cur);
+  chunks.push(cur + quoteClose);
   return chunks;
 }
 
-// Богатый рендер для sendRichMessage (Bot API 10.1): заголовки разного размера + таблицы
-// задач по группам (рамки/чередование). Оставляем компактные три колонки как в исходном
-// мобильном виде; действие живёт под названием задачи и не раздувает таблицу четвёртой колонкой.
+// Богатый рендер для sendRichMessage (Bot API 10.2): заголовок + закрытый по умолчанию
+// <details>. Внутри вертикальные списки вместо широкой таблицы: на телефоне не появляется
+// боковой скролл, а название, ответственный, срок и действие остаются читаемыми.
 // ВЫДЕЛЯЕМЫЙ текст, не картинка — тот самый Hermes-вид.
 // Возвращает ОДНУ HTML-строку (Telegram сам парсит её в блоки). Для очень длинных сводок
 // caller делает фоллбэк на renderDigestTelegram, если sendRichMessage вернёт ошибку.
@@ -289,21 +335,37 @@ export function renderDigestRich(m: DigestModel): string {
   const h: string[] = [
     `<h2>🗒 Ежедневная сводка · «${escapeHtml(m.projectName)}»</h2>`,
     `<p>Открытых задач: <b>${m.count}</b></p>`,
+    `<details><summary>Показать задачи (${m.count})</summary>`,
   ];
   for (const g of m.groups) {
-    h.push(`<h3>${escapeHtml(g.heading)}</h3>`);
-    h.push('<table bordered striped>');
-    h.push('<tr><th>Задача</th><th>Кто</th><th>Дедлайн</th></tr>');
+    h.push(`<h3>${telegramGroupHeading(g)}</h3>`);
+    h.push('<ul>');
     for (const it of g.items) {
       const who = it.assignee ? escapeHtml(it.assignee) : '—';
-      const dl = it.deadline ? escapeHtml(it.deadline) : '—';
+      const dl = it.deadline ? escapeHtml(it.deadline) : 'без дедлайна';
       h.push(
-        `<tr><td><a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>` +
-          `<br><a href="${escapeHtml(it.doneLink)}">✓ Завершить</a></td>` +
-          `<td>${who}</td><td>${dl}</td></tr>`,
+        `<li><a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>` +
+          `<br><i>👤 ${who} · ⏰ ${dl}</i>` +
+          `<br><a href="${escapeHtml(it.doneLink)}">✓ Завершить</a></li>`,
       );
     }
-    h.push('</table>');
+    h.push('</ul>');
   }
+  h.push('</details>');
   return h.join('');
+}
+
+function telegramGroupHeading(g: DigestGroup): string {
+  const link = g.telegramAssignee;
+  if (!link) return escapeHtml(g.heading);
+  const username = link.username?.replace(/^@/, '').trim();
+  if (username && /^[A-Za-z0-9_]{5,32}$/.test(username)) {
+    // Оставляем @username обычным текстом: Telegram сам создаёт entity mention, подсвечивает
+    // пользователя и присылает ему упоминание в группе.
+    return `@${escapeHtml(username)} · ${escapeHtml(g.heading)}`;
+  }
+  if (Number.isSafeInteger(link.telegramUserId) && link.telegramUserId > 0) {
+    return `<a href="tg://user?id=${link.telegramUserId}">${escapeHtml(g.heading)}</a>`;
+  }
+  return escapeHtml(g.heading);
 }

@@ -30,6 +30,8 @@ const saveSchema = z.object({
     recipientUserIds: z.array(z.string().uuid()).max(200),
     channels: z.array(z.enum(['email', 'telegram', 'notification'])).max(3),
     tgTargets: z.array(z.enum(['personal', 'group'])).max(2),
+    // Старые клиенты продолжают получать прежнюю группировку по колонкам.
+    tgGrouping: z.enum(['status', 'assignee']).optional().default('status'),
     statuses: z.array(taskStatusSchema).max(6),
     // Старые клиенты поле не шлют — дефолт false (обратная совместимость).
     weekdaysOnly: z.boolean().optional().default(false),

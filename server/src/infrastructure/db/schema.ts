@@ -1310,10 +1310,15 @@ export const projectDigestSettings = mysqlTable('project_digest_settings', {
   dailyRecipients: json('daily_recipients').$type<string[] | null>(),
   dailyChannels: json('daily_channels').$type<string[] | null>(),
   dailyTgTargets: json('daily_tg_targets').$type<string[] | null>(),
+  dailyTgGrouping: varchar('daily_tg_grouping', { length: 16 }).notNull().default('status'),
   dailyStatuses: json('daily_statuses').$type<string[] | null>(),
   // true — слать сводку только по будням (Пн–Пт МSK). См. db/095.
   dailyWeekdaysOnly: boolean('daily_weekdays_only').notNull().default(false),
   dailyLastSentOn: date('daily_last_sent_on', { mode: 'string' }),
+  // Массив {chatId,messageIds[]} последнего ручного теста; авто-сводки не записываются.
+  dailyTestDeliveries: json('daily_test_deliveries').$type<
+    Array<{ chatId: number; messageIds: number[] }> | null
+  >(),
   updatedAt: updatedAtCol(),
 });
 

@@ -340,3 +340,20 @@ test('explicit rich 400 rejection remains safe for a single fallback message', a
     },
   );
 });
+
+test('deleteMessages sorts, deduplicates and deletes previous test messages in one request', async () => {
+  await withTelegramStub(
+    () => ({ status: 200, body: { ok: true, result: true } }),
+    async (baseUrl, requests) => {
+      const client = new HttpTelegramClient('secret', baseUrl);
+      await client.deleteMessages({ chatId: -1007, messageIds: [9, 4, 9, -1] });
+
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]!.path, '/botsecret/deleteMessages');
+      assert.deepEqual(JSON.parse(requests[0]!.body), {
+        chat_id: -1007,
+        message_ids: [4, 9],
+      });
+    },
+  );
+});

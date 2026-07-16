@@ -12,6 +12,13 @@ export type DigestGroupHistory = {
   readonly title: string | null;
 };
 
+// Сообщения последнего ручного теста. Нужны только для уборки перед следующим тестом;
+// автоматические ежедневные сводки сюда не попадают и никогда не удаляются.
+export type DigestTestDelivery = {
+  readonly chatId: number;
+  readonly messageIds: number[];
+};
+
 export interface DigestSettingsRepository {
   // Всегда возвращает настройки (дефолты, если строки нет).
   getByProject(projectId: string): Promise<DigestSettings>;
@@ -21,6 +28,11 @@ export interface DigestSettingsRepository {
   listDailyEnabled(): Promise<DigestSettings[]>;
   // Отметить, что сводка отправлена в указанную МSK-дату ('YYYY-MM-DD').
   markDailySent(projectId: string, dateMsk: string): Promise<void>;
+  getLastTestDeliveries(projectId: string): Promise<DigestTestDelivery[]>;
+  replaceLastTestDeliveries(
+    projectId: string,
+    deliveries: readonly DigestTestDelivery[],
+  ): Promise<void>;
   // Distinct Telegram-группы (chat_id + последнее известное название) — подсказки
   // «ранее введённые ID групп». Объединение: (A) все проекты, где userId — участник
   // (любое пространство), + (B) все проекты ПРОСТРАНСТВА проекта projectId, из которого

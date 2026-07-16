@@ -6,6 +6,7 @@ import { fetch as undiciFetch, FormData, ProxyAgent, type Dispatcher } from 'und
 import {
   TELEGRAM_ALLOWED_UPDATES,
   type AnswerInlineQueryInput,
+  type DeleteMessagesInput,
   type EditMessageTextInput,
   type SendAttachmentInput,
   type SendDocumentGroupInput,
@@ -186,6 +187,23 @@ export class HttpTelegramClient implements TelegramClient {
       // replace with a fallback message.
       deliveryUnknown: res.ok || res.status >= 500,
     };
+  }
+
+  async deleteMessages(input: DeleteMessagesInput): Promise<void> {
+    const ids = [...new Set(input.messageIds)]
+      .filter((id) => Number.isInteger(id) && id > 0)
+      .sort((a, b) => a - b);
+    for (let offset = 0; offset < ids.length; offset += 100) {
+      const chunk = ids.slice(offset, offset + 100);
+      if (chunk.length === 0) continue;
+      // Telegram сам пропускает уже удалённые/несуществующие сообщения. Ошибка удаления
+      // (например, старше 48 часов) не должна блокировать новый тест.
+      await this.tgFetch('/deleteMessages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: input.chatId, message_ids: chunk }),
+      }).catch(() => undefined);
+    }
   }
 
   // Редактирование текста+кнопок ранее отправленного сообщения. Best-effort: ошибки

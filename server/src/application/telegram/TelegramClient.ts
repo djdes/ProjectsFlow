@@ -41,6 +41,12 @@ export type SendRichMessageInput = {
   readonly replyMarkup?: unknown;
 };
 
+export type DeleteMessagesInput = {
+  readonly chatId: number;
+  // Bot API принимает от 1 до 100 идентификаторов за запрос.
+  readonly messageIds: readonly number[];
+};
+
 export type SendRichMessageMediaInput = {
   readonly id: string;
   readonly kind: 'photo' | 'video' | 'audio' | 'animation' | 'voice_note';
@@ -173,6 +179,8 @@ export interface TelegramClient {
   // Native rich HTML with optional in-flow media. Callers fall back to regular messages when
   // a test client, relay, or Telegram deployment doesn't support the method yet.
   sendRichMessage?(input: SendRichMessageInput): Promise<SendMessageResult>;
+  // Удаление предыдущих ручных тестов сводки. Опционально для старых тестовых фейков.
+  deleteMessages?(input: DeleteMessagesInput): Promise<void>;
   // Редактирование ранее отправленного сообщения (текст + inline-кнопки). Best-effort —
   // используется конструктором чтобы превратить карточку в «✅ Создано» и убрать кнопки.
   editMessageText(input: EditMessageTextInput): Promise<void>;

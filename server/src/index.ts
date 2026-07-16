@@ -1354,6 +1354,7 @@ const sendDailyDigest = new SendDailyDigest({
   notifications: notificationRepo,
   telegram: sendAgentTelegramNotification,
   telegramClient,
+  users: userRepo,
   settings: digestSettingsRepo,
   appUrl: appBaseUrl,
   idGen: idGenerator,

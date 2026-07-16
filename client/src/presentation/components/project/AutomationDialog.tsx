@@ -44,6 +44,7 @@ import type {
 import type {
   DigestChannelKind,
   DigestGroupHistory,
+  DigestTgGrouping,
   DigestTgTarget,
   SaveDigestSettingsInput,
 } from '@/application/digest/DigestSettingsRepository';
@@ -125,6 +126,7 @@ type DigestDraft = {
   recipientUserIds: string[];
   channels: DigestChannelKind[];
   tgTargets: DigestTgTarget[];
+  tgGrouping: DigestTgGrouping;
   statuses: TaskStatus[];
   weekdaysOnly: boolean;
 };
@@ -160,6 +162,7 @@ function digestToPayload(d: DigestDraft): SaveDigestSettingsInput {
       recipientUserIds: d.recipientUserIds,
       channels: d.channels,
       tgTargets: d.tgTargets,
+      tgGrouping: d.tgGrouping,
       statuses: d.statuses,
       weekdaysOnly: d.weekdaysOnly,
     },
@@ -370,6 +373,7 @@ export function AutomationDialog({
           recipientUserIds: digestSettings.daily.recipientUserIds,
           channels: digestSettings.daily.channels,
           tgTargets: digestSettings.daily.tgTargets,
+          tgGrouping: digestSettings.daily.tgGrouping,
           statuses: digestSettings.daily.statuses,
           weekdaysOnly: digestSettings.daily.weekdaysOnly,
         });
@@ -1166,6 +1170,38 @@ export function AutomationDialog({
                       </div>
                     )}
                   </div>
+
+                  {digest.channels.includes('telegram') && digest.tgTargets.includes('group') && (
+                    <div className="space-y-2">
+                      <FieldGroupLabel>Группировка в Telegram-группе</FieldGroupLabel>
+                      <RadioGroup
+                        value={digest.tgGrouping}
+                        onValueChange={(value) =>
+                          updateDigest({ tgGrouping: value as DigestTgGrouping })
+                        }
+                        className="grid gap-2 sm:grid-cols-2"
+                      >
+                        <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2.5 text-sm">
+                          <RadioGroupItem value="assignee" className="mt-0.5" />
+                          <span>
+                            <span className="block font-medium">По ответственным</span>
+                            <span className="block text-xs leading-snug text-muted-foreground">
+                              Один блок на человека с @упоминанием Telegram
+                            </span>
+                          </span>
+                        </label>
+                        <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2.5 text-sm">
+                          <RadioGroupItem value="status" className="mt-0.5" />
+                          <span>
+                            <span className="block font-medium">По колонкам</span>
+                            <span className="block text-xs leading-snug text-muted-foreground">
+                              Черновики, вручную, воркер и другие статусы
+                            </span>
+                          </span>
+                        </label>
+                      </RadioGroup>
+                    </div>
+                  )}
 
                   <div className="space-y-1.5">
                     <FieldGroupLabel>Какие колонки</FieldGroupLabel>

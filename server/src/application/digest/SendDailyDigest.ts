@@ -7,7 +7,11 @@ import type { EmailSender } from '../notifications/EmailSender.js';
 import type { NotificationRepository } from '../notifications/NotificationRepository.js';
 import type { SendAgentTelegramNotification } from '../telegram/SendAgentTelegramNotification.js';
 import type { TelegramClient } from '../telegram/TelegramClient.js';
-import type { DigestSettingsRepository } from './DigestSettingsRepository.js';
+import type { UserRepository } from '../user/UserRepository.js';
+import type {
+  DigestSettingsRepository,
+  DigestTestDelivery,
+} from './DigestSettingsRepository.js';
 import type { CreateEmailActionToken } from '../email-action/CreateEmailActionToken.js';
 import { markdownToTelegramHtml } from '../telegram/telegramMarkdown.js';
 import {
@@ -41,6 +45,7 @@ type Deps = {
   readonly notifications: NotificationRepository;
   readonly telegram: SendAgentTelegramNotification; // личка участникам
   readonly telegramClient: TelegramClient; // группа
+  readonly users: UserRepository;
   readonly settings: DigestSettingsRepository;
   readonly appUrl: string;
   readonly idGen: () => string;
@@ -63,6 +68,10 @@ export class SendDailyDigest {
     const cfg = settings.daily;
     if (!opts.force && !cfg.enabled) return { taskCount: 0 };
 
+    // «Отправить сейчас» — тест автоматизации. Перед новым тестом удаляем сообщения
+    // предыдущего теста во всех его чатах; плановые ежедневные сводки не затрагиваем.
+    if (opts.force) await this.cleanupPreviousTest(projectId);
+
     const project = await this.deps.projects.getById(projectId);
     if (!project) return { taskCount: 0 };
 
@@ -84,6 +93,26 @@ export class SendDailyDigest {
     }));
 
     const digestNow = new Date();
+    const members = await this.deps.members.listByProject(projectId);
+    const memberById = new Map(members.map((m) => [m.userId, m] as const));
+    const telegramAssignees = new Map<
+      string,
+      { telegramUserId: number; username: string | null }
+    >();
+    if (cfg.tgGrouping === 'assignee') {
+      const assigneeIds = [...new Set(selected.map((task) => task.assignee.userId))];
+      await Promise.all(
+        assigneeIds.map(async (userId) => {
+          const link = await this.deps.users.getTelegramLink(userId).catch(() => null);
+          if (link) {
+            telegramAssignees.set(userId, {
+              telegramUserId: link.telegramUserId,
+              username: link.telegramUsername,
+            });
+          }
+        }),
+      );
+    }
     const model = buildDigestModel(enriched, {
       projectName: project.name,
       appUrl: this.deps.appUrl,
@@ -92,19 +121,39 @@ export class SendDailyDigest {
       grouping: { by: 'status', statuses },
       now: digestNow,
     });
+    const telegramModel =
+      cfg.tgGrouping === 'assignee'
+        ? buildDigestModel(enriched, {
+            projectName: project.name,
+            appUrl: this.deps.appUrl,
+            isInbox: project.isInbox,
+            attachmentsByTask: new Map(),
+            grouping: { by: 'assignee' },
+            telegramAssignees,
+            now: digestNow,
+          })
+        : model;
 
     const subject = `Ежедневная сводка · ${project.name}`;
     const base = this.deps.appUrl.replace(/\/+$/, '');
     const text = renderDigestMarkdown(model);
     // Telegram: массив сообщений (длинная сводка разбивается, все задачи целиком).
-    const tgChunks = renderDigestTelegram(model);
+    const tgChunks = renderDigestTelegram(telegramModel);
     // Резолвер картинок-вложений → подписанные URL (письмо: <img> в теле, TG: альбом на карточке).
     const nowMs = Date.now();
     const resolveImageUrl = makeAttachmentImageResolver(base, this.deps.signingSecret, IMG_URL_TTL_SECONDS, nowMs);
 
-    const members = await this.deps.members.listByProject(projectId);
-    const memberById = new Map(members.map((m) => [m.userId, m] as const));
     const recipients = cfg.recipientUserIds.filter((id) => memberById.has(id));
+    const testDeliveries = new Map<number, number[]>();
+    const rememberTestMessage = (result: unknown): void => {
+      if (!opts.force || !result || typeof result !== 'object') return;
+      const value = result as { status?: unknown; kind?: unknown; chatId?: unknown; messageId?: unknown };
+      const successful = value.status === 'ok' || value.kind === 'ok';
+      if (!successful || typeof value.chatId !== 'number' || typeof value.messageId !== 'number') return;
+      const ids = testDeliveries.get(value.chatId) ?? [];
+      ids.push(value.messageId);
+      testDeliveries.set(value.chatId, ids);
+    };
 
     for (const userId of recipients) {
       const member = memberById.get(userId)!;
@@ -144,7 +193,7 @@ export class SendDailyDigest {
         // Личный TG — заголовок + карточка на задачу. Действия живут компактными ссылками
         // прямо в тексте, без большой inline-клавиатуры под каждым сообщением.
         const base = this.deps.appUrl.replace(/\/$/, '');
-        await this.deps.telegram
+        const headerResult = await this.deps.telegram
           .execute({
             userId,
             text: `🗒 <b>Ежедневная сводка · ${escapeDigestHtml(project.name)}</b> — ${selected.length} задач`,
@@ -153,13 +202,14 @@ export class SendDailyDigest {
             skipDedupCheck: true,
           })
           .catch((e) => console.warn('[daily-digest] tg personal header failed', userId, e));
+        rememberTestMessage(headerResult);
         for (const t of selected.slice(0, TG_DIGEST_ACTION_LIMIT)) {
           // Картинки задачи — альбомом после карточки (подписанные URL); из текста срезаны.
           const taskUrl = `${base}/${project.isInbox ? 'inbox' : `projects/${projectId}`}?task=${t.id}`;
           const imgUrls = extractImageSrcs(t.description)
             .map((s) => signAttachmentUrl(base, s, this.deps.signingSecret, IMG_URL_TTL_SECONDS, nowMs))
             .filter((u): u is string => u !== null);
-          await this.deps.telegram
+          const itemResult = await this.deps.telegram
             .execute({
               userId,
               text:
@@ -178,10 +228,11 @@ export class SendDailyDigest {
               imageUrls: imgUrls,
             })
             .catch((e) => console.warn('[daily-digest] tg personal card failed', userId, e));
+          rememberTestMessage(itemResult);
         }
         if (selected.length > TG_DIGEST_ACTION_LIMIT) {
           const rest = selected.length - TG_DIGEST_ACTION_LIMIT;
-          await this.deps.telegram
+          const tailResult = await this.deps.telegram
             .execute({
               userId,
               text: `… ещё ${rest}. <a href="${base}/projects/${projectId}">Открыть в приложении</a>`,
@@ -190,12 +241,13 @@ export class SendDailyDigest {
               skipDedupCheck: true,
             })
             .catch((e) => console.warn('[daily-digest] tg personal tail failed', userId, e));
+          rememberTestMessage(tailResult);
         }
       }
     }
 
-    // Группа — на всю команду. Сначала пробуем БОГАТУЮ карточку (Bot API 10.1 sendRichMessage:
-    // заголовки + таблицы, выделяемый текст — Hermes-вид). Фоллбэк на текстовые чанки, если
+    // Группа — на всю команду. Сначала пробуем БОГАТУЮ карточку (Bot API 10.2 sendRichMessage:
+    // закрытый details + мобильные списки, выделяемый текст). Фоллбэк на текстовые чанки, если
     // метод недоступен (старый API) или вернул ошибку (напр. слишком длинно).
     if (
       cfg.channels.includes('telegram') &&
@@ -204,20 +256,28 @@ export class SendDailyDigest {
     ) {
       const groupChatId = settings.telegramGroupChatId;
       let richOk = false;
+      let fallbackAllowed = !this.deps.telegramClient.sendRichMessage;
       if (this.deps.telegramClient.sendRichMessage) {
         try {
           const r = await this.deps.telegramClient.sendRichMessage({
             chatId: groupChatId,
-            html: renderDigestRich(model),
+            html: renderDigestRich(telegramModel),
           });
           richOk = r.kind === 'ok';
+          fallbackAllowed = r.kind === 'error' && r.deliveryUnknown !== true;
+          if (r.kind === 'ok') {
+            rememberTestMessage({ ...r, chatId: groupChatId });
+          }
         } catch (e) {
           console.warn('[daily-digest] tg group rich failed', e);
+          // Сетевой сбой неоднозначен: запрос мог дойти до Telegram. Не посылаем второй
+          // вариант вслед, иначе в группе появляются дубли.
+          fallbackAllowed = false;
         }
       }
-      if (!richOk) {
+      if (!richOk && fallbackAllowed) {
         for (const chunk of tgChunks) {
-          await this.deps.telegramClient
+          const result = await this.deps.telegramClient
             .sendMessage({
               chatId: groupChatId,
               text: chunk,
@@ -225,11 +285,41 @@ export class SendDailyDigest {
               disableWebPagePreview: true,
             })
             .catch((e) => console.warn('[daily-digest] tg group failed', e));
+          if (result && typeof result === 'object' && result.kind === 'ok') {
+            rememberTestMessage({ ...result, chatId: groupChatId });
+          }
         }
       }
     }
 
+    if (opts.force) {
+      const deliveries: DigestTestDelivery[] = [...testDeliveries.entries()].map(
+        ([chatId, messageIds]) => ({ chatId, messageIds }),
+      );
+      await this.deps.settings
+        .replaceLastTestDeliveries(projectId, deliveries)
+        .catch((e) => console.warn('[daily-digest] remember test messages failed', e));
+    }
+
     return { taskCount: selected.length };
+  }
+
+  private async cleanupPreviousTest(projectId: string): Promise<void> {
+    const previous = await this.deps.settings.getLastTestDeliveries(projectId).catch(() => []);
+    const remove = this.deps.telegramClient.deleteMessages;
+    if (remove) {
+      for (const delivery of previous) {
+        await remove
+          .call(this.deps.telegramClient, {
+            chatId: delivery.chatId,
+            messageIds: delivery.messageIds,
+          })
+          .catch((e) => console.warn('[daily-digest] delete previous test failed', e));
+      }
+    }
+    await this.deps.settings
+      .replaceLastTestDeliveries(projectId, [])
+      .catch((e) => console.warn('[daily-digest] clear previous test refs failed', e));
   }
 }
 

@@ -2,6 +2,7 @@ import type { TaskStatus } from '@/domain/task/Task';
 
 export type DigestChannelKind = 'email' | 'telegram' | 'notification';
 export type DigestTgTarget = 'personal' | 'group';
+export type DigestTgGrouping = 'status' | 'assignee';
 
 export type DailyDigestConfig = {
   readonly enabled: boolean;
@@ -10,6 +11,7 @@ export type DailyDigestConfig = {
   readonly recipientUserIds: string[];
   readonly channels: DigestChannelKind[];
   readonly tgTargets: DigestTgTarget[];
+  readonly tgGrouping: DigestTgGrouping;
   readonly statuses: TaskStatus[];
   // true — слать только по будням (Пн–Пт МSK), в выходные не отправлять.
   readonly weekdaysOnly: boolean;

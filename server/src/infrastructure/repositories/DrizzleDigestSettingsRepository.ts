@@ -8,12 +8,14 @@ import {
 import type {
   DigestGroupHistory,
   DigestSettingsRepository,
+  DigestTestDelivery,
   SaveDigestSettingsInput,
 } from '../../application/digest/DigestSettingsRepository.js';
 import {
   defaultDigestSettings,
   type DigestChannelKind,
   type DigestSettings,
+  type DigestTgGrouping,
   type DigestTgTarget,
 } from '../../domain/digest/DigestSettings.js';
 import type { TaskStatus } from '../../domain/task/Task.js';
@@ -38,6 +40,10 @@ function rowToSettings(row: ProjectDigestSettingsRow): DigestSettings {
       recipientUserIds: parseJsonCol<string[]>(row.dailyRecipients, []),
       channels: parseJsonCol<DigestChannelKind[]>(row.dailyChannels, def.daily.channels),
       tgTargets: parseJsonCol<DigestTgTarget[]>(row.dailyTgTargets, def.daily.tgTargets),
+      tgGrouping:
+        row.dailyTgGrouping === 'assignee'
+          ? ('assignee' as DigestTgGrouping)
+          : def.daily.tgGrouping,
       statuses: parseJsonCol<TaskStatus[]>(row.dailyStatuses, def.daily.statuses),
       weekdaysOnly: row.dailyWeekdaysOnly,
     },
@@ -70,6 +76,7 @@ export class DrizzleDigestSettingsRepository implements DigestSettingsRepository
       dailyRecipients: input.daily.recipientUserIds,
       dailyChannels: input.daily.channels,
       dailyTgTargets: input.daily.tgTargets,
+      dailyTgGrouping: input.daily.tgGrouping,
       dailyStatuses: input.daily.statuses,
       dailyWeekdaysOnly: input.daily.weekdaysOnly,
     };
@@ -93,6 +100,40 @@ export class DrizzleDigestSettingsRepository implements DigestSettingsRepository
       .update(projectDigestSettings)
       .set({ dailyLastSentOn: dateMsk })
       .where(eq(projectDigestSettings.projectId, projectId));
+  }
+
+  async getLastTestDeliveries(projectId: string): Promise<DigestTestDelivery[]> {
+    const [row] = await this.db
+      .select({ deliveries: projectDigestSettings.dailyTestDeliveries })
+      .from(projectDigestSettings)
+      .where(eq(projectDigestSettings.projectId, projectId))
+      .limit(1);
+    const raw = parseJsonCol<unknown[]>(row?.deliveries, []);
+    const result: DigestTestDelivery[] = [];
+    for (const value of raw) {
+      if (!value || typeof value !== 'object') continue;
+      const candidate = value as { chatId?: unknown; messageIds?: unknown };
+      if (typeof candidate.chatId !== 'number' || !Array.isArray(candidate.messageIds)) continue;
+      const messageIds = candidate.messageIds.filter(
+        (id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0,
+      );
+      if (messageIds.length > 0) result.push({ chatId: candidate.chatId, messageIds });
+    }
+    return result;
+  }
+
+  async replaceLastTestDeliveries(
+    projectId: string,
+    deliveries: readonly DigestTestDelivery[],
+  ): Promise<void> {
+    const value = deliveries.map((delivery) => ({
+      chatId: delivery.chatId,
+      messageIds: [...new Set(delivery.messageIds)].sort((a, b) => a - b),
+    }));
+    await this.db
+      .insert(projectDigestSettings)
+      .values({ projectId, dailyTestDeliveries: value })
+      .onDuplicateKeyUpdate({ set: { dailyTestDeliveries: value } });
   }
 
   async listGroupsForUser(userId: string, projectId: string): Promise<DigestGroupHistory[]> {

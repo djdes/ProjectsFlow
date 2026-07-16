@@ -8,6 +8,10 @@ export const DIGEST_CHANNELS: readonly DigestChannelKind[] = ['email', 'telegram
 export type DigestTgTarget = 'personal' | 'group';
 export const DIGEST_TG_TARGETS: readonly DigestTgTarget[] = ['personal', 'group'];
 
+// Как собирать задачи внутри Telegram-сводки для общей группы проекта.
+export type DigestTgGrouping = 'status' | 'assignee';
+export const DIGEST_TG_GROUPINGS: readonly DigestTgGrouping[] = ['status', 'assignee'];
+
 export type DailyDigestConfig = {
   readonly enabled: boolean;
   readonly hour: number; // 0..23 (Europe/Moscow)
@@ -15,6 +19,7 @@ export type DailyDigestConfig = {
   readonly recipientUserIds: string[]; // участники проекта (включая владельца)
   readonly channels: DigestChannelKind[];
   readonly tgTargets: DigestTgTarget[];
+  readonly tgGrouping: DigestTgGrouping;
   readonly statuses: TaskStatus[]; // какие колонки включать
   // true — слать только по будням (Пн–Пт по Europe/Moscow), в выходные не тревожить.
   readonly weekdaysOnly: boolean;
@@ -43,6 +48,7 @@ export function defaultDigestSettings(projectId: string): DigestSettings {
       recipientUserIds: [],
       channels: ['notification'],
       tgTargets: ['personal'],
+      tgGrouping: 'status',
       statuses: ['backlog', 'manual', 'todo', 'done'],
       weekdaysOnly: false,
     },
