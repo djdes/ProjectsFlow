@@ -1,7 +1,7 @@
 import type { TelegramClient } from '../telegram/TelegramClient.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { WorkspaceRepository } from '../workspace/WorkspaceRepository.js';
-import { requireWorkspaceMember, requireWorkspaceOwner } from '../workspace/workspaceAccess.js';
+import { requireWorkspaceMember } from '../workspace/workspaceAccess.js';
 import type { DigestGroupHistory } from './DigestSettingsRepository.js';
 import type { SendWorkspaceAssigneeDigest } from './SendWorkspaceAssigneeDigest.js';
 import type {
@@ -66,7 +66,7 @@ export class ManageWorkspaceAssigneeDigest {
     actorUserId: string,
     input: SaveWorkspaceAssigneeDigestSettingsInput,
   ): Promise<WorkspaceAssigneeDigestSettings> {
-    await requireWorkspaceOwner(this.deps.workspaces, workspaceId, actorUserId);
+    await requireWorkspaceMember(this.deps.workspaces, workspaceId, actorUserId);
     const members = await this.deps.workspaces.listMembers(workspaceId);
     const memberIds = new Set(members.map((member) => member.userId));
     const recipientUserIds = [...new Set(input.recipientUserIds)].filter((id) =>
@@ -76,7 +76,7 @@ export class ManageWorkspaceAssigneeDigest {
   }
 
   async sendNow(workspaceId: string, actorUserId: string) {
-    await requireWorkspaceOwner(this.deps.workspaces, workspaceId, actorUserId);
+    await requireWorkspaceMember(this.deps.workspaces, workspaceId, actorUserId);
     return this.deps.send.execute(workspaceId, { force: true });
   }
 
@@ -93,7 +93,7 @@ export class ManageWorkspaceAssigneeDigest {
     actorUserId: string,
     chatId: number,
   ): Promise<{ title: string | null }> {
-    await requireWorkspaceOwner(this.deps.workspaces, workspaceId, actorUserId);
+    await requireWorkspaceMember(this.deps.workspaces, workspaceId, actorUserId);
     const chat = await this.deps.telegram.getChat?.(chatId).catch(() => null);
     return { title: chat?.title ?? null };
   }

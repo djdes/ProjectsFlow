@@ -34,7 +34,8 @@ const CREATOR_BADGE_CLASS = 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
 
 // Секция «Команда» на странице проекта. После унификации доступа команда — это участники
 // ПРОСТРАНСТВА проекта (read-only список). Управление ролями/удаление/инвайт-лист — на
-// странице настроек пространства (ссылка «Управлять командой» для owner'а).
+// странице настроек пространства. Общие настройки открыты каждому участнику, а опасные
+// действия внутри страницы по-прежнему показываются только owner'у.
 export function TeamSection({ project }: { project: Project }): React.ReactElement | null {
   const { workspaceRepository } = useContainer();
   const { user: currentUser } = useCurrentUser();
@@ -43,7 +44,6 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
   const [loading, setLoading] = useState(true);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
-  const isOwner = workspace?.role === 'owner';
   const canInvite = workspace?.role === 'owner' || workspace?.role === 'editor';
 
   // В inbox команды не бывает — секцию не показываем.
@@ -86,11 +86,11 @@ export function TeamSection({ project }: { project: Project }): React.ReactEleme
       title="Команда"
       actions={
         <div className="flex items-center gap-1.5">
-          {isOwner && workspaceId && (
+          {workspaceId && (
             <Button asChild size="sm" variant="ghost" className="text-muted-foreground">
               <Link to={`/workspaces/${workspaceId}/settings`}>
                 <Settings2 className="size-4" />
-                Управлять командой
+                Настройки пространства
               </Link>
             </Button>
           )}

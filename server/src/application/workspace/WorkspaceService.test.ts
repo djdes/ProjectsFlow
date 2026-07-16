@@ -6,7 +6,7 @@ import type { Workspace, WorkspaceKind } from '../../domain/workspace/Workspace.
 import type { WorkspaceMember, WorkspaceRole } from '../../domain/workspace/WorkspaceMember.js';
 import {
   WorkspaceNameEmptyError,
-  NotWorkspaceOwnerError,
+  WorkspaceNotFoundError,
   LastOwnerError,
   WorkspaceNotEmptyError,
   CannotDeleteLastWorkspaceError,
@@ -188,12 +188,30 @@ test('create: empty name rejected', async () => {
   await assert.rejects(() => service.create('u1', { name: '   ', icon: null }), WorkspaceNameEmptyError);
 });
 
-test('rename: non-owner rejected', async () => {
+test('rename: any workspace member can update shared name and icon', async () => {
   const { service } = makeFakes({
     workspaces: [{ id: 'w1', ownerUserId: 'u1' }],
-    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }, { workspaceId: 'w1', userId: 'u2', role: 'editor' }],
+    members: [
+      { workspaceId: 'w1', userId: 'u1', role: 'owner' },
+      { workspaceId: 'w1', userId: 'u2', role: 'editor' },
+      { workspaceId: 'w1', userId: 'u3', role: 'viewer' },
+    ],
   });
-  await assert.rejects(() => service.rename('w1', 'u2', { name: 'x' }), NotWorkspaceOwnerError);
+  const byEditor = await service.rename('w1', 'u2', { name: 'Общее' });
+  assert.equal(byEditor.name, 'Общее');
+  const byViewer = await service.rename('w1', 'u3', { icon: '🤝' });
+  assert.equal(byViewer.icon, '🤝');
+});
+
+test('rename: user outside workspace is rejected without revealing it', async () => {
+  const { service } = makeFakes({
+    workspaces: [{ id: 'w1', ownerUserId: 'u1' }],
+    members: [{ workspaceId: 'w1', userId: 'u1', role: 'owner' }],
+  });
+  await assert.rejects(
+    () => service.rename('w1', 'outsider', { name: 'Чужое' }),
+    WorkspaceNotFoundError,
+  );
 });
 
 test('removeMember: cannot remove the last owner', async () => {

@@ -77,6 +77,9 @@ export function WorkspaceSettingsPage(): React.ReactElement {
 
   const workspace = workspaces?.find((w) => w.id === workspaceId) ?? null;
   const isOwner = workspace?.role === 'owner';
+  // Общие настройки пространства принадлежат всей команде. Любой участник может
+  // менять название, иконку и рассылку; owner-only остаются роли и удаление.
+  const canEditSharedSettings = workspace !== null;
   // Дефолт-хаб: состав участников выводится автоматически (вы + все по общим проектам),
   // и его нельзя удалить. Поэтому ручное управление участниками и «опасная зона» скрыты.
   const isDefault = workspace?.kind === 'default';
@@ -117,9 +120,14 @@ export function WorkspaceSettingsPage(): React.ReactElement {
         <h1 className="text-xl font-semibold tracking-tight">{workspace.name}</h1>
       </div>
 
-      <RenameCard workspaceId={workspace.id} initialName={workspace.name} initialIcon={workspace.icon} disabled={!isOwner} />
+      <RenameCard
+        workspaceId={workspace.id}
+        initialName={workspace.name}
+        initialIcon={workspace.icon}
+        disabled={!canEditSharedSettings}
+      />
       <MembersCard workspaceId={workspace.id} canManage={isOwner && !isDefault} autoManaged={isDefault} />
-      <AssigneeDigestCard workspaceId={workspace.id} canManage={isOwner} />
+      <AssigneeDigestCard workspaceId={workspace.id} canManage={canEditSharedSettings} />
       {isOwner && !isDefault && <InvitesCard workspaceId={workspace.id} />}
       <ProjectsCard workspaceId={workspace.id} />
       {isOwner && !isDefault && (

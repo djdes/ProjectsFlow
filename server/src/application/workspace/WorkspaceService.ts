@@ -86,7 +86,10 @@ export class WorkspaceService {
     userId: string,
     patch: { name?: string; icon?: string | null },
   ): Promise<Workspace> {
-    await requireWorkspaceOwner(this.deps.repo, workspaceId, userId);
+    // Название и иконка принадлежат всему общему пространству: менять их может
+    // любой его участник, включая viewer. Управление ролями и удаление остаются
+    // отдельными owner-only действиями ниже.
+    await requireWorkspaceMember(this.deps.repo, workspaceId, userId);
     let name: string | undefined;
     if (patch.name !== undefined) {
       name = patch.name.trim();
