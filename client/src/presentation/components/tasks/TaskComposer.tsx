@@ -354,7 +354,7 @@ export function TaskComposer({
       className={cn(
         'group/composer w-full overflow-hidden border bg-card transition-colors focus-within:border-foreground/30',
         isInline
-          ? 'rounded-lg shadow-sm'
+          ? 'rounded-lg'
           : 'pointer-events-auto max-w-2xl rounded-2xl bg-card/95 shadow-lg backdrop-blur-md',
         dragActive ? 'border-primary bg-primary/5' : '',
       )}

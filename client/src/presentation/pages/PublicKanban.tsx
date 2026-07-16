@@ -36,7 +36,7 @@ function PublicCard({
     <button
       type="button"
       onClick={() => onOpen(task.id)}
-      className="w-full overflow-hidden rounded-lg border border-black/[0.06] bg-white text-left shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-shadow hover:border-[var(--pf-public-accent)] hover:shadow-[0_2px_6px_rgba(15,23,42,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pf-public-accent)] dark:border-white/[0.08] dark:bg-white/[0.04]"
+      className="w-full overflow-hidden rounded-lg border border-black/[0.06] bg-white text-left transition-colors hover:border-[var(--pf-public-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pf-public-accent)] dark:border-white/[0.08] dark:bg-white/[0.04]"
     >
       {task.cover && (
         <div className="h-16 w-full" style={coverStyle(task.cover, task.coverPosition)} aria-hidden />

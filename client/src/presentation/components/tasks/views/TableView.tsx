@@ -206,7 +206,7 @@ export function TableView({
   const headScrollRef = useRef<HTMLDivElement | null>(null);
   const [headerTop, setHeaderTop] = useState(0);
   useEffect(() => {
-    const els = ['pf-project-crumbs', 'pf-sticky-banners', 'pf-views-tabs-row']
+    const els = ['pf-project-crumbs', 'pf-sticky-banners']
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => el !== null);
     const measure = (): void => setHeaderTop(els.reduce((s, el) => s + el.offsetHeight, 0));
@@ -505,6 +505,17 @@ export function TableView({
   const createPropertyFromHeader = async (): Promise<void> => {
     if (!canEdit) return;
     if (creatingProperty) return;
+    // Сдвигаем содержимое таблицы влево (scroll вправо до упора) сразу по клику,
+    // ещё до ответа сервера. После появления новой колонки эффект ниже повторит
+    // доводку до нового максимума и откроет её меню.
+    bodyScrollRef.current?.scrollTo({
+      left: bodyScrollRef.current.scrollWidth,
+      behavior: 'smooth',
+    });
+    headScrollRef.current?.scrollTo({
+      left: headScrollRef.current.scrollWidth,
+      behavior: 'smooth',
+    });
     setCreatingProperty(true);
     try {
       const property = await customProps.createProperty('text', 'Новое свойство');
@@ -1271,7 +1282,7 @@ export function TableView({
             <div
               role="columnheader"
               className={cn(
-                'flex h-12 items-center justify-end border-b bg-muted/25 pr-4',
+                'group/gutter flex h-12 items-center justify-end bg-background pr-4',
                 tableState.freezeTitle && 'sticky left-0 z-30',
               )}
             >
@@ -1282,7 +1293,9 @@ export function TableView({
                 aria-label="Выбрать все"
                 className={cn(
                   'size-3.5 cursor-pointer accent-primary transition-opacity',
-                  allSelected || selected.size > 0 ? 'opacity-100' : 'opacity-0 group-hover/head:opacity-100',
+                  allSelected || selected.size > 0
+                    ? 'opacity-100'
+                    : 'opacity-0 group-hover/gutter:opacity-100',
                 )}
               />
             </div>

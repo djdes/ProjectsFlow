@@ -190,11 +190,10 @@ export function KanbanCard({
           // сам отличает скролл от переноса.
           // Notion-style компактная карточка: минимальный отступ (px-2 py-1.5), без
           // лишнего «воздуха». При hover — только маленькая корзина (оверлей ниже).
-          'group relative flex select-none items-start gap-1.5 rounded-lg border border-black/[0.06] bg-card px-2 py-1.5 shadow-sm outline-none dark:border-white/[0.08]',
+          'group relative flex select-none items-start gap-1.5 rounded-lg border border-black/[0.06] bg-card px-2 py-1.5 outline-none dark:border-white/[0.08]',
           // Базовый transition только для тех свойств, которые меняем CSS-ом —
           // transform трогать НЕ нужно, им рулит dnd-kit (см. inline style выше).
-          'transition-[box-shadow,border-color,opacity,background-color] duration-150 ease-out',
-          'hover:shadow-md',
+          'transition-[border-color,opacity,background-color] duration-150 ease-out',
           // Done-карточка: мягкая зелёная заливка (Notion-style спокойный маркер
           // готовности). На hover — МЯГКОЕ зелёное затемнение (не резкое); текст за
           // кнопками снизу скрывается зелёным градиентом-оверлеем (ниже), как у черновиков.

@@ -742,7 +742,7 @@ function TaskChip({
         {...attributes}
         onClick={onOpen}
         className={cn(
-          'flex cursor-pointer items-center gap-1 border bg-card px-1.5 py-0.5 text-xs shadow-sm transition-colors hover:bg-accent',
+          'flex cursor-pointer items-center gap-1 border bg-card px-1.5 py-0.5 text-xs transition-colors hover:bg-accent',
           // Сегменты полосы (Notion date range): скругление только на краях диапазона.
           seg === 'single' && 'rounded-md',
           seg === 'start' && '-mr-1 rounded-l-md rounded-r-none border-r-0',

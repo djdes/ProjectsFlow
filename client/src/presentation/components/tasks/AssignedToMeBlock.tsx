@@ -1737,7 +1737,7 @@ function AcceptedCard({
   return (
     <div
       className={cn(
-        'group flex cursor-pointer flex-col overflow-hidden rounded-lg border border-black/[0.06] bg-card shadow-sm transition-[box-shadow,border-color] duration-150 hover:shadow-md dark:border-white/[0.08]',
+        'group flex cursor-pointer flex-col overflow-hidden rounded-lg border border-black/[0.06] bg-card transition-colors duration-150 dark:border-white/[0.08]',
         isDone && 'border-success/20 bg-success/[0.06] hover:border-success/30',
       )}
       onClick={onOpen}

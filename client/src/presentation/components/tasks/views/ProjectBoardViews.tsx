@@ -699,20 +699,14 @@ export function ProjectBoardViews({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      {/* Строка вкладок + тулбар вью (Notion-style). На узком экране (как в Notion)
-          ряд вкладок сворачивается в одну кнопку «Активная вью ⌄» с дропдауном.
-          group/tabs — «+» новой вью появляется при наведении на строку; sticky —
-          строка (и панель выделения таблицы поверх неё) видна при скролле, прилипая
-          ПОД sticky-крошками и плашками страницы (динамический top, см. эффект). */}
+      {/* Строка вкладок + тулбар вью (Notion-style). На узком экране ряд вкладок
+          сворачивается в одну кнопку «Активная вью ⌄». Строка остаётся в обычном
+          потоке страницы и уезжает вверх вместе с контентом — закрепляются только
+          действительно полезные заголовки колонок/таблицы. */}
       <div
         id="pf-views-tabs-row"
-        style={{ top: stickyTop, marginRight: rightPanelWidth }}
-        className={cn(
-          'pf-sticky-surface group/tabs z-30 flex items-center gap-0.5 bg-background pb-1 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none',
-          // На канбане строку вкладок НЕ закрепляем — при скролле липнут только шапки
-          // колонок (запрос). В остальных видах — как раньше (нужна для панели выбора).
-          !isKanban && 'sticky',
-        )}
+        style={{ marginRight: rightPanelWidth }}
+        className="group/tabs relative z-30 flex items-center gap-0.5 bg-background pb-1 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none"
       >
         {/* Компактный переключатель вью (узкий экран). */}
         <div className="flex min-w-0 flex-1 items-center md:hidden">
@@ -2041,9 +2035,9 @@ function ViewTab({
     },
   };
   const tabClass = cn(
-    'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium transition-[background-color,color,box-shadow,transform] duration-150 motion-reduce:transition-none',
+    'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium transition-[background-color,color,transform] duration-150 motion-reduce:transition-none',
     active
-      ? 'scale-[1.01] bg-accent text-foreground shadow-sm'
+      ? 'scale-[1.01] bg-accent text-foreground'
       : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
   );
   const inner = (

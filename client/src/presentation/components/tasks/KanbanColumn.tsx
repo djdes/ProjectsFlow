@@ -679,7 +679,7 @@ function InlineNewCard({
   };
 
   return (
-    <div className="group/new rounded-xl border bg-card p-2 shadow-sm ring-1 ring-primary/20">
+    <div className="group/new rounded-xl border bg-card p-2 ring-1 ring-primary/20">
       {/* items-start: иконка стоит рядом с ПЕРВОЙ строкой (при многострочном названии остаётся
           сверху); при однострочном — визуально по центру. gap-1.5 — компактно. */}
       <div className="flex items-start gap-1.5">
