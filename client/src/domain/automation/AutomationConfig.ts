@@ -50,5 +50,7 @@ export type AutomationConfig = {
   readonly commitSyncThresholdHours: number;
   // Read-only: МSK-дата последнего прогона ('YYYY-MM-DD') или null.
   readonly commitSyncLastRunOn: string | null;
+  // Include this project in the workspace-level Telegram digest grouped by assignee.
+  readonly assigneeDigestEnabled: boolean;
   readonly criteria: ReadonlyArray<AutomationCriterion>;
 };

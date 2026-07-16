@@ -27,6 +27,36 @@ export const moveProjectSchema = z.object({
   targetWorkspaceId: z.string().min(1),
 });
 
+export const saveWorkspaceAssigneeDigestSchema = z
+  .object({
+    enabled: z.boolean(),
+    hour: z.number().int().min(0).max(23),
+    minute: z.number().int().min(0).max(59),
+    weekdaysOnly: z.boolean(),
+    telegramGroupChatId: z.number().int().nullable(),
+    telegramGroupTitle: z.string().trim().max(255).nullable(),
+    recipientMode: z.enum(['all', 'selected']),
+    recipientUserIds: z.array(z.string().uuid()).max(500),
+  })
+  .refine((value) => !value.enabled || value.telegramGroupChatId !== null, {
+    message: 'Выберите Telegram-группу для рассылки',
+    path: ['telegramGroupChatId'],
+  })
+  .refine(
+    (value) =>
+      !value.enabled ||
+      value.recipientMode === 'all' ||
+      value.recipientUserIds.length > 0,
+    {
+      message: 'Выберите хотя бы одного получателя',
+      path: ['recipientUserIds'],
+    },
+  );
+
+export const resolveWorkspaceTelegramGroupSchema = z.object({
+  chatId: z.number().int(),
+});
+
 export const createWorkspaceInviteSchema = z.object({
   role: z.enum(['editor', 'viewer']),
   // Информационный email «для кого» — опционален; пустая строка → null.

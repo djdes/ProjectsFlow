@@ -78,6 +78,7 @@ const saveBodySchema = z
     commitSyncHour: z.number().int().min(0).max(23).optional().default(3),
     commitSyncMinute: z.number().int().min(0).max(59).optional().default(0),
     commitSyncThresholdHours: z.number().int().min(1).max(8760).optional().default(70),
+    assigneeDigestEnabled: z.boolean().optional(),
     criteria: z.array(criterionSchema).max(20),
   })
   .refine((b) => b.pauseMaxSeconds >= b.pauseMinSeconds, {
@@ -150,6 +151,7 @@ export function buildAutomationRouter(deps: Deps): Router {
           commitSyncHour: body.commitSyncHour,
           commitSyncMinute: body.commitSyncMinute,
           commitSyncThresholdHours: body.commitSyncThresholdHours,
+          assigneeDigestEnabled: body.assigneeDigestEnabled,
           criteria: body.criteria,
         });
         res.json(automationConfigToDto(config));
@@ -186,6 +188,7 @@ function automationConfigToDto(config: AutomationConfig): {
   commitSyncMinute: number;
   commitSyncThresholdHours: number;
   commitSyncLastRunOn: string | null;
+  assigneeDigestEnabled: boolean;
   criteria: ReadonlyArray<{
     key: string;
     label: string;
@@ -218,6 +221,7 @@ function automationConfigToDto(config: AutomationConfig): {
     commitSyncMinute: config.commitSyncMinute,
     commitSyncThresholdHours: config.commitSyncThresholdHours,
     commitSyncLastRunOn: config.commitSyncLastRunOn,
+    assigneeDigestEnabled: config.assigneeDigestEnabled,
     criteria: config.criteria.map((c) => ({
       key: c.key,
       label: AUTOMATION_CRITERIA_BY_KEY.get(c.key)?.label ?? c.key,

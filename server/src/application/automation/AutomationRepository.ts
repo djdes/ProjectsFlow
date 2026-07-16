@@ -30,6 +30,7 @@ export type SaveAutomationInput = {
   readonly commitSyncHour: number;
   readonly commitSyncMinute: number;
   readonly commitSyncThresholdHours: number;
+  readonly assigneeDigestEnabled: boolean;
   // run_status выставляется отдельно (resetRun/markStopped) — здесь не трогаем.
   readonly criteria: ReadonlyArray<{
     readonly key: string;
@@ -70,6 +71,9 @@ export type AutomationRepository = {
   // project_id'ы где автоматизация включена (enabled=true) — лёгкий флаг для discovery
   // в ListMyDispatchedProjects (диспетчер решает, какие проекты опрашивать полным GET'ом).
   listEnabledProjectIds(): Promise<ReadonlyArray<string>>;
+
+  // Projects in a workspace that contribute tasks to the assignee digest.
+  listAssigneeDigestProjectIds(workspaceId: string): Promise<ReadonlyArray<string>>;
 
   // --- Ежедневная авто-обработка статусов задач по коммитам (db/072) ---
   // Проекты с включённым commit-sync — для планировщика CommitSyncScheduler.

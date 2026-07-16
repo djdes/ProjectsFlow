@@ -88,6 +88,7 @@ type Draft = {
   commitSyncHour: number;
   commitSyncMinute: number;
   commitSyncThresholdHours: number;
+  assigneeDigestEnabled: boolean;
   criteria: DraftCriterion[];
 };
 
@@ -301,6 +302,7 @@ function toDraft(config: AutomationConfig): Draft {
     commitSyncHour: config.commitSyncHour,
     commitSyncMinute: config.commitSyncMinute,
     commitSyncThresholdHours: config.commitSyncThresholdHours,
+    assigneeDigestEnabled: config.assigneeDigestEnabled,
     criteria: config.criteria.map((c) => ({
       key: c.key,
       label: c.label,
@@ -530,6 +532,7 @@ export function AutomationDialog({
         commitSyncHour: draft.commitSyncHour,
         commitSyncMinute: draft.commitSyncMinute,
         commitSyncThresholdHours: draft.commitSyncThresholdHours,
+        assigneeDigestEnabled: draft.assigneeDigestEnabled,
         criteria: draft.criteria.map((c) => ({
           key: c.key,
           enabled: c.enabled,
@@ -948,6 +951,17 @@ export function AutomationDialog({
                 </div>
               </div>
             </AutomationCard>
+
+            <AutomationCard
+              icon={Send}
+              title="Рассылка пространства по ответственным"
+              description="Добавляет открытые задачи этого проекта в общую Telegram-рассылку пространства. Группа, время и получатели настраиваются в настройках пространства."
+              toggle={{
+                checked: draft.assigneeDigestEnabled,
+                onCheckedChange: (value) => update({ assigneeDigestEnabled: value }),
+                ariaLabel: 'Включить проект в рассылку пространства по ответственным',
+              }}
+            />
 
             {/* ЕЖЕДНЕВНАЯ СВОДКА ПО ЗАДАЧАМ — Telegram-группа проекта + расписание сводки в
                 одном блоке (агрегируется мастером). Поля группы (chat_id/название) видны

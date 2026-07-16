@@ -7,6 +7,7 @@ import type { WorkspaceInvite } from '../../domain/workspace/WorkspaceInvite.js'
 import type { CreateWorkspaceInvite } from '../../application/workspace/CreateWorkspaceInvite.js';
 import type { ListWorkspaceInvites } from '../../application/workspace/ListWorkspaceInvites.js';
 import type { DeleteWorkspaceInvite } from '../../application/workspace/DeleteWorkspaceInvite.js';
+import type { ManageWorkspaceAssigneeDigest } from '../../application/digest/ManageWorkspaceAssigneeDigest.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
   addMemberSchema,
@@ -14,6 +15,8 @@ import {
   createWorkspaceInviteSchema,
   createWorkspaceSchema,
   moveProjectSchema,
+  resolveWorkspaceTelegramGroupSchema,
+  saveWorkspaceAssigneeDigestSchema,
   setCurrentSchema,
   updateWorkspaceSchema,
 } from './schemas.js';
@@ -110,6 +113,7 @@ type Deps = {
     readonly list: ListWorkspaceInvites;
     readonly delete: DeleteWorkspaceInvite;
   };
+  readonly assigneeDigest: ManageWorkspaceAssigneeDigest;
   readonly appUrl: string;
 };
 
@@ -185,6 +189,85 @@ export function workspacesRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  router.get(
+    '/:id/assignee-digest',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const result = await deps.assigneeDigest.get(
+          req.params.id as string,
+          req.user!.id,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.put(
+    '/:id/assignee-digest',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const body = saveWorkspaceAssigneeDigestSchema.parse(req.body);
+        const settings = await deps.assigneeDigest.save(
+          req.params.id as string,
+          req.user!.id,
+          body,
+        );
+        res.json({ settings });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/:id/assignee-digest/send-now',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const result = await deps.assigneeDigest.sendNow(
+          req.params.id as string,
+          req.user!.id,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/:id/assignee-digest/groups',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const groups = await deps.assigneeDigest.listGroups(
+          req.params.id as string,
+          req.user!.id,
+        );
+        res.json({ groups });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/:id/assignee-digest/group/resolve',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const body = resolveWorkspaceTelegramGroupSchema.parse(req.body);
+        const result = await deps.assigneeDigest.resolveGroupTitle(
+          req.params.id as string,
+          req.user!.id,
+          body.chatId,
+        );
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   // POST /api/workspaces/:id/members — добавить участника по email.
   router.post('/:id/members', async (req: Request, res: Response, next: NextFunction) => {

@@ -143,6 +143,7 @@ export function defaultAutomationConfig(projectId: string): AutomationConfig {
     eodReminderMinute: 20,
     eodReminderLastRunOn: null,
     dailyPlanEnabled: true,
+    assigneeDigestEnabled: false,
     criteria: mergeCriteriaWithDefaults([]),
   };
 }

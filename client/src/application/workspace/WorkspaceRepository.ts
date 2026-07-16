@@ -1,5 +1,12 @@
 import type { Workspace, WorkspaceMember, WorkspaceRole } from '@/domain/workspace/Workspace';
 import type { WorkspaceInvite, WorkspaceInviteRole } from '@/domain/workspace/WorkspaceInvite';
+import type {
+  SaveWorkspaceAssigneeDigestInput,
+  WorkspaceAssigneeDigestGroup,
+  WorkspaceAssigneeDigestMember,
+  WorkspaceAssigneeDigestSendResult,
+  WorkspaceAssigneeDigestSettings,
+} from '@/domain/workspace/WorkspaceAssigneeDigest';
 
 export type CreateWorkspaceInput = {
   readonly name: string;
@@ -36,4 +43,16 @@ export interface WorkspaceRepository {
 
   listProjects(id: string): Promise<Array<{ id: string; name: string; icon: string | null }>>;
   moveProject(workspaceId: string, projectId: string, targetWorkspaceId: string): Promise<void>;
+
+  getAssigneeDigest(id: string): Promise<{
+    settings: WorkspaceAssigneeDigestSettings;
+    members: WorkspaceAssigneeDigestMember[];
+  }>;
+  saveAssigneeDigest(
+    id: string,
+    input: SaveWorkspaceAssigneeDigestInput,
+  ): Promise<WorkspaceAssigneeDigestSettings>;
+  sendAssigneeDigestNow(id: string): Promise<WorkspaceAssigneeDigestSendResult>;
+  listAssigneeDigestGroups(id: string): Promise<WorkspaceAssigneeDigestGroup[]>;
+  resolveAssigneeDigestGroup(id: string, chatId: number): Promise<{ title: string | null }>;
 }

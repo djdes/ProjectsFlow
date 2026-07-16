@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import type {
   AutomationConfig,
@@ -12,6 +12,7 @@ import type {
 import {
   projectAutomation,
   projectAutomationCriteria,
+  projects,
   type ProjectAutomationRow,
 } from '../db/schema.js';
 
@@ -68,6 +69,7 @@ export class DrizzleAutomationRepository implements AutomationRepository {
         commitSyncHour: input.commitSyncHour,
         commitSyncMinute: input.commitSyncMinute,
         commitSyncThresholdHours: input.commitSyncThresholdHours,
+        assigneeDigestEnabled: input.assigneeDigestEnabled,
       })
       .onDuplicateKeyUpdate({
         set: {
@@ -89,6 +91,7 @@ export class DrizzleAutomationRepository implements AutomationRepository {
           commitSyncHour: input.commitSyncHour,
           commitSyncMinute: input.commitSyncMinute,
           commitSyncThresholdHours: input.commitSyncThresholdHours,
+          assigneeDigestEnabled: input.assigneeDigestEnabled,
         },
       });
 
@@ -139,6 +142,20 @@ export class DrizzleAutomationRepository implements AutomationRepository {
       .from(projectAutomation)
       .where(eq(projectAutomation.enabled, true));
     return rows.map((r) => r.projectId);
+  }
+
+  async listAssigneeDigestProjectIds(workspaceId: string): Promise<ReadonlyArray<string>> {
+    const rows = await this.db
+      .select({ projectId: projectAutomation.projectId })
+      .from(projectAutomation)
+      .innerJoin(projects, eq(projects.id, projectAutomation.projectId))
+      .where(
+        and(
+          eq(projects.workspaceId, workspaceId),
+          eq(projectAutomation.assigneeDigestEnabled, true),
+        ),
+      );
+    return rows.map((row) => row.projectId);
   }
 
   async listCommitSyncEnabled(): Promise<
@@ -276,5 +293,6 @@ function rowToConfigBase(row: ProjectAutomationRow): Omit<AutomationConfig, 'cri
     eodReminderMinute: row.eodReminderMinute,
     eodReminderLastRunOn: row.eodReminderLastRunOn ?? null,
     dailyPlanEnabled: row.dailyPlanEnabled,
+    assigneeDigestEnabled: row.assigneeDigestEnabled,
   };
 }

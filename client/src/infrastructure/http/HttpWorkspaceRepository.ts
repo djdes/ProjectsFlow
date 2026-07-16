@@ -11,6 +11,13 @@ import type {
   UpdateWorkspaceInput,
   WorkspaceRepository,
 } from '@/application/workspace/WorkspaceRepository';
+import type {
+  SaveWorkspaceAssigneeDigestInput,
+  WorkspaceAssigneeDigestGroup,
+  WorkspaceAssigneeDigestMember,
+  WorkspaceAssigneeDigestSendResult,
+  WorkspaceAssigneeDigestSettings,
+} from '@/domain/workspace/WorkspaceAssigneeDigest';
 import { httpClient } from './httpClient';
 
 type WorkspaceDto = {
@@ -178,5 +185,41 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
     await httpClient.post<void>(`/workspaces/${workspaceId}/projects/${projectId}/move`, {
       targetWorkspaceId,
     });
+  }
+
+  async getAssigneeDigest(id: string): Promise<{
+    settings: WorkspaceAssigneeDigestSettings;
+    members: WorkspaceAssigneeDigestMember[];
+  }> {
+    return httpClient.get(`/workspaces/${id}/assignee-digest`);
+  }
+
+  async saveAssigneeDigest(
+    id: string,
+    input: SaveWorkspaceAssigneeDigestInput,
+  ): Promise<WorkspaceAssigneeDigestSettings> {
+    const { settings } = await httpClient.put<{ settings: WorkspaceAssigneeDigestSettings }>(
+      `/workspaces/${id}/assignee-digest`,
+      input,
+    );
+    return settings;
+  }
+
+  async sendAssigneeDigestNow(id: string): Promise<WorkspaceAssigneeDigestSendResult> {
+    return httpClient.post(`/workspaces/${id}/assignee-digest/send-now`, {});
+  }
+
+  async listAssigneeDigestGroups(id: string): Promise<WorkspaceAssigneeDigestGroup[]> {
+    const { groups } = await httpClient.get<{ groups: WorkspaceAssigneeDigestGroup[] }>(
+      `/workspaces/${id}/assignee-digest/groups`,
+    );
+    return groups;
+  }
+
+  async resolveAssigneeDigestGroup(
+    id: string,
+    chatId: number,
+  ): Promise<{ title: string | null }> {
+    return httpClient.post(`/workspaces/${id}/assignee-digest/group/resolve`, { chatId });
   }
 }

@@ -65,5 +65,7 @@ export type AutomationConfig = {
   readonly eodReminderMinute: number;
   readonly eodReminderLastRunOn: string | null;
   readonly dailyPlanEnabled: boolean;
+  // Include this project in the workspace-level Telegram digest grouped by assignee.
+  readonly assigneeDigestEnabled: boolean;
   readonly criteria: ReadonlyArray<AutomationCriterion>;
 };

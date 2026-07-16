@@ -1296,6 +1296,8 @@ export const projectAutomation = mysqlTable('project_automation', {
   eodReminderLastRunOn: date('eod_reminder_last_run_on', { mode: 'string' }),
   // Фаза 3: секция «с чего начать» в дневном дайджесте (ВКЛ по умолчанию).
   dailyPlanEnabled: boolean('daily_plan_enabled').notNull().default(true),
+  // Include this project in the workspace-level Telegram digest grouped by assignee.
+  assigneeDigestEnabled: boolean('assignee_digest_enabled').notNull().default(false),
   createdAt: createdAtCol(),
   updatedAt: updatedAtCol(),
 });
@@ -1344,6 +1346,33 @@ export const projectDigestSettings = mysqlTable('project_digest_settings', {
 
 export type ProjectDigestSettingsRow = typeof projectDigestSettings.$inferSelect;
 export type NewProjectDigestSettingsRow = typeof projectDigestSettings.$inferInsert;
+
+// Workspace-level Telegram digest: one message per assignee across opted-in projects.
+export const workspaceAssigneeDigestSettings = mysqlTable(
+  'workspace_assignee_digest_settings',
+  {
+    workspaceId: char('workspace_id', { length: 36 }).primaryKey(),
+    enabled: boolean('enabled').notNull().default(false),
+    sendHour: tinyint('send_hour').notNull().default(9),
+    sendMinute: tinyint('send_minute').notNull().default(0),
+    weekdaysOnly: boolean('weekdays_only').notNull().default(true),
+    telegramGroupChatId: bigint('telegram_group_chat_id', { mode: 'number' }),
+    telegramGroupTitle: varchar('telegram_group_title', { length: 255 }),
+    recipientMode: mysqlEnum('recipient_mode', ['all', 'selected']).notNull().default('all'),
+    recipientUserIds: json('recipient_user_ids').$type<string[] | null>(),
+    lastSentOn: date('last_sent_on', { mode: 'string' }),
+    testDeliveries: json('test_deliveries').$type<
+      Array<{ chatId: number; messageIds: number[] }> | null
+    >(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [index('idx_workspace_assignee_digest_enabled').on(t.enabled)],
+);
+
+export type WorkspaceAssigneeDigestSettingsRow =
+  typeof workspaceAssigneeDigestSettings.$inferSelect;
+export type NewWorkspaceAssigneeDigestSettingsRow =
+  typeof workspaceAssigneeDigestSettings.$inferInsert;
 
 // ============================================================================
 // file-sync — миграция db/044. Кастомная (не-git) синхронизация папок:

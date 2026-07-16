@@ -212,11 +212,15 @@ import { randomBytes, createHash } from 'node:crypto';
 import { ListTasks } from './application/task/ListTasks.js';
 import { ExportTasksDigest } from './application/task/ExportTasksDigest.js';
 import { DrizzleDigestSettingsRepository } from './infrastructure/repositories/DrizzleDigestSettingsRepository.js';
+import { DrizzleWorkspaceAssigneeDigestRepository } from './infrastructure/repositories/DrizzleWorkspaceAssigneeDigestRepository.js';
 import { GetDigestSettings } from './application/digest/GetDigestSettings.js';
 import { SaveDigestSettings } from './application/digest/SaveDigestSettings.js';
 import { SendDailyDigest } from './application/digest/SendDailyDigest.js';
 import { TriggerDailyDigestNow } from './application/digest/TriggerDailyDigestNow.js';
 import { DailyDigestScheduler } from './infrastructure/scheduler/DailyDigestScheduler.js';
+import { SendWorkspaceAssigneeDigest } from './application/digest/SendWorkspaceAssigneeDigest.js';
+import { ManageWorkspaceAssigneeDigest } from './application/digest/ManageWorkspaceAssigneeDigest.js';
+import { WorkspaceAssigneeDigestScheduler } from './infrastructure/scheduler/WorkspaceAssigneeDigestScheduler.js';
 import { SearchTasks } from './application/task/SearchTasks.js';
 import { DrizzleTaskSearchRepository } from './infrastructure/repositories/DrizzleTaskSearchRepository.js';
 import { CreateTask } from './application/task/CreateTask.js';
@@ -490,6 +494,7 @@ console.log(`[projectsflow] attachments dir: ${uploadsDir}`);
 const taskCommentRepo = new DrizzleTaskCommentRepository(db);
 const taskBillingAttributionRepo = new DrizzleTaskBillingAttributionRepository(db);
 const digestSettingsRepo = new DrizzleDigestSettingsRepository(db, projectMemberRepo);
+const workspaceAssigneeDigestRepo = new DrizzleWorkspaceAssigneeDigestRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const aiPromptJobRepo = new DrizzleAiPromptJobRepository(db);
 // Метеринг расхода ИИ (db/082): единый ledger + хаб RecordUsage, который зовут все
@@ -1364,6 +1369,23 @@ const sendDailyDigest = new SendDailyDigest({
   createEmailActionToken,
   signingSecret: repoAccessSecret,
 });
+const sendWorkspaceAssigneeDigest = new SendWorkspaceAssigneeDigest({
+  settings: workspaceAssigneeDigestRepo,
+  workspaces: workspaceRepo,
+  projects: projectRepo,
+  automation: automationRepo,
+  tasks: taskRepo,
+  users: userRepo,
+  telegram: telegramClient,
+  appUrl: appBaseUrl,
+});
+const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({
+  repo: workspaceAssigneeDigestRepo,
+  workspaces: workspaceRepo,
+  users: userRepo,
+  telegram: telegramClient,
+  send: sendWorkspaceAssigneeDigest,
+});
 
 const { app, devProxyUpgrade } = createApp({
   emailActions: { service: emailActionService, appUrl: appBaseUrl },
@@ -1521,6 +1543,7 @@ const { app, devProxyUpgrade } = createApp({
   },
   workspaces: {
     service: workspaceService,
+    assigneeDigest: manageWorkspaceAssigneeDigest,
     invites: {
       create: new CreateWorkspaceInvite({
         workspaces: workspaceRepo,
@@ -2375,6 +2398,12 @@ const dailyDigestScheduler = new DailyDigestScheduler({
   send: sendDailyDigest,
 });
 dailyDigestScheduler.start();
+
+const workspaceAssigneeDigestScheduler = new WorkspaceAssigneeDigestScheduler({
+  settings: workspaceAssigneeDigestRepo,
+  send: sendWorkspaceAssigneeDigest,
+});
+workspaceAssigneeDigestScheduler.start();
 
 // Ежедневная commit-sync (db/072): тик раз в минуту ставит job на проекты с включённой
 // авто-обработкой статусов по коммитам в заданное МSK-время. Зеркало DailyDigestScheduler.

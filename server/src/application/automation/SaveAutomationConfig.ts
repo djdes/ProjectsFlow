@@ -35,6 +35,7 @@ export type SaveAutomationCommand = {
   readonly commitSyncHour: number;
   readonly commitSyncMinute: number;
   readonly commitSyncThresholdHours: number;
+  readonly assigneeDigestEnabled?: boolean;
   readonly criteria: ReadonlyArray<{
     readonly key: string;
     readonly enabled: boolean;
@@ -98,6 +99,8 @@ export class SaveAutomationConfig {
       commitSyncHour: input.commitSyncHour,
       commitSyncMinute: input.commitSyncMinute,
       commitSyncThresholdHours: input.commitSyncThresholdHours,
+      assigneeDigestEnabled:
+        input.assigneeDigestEnabled ?? baseline.assigneeDigestEnabled,
       criteria: input.criteria,
     });
 

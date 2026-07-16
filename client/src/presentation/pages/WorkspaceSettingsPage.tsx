@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Copy, Loader2, Trash2, UserPlus } from 'lucide-react';
+import {
+  ArrowLeft,
+  CalendarClock,
+  Copy,
+  History,
+  Loader2,
+  RefreshCw,
+  Send,
+  Trash2,
+  UserPlus,
+} from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,10 +30,25 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import type { WorkspaceRole } from '@/domain/workspace/Workspace';
 import type { WorkspaceInvite } from '@/domain/workspace/WorkspaceInvite';
+import type {
+  WorkspaceAssigneeDigestGroup,
+  WorkspaceAssigneeDigestMember,
+  WorkspaceAssigneeDigestRecipientMode,
+} from '@/domain/workspace/WorkspaceAssigneeDigest';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
@@ -94,6 +119,7 @@ export function WorkspaceSettingsPage(): React.ReactElement {
 
       <RenameCard workspaceId={workspace.id} initialName={workspace.name} initialIcon={workspace.icon} disabled={!isOwner} />
       <MembersCard workspaceId={workspace.id} canManage={isOwner && !isDefault} autoManaged={isDefault} />
+      <AssigneeDigestCard workspaceId={workspace.id} canManage={isOwner} />
       {isOwner && !isDefault && <InvitesCard workspaceId={workspace.id} />}
       <ProjectsCard workspaceId={workspace.id} />
       {isOwner && !isDefault && (
@@ -169,6 +195,419 @@ function RenameCard({
                 {saving ? 'Сохраняем…' : 'Сохранить'}
               </Button>
             </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+type AssigneeDigestDraft = {
+  enabled: boolean;
+  hour: number;
+  minute: number;
+  weekdaysOnly: boolean;
+  groupChatId: string;
+  groupTitle: string;
+  recipientMode: WorkspaceAssigneeDigestRecipientMode;
+  recipientUserIds: string[];
+};
+
+function AssigneeDigestCard({
+  workspaceId,
+  canManage,
+}: {
+  workspaceId: string;
+  canManage: boolean;
+}): React.ReactElement {
+  const { workspaceRepository } = useContainer();
+  const [draft, setDraft] = useState<AssigneeDigestDraft | null>(null);
+  const [members, setMembers] = useState<WorkspaceAssigneeDigestMember[]>([]);
+  const [groups, setGroups] = useState<WorkspaceAssigneeDigestGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [resolving, setResolving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([
+      workspaceRepository.getAssigneeDigest(workspaceId),
+      workspaceRepository.listAssigneeDigestGroups(workspaceId).catch(() => []),
+    ])
+      .then(([result, history]) => {
+        if (cancelled) return;
+        setDraft({
+          enabled: result.settings.enabled,
+          hour: result.settings.hour,
+          minute: result.settings.minute,
+          weekdaysOnly: result.settings.weekdaysOnly,
+          groupChatId:
+            result.settings.telegramGroupChatId === null
+              ? ''
+              : String(result.settings.telegramGroupChatId),
+          groupTitle: result.settings.telegramGroupTitle ?? '',
+          recipientMode: result.settings.recipientMode,
+          recipientUserIds: result.settings.recipientUserIds,
+        });
+        setMembers(result.members);
+        setGroups(history);
+      })
+      .catch((error) => toast.error((error as Error).message || 'Не удалось загрузить рассылку'))
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, workspaceRepository]);
+
+  const update = (patch: Partial<AssigneeDigestDraft>): void => {
+    setDraft((current) => (current ? { ...current, ...patch } : current));
+  };
+
+  const selectedEligible = draft
+    ? draft.recipientUserIds.filter((id) =>
+        members.some((member) => member.userId === id && member.hasTelegram),
+      )
+    : [];
+
+  const validate = (requireGroup = draft?.enabled ?? false): boolean => {
+    if (!draft) return false;
+    const chatId = Number(draft.groupChatId.trim());
+    if (requireGroup && (!draft.groupChatId.trim() || !Number.isInteger(chatId))) {
+      toast.error('Укажите корректный chat_id Telegram-группы');
+      return false;
+    }
+    if (
+      requireGroup &&
+      draft.recipientMode === 'selected' &&
+      selectedEligible.length === 0
+    ) {
+      toast.error('Выберите хотя бы одного участника');
+      return false;
+    }
+    return true;
+  };
+
+  const save = async (): Promise<boolean> => {
+    if (!draft || !validate()) return false;
+    setSaving(true);
+    try {
+      const settings = await workspaceRepository.saveAssigneeDigest(workspaceId, {
+        enabled: draft.enabled,
+        hour: draft.hour,
+        minute: draft.minute,
+        weekdaysOnly: draft.weekdaysOnly,
+        telegramGroupChatId:
+          draft.groupChatId.trim() && Number.isInteger(Number(draft.groupChatId.trim()))
+            ? Number(draft.groupChatId.trim())
+            : null,
+        telegramGroupTitle: draft.groupTitle.trim() || null,
+        recipientMode: draft.recipientMode,
+        recipientUserIds: selectedEligible,
+      });
+      update({
+        enabled: settings.enabled,
+        recipientUserIds: settings.recipientUserIds,
+      });
+      toast.success('Рассылка по ответственным сохранена');
+      return true;
+    } catch (error) {
+      toast.error((error as Error).message || 'Не удалось сохранить рассылку');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sendNow = async (): Promise<void> => {
+    if (sending || !validate(true) || !(await save())) return;
+    setSending(true);
+    try {
+      const result = await workspaceRepository.sendAssigneeDigestNow(workspaceId);
+      if (result.sentCount === 0) {
+        if (result.skippedRecipientUserIds.length > 0) {
+          toast.error(
+            `Не удалось отправить сообщения: у ${result.skippedRecipientUserIds.length} участников Telegram не подключён или недоступен`,
+          );
+        } else {
+          toast.message(
+            result.projectCount === 0
+              ? 'Нет проектов, включённых в рассылку'
+              : 'Нет открытых задач для выбранных участников',
+          );
+        }
+        return;
+      }
+      toast.success(
+        `Отправлено сообщений: ${result.sentCount} · задач: ${result.taskCount}`,
+      );
+      if (result.skippedRecipientUserIds.length > 0) {
+        toast.warning(
+          `Не удалось отправить для ${result.skippedRecipientUserIds.length} участников без доступного Telegram`,
+        );
+      }
+    } catch (error) {
+      toast.error((error as Error).message || 'Не удалось отправить тест');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const resolveTitle = async (): Promise<void> => {
+    if (!draft) return;
+    const chatId = Number(draft.groupChatId.trim());
+    if (!Number.isInteger(chatId)) {
+      toast.error('Сначала укажите корректный chat_id');
+      return;
+    }
+    setResolving(true);
+    try {
+      const result = await workspaceRepository.resolveAssigneeDigestGroup(
+        workspaceId,
+        chatId,
+      );
+      if (result.title) update({ groupTitle: result.title });
+      else toast.message('Бот не смог получить название группы');
+    } catch (error) {
+      toast.error((error as Error).message || 'Не удалось получить название группы');
+    } finally {
+      setResolving(false);
+    }
+  };
+
+  const toggleRecipient = (userId: string): void => {
+    if (!draft) return;
+    update({
+      recipientUserIds: draft.recipientUserIds.includes(userId)
+        ? draft.recipientUserIds.filter((id) => id !== userId)
+        : [...draft.recipientUserIds, userId],
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1.5">
+            <CardTitle className="flex items-center gap-2">
+              <CalendarClock className="size-5 text-primary" />
+              Рассылка по ответственным
+            </CardTitle>
+            <CardDescription>
+              Одно сообщение на каждого ответственного с задачами из проектов, отмеченных в
+              окне автоматизации. Сообщения публикуются в общей Telegram-группе пространства.
+            </CardDescription>
+          </div>
+          <Switch
+            checked={draft?.enabled ?? false}
+            disabled={!canManage || loading}
+            onCheckedChange={(enabled) => update({ enabled })}
+            aria-label="Включить рассылку по ответственным"
+          />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {loading || !draft ? (
+          <div className="h-32 animate-pulse rounded bg-muted" />
+        ) : (
+          <>
+            <div className="space-y-2">
+              <Label>Telegram-группа пространства</Label>
+              <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <div className="flex min-w-0 gap-1.5">
+                  <Input
+                    value={draft.groupChatId}
+                    disabled={!canManage}
+                    inputMode="numeric"
+                    placeholder="-1003920622527"
+                    className="font-mono text-xs"
+                    onChange={(event) => update({ groupChatId: event.target.value })}
+                  />
+                  {groups.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          disabled={!canManage}
+                          aria-label="Ранее использованные Telegram-группы"
+                        >
+                          <History className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="max-h-64 w-72 overflow-auto">
+                        <DropdownMenuLabel>Ранее использованные группы</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {groups.map((group) => (
+                          <DropdownMenuItem
+                            key={group.chatId}
+                            onSelect={() =>
+                              update({
+                                groupChatId: String(group.chatId),
+                                ...(group.title ? { groupTitle: group.title } : {}),
+                              })
+                            }
+                          >
+                            <div className="min-w-0">
+                              <div className="truncate">{group.title || 'Без названия'}</div>
+                              <div className="font-mono text-xs text-muted-foreground">
+                                {group.chatId}
+                              </div>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+                <Input
+                  value={draft.groupTitle}
+                  disabled={!canManage}
+                  placeholder="Название группы"
+                  maxLength={255}
+                  onChange={(event) => update({ groupTitle: event.target.value })}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={!canManage || resolving}
+                  onClick={() => void resolveTitle()}
+                  aria-label="Получить название группы"
+                >
+                  {resolving ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Бот ProjectsFlow_Bot должен быть добавлен в группу. Для супергруппы chat_id
+                обычно начинается с −100.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 border-t pt-4">
+              <Label>Время (МСК)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={23}
+                value={draft.hour}
+                disabled={!canManage}
+                className="w-16"
+                onChange={(event) =>
+                  update({ hour: Math.min(23, Math.max(0, Number(event.target.value) || 0)) })
+                }
+              />
+              <span>:</span>
+              <Input
+                type="number"
+                min={0}
+                max={59}
+                value={draft.minute}
+                disabled={!canManage}
+                className="w-16"
+                onChange={(event) =>
+                  update({
+                    minute: Math.min(59, Math.max(0, Number(event.target.value) || 0)),
+                  })
+                }
+              />
+              <label className="ml-auto flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={draft.weekdaysOnly}
+                  disabled={!canManage}
+                  onCheckedChange={(value) => update({ weekdaysOnly: value === true })}
+                />
+                Только по будням
+              </label>
+            </div>
+
+            <div className="space-y-3 border-t pt-4">
+              <Label>Кому формировать сообщения</Label>
+              <div className="flex flex-wrap gap-4 text-sm">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`assignee-digest-recipients-${workspaceId}`}
+                    checked={draft.recipientMode === 'all'}
+                    disabled={!canManage}
+                    onChange={() => update({ recipientMode: 'all' })}
+                  />
+                  Всем участникам с задачами
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`assignee-digest-recipients-${workspaceId}`}
+                    checked={draft.recipientMode === 'selected'}
+                    disabled={!canManage}
+                    onChange={() => update({ recipientMode: 'selected' })}
+                  />
+                  Только выбранным
+                </label>
+              </div>
+
+              {draft.recipientMode === 'selected' && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {members.map((member) => {
+                    const label = member.displayName ?? member.email ?? 'Участник';
+                    return (
+                      <label
+                        key={member.userId}
+                        className={cn(
+                          'flex items-center gap-2 rounded-md border px-3 py-2 text-sm',
+                          member.hasTelegram
+                            ? 'cursor-pointer'
+                            : 'cursor-not-allowed opacity-55',
+                        )}
+                      >
+                        <Checkbox
+                          checked={draft.recipientUserIds.includes(member.userId)}
+                          disabled={!canManage || !member.hasTelegram}
+                          onCheckedChange={() => toggleRecipient(member.userId)}
+                        />
+                        <span className="min-w-0 flex-1 truncate">{label}</span>
+                        <span className="truncate text-xs text-muted-foreground">
+                          {member.telegramUsername
+                            ? `@${member.telegramUsername.replace(/^@/, '')}`
+                            : member.hasTelegram
+                              ? 'Telegram подключён'
+                              : 'Нет Telegram'}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {canManage && (
+              <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+                <Button
+                  variant="outline"
+                  disabled={saving || sending}
+                  onClick={() => void save()}
+                >
+                  {saving && !sending ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Сохранить
+                </Button>
+                <Button disabled={saving || sending} onClick={() => void sendNow()}>
+                  {sending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Send className="size-4" />
+                  )}
+                  Отправить сейчас
+                </Button>
+              </div>
+            )}
           </>
         )}
       </CardContent>

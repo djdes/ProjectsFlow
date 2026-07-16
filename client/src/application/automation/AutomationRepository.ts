@@ -24,6 +24,7 @@ export type SaveAutomationInput = {
   readonly commitSyncHour: number;
   readonly commitSyncMinute: number;
   readonly commitSyncThresholdHours: number;
+  readonly assigneeDigestEnabled: boolean;
   readonly criteria: ReadonlyArray<{
     readonly key: string;
     readonly enabled: boolean;
