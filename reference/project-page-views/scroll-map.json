@@ -1,0 +1,130 @@
+{
+  "copyZone": "project-page-views",
+  "owners": [
+    {
+      "name": "workspace-sidebar",
+      "selectorHint": "left sidebar tabpanel",
+      "axis": "y",
+      "independent": true,
+      "notes": "Sidebar list scroll does not move project content."
+    },
+    {
+      "name": "collection-main",
+      "selectorHint": ".notion-scroller.vertical.horizontal",
+      "axis": "both",
+      "independent": true,
+      "desktop": {
+        "clientWidth": 1155,
+        "scrollWidth": 2842,
+        "clientHeight": 841,
+        "scrollHeight": 1351
+      },
+      "notes": "Owns cover/title/views/body vertical motion and table/board horizontal motion."
+    },
+    {
+      "name": "views-overflow",
+      "axis": "y",
+      "independent": true,
+      "maxHeightPolicy": "bounded by visual viewport",
+      "notes": "Search and bottom actions remain in the same popover."
+    },
+    {
+      "name": "view-settings",
+      "axis": "y",
+      "independent": true,
+      "notes": "The right panel scroll does not move the active view."
+    }
+  ],
+  "verticalSamples": [
+    {
+      "scrollTop": 0,
+      "viewTabY": 354.4,
+      "tableHeaderY": 390.4,
+      "newButtonY": 356.4
+    },
+    {
+      "scrollTop": 120,
+      "viewTabY": 234.4,
+      "tableHeaderY": 270.4,
+      "newButtonY": 236.4
+    },
+    {
+      "scrollTop": 260,
+      "viewTabY": 94.4,
+      "tableHeaderY": 130.4,
+      "newButtonY": 96.4
+    },
+    {
+      "scrollTop": 420,
+      "viewTabY": -65.6,
+      "tableHeaderY": 44,
+      "newButtonY": -63.6
+    },
+    {
+      "scrollTop": 510.5,
+      "viewTabY": -156.1,
+      "tableHeaderY": 44,
+      "newButtonY": -154.1
+    }
+  ],
+  "horizontalSamples": [
+    {
+      "scrollLeft": 0,
+      "nameX": 374,
+      "blockedByX": 654
+    },
+    {
+      "scrollLeft": 400,
+      "nameX": -26,
+      "blockedByX": 254
+    },
+    {
+      "scrollLeft": 900,
+      "nameX": -526,
+      "blockedByX": -246
+    },
+    {
+      "scrollLeft": 1600,
+      "nameX": -1226,
+      "blockedByX": -946
+    }
+  ],
+  "sticky": [
+    {
+      "element": "view-tabs-and-toolbar",
+      "sticky": false,
+      "reason": "Y moves linearly with collection scroll and leaves viewport."
+    },
+    {
+      "element": "table-header",
+      "sticky": true,
+      "axis": "y",
+      "top": 44,
+      "owner": "collection-main"
+    },
+    {
+      "element": "name-column",
+      "sticky": false,
+      "axis": "x"
+    }
+  ],
+  "addColumnTransition": {
+    "before": {
+      "scrollLeft": 1687,
+      "scrollWidth": 2842,
+      "maxScrollLeft": 1687
+    },
+    "pickerOpen": {
+      "scrollLeft": 1918,
+      "scrollWidth": 3192,
+      "maxScrollLeft": 2037,
+      "temporaryWidthAdded": 350
+    },
+    "afterTextPropertyCreated": {
+      "scrollLeft": 1887,
+      "scrollWidth": 3042,
+      "maxScrollLeft": 1887,
+      "regularColumnWidth": 200
+    }
+  }
+}

@@ -56,6 +56,7 @@ import { VISIBLE_KANBAN_STATUSES } from '@/domain/kanban/KanbanSettings';
 import { useContainer } from '@/infrastructure/di/container';
 import { useTasks } from '@/presentation/hooks/useTasks';
 import {
+  NewPropertyForm,
   PROPERTY_TYPE_ICONS,
   PropertyHeaderCell,
   PropertyValueCell,
@@ -138,15 +139,17 @@ type Props = {
   // Открытая правая панель уже резервирует 496px в родительском rail; таблица не должна
   // заходить отрицательным правым отступом в 16px gutter перед панелью.
   sidePanelOpen?: boolean;
+  showVerticalLines?: boolean;
+  wrapAllContent?: boolean;
   canEdit?: boolean;
 };
 
 // Ширины колонок; сетка собирается из видимых (скрытие свойств — как в Notion).
 const COLUMN_WIDTH: Record<ViewColumn, string> = {
-  status: '8.5rem',
-  priority: '8rem',
-  deadline: '8.5rem',
-  assignee: '11rem',
+  status: '12.5rem',
+  priority: '12.5rem',
+  deadline: '12.5rem',
+  assignee: '12.5rem',
   created: '19rem',
 };
 const ALL_COLUMNS: readonly ViewColumn[] = ['status', 'priority', 'deadline', 'assignee', 'created'];
@@ -201,6 +204,8 @@ export function TableView({
   createRequest,
   onSetHiddenCols,
   sidePanelOpen = false,
+  showVerticalLines = true,
+  wrapAllContent = false,
   canEdit = true,
 }: Props): React.ReactElement {
   const tasksApi = useTasks(projectId);
@@ -209,6 +214,7 @@ export function TableView({
   // Кастомные свойства (db/109): колонки после стандартных, «+» в шапке создаёт новое.
   const customProps = useTaskProperties(projectId);
   const [creatingProperty, setCreatingProperty] = useState(false);
+  const [newPropertyOpen, setNewPropertyOpen] = useState(false);
   const [propertyPendingScrollId, setPropertyPendingScrollId] = useState<string | null>(null);
   const [openPropertyMenuId, setOpenPropertyMenuId] = useState<string | null>(null);
 
@@ -511,16 +517,11 @@ export function TableView({
   const propByKey = (k: string): TaskProperty | undefined =>
     customProps.properties.find((p) => `p:${p.id}` === k);
 
-  // Notion: «+» не открывает пустую форму отдельно от таблицы. Сначала появляется
-  // реальная текстовая колонка, затем таблица плавно доезжает до её заголовка и
-  // открывает меню новой колонки для имени/типа. Повторный клик во время запроса
-  // игнорируется, чтобы один жест не создавал несколько одинаковых свойств.
-  const createPropertyFromHeader = async (): Promise<void> => {
-    if (!canEdit) return;
-    if (creatingProperty) return;
-    // Сдвигаем содержимое таблицы влево (scroll вправо до упора) сразу по клику,
-    // ещё до ответа сервера. После появления новой колонки эффект ниже повторит
-    // доводку до нового максимума и откроет её меню.
+  // Notion: «+» сначала открывает type picker. Таблица в тот же жест плавно
+  // доезжает до правого края; реальное свойство создаётся только после выбора типа.
+  const setPropertyCreatorOpen = (open: boolean): void => {
+    setNewPropertyOpen(open);
+    if (!open) return;
     bodyScrollRef.current?.scrollTo({
       left: bodyScrollRef.current.scrollWidth,
       behavior: 'smooth',
@@ -529,12 +530,23 @@ export function TableView({
       left: headScrollRef.current.scrollWidth,
       behavior: 'smooth',
     });
+  };
+  const createPropertyFromHeader = async (
+    type: Parameters<typeof customProps.createProperty>[0],
+    name?: string,
+  ): Promise<void> => {
+    if (!canEdit) return;
+    if (creatingProperty) return;
     setCreatingProperty(true);
     try {
-      const property = await customProps.createProperty('text', 'Новое свойство');
+      const property = await customProps.createProperty(
+        type,
+        name?.trim() || 'Новое свойство',
+      );
       if (!property) return;
       const key = `p:${property.id}`;
       onTableState({ colOrder: [...orderedKeys, key] });
+      setNewPropertyOpen(false);
       setPropertyPendingScrollId(property.id);
     } finally {
       setCreatingProperty(false);
@@ -545,23 +557,18 @@ export function TableView({
     if (!propertyPendingScrollId) return;
     if (!customProps.properties.some((property) => property.id === propertyPendingScrollId)) return;
     let secondFrame = 0;
-    let openTimer = 0;
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
         bodyScrollRef.current?.scrollTo({
           left: bodyScrollRef.current.scrollWidth,
           behavior: 'smooth',
         });
-        openTimer = window.setTimeout(() => {
-          setOpenPropertyMenuId(propertyPendingScrollId);
-          setPropertyPendingScrollId(null);
-        }, 180);
+        setPropertyPendingScrollId(null);
       });
     });
     return () => {
       window.cancelAnimationFrame(firstFrame);
       if (secondFrame) window.cancelAnimationFrame(secondFrame);
-      if (openTimer) window.clearTimeout(openTimer);
     };
   }, [customProps.properties, propertyPendingScrollId]);
 
@@ -597,19 +604,20 @@ export function TableView({
         // (sticky-freeze) minmax(...,1fr) считался бы по max-content — одна задача
         // с длинным неразрывным названием раздувала колонку на тысячи px, и грид
         // строк переставал совпадать с шапкой («клетки исчезли»).
-        tableState.colWidths.title ? `${tableState.colWidths.title}px` : '16rem',
+        tableState.colWidths.title ? `${tableState.colWidths.title}px` : '17.5rem',
         ...orderedKeys.map((k) =>
           tableState.colWidths[k]
             ? `${tableState.colWidths[k]}px`
             : k.startsWith('p:')
-              ? '180px'
+              ? '200px'
               : COLUMN_WIDTH[k as ViewColumn],
         ),
-        // Хвост-филлер до правого края окна (Notion): границы строк тянутся до конца.
-        'minmax(6rem,1fr)',
+        // При открытии «+» Notion сначала резервирует временную область 350px,
+        // затем открывает picker. Закрытие picker убирает область без создания свойства.
+        newPropertyOpen ? '350px' : 'minmax(6rem,1fr)',
       ].join(' '),
     }),
-    [orderedKeys, tableState.colWidths],
+    [newPropertyOpen, orderedKeys, tableState.colWidths],
   );
   const tableScrollStorageKey = useMemo(() => {
     const viewId =
@@ -1119,7 +1127,7 @@ export function TableView({
     if (single)
       return 'ring-2 ring-inset ring-primary/70 after:pointer-events-none after:absolute after:-bottom-[3px] after:-right-[3px] after:size-1.5 after:rounded-[1px] after:bg-primary';
     return cn(
-      'bg-primary/10',
+      'bg-primary/[0.07]',
       row === selRange.a.row && c === selRange.a.col && 'ring-2 ring-inset ring-primary/70',
     );
   };
@@ -1331,7 +1339,7 @@ export function TableView({
         )}
       >
         <span className="sr-only">Загружаем таблицу задач…</span>
-        <div role="row" className="grid h-12" style={gridStyle} aria-hidden>
+        <div role="row" className="grid h-9" style={gridStyle} aria-hidden>
           {Array.from({ length: orderedKeys.length + 3 }, (_, index) => (
             <div
               key={index}
@@ -1347,7 +1355,7 @@ export function TableView({
           <div
             key={index}
             role="row"
-            className="grid h-[52px]"
+            className="grid h-9"
             style={gridStyle}
             aria-hidden
           >
@@ -1375,7 +1383,7 @@ export function TableView({
           sidePanelOpen ? 'mr-0' : '-mr-2 sm:-mr-8 lg:-mr-16',
         )}
       >
-        <div className="grid h-12" style={gridStyle} aria-hidden>
+        <div className="grid h-9" style={gridStyle} aria-hidden>
           {Array.from({ length: orderedKeys.length + 3 }, (_, index) => (
             <div
               key={index}
@@ -1410,6 +1418,8 @@ export function TableView({
         '-ml-2 flex min-h-0 flex-1 flex-col bg-background sm:-ml-8 lg:-ml-16',
         '[--pf-table-gutter:6rem] sm:[--pf-table-gutter:3.5rem]',
         sidePanelOpen ? 'mr-0' : '-mr-2 sm:-mr-8 lg:-mr-16',
+        !showVerticalLines &&
+          '[&_[role=columnheader]]:border-l-transparent [&_[role=gridcell]]:border-l-transparent',
       )}
     >
       <span className="sr-only" aria-live="polite" aria-atomic="true">
@@ -1478,7 +1488,7 @@ export function TableView({
             ref={headGridRef}
             role="row"
             aria-rowindex={1}
-            className="group/head relative grid h-12 text-sm text-muted-foreground"
+            className="group/head relative grid h-9 text-sm text-muted-foreground"
             style={gridStyle}
           >
             {/* Gutter шапки с «выбрать все». Sticky — только когда «Название»
@@ -1488,11 +1498,11 @@ export function TableView({
               role="columnheader"
               aria-colindex={1}
               className={cn(
-                'group/gutter flex h-12 items-center justify-end bg-background pr-4',
+                'group/gutter flex h-9 items-center justify-end bg-background pr-1',
                 tableState.freezeTitle && 'sticky left-0 z-30',
               )}
             >
-              <label className="grid size-11 place-items-center sm:size-4">
+              <label className="grid size-7 place-items-center sm:size-4">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -1645,36 +1655,50 @@ export function TableView({
             <div
               role="columnheader"
               aria-colindex={orderedKeys.length + 3}
-              className="h-12 border-b border-l bg-muted/25"
+              className="h-9 border-b border-l bg-background"
               aria-label="Действия таблицы"
             />
             {/* Хвост шапки (Notion): «+» сразу создаёт колонку, плавно доводит
                 горизонтальный scroller до неё и открывает её меню; «⋯» —
                 «Видимость свойств» (глазки/поиск/Скрыть все). */}
-            <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-1">
-              <button
-                type="button"
-                aria-label="Добавить свойство"
-                title={canEdit ? 'Добавить свойство' : 'Недостаточно прав для добавления свойства'}
-                onClick={() => void createPropertyFromHeader()}
-                disabled={!canEdit || creatingProperty}
-                className="grid size-10 place-items-center rounded-[10px] text-muted-foreground/70 transition-[background-color,color,transform] hover:bg-accent hover:text-foreground active:scale-[.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none"
-              >
-                {creatingProperty ? (
-                  <Loader2 className="size-[18px] animate-spin motion-reduce:animate-none" />
-                ) : (
-                  <Plus className="size-[18px]" />
-                )}
-              </button>
+            <div
+              className="absolute top-1/2 flex -translate-y-1/2 items-center gap-1 transition-[right] duration-200 motion-reduce:transition-none"
+              style={{ right: newPropertyOpen ? 318 : 4 }}
+            >
+              <Popover open={newPropertyOpen} onOpenChange={setPropertyCreatorOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    data-testid="add-column-button"
+                    aria-label="Добавить свойство"
+                    title={
+                      canEdit ? 'Добавить свойство' : 'Недостаточно прав для добавления свойства'
+                    }
+                    disabled={!canEdit || creatingProperty}
+                    className="grid size-7 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {creatingProperty ? (
+                      <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
+                    ) : (
+                      <Plus className="size-4" />
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" sideOffset={4} className="w-auto p-2">
+                  <NewPropertyForm
+                    onCreate={(type, name) => void createPropertyFromHeader(type, name)}
+                  />
+                </PopoverContent>
+              </Popover>
               {canEdit && <Popover>
                 <PopoverTrigger asChild>
                   <button
                     type="button"
                     aria-label="Видимость свойств"
                     title="Видимость свойств"
-                    className="grid size-10 place-items-center rounded-[10px] text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="grid size-7 place-items-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <MoreHorizontal className="size-[18px]" />
+                    <MoreHorizontal className="size-4" />
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-auto p-2">
@@ -1780,7 +1804,7 @@ export function TableView({
                 hasChildren={hasChildren}
                 expanded={expandedTasks.has(task.id)}
                 onToggleExpand={() => toggleExpand(task.id)}
-                wrapTitle={tableState.wrapTitle}
+                wrapTitle={tableState.wrapTitle || wrapAllContent}
                 dndEnabled={canEdit && canReorder}
                 canEdit={canEdit}
                 recentlyMoved={recentlyMovedId === task.id}
@@ -1904,7 +1928,7 @@ export function TableView({
               и выделяет клетку названия созданной строки. */}
           {canEdit && (
             <div role="row" className="pl-[var(--pf-table-gutter)]">
-              <div className="flex h-[52px] items-center border-b">
+              <div className="flex h-9 items-center border-b">
                 <NewTaskRow
                   create={async (input) => {
                     const created = await create(input);
@@ -2101,7 +2125,7 @@ function HeaderCell({
       aria-sort={sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : sortKey ? 'none' : undefined}
       data-colkey={colKey}
       className={cn(
-        'relative flex h-12 min-w-0 border-b bg-muted/25',
+        'relative flex h-9 min-w-0 border-b bg-background',
         !first && 'border-l',
         // «Закрепить колонку» (Notion Freeze): липнет при горизонтальном скролле.
         frozen && 'sticky left-[var(--pf-table-gutter)] z-20 border-r bg-background',
@@ -2137,7 +2161,7 @@ function HeaderCell({
                   }
                 : undefined
             }
-            className="flex h-12 min-w-0 flex-1 items-center gap-2 px-4 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             {iconNode}
             <span className="truncate">{label}</span>
@@ -2185,12 +2209,12 @@ function InsertRow({
 }): React.ReactElement {
   const [value, setValue] = useState('');
   return (
-    <div role="row" style={gridStyle} className="grid min-h-[52px] border-b bg-accent/30">
+    <div role="row" style={gridStyle} className="grid min-h-9 border-b bg-accent/30">
       {/* Gutter без фона строки вставки. */}
       <div className="bg-background" aria-hidden />
       <div
         role="gridcell"
-        className="flex min-h-[52px] items-center gap-2 px-4 py-2"
+        className="flex min-h-9 items-center gap-2 px-2 py-1"
         style={indent > 0 ? { paddingLeft: 16 + indent } : undefined}
       >
         <FileText className="size-4 shrink-0 text-muted-foreground/40" />
@@ -2523,7 +2547,7 @@ function TableRow({
   } => ({
     // Без внутренних отступов: значение-кнопка занимает ВСЮ клетку, hover
     // подсвечивает её от края до края (Notion).
-    className: cn('relative flex min-h-[52px] border-b border-l', rangeClassFor(rowIdx, col)),
+    className: cn('relative flex min-h-9 border-b border-l', rangeClassFor(rowIdx, col)),
     role: 'gridcell',
     'aria-colindex': orderedKeys.indexOf(col) + 3,
     'data-cell': col,
@@ -2542,7 +2566,7 @@ function TableRow({
                   type="button"
                   disabled={!canEdit}
                   aria-label={`Изменить статус задачи «${taskTitle(task)}». Сейчас: ${STATUS_LABEL[task.status]}`}
-                  className="flex h-full min-h-[52px] w-full items-center gap-1 px-4 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
+                  className="flex h-full min-h-9 w-full items-center gap-1 px-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
                 >
                   {/* Значение статуса — цветная пилюля (Notion select pill). */}
                   <span
@@ -2577,7 +2601,7 @@ function TableRow({
                   type="button"
                   disabled={!canEdit}
                   aria-label={`Изменить приоритет задачи «${taskTitle(task)}»`}
-                  className="flex h-full min-h-[52px] w-full items-center gap-1.5 px-4 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
+                  className="flex h-full min-h-9 w-full items-center gap-1.5 px-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
                 >
                   {task.priority !== null && task.priority !== undefined ? (
                     <span
@@ -2624,7 +2648,7 @@ function TableRow({
               onChanged={onChanged}
               projectId={projectId}
               disabled={!currentUserId || !canEdit}
-              className="h-full min-h-[52px] w-full justify-start rounded-none px-4 text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset"
+              className="h-full min-h-9 w-full justify-start rounded-none px-2 text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset"
             />
           </div>
         );
@@ -2635,7 +2659,7 @@ function TableRow({
             <TaskCreatedValue
               task={task}
               dateLabel={CREATED_FMT.format(task.createdAt)}
-              className="min-h-[52px] w-full px-4"
+              className="min-h-9 w-full px-2"
             />
           </div>
         );
@@ -2700,10 +2724,10 @@ function TableRow({
           }}
           className={cn(
             // Границы — на ячейках (см. cellProps/title): зона контролов слева чистая.
-            'group relative grid min-h-[52px] transition-colors hover:bg-accent/40 focus-within:bg-accent/30 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring/50',
+            'group relative grid min-h-9 transition-colors hover:bg-accent/40 focus-within:bg-accent/30 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring/50',
             // Условный цвет (Notion Conditional color) — до selected/moved подсветок.
             rowColor,
-            selected && 'bg-primary/5',
+            selected && 'bg-selection',
             isDragging && 'opacity-40',
             // Синяя линия сверху — сюда вставится перетаскиваемая строка (Notion).
             isOver && 'shadow-[inset_0_2px_0_0_hsl(var(--primary))]',
@@ -2755,7 +2779,7 @@ function TableRow({
                 if (e.defaultPrevented) return; // click после drag
                 setGripMenuOpen(true);
               }}
-              className="grid size-11 cursor-grab place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground active:cursor-grabbing sm:size-5"
+              className="grid size-7 cursor-grab place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground active:cursor-grabbing sm:size-5"
             >
               <GripVertical className="size-3.5" />
             </button>
@@ -2764,7 +2788,7 @@ function TableRow({
             <DropdownEntries entries={menuEntries} />
           </DropdownMenuContent>
         </DropdownMenu>
-        <label className="grid size-11 place-items-center sm:size-4">
+        <label className="grid size-7 place-items-center sm:size-4">
           <input
             type="checkbox"
             checked={selected}
@@ -2793,7 +2817,7 @@ function TableRow({
         data-cell="title"
         tabIndex={-1}
         className={cn(
-          'relative flex min-h-[52px] min-w-0 items-center gap-2 border-b px-4 py-2',
+          'relative flex min-h-9 min-w-0 items-center gap-2 border-b px-2 py-1',
           // Freeze: липнет ПОСЛЕ sticky-gutter'а контролов (3.5rem).
           frozenTitle && 'sticky left-[var(--pf-table-gutter)] z-10 border-r bg-background',
           rangeClassFor(rowIdx, 'title'),
@@ -2839,7 +2863,7 @@ function TableRow({
                   e.stopPropagation();
                   onToggleExpand?.();
                 }}
-                className="grid size-11 shrink-0 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground sm:size-4"
+                className="grid size-7 shrink-0 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground sm:size-4"
               >
                 <ChevronDown
                   className={cn('size-3.5 transition-transform', !expanded && '-rotate-90')}
@@ -2963,7 +2987,7 @@ function DeadlineCell({
             type="button"
             disabled={readOnly}
             aria-label={`Изменить срок задачи «${taskTitle(task)}»`}
-            className="flex h-full min-h-[52px] w-full items-center gap-1.5 px-4 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
+            className="flex h-full min-h-9 w-full items-center gap-1.5 px-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
           >
             {/* Пустой срок — чистая ячейка (Notion). */}
             {task.deadline ? <DeadlineBadge deadline={task.deadline} status={task.status} /> : null}

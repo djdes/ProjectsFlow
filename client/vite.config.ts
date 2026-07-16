@@ -19,10 +19,17 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     allowedHosts: true,
-    hmr: {
-      clientPort: 443,
-      protocol: 'wss',
-    },
+    // Playwright подключается к уже открытому Chrome и иногда проверяет локальную
+    // сборку по LAN-IP. В таком режиме production-WSS HMR бесконечно переподключается
+    // к :443 и забивает страницу ошибками. Для детерминированного visual-run HMR
+    // можно отключить, не меняя обычный dev-режим.
+    hmr:
+      process.env.PF_DISABLE_HMR === '1'
+        ? false
+        : {
+            clientPort: 443,
+            protocol: 'wss',
+          },
     proxy: {
       // Все запросы /api/* dev-сервер проксирует в Express на 4317.
       // Cookie пересылаются прозрачно: для браузера всё выглядит same-origin.

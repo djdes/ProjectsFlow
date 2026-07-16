@@ -2,13 +2,31 @@
 // задач. Дефолтная вкладка «Доска» (канбан) — неявная, в БД не хранится.
 // Mirrors client/src/domain/project/BoardView.ts.
 
-export type BoardViewType = 'kanban' | 'table' | 'list' | 'calendar';
+export type BoardViewType =
+  | 'kanban'
+  | 'table'
+  | 'list'
+  | 'calendar'
+  | 'timeline'
+  | 'gallery'
+  | 'chart'
+  | 'feed'
+  | 'map'
+  | 'dashboard'
+  | 'form';
 
 export const BOARD_VIEW_TYPES: readonly BoardViewType[] = [
   'kanban',
   'table',
   'list',
   'calendar',
+  'timeline',
+  'gallery',
+  'chart',
+  'feed',
+  'map',
+  'dashboard',
+  'form',
 ];
 
 export type BoardView = {

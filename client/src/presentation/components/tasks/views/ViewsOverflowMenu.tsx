@@ -17,13 +17,14 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, MoreHorizontal, Plus, Search } from 'lucide-react';
+import { Database, GripVertical, MoreHorizontal, Plus, Search, Sparkles } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { toast } from '@/components/ui/sonner';
 import type { BoardView, BoardViewType } from '@/domain/project/BoardView';
 import { BOARD_VIEW_TYPES, BOARD_VIEW_TYPE_LABELS } from '@/domain/project/BoardView';
 import { DropdownEntries, type MenuEntry } from './menuEntries';
@@ -135,6 +136,7 @@ export function ViewsOverflowMenu({
   const [query, setQuery] = useState('');
   // Drill-down «Начать с нуля» по кнопке «+ Новое отображение» (Notion New view).
   const [creating, setCreating] = useState(false);
+  const [description, setDescription] = useState('');
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
   // Попап — fixed-портал в body: строка вкладок имеет overflow-x-auto и обрезала бы
@@ -167,6 +169,7 @@ export function ViewsOverflowMenu({
     if (!open) {
       setQuery('');
       setCreating(false);
+      setDescription('');
     }
   }, [open]);
 
@@ -193,11 +196,33 @@ export function ViewsOverflowMenu({
   };
 
   const BoardIcon = VIEW_TYPE_ICONS.kanban;
+  const createFromDescription = (): void => {
+    const text = description.trim().toLocaleLowerCase('ru');
+    if (!text) return;
+    const mappings: [RegExp, BoardViewType][] = [
+      [/форм/, 'form'],
+      [/даш|dashboard/, 'dashboard'],
+      [/тайм|timeline|гант/, 'timeline'],
+      [/кален|calendar/, 'calendar'],
+      [/галер|gallery/, 'gallery'],
+      [/граф|chart/, 'chart'],
+      [/лента|feed/, 'feed'],
+      [/карт|map/, 'map'],
+      [/спис|list/, 'list'],
+      [/доск|board|канбан/, 'kanban'],
+      [/табл|table/, 'table'],
+    ];
+    const type = mappings.find(([pattern]) => pattern.test(text))?.[1] ?? 'table';
+    setOpen(false);
+    onCreate(type);
+  };
   return (
     <span ref={rootRef} className="relative inline-flex shrink-0">
       <button
         type="button"
         onClick={toggleOpen}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         className={cn(
           'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[13px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground',
           open && 'bg-accent/60 text-foreground',
@@ -209,12 +234,22 @@ export function ViewsOverflowMenu({
         createPortal(
           <div
             ref={popupRef}
+            role="dialog"
+            aria-label={creating ? 'Новое отображение' : 'Все отображения проекта'}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.stopPropagation();
+                setOpen(false);
+              }
+            }}
             style={!creating && pos ? { left: pos.left, top: pos.top } : undefined}
             className={cn(
               'fixed z-50 rounded-lg border bg-popover p-1.5 shadow-lg duration-100 animate-in fade-in zoom-in-95',
               // «Начать с нуля» — центрированное окно (Notion Start from scratch),
               // список вью — у кнопки-триггера.
-              creating ? 'left-1/2 top-[38%] w-80 -translate-x-1/2 p-3' : 'w-72',
+              creating
+                ? 'left-1/2 top-[38%] w-[420px] max-w-[calc(100vw-24px)] -translate-x-1/2 p-3'
+                : 'w-[290px]',
             )}
           >
           {creating ? (
@@ -238,6 +273,20 @@ export function ViewsOverflowMenu({
                     </button>
                   );
                 })}
+              </div>
+              <div className="relative mt-2 border-t pt-3">
+                <Sparkles className="pointer-events-none absolute left-2.5 top-[22px] size-4 text-muted-foreground/60" />
+                <input
+                  autoFocus
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') createFromDescription();
+                  }}
+                  placeholder="Или опишите отображение…"
+                  aria-label="Описать новое отображение"
+                  className="h-9 w-full rounded-md border bg-background pl-8 pr-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                />
               </div>
             </>
           ) : (
@@ -310,6 +359,16 @@ export function ViewsOverflowMenu({
                 >
                   <Plus className="size-4" />
                   Новое отображение
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    toast.info('Все отображения уже подключены к задачам текущего проекта')
+                  }
+                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-[13px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+                >
+                  <Database className="size-4" />
+                  Новый источник данных
                 </button>
               </div>}
             </>

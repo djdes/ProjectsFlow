@@ -1724,7 +1724,7 @@ export type NewRecentTaskViewRow = typeof recentTaskViews.$inferInsert;
 
 // ============================================================================
 // board_views — миграция db/103. Пользовательские вью доски проекта (Notion-style):
-// именованные представления задач (kanban/table/list/calendar). Дефолтная «Доска»
+// именованные представления задач. Дефолтная «Доска»
 // (канбан) — неявная, здесь только вью, созданные через «+». Общие на проект.
 // ============================================================================
 export const boardViews = mysqlTable(
@@ -1733,7 +1733,19 @@ export const boardViews = mysqlTable(
     id: id(),
     projectId: char('project_id', { length: 36 }).notNull(),
     name: varchar('name', { length: 64 }).notNull(),
-    type: mysqlEnum('type', ['kanban', 'table', 'list', 'calendar']).notNull(),
+    type: mysqlEnum('type', [
+      'kanban',
+      'table',
+      'list',
+      'calendar',
+      'timeline',
+      'gallery',
+      'chart',
+      'feed',
+      'map',
+      'dashboard',
+      'form',
+    ]).notNull(),
     sortOrder: int('sort_order').notNull().default(0),
     // db/105: пер-вью настройки (фильтры/сортировка/колонки/группировка…) —
     // структуру знает клиент, сервер валидирует только размер.

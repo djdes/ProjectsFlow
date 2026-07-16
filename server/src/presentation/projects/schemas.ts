@@ -118,12 +118,38 @@ export const kanbanDefaultColorsSchema = z.record(
 // Пользовательские вью доски (Notion-style, db/103).
 export const createBoardViewSchema = z.object({
   name: z.string().trim().min(1, 'Введите название').max(64),
-  type: z.enum(['kanban', 'table', 'list', 'calendar']),
+  type: z.enum([
+    'kanban',
+    'table',
+    'list',
+    'calendar',
+    'timeline',
+    'gallery',
+    'chart',
+    'feed',
+    'map',
+    'dashboard',
+    'form',
+  ]),
 });
 export const updateBoardViewSchema = z
   .object({
     name: z.string().trim().min(1, 'Введите название').max(64).optional(),
-    type: z.enum(['kanban', 'table', 'list', 'calendar']).optional(),
+    type: z
+      .enum([
+        'kanban',
+        'table',
+        'list',
+        'calendar',
+        'timeline',
+        'gallery',
+        'chart',
+        'feed',
+        'map',
+        'dashboard',
+        'form',
+      ])
+      .optional(),
     // Порядок вкладок (drag-reorder в окне «ещё…», Notion-style).
     sortOrder: z.number().int().min(0).max(100000).optional(),
     // Пер-вью настройки — прозрачный JSON от клиента; ограничиваем только размер.

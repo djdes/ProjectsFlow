@@ -473,6 +473,64 @@ export type ViewConfig = {
   calendarMode?: 'month' | 'week';
   // Кастомная эмодзи-иконка вью (Notion view icon); null — иконка типа.
   icon?: string | null;
+  layout?: Partial<ViewLayoutState>;
+  form?: Partial<ViewFormState>;
+};
+
+export type ViewLayoutState = {
+  showPageIcon: boolean;
+  wrapAll: boolean;
+  openPagesIn: 'side' | 'center' | 'full';
+  showVerticalLines: boolean;
+  colorColumns: boolean;
+  cardPreview: 'none' | 'cover' | 'content';
+  cardSize: 'small' | 'medium' | 'large';
+  cardLayout: 'compact' | 'list';
+  showTimelineTable: boolean;
+  wrapPageTitles: boolean;
+  showWeekends: boolean;
+  showAuthorByline: boolean;
+  wrapProperties: boolean;
+  feedLimit: 10 | 20 | 50;
+  dashboardModules: ('chart' | 'table' | 'list')[];
+};
+
+export type ViewFormQuestion = {
+  id: string;
+  label: string;
+  required: boolean;
+};
+
+export type ViewFormState = {
+  initialized: boolean;
+  title: string;
+  description: string;
+  questions: ViewFormQuestion[];
+};
+
+export const EMPTY_VIEW_LAYOUT_STATE: ViewLayoutState = {
+  showPageIcon: true,
+  wrapAll: false,
+  openPagesIn: 'side',
+  showVerticalLines: true,
+  colorColumns: true,
+  cardPreview: 'none',
+  cardSize: 'medium',
+  cardLayout: 'compact',
+  showTimelineTable: false,
+  wrapPageTitles: true,
+  showWeekends: true,
+  showAuthorByline: true,
+  wrapProperties: false,
+  feedLimit: 10,
+  dashboardModules: [],
+};
+
+export const EMPTY_VIEW_FORM_STATE: ViewFormState = {
+  initialized: false,
+  title: 'Название формы',
+  description: '',
+  questions: [{ id: 'title', label: 'Название', required: true }],
 };
 
 export type PerViewState = {
@@ -484,6 +542,8 @@ export type PerViewState = {
   colorRules: ViewColorRule[];
   calendarMode: 'month' | 'week';
   icon: string | null;
+  layout: ViewLayoutState;
+  form: ViewFormState;
 };
 
 export const EMPTY_PER_VIEW_STATE: PerViewState = {
@@ -496,6 +556,8 @@ export const EMPTY_PER_VIEW_STATE: PerViewState = {
   colorRules: [],
   calendarMode: 'month',
   icon: null,
+  layout: EMPTY_VIEW_LAYOUT_STATE,
+  form: EMPTY_VIEW_FORM_STATE,
 };
 
 export function perViewToConfig(s: PerViewState): ViewConfig {
@@ -521,6 +583,8 @@ export function perViewToConfig(s: PerViewState): ViewConfig {
     colorRules: s.colorRules,
     calendarMode: s.calendarMode,
     icon: s.icon,
+    layout: s.layout,
+    form: s.form,
   };
 }
 
@@ -554,6 +618,61 @@ export function perViewFromConfig(c: unknown): PerViewState {
     colorRules: Array.isArray(cfg.colorRules) ? cfg.colorRules : [],
     calendarMode: cfg.calendarMode === 'week' ? 'week' : 'month',
     icon: typeof cfg.icon === 'string' && cfg.icon ? cfg.icon : null,
+    layout: {
+      ...EMPTY_VIEW_LAYOUT_STATE,
+      ...(cfg.layout && typeof cfg.layout === 'object' ? cfg.layout : {}),
+      openPagesIn:
+        cfg.layout?.openPagesIn === 'center' || cfg.layout?.openPagesIn === 'full'
+          ? cfg.layout.openPagesIn
+          : 'side',
+      cardPreview:
+        cfg.layout?.cardPreview === 'cover' || cfg.layout?.cardPreview === 'content'
+          ? cfg.layout.cardPreview
+          : 'none',
+      cardSize:
+        cfg.layout?.cardSize === 'small' || cfg.layout?.cardSize === 'large'
+          ? cfg.layout.cardSize
+          : 'medium',
+      cardLayout: cfg.layout?.cardLayout === 'list' ? 'list' : 'compact',
+      feedLimit:
+        cfg.layout?.feedLimit === 20 || cfg.layout?.feedLimit === 50
+          ? cfg.layout.feedLimit
+          : 10,
+      dashboardModules: Array.isArray(cfg.layout?.dashboardModules)
+        ? cfg.layout.dashboardModules.filter(
+            (module): module is 'chart' | 'table' | 'list' =>
+              module === 'chart' || module === 'table' || module === 'list',
+          )
+        : [],
+    },
+    form: {
+      initialized: cfg.form?.initialized === true,
+      title:
+        typeof cfg.form?.title === 'string' && cfg.form.title.trim()
+          ? cfg.form.title
+          : EMPTY_VIEW_FORM_STATE.title,
+      description:
+        typeof cfg.form?.description === 'string'
+          ? cfg.form.description
+          : EMPTY_VIEW_FORM_STATE.description,
+      questions: Array.isArray(cfg.form?.questions)
+        ? cfg.form.questions
+            .filter(
+              (question): question is ViewFormQuestion =>
+                Boolean(
+                  question &&
+                    typeof question === 'object' &&
+                    typeof question.id === 'string' &&
+                    typeof question.label === 'string',
+                ),
+            )
+            .map((question) => ({
+              id: question.id,
+              label: question.label,
+              required: Boolean(question.required),
+            }))
+        : EMPTY_VIEW_FORM_STATE.questions,
+    },
   };
 }
 

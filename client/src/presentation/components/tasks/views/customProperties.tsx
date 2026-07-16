@@ -382,7 +382,7 @@ export function PropertyHeaderCell({
       aria-sort={sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none'}
       data-colkey={colKey}
       className={cn(
-        'relative flex h-12 min-w-0 border-b border-l bg-muted/25',
+        'relative flex h-9 min-w-0 border-b border-l bg-background',
         dropSide === 'left' && 'shadow-[inset_2px_0_0_hsl(var(--primary))]',
         dropSide === 'right' && 'shadow-[inset_-2px_0_0_hsl(var(--primary))]',
       )}
@@ -421,7 +421,7 @@ export function PropertyHeaderCell({
                   }
                 : undefined
             }
-            className="flex h-12 min-w-0 flex-1 items-center gap-2 px-4 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             <Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
             <span className="truncate">{property.name}</span>
@@ -987,7 +987,7 @@ export function PropertyValueCell({
               : 'text';
     if (editing) {
       return (
-        <div role="gridcell" {...selAttrs} className={cn('relative min-h-[52px] border-b border-l', rangeClass)}>
+        <div role="gridcell" {...selAttrs} className={cn('relative min-h-9 border-b border-l', rangeClass)}>
           {/* Notion: редактор раскрывается ПОВЕРХ ячейки РОВНО по её ширине (w-full),
               текст растёт вниз не двигая строки. Тонкая рамка + мягкая тень как в
               Notion (не «плавающий» широкий бокс). Enter — коммит (Shift+Enter —
@@ -1044,7 +1044,7 @@ export function PropertyValueCell({
             )}
           </div>
           {/* Держит высоту строки под оверлеем. */}
-          <div className="min-h-[52px]" aria-hidden />
+          <div className="min-h-9" aria-hidden />
         </div>
       );
     }
@@ -1060,7 +1060,7 @@ export function PropertyValueCell({
           setEditing(true);
         }}
         className={cn(
-          'relative min-h-[52px] min-w-0 border-b border-l px-4 py-2 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
+          'relative min-h-9 min-w-0 border-b border-l px-2 py-1 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
           rangeClass,
         )}
       >
@@ -1079,8 +1079,8 @@ export function PropertyValueCell({
 
   if (property.type === 'checkbox') {
     return (
-      <div role="gridcell" {...selAttrs} tabIndex={-1} className={cn('relative flex min-h-[52px] items-center border-b border-l', rangeClass)}>
-        <label className="flex min-h-[52px] w-full items-center px-4 py-2">
+      <div role="gridcell" {...selAttrs} tabIndex={-1} className={cn('relative flex min-h-9 items-center border-b border-l', rangeClass)}>
+        <label className="flex min-h-9 w-full items-center px-2 py-1">
           <input
             type="checkbox"
             checked={value === '1'}
@@ -1106,7 +1106,7 @@ export function PropertyValueCell({
             role="gridcell"
             disabled={readOnly}
             className={cn(
-              'relative flex min-h-[52px] min-w-0 items-center gap-2 border-b border-l px-4 py-2 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
+              'relative flex min-h-9 min-w-0 items-center gap-2 border-b border-l px-2 py-1 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
               rangeClass,
             )}
           >
@@ -1183,7 +1183,7 @@ export function PropertyValueCell({
           role="gridcell"
           disabled={readOnly}
           className={cn(
-            'relative flex min-h-[52px] min-w-0 flex-wrap items-center gap-1 border-b border-l px-4 py-2 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
+            'relative flex min-h-9 min-w-0 flex-wrap items-center gap-1 border-b border-l px-2 py-1 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
             rangeClass,
           )}
         >

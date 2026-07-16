@@ -4,20 +4,28 @@ import {
   ArrowUp,
   ArrowUpDown,
   Calendar,
+  CalendarClock,
   CalendarDays,
+  ChartNoAxesColumn,
+  ChartNoAxesGantt,
   Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleDot,
   Copy,
+  Database,
   Eye,
   FileText,
   Flag,
+  Images,
+  LayoutDashboard,
   LayoutGrid,
   Link as LinkIcon,
   List,
   ListFilter,
+  Map as MapIcon,
+  Newspaper,
   Paintbrush,
   Pencil,
   Plus,
@@ -25,6 +33,7 @@ import {
   Search,
   Settings2,
   Table as TableIcon,
+  ClipboardList,
   Trash2,
   X,
   Zap,
@@ -63,6 +72,7 @@ import { TASK_PRIORITIES } from '@/domain/task/Task';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { VISIBLE_KANBAN_STATUSES } from '@/domain/kanban/KanbanSettings';
 import {
+  BOARD_VIEW_LAYOUT_TYPES,
   BOARD_VIEW_TYPES,
   BOARD_VIEW_TYPE_LABELS,
   type BoardView,
@@ -76,6 +86,7 @@ import { KanbanBoard } from '../KanbanBoard';
 import { TableView } from './TableView';
 import { ListView } from './ListView';
 import { CalendarView } from './CalendarView';
+import { ExtendedProjectView, type ExtendedViewType } from './ExtendedProjectViews';
 import {
   EMPTY_PER_VIEW_STATE,
   RULE_COLOR_DOT,
@@ -97,6 +108,8 @@ import {
   type ViewDueFilter,
   type ViewFilters,
   type ViewGrouping,
+  type ViewFormState,
+  type ViewLayoutState,
   type ViewRuleColor,
   type ViewSort,
   type ViewSortKey,
@@ -114,6 +127,13 @@ export const VIEW_TYPE_ICONS: Record<BoardViewType, LucideIcon> = {
   table: TableIcon,
   list: List,
   calendar: Calendar,
+  timeline: ChartNoAxesGantt,
+  gallery: Images,
+  chart: ChartNoAxesColumn,
+  feed: Newspaper,
+  map: MapIcon,
+  dashboard: LayoutDashboard,
+  form: ClipboardList,
 };
 
 // Иконка отображения: lucide-иконка типа ИЛИ кастомное эмодзи из config (Notion view icon).
@@ -151,6 +171,8 @@ type Props = {
 // id неявной дефолтной вкладки «Доска» (канбан). В БД не хранится, не переименовывается
 // и не удаляется — это текущая доска проекта как есть.
 const DEFAULT_VIEW_ID = 'default';
+
+export type ViewTabDisplay = 'text-icon' | 'text' | 'icon';
 
 // Зазор между вкладками (gap-0.5) — участвует в расчёте, сколько вкладок влезает.
 const TAB_GAP = 2;
@@ -208,6 +230,30 @@ export function ProjectBoardViews({
     }
   });
   const [boardRenameOpen, setBoardRenameOpen] = useState(false);
+  const displayStorageKey = `pf:view-tab-display:${projectId}`;
+  const [tabDisplay, setTabDisplay] = useState<Record<string, ViewTabDisplay>>(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(displayStorageKey) ?? '{}') as Record<
+        string,
+        ViewTabDisplay
+      >;
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
+  const displayFor = (id: string): ViewTabDisplay => tabDisplay[id] ?? 'text-icon';
+  const setDisplayFor = (id: string, display: ViewTabDisplay): void => {
+    setTabDisplay((current) => {
+      const next = { ...current, [id]: display };
+      try {
+        localStorage.setItem(displayStorageKey, JSON.stringify(next));
+      } catch {
+        /* local preference remains in memory */
+      }
+      return next;
+    });
+  };
   const renameBoard = (name: string): void => {
     setBoardName(name);
     setBoardRenameOpen(false);
@@ -222,6 +268,11 @@ export function ProjectBoardViews({
   // View settings); 'settings' — полные настройки. Новое свойство создаётся прямо
   // в таблице и открывает меню собственного заголовка.
   const [panel, setPanel] = useState<'settings' | 'newview' | null>(null);
+  const [settingsFocusName, setSettingsFocusName] = useState(false);
+  const openSettings = (focusName = false): void => {
+    setSettingsFocusName(focusName);
+    setPanel('settings');
+  };
   // Фильтры/сортировка — пер-вью, живут в памяти вкладки (смена вью не сбрасывает).
   const [perView, setPerView] = useState<Record<string, PerViewState>>({});
   const [searchOpen, setSearchOpen] = useState(false);
@@ -323,6 +374,7 @@ export function ProjectBoardViews({
   );
   const activeType: BoardViewType = active?.type ?? 'kanban';
   const isKanban = activeId === DEFAULT_VIEW_ID || activeType === 'kanban';
+  const isStandaloneView = activeType === 'dashboard' || activeType === 'form';
 
   const state: PerViewState = perView[activeId] ?? EMPTY_PER_VIEW_STATE;
   useEffect(() => {
@@ -362,6 +414,16 @@ export function ProjectBoardViews({
   // Кастомная эмодзи-иконка вью (Notion view icon) — живёт в config, синкается как всё.
   const setViewIcon = (icon: string | null): void =>
     setPerView((prev) => ({ ...prev, [activeId]: { ...state, icon } }));
+  const setLayoutState = (patch: Partial<ViewLayoutState>): void =>
+    setPerView((prev) => ({
+      ...prev,
+      [activeId]: { ...state, layout: { ...state.layout, ...patch } },
+    }));
+  const setFormState = (patch: Partial<ViewFormState>): void =>
+    setPerView((prev) => ({
+      ...prev,
+      [activeId]: { ...state, form: { ...state.form, ...patch } },
+    }));
 
   // Гидратация пер-вью состояния из серверного config (только впервые увиденные вью —
   // локальные несохранённые правки не затираем).
@@ -560,7 +622,7 @@ export function ProjectBoardViews({
     ro.observe(wrap);
     ro.observe(meas);
     return () => ro.disconnect();
-  }, [views, boardName, perView]);
+  }, [views, boardName, perView, tabDisplay]);
 
   // Overflow вкладок: первые N видимы; активная из хвоста подменяет последнюю видимую.
   const { visibleViews, hiddenViews } = useMemo(() => {
@@ -592,32 +654,78 @@ export function ProjectBoardViews({
     });
   };
 
+  const displayEntries = (id: string, icon: LucideIcon): MenuEntry => ({
+    kind: 'sub',
+    label: 'Показывать как',
+    icon,
+    items: [
+      {
+        kind: 'item',
+        label: 'Текст и иконка',
+        checked: displayFor(id) === 'text-icon',
+        onSelect: () => setDisplayFor(id, 'text-icon'),
+      },
+      {
+        kind: 'item',
+        label: 'Только текст',
+        checked: displayFor(id) === 'text',
+        onSelect: () => setDisplayFor(id, 'text'),
+      },
+      {
+        kind: 'item',
+        label: 'Только иконка',
+        checked: displayFor(id) === 'icon',
+        onSelect: () => setDisplayFor(id, 'icon'),
+      },
+      { kind: 'label', label: 'Применяется только для вас' },
+    ],
+  });
+  const sourceEntry = (): MenuEntry => ({
+    kind: 'sub',
+    label: 'Источник',
+    icon: Database,
+    items: [
+      {
+        kind: 'item',
+        label: projectName ?? 'Текущий проект',
+        checked: true,
+        onSelect: () => undefined,
+      },
+      { kind: 'separator' },
+      {
+        kind: 'item',
+        label: 'Управлять источниками',
+        muted: true,
+        onSelect: () =>
+          toast.info('Это отображение использует задачи текущего проекта как источник'),
+      },
+    ],
+  });
+
   // Меню дефолтной вкладки «Доска» (виртуальная, в БД не хранится) — то же окно, что у
-  // остальных вью (Notion: все вкладки равнозначны). «Показывать как» другой тип создаёт
-  // новую вью этого типа; дублирование создаёт канбан-вью.
+  // остальных вью. «Показывать как» меняет только персональный вид вкладки; layout
+  // выбирается внутри «Настроить отображение → Вид».
   const defaultTabMenuEntries = (): MenuEntry[] => [
     {
       kind: 'item',
       label: 'Переименовать',
       icon: Pencil,
-      // setTimeout: попап нельзя открывать, пока Radix-меню не закрылось полностью —
-      // его dismiss-слой и возврат фокуса тут же закроют попап.
-      onSelect: () => setTimeout(() => setBoardRenameOpen(true), 150),
+      onSelect: () => {
+        selectView(DEFAULT_VIEW_ID);
+        openSettings(true);
+      },
     },
+    displayEntries(DEFAULT_VIEW_ID, VIEW_TYPE_ICONS.kanban),
     {
-      kind: 'sub',
-      label: 'Показывать как',
-      icon: VIEW_TYPE_ICONS.kanban,
-      items: BOARD_VIEW_TYPES.map((t) => ({
-        kind: 'item' as const,
-        label: BOARD_VIEW_TYPE_LABELS[t],
-        icon: VIEW_TYPE_ICONS[t],
-        checked: t === 'kanban',
-        onSelect: () => {
-          if (t !== 'kanban') void handleCreate(BOARD_VIEW_TYPE_LABELS[t], t);
-        },
-      })),
+      kind: 'item',
+      label: 'Изменить отображение',
+      icon: Settings2,
+      onSelect: () => {
+        selectView(DEFAULT_VIEW_ID);
+        openSettings();
+      },
     },
+    sourceEntry(),
     {
       kind: 'item',
       label: 'Скопировать ссылку',
@@ -628,15 +736,6 @@ export function ProjectBoardViews({
           .writeText(url)
           .then(() => toast.success('Ссылка на отображение скопирована'))
           .catch(() => toast.error('Не удалось скопировать ссылку'));
-      },
-    },
-    {
-      kind: 'item',
-      label: 'Настроить отображение',
-      icon: Settings2,
-      onSelect: () => {
-        selectView(DEFAULT_VIEW_ID);
-        setPanel('settings');
       },
     },
     {
@@ -654,6 +753,14 @@ export function ProjectBoardViews({
       // Дефолтная «Доска» — сама доска проекта, в БД как вью не хранится.
       onSelect: () => toast.error('Дефолтную вкладку «Доска» нельзя удалить'),
     },
+    { kind: 'separator' },
+    {
+      kind: 'item',
+      label: 'Управлять в Календаре',
+      icon: CalendarClock,
+      muted: true,
+      onSelect: () => toast.info('Календарная интеграция для этой доски пока не подключена'),
+    },
   ];
 
   // Единая спека меню вкладки — рендерится и в дропдаун (клик по активной вкладке),
@@ -663,29 +770,22 @@ export function ProjectBoardViews({
       kind: 'item',
       label: 'Переименовать',
       icon: Pencil,
-      onSelect: () => setTimeout(() => setRenameTarget(v), 150),
+      onSelect: () => {
+        selectView(v.id);
+        openSettings(true);
+      },
     },
-    {
-      kind: 'sub',
-      label: 'Показывать как',
-      icon: VIEW_TYPE_ICONS[v.type],
-      items: BOARD_VIEW_TYPES.map((t) => ({
-        kind: 'item' as const,
-        label: BOARD_VIEW_TYPE_LABELS[t],
-        icon: VIEW_TYPE_ICONS[t],
-        checked: v.type === t,
-        onSelect: () => void handleUpdate(v, { type: t }),
-      })),
-    },
+    displayEntries(v.id, VIEW_TYPE_ICONS[v.type]),
     {
       kind: 'item',
-      label: 'Настроить отображение',
+      label: 'Изменить отображение',
       icon: Settings2,
       onSelect: () => {
         selectView(v.id);
-        setPanel('settings');
+        openSettings();
       },
     },
+    sourceEntry(),
     { kind: 'item', label: 'Скопировать ссылку', icon: LinkIcon, onSelect: () => copyViewLink(v) },
     { kind: 'item', label: 'Дублировать отображение', icon: Copy, onSelect: () => void handleDuplicate(v) },
     { kind: 'separator' },
@@ -696,6 +796,19 @@ export function ProjectBoardViews({
       destructive: true,
       onSelect: () => setDeleteTarget(v),
     },
+    ...(v.type === 'calendar' || v.type === 'timeline'
+      ? ([
+          { kind: 'separator' },
+          {
+            kind: 'item',
+            label: 'Управлять в Календаре',
+            icon: CalendarClock,
+            muted: true,
+            onSelect: () =>
+              toast.info('Календарная интеграция для этого отображения пока не подключена'),
+          },
+        ] as MenuEntry[])
+      : []),
   ];
 
   return (
@@ -743,7 +856,7 @@ export function ProjectBoardViews({
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="gap-2" onClick={() => setPanel('settings')}>
+              <DropdownMenuItem className="gap-2" onClick={() => openSettings()}>
                 <Settings2 className="size-4" />
                 Настройки отображения
               </DropdownMenuItem>
@@ -815,19 +928,27 @@ export function ProjectBoardViews({
             className="pointer-events-none invisible absolute left-0 top-0 flex items-center whitespace-nowrap"
           >
             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium">
-              <LayoutGrid className="size-3.5 shrink-0" />
-              <span className="max-w-[9rem] truncate">{boardName}</span>
+              {displayFor(DEFAULT_VIEW_ID) !== 'text' && (
+                <LayoutGrid className="size-3.5 shrink-0" />
+              )}
+              {displayFor(DEFAULT_VIEW_ID) !== 'icon' && (
+                <span className="max-w-[9rem] truncate">{boardName}</span>
+              )}
             </span>
             {allViewsSorted.map((v) => (
               <span
                 key={v.id}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium"
               >
-                <ViewIconGlyph
-                  icon={perView[v.id]?.icon ?? VIEW_TYPE_ICONS[v.type]}
-                  className="size-3.5 shrink-0"
-                />
-                <span className="max-w-[9rem] truncate">{v.name}</span>
+                {displayFor(v.id) !== 'text' && (
+                  <ViewIconGlyph
+                    icon={perView[v.id]?.icon ?? VIEW_TYPE_ICONS[v.type]}
+                    className="size-3.5 shrink-0"
+                  />
+                )}
+                {displayFor(v.id) !== 'icon' && (
+                  <span className="max-w-[9rem] truncate">{v.name}</span>
+                )}
               </span>
             ))}
             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium">
@@ -838,6 +959,7 @@ export function ProjectBoardViews({
           <ViewTab
             icon={VIEW_TYPE_ICONS.kanban}
             name={boardName}
+            display={displayFor(DEFAULT_VIEW_ID)}
             active={activeId === DEFAULT_VIEW_ID}
             onSelect={() => selectView(DEFAULT_VIEW_ID)}
             menu={canEdit ? defaultTabMenuEntries() : undefined}
@@ -850,6 +972,7 @@ export function ProjectBoardViews({
               key={v.id}
               icon={perView[v.id]?.icon ?? VIEW_TYPE_ICONS[v.type]}
               name={v.name}
+              display={displayFor(v.id)}
               active={activeId === v.id}
               onSelect={() => selectView(v.id)}
               menu={canEdit ? tabMenuEntries(v) : undefined}
@@ -917,10 +1040,10 @@ export function ProjectBoardViews({
             оставаться справа так же, как в таблице. На узком экране остаются
             настройки и «Создать». */}
         <div className="flex shrink-0 items-center gap-0.5">
-          <div className="md:hidden">
+          {!isStandaloneView && <div className="md:hidden">
             <FilterMenu filters={state.filters} onChange={setFilters} active={filtersActive} />
-          </div>
-          <div className="hidden items-center gap-0.5 md:flex">
+          </div>}
+          {!isStandaloneView && <div className="hidden items-center gap-0.5 md:flex">
             <FilterMenu filters={state.filters} onChange={setFilters} active={filtersActive} />
             <SortMenu sort={state.sort} onChange={setSort} />
             {canEdit && onOpenAutomation && (
@@ -958,13 +1081,13 @@ export function ProjectBoardViews({
                   <Search className="size-4" />
                 </ToolbarIcon>
               )}
-          </div>
+          </div>}
           {(active || isKanban) && (
-            <ToolbarIcon label="Настройки отображения" onClick={() => setPanel('settings')}>
+            <ToolbarIcon label="Настройки отображения" onClick={() => openSettings()}>
               <Settings2 className="size-4" />
             </ToolbarIcon>
           )}
-          {canEdit && <div className="ml-1 inline-flex overflow-hidden rounded-md">
+          {canEdit && !isStandaloneView && <div className="ml-1 inline-flex overflow-hidden rounded-md">
             <Button
               size="sm"
               className="h-10 rounded-r-none px-3.5 text-sm sm:h-9 sm:text-xs"
@@ -1029,7 +1152,7 @@ export function ProjectBoardViews({
 
       {/* Строка активных фильтров/сортировки (chips, Notion-style): клик по chip —
           попап значений (чекбоксы) + «Убрать фильтр»; «+ Фильтр» добавляет следующий. */}
-      {chipsVisible && (
+      {chipsVisible && !isStandaloneView && (
         <div className="flex max-w-full items-center gap-1 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible">
           {state.sort && (
             <button
@@ -1093,7 +1216,7 @@ export function ProjectBoardViews({
 
       {/* Активный вид. key по вью — смена вкладки пересоздаёт вид (свой useTasks/стейт).
           Панель «Настройки отображения» — В ПОТОКЕ справа (Notion): контент поджимается. */}
-      <div className="flex min-h-0 flex-1 items-start gap-4">
+      <div className="flex min-h-0 flex-1 items-start gap-0">
       <div
         className="min-w-0 flex-1 transition-[width] motion-reduce:transition-none"
         style={{ transitionDuration: '240ms', transitionTimingFunction: 'cubic-bezier(.2,.8,.2,1)' }}
@@ -1132,6 +1255,8 @@ export function ProjectBoardViews({
           colorRules={state.colorRules}
           createRequest={createReq}
           sidePanelOpen={panel !== null}
+          showVerticalLines={state.layout.showVerticalLines}
+          wrapAllContent={state.layout.wrapAll}
           onSetHiddenCols={setHiddenCols}
           canEdit={canEdit}
         />
@@ -1148,7 +1273,7 @@ export function ProjectBoardViews({
           createRequest={createReq}
           canEdit={canEdit}
         />
-      ) : (
+      ) : activeType === 'calendar' ? (
         <CalendarView
           key={`${projectId}:${activeId}`}
           projectId={projectId}
@@ -1157,6 +1282,22 @@ export function ProjectBoardViews({
           filters={state.filters}
           mode={state.calendarMode}
           onModeChange={setCalendarMode}
+          createRequest={createReq}
+          canEdit={canEdit}
+        />
+      ) : (
+        <ExtendedProjectView
+          key={`${projectId}:${activeId}`}
+          type={activeType as ExtendedViewType}
+          projectId={projectId}
+          projectName={projectName}
+          memberCount={memberCount}
+          filters={state.filters}
+          sort={state.sort}
+          layout={state.layout}
+          onLayoutChange={setLayoutState}
+          form={state.form}
+          onFormChange={setFormState}
           createRequest={createReq}
           canEdit={canEdit}
         />
@@ -1174,11 +1315,12 @@ export function ProjectBoardViews({
             onTableState={setTableState}
             onGrouping={setGrouping}
             onCalendarMode={setCalendarMode}
+            onLayout={setLayoutState}
             onIcon={setViewIcon}
             onClose={() => setPanel(null)}
             onRename={(name) => void handleUpdate(active, { name })}
             onType={(type) => void handleUpdate(active, { type })}
-            onDone={() => setPanel('settings')}
+            onDone={() => openSettings()}
           />
         </BoardSidePanel>
       )}
@@ -1187,6 +1329,7 @@ export function ProjectBoardViews({
           {active ? (
             <ViewSettingsCard
               view={active}
+              focusName={settingsFocusName}
               canEdit={canEdit}
               onClose={() => setPanel(null)}
               onRename={(name) => void handleUpdate(active, { name })}
@@ -1205,6 +1348,8 @@ export function ProjectBoardViews({
               onGrouping={setGrouping}
               colorRules={state.colorRules}
               onColorRules={setColorRules}
+              layout={state.layout}
+              onLayout={setLayoutState}
             />
           ) : (
             /* Настройки дефолтной «Доски» (в БД не хранится): синтетическая вью;
@@ -1219,6 +1364,7 @@ export function ProjectBoardViews({
                 config: null,
                 createdAt: new Date(),
               }}
+              focusName={settingsFocusName}
               canEdit={canEdit}
               onClose={() => setPanel(null)}
               onRename={renameBoard}
@@ -1245,6 +1391,8 @@ export function ProjectBoardViews({
               onGrouping={setGrouping}
               colorRules={state.colorRules}
               onColorRules={setColorRules}
+              layout={state.layout}
+              onLayout={setLayoutState}
             />
           )}
         </BoardSidePanel>
@@ -1277,10 +1425,8 @@ export function ProjectBoardViews({
   );
 }
 
-// Плавающая панель настроек (Notion View settings): карточка в правом верхнем углу
-// ПОД тулбаром (не на всю высоту), СО СВОИМ скроллом (max-height + overflow-y-auto).
-// Пока открыта — блокируем скролл главной страницы (<main>) и тела таблицы: двигается
-// только сама панель (запрос: «нельзя скроллить таблицу и главную страницу»).
+// Панель настроек (Notion View settings): отдельный правый rail со своим скроллом.
+// Она сужает только тело активного view и не блокирует main/table scroll.
 function BoardSidePanel({
   onClose,
   children,
@@ -1300,28 +1446,7 @@ function BoardSidePanel({
     const r = tabs?.getBoundingClientRect();
     if (r) setPos({ top: Math.round(r.bottom + 6) });
     else setPos({ top: 100 });
-    // В приложении один главный вертикальный scroller — <main>. Замораживаем только его:
-    // горизонтальный scroller таблицы в desktop split-view остаётся доступным.
-    const main = document.querySelector<HTMLElement>('main');
-    const mainScrollTop = main?.scrollTop ?? 0;
-    const previousMainOverflowY = main?.style.overflowY ?? '';
-    const previousMainOverscroll = main?.style.overscrollBehavior ?? '';
-    const previousBodyOverflow = document.body.style.overflow;
-    if (main) {
-      main.style.overflowY = 'hidden';
-      main.style.overscrollBehavior = 'contain';
-    }
-    document.body.style.overflow = 'hidden';
-    return () => {
-      if (main) {
-        main.style.overflowY = previousMainOverflowY;
-        main.style.overscrollBehavior = previousMainOverscroll;
-      }
-      document.body.style.overflow = previousBodyOverflow;
-      window.requestAnimationFrame(() => {
-        if (main?.isConnected) main.scrollTop = mainScrollTop;
-      });
-    };
+    return undefined;
   }, []);
   // Escape закрывает верхний слой; на tablet/mobile Tab остаётся внутри полноэкранной панели.
   useEffect(() => {
@@ -1383,10 +1508,10 @@ function BoardSidePanel({
         transitionTimingFunction: 'cubic-bezier(.2,.8,.2,1)',
       }}
       className={cn(
-        'fixed inset-x-3 bottom-3 z-[60] flex flex-col overflow-y-auto overscroll-contain rounded-[20px] border bg-popover pb-[env(safe-area-inset-bottom)] shadow-2xl',
+        'fixed inset-x-3 bottom-3 z-[60] flex flex-col overflow-y-auto overscroll-contain rounded-xl border bg-popover pb-[env(safe-area-inset-bottom)] shadow-lg',
         'max-lg:!inset-0 max-lg:!top-0 max-lg:!max-h-none max-lg:rounded-none',
         'animate-in fade-in slide-in-from-right-3 motion-reduce:animate-none',
-        'lg:sticky lg:inset-auto lg:z-30 lg:w-[480px] lg:shrink-0',
+        'lg:sticky lg:inset-auto lg:z-30 lg:w-[386px] lg:shrink-0 lg:rounded-none lg:border-y-0 lg:border-r-0 lg:shadow-none',
         'motion-reduce:transition-none',
       )}
     >
@@ -1439,6 +1564,188 @@ function ToggleRow({
   );
 }
 
+function SelectRow<T extends string | number>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: readonly { value: T; label: string }[];
+  onChange: (value: T) => void;
+}): React.ReactElement {
+  return (
+    <label className="flex items-center justify-between gap-3 rounded-md px-1.5 py-1.5 text-sm transition-colors hover:bg-accent/50">
+      <span>{label}</span>
+      <select
+        value={String(value)}
+        onChange={(event) => {
+          const option = options.find((item) => String(item.value) === event.target.value);
+          if (option) onChange(option.value);
+        }}
+        className="max-w-[11rem] rounded-md bg-transparent px-1.5 py-1 text-right text-sm text-muted-foreground outline-none focus:bg-accent"
+      >
+        {options.map((option) => (
+          <option key={String(option.value)} value={String(option.value)}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function LayoutOptions({
+  type,
+  layout,
+  onChange,
+}: {
+  type: BoardViewType;
+  layout: ViewLayoutState;
+  onChange: (patch: Partial<ViewLayoutState>) => void;
+}): React.ReactElement {
+  const canShowPageIcon = type !== 'chart' && type !== 'dashboard' && type !== 'form';
+  return (
+    <div className="flex flex-col border-t px-1.5 py-1.5">
+      {canShowPageIcon && (
+        <ToggleRow
+          label="Показывать иконку страницы"
+          checked={layout.showPageIcon}
+          onChange={(showPageIcon) => onChange({ showPageIcon })}
+        />
+      )}
+      {type === 'table' && (
+        <>
+          <ToggleRow
+            label="Вертикальные линии"
+            checked={layout.showVerticalLines}
+            onChange={(showVerticalLines) => onChange({ showVerticalLines })}
+          />
+          <ToggleRow
+            label="Переносить всё содержимое"
+            checked={layout.wrapAll}
+            onChange={(wrapAll) => onChange({ wrapAll })}
+          />
+        </>
+      )}
+      {type === 'kanban' && (
+        <>
+          <ToggleRow
+            label="Раскрашивать колонки"
+            checked={layout.colorColumns}
+            onChange={(colorColumns) => onChange({ colorColumns })}
+          />
+          <ToggleRow
+            label="Переносить всё содержимое"
+            checked={layout.wrapAll}
+            onChange={(wrapAll) => onChange({ wrapAll })}
+          />
+        </>
+      )}
+      {type === 'timeline' && (
+        <ToggleRow
+          label="Показывать таблицу"
+          checked={layout.showTimelineTable}
+          onChange={(showTimelineTable) => onChange({ showTimelineTable })}
+        />
+      )}
+      {type === 'calendar' && (
+        <>
+          <ToggleRow
+            label="Переносить названия"
+            checked={layout.wrapPageTitles}
+            onChange={(wrapPageTitles) => onChange({ wrapPageTitles })}
+          />
+          <ToggleRow
+            label="Показывать выходные"
+            checked={layout.showWeekends}
+            onChange={(showWeekends) => onChange({ showWeekends })}
+          />
+        </>
+      )}
+      {type === 'gallery' && (
+        <>
+          <ToggleRow
+            label="Переносить всё содержимое"
+            checked={layout.wrapAll}
+            onChange={(wrapAll) => onChange({ wrapAll })}
+          />
+          <SelectRow
+            label="Предпросмотр карточки"
+            value={layout.cardPreview}
+            options={[
+              { value: 'none', label: 'Нет' },
+              { value: 'cover', label: 'Обложка' },
+              { value: 'content', label: 'Содержимое' },
+            ]}
+            onChange={(cardPreview) => onChange({ cardPreview })}
+          />
+        </>
+      )}
+      {(type === 'kanban' || type === 'gallery') && (
+        <>
+          <SelectRow
+            label="Размер карточки"
+            value={layout.cardSize}
+            options={[
+              { value: 'small', label: 'Маленький' },
+              { value: 'medium', label: 'Средний' },
+              { value: 'large', label: 'Большой' },
+            ]}
+            onChange={(cardSize) => onChange({ cardSize })}
+          />
+          <SelectRow
+            label="Макет карточки"
+            value={layout.cardLayout}
+            options={[
+              { value: 'compact', label: 'Компактный' },
+              { value: 'list', label: 'Список' },
+            ]}
+            onChange={(cardLayout) => onChange({ cardLayout })}
+          />
+        </>
+      )}
+      {type === 'feed' && (
+        <>
+          <ToggleRow
+            label="Показывать автора"
+            checked={layout.showAuthorByline}
+            onChange={(showAuthorByline) => onChange({ showAuthorByline })}
+          />
+          <ToggleRow
+            label="Переносить свойства"
+            checked={layout.wrapProperties}
+            onChange={(wrapProperties) => onChange({ wrapProperties })}
+          />
+          <SelectRow
+            label="Лимит загрузки"
+            value={layout.feedLimit}
+            options={[
+              { value: 10, label: '10' },
+              { value: 20, label: '20' },
+              { value: 50, label: '50' },
+            ]}
+            onChange={(feedLimit) => onChange({ feedLimit })}
+          />
+        </>
+      )}
+      {type !== 'chart' && type !== 'dashboard' && type !== 'form' && (
+        <SelectRow
+          label="Открывать страницы"
+          value={layout.openPagesIn}
+          options={[
+            { value: 'side', label: 'Сбоку' },
+            { value: 'center', label: 'По центру' },
+            { value: 'full', label: 'На всю страницу' },
+          ]}
+          onChange={(openPagesIn) => onChange({ openPagesIn })}
+        />
+      )}
+    </div>
+  );
+}
+
 // Панель «Новое отображение» (Notion New view): сразу после создания вью — иконка типа + имя
 // (autoFocus), сетка типов (клик меняет тип на лету), настройки ПОД ВЫБРАННЫЙ ТИП
 // (Notion: у Table/Board/Calendar разные), «Источник», «Готово» → полные настройки.
@@ -1453,6 +1760,7 @@ function NewViewPanel({
   onTableState,
   onGrouping,
   onCalendarMode,
+  onLayout,
   onIcon,
   onClose,
   onRename,
@@ -1465,6 +1773,7 @@ function NewViewPanel({
   onTableState: (patch: Partial<TableViewState>) => void;
   onGrouping: (g: ViewGrouping | null) => void;
   onCalendarMode: (m: 'month' | 'week') => void;
+  onLayout: (patch: Partial<ViewLayoutState>) => void;
   onIcon: (icon: string | null) => void;
   onClose: () => void;
   onRename: (name: string) => void;
@@ -1547,8 +1856,11 @@ function NewViewPanel({
           className="h-8 w-full rounded-md border bg-background px-2 text-sm outline-none ring-primary/30 focus:ring-2"
         />
       </div>
-      <div className="grid grid-cols-2 gap-1.5 p-3 pt-2">
-        {BOARD_VIEW_TYPES.map((t) => {
+      <div className="grid grid-cols-3 gap-1.5 p-3 pt-2">
+        {(view.type === 'dashboard' || view.type === 'form'
+          ? [view.type]
+          : BOARD_VIEW_LAYOUT_TYPES
+        ).map((t) => {
           const Icon = VIEW_TYPE_ICONS[t];
           const selected = view.type === t;
           return (
@@ -1571,6 +1883,7 @@ function NewViewPanel({
           );
         })}
       </div>
+      <LayoutOptions type={view.type} layout={state.layout} onChange={onLayout} />
       {/* Настройки выбранного типа (Notion: per-layout options). */}
       <div className="border-t px-1.5 py-1.5">
         {view.type === 'table' && (
@@ -2040,6 +2353,7 @@ function AddFilterChip({
 function ViewTab({
   icon,
   name,
+  display,
   active,
   onSelect,
   menu,
@@ -2049,6 +2363,7 @@ function ViewTab({
 }: {
   icon: ViewIconLike;
   name: string;
+  display: ViewTabDisplay;
   active: boolean;
   onSelect: () => void;
   menu?: MenuEntry[];
@@ -2081,15 +2396,15 @@ function ViewTab({
     },
   };
   const tabClass = cn(
-    'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md py-1 pl-2 pr-2 text-[13px] font-medium transition-[background-color,color,transform] duration-150 motion-reduce:transition-none',
+    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full py-1 pl-2 pr-2 text-[13px] font-medium transition-colors duration-150 motion-reduce:transition-none',
     active
-      ? 'scale-[1.01] bg-accent text-foreground'
+      ? 'bg-accent text-foreground'
       : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
   );
   const inner = (
     <>
-      <ViewIconGlyph icon={icon} className="size-3.5 shrink-0" />
-      <span className="max-w-[9rem] truncate">{name}</span>
+      {display !== 'text' && <ViewIconGlyph icon={icon} className="size-3.5 shrink-0" />}
+      {display !== 'icon' && <span className="max-w-[9rem] truncate">{name}</span>}
     </>
   );
 
@@ -2100,7 +2415,7 @@ function ViewTab({
     const btn = (
       <ContextMenuTrigger asChild>
         {active ? (
-          <button type="button" aria-label="Меню вью" title="Меню вью" className={tabClass} {...tabA11y}>
+          <button type="button" aria-label={`Меню отображения «${name}»`} title={name} className={tabClass} {...tabA11y}>
             {inner}
           </button>
         ) : (
@@ -2237,6 +2552,7 @@ type SettingsPage = 'root' | 'layout' | 'props' | 'filter' | 'sort' | 'group' | 
 
 function ViewSettingsCard({
   view,
+  focusName,
   canEdit,
   onClose,
   onRename,
@@ -2255,8 +2571,11 @@ function ViewSettingsCard({
   onGrouping,
   colorRules,
   onColorRules,
+  layout,
+  onLayout,
 }: {
   view: BoardView;
+  focusName: boolean;
   canEdit: boolean;
   onClose: () => void;
   onRename: (name: string) => void;
@@ -2275,13 +2594,25 @@ function ViewSettingsCard({
   onGrouping: (g: ViewGrouping | null) => void;
   colorRules: ViewColorRule[];
   onColorRules: (rules: ViewColorRule[]) => void;
+  layout: ViewLayoutState;
+  onLayout: (patch: Partial<ViewLayoutState>) => void;
 }): React.ReactElement {
   const [page, setPage] = useState<SettingsPage>('root');
   const [name, setName] = useState(view.name);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const cancelNameRef = useRef(false);
   // Кастомные свойства проекта — для страницы «Видимость свойств» (панель
   // смонтирована только когда открыта, лишних запросов нет).
   const cardProps = useTaskProperties(view.projectId);
   useEffect(() => setName(view.name), [view.id, view.name]);
+  useEffect(() => {
+    if (!focusName || page !== 'root') return;
+    const frame = window.requestAnimationFrame(() => {
+      nameInputRef.current?.focus();
+      nameInputRef.current?.select();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusName, page, view.id]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose();
@@ -2290,6 +2621,10 @@ function ViewSettingsCard({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   const commitName = (): void => {
+    if (cancelNameRef.current) {
+      cancelNameRef.current = false;
+      return;
+    }
     const trimmed = name.trim();
     if (trimmed && trimmed !== view.name) onRename(trimmed);
   };
@@ -2325,10 +2660,19 @@ function ViewSettingsCard({
                 <TypeIcon className="size-4 text-muted-foreground" />
               </span>
               <input
+                ref={nameInputRef}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onBlur={commitName}
                 onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    cancelNameRef.current = true;
+                    setName(view.name);
+                    onClose();
+                    return;
+                  }
                   if (e.key === 'Enter') {
                     e.preventDefault();
                     commitName();
@@ -2340,10 +2684,10 @@ function ViewSettingsCard({
                 className="h-8 w-full rounded-md border bg-background px-2.5 text-sm outline-none focus:border-foreground/30"
               />
             </div>
-            {canEdit && (
+            {canEdit && view.type !== 'dashboard' && view.type !== 'form' && (
               <NavRow
                 icon={TypeIcon}
-                label="Вид"
+                label="Макет"
                 value={BOARD_VIEW_TYPE_LABELS[view.type]}
                 onClick={() => setPage('layout')}
               />
@@ -2396,9 +2740,9 @@ function ViewSettingsCard({
         )}
         {page === 'layout' && (
           <div className="flex flex-col gap-1.5">
-            {backHeader('Вид')}
-            <div className="grid grid-cols-2 gap-1.5 px-0.5 pb-1">
-              {BOARD_VIEW_TYPES.map((t) => {
+            {backHeader('Макет')}
+            <div className="grid grid-cols-3 gap-1.5 px-0.5 pb-1">
+              {BOARD_VIEW_LAYOUT_TYPES.map((t) => {
                 const Icon = VIEW_TYPE_ICONS[t];
                 return (
                   <button
@@ -2418,6 +2762,7 @@ function ViewSettingsCard({
                 );
               })}
             </div>
+            <LayoutOptions type={view.type} layout={layout} onChange={onLayout} />
           </div>
         )}
         {page === 'props' && onToggleColumn && (

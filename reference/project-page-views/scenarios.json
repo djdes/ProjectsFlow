@@ -1,0 +1,220 @@
+{
+  "copyZone": "project-page-views",
+  "scenarios": [
+    {
+      "id": "views-01-switch-visible",
+      "steps": [
+        "Open project page",
+        "Click a visible view tab"
+      ],
+      "expected": [
+        "Clicked tab becomes active pill",
+        "View body changes",
+        "URL view id changes"
+      ]
+    },
+    {
+      "id": "views-02-overflow-keyboard",
+      "steps": [
+        "Focus N more…",
+        "Press Enter",
+        "Press Escape"
+      ],
+      "expected": [
+        "Overflow dialog opens",
+        "Search and all views are available",
+        "Escape closes without changing active view"
+      ]
+    },
+    {
+      "id": "views-03-context-menu",
+      "steps": [
+        "Right-click active view"
+      ],
+      "expected": [
+        "Context menu is anchored under the tab",
+        "Rename, Display as, Edit view, Source, Copy, Duplicate and Delete are present"
+      ]
+    },
+    {
+      "id": "views-04-display-as",
+      "steps": [
+        "Open view context menu",
+        "Open Display as"
+      ],
+      "expected": [
+        "Text and icon, Text only and Icon only are shown",
+        "Current personal choice is marked",
+        "Layout is not changed"
+      ]
+    },
+    {
+      "id": "views-05-rename",
+      "steps": [
+        "Open view context menu",
+        "Choose Rename"
+      ],
+      "expected": [
+        "View settings opens",
+        "Name field is focused and prefilled",
+        "Escape cancels the uncommitted edit"
+      ]
+    },
+    {
+      "id": "views-06-edit-layout",
+      "steps": [
+        "Open Edit view",
+        "Open Layout",
+        "Choose another layout"
+      ],
+      "expected": [
+        "Layout changes immediately",
+        "Type-specific settings are shown",
+        "View identity is preserved"
+      ]
+    },
+    {
+      "id": "views-07-new-view",
+      "steps": [
+        "Open overflow",
+        "Choose New view",
+        "Choose Timeline"
+      ],
+      "expected": [
+        "Draft view becomes active",
+        "Timeline renders",
+        "View name input is focused"
+      ]
+    },
+    {
+      "id": "views-08-form",
+      "steps": [
+        "Choose New view",
+        "Choose Form",
+        "Choose Start from scratch"
+      ],
+      "expected": [
+        "Form setup confirmation appears",
+        "Form builder replaces normal New toolbar",
+        "Preview and Share form are visible"
+      ]
+    },
+    {
+      "id": "views-09-delete",
+      "steps": [
+        "Open context menu of a test view",
+        "Choose Delete view",
+        "Confirm"
+      ],
+      "expected": [
+        "Only the selected test view is removed",
+        "Another readable view becomes active"
+      ]
+    },
+    {
+      "id": "table-01-scroll",
+      "steps": [
+        "Scroll project vertically",
+        "Scroll table horizontally"
+      ],
+      "expected": [
+        "View tabs leave the viewport",
+        "Table header sticks at top 44px",
+        "Name column scrolls horizontally"
+      ]
+    },
+    {
+      "id": "table-02-add-column-open",
+      "steps": [
+        "Scroll to table right edge",
+        "Click add-column plus"
+      ],
+      "expected": [
+        "350px temporary area is reserved",
+        "Table moves toward new right edge",
+        "Property type picker opens",
+        "Name input is focused"
+      ]
+    },
+    {
+      "id": "table-03-add-column-create",
+      "steps": [
+        "Enter a property name",
+        "Choose Text"
+      ],
+      "expected": [
+        "A 200px text property is created",
+        "Table ends at the new right edge",
+        "Header opens property actions"
+      ]
+    },
+    {
+      "id": "table-04-add-column-cancel",
+      "steps": [
+        "Open add-column picker",
+        "Press Escape"
+      ],
+      "expected": [
+        "Picker closes",
+        "Temporary width is removed",
+        "No property is created"
+      ]
+    },
+    {
+      "id": "table-05-range",
+      "steps": [
+        "Drag across a 2-column by 3-row cell range"
+      ],
+      "expected": [
+        "All six cells receive blue wash",
+        "Anchor cell receives 2px blue inset outline"
+      ]
+    },
+    {
+      "id": "table-06-range-to-rows",
+      "steps": [
+        "Right-click selected range"
+      ],
+      "expected": [
+        "Three intersecting rows become selected",
+        "Row checkboxes become visible",
+        "Bulk context menu opens"
+      ]
+    },
+    {
+      "id": "table-07-row-selection-dismiss",
+      "steps": [
+        "With row context menu open, click outside once",
+        "Click outside again"
+      ],
+      "expected": [
+        "First click closes only the menu",
+        "Selected rows remain highlighted",
+        "Second click clears selection and performs normal click"
+      ]
+    },
+    {
+      "id": "responsive-01-tablet",
+      "steps": [
+        "Set viewport to 1024x768"
+      ],
+      "expected": [
+        "Sidebar remains visible",
+        "More views move into overflow",
+        "Table keeps horizontal scroll",
+        "Settings panel uses most of main content"
+      ]
+    },
+    {
+      "id": "responsive-02-compact",
+      "steps": [
+        "Set viewport to 390x844 with desktop sidebar open"
+      ],
+      "expected": [
+        "Sidebar remains 270px",
+        "Main content becomes a narrow independently scrollable strip",
+        "No global page horizontal overflow is added"
+      ]
+    }
+  ]
+}

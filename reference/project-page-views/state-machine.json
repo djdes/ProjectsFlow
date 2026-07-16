@@ -1,0 +1,217 @@
+{
+  "copyZone": "project-page-views",
+  "machines": {
+    "activeView": {
+      "states": [
+        "idle",
+        "switching",
+        "loaded",
+        "error"
+      ],
+      "transitions": [
+        {
+          "from": "loaded",
+          "event": "VIEW_TAB_CLICK",
+          "to": "switching",
+          "guard": "view exists and is readable",
+          "sideEffect": "update URL view id and load persisted config",
+          "focusTarget": "selected tab",
+          "scrollBehavior": "preserve main scroller when possible; reset layout-local scroll",
+          "rollback": "restore previous view on load failure"
+        },
+        {
+          "from": "switching",
+          "event": "VIEW_LOADED",
+          "to": "loaded",
+          "sideEffect": "render layout and toolbar"
+        }
+      ]
+    },
+    "viewMenu": {
+      "states": [
+        "closed",
+        "context-open",
+        "display-as-open",
+        "overflow-open",
+        "new-view-picker",
+        "settings-open",
+        "delete-confirm"
+      ],
+      "transitions": [
+        {
+          "from": "closed",
+          "event": "CONTEXT_MENU",
+          "to": "context-open",
+          "focusTarget": "first menu item",
+          "scrollBehavior": "none"
+        },
+        {
+          "from": "context-open",
+          "event": "DISPLAY_AS",
+          "to": "display-as-open",
+          "focusTarget": "current display option"
+        },
+        {
+          "from": "closed",
+          "event": "OVERFLOW_ENTER_OR_CLICK",
+          "to": "overflow-open",
+          "focusTarget": "search input"
+        },
+        {
+          "from": "overflow-open",
+          "event": "NEW_VIEW",
+          "to": "new-view-picker",
+          "focusTarget": "view picker"
+        },
+        {
+          "from": "context-open",
+          "event": "EDIT_VIEW",
+          "to": "settings-open",
+          "focusTarget": "settings panel"
+        },
+        {
+          "from": "context-open",
+          "event": "DELETE_VIEW",
+          "to": "delete-confirm",
+          "focusTarget": "confirm dialog"
+        },
+        {
+          "from": "*",
+          "event": "ESCAPE",
+          "to": "closed",
+          "sideEffect": "cancel uncommitted field edit",
+          "scrollBehavior": "preserve"
+        }
+      ]
+    },
+    "newView": {
+      "states": [
+        "picker",
+        "creating",
+        "draft-settings",
+        "form-question-choice",
+        "ready",
+        "failed"
+      ],
+      "transitions": [
+        {
+          "from": "picker",
+          "event": "SELECT_LAYOUT",
+          "to": "creating",
+          "guard": "can edit project views",
+          "sideEffect": "create a draft view"
+        },
+        {
+          "from": "creating",
+          "event": "NORMAL_LAYOUT_CREATED",
+          "to": "draft-settings",
+          "focusTarget": "View name input"
+        },
+        {
+          "from": "creating",
+          "event": "FORM_CREATED",
+          "to": "form-question-choice",
+          "focusTarget": "Create questions button"
+        },
+        {
+          "from": "draft-settings",
+          "event": "NAME_COMMIT_OR_CLOSE",
+          "to": "ready",
+          "sideEffect": "persist view config"
+        },
+        {
+          "from": "form-question-choice",
+          "event": "START_FROM_SCRATCH_OR_CREATE_QUESTIONS",
+          "to": "ready",
+          "sideEffect": "initialize form builder"
+        }
+      ]
+    },
+    "addColumn": {
+      "states": [
+        "closed",
+        "placeholder-open",
+        "type-selected",
+        "created",
+        "failed"
+      ],
+      "transitions": [
+        {
+          "from": "closed",
+          "event": "ADD_COLUMN_CLICK",
+          "to": "placeholder-open",
+          "guard": "can edit properties",
+          "sideEffect": "reserve 350px, move scroll toward right edge, open type picker",
+          "focusTarget": "Type property name input",
+          "scrollBehavior": "preserve vertical; adjust horizontal"
+        },
+        {
+          "from": "placeholder-open",
+          "event": "SELECT_PROPERTY_TYPE",
+          "to": "type-selected",
+          "sideEffect": "create property with name and type"
+        },
+        {
+          "from": "type-selected",
+          "event": "CREATE_SUCCESS",
+          "to": "created",
+          "sideEffect": "replace placeholder with 200px column"
+        },
+        {
+          "from": "placeholder-open",
+          "event": "ESCAPE_OR_OUTSIDE",
+          "to": "closed",
+          "sideEffect": "remove placeholder",
+          "rollback": "restore original scroll width"
+        }
+      ]
+    },
+    "tableSelection": {
+      "states": [
+        "none",
+        "cell-active",
+        "range-selected",
+        "rows-selected",
+        "rows-menu-open"
+      ],
+      "transitions": [
+        {
+          "from": "none",
+          "event": "CELL_CLICK",
+          "to": "cell-active",
+          "focusTarget": "clicked cell"
+        },
+        {
+          "from": "*",
+          "event": "CELL_DRAG",
+          "to": "range-selected",
+          "sideEffect": "paint rectangle and anchor outline"
+        },
+        {
+          "from": "range-selected",
+          "event": "RIGHT_CLICK",
+          "to": "rows-menu-open",
+          "sideEffect": "promote intersecting rows to row selection and open bulk actions"
+        },
+        {
+          "from": "rows-menu-open",
+          "event": "OUTSIDE_CLICK",
+          "to": "rows-selected",
+          "sideEffect": "close menu only"
+        },
+        {
+          "from": "rows-selected",
+          "event": "OUTSIDE_CLICK",
+          "to": "cell-active",
+          "sideEffect": "clear row selection and perform normal click"
+        },
+        {
+          "from": "range-selected",
+          "event": "CELL_CLICK",
+          "to": "cell-active",
+          "sideEffect": "clear range and activate clicked cell"
+        }
+      ]
+    }
+  }
+}

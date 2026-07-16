@@ -1,0 +1,132 @@
+{
+  "copyZone": "project-page-views",
+  "reference": {
+    "product": "Notion",
+    "page": "Projectsflow"
+  },
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900,
+      "devicePixelRatio": 1,
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 270,
+        "height": 900
+      },
+      "topBar": {
+        "x": 270,
+        "y": 0,
+        "width": 1170,
+        "height": 44
+      },
+      "mainScroller": {
+        "x": 270,
+        "y": 44,
+        "width": 1170,
+        "height": 856,
+        "clientWidth": 1155,
+        "clientHeight": 841,
+        "scrollWidth": 2842,
+        "scrollHeight": 1351,
+        "overflowX": "auto",
+        "overflowY": "auto"
+      },
+      "contentLeft": 374,
+      "viewTabs": {
+        "x": 374,
+        "y": 350.4,
+        "height": 40,
+        "visibleWidth": 698.5,
+        "tabHeight": 32,
+        "activeRadius": 9999
+      },
+      "activeTableTab": {
+        "x": 572,
+        "y": 354.4,
+        "width": 83,
+        "height": 32
+      },
+      "newButton": {
+        "x": 1252.5,
+        "y": 356.4,
+        "width": 44.5,
+        "height": 28,
+        "radius": "6px 0 0 6px"
+      },
+      "table": {
+        "headerY": 390.4,
+        "headerHeight": 36,
+        "rowHeight": 36,
+        "rowStep": 37,
+        "nameWidth": 280,
+        "propertyWidth": 200,
+        "leftGutterWidth": 104,
+        "addButton": {
+          "width": 28,
+          "height": 28
+        }
+      },
+      "overlays": {
+        "viewContextMenu": {
+          "width": 220,
+          "height": 263
+        },
+        "viewsOverflow": {
+          "width": 290,
+          "height": 374
+        },
+        "viewSettings": {
+          "x": 1039,
+          "y": 390.4,
+          "width": 386,
+          "visibleHeight": 509.6
+        },
+        "addColumnPicker": {
+          "x": 1024,
+          "y": 422.4,
+          "width": 404,
+          "height": 454
+        },
+        "deleteConfirm": {
+          "width": 406,
+          "height": 169
+        },
+        "formSetup": {
+          "width": 406,
+          "height": 233
+        }
+      }
+    },
+    "tablet": {
+      "width": 1024,
+      "height": 768,
+      "sidebarWidth": 270,
+      "mainWidth": 754,
+      "viewsOverflowWidth": 290,
+      "behavior": "desktop layout remains; views collapse into overflow; table scrolls horizontally"
+    },
+    "compact": {
+      "width": 390,
+      "height": 844,
+      "sidebarWidth": 270,
+      "mainWidth": 120,
+      "mainScrollerClientWidth": 105,
+      "behavior": "desktop web compresses; main content remains horizontally scrollable"
+    }
+  },
+  "styles": {
+    "fontFamily": "ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI Variable Display, Segoe UI, Helvetica, Arial, sans-serif",
+    "baseFontSize": 16,
+    "viewTabFontSize": 14,
+    "tableHeaderFontSize": 14,
+    "tableHeaderLineHeight": 21,
+    "activeTabBackground": "rgba(42, 28, 0, 0.07)",
+    "selectionBackground": "rgba(35, 131, 226, 0.07)",
+    "rowSelectionBackground": "rgba(35, 131, 226, 0.14)",
+    "selectionBorder": "rgb(39, 131, 222)",
+    "primaryBlue": "rgb(39, 131, 222)",
+    "shadowPolicy": "no shadows for tabs/table rows; soft shadow only for floating overlays"
+  }
+}
