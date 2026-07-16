@@ -497,8 +497,6 @@ const taskCommentRepo = new DrizzleTaskCommentRepository(db);
 const taskBillingAttributionRepo = new DrizzleTaskBillingAttributionRepository(db);
 const digestSettingsRepo = new DrizzleDigestSettingsRepository(db, projectMemberRepo);
 const workspaceAssigneeDigestRepo = new DrizzleWorkspaceAssigneeDigestRepository(db);
-const telegramDigestActionDeliveryRepo =
-  new DrizzleTelegramDigestActionDeliveryRepository(db);
 const agentTokenRepo = new DrizzleAgentTokenRepository(db);
 const aiPromptJobRepo = new DrizzleAiPromptJobRepository(db);
 // Метеринг расхода ИИ (db/082): единый ledger + хаб RecordUsage, который зовут все
@@ -869,9 +867,7 @@ const dismissCloseProposal = new DismissCloseProposal({
 const handleTelegramWebhook = new HandleTelegramWebhook({
   users: userRepo,
   members: projectMemberRepo,
-  projects: projectRepo,
   tasks: taskRepo,
-  digestActions: telegramDigestActionDeliveryRepo,
   attachments: taskAttachmentRepo,
   attachmentStorage,
   client: telegramClient,
@@ -1340,6 +1336,8 @@ const authDeps = {
 // «Отправить сейчас». Полностью серверная рассылка (почта / личный TG / группа / in-app).
 // One-click действия из писем-сводок (db/086): токены + публичный сервис.
 const emailActionTokenRepo = new DrizzleEmailActionTokenRepository(db);
+const telegramDigestActionDeliveryRepo =
+  new DrizzleTelegramDigestActionDeliveryRepository(db);
 const createEmailActionToken = new CreateEmailActionToken({
   tokens: emailActionTokenRepo,
   idGen: idGenerator,

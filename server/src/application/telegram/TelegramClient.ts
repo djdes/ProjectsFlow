@@ -10,7 +10,6 @@ export type InlineKeyboardButton = {
   readonly callback_data?: string;
   readonly url?: string;
   readonly switch_inline_query_current_chat?: string;
-  readonly style?: 'danger' | 'success' | 'primary';
 };
 
 export type InlineKeyboardMarkup = {

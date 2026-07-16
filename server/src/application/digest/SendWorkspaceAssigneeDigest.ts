@@ -14,7 +14,6 @@ import type { WorkspaceAssigneeDigestRepository } from './WorkspaceAssigneeDiges
 import type { CreateEmailActionToken } from '../email-action/CreateEmailActionToken.js';
 import type { TelegramDigestActionDeliveryRepository } from './TelegramDigestActionDeliveryRepository.js';
 import { extractTelegramDigestActionTokens } from './TelegramDigestActionService.js';
-import { collapsedTelegramDigestKeyboard } from './TelegramDigestKeyboard.js';
 import type { Task } from '../../domain/task/Task.js';
 import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 import type { TaskWithCounts } from '../task/ListTasks.js';
@@ -139,7 +138,6 @@ export class SendWorkspaceAssigneeDigest {
         continue;
       }
       const completeActionLinks = new Map<string, string>();
-      const actionTokens: string[] = [];
       const base = this.deps.appUrl.replace(/\/+$/, '');
       for (const group of grouped) {
         for (const task of group.tasks) {
@@ -153,7 +151,6 @@ export class SendWorkspaceAssigneeDigest {
             task.id,
             `${base}/api/telegram-digest-actions/${token}`,
           );
-          actionTokens.push(token);
         }
       }
       const message = buildWorkspaceAssigneeDigestMessage({
@@ -181,9 +178,6 @@ export class SendWorkspaceAssigneeDigest {
           const richResult = await this.deps.telegram.sendRichMessage({
             chatId: settings.telegramGroupChatId,
             html: richMessage,
-            replyMarkup: collapsedTelegramDigestKeyboard(
-              completeActionLinks.size,
-            ),
           });
           if (richResult.kind === 'ok') result = richResult;
           fallbackAllowed =
@@ -212,10 +206,7 @@ export class SendWorkspaceAssigneeDigest {
         if (opts.force) testMessageIds.push(result.messageId);
         await this.deps.telegramDigestActions
           .attach({
-            tokens:
-              deliveredKind === 'rich'
-                ? actionTokens
-                : extractTelegramDigestActionTokens(deliveredHtml),
+            tokens: extractTelegramDigestActionTokens(deliveredHtml),
             chatId: settings.telegramGroupChatId,
             messageId: result.messageId,
             messageHtml: deliveredHtml,
@@ -364,7 +355,6 @@ export function buildWorkspaceAssigneeDigestRichMessage(input: {
       input.telegramLink,
     )}`,
     showAssignee: false,
-    interactivePanel: true,
   });
 }
 

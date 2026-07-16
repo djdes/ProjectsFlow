@@ -15,7 +15,6 @@ import type {
 import type { CreateEmailActionToken } from '../email-action/CreateEmailActionToken.js';
 import type { TelegramDigestActionDeliveryRepository } from './TelegramDigestActionDeliveryRepository.js';
 import { extractTelegramDigestActionTokens } from './TelegramDigestActionService.js';
-import { collapsedTelegramDigestKeyboard } from './TelegramDigestKeyboard.js';
 import { markdownToTelegramHtml } from '../telegram/telegramMarkdown.js';
 import {
   buildDigestModel,
@@ -119,7 +118,6 @@ export class SendDailyDigest {
     }
     const base = this.deps.appUrl.replace(/\/+$/, '');
     const telegramCompleteActionLinks = new Map<string, string>();
-    const telegramActionTokens: string[] = [];
     if (
       cfg.channels.includes('telegram') &&
       cfg.tgTargets.includes('group') &&
@@ -136,7 +134,6 @@ export class SendDailyDigest {
           task.id,
           `${base}/api/telegram-digest-actions/${token}`,
         );
-        telegramActionTokens.push(token);
       }
     }
 
@@ -282,7 +279,7 @@ export class SendDailyDigest {
       settings.telegramGroupChatId !== null
     ) {
       const groupChatId = settings.telegramGroupChatId;
-      const richHtml = renderDigestRich(telegramModel, { interactivePanel: true });
+      const richHtml = renderDigestRich(telegramModel);
       let richOk = false;
       let fallbackAllowed = !this.deps.telegramClient.sendRichMessage;
       if (this.deps.telegramClient.sendRichMessage) {
@@ -290,7 +287,6 @@ export class SendDailyDigest {
           const r = await this.deps.telegramClient.sendRichMessage({
             chatId: groupChatId,
             html: richHtml,
-            replyMarkup: collapsedTelegramDigestKeyboard(telegramModel.count),
           });
           richOk = r.kind === 'ok';
           fallbackAllowed = r.kind === 'error' && r.deliveryUnknown !== true;
@@ -298,7 +294,7 @@ export class SendDailyDigest {
             rememberTestMessage({ ...r, chatId: groupChatId });
             await this.deps.telegramDigestActions
               .attach({
-                tokens: telegramActionTokens,
+                tokens: extractTelegramDigestActionTokens(richHtml),
                 chatId: groupChatId,
                 messageId: r.messageId,
                 messageHtml: richHtml,

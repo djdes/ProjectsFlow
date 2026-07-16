@@ -48,7 +48,6 @@ test('service completes the task and edits the same rich Telegram message', asyn
     deliveries: {
       findByToken: async () => ({
         token,
-        taskId: 't1',
         chatId: -1007,
         messageId: 42,
         messageHtml: storedHtml,
