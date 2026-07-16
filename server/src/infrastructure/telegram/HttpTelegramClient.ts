@@ -216,7 +216,9 @@ export class HttpTelegramClient implements TelegramClient {
       body: JSON.stringify({
         chat_id: input.chatId,
         message_id: input.messageId,
-        text: input.text,
+        text: input.richHtml === undefined ? input.text : undefined,
+        rich_message:
+          input.richHtml === undefined ? undefined : { html: input.richHtml },
         parse_mode: input.parseMode,
         disable_web_page_preview: input.disableWebPagePreview,
         reply_markup: input.replyMarkup,

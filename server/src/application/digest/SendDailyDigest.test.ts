@@ -46,6 +46,7 @@ test('manual group test deletes its predecessor and remembers one collapsed assi
   };
   const deleted: Array<{ chatId: number; messageIds: readonly number[] }> = [];
   const saved: unknown[] = [];
+  const actionDeliveries: unknown[] = [];
   let richHtml = '';
 
   const send = new SendDailyDigest({
@@ -90,7 +91,12 @@ test('manual group test deletes its predecessor and remembers one collapsed assi
     } as never,
     appUrl: 'https://projectsflow.ru',
     idGen: () => 'id',
-    createEmailActionToken: { execute: async () => 'token' } as never,
+    createEmailActionToken: { execute: async () => 'a'.repeat(64) } as never,
+    telegramDigestActions: {
+      attach: async (input: unknown) => {
+        actionDeliveries.push(input);
+      },
+    } as never,
     signingSecret: 'secret',
   });
 
@@ -99,8 +105,12 @@ test('manual group test deletes its predecessor and remembers one collapsed assi
   assert.deepEqual(result, { taskCount: 1 });
   assert.deepEqual(deleted, [{ chatId: -1007, messageIds: [11, 12] }]);
   assert.deepEqual(saved, [[], [{ chatId: -1007, messageIds: [44] }]]);
+  assert.equal(actionDeliveries.length, 1);
+  assert.deepEqual((actionDeliveries[0] as { tokens: string[] }).tokens, ['a'.repeat(64)]);
   assert.ok(richHtml.includes('<details><summary>Показать задачи (1)</summary>'));
   assert.ok(richHtml.includes('@anna_pf · Анна'));
   assert.ok(richHtml.includes('<ul>'));
+  assert.ok(richHtml.includes('>○</a>'));
+  assert.ok(!richHtml.includes('✓ Завершить'));
   assert.ok(!richHtml.includes('<table'));
 });

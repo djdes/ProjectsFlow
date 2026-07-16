@@ -13,6 +13,8 @@ import type {
   DigestTestDelivery,
 } from './DigestSettingsRepository.js';
 import type { CreateEmailActionToken } from '../email-action/CreateEmailActionToken.js';
+import type { TelegramDigestActionDeliveryRepository } from './TelegramDigestActionDeliveryRepository.js';
+import { extractTelegramDigestActionTokens } from './TelegramDigestActionService.js';
 import { markdownToTelegramHtml } from '../telegram/telegramMarkdown.js';
 import {
   buildDigestModel,
@@ -51,6 +53,7 @@ type Deps = {
   readonly idGen: () => string;
   // Токен-ссылки one-click действий в письме (своя на каждого получателя × задачу).
   readonly createEmailActionToken: CreateEmailActionToken;
+  readonly telegramDigestActions: TelegramDigestActionDeliveryRepository;
   // Секрет для подписи URL картинок-вложений (письмо: <img>, Telegram: альбом).
   readonly signingSecret: string;
 };
@@ -113,6 +116,27 @@ export class SendDailyDigest {
         }),
       );
     }
+    const base = this.deps.appUrl.replace(/\/+$/, '');
+    const telegramCompleteActionLinks = new Map<string, string>();
+    if (
+      cfg.channels.includes('telegram') &&
+      cfg.tgTargets.includes('group') &&
+      settings.telegramGroupChatId !== null
+    ) {
+      for (const task of selected) {
+        const token = await this.deps.createEmailActionToken.execute({
+          action: 'complete',
+          taskId: task.id,
+          projectId,
+          userId: task.assignee.userId,
+        });
+        telegramCompleteActionLinks.set(
+          task.id,
+          `${base}/api/telegram-digest-actions/${token}`,
+        );
+      }
+    }
+
     const model = buildDigestModel(enriched, {
       projectName: project.name,
       appUrl: this.deps.appUrl,
@@ -121,21 +145,21 @@ export class SendDailyDigest {
       grouping: { by: 'status', statuses },
       now: digestNow,
     });
-    const telegramModel =
-      cfg.tgGrouping === 'assignee'
-        ? buildDigestModel(enriched, {
-            projectName: project.name,
-            appUrl: this.deps.appUrl,
-            isInbox: project.isInbox,
-            attachmentsByTask: new Map(),
-            grouping: { by: 'assignee' },
-            telegramAssignees,
-            now: digestNow,
-          })
-        : model;
+    const telegramModel = buildDigestModel(enriched, {
+      projectName: project.name,
+      appUrl: this.deps.appUrl,
+      isInbox: project.isInbox,
+      attachmentsByTask: new Map(),
+      grouping:
+        cfg.tgGrouping === 'assignee'
+          ? { by: 'assignee' }
+          : { by: 'status', statuses },
+      telegramAssignees,
+      completeActionLinks: telegramCompleteActionLinks,
+      now: digestNow,
+    });
 
     const subject = `Ежедневная сводка · ${project.name}`;
-    const base = this.deps.appUrl.replace(/\/+$/, '');
     const text = renderDigestMarkdown(model);
     // Telegram: массив сообщений (длинная сводка разбивается, все задачи целиком).
     const tgChunks = renderDigestTelegram(telegramModel);
@@ -255,18 +279,30 @@ export class SendDailyDigest {
       settings.telegramGroupChatId !== null
     ) {
       const groupChatId = settings.telegramGroupChatId;
+      const richHtml = renderDigestRich(telegramModel);
       let richOk = false;
       let fallbackAllowed = !this.deps.telegramClient.sendRichMessage;
       if (this.deps.telegramClient.sendRichMessage) {
         try {
           const r = await this.deps.telegramClient.sendRichMessage({
             chatId: groupChatId,
-            html: renderDigestRich(telegramModel),
+            html: richHtml,
           });
           richOk = r.kind === 'ok';
           fallbackAllowed = r.kind === 'error' && r.deliveryUnknown !== true;
           if (r.kind === 'ok') {
             rememberTestMessage({ ...r, chatId: groupChatId });
+            await this.deps.telegramDigestActions
+              .attach({
+                tokens: extractTelegramDigestActionTokens(richHtml),
+                chatId: groupChatId,
+                messageId: r.messageId,
+                messageHtml: richHtml,
+                messageKind: 'rich',
+              })
+              .catch((e) =>
+                console.warn('[daily-digest] remember rich actions failed', e),
+              );
           }
         } catch (e) {
           console.warn('[daily-digest] tg group rich failed', e);
@@ -287,6 +323,17 @@ export class SendDailyDigest {
             .catch((e) => console.warn('[daily-digest] tg group failed', e));
           if (result && typeof result === 'object' && result.kind === 'ok') {
             rememberTestMessage({ ...result, chatId: groupChatId });
+            await this.deps.telegramDigestActions
+              .attach({
+                tokens: extractTelegramDigestActionTokens(chunk),
+                chatId: groupChatId,
+                messageId: result.messageId,
+                messageHtml: chunk,
+                messageKind: 'html',
+              })
+              .catch((e) =>
+                console.warn('[daily-digest] remember fallback actions failed', e),
+              );
           }
         }
       }

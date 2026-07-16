@@ -213,12 +213,14 @@ import { ListTasks } from './application/task/ListTasks.js';
 import { ExportTasksDigest } from './application/task/ExportTasksDigest.js';
 import { DrizzleDigestSettingsRepository } from './infrastructure/repositories/DrizzleDigestSettingsRepository.js';
 import { DrizzleWorkspaceAssigneeDigestRepository } from './infrastructure/repositories/DrizzleWorkspaceAssigneeDigestRepository.js';
+import { DrizzleTelegramDigestActionDeliveryRepository } from './infrastructure/repositories/DrizzleTelegramDigestActionDeliveryRepository.js';
 import { GetDigestSettings } from './application/digest/GetDigestSettings.js';
 import { SaveDigestSettings } from './application/digest/SaveDigestSettings.js';
 import { SendDailyDigest } from './application/digest/SendDailyDigest.js';
 import { TriggerDailyDigestNow } from './application/digest/TriggerDailyDigestNow.js';
 import { DailyDigestScheduler } from './infrastructure/scheduler/DailyDigestScheduler.js';
 import { SendWorkspaceAssigneeDigest } from './application/digest/SendWorkspaceAssigneeDigest.js';
+import { TelegramDigestActionService } from './application/digest/TelegramDigestActionService.js';
 import { ManageWorkspaceAssigneeDigest } from './application/digest/ManageWorkspaceAssigneeDigest.js';
 import { WorkspaceAssigneeDigestScheduler } from './infrastructure/scheduler/WorkspaceAssigneeDigestScheduler.js';
 import { SearchTasks } from './application/task/SearchTasks.js';
@@ -1334,6 +1336,8 @@ const authDeps = {
 // «Отправить сейчас». Полностью серверная рассылка (почта / личный TG / группа / in-app).
 // One-click действия из писем-сводок (db/086): токены + публичный сервис.
 const emailActionTokenRepo = new DrizzleEmailActionTokenRepository(db);
+const telegramDigestActionDeliveryRepo =
+  new DrizzleTelegramDigestActionDeliveryRepository(db);
 const createEmailActionToken = new CreateEmailActionToken({
   tokens: emailActionTokenRepo,
   idGen: idGenerator,
@@ -1352,6 +1356,12 @@ const emailActionService = new EmailActionService({
   createTaskComment: createTaskCommentUseCase,
   now,
 });
+const telegramDigestActionService = new TelegramDigestActionService({
+  emailActions: emailActionService,
+  deliveries: telegramDigestActionDeliveryRepo,
+  telegram: telegramClient,
+  notifyTaskChanged,
+});
 
 const sendDailyDigest = new SendDailyDigest({
   tasks: taskRepo,
@@ -1367,6 +1377,7 @@ const sendDailyDigest = new SendDailyDigest({
   appUrl: appBaseUrl,
   idGen: idGenerator,
   createEmailActionToken,
+  telegramDigestActions: telegramDigestActionDeliveryRepo,
   signingSecret: repoAccessSecret,
 });
 const sendWorkspaceAssigneeDigest = new SendWorkspaceAssigneeDigest({
@@ -1378,6 +1389,8 @@ const sendWorkspaceAssigneeDigest = new SendWorkspaceAssigneeDigest({
   users: userRepo,
   telegram: telegramClient,
   appUrl: appBaseUrl,
+  createEmailActionToken,
+  telegramDigestActions: telegramDigestActionDeliveryRepo,
 });
 const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({
   repo: workspaceAssigneeDigestRepo,
@@ -1389,6 +1402,7 @@ const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({
 
 const { app, devProxyUpgrade } = createApp({
   emailActions: { service: emailActionService, appUrl: appBaseUrl },
+  telegramDigestActions: { service: telegramDigestActionService },
   auth: {
     register: new Register(authDeps),
     login: new Login(authDeps),

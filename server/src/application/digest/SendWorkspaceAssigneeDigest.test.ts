@@ -84,6 +84,10 @@ test('workspace assignee digest uses the same rich layout as regular Telegram di
     telegramLink: link,
     appUrl: 'https://projectsflow.ru',
     now: new Date('2026-07-16T09:00:00.000Z'),
+    completeActionLinks: new Map([
+      ['task-a', 'https://projectsflow.ru/api/telegram-digest-actions/' + 'a'.repeat(64)],
+      ['task-b', 'https://projectsflow.ru/api/telegram-digest-actions/' + 'b'.repeat(64)],
+    ]),
     projects: [
       {
         project: { id: 'project-a', name: 'DocsFlow' },
@@ -102,8 +106,10 @@ test('workspace assignee digest uses the same rich layout as regular Telegram di
   assert.match(message, /<h3>📁 DocsFlow<\/h3>/);
   assert.match(message, /<h3>📁 Banana<\/h3>/);
   assert.match(message, /projects\/project-a\?task=task-a/);
+  assert.match(message, /api\/telegram-digest-actions\/a{64}">○<\/a>/);
   assert.match(message, /⏰ осталось 2 дня/);
-  assert.match(message, /✓ Завершить/);
+  assert.match(message, />○<\/a>/);
+  assert.doesNotMatch(message, /✓ Завершить/);
   assert.doesNotMatch(message, /👤 Денис/);
   assert.match(message, /<\/details>$/);
 });

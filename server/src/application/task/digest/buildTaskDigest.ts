@@ -21,6 +21,7 @@ export type DigestItem = {
   readonly assignee: string;
   readonly openLink: string; // ?task=… — открыть задачу (карточка с комментариями)
   readonly doneLink: string; // ?task=…&done=1 — перенести в «Готово»
+  readonly completeActionLink: string | null;
   readonly commentCount: number; // кол-во комментариев у задачи (для «Комментировать (N)»)
   readonly attachments: DigestAttachment[];
 };
@@ -59,6 +60,9 @@ export type BuildDigestOptions = {
   // Привязки Telegram нужны только рендерам групповой сводки; обычные email/markdown
   // используют displayName и не получают технические идентификаторы.
   readonly telegramAssignees?: ReadonlyMap<string, DigestTelegramAssignee>;
+  // Одноразовые ссылки завершения из Telegram. Круг перед названием вызывает действие,
+  // после которого сервер обновляет исходное rich-сообщение.
+  readonly completeActionLinks?: ReadonlyMap<string, string>;
   // Подменяемое «сейчас» для детерминированных тестов RU-дат.
   readonly now?: Date;
 };
@@ -84,6 +88,7 @@ export function buildDigestModel(
       assignee: t.assignee.displayName,
       openLink: linkBase,
       doneLink: `${linkBase}&done=1`,
+      completeActionLink: opts.completeActionLinks?.get(t.id) ?? null,
       commentCount: t.commentCount ?? 0,
       attachments: [...(opts.attachmentsByTask.get(t.id) ?? [])],
     };
@@ -251,20 +256,21 @@ export function renderDigestHtml(
   return p.join('');
 }
 
-// Блок одной задачи для Telegram: кликабельный жирный заголовок → мета (👤/⏰) → тело →
-// вложения → футер «Комментировать (N) | Завершить» (гиперссылки на сайт). Если блок не
+// Блок одной задачи для Telegram: кликабельный круг завершения + жирный заголовок →
+// мета (👤/⏰) → тело → вложения → ссылка «Комментировать (N)». Если блок не
 // влезает в maxBlock — усекаем ТОЛЬКО тело (по сырому markdown, затем re-render, чтобы HTML
 // остался сбалансированным и Telegram не отбил parse_mode).
 function digestItemBlockTg(it: DigestItem, maxBlock: number): string {
-  const title = `<a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>`;
+  const completeLink = it.completeActionLink ?? it.doneLink;
+  const title =
+    `<a href="${escapeHtml(completeLink)}">○</a> ` +
+    `<a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>`;
   const meta: string[] = [];
   if (it.assignee) meta.push(`👤 ${escapeHtml(it.assignee)}`);
   if (it.deadline) meta.push(`⏰ ${escapeHtml(it.deadline)}`);
   const commentLabel =
     it.commentCount > 0 ? `Комментировать (${it.commentCount})` : 'Комментировать';
-  const footer =
-    `<a href="${escapeHtml(it.openLink)}">${commentLabel}</a>` +
-    ` | <a href="${escapeHtml(it.doneLink)}">✓ Завершить</a>`;
+  const footer = `<a href="${escapeHtml(it.openLink)}">${commentLabel}</a>`;
   const attach = it.attachments.length
     ? it.attachments.map((a) => `📎 <a href="${escapeHtml(a.url)}">${escapeHtml(a.name)}</a>`).join(' · ')
     : '';
@@ -353,15 +359,17 @@ export function renderDigestRich(
     h.push(`<h3>${telegramGroupHeading(g)}</h3>`);
     h.push('<ul>');
     for (const it of g.items) {
+      const completeLink = it.completeActionLink ?? it.doneLink;
       const meta: string[] = [];
       if (opts.showAssignee !== false) {
         meta.push(`👤 ${it.assignee ? escapeHtml(it.assignee) : '—'}`);
       }
       meta.push(`⏰ ${it.deadline ? escapeHtml(it.deadline) : 'без дедлайна'}`);
       h.push(
-        `<li><a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>` +
+        `<li><a href="${escapeHtml(completeLink)}">○</a> ` +
+          `<a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>` +
           `<br><i>${meta.join(' · ')}</i>` +
-          `<br><a href="${escapeHtml(it.doneLink)}">✓ Завершить</a></li>`,
+          `</li>`,
       );
     }
     h.push('</ul>');

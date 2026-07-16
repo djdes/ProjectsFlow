@@ -357,3 +357,27 @@ test('deleteMessages sorts, deduplicates and deletes previous test messages in o
     },
   );
 });
+
+test('editMessageText can replace a digest with rich HTML', async () => {
+  await withTelegramStub(
+    () => ({ status: 200, body: { ok: true, result: true } }),
+    async (baseUrl, requests) => {
+      const client = new HttpTelegramClient('secret', baseUrl);
+      await client.editMessageText({
+        chatId: -1007,
+        messageId: 42,
+        richHtml: '<details><summary>Задачи</summary><p>● Готово</p></details>',
+      });
+
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]!.path, '/botsecret/editMessageText');
+      assert.deepEqual(JSON.parse(requests[0]!.body), {
+        chat_id: -1007,
+        message_id: 42,
+        rich_message: {
+          html: '<details><summary>Задачи</summary><p>● Готово</p></details>',
+        },
+      });
+    },
+  );
+});

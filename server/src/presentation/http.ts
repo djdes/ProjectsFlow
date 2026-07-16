@@ -178,6 +178,8 @@ import { config } from './config.js';
 import { authRouter } from './auth/routes.js';
 import { emailActionsRouter } from './emailActions/routes.js';
 import type { EmailActionService } from '../application/email-action/EmailActionService.js';
+import { telegramDigestActionsRouter } from './telegramDigestActions/routes.js';
+import type { TelegramDigestActionService } from '../application/digest/TelegramDigestActionService.js';
 import { avatarRouter } from './users/avatarRoutes.js';
 import { projectsRouter } from './projects/routes.js';
 import { workspacesRouter } from './workspaces/routes.js';
@@ -264,6 +266,9 @@ type AppDeps = {
   readonly emailActions: {
     readonly service: EmailActionService;
     readonly appUrl: string;
+  };
+  readonly telegramDigestActions: {
+    readonly service: TelegramDigestActionService;
   };
   readonly auth: {
     readonly register: Register;
@@ -718,6 +723,10 @@ export function createApp(deps: AppDeps): CreatedApp {
 
   // Публичные one-click страницы действий из писем-сводок (авторизация по opaque-токену).
   app.use('/api/email-actions', emailActionsRouter(deps.emailActions));
+  app.use(
+    '/api/telegram-digest-actions',
+    telegramDigestActionsRouter(deps.telegramDigestActions),
+  );
 
   app.use(
     '/api/auth',

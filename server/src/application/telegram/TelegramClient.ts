@@ -83,7 +83,10 @@ export type SendDocumentGroupInput = {
 export type EditMessageTextInput = {
   readonly chatId: number;
   readonly messageId: number;
-  readonly text: string;
+  readonly text?: string;
+  // Bot API 10.2 позволяет заменить обычный текст сообщения структурированным rich_message.
+  // Используем это для мгновенной перерисовки чекбоксов внутри скрываемых сводок.
+  readonly richHtml?: string;
   readonly parseMode?: 'HTML' | 'MarkdownV2';
   readonly disableWebPagePreview?: boolean;
   // null/undefined — убрать кнопки; объект — заменить.

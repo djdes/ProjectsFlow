@@ -1894,3 +1894,28 @@ export const emailActionTokens = mysqlTable(
 
 export type EmailActionTokenRow = typeof emailActionTokens.$inferSelect;
 export type NewEmailActionTokenRow = typeof emailActionTokens.$inferInsert;
+
+// ============================================================================
+// telegram_digest_action_deliveries — db/122. Связывает complete-токен с конкретным
+// Telegram-сообщением, чтобы после клика обновить круг и зачеркнуть завершённую задачу.
+// ============================================================================
+export const telegramDigestActionDeliveries = mysqlTable(
+  'telegram_digest_action_deliveries',
+  {
+    token: varchar('token', { length: 64 }).primaryKey(),
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
+    tgMessageId: bigint('tg_message_id', { mode: 'number' }).notNull(),
+    messageHtml: mediumtext('message_html').notNull(),
+    messageKind: mysqlEnum('message_kind', ['rich', 'html']).notNull().default('rich'),
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [
+    index('idx_tg_digest_action_message').on(t.tgChatId, t.tgMessageId),
+  ],
+);
+
+export type TelegramDigestActionDeliveryRow =
+  typeof telegramDigestActionDeliveries.$inferSelect;
+export type NewTelegramDigestActionDeliveryRow =
+  typeof telegramDigestActionDeliveries.$inferInsert;
