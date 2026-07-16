@@ -52,6 +52,7 @@ import {
 } from '@/components/ui/context-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { trackProjectAction } from '@/lib/productAnalytics';
@@ -1288,6 +1289,7 @@ function BoardSidePanel({
   children: React.ReactNode;
 }): React.ReactElement | null {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const [panelScrolled, setPanelScrolled] = useState(false);
   const triggerRef = useRef<HTMLElement | null>(
     typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null),
   );
@@ -1298,22 +1300,44 @@ function BoardSidePanel({
     const r = tabs?.getBoundingClientRect();
     if (r) setPos({ top: Math.round(r.bottom + 6) });
     else setPos({ top: 100 });
-    // Блокируем прокрутку страницы и горизонтальную прокрутку таблицы, пока панель открыта.
-    const locked: Array<{ el: HTMLElement; prev: string }> = [];
-    const lock = (el: HTMLElement | null): void => {
-      if (!el) return;
-      locked.push({ el, prev: el.style.overflow });
-      el.style.overflow = 'hidden';
+    // В приложении один главный вертикальный scroller — <main>. Замораживаем только его:
+    // горизонтальный scroller таблицы в desktop split-view остаётся доступным.
+    const main = document.querySelector<HTMLElement>('main');
+    const mainScrollTop = main?.scrollTop ?? 0;
+    const previousMainOverflowY = main?.style.overflowY ?? '';
+    const previousMainOverscroll = main?.style.overscrollBehavior ?? '';
+    const previousBodyOverflow = document.body.style.overflow;
+    if (main) {
+      main.style.overflowY = 'hidden';
+      main.style.overscrollBehavior = 'contain';
+    }
+    document.body.style.overflow = 'hidden';
+    return () => {
+      if (main) {
+        main.style.overflowY = previousMainOverflowY;
+        main.style.overscrollBehavior = previousMainOverscroll;
+      }
+      document.body.style.overflow = previousBodyOverflow;
+      window.requestAnimationFrame(() => {
+        if (main?.isConnected) main.scrollTop = mainScrollTop;
+      });
     };
-    lock(document.querySelector('main'));
-    document
-      .querySelectorAll<HTMLElement>('.overflow-x-auto')
-      .forEach((el) => lock(el));
-    return () => locked.forEach(({ el, prev }) => (el.style.overflow = prev));
   }, []);
   // Escape закрывает верхний слой; на tablet/mobile Tab остаётся внутри полноэкранной панели.
   useEffect(() => {
     const trigger = triggerRef.current;
+    const focusTimer = window.setTimeout(() => {
+      const panel = panelRef.current;
+      const firstControl =
+        panel?.querySelector<HTMLElement>('[autofocus]') ??
+        panel?.querySelector<HTMLElement>(
+          'input[required]:not([disabled]), textarea[required]:not([disabled]), select[required]:not([disabled])',
+        ) ??
+        panel?.querySelector<HTMLElement>(
+          'input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])',
+        );
+      firstControl?.focus({ preventScroll: true });
+    }, 240);
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -1339,6 +1363,7 @@ function BoardSidePanel({
     };
     window.addEventListener('keydown', onKey);
     return () => {
+      window.clearTimeout(focusTimer);
       window.removeEventListener('keydown', onKey);
       requestAnimationFrame(() => trigger?.isConnected && trigger.focus());
     };
@@ -1349,6 +1374,8 @@ function BoardSidePanel({
       ref={panelRef}
       role="dialog"
       aria-label="Настройки отображения"
+      data-pf-panel-scrolled={panelScrolled ? 'true' : 'false'}
+      onScroll={(event) => setPanelScrolled(event.currentTarget.scrollTop > 8)}
       style={{
         top: pos.top,
         maxHeight: `calc(100dvh - ${pos.top + 12}px)`,
@@ -1365,6 +1392,32 @@ function BoardSidePanel({
     >
       {children}
     </div>
+  );
+}
+
+function PanelCloseButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}): React.ReactElement {
+  return (
+    <TooltipProvider delayDuration={550}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={label}
+            onClick={onClick}
+            className="grid size-10 place-items-center rounded-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -1430,16 +1483,9 @@ function NewViewPanel({
   };
   return (
     <div className="flex flex-col">
-      <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b bg-card px-3 py-2.5">
+      <div className="pf-panel-sticky-header sticky top-0 z-10 flex shrink-0 items-center justify-between border-b bg-card px-3 py-2.5">
         <p className="text-sm font-semibold">Новое отображение</p>
-        <button
-          type="button"
-          aria-label="Закрыть"
-          onClick={onClose}
-          className="grid size-10 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:size-7"
-        >
-          <X className="size-4" />
-        </button>
+        <PanelCloseButton label="Закрыть" onClick={onClose} />
       </div>
       {/* Имя с иконкой слева — как в Notion; клик по квадратику открывает пикер
           эмодзи-иконки вью (Icon → Remove). */}
@@ -2266,16 +2312,9 @@ function ViewSettingsCard({
 
   return (
     <div className="flex flex-col">
-      <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b bg-popover px-3 py-2.5">
+      <div className="pf-panel-sticky-header sticky top-0 z-10 flex shrink-0 items-center justify-between border-b bg-popover px-3 py-2.5">
         <p className="text-sm font-semibold">Настройки отображения</p>
-        <button
-          type="button"
-          aria-label="Закрыть панель"
-          onClick={onClose}
-          className="grid size-10 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:size-7"
-        >
-          <X className="size-4" />
-        </button>
+        <PanelCloseButton label="Закрыть" onClick={onClose} />
       </div>
       <div className="p-2">
         {page === 'root' && (

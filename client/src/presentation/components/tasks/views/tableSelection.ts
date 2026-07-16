@@ -5,6 +5,71 @@ export type TableCellRange = {
   h: TableCellCoord;
 };
 
+export type TableNavigationKey =
+  | 'ArrowUp'
+  | 'ArrowDown'
+  | 'ArrowLeft'
+  | 'ArrowRight'
+  | 'Home'
+  | 'End'
+  | 'PageUp'
+  | 'PageDown';
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+export function navigateTableRange(
+  range: TableCellRange,
+  key: TableNavigationKey,
+  rowCount: number,
+  colCount: number,
+  options: { extend?: boolean; edge?: boolean; pageSize?: number } = {},
+): TableCellRange {
+  if (rowCount <= 0 || colCount <= 0) return range;
+
+  const lastRow = rowCount - 1;
+  const lastCol = colCount - 1;
+  const pageSize = Math.max(1, options.pageSize ?? 10);
+  let row = clamp(range.h.row, 0, lastRow);
+  let col = clamp(range.h.col, 0, lastCol);
+
+  switch (key) {
+    case 'ArrowUp':
+      row -= 1;
+      break;
+    case 'ArrowDown':
+      row += 1;
+      break;
+    case 'ArrowLeft':
+      col -= 1;
+      break;
+    case 'ArrowRight':
+      col += 1;
+      break;
+    case 'Home':
+      if (options.edge) row = 0;
+      col = 0;
+      break;
+    case 'End':
+      if (options.edge) row = lastRow;
+      col = lastCol;
+      break;
+    case 'PageUp':
+      row -= pageSize;
+      break;
+    case 'PageDown':
+      row += pageSize;
+      break;
+  }
+
+  const next = {
+    row: clamp(row, 0, lastRow),
+    col: clamp(col, 0, lastCol),
+  };
+  return options.extend ? { a: range.a, h: next } : { a: next, h: next };
+}
+
 export function rangeBounds(range: TableCellRange): {
   firstRow: number;
   lastRow: number;

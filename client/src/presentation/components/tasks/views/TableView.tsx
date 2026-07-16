@@ -107,10 +107,12 @@ import {
 import { ContextEntries, DropdownEntries, type MenuEntry } from './menuEntries';
 import { ConfirmDeleteDialog } from '../ConfirmDeleteDialog';
 import {
+  navigateTableRange,
   primaryPointerActivatesCell,
   rangeBounds,
   rowsForContextMenu,
   type TableCellRange,
+  type TableNavigationKey,
 } from './tableSelection';
 
 type Props = {
@@ -148,6 +150,16 @@ const COLUMN_WIDTH: Record<ViewColumn, string> = {
   created: '19rem',
 };
 const ALL_COLUMNS: readonly ViewColumn[] = ['status', 'priority', 'deadline', 'assignee', 'created'];
+const TABLE_NAVIGATION_KEYS = new Set<TableNavigationKey>([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+]);
 
 // Сортируемое свойство колонки (у «Ответственного» сортировки нет).
 const COLUMN_SORT_KEY: Partial<Record<ViewColumn, ViewSortKey>> = {
@@ -202,6 +214,7 @@ export function TableView({
 
   // Sticky-шапка колонок: top = высота sticky-стека страницы (крошки + плашки +
   // строка вкладок); гор. скролл тела транслируется в шапку (refs ниже).
+  const tableRootRef = useRef<HTMLDivElement | null>(null);
   const bodyScrollRef = useRef<HTMLDivElement | null>(null);
   const headScrollRef = useRef<HTMLDivElement | null>(null);
   const [headerTop, setHeaderTop] = useState(0);
@@ -579,7 +592,7 @@ export function TableView({
       gridTemplateColumns: [
         // Gutter hover-контролов («+»/⋮⋮/чекбокс) — sticky-колонка, закреплена при
         // горизонтальном скролле (Notion).
-        '3.5rem',
+        'var(--pf-table-gutter, 3.5rem)',
         // ФИКСИРОВАННАЯ ширина (Notion): НИКОГДА не по контенту. В w-max контейнере
         // (sticky-freeze) minmax(...,1fr) считался бы по max-content — одна задача
         // с длинным неразрывным названием раздувала колонку на тысячи px, и грид
@@ -598,6 +611,35 @@ export function TableView({
     }),
     [orderedKeys, tableState.colWidths],
   );
+  const tableScrollStorageKey = useMemo(() => {
+    const viewId =
+      typeof window === 'undefined'
+        ? 'default'
+        : new URL(window.location.href).searchParams.get('view') ?? 'default';
+    return `pf:table-scroll:${projectId}:${viewId}`;
+  }, [projectId]);
+  const rememberTableScroll = (left: number): void => {
+    try {
+      sessionStorage.setItem(tableScrollStorageKey, String(Math.max(0, Math.round(left))));
+    } catch {
+      // Private browsing/storage policies must not break table scrolling.
+    }
+  };
+  useEffect(() => {
+    if (loading) return;
+    let saved = 0;
+    try {
+      saved = Number.parseInt(sessionStorage.getItem(tableScrollStorageKey) ?? '0', 10) || 0;
+    } catch {
+      saved = 0;
+    }
+    if (saved <= 0) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (bodyScrollRef.current) bodyScrollRef.current.scrollLeft = saved;
+      if (headScrollRef.current) headScrollRef.current.scrollLeft = saved;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [loading, tableScrollStorageKey]);
 
   // Drag-перестановка колонок за заголовок (Notion): свой pointer-драг — старт
   // после 8px, синяя линия-индикатор на границе вставки, click без движения
@@ -741,7 +783,7 @@ export function TableView({
   // Excel type-to-edit: при единственной выделенной клетке названия печать сразу
   // начинает ввод (замещая), Enter открывает редактор с текущим значением.
   useEffect(() => {
-    if (!selRange || editingId) return;
+    if (!canEdit || !selRange || editingId) return;
     const single =
       selRange.a.row === selRange.h.row && selRange.a.col === selRange.h.col;
     if (!single || selRange.a.col !== 0) return;
@@ -774,7 +816,49 @@ export function TableView({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selRange, rows, editingId]);
+  }, [canEdit, selRange, rows, editingId]);
+
+  useEffect(() => {
+    if (!selRange || editingId) return;
+    const single =
+      selRange.a.row === selRange.h.row && selRange.a.col === selRange.h.col;
+    if (!single || selRange.h.col === 0) return;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Enter' && event.key !== 'F2' && event.key !== ' ') return;
+      const target = event.target as HTMLElement | null;
+      if (!target || !tableRootRef.current?.contains(target)) return;
+      if (target.closest('button, input, textarea, [role="menu"]')) return;
+      const task = rows[selRange.h.row];
+      const key = orderedKeys[selRange.h.col - 1];
+      if (!task || !key) return;
+      const rowElement = Array.from(
+        tableRootRef.current.querySelectorAll<HTMLElement>('[data-pf-task-id]'),
+      ).find((element) => element.dataset.pfTaskId === task.id);
+      const cell = Array.from(
+        rowElement?.querySelectorAll<HTMLElement>('[data-cell]') ?? [],
+      ).find((element) => element.dataset.cell === key);
+      const control = cell?.querySelector<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), [role="button"]:not([aria-disabled="true"])',
+      );
+      if (!control) return;
+      event.preventDefault();
+      control.focus({ preventScroll: true });
+      if (control instanceof HTMLInputElement) {
+        control.click();
+      } else {
+        control.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'Enter',
+            code: 'Enter',
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editingId, orderedKeys, rows, selRange]);
 
   // «+» слева от строки (Notion): inline-строка ввода СРАЗУ ПОД текущей (Alt+клик — над).
   // asSub — создание ПОДЗАДАЧИ под якорем (db/107); parentId — родитель цепочки
@@ -960,7 +1044,6 @@ export function TableView({
   // Клик вне таблицы сбрасывает выбор, кроме клика, которым закрывается открытое
   // контекстное меню: он только закрывает слой, а следующий клик уже снимает выбор.
   // Порталы других меню/диалогов/панели «Выбрано» тоже не меняют контекст таблицы.
-  const tableRootRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const onDown = (e: MouseEvent): void => {
       const t = e.target as HTMLElement | null;
@@ -980,9 +1063,9 @@ export function TableView({
     return () => window.removeEventListener('mousedown', onDown);
   }, []);
 
-  const colIndexOf = (k: 'title' | ViewColumn): number =>
+  const colIndexOf = (k: string): number =>
     k === 'title' ? 0 : orderedKeys.indexOf(k) + 1;
-  const cellDown = (row: number, k: 'title' | ViewColumn, rightButton = false): void => {
+  const cellDown = (row: number, k: string, rightButton = false): void => {
     // ПКМ по выделенному диапазону превращает диапазон ячеек в выбранные строки.
     // ПКМ вне диапазона выбирает только строку под курсором. Сам диапазон после
     // открытия меню больше не нужен, а выбор строк сохраняется после закрытия меню.
@@ -1018,7 +1101,7 @@ export function TableView({
     const c = { row, col: colIndexOf(k) };
     setSelRange({ a: c, h: c });
   };
-  const cellEnter = (row: number, k: 'title' | ViewColumn): void => {
+  const cellEnter = (row: number, k: string): void => {
     if (!selDragging.current) return;
     // Протяжка не должна выделять текст под курсором.
     document.getSelection()?.removeAllRanges();
@@ -1026,7 +1109,7 @@ export function TableView({
   };
   // Стиль ячейки в диапазоне: одиночная — синяя рамка с уголком (как раньше),
   // диапазон — заливка Excel-style.
-  const rangeClassFor = (row: number, k: 'title' | ViewColumn): string | null => {
+  const rangeClassFor = (row: number, k: string): string | null => {
     if (!selRange) return null;
     const c = colIndexOf(k);
     const { firstRow: r1, lastRow: r2, firstCol: c1, lastCol: c2 } =
@@ -1041,6 +1124,68 @@ export function TableView({
     );
   };
 
+  useEffect(() => {
+    if (!selRange || editingId) return;
+    const onKey = (event: KeyboardEvent): void => {
+      if (!TABLE_NAVIGATION_KEYS.has(event.key as TableNavigationKey)) return;
+      const target = event.target as HTMLElement | null;
+      if (!target || !tableRootRef.current?.contains(target)) return;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      )
+        return;
+      event.preventDefault();
+      setSelected(new Set());
+      setSelRange((current) =>
+        current
+          ? navigateTableRange(
+              current,
+              event.key as TableNavigationKey,
+              rows.length,
+              orderedKeys.length + 1,
+              {
+                extend: event.shiftKey,
+                edge: event.ctrlKey || event.metaKey,
+                pageSize: 10,
+              },
+            )
+          : current,
+      );
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editingId, orderedKeys.length, rows.length, selRange]);
+
+  useEffect(() => {
+    if (!selRange) return;
+    const task = rows[selRange.h.row];
+    const key = selRange.h.col === 0 ? 'title' : orderedKeys[selRange.h.col - 1];
+    if (!task || !key) return;
+    const frame = window.requestAnimationFrame(() => {
+      const rowElement = Array.from(
+        tableRootRef.current?.querySelectorAll<HTMLElement>('[data-pf-task-id]') ?? [],
+      ).find((element) => element.dataset.pfTaskId === task.id);
+      const cell = Array.from(
+        rowElement?.querySelectorAll<HTMLElement>('[data-cell]') ?? [],
+      ).find((element) => element.dataset.cell === key);
+      if (!cell) return;
+      cell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      const focusTarget = cell.matches('button, input, [tabindex]')
+        ? cell
+        : cell.querySelector<HTMLElement>(
+            'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          );
+      if (focusTarget) focusTarget.focus({ preventScroll: true });
+      else {
+        cell.tabIndex = -1;
+        cell.focus({ preventScroll: true });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [orderedKeys, rows, selRange]);
+
 
   const toggleSelected = (id: string): void => {
     setSelected((prev) => {
@@ -1053,6 +1198,7 @@ export function TableView({
 
   const allSelected = rows.length > 0 && rows.every((t) => selected.has(t.id));
   const toggleAll = (): void => {
+    if (!canEdit) return;
     setSelected(allSelected ? new Set() : new Set(rows.map((t) => t.id)));
   };
 
@@ -1171,32 +1317,87 @@ export function TableView({
 
   if (loading) {
     return (
-      <div role="status" aria-live="polite" aria-label="Загрузка таблицы задач" className="overflow-hidden bg-background">
+      <div
+        role="grid"
+        aria-busy="true"
+        aria-live="polite"
+        aria-label="Загрузка таблицы задач"
+        aria-rowcount={7}
+        aria-colcount={orderedKeys.length + 3}
+        className={cn(
+          '-ml-2 overflow-hidden bg-background sm:-ml-8 lg:-ml-16',
+          '[--pf-table-gutter:6rem] sm:[--pf-table-gutter:3.5rem]',
+          sidePanelOpen ? 'mr-0' : '-mr-2 sm:-mr-8 lg:-mr-16',
+        )}
+      >
         <span className="sr-only">Загружаем таблицу задач…</span>
-        <div className="h-12 animate-pulse border-b bg-muted/70 motion-reduce:animate-none" aria-hidden />
+        <div role="row" className="grid h-12" style={gridStyle} aria-hidden>
+          {Array.from({ length: orderedKeys.length + 3 }, (_, index) => (
+            <div
+              key={index}
+              role="columnheader"
+              className={cn(
+                'animate-pulse border-b bg-muted/55 motion-reduce:animate-none',
+                index > 1 && 'border-l',
+              )}
+            />
+          ))}
+        </div>
         {Array.from({ length: 6 }, (_, index) => (
           <div
             key={index}
-            className="h-[52px] animate-pulse border-b bg-muted/40 motion-reduce:animate-none last:border-b-0"
+            role="row"
+            className="grid h-[52px]"
+            style={gridStyle}
             aria-hidden
-          />
+          >
+            {Array.from({ length: orderedKeys.length + 3 }, (_, cellIndex) => (
+              <div
+                key={cellIndex}
+                role="gridcell"
+                className={cn(
+                  'animate-pulse border-b bg-muted/30 motion-reduce:animate-none',
+                  cellIndex > 1 && 'border-l',
+                )}
+              />
+            ))}
+          </div>
         ))}
       </div>
     );
   }
   if (error && tasks.length === 0) {
     return (
-      <div role="alert" className="flex min-h-44 flex-col items-center justify-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-6 py-8 text-center">
-        <p className="text-sm text-destructive">Не удалось загрузить таблицу: {error}</p>
-        <button
-          type="button"
-          onClick={() => void retryLoad()}
-          disabled={retrying}
-          className="inline-flex min-h-11 items-center gap-2 rounded-md border bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60"
+      <div
+        className={cn(
+          '-ml-2 overflow-hidden bg-background sm:-ml-8 lg:-ml-16',
+          '[--pf-table-gutter:6rem] sm:[--pf-table-gutter:3.5rem]',
+          sidePanelOpen ? 'mr-0' : '-mr-2 sm:-mr-8 lg:-mr-16',
+        )}
+      >
+        <div className="grid h-12" style={gridStyle} aria-hidden>
+          {Array.from({ length: orderedKeys.length + 3 }, (_, index) => (
+            <div
+              key={index}
+              className={cn('border-b bg-muted/25', index > 1 && 'border-l')}
+            />
+          ))}
+        </div>
+        <div
+          role="alert"
+          className="flex min-h-44 flex-col items-center justify-center gap-3 border-b border-destructive/30 bg-destructive/5 px-6 py-8 text-center"
         >
-          {retrying ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <RefreshCw className="size-4" />}
-          Повторить
-        </button>
+          <p className="text-sm text-destructive">Не удалось загрузить таблицу: {error}</p>
+          <button
+            type="button"
+            onClick={() => void retryLoad()}
+            disabled={retrying}
+            className="inline-flex min-h-11 items-center gap-2 rounded-[10px] border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60"
+          >
+            {retrying ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <RefreshCw className="size-4" />}
+            Повторить
+          </button>
+        </div>
       </div>
     );
   }
@@ -1207,6 +1408,7 @@ export function TableView({
       aria-busy={retrying}
       className={cn(
         '-ml-2 flex min-h-0 flex-1 flex-col bg-background sm:-ml-8 lg:-ml-16',
+        '[--pf-table-gutter:6rem] sm:[--pf-table-gutter:3.5rem]',
         sidePanelOpen ? 'mr-0' : '-mr-2 sm:-mr-8 lg:-mr-16',
       )}
     >
@@ -1260,7 +1462,9 @@ export function TableView({
           onScroll={(e) => {
             if (bodyScrollRef.current)
               bodyScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+            rememberTableScroll(e.currentTarget.scrollLeft);
           }}
+          data-pf-table-scroll="header"
           className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
         {/* w-max: контейнер (и грид-строки в нём) растягивается на ПОЛНУЮ ширину
@@ -1273,6 +1477,7 @@ export function TableView({
           <div
             ref={headGridRef}
             role="row"
+            aria-rowindex={1}
             className="group/head relative grid h-12 text-sm text-muted-foreground"
             style={gridStyle}
           >
@@ -1281,23 +1486,28 @@ export function TableView({
                 скроллится целиком). */}
             <div
               role="columnheader"
+              aria-colindex={1}
               className={cn(
                 'group/gutter flex h-12 items-center justify-end bg-background pr-4',
                 tableState.freezeTitle && 'sticky left-0 z-30',
               )}
             >
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={toggleAll}
-                aria-label="Выбрать все"
-                className={cn(
-                  'size-3.5 cursor-pointer accent-primary transition-opacity',
-                  allSelected || selected.size > 0
-                    ? 'opacity-100'
-                    : 'opacity-0 group-hover/gutter:opacity-100',
-                )}
-              />
+              <label className="grid size-11 place-items-center sm:size-4">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  disabled={!canEdit}
+                  aria-label="Выбрать все"
+                  className={cn(
+                    'size-3.5 cursor-pointer accent-primary transition-opacity disabled:cursor-default',
+                    !canEdit && 'invisible',
+                    allSelected || selected.size > 0
+                      ? 'opacity-100'
+                      : 'opacity-0 group-hover/gutter:opacity-100',
+                  )}
+                />
+              </label>
             </div>
             <HeaderCell
               label="Название"
@@ -1307,7 +1517,7 @@ export function TableView({
               sortKey="title"
               sort={sort}
               onSortChange={onSortChange}
-              extraEntries={[
+              extraEntries={canEdit ? [
                 { kind: 'separator' },
                 {
                   kind: 'item',
@@ -1323,10 +1533,11 @@ export function TableView({
                   checked: tableState.freezeTitle,
                   onSelect: () => onTableState({ freezeTitle: !tableState.freezeTitle }),
                 },
-              ]}
+              ] : undefined}
               frozen={tableState.freezeTitle}
-              onResizeStart={(e) => startResize('title', e)}
-              onResizeBy={(delta) => resizeBy('title', delta)}
+              onResizeStart={canEdit ? (e) => startResize('title', e) : undefined}
+              onResizeBy={canEdit ? (delta) => resizeBy('title', delta) : undefined}
+              ariaColIndex={2}
               first
             />
             {/* Колонки в едином порядке orderedKeys (drag за заголовок — Notion). */}
@@ -1347,16 +1558,17 @@ export function TableView({
                   <PropertyHeaderCell
                     key={k}
                     property={prop}
-                    onRename={(name) => customProps.renameProperty(prop.id, name)}
-                    onRemove={() => customProps.removeProperty(prop.id)}
-                    onDuplicate={() => customProps.duplicateProperty(prop)}
-                    onInsert={(side) => customProps.insertProperty(prop, side)}
-                    onChangeType={(t) => customProps.changeType(prop.id, t)}
-                    onResizeStart={(e) => startResize(k, e)}
-                    onResizeBy={(delta) => resizeBy(k, delta)}
+                    ariaColIndex={i + 3}
+                    onRename={canEdit ? (name) => customProps.renameProperty(prop.id, name) : undefined}
+                    onRemove={canEdit ? () => customProps.removeProperty(prop.id) : undefined}
+                    onDuplicate={canEdit ? () => customProps.duplicateProperty(prop) : undefined}
+                    onInsert={canEdit ? (side) => customProps.insertProperty(prop, side) : undefined}
+                    onChangeType={canEdit ? (t) => customProps.changeType(prop.id, t) : undefined}
+                    onResizeStart={canEdit ? (e) => startResize(k, e) : undefined}
+                    onResizeBy={canEdit ? (delta) => resizeBy(k, delta) : undefined}
                     colKey={k}
                     dropSide={dropSide}
-                    onColDragStart={startColDrag(k)}
+                    onColDragStart={canEdit ? startColDrag(k) : undefined}
                     consumeColDragged={consumeColDragged}
                     // Notion-меню колонки: сортировка ↑↓ / Фильтр ▸ / Группировать.
                     sorted={sort?.key === propKey ? sort.dir : null}
@@ -1401,7 +1613,7 @@ export function TableView({
                         ? () => onGroupingChange(grouping === propKey ? null : propKey)
                         : undefined
                     }
-                    onHide={() => onToggleCol(k)}
+                    onHide={canEdit ? () => onToggleCol(k) : undefined}
                     openMenu={openPropertyMenuId === prop.id}
                     onOpenMenuClosed={() =>
                       setOpenPropertyMenuId((current) => (current === prop.id ? null : current))
@@ -1414,22 +1626,28 @@ export function TableView({
                 <HeaderCell
                   key={k}
                   label={VIEW_COLUMN_LABELS[c]}
+                  ariaColIndex={i + 3}
                   iconNode={<ColumnIcon col={c} />}
                   sortKey={COLUMN_SORT_KEY[c] ?? null}
                   sort={sort}
                   onSortChange={onSortChange}
-                  onHide={() => onToggleCol(c)}
+                  onHide={canEdit ? () => onToggleCol(c) : undefined}
                   filterEntries={filterEntriesFor(c)}
-                  onResizeStart={(e) => startResize(c, e)}
-                  onResizeBy={(delta) => resizeBy(c, delta)}
+                  onResizeStart={canEdit ? (e) => startResize(c, e) : undefined}
+                  onResizeBy={canEdit ? (delta) => resizeBy(c, delta) : undefined}
                   colKey={k}
                   dropSide={dropSide}
-                  onColDragStart={startColDrag(k)}
+                  onColDragStart={canEdit ? startColDrag(k) : undefined}
                   consumeColDragged={consumeColDragged}
                 />
               );
             })}
-            <div role="columnheader" className="h-12 border-b border-l bg-muted/25" aria-label="Действия таблицы" />
+            <div
+              role="columnheader"
+              aria-colindex={orderedKeys.length + 3}
+              className="h-12 border-b border-l bg-muted/25"
+              aria-label="Действия таблицы"
+            />
             {/* Хвост шапки (Notion): «+» сразу создаёт колонку, плавно доводит
                 горизонтальный scroller до неё и открывает её меню; «⋯» —
                 «Видимость свойств» (глазки/поиск/Скрыть все). */}
@@ -1437,10 +1655,10 @@ export function TableView({
               <button
                 type="button"
                 aria-label="Добавить свойство"
-                title="Добавить свойство"
+                title={canEdit ? 'Добавить свойство' : 'Недостаточно прав для добавления свойства'}
                 onClick={() => void createPropertyFromHeader()}
-                disabled={creatingProperty}
-                className="grid size-10 place-items-center rounded-[10px] text-muted-foreground/70 transition-[background-color,color,transform] hover:bg-accent hover:text-foreground active:scale-[.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-50 motion-reduce:transform-none"
+                disabled={!canEdit || creatingProperty}
+                className="grid size-10 place-items-center rounded-[10px] text-muted-foreground/70 transition-[background-color,color,transform] hover:bg-accent hover:text-foreground active:scale-[.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none"
               >
                 {creatingProperty ? (
                   <Loader2 className="size-[18px] animate-spin motion-reduce:animate-none" />
@@ -1448,7 +1666,7 @@ export function TableView({
                   <Plus className="size-[18px]" />
                 )}
               </button>
-              <Popover>
+              {canEdit && <Popover>
                 <PopoverTrigger asChild>
                   <button
                     type="button"
@@ -1469,7 +1687,7 @@ export function TableView({
                     onReorder={(keys) => onTableState({ colOrder: keys })}
                   />
                 </PopoverContent>
-              </Popover>
+              </Popover>}
             </div>
           </div>
         </div>
@@ -1483,7 +1701,9 @@ export function TableView({
         onScroll={(e) => {
           if (headScrollRef.current)
             headScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+          rememberTableScroll(e.currentTarget.scrollLeft);
         }}
+        data-pf-table-scroll="body"
         className="overflow-x-auto overscroll-x-contain"
       >
         {/* w-max min-w-full — см. комментарий у шапки (sticky-freeze «Название»). */}
@@ -1501,7 +1721,7 @@ export function TableView({
                       type="button"
                       aria-label={collapsedGroups.has(g.key) ? 'Развернуть группу' : 'Свернуть группу'}
                       onClick={() => toggleGroup(g.key)}
-                      className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                      className="grid size-11 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground sm:size-5"
                     >
                       <ChevronDown
                         className={cn('size-3.5 transition-transform', collapsedGroups.has(g.key) && '-rotate-90')}
@@ -1515,7 +1735,7 @@ export function TableView({
                         : groupLabelFor(g.key, grouping as StandardGrouping, sample)}
                     </span>
                     <span className="text-xs text-muted-foreground">{g.tasks.length}</span>
-                    {grouping !== 'assignee' && (
+                    {canEdit && grouping !== 'assignee' && (
                       <button
                         type="button"
                         aria-label="Создать задачу в группе"
@@ -1526,7 +1746,7 @@ export function TableView({
                             status: grouping === 'status' ? (g.key as Task['status']) : 'backlog',
                           })
                         }
-                        className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                        className="grid size-11 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground sm:size-5"
                       >
                         <Plus className="size-3.5" />
                       </button>
@@ -1561,7 +1781,8 @@ export function TableView({
                 expanded={expandedTasks.has(task.id)}
                 onToggleExpand={() => toggleExpand(task.id)}
                 wrapTitle={tableState.wrapTitle}
-                dndEnabled={canReorder}
+                dndEnabled={canEdit && canReorder}
+                canEdit={canEdit}
                 recentlyMoved={recentlyMovedId === task.id}
                 rowColor={rowColorFor(task, colorRules)}
                 frozenTitle={tableState.freezeTitle}
@@ -1571,6 +1792,10 @@ export function TableView({
                 editValue={editValue}
                 onEditValue={setEditValue}
                 onStartEdit={() => {
+                  if (!canEdit) {
+                    setDrawer({ mode: 'edit', task });
+                    return;
+                  }
                   setEditingId(task.id);
                   setEditValue(taskTitle(task));
                   setEditError(null);
@@ -1585,7 +1810,7 @@ export function TableView({
                 selected={selected.has(task.id)}
                 anySelected={selected.size > 0}
                 bulkEntries={
-                  selected.size > 1 && selected.has(task.id) ? bulkMenuEntries() : undefined
+                  canEdit && selected.size > 1 && selected.has(task.id) ? bulkMenuEntries() : undefined
                 }
                 rowIdx={idx}
                 onCellDown={cellDown}
@@ -1666,7 +1891,7 @@ export function TableView({
           })}
 
           {rows.length === 0 && (
-            <p role="status" aria-live="polite" className="py-6 pl-14 pr-2 text-sm text-muted-foreground">
+            <p role="status" aria-live="polite" className="py-6 pl-[var(--pf-table-gutter)] pr-2 text-sm text-muted-foreground">
               {filters.query || hasActiveFilters(filters)
                 ? 'Под фильтр ничего не попадает.'
                 : 'Задач пока нет.'}
@@ -1677,19 +1902,21 @@ export function TableView({
               граница — только под контентной частью (Notion). */}
           {/* Notion New page: компактная строка 28px; Enter создаёт, закрывает ввод
               и выделяет клетку названия созданной строки. */}
-          <div role="row" className="pl-14">
-            <div className="flex h-[52px] items-center border-b">
-              <NewTaskRow
-                create={async (input) => {
-                  const created = await create(input);
-                  setPendingSelect({ id: created.id, below: false });
-                  return created;
-                }}
-                closeOnSubmit
-                className="w-full"
-              />
+          {canEdit && (
+            <div role="row" className="pl-[var(--pf-table-gutter)]">
+              <div className="flex h-[52px] items-center border-b">
+                <NewTaskRow
+                  create={async (input) => {
+                    const created = await create(input);
+                    setPendingSelect({ id: created.id, below: false });
+                    return created;
+                  }}
+                  closeOnSubmit
+                  className="w-full"
+                />
+              </div>
             </div>
-          </div>
+          )}
           {/* Строка подсчётов (Notion Calculate): «Всего» под названием; под каждой
               колонкой — свой подсчёт по клику (появляется при наведении). */}
           <div role="row" className="group/calc grid" style={gridStyle}>
@@ -1750,7 +1977,7 @@ export function TableView({
 
       {/* Плавающая панель выбранных — поверх строки вкладок (Notion). ТОЛЬКО от
           чекбоксов строк: Excel-диапазон — визуальное выделение, не выбор. */}
-      {selectedIds.length > 0 && (
+      {canEdit && selectedIds.length > 0 && (
         <SelectedBar
           count={selectedIds.length}
           onExit={() => setSelected(new Set())}
@@ -1785,6 +2012,7 @@ export function TableView({
 function HeaderCell({
   label,
   iconNode,
+  ariaColIndex,
   sortKey,
   sort,
   onSortChange,
@@ -1802,6 +2030,7 @@ function HeaderCell({
 }: {
   label: string;
   iconNode: React.ReactNode;
+  ariaColIndex: number;
   sortKey: ViewSortKey | null;
   sort: ViewSort | null;
   onSortChange: (s: ViewSort | null) => void;
@@ -1868,13 +2097,14 @@ function HeaderCell({
   return (
     <div
       role="columnheader"
+      aria-colindex={ariaColIndex}
       aria-sort={sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : sortKey ? 'none' : undefined}
       data-colkey={colKey}
       className={cn(
         'relative flex h-12 min-w-0 border-b bg-muted/25',
         !first && 'border-l',
         // «Закрепить колонку» (Notion Freeze): липнет при горизонтальном скролле.
-        frozen && 'sticky left-14 z-20 border-r bg-background',
+        frozen && 'sticky left-[var(--pf-table-gutter)] z-20 border-r bg-background',
         // Индикатор вставки при drag-переносе колонки.
         dropSide === 'left' && 'shadow-[inset_2px_0_0_hsl(var(--primary))]',
         dropSide === 'right' && 'shadow-[inset_-2px_0_0_hsl(var(--primary))]',
@@ -2177,6 +2407,7 @@ function TableRow({
   onToggleExpand,
   wrapTitle,
   dndEnabled,
+  canEdit,
   recentlyMoved,
   rowColor,
   frozenTitle,
@@ -2226,6 +2457,7 @@ function TableRow({
   onToggleExpand?: () => void;
   wrapTitle: boolean;
   dndEnabled: boolean;
+  canEdit: boolean;
   recentlyMoved: boolean;
   rowColor: string | null;
   frozenTitle: boolean;
@@ -2244,9 +2476,9 @@ function TableRow({
   // ПКМ по строке из мульти-выбора: bulk-меню над всеми выбранными (Notion).
   bulkEntries?: MenuEntry[];
   rowIdx: number;
-  onCellDown: (row: number, col: 'title' | ViewColumn, rightButton?: boolean) => void;
-  onCellEnter: (row: number, col: 'title' | ViewColumn) => void;
-  rangeClassFor: (row: number, col: 'title' | ViewColumn) => string | null;
+  onCellDown: (row: number, col: string, rightButton?: boolean) => void;
+  onCellEnter: (row: number, col: string) => void;
+  rangeClassFor: (row: number, col: string) => string | null;
   selectionActive: boolean;
   onContextMenuOpenChange: (open: boolean) => void;
   preserveContextMenuSelection: () => boolean;
@@ -2284,14 +2516,18 @@ function TableRow({
   ): {
     className: string;
     role: 'gridcell';
+    'aria-colindex': number;
     'data-cell': string;
+    tabIndex: number;
     onMouseEnter: () => void;
   } => ({
     // Без внутренних отступов: значение-кнопка занимает ВСЮ клетку, hover
     // подсвечивает её от края до края (Notion).
     className: cn('relative flex min-h-[52px] border-b border-l', rangeClassFor(rowIdx, col)),
     role: 'gridcell',
+    'aria-colindex': orderedKeys.indexOf(col) + 3,
     'data-cell': col,
+    tabIndex: -1,
     onMouseEnter: () => onCellEnter(rowIdx, col),
   });
 
@@ -2304,8 +2540,9 @@ function TableRow({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
+                  disabled={!canEdit}
                   aria-label={`Изменить статус задачи «${taskTitle(task)}». Сейчас: ${STATUS_LABEL[task.status]}`}
-                  className="flex h-full min-h-[52px] w-full items-center gap-1 px-4 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  className="flex h-full min-h-[52px] w-full items-center gap-1 px-4 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
                 >
                   {/* Значение статуса — цветная пилюля (Notion select pill). */}
                   <span
@@ -2338,8 +2575,9 @@ function TableRow({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
+                  disabled={!canEdit}
                   aria-label={`Изменить приоритет задачи «${taskTitle(task)}»`}
-                  className="flex h-full min-h-[52px] w-full items-center gap-1.5 px-4 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  className="flex h-full min-h-[52px] w-full items-center gap-1.5 px-4 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
                 >
                   {task.priority !== null && task.priority !== undefined ? (
                     <span
@@ -2375,7 +2613,7 @@ function TableRow({
       case 'deadline':
         return (
           <div key={col} {...cellProps('deadline')}>
-            <DeadlineCell task={task} onDeadline={onDeadline} />
+            <DeadlineCell task={task} onDeadline={onDeadline} readOnly={!canEdit} />
           </div>
         );
       case 'assignee':
@@ -2385,7 +2623,7 @@ function TableRow({
               task={task}
               onChanged={onChanged}
               projectId={projectId}
-              disabled={!currentUserId}
+              disabled={!currentUserId || !canEdit}
               className="h-full min-h-[52px] w-full justify-start rounded-none px-4 text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset"
             />
           </div>
@@ -2404,17 +2642,19 @@ function TableRow({
     }
   };
 
-  const menuEntries = taskMenuEntries(task, projectId, {
-    onOpen,
-    onStatus,
-    onPriority,
-    onDeadline,
-    onStartDate,
-    onDuplicate,
-    onDelete,
-    onAddSub,
-    onSaveTemplate,
-  });
+  const menuEntries: MenuEntry[] = canEdit
+    ? taskMenuEntries(task, projectId, {
+        onOpen,
+        onStatus,
+        onPriority,
+        onDeadline,
+        onStartDate,
+        onDuplicate,
+        onDelete,
+        onAddSub,
+        onSaveTemplate,
+      })
+    : [{ kind: 'item', label: 'Открыть', icon: PanelRight, onSelect: onOpen }];
 
   return (
     <ContextMenu onOpenChange={onContextMenuOpenChange}>
@@ -2423,6 +2663,7 @@ function TableRow({
           ref={dropRef}
           data-pf-task-id={task.id}
           role="row"
+          aria-rowindex={rowIdx + 2}
           aria-selected={selected}
           aria-label={`Задача: ${taskTitle(task)}`}
           style={gridStyle}
@@ -2473,22 +2714,28 @@ function TableRow({
       {/* Gutter строки (Notion): «+»/«⋮⋮»/чекбокс. Sticky — только при закреплённом
           «Названии»; иначе едет вместе с таблицей. Фон — на ячейке ВСЕГДА (иначе
           уезжающий текст просвечивает), прозрачность до hover — только на контролах. */}
-      <div role="gridcell" className={cn('bg-background', frozenTitle && 'sticky left-0 z-20')}>
+      <div
+        role="gridcell"
+        aria-colindex={1}
+        className={cn('bg-background', frozenTitle && 'sticky left-0 z-20')}
+      >
       <div
         className={cn(
           'flex h-full items-center justify-end gap-0 pr-1 transition-opacity duration-100',
           selected || anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100',
         )}
       >
-        <button
-          type="button"
-          aria-label="Добавить задачу ниже (Alt — выше)"
-          title="Добавить задачу ниже (Alt — выше)"
-          onClick={(e) => onCreateBelow(e.altKey)}
-          className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <Plus className="size-3.5" />
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            aria-label="Добавить задачу ниже (Alt — выше)"
+            title="Добавить задачу ниже (Alt — выше)"
+            onClick={(e) => onCreateBelow(e.altKey)}
+            className="grid size-5 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground max-sm:hidden"
+          >
+            <Plus className="size-3.5" />
+          </button>
+        )}
         <DropdownMenu open={gripMenuOpen} onOpenChange={setGripMenuOpen}>
           <DropdownMenuTrigger asChild>
             <button
@@ -2508,7 +2755,7 @@ function TableRow({
                 if (e.defaultPrevented) return; // click после drag
                 setGripMenuOpen(true);
               }}
-              className="grid size-5 cursor-grab place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground active:cursor-grabbing"
+              className="grid size-11 cursor-grab place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground active:cursor-grabbing sm:size-5"
             >
               <GripVertical className="size-3.5" />
             </button>
@@ -2517,17 +2764,23 @@ function TableRow({
             <DropdownEntries entries={menuEntries} />
           </DropdownMenuContent>
         </DropdownMenu>
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={() => undefined}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSelected(e.shiftKey);
-          }}
-          aria-label="Выбрать задачу"
-          className="ml-0.5 size-3.5 cursor-pointer accent-primary"
-        />
+        <label className="grid size-11 place-items-center sm:size-4">
+          <input
+            type="checkbox"
+            checked={selected}
+            disabled={!canEdit}
+            onChange={() => undefined}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelected(e.shiftKey);
+            }}
+            aria-label="Выбрать задачу"
+            className={cn(
+              'size-3.5 cursor-pointer accent-primary',
+              !canEdit && 'invisible',
+            )}
+          />
+        </label>
       </div>
       </div>
 
@@ -2536,11 +2789,13 @@ function TableRow({
           подзадач (Notion sub-items). */}
       <div
         role="gridcell"
+        aria-colindex={2}
         data-cell="title"
+        tabIndex={-1}
         className={cn(
           'relative flex min-h-[52px] min-w-0 items-center gap-2 border-b px-4 py-2',
           // Freeze: липнет ПОСЛЕ sticky-gutter'а контролов (3.5rem).
-          frozenTitle && 'sticky left-14 z-10 border-r bg-background',
+          frozenTitle && 'sticky left-[var(--pf-table-gutter)] z-10 border-r bg-background',
           rangeClassFor(rowIdx, 'title'),
           // Редактирование: синяя рамка на ВСЮ клетку (Notion), не мини-инпут.
           editing && 'z-10 bg-background ring-2 ring-inset ring-primary/70',
@@ -2584,7 +2839,7 @@ function TableRow({
                   e.stopPropagation();
                   onToggleExpand?.();
                 }}
-                className="grid size-4 shrink-0 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                className="grid size-11 shrink-0 place-items-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground sm:size-4"
               >
                 <ChevronDown
                   className={cn('size-3.5 transition-transform', !expanded && '-rotate-90')}
@@ -2641,19 +2896,26 @@ function TableRow({
             <PropertyValueCell
               key={k}
               property={prop}
+              ariaColIndex={orderedKeys.indexOf(k) + 3}
               value={customProps.valueFor(task.id, prop.id)}
               onChange={(v) => customProps.setValue(task.id, prop.id, v)}
               onAddOption={(label) => customProps.addOption(prop, label)}
               members={customProps.members}
               dataCell={k}
-              onCellMouseEnter={() => onCellEnter(rowIdx, k as ViewColumn)}
-              rangeClass={rangeClassFor(rowIdx, k as ViewColumn)}
+              onCellMouseEnter={() => onCellEnter(rowIdx, k)}
+              rangeClass={rangeClassFor(rowIdx, k)}
+              readOnly={!canEdit}
             />
           );
         }
         return cellFor(k as ViewColumn);
       })}
-      <div role="gridcell" className="border-b border-l" aria-label="" />
+      <div
+        role="gridcell"
+        aria-colindex={orderedKeys.length + 3}
+        className="border-b border-l"
+        aria-label=""
+      />
         </div>
       </ContextMenuTrigger>
       {/* Правый клик по строке — контекстное меню задачи (Notion-style); по строке
@@ -2674,9 +2936,11 @@ function TableRow({
 function DeadlineCell({
   task,
   onDeadline,
+  readOnly = false,
 }: {
   task: Task;
   onDeadline: (d: string | null) => void;
+  readOnly?: boolean;
 }): React.ReactElement {
   const dateRef = useRef<HTMLInputElement>(null);
   const openPicker = (): void => {
@@ -2697,8 +2961,9 @@ function DeadlineCell({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
+            disabled={readOnly}
             aria-label={`Изменить срок задачи «${taskTitle(task)}»`}
-            className="flex h-full min-h-[52px] w-full items-center gap-1.5 px-4 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="flex h-full min-h-[52px] w-full items-center gap-1.5 px-4 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
           >
             {/* Пустой срок — чистая ячейка (Notion). */}
             {task.deadline ? <DeadlineBadge deadline={task.deadline} status={task.status} /> : null}

@@ -311,6 +311,7 @@ export function useTaskProperties(projectId: string): UseTaskPropertiesResult {
 // на правой кромке.
 export function PropertyHeaderCell({
   property,
+  ariaColIndex,
   onRename,
   onRemove,
   onDuplicate,
@@ -332,8 +333,9 @@ export function PropertyHeaderCell({
   onOpenMenuClosed,
 }: {
   property: TaskProperty;
-  onRename: (name: string) => void;
-  onRemove: () => void;
+  ariaColIndex: number;
+  onRename?: (name: string) => void;
+  onRemove?: () => void;
   onDuplicate?: () => void;
   onInsert?: (side: 'left' | 'right') => void;
   onChangeType?: (type: TaskPropertyType) => void;
@@ -370,12 +372,13 @@ export function PropertyHeaderCell({
   const Icon = PROPERTY_TYPE_ICONS[property.type];
   const commit = (): void => {
     const trimmed = name.trim();
-    if (trimmed && trimmed !== property.name) onRename(trimmed);
+    if (trimmed && trimmed !== property.name && onRename) onRename(trimmed);
     else setName(property.name);
   };
   return (
     <div
       role="columnheader"
+      aria-colindex={ariaColIndex}
       aria-sort={sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none'}
       data-colkey={colKey}
       className={cn(
@@ -437,7 +440,7 @@ export function PropertyHeaderCell({
               onNameChange={setName}
               onCreate={(type, nextName) => {
                 const trimmed = nextName?.trim();
-                if (trimmed && trimmed !== property.name) onRename(trimmed);
+                if (trimmed && trimmed !== property.name) onRename?.(trimmed);
                 if (type !== property.type) onChangeType?.(type);
                 setMenuOpen(false);
                 onOpenMenuClosed?.();
@@ -451,20 +454,26 @@ export function PropertyHeaderCell({
             <span className="grid size-7 shrink-0 place-items-center rounded-md border text-muted-foreground">
               <Icon className="size-3.5" />
             </span>
-            <input
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === 'Enter') {
-                  commit();
-                  setMenuOpen(false);
-                }
-              }}
-              aria-label="Имя свойства"
-              className="h-7 w-full min-w-0 rounded-md bg-accent/60 px-2 text-sm outline-none ring-primary/40 focus:ring-2"
-            />
+            {onRename ? (
+              <input
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') {
+                    commit();
+                    setMenuOpen(false);
+                  }
+                }}
+                aria-label="Имя свойства"
+                className="h-7 w-full min-w-0 rounded-md bg-accent/60 px-2 text-sm outline-none ring-primary/40 focus:ring-2"
+              />
+            ) : (
+              <span className="min-w-0 flex-1 truncate px-2 text-sm font-medium">
+                {property.name}
+              </span>
+            )}
           </div>
           {onChangeType && (
             <DropdownMenuSub>
@@ -556,14 +565,18 @@ export function PropertyHeaderCell({
               </DropdownMenuItem>
             </>
           )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="gap-2 text-destructive focus:text-destructive"
-            onSelect={() => setRemoveConfirmOpen(true)}
-          >
-            <Trash2 className="size-4" />
-            Удалить свойство
-          </DropdownMenuItem>
+          {onRemove && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="gap-2 text-destructive focus:text-destructive"
+                onSelect={() => setRemoveConfirmOpen(true)}
+              >
+                <Trash2 className="size-4" />
+                Удалить свойство
+              </DropdownMenuItem>
+            </>
+          )}
             </>
           )}
         </DropdownMenuContent>
@@ -585,17 +598,19 @@ export function PropertyHeaderCell({
           className="absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize rounded transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         />
       )}
-      <ConfirmDeleteDialog
-        open={removeConfirmOpen}
-        onOpenChange={setRemoveConfirmOpen}
-        taskLabel={null}
-        title="Удалить свойство?"
-        description={`Столбец «${property.name}» и все его значения будут удалены безвозвратно.`}
-        onConfirm={() => {
-          onRemove();
-          setRemoveConfirmOpen(false);
-        }}
-      />
+      {onRemove && (
+        <ConfirmDeleteDialog
+          open={removeConfirmOpen}
+          onOpenChange={setRemoveConfirmOpen}
+          taskLabel={null}
+          title="Удалить свойство?"
+          description={`Столбец «${property.name}» и все его значения будут удалены безвозвратно.`}
+          onConfirm={() => {
+            onRemove();
+            setRemoveConfirmOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -912,6 +927,7 @@ function CreateOptionInput({
 // Ячейка значения кастомного свойства: рендер + редактор по типу.
 export function PropertyValueCell({
   property,
+  ariaColIndex,
   value,
   onChange,
   onAddOption,
@@ -919,8 +935,10 @@ export function PropertyValueCell({
   dataCell,
   onCellMouseEnter,
   rangeClass,
+  readOnly = false,
 }: {
   property: TaskProperty;
+  ariaColIndex: number;
   value: string;
   onChange: (value: string) => void;
   onAddOption: (label: string) => Promise<TaskPropertyOption | null>;
@@ -932,12 +950,17 @@ export function PropertyValueCell({
   dataCell?: string;
   onCellMouseEnter?: () => void;
   rangeClass?: string | null;
+  readOnly?: boolean;
 }): React.ReactElement {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement | null>(null);
   // Общие для всех веток атрибуты выделения (data-cell + наведение при протяжке).
-  const selAttrs = { 'data-cell': dataCell, onMouseEnter: onCellMouseEnter };
+  const selAttrs = {
+    'aria-colindex': ariaColIndex,
+    'data-cell': dataCell,
+    onMouseEnter: onCellMouseEnter,
+  };
 
   // text / number / url / date / phone / email — клик = инлайн-инпут на всю ячейку.
   if (
@@ -1029,12 +1052,15 @@ export function PropertyValueCell({
       <button
         {...selAttrs}
         type="button"
+        role="gridcell"
+        disabled={readOnly}
         onClick={() => {
+          if (readOnly) return;
           setDraft(value);
           setEditing(true);
         }}
         className={cn(
-          'relative min-h-[52px] min-w-0 border-b border-l px-4 py-2 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+          'relative min-h-[52px] min-w-0 border-b border-l px-4 py-2 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
           rangeClass,
         )}
       >
@@ -1053,14 +1079,17 @@ export function PropertyValueCell({
 
   if (property.type === 'checkbox') {
     return (
-      <div role="gridcell" {...selAttrs} className={cn('relative flex min-h-[52px] items-center border-b border-l px-4 py-2', rangeClass)}>
-        <input
-          type="checkbox"
-          checked={value === '1'}
-          onChange={(e) => onChange(e.target.checked ? '1' : '')}
-          aria-label={property.name}
-          className="size-4 cursor-pointer accent-primary"
-        />
+      <div role="gridcell" {...selAttrs} tabIndex={-1} className={cn('relative flex min-h-[52px] items-center border-b border-l', rangeClass)}>
+        <label className="flex min-h-[52px] w-full items-center px-4 py-2">
+          <input
+            type="checkbox"
+            checked={value === '1'}
+            disabled={readOnly}
+            onChange={(e) => onChange(e.target.checked ? '1' : '')}
+            aria-label={property.name}
+            className="size-4 cursor-pointer accent-primary disabled:cursor-default"
+          />
+        </label>
       </div>
     );
   }
@@ -1074,8 +1103,10 @@ export function PropertyValueCell({
           <button
             {...selAttrs}
             type="button"
+            role="gridcell"
+            disabled={readOnly}
             className={cn(
-              'relative flex min-h-[52px] min-w-0 items-center gap-2 border-b border-l px-4 py-2 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+              'relative flex min-h-[52px] min-w-0 items-center gap-2 border-b border-l px-4 py-2 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
               rangeClass,
             )}
           >
@@ -1149,8 +1180,10 @@ export function PropertyValueCell({
         <button
           {...selAttrs}
           type="button"
+          role="gridcell"
+          disabled={readOnly}
           className={cn(
-            'relative flex min-h-[52px] min-w-0 flex-wrap items-center gap-1 border-b border-l px-4 py-2 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+            'relative flex min-h-[52px] min-w-0 flex-wrap items-center gap-1 border-b border-l px-4 py-2 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent',
             rangeClass,
           )}
         >
