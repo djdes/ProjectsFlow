@@ -8,6 +8,7 @@ import type { TelegramTaskMessageRepository } from './TelegramTaskMessageReposit
 import type { TelegramGroupOwnerRepository } from './TelegramGroupOwnerRepository.js';
 import type { UserRepository } from '../user/UserRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
+import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { TaskAttachmentRepository } from '../task/TaskAttachmentRepository.js';
 import type { AttachmentStorage } from '../task/AttachmentStorage.js';
@@ -44,6 +45,14 @@ import {
   buildTaskTelegramFallbackContent,
   buildTaskTelegramRichContent,
 } from './taskTelegramContent.js';
+import type { TelegramDigestActionDeliveryRepository } from '../digest/TelegramDigestActionDeliveryRepository.js';
+import {
+  collapsedTelegramDigestKeyboard,
+  expandedTelegramDigestKeyboard,
+  parseTelegramDigestSort,
+  type TelegramDigestKeyboardTask,
+  type TelegramDigestSort,
+} from '../digest/TelegramDigestKeyboard.js';
 
 // Signed task attachment URLs stay valid long enough for Telegram to fetch and cache media.
 const TG_ATTACHMENT_URL_TTL_SECONDS = 14 * 24 * 60 * 60;
@@ -290,7 +299,9 @@ function neutralMediaText(attachments: readonly TelegramDraftAttachment[]): stri
 type Deps = {
   readonly users: UserRepository;
   readonly members: ProjectMemberRepository;
+  readonly projects: ProjectRepository;
   readonly tasks: TaskRepository;
+  readonly digestActions: TelegramDigestActionDeliveryRepository;
   readonly attachments: TaskAttachmentRepository;
   readonly attachmentStorage: Pick<AttachmentStorage, 'read'>;
   readonly client: TelegramClient;
@@ -363,6 +374,23 @@ export class HandleTelegramWebhook {
       if (data.startsWith('nd:')) return this.handleTaskDone(cq, data.slice(3));
       if (data.startsWith('nc:')) return this.handleTaskCommentPrompt(cq, data.slice(3));
       if (data.startsWith('nu:')) return this.handleTaskUndo(cq, data.slice(3));
+      if (data.startsWith('dgx:')) {
+        return this.handleDigestPanel(cq, true, data.slice(4));
+      }
+      if (data.startsWith('dgh:')) {
+        return this.handleDigestPanel(cq, false, data.slice(4));
+      }
+      if (data.startsWith('dgs:')) {
+        return this.handleDigestPanel(cq, true, data.slice(4));
+      }
+      if (data.startsWith('dgc:')) {
+        return this.handleDigestTaskDone(cq, data.slice(4));
+      }
+      if (data.startsWith('dgm:')) {
+        return this.deps.client.answerCallbackQuery(cq.id, {
+          text: 'Остальные задачи доступны в ProjectsFlow.',
+        });
+      }
       // Предложения закрыть (db/101): pd: подтвердить, px: отклонить.
       if (data.startsWith('pd:')) return this.handleCloseProposalConfirm(cq, data.slice(3));
       if (data.startsWith('px:')) return this.handleCloseProposalDismiss(cq, data.slice(3));
@@ -654,6 +682,176 @@ export class HandleTelegramWebhook {
 
   // --- Инлайн-действия задачных уведомлений (nd/nc/nu) — email-аналог «Завершить/Комментировать»
   //     прямо в чате, без авторизации и редиректа (TG-аккаунт уже привязан к юзеру). ---
+
+  private async loadDigestPanel(
+    cq: TelegramCallbackQuery,
+  ): Promise<{
+    chatId: number;
+    messageId: number;
+    messageHtml: string;
+    messageKind: 'rich' | 'html';
+    tasks: TelegramDigestKeyboardTask[];
+  } | null> {
+    const chatId = cq.message?.chat.id;
+    const messageId = cq.message?.message_id;
+    if (chatId === undefined || messageId === undefined) return null;
+
+    const deliveries = await this.deps.digestActions
+      .listByMessage(chatId, messageId)
+      .catch(() => []);
+    const first = deliveries[0];
+    if (!first) return null;
+
+    const uniqueTaskIds = [...new Set(deliveries.map((delivery) => delivery.taskId))];
+    const loaded = await Promise.all(
+      uniqueTaskIds.map(async (taskId) => {
+        const task = await this.deps.tasks.getById(taskId).catch(() => null);
+        return task;
+      }),
+    );
+    const existing = loaded.filter(
+      (task): task is NonNullable<typeof task> => task !== null,
+    );
+    const projectIds = [...new Set(existing.map((task) => task.projectId))];
+    const projects = await Promise.all(
+      projectIds.map(async (projectId) => [
+        projectId,
+        await this.deps.projects.getById(projectId).catch(() => null),
+      ] as const),
+    );
+    const projectById = new Map(projects);
+    const appBase = this.deps.appUrl.replace(/\/+$/, '');
+
+    return {
+      chatId,
+      messageId,
+      messageHtml: first.messageHtml,
+      messageKind: first.messageKind,
+      tasks: existing.map((task) => {
+        const { name } = splitDescription(task.description);
+        return {
+          taskId: task.id,
+          name,
+          openLink:
+            `${appBase}/${
+              projectById.get(task.projectId)?.isInbox
+                ? 'inbox'
+                : `projects/${task.projectId}`
+            }?task=${task.id}`,
+          projectName: projectById.get(task.projectId)?.name ?? 'Проект',
+          assigneeName: task.assignee.displayName,
+          deadline: task.deadline,
+          priority: task.priority,
+          position: task.position,
+          completed: task.status === 'done',
+        };
+      }),
+    };
+  }
+
+  private async renderDigestPanel(
+    cq: TelegramCallbackQuery,
+    expanded: boolean,
+    sort: TelegramDigestSort,
+  ): Promise<boolean> {
+    const panel = await this.loadDigestPanel(cq);
+    if (!panel) return false;
+    const replyMarkup = expanded
+      ? expandedTelegramDigestKeyboard(panel.tasks, sort)
+      : collapsedTelegramDigestKeyboard(panel.tasks.length, sort);
+    await this.deps.client.editMessageText(
+      panel.messageKind === 'rich'
+        ? {
+            chatId: panel.chatId,
+            messageId: panel.messageId,
+            richHtml: panel.messageHtml,
+            replyMarkup,
+          }
+        : {
+            chatId: panel.chatId,
+            messageId: panel.messageId,
+            text: panel.messageHtml,
+            parseMode: 'HTML',
+            disableWebPagePreview: true,
+            replyMarkup,
+          },
+    );
+    return true;
+  }
+
+  private async handleDigestPanel(
+    cq: TelegramCallbackQuery,
+    expanded: boolean,
+    sortValue: string,
+  ): Promise<void> {
+    const sort = parseTelegramDigestSort(sortValue);
+    const rendered = await this.renderDigestPanel(cq, expanded, sort);
+    await this.deps.client.answerCallbackQuery(
+      cq.id,
+      rendered
+        ? undefined
+        : { text: 'Сводка устарела.', showAlert: true },
+    );
+  }
+
+  private async handleDigestTaskDone(
+    cq: TelegramCallbackQuery,
+    value: string,
+  ): Promise<void> {
+    const separator = value.indexOf(':');
+    if (separator < 0) {
+      await this.deps.client.answerCallbackQuery(cq.id, {
+        text: 'Сводка устарела.',
+        showAlert: true,
+      });
+      return;
+    }
+    const sort = parseTelegramDigestSort(value.slice(0, separator));
+    const taskId = value.slice(separator + 1);
+    const panel = await this.loadDigestPanel(cq);
+    if (!panel || !panel.tasks.some((task) => task.taskId === taskId)) {
+      await this.deps.client.answerCallbackQuery(cq.id, {
+        text: 'Задача не найдена в этой сводке.',
+        showAlert: true,
+      });
+      return;
+    }
+
+    const ctx = await this.resolveTaskAction(cq, taskId);
+    if (!ctx) return;
+    const { userId, task } = ctx;
+    if (task.status !== 'done') {
+      try {
+        await this.deps.moveTask.execute({
+          projectId: task.projectId,
+          ownerUserId: userId,
+          taskId,
+          targetStatus: 'done',
+          beforeTaskId: null,
+          afterTaskId: null,
+        });
+      } catch (error) {
+        console.warn('[tg-webhook] digest task complete failed:', error);
+        await this.deps.client.answerCallbackQuery(cq.id, {
+          text: 'Не удалось завершить задачу.',
+          showAlert: true,
+        });
+        return;
+      }
+      this.deps.notifyStatusChanged(
+        task.projectId,
+        taskId,
+        task.status,
+        'done',
+        userId,
+      );
+      this.deps.notifyTaskChanged(task.projectId);
+    }
+    await this.deps.client.answerCallbackQuery(cq.id, {
+      text: task.status === 'done' ? 'Уже завершена.' : '● Задача завершена',
+    });
+    await this.renderDigestPanel(cq, true, sort);
+  }
 
   private async answerNeedsLink(cqId: string): Promise<void> {
     await this.deps.client.answerCallbackQuery(cqId, {

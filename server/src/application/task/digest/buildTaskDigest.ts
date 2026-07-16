@@ -344,6 +344,9 @@ export type DigestRichRenderOptions = {
   // В персональной сводке ответственный уже указан в заголовке, поэтому его можно
   // не дублировать у каждой задачи.
   readonly showAssignee?: boolean;
+  // Telegram не передаёт callback из checkbox внутри rich-текста. В интерактивном режиме
+  // список задач живёт в большой inline-панели под сообщением и раскрывается без браузера.
+  readonly interactivePanel?: boolean;
 };
 
 export function renderDigestRich(
@@ -352,9 +355,13 @@ export function renderDigestRich(
 ): string {
   const h: string[] = [
     `<h2>${opts.titleHtml ?? `🗒 Ежедневная сводка · «${escapeHtml(m.projectName)}»`}</h2>`,
-    `<p>Открытых задач: <b>${m.count}</b></p>`,
-    `<details><summary>Показать задачи (${m.count})</summary>`,
+    `<p>${opts.interactivePanel ? 'Задач в сводке' : 'Открытых задач'}: <b>${m.count}</b></p>`,
   ];
+  if (opts.interactivePanel) {
+    h.push('<p><i>Задачи доступны в управляемой панели ниже.</i></p>');
+    return h.join('');
+  }
+  h.push(`<details><summary>Показать задачи (${m.count})</summary>`);
   for (const g of m.groups) {
     h.push(`<h3>${telegramGroupHeading(g)}</h3>`);
     h.push('<ul>');

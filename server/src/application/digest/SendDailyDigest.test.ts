@@ -48,6 +48,7 @@ test('manual group test deletes its predecessor and remembers one collapsed assi
   const saved: unknown[] = [];
   const actionDeliveries: unknown[] = [];
   let richHtml = '';
+  let richReplyMarkup: unknown = null;
 
   const send = new SendDailyDigest({
     tasks: { listByProject: async () => [openTask()] } as never,
@@ -74,8 +75,9 @@ test('manual group test deletes its predecessor and remembers one collapsed assi
     telegram: { execute: async () => ({ status: 'not_connected' }) } as never,
     telegramClient: {
       sendMessage: async () => ({ kind: 'ok', messageId: 99 }),
-      sendRichMessage: async (input: { html: string }) => {
+      sendRichMessage: async (input: { html: string; replyMarkup?: unknown }) => {
         richHtml = input.html;
+        richReplyMarkup = input.replyMarkup;
         return { kind: 'ok' as const, messageId: 44 };
       },
       deleteMessages: async (input: { chatId: number; messageIds: readonly number[] }) => {
@@ -107,10 +109,16 @@ test('manual group test deletes its predecessor and remembers one collapsed assi
   assert.deepEqual(saved, [[], [{ chatId: -1007, messageIds: [44] }]]);
   assert.equal(actionDeliveries.length, 1);
   assert.deepEqual((actionDeliveries[0] as { tokens: string[] }).tokens, ['a'.repeat(64)]);
-  assert.ok(richHtml.includes('<details><summary>Показать задачи (1)</summary>'));
-  assert.ok(richHtml.includes('@anna_pf · Анна'));
-  assert.ok(richHtml.includes('<ul>'));
-  assert.ok(richHtml.includes('>○</a>'));
+  assert.ok(richHtml.includes('Задачи доступны в управляемой панели ниже.'));
+  assert.ok(!richHtml.includes('<details>'));
+  assert.ok(!richHtml.includes('>○</a>'));
   assert.ok(!richHtml.includes('✓ Завершить'));
   assert.ok(!richHtml.includes('<table'));
+  assert.deepEqual(richReplyMarkup, {
+    inline_keyboard: [[{
+      text: 'Показать задачи (1)',
+      callback_data: 'dgx:default',
+      style: 'primary',
+    }]],
+  });
 });

@@ -2,6 +2,7 @@ export type TelegramDigestMessageKind = 'rich' | 'html';
 
 export type TelegramDigestActionDelivery = {
   readonly token: string;
+  readonly taskId: string;
   readonly chatId: number;
   readonly messageId: number;
   readonly messageHtml: string;
@@ -18,6 +19,11 @@ export interface TelegramDigestActionDeliveryRepository {
   }): Promise<void>;
 
   findByToken(token: string): Promise<TelegramDigestActionDelivery | null>;
+
+  listByMessage(
+    chatId: number,
+    messageId: number,
+  ): Promise<TelegramDigestActionDelivery[]>;
 
   updateMessage(input: {
     readonly chatId: number;

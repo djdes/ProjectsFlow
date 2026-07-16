@@ -1,19 +1,27 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type {
   TelegramDigestActionDelivery,
   TelegramDigestActionDeliveryRepository,
 } from '../../application/digest/TelegramDigestActionDeliveryRepository.js';
 import type { Database } from '../db/index.js';
 import {
+  emailActionTokens,
   telegramDigestActionDeliveries,
-  type TelegramDigestActionDeliveryRow,
 } from '../db/schema.js';
 
-function toDelivery(
-  row: TelegramDigestActionDeliveryRow,
-): TelegramDigestActionDelivery {
+type JoinedDelivery = {
+  token: string;
+  taskId: string;
+  tgChatId: number;
+  tgMessageId: number;
+  messageHtml: string;
+  messageKind: 'rich' | 'html';
+};
+
+function toDelivery(row: JoinedDelivery): TelegramDigestActionDelivery {
   return {
     token: row.token,
+    taskId: row.taskId,
     chatId: row.tgChatId,
     messageId: row.tgMessageId,
     messageHtml: row.messageHtml,
@@ -58,11 +66,53 @@ export class DrizzleTelegramDigestActionDeliveryRepository
 
   async findByToken(token: string): Promise<TelegramDigestActionDelivery | null> {
     const [row] = await this.db
-      .select()
+      .select({
+        token: telegramDigestActionDeliveries.token,
+        taskId: emailActionTokens.taskId,
+        tgChatId: telegramDigestActionDeliveries.tgChatId,
+        tgMessageId: telegramDigestActionDeliveries.tgMessageId,
+        messageHtml: telegramDigestActionDeliveries.messageHtml,
+        messageKind: telegramDigestActionDeliveries.messageKind,
+      })
       .from(telegramDigestActionDeliveries)
+      .innerJoin(
+        emailActionTokens,
+        eq(emailActionTokens.token, telegramDigestActionDeliveries.token),
+      )
       .where(eq(telegramDigestActionDeliveries.token, token))
       .limit(1);
     return row ? toDelivery(row) : null;
+  }
+
+  async listByMessage(
+    chatId: number,
+    messageId: number,
+  ): Promise<TelegramDigestActionDelivery[]> {
+    const rows = await this.db
+      .select({
+        token: telegramDigestActionDeliveries.token,
+        taskId: emailActionTokens.taskId,
+        tgChatId: telegramDigestActionDeliveries.tgChatId,
+        tgMessageId: telegramDigestActionDeliveries.tgMessageId,
+        messageHtml: telegramDigestActionDeliveries.messageHtml,
+        messageKind: telegramDigestActionDeliveries.messageKind,
+      })
+      .from(telegramDigestActionDeliveries)
+      .innerJoin(
+        emailActionTokens,
+        eq(emailActionTokens.token, telegramDigestActionDeliveries.token),
+      )
+      .where(
+        and(
+          eq(telegramDigestActionDeliveries.tgChatId, chatId),
+          eq(telegramDigestActionDeliveries.tgMessageId, messageId),
+        ),
+      )
+      .orderBy(
+        asc(telegramDigestActionDeliveries.createdAt),
+        asc(telegramDigestActionDeliveries.token),
+      );
+    return rows.map(toDelivery);
   }
 
   async updateMessage(input: {
