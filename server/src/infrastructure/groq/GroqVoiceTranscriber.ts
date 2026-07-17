@@ -15,6 +15,18 @@ const DEFAULT_MODEL = 'whisper-large-v3-turbo';
 const DEFAULT_LANGUAGE = 'ru';
 const DEFAULT_MAX_BYTES = 25 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 120_000;
+const GROQ_AUDIO_EXTENSIONS = new Set([
+  'flac',
+  'mp3',
+  'mp4',
+  'mpeg',
+  'mpga',
+  'm4a',
+  'ogg',
+  'opus',
+  'wav',
+  'webm',
+]);
 
 export type GroqVoiceTranscriberOptions = {
   readonly apiKey: string;
@@ -27,7 +39,33 @@ export type GroqVoiceTranscriberOptions = {
 
 type GroqTranscriptionResponse = {
   readonly text?: unknown;
+  readonly error?: { readonly message?: unknown };
 };
+
+// Telegram getFile names voice notes `*.oga`. Groq accepts the same Ogg/Opus bytes but validates
+// the multipart filename against its documented `*.ogg`/`*.opus` extensions and returns HTTP 400
+// for `*.oga`. Normalize only unsupported extensions; known uploaded audio names stay untouched.
+export function normalizeGroqAudioFilename(filename: string, mimeType: string): string {
+  const clean = filename.trim() || 'telegram-voice';
+  const currentExtension = clean.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() ?? '';
+  if (GROQ_AUDIO_EXTENSIONS.has(currentExtension)) return clean;
+
+  const normalizedMime = mimeType.split(';', 1)[0]?.trim().toLowerCase();
+  const extension =
+    currentExtension === 'oga' || normalizedMime === 'audio/ogg'
+      ? 'ogg'
+      : normalizedMime === 'audio/webm'
+        ? 'webm'
+        : normalizedMime === 'audio/wav' || normalizedMime === 'audio/x-wav'
+          ? 'wav'
+          : normalizedMime === 'audio/mp4'
+            ? 'm4a'
+            : normalizedMime === 'audio/mpeg'
+              ? 'mp3'
+              : 'ogg';
+  const basename = clean.replace(/\.[^./\\]+$/, '').trim() || 'telegram-voice';
+  return `${basename}.${extension}`;
+}
 
 export class GroqVoiceTranscriber implements VoiceTranscriber {
   private readonly apiKey: string;
@@ -63,9 +101,13 @@ export class GroqVoiceTranscriber implements VoiceTranscriber {
     }
 
     const form = new FormData();
+    const uploadFilename = normalizeGroqAudioFilename(
+      input.filename || 'telegram-voice.ogg',
+      input.mimeType,
+    );
     form.set(
       'file',
-      new File([new Uint8Array(input.data)], input.filename || 'telegram-voice.ogg', {
+      new File([new Uint8Array(input.data)], uploadFilename, {
         type: input.mimeType || 'audio/ogg',
       }),
     );
@@ -83,8 +125,17 @@ export class GroqVoiceTranscriber implements VoiceTranscriber {
     });
 
     if (!response.ok) {
-      // Do not include the provider body in logs/errors: it can contain account or request data.
-      throw new Error(`Groq voice transcription failed with HTTP ${response.status}`);
+      const errorPayload = (await response.json().catch(() => null)) as
+        | GroqTranscriptionResponse
+        | null;
+      const providerMessage =
+        typeof errorPayload?.error?.message === 'string'
+          ? errorPayload.error.message.replace(/\s+/g, ' ').trim().slice(0, 240)
+          : '';
+      throw new Error(
+        `Groq voice transcription failed with HTTP ${response.status}` +
+          (providerMessage ? `: ${providerMessage}` : ''),
+      );
     }
 
     const payload = (await response.json().catch(() => null)) as GroqTranscriptionResponse | null;
