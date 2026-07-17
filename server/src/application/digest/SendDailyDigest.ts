@@ -18,6 +18,7 @@ import { extractTelegramDigestActionTokens } from './TelegramDigestActionService
 import { markdownToTelegramHtml } from '../telegram/telegramMarkdown.js';
 import {
   buildDigestModel,
+  digestTaskKeyboard,
   renderDigestHtml,
   renderDigestMarkdown,
   renderDigestRich,
@@ -287,6 +288,7 @@ export class SendDailyDigest {
           const r = await this.deps.telegramClient.sendRichMessage({
             chatId: groupChatId,
             html: richHtml,
+            replyMarkup: digestTaskKeyboard(telegramModel),
           });
           richOk = r.kind === 'ok';
           fallbackAllowed = r.kind === 'error' && r.deliveryUnknown !== true;
@@ -319,6 +321,7 @@ export class SendDailyDigest {
               text: chunk,
               parseMode: 'HTML',
               disableWebPagePreview: true,
+              replyMarkup: chunk === tgChunks[0] ? digestTaskKeyboard(telegramModel) : undefined,
             })
             .catch((e) => console.warn('[daily-digest] tg group failed', e));
           if (result && typeof result === 'object' && result.kind === 'ok') {

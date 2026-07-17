@@ -1,4 +1,4 @@
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq, isNotNull, or } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   projectDigestSettings,
@@ -33,6 +33,16 @@ function rowToSettings(
     telegramGroupTitle: row.telegramGroupTitle ?? null,
     recipientMode: row.recipientMode,
     recipientUserIds: parseJsonCol<string[]>(row.recipientUserIds, []),
+    projectMode: row.projectMode,
+    projectIds: parseJsonCol<string[]>(row.projectIds, []),
+    commitSyncEnabled: row.commitSyncEnabled,
+    commitSyncHour: row.commitSyncHour,
+    commitSyncMinute: row.commitSyncMinute,
+    commitSyncLastSentOn: row.commitSyncLastSentOn ?? null,
+    eodReminderEnabled: row.eodReminderEnabled,
+    eodReminderHour: row.eodReminderHour,
+    eodReminderMinute: row.eodReminderMinute,
+    eodReminderLastSentOn: row.eodReminderLastSentOn ?? null,
     lastSentOn: row.lastSentOn ?? null,
   };
 }
@@ -81,6 +91,14 @@ export class DrizzleWorkspaceAssigneeDigestRepository
       telegramGroupTitle: input.telegramGroupTitle,
       recipientMode: input.recipientMode,
       recipientUserIds: input.recipientUserIds,
+      projectMode: input.projectMode,
+      projectIds: input.projectIds,
+      commitSyncEnabled: input.commitSyncEnabled,
+      commitSyncHour: input.commitSyncHour,
+      commitSyncMinute: input.commitSyncMinute,
+      eodReminderEnabled: input.eodReminderEnabled,
+      eodReminderHour: input.eodReminderHour,
+      eodReminderMinute: input.eodReminderMinute,
     };
     await this.db
       .insert(workspaceAssigneeDigestSettings)
@@ -97,10 +115,38 @@ export class DrizzleWorkspaceAssigneeDigestRepository
     return rows.map(rowToSettings);
   }
 
+  async listScheduled(): Promise<WorkspaceAssigneeDigestSettings[]> {
+    const rows = await this.db
+      .select()
+      .from(workspaceAssigneeDigestSettings)
+      .where(
+        or(
+          eq(workspaceAssigneeDigestSettings.enabled, true),
+          eq(workspaceAssigneeDigestSettings.commitSyncEnabled, true),
+          eq(workspaceAssigneeDigestSettings.eodReminderEnabled, true),
+        ),
+      );
+    return rows.map(rowToSettings);
+  }
+
   async markSent(workspaceId: string, dateMsk: string): Promise<void> {
     await this.db
       .update(workspaceAssigneeDigestSettings)
       .set({ lastSentOn: dateMsk })
+      .where(eq(workspaceAssigneeDigestSettings.workspaceId, workspaceId));
+  }
+
+  async markCommitSyncSent(workspaceId: string, dateMsk: string): Promise<void> {
+    await this.db
+      .update(workspaceAssigneeDigestSettings)
+      .set({ commitSyncLastSentOn: dateMsk })
+      .where(eq(workspaceAssigneeDigestSettings.workspaceId, workspaceId));
+  }
+
+  async markEodReminderSent(workspaceId: string, dateMsk: string): Promise<void> {
+    await this.db
+      .update(workspaceAssigneeDigestSettings)
+      .set({ eodReminderLastSentOn: dateMsk })
       .where(eq(workspaceAssigneeDigestSettings.workspaceId, workspaceId));
   }
 

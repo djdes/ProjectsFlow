@@ -1360,6 +1360,16 @@ export const workspaceAssigneeDigestSettings = mysqlTable(
     telegramGroupTitle: varchar('telegram_group_title', { length: 255 }),
     recipientMode: mysqlEnum('recipient_mode', ['all', 'selected']).notNull().default('all'),
     recipientUserIds: json('recipient_user_ids').$type<string[] | null>(),
+    projectMode: mysqlEnum('project_mode', ['all', 'selected']).notNull().default('all'),
+    projectIds: json('project_ids').$type<string[] | null>(),
+    commitSyncEnabled: boolean('commit_sync_enabled').notNull().default(false),
+    commitSyncHour: tinyint('commit_sync_hour').notNull().default(17),
+    commitSyncMinute: tinyint('commit_sync_minute').notNull().default(0),
+    commitSyncLastSentOn: date('commit_sync_last_sent_on', { mode: 'string' }),
+    eodReminderEnabled: boolean('eod_reminder_enabled').notNull().default(false),
+    eodReminderHour: tinyint('eod_reminder_hour').notNull().default(17),
+    eodReminderMinute: tinyint('eod_reminder_minute').notNull().default(20),
+    eodReminderLastSentOn: date('eod_reminder_last_sent_on', { mode: 'string' }),
     lastSentOn: date('last_sent_on', { mode: 'string' }),
     testDeliveries: json('test_deliveries').$type<
       Array<{ chatId: number; messageIds: number[] }> | null

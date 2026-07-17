@@ -5,6 +5,8 @@ import type { ProjectMemberRepository } from '../project/ProjectMemberRepository
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { SendAgentTelegramNotification } from '../telegram/SendAgentTelegramNotification.js';
+import type { TelegramClient } from '../telegram/TelegramClient.js';
+import type { WorkspaceAssigneeDigestRepository } from '../digest/WorkspaceAssigneeDigestRepository.js';
 import { closeProposalKeyboard } from '../telegram/taskActionKeyboard.js';
 import { buildTaskUrl } from '../notifications/taskUrl.js';
 
@@ -31,6 +33,8 @@ type Deps = {
   readonly projects: ProjectRepository;
   readonly tasks: TaskRepository;
   readonly tgSend: SendAgentTelegramNotification;
+  readonly telegram: TelegramClient;
+  readonly workspaceDigestSettings: WorkspaceAssigneeDigestRepository;
   readonly idGen: () => string;
   readonly appUrl: string;
 };
@@ -57,6 +61,17 @@ export class CreateCloseProposals {
     const project = await this.deps.projects.getById(input.projectId);
     if (!project) return { created: 0 };
     const members = await this.deps.members.listByProject(input.projectId);
+    const workspaceId = await this.deps.projects.getWorkspaceId(input.projectId);
+    const workspaceSettings = workspaceId
+      ? await this.deps.workspaceDigestSettings.get(workspaceId).catch(() => null)
+      : null;
+    const selectedProjects = new Set(workspaceSettings?.projectIds ?? []);
+    const groupChatId =
+      workspaceSettings?.commitSyncEnabled &&
+      workspaceSettings.telegramGroupChatId !== null &&
+      (workspaceSettings.projectMode === 'all' || selectedProjects.has(input.projectId))
+        ? workspaceSettings.telegramGroupChatId
+        : null;
 
     let created = 0;
     // На одну задачу — максимум одно предложение за прогон (первое валидное совпадение).
@@ -131,19 +146,34 @@ export class CreateCloseProposals {
         } catch (err) {
           console.warn('[CreateCloseProposals] in-app notify failed', mem.userId, err);
         }
-        try {
-          await this.deps.tgSend.execute({
-            userId: mem.userId,
+        if (groupChatId === null) {
+          try {
+            await this.deps.tgSend.execute({
+              userId: mem.userId,
+              text: tgText,
+              parseMode: 'HTML',
+              kind: 'close_proposal',
+              taskId: m.taskId,
+              projectId: input.projectId,
+              replyMarkup: closeProposalKeyboard(proposal.id),
+            });
+          } catch (err) {
+            console.warn('[CreateCloseProposals] TG notify failed', mem.userId, err);
+          }
+        }
+      }
+      if (groupChatId !== null) {
+        await this.deps.telegram
+          .sendMessage({
+            chatId: groupChatId,
             text: tgText,
             parseMode: 'HTML',
-            kind: 'close_proposal',
-            taskId: m.taskId,
-            projectId: input.projectId,
+            disableWebPagePreview: true,
             replyMarkup: closeProposalKeyboard(proposal.id),
-          });
-        } catch (err) {
-          console.warn('[CreateCloseProposals] TG notify failed', mem.userId, err);
-        }
+          })
+          .catch((err) =>
+            console.warn('[CreateCloseProposals] group TG notify failed', groupChatId, err),
+          );
       }
     }
 

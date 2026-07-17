@@ -1,5 +1,6 @@
 import type {
   WorkspaceAssigneeDigestRecipientMode,
+  WorkspaceDigestProjectMode,
   WorkspaceAssigneeDigestSettings,
 } from '../../domain/digest/WorkspaceAssigneeDigestSettings.js';
 import type {
@@ -16,6 +17,14 @@ export type SaveWorkspaceAssigneeDigestSettingsInput = {
   readonly telegramGroupTitle: string | null;
   readonly recipientMode: WorkspaceAssigneeDigestRecipientMode;
   readonly recipientUserIds: string[];
+  readonly projectMode: WorkspaceDigestProjectMode;
+  readonly projectIds: string[];
+  readonly commitSyncEnabled: boolean;
+  readonly commitSyncHour: number;
+  readonly commitSyncMinute: number;
+  readonly eodReminderEnabled: boolean;
+  readonly eodReminderHour: number;
+  readonly eodReminderMinute: number;
 };
 
 export interface WorkspaceAssigneeDigestRepository {
@@ -25,7 +34,10 @@ export interface WorkspaceAssigneeDigestRepository {
     input: SaveWorkspaceAssigneeDigestSettingsInput,
   ): Promise<WorkspaceAssigneeDigestSettings>;
   listEnabled(): Promise<WorkspaceAssigneeDigestSettings[]>;
+  listScheduled(): Promise<WorkspaceAssigneeDigestSettings[]>;
   markSent(workspaceId: string, dateMsk: string): Promise<void>;
+  markCommitSyncSent(workspaceId: string, dateMsk: string): Promise<void>;
+  markEodReminderSent(workspaceId: string, dateMsk: string): Promise<void>;
   getLastTestDeliveries(workspaceId: string): Promise<DigestTestDelivery[]>;
   replaceLastTestDeliveries(
     workspaceId: string,

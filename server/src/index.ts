@@ -187,9 +187,6 @@ import { CreateCloseProposals } from './application/close-proposal/CreateClosePr
 import { ConfirmCloseProposal } from './application/close-proposal/ConfirmCloseProposal.js';
 import { DismissCloseProposal } from './application/close-proposal/DismissCloseProposal.js';
 import { CommitSyncJobCleanup } from './application/commit-sync/CommitSyncJobCleanup.js';
-import { CommitSyncScheduler } from './infrastructure/scheduler/CommitSyncScheduler.js';
-import { EodReminderScheduler } from './infrastructure/scheduler/EodReminderScheduler.js';
-import { SendEodReminder } from './application/eod/SendEodReminder.js';
 import { DrizzleAutomationRepository } from './infrastructure/repositories/DrizzleAutomationRepository.js';
 import { GetAutomationConfig } from './application/automation/GetAutomationConfig.js';
 import { SaveAutomationConfig } from './application/automation/SaveAutomationConfig.js';
@@ -223,6 +220,7 @@ import { SendWorkspaceAssigneeDigest } from './application/digest/SendWorkspaceA
 import { TelegramDigestActionService } from './application/digest/TelegramDigestActionService.js';
 import { ManageWorkspaceAssigneeDigest } from './application/digest/ManageWorkspaceAssigneeDigest.js';
 import { WorkspaceAssigneeDigestScheduler } from './infrastructure/scheduler/WorkspaceAssigneeDigestScheduler.js';
+import { SendWorkspaceEodReminder } from './application/eod/SendWorkspaceEodReminder.js';
 import { SearchTasks } from './application/task/SearchTasks.js';
 import { DrizzleTaskSearchRepository } from './infrastructure/repositories/DrizzleTaskSearchRepository.js';
 import { CreateTask } from './application/task/CreateTask.js';
@@ -840,6 +838,8 @@ const createCloseProposals = new CreateCloseProposals({
   projects: projectRepo,
   tasks: taskRepo,
   tgSend: sendAgentTelegramNotification,
+  telegram: telegramClient,
+  workspaceDigestSettings: workspaceAssigneeDigestRepo,
   idGen: idGenerator,
   appUrl: appBaseUrl,
 });
@@ -1384,7 +1384,6 @@ const sendWorkspaceAssigneeDigest = new SendWorkspaceAssigneeDigest({
   settings: workspaceAssigneeDigestRepo,
   workspaces: workspaceRepo,
   projects: projectRepo,
-  automation: automationRepo,
   tasks: taskRepo,
   users: userRepo,
   telegram: telegramClient,
@@ -1398,6 +1397,7 @@ const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({
   users: userRepo,
   telegram: telegramClient,
   send: sendWorkspaceAssigneeDigest,
+  projects: projectRepo,
 });
 
 const { app, devProxyUpgrade } = createApp({
@@ -2413,35 +2413,21 @@ const dailyDigestScheduler = new DailyDigestScheduler({
 });
 dailyDigestScheduler.start();
 
+const sendWorkspaceEodReminder = new SendWorkspaceEodReminder({
+  settings: workspaceAssigneeDigestRepo,
+  projects: projectRepo,
+  tasks: taskRepo,
+  telegram: telegramClient,
+  appUrl: appBaseUrl,
+});
 const workspaceAssigneeDigestScheduler = new WorkspaceAssigneeDigestScheduler({
   settings: workspaceAssigneeDigestRepo,
   send: sendWorkspaceAssigneeDigest,
+  projects: projectRepo,
+  enqueueCommitSync: enqueueCommitSyncJob,
+  sendEodReminder: sendWorkspaceEodReminder,
 });
 workspaceAssigneeDigestScheduler.start();
-
-// Ежедневная commit-sync (db/072): тик раз в минуту ставит job на проекты с включённой
-// авто-обработкой статусов по коммитам в заданное МSK-время. Зеркало DailyDigestScheduler.
-const commitSyncScheduler = new CommitSyncScheduler({
-  automation: automationRepo,
-  enqueue: enqueueCommitSyncJob,
-});
-commitSyncScheduler.start();
-
-// EOD-напоминание (db/101, Фаза 2): тик раз в минуту шлёт «актуализируй перед уходом» участникам
-// проектов с включённым eod_reminder в их МSK-время + тимбилдинг-нудж в группу. Без раннера.
-const eodReminderScheduler = new EodReminderScheduler({
-  automation: automationRepo,
-  send: new SendEodReminder({
-    projects: projectRepo,
-    members: projectMemberRepo,
-    tasks: taskRepo,
-    tgSend: sendAgentTelegramNotification,
-    appUrl: appBaseUrl,
-    telegramClient,
-    getGroupChatId: async (id) => (await digestSettingsRepo.getByProject(id)).telegramGroupChatId,
-  }),
-});
-eodReminderScheduler.start();
 
 const server = app.listen(config.port, () => {
   console.log(

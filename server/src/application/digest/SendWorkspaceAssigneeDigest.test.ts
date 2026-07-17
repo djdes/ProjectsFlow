@@ -73,7 +73,7 @@ test('workspace assignee digest renders one compact message with mention and pro
   assert.match(message, /<blockquote expandable>/);
   assert.match(message, /DocsFlow/);
   assert.match(message, /Banana/);
-  assert.match(message, /projects\/project-a\?task=task-a/);
+  assert.doesNotMatch(message, /projects\/project-a\?task=task-a/);
   assert.match(message, /осталось 2 дня/);
   assert.ok(message.length <= 3800);
 });
@@ -105,11 +105,12 @@ test('workspace assignee digest uses the same rich layout as regular Telegram di
   assert.match(message, /<details><summary>Показать задачи \(2\)<\/summary>/);
   assert.match(message, /<h3>📁 DocsFlow<\/h3>/);
   assert.match(message, /<h3>📁 Banana<\/h3>/);
-  assert.match(message, /projects\/project-a\?task=task-a/);
-  assert.match(message, /api\/telegram-digest-actions\/a{64}">✓ Завершить<\/a>/);
-  assert.match(message, /⏰ осталось 2 дня/);
-  assert.match(message, />✓ Завершить<\/a>/);
-  assert.doesNotMatch(message, />○<\/a>/);
+  assert.match(message, /<table/);
+  assert.match(message, /table-layout:fixed/);
+  assert.match(message, /width:72%/);
+  assert.doesNotMatch(message, /projects\/project-a\?task=task-a/);
+  assert.doesNotMatch(message, /telegram-digest-actions/);
+  assert.match(message, />осталось 2 дня<\/td>/);
   assert.doesNotMatch(message, /👤 Денис/);
   assert.match(message, /<\/details>$/);
 });

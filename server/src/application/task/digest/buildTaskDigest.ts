@@ -1,5 +1,6 @@
 import type { TaskPriority, TaskStatus } from '../../../domain/task/Task.js';
 import type { TaskWithCounts } from '../ListTasks.js';
+import type { InlineKeyboardMarkup } from '../../telegram/TelegramClient.js';
 import {
   STATUS_DIGEST_LABEL,
   escapeHtml,
@@ -261,21 +262,15 @@ export function renderDigestHtml(
 // влезает в maxBlock — усекаем ТОЛЬКО тело (по сырому markdown, затем re-render, чтобы HTML
 // остался сбалансированным и Telegram не отбил parse_mode).
 function digestItemBlockTg(it: DigestItem, maxBlock: number): string {
-  const completeLink = it.completeActionLink ?? it.doneLink;
-  const title = `<a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>`;
+  const title = `<b>${escapeHtml(it.name)}</b>`;
   const meta: string[] = [];
   if (it.assignee) meta.push(`👤 ${escapeHtml(it.assignee)}`);
   if (it.deadline) meta.push(`⏰ ${escapeHtml(it.deadline)}`);
-  const commentLabel =
-    it.commentCount > 0 ? `Комментировать (${it.commentCount})` : 'Комментировать';
-  const footer =
-    `<a href="${escapeHtml(it.openLink)}">${commentLabel}</a>` +
-    ` | <a href="${escapeHtml(completeLink)}">✓ Завершить</a>`;
   const attach = it.attachments.length
     ? it.attachments.map((a) => `📎 <a href="${escapeHtml(a.url)}">${escapeHtml(a.name)}</a>`).join(' · ')
     : '';
   const compose = (body: string): string =>
-    [title, meta.join(' · '), body, attach, footer].filter((s) => s.length > 0).join('\n');
+    [title, meta.join(' · '), body, attach].filter((s) => s.length > 0).join('\n');
 
   let block = compose(it.body ? markdownToRich(it.body, 'telegram') : '');
   if (block.length > maxBlock) {
@@ -357,24 +352,43 @@ export function renderDigestRich(
   ];
   for (const g of m.groups) {
     h.push(`<h3>${telegramGroupHeading(g)}</h3>`);
-    h.push('<ul>');
+    h.push(
+      '<table style="width:100%;max-width:100%;table-layout:fixed;border-collapse:collapse">' +
+        '<colgroup><col style="width:72%"><col style="width:28%"></colgroup>' +
+        '<thead><tr><th style="text-align:left;padding:5px 6px;border-bottom:1px solid #d8dee8">Задача</th>' +
+        '<th style="text-align:left;padding:5px 4px;border-bottom:1px solid #d8dee8">Срок</th></tr></thead><tbody>',
+    );
     for (const it of g.items) {
-      const completeLink = it.completeActionLink ?? it.doneLink;
-      const meta: string[] = [];
-      if (opts.showAssignee !== false) {
-        meta.push(`👤 ${it.assignee ? escapeHtml(it.assignee) : '—'}`);
-      }
-      meta.push(`⏰ ${it.deadline ? escapeHtml(it.deadline) : 'без дедлайна'}`);
+      const assignee =
+        opts.showAssignee !== false && it.assignee
+          ? `<br><small>👤 ${escapeHtml(it.assignee)}</small>`
+          : '';
       h.push(
-        `<li><a href="${escapeHtml(it.openLink)}"><b>${escapeHtml(it.name)}</b></a>` +
-          `<br><i>${meta.join(' · ')}</i>` +
-          `<br><a href="${escapeHtml(completeLink)}">✓ Завершить</a></li>`,
+        '<tr>' +
+          `<td style="padding:7px 6px;vertical-align:top;border-bottom:1px solid #edf0f4;white-space:normal;overflow-wrap:anywhere;word-break:break-word"><b>${escapeHtml(it.name)}</b>${assignee}</td>` +
+          `<td style="padding:7px 4px;vertical-align:top;border-bottom:1px solid #edf0f4;white-space:normal;overflow-wrap:anywhere;word-break:break-word">${it.deadline ? escapeHtml(it.deadline) : '—'}</td>` +
+          '</tr>',
       );
     }
-    h.push('</ul>');
+    h.push('</tbody></table>');
   }
   h.push('</details>');
   return h.join('');
+}
+
+// Telegram cannot place callback controls inside rich-message table cells. The table stays plain
+// text and a compact pair of native bot buttons is attached below it for every numbered row.
+export function digestTaskKeyboard(
+  m: DigestModel,
+  opts: { maxTasks?: number } = {},
+): InlineKeyboardMarkup {
+  const items = m.groups.flatMap((group) => group.items).slice(0, opts.maxTasks ?? 40);
+  return {
+    inline_keyboard: items.map((item, index) => [
+      { text: `✓ ${index + 1}`, callback_data: `dg:${item.taskId}` },
+      { text: `↗ ${index + 1}`, url: item.openLink },
+    ]),
+  };
 }
 
 function telegramGroupHeading(g: DigestGroup): string {

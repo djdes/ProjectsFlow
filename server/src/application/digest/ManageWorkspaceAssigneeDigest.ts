@@ -16,6 +16,7 @@ type Deps = {
   readonly users: UserRepository;
   readonly telegram: TelegramClient;
   readonly send: SendWorkspaceAssigneeDigest;
+  readonly projects: import('../project/ProjectRepository.js').ProjectRepository;
 };
 
 export type WorkspaceAssigneeDigestMember = {
@@ -67,12 +68,21 @@ export class ManageWorkspaceAssigneeDigest {
     input: SaveWorkspaceAssigneeDigestSettingsInput,
   ): Promise<WorkspaceAssigneeDigestSettings> {
     await requireWorkspaceMember(this.deps.workspaces, workspaceId, actorUserId);
-    const members = await this.deps.workspaces.listMembers(workspaceId);
+    const [members, projects] = await Promise.all([
+      this.deps.workspaces.listMembers(workspaceId),
+      this.deps.projects.listByWorkspace(workspaceId),
+    ]);
     const memberIds = new Set(members.map((member) => member.userId));
     const recipientUserIds = [...new Set(input.recipientUserIds)].filter((id) =>
       memberIds.has(id),
     );
-    return this.deps.repo.save(workspaceId, { ...input, recipientUserIds });
+    const projectIdSet = new Set(projects.map((project) => project.id));
+    const projectIds = [...new Set(input.projectIds)].filter((id) => projectIdSet.has(id));
+    return this.deps.repo.save(workspaceId, {
+      ...input,
+      recipientUserIds,
+      projectIds,
+    });
   }
 
   async sendNow(workspaceId: string, actorUserId: string) {

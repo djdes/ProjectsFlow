@@ -26,13 +26,17 @@ type Deps = {
 export class EnqueueCommitSyncJob {
   constructor(private readonly deps: Deps) {}
 
-  async execute(projectId: string, now: Date = new Date()): Promise<CommitSyncJob | null> {
+  async execute(
+    projectId: string,
+    now: Date = new Date(),
+    opts: { forceEnabled?: boolean } = {},
+  ): Promise<CommitSyncJob | null> {
     const project = await this.deps.projects.getById(projectId);
     if (!project?.dispatcherUserId) return null;
     const dispatcherUserId = project.dispatcherUserId;
 
     const config = (await this.deps.automation.getConfig(projectId)) ?? defaultAutomationConfig(projectId);
-    if (!config.commitSyncEnabled) return null;
+    if (!config.commitSyncEnabled && !opts.forceEnabled) return null;
 
     // Дедуп: не плодим параллельные прогоны если предыдущий ещё в очереди/работе.
     if (await this.deps.commitSyncJobs.existsActiveForProject(projectId)) return null;

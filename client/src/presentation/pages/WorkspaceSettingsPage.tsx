@@ -48,6 +48,7 @@ import type {
   WorkspaceAssigneeDigestGroup,
   WorkspaceAssigneeDigestMember,
   WorkspaceAssigneeDigestRecipientMode,
+  WorkspaceDigestProjectMode,
 } from '@/domain/workspace/WorkspaceAssigneeDigest';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
@@ -219,6 +220,14 @@ type AssigneeDigestDraft = {
   groupTitle: string;
   recipientMode: WorkspaceAssigneeDigestRecipientMode;
   recipientUserIds: string[];
+  projectMode: WorkspaceDigestProjectMode;
+  projectIds: string[];
+  commitSyncEnabled: boolean;
+  commitSyncHour: number;
+  commitSyncMinute: number;
+  eodReminderEnabled: boolean;
+  eodReminderHour: number;
+  eodReminderMinute: number;
 };
 
 function AssigneeDigestCard({
@@ -232,6 +241,7 @@ function AssigneeDigestCard({
   const [draft, setDraft] = useState<AssigneeDigestDraft | null>(null);
   const [members, setMembers] = useState<WorkspaceAssigneeDigestMember[]>([]);
   const [groups, setGroups] = useState<WorkspaceAssigneeDigestGroup[]>([]);
+  const [projects, setProjects] = useState<Array<{ id: string; name: string; icon: string | null }>>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
@@ -243,14 +253,15 @@ function AssigneeDigestCard({
     Promise.all([
       workspaceRepository.getAssigneeDigest(workspaceId),
       workspaceRepository.listAssigneeDigestGroups(workspaceId).catch(() => []),
+      workspaceRepository.listProjects(workspaceId),
     ])
-      .then(([result, history]) => {
+      .then(([result, history, workspaceProjects]) => {
         if (cancelled) return;
         setDraft({
           enabled: result.settings.enabled,
           hour: result.settings.hour,
           minute: result.settings.minute,
-          weekdaysOnly: result.settings.weekdaysOnly,
+          weekdaysOnly: true,
           groupChatId:
             result.settings.telegramGroupChatId === null
               ? ''
@@ -258,9 +269,18 @@ function AssigneeDigestCard({
           groupTitle: result.settings.telegramGroupTitle ?? '',
           recipientMode: result.settings.recipientMode,
           recipientUserIds: result.settings.recipientUserIds,
+          projectMode: result.settings.projectMode,
+          projectIds: result.settings.projectIds,
+          commitSyncEnabled: result.settings.commitSyncEnabled,
+          commitSyncHour: result.settings.commitSyncHour,
+          commitSyncMinute: result.settings.commitSyncMinute,
+          eodReminderEnabled: result.settings.eodReminderEnabled,
+          eodReminderHour: result.settings.eodReminderHour,
+          eodReminderMinute: result.settings.eodReminderMinute,
         });
         setMembers(result.members);
         setGroups(history);
+        setProjects(workspaceProjects);
       })
       .catch((error) => toast.error((error as Error).message || 'Не удалось загрузить рассылку'))
       .finally(() => {
@@ -281,7 +301,11 @@ function AssigneeDigestCard({
       )
     : [];
 
-  const validate = (requireGroup = draft?.enabled ?? false): boolean => {
+  const validate = (
+    requireGroup = Boolean(
+      draft?.enabled || draft?.commitSyncEnabled || draft?.eodReminderEnabled,
+    ),
+  ): boolean => {
     if (!draft) return false;
     const chatId = Number(draft.groupChatId.trim());
     if (requireGroup && (!draft.groupChatId.trim() || !Number.isInteger(chatId))) {
@@ -290,6 +314,14 @@ function AssigneeDigestCard({
     }
     if (
       requireGroup &&
+      draft.projectMode === 'selected' &&
+      draft.projectIds.length === 0
+    ) {
+      toast.error('Выберите хотя бы один проект');
+      return false;
+    }
+    if (
+      draft.enabled &&
       draft.recipientMode === 'selected' &&
       selectedEligible.length === 0
     ) {
@@ -307,7 +339,7 @@ function AssigneeDigestCard({
         enabled: draft.enabled,
         hour: draft.hour,
         minute: draft.minute,
-        weekdaysOnly: draft.weekdaysOnly,
+        weekdaysOnly: true,
         telegramGroupChatId:
           draft.groupChatId.trim() && Number.isInteger(Number(draft.groupChatId.trim()))
             ? Number(draft.groupChatId.trim())
@@ -315,10 +347,28 @@ function AssigneeDigestCard({
         telegramGroupTitle: draft.groupTitle.trim() || null,
         recipientMode: draft.recipientMode,
         recipientUserIds: selectedEligible,
+        projectMode: draft.projectMode,
+        projectIds: draft.projectIds,
+        commitSyncEnabled: draft.commitSyncEnabled,
+        commitSyncHour: draft.commitSyncHour,
+        commitSyncMinute: draft.commitSyncMinute,
+        eodReminderEnabled: draft.eodReminderEnabled,
+        eodReminderHour: draft.eodReminderHour,
+        eodReminderMinute: draft.eodReminderMinute,
       });
       update({
         enabled: settings.enabled,
+        hour: settings.hour,
+        minute: settings.minute,
         recipientUserIds: settings.recipientUserIds,
+        projectMode: settings.projectMode,
+        projectIds: settings.projectIds,
+        commitSyncEnabled: settings.commitSyncEnabled,
+        commitSyncHour: settings.commitSyncHour,
+        commitSyncMinute: settings.commitSyncMinute,
+        eodReminderEnabled: settings.eodReminderEnabled,
+        eodReminderHour: settings.eodReminderHour,
+        eodReminderMinute: settings.eodReminderMinute,
       });
       toast.success('Рассылка по ответственным сохранена');
       return true;
@@ -395,6 +445,15 @@ function AssigneeDigestCard({
     });
   };
 
+  const toggleProject = (projectId: string): void => {
+    if (!draft) return;
+    update({
+      projectIds: draft.projectIds.includes(projectId)
+        ? draft.projectIds.filter((id) => id !== projectId)
+        : [...draft.projectIds, projectId],
+    });
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -402,19 +461,13 @@ function AssigneeDigestCard({
           <div className="space-y-1.5">
             <CardTitle className="flex items-center gap-2">
               <CalendarClock className="size-5 text-primary" />
-              Рассылка по ответственным
+              Telegram-расписание пространства
             </CardTitle>
             <CardDescription>
-              Одно сообщение на каждого ответственного с задачами из проектов, отмеченных в
-              окне автоматизации. Сообщения публикуются в общей Telegram-группе пространства.
+              Ежедневная таблица по ответственным, сверка выполненных задач в 17:00 и вечернее
+              напоминание в 17:20. Всё публикуется в общей Telegram-группе пространства только по будням.
             </CardDescription>
           </div>
-          <Switch
-            checked={draft?.enabled ?? false}
-            disabled={!canManage || loading}
-            onCheckedChange={(enabled) => update({ enabled })}
-            aria-label="Включить рассылку по ответственным"
-          />
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -500,41 +553,179 @@ function AssigneeDigestCard({
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 border-t pt-4">
-              <Label>Время (МСК)</Label>
-              <Input
-                type="number"
-                min={0}
-                max={23}
-                value={draft.hour}
-                disabled={!canManage}
-                className="w-16"
-                onChange={(event) =>
-                  update({ hour: Math.min(23, Math.max(0, Number(event.target.value) || 0)) })
-                }
-              />
-              <span>:</span>
-              <Input
-                type="number"
-                min={0}
-                max={59}
-                value={draft.minute}
-                disabled={!canManage}
-                className="w-16"
-                onChange={(event) =>
-                  update({
-                    minute: Math.min(59, Math.max(0, Number(event.target.value) || 0)),
-                  })
-                }
-              />
-              <label className="ml-auto flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={draft.weekdaysOnly}
+            <div className="space-y-3 border-t pt-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <Switch
+                  checked={draft.enabled}
                   disabled={!canManage}
-                  onCheckedChange={(value) => update({ weekdaysOnly: value === true })}
+                  onCheckedChange={(enabled) => update({ enabled })}
+                  aria-label="Включить ежедневную таблицу"
                 />
-                Только по будням
-              </label>
+                <Label className="min-w-32">Ежедневная таблица</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={draft.hour}
+                  disabled={!canManage}
+                  className="w-16"
+                  onChange={(event) =>
+                    update({
+                      hour: Math.min(23, Math.max(0, Number(event.target.value) || 0)),
+                    })
+                  }
+                />
+                <span>:</span>
+                <Input
+                  type="number"
+                  min={0}
+                  max={59}
+                  value={draft.minute}
+                  disabled={!canManage}
+                  className="w-16"
+                  onChange={(event) =>
+                    update({
+                      minute: Math.min(59, Math.max(0, Number(event.target.value) || 0)),
+                    })
+                  }
+                />
+                <label className="ml-auto flex items-center gap-2 text-sm">
+                  <Checkbox checked disabled />
+                  Только по будням
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
+                <Switch
+                  checked={draft.commitSyncEnabled}
+                  disabled={!canManage}
+                  onCheckedChange={(commitSyncEnabled) => update({ commitSyncEnabled })}
+                />
+                <Label className="min-w-32">Сверка коммитов</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={draft.commitSyncHour}
+                  disabled={!canManage}
+                  className="w-16"
+                  onChange={(event) =>
+                    update({
+                      commitSyncHour: Math.min(
+                        23,
+                        Math.max(0, Number(event.target.value) || 0),
+                      ),
+                    })
+                  }
+                />
+                <span>:</span>
+                <Input
+                  type="number"
+                  min={0}
+                  max={59}
+                  value={draft.commitSyncMinute}
+                  disabled={!canManage}
+                  className="w-16"
+                  onChange={(event) =>
+                    update({
+                      commitSyncMinute: Math.min(
+                        59,
+                        Math.max(0, Number(event.target.value) || 0),
+                      ),
+                    })
+                  }
+                />
+                <span className="text-xs text-muted-foreground">
+                  предложить завершить найденные задачи в группе
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
+                <Switch
+                  checked={draft.eodReminderEnabled}
+                  disabled={!canManage}
+                  onCheckedChange={(eodReminderEnabled) => update({ eodReminderEnabled })}
+                />
+                <Label className="min-w-32">Перед уходом</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={draft.eodReminderHour}
+                  disabled={!canManage}
+                  className="w-16"
+                  onChange={(event) =>
+                    update({
+                      eodReminderHour: Math.min(
+                        23,
+                        Math.max(0, Number(event.target.value) || 0),
+                      ),
+                    })
+                  }
+                />
+                <span>:</span>
+                <Input
+                  type="number"
+                  min={0}
+                  max={59}
+                  value={draft.eodReminderMinute}
+                  disabled={!canManage}
+                  className="w-16"
+                  onChange={(event) =>
+                    update({
+                      eodReminderMinute: Math.min(
+                        59,
+                        Math.max(0, Number(event.target.value) || 0),
+                      ),
+                    })
+                  }
+                />
+                <span className="text-xs text-muted-foreground">
+                  напомнить обновить статусы в группе
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3 border-t pt-4">
+              <Label>Проекты для всех трёх рассылок</Label>
+              <div className="flex flex-wrap gap-4 text-sm">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`assignee-digest-projects-${workspaceId}`}
+                    checked={draft.projectMode === 'all'}
+                    disabled={!canManage}
+                    onChange={() => update({ projectMode: 'all' })}
+                  />
+                  Все проекты
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`assignee-digest-projects-${workspaceId}`}
+                    checked={draft.projectMode === 'selected'}
+                    disabled={!canManage}
+                    onChange={() => update({ projectMode: 'selected' })}
+                  />
+                  Только выбранные
+                </label>
+              </div>
+              {draft.projectMode === 'selected' && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {projects.map((project) => (
+                    <label
+                      key={project.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                    >
+                      <Checkbox
+                        checked={draft.projectIds.includes(project.id)}
+                        disabled={!canManage}
+                        onCheckedChange={() => toggleProject(project.id)}
+                      />
+                      <span>{project.icon ?? '📁'}</span>
+                      <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-3 border-t pt-4">

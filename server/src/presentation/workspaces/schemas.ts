@@ -37,11 +37,38 @@ export const saveWorkspaceAssigneeDigestSchema = z
     telegramGroupTitle: z.string().trim().max(255).nullable(),
     recipientMode: z.enum(['all', 'selected']),
     recipientUserIds: z.array(z.string().uuid()).max(500),
+    projectMode: z.enum(['all', 'selected']).default('all'),
+    projectIds: z.array(z.string().uuid()).max(500).default([]),
+    commitSyncEnabled: z.boolean().default(false),
+    commitSyncHour: z.number().int().min(0).max(23).default(17),
+    commitSyncMinute: z.number().int().min(0).max(59).default(0),
+    eodReminderEnabled: z.boolean().default(false),
+    eodReminderHour: z.number().int().min(0).max(23).default(17),
+    eodReminderMinute: z.number().int().min(0).max(59).default(20),
   })
   .refine((value) => !value.enabled || value.telegramGroupChatId !== null, {
     message: 'Выберите Telegram-группу для рассылки',
     path: ['telegramGroupChatId'],
   })
+  .refine(
+    (value) =>
+      (!value.enabled && !value.commitSyncEnabled && !value.eodReminderEnabled) ||
+      value.telegramGroupChatId !== null,
+    {
+      message: 'Выберите Telegram-группу для рассылки',
+      path: ['telegramGroupChatId'],
+    },
+  )
+  .refine(
+    (value) =>
+      (!value.enabled && !value.commitSyncEnabled && !value.eodReminderEnabled) ||
+      value.projectMode === 'all' ||
+      value.projectIds.length > 0,
+    {
+      message: 'Выберите хотя бы один проект',
+      path: ['projectIds'],
+    },
+  )
   .refine(
     (value) =>
       !value.enabled ||

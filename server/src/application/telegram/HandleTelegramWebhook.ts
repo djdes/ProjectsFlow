@@ -361,6 +361,7 @@ export class HandleTelegramWebhook {
       const data = cq.data ?? '';
       // Действия задачных уведомлений (nd/nc/nu) — до фолбэка на композер.
       if (data.startsWith('nd:')) return this.handleTaskDone(cq, data.slice(3));
+      if (data.startsWith('dg:')) return this.handleDigestTaskDone(cq, data.slice(3));
       if (data.startsWith('nc:')) return this.handleTaskCommentPrompt(cq, data.slice(3));
       if (data.startsWith('nu:')) return this.handleTaskUndo(cq, data.slice(3));
       // Предложения закрыть (db/101): pd: подтвердить, px: отклонить.
@@ -745,6 +746,41 @@ export class HandleTelegramWebhook {
     await this.deps.client.answerCallbackQuery(cq.id, { text: '✅ Завершено' });
     const name = (await this.deps.users.getById(userId).catch(() => null))?.displayName ?? null;
     if (messageId !== null) await this.renderCompleted(chatId, messageId, task.description, name, taskId);
+    this.deps.notifyStatusChanged(task.projectId, taskId, task.status, 'done', userId);
+    this.deps.notifyTaskChanged(task.projectId);
+  }
+
+  // Compact daily-digest action. Unlike a single-task notification, a digest contains many
+  // tasks, so completing one row must not replace the entire message or its other buttons.
+  private async handleDigestTaskDone(
+    cq: TelegramCallbackQuery,
+    taskId: string,
+  ): Promise<void> {
+    const ctx = await this.resolveTaskAction(cq, taskId);
+    if (!ctx) return;
+    const { userId, task } = ctx;
+    if (task.status === 'done') {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Уже завершена.' });
+      return;
+    }
+    try {
+      await this.deps.moveTask.execute({
+        projectId: task.projectId,
+        ownerUserId: userId,
+        taskId,
+        targetStatus: 'done',
+        beforeTaskId: null,
+        afterTaskId: null,
+      });
+    } catch (err) {
+      console.warn('[tg-webhook] digest task complete failed:', err);
+      await this.deps.client.answerCallbackQuery(cq.id, {
+        text: 'Не удалось завершить задачу.',
+        showAlert: true,
+      });
+      return;
+    }
+    await this.deps.client.answerCallbackQuery(cq.id, { text: '✓ Задача завершена' });
     this.deps.notifyStatusChanged(task.projectId, taskId, task.status, 'done', userId);
     this.deps.notifyTaskChanged(task.projectId);
   }

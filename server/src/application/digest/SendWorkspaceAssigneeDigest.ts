@@ -1,4 +1,3 @@
-import type { AutomationRepository } from '../automation/AutomationRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type {
@@ -19,6 +18,7 @@ import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 import type { TaskWithCounts } from '../task/ListTasks.js';
 import {
   buildDigestModel,
+  digestTaskKeyboard,
   renderDigestRich,
   type DigestModel,
 } from '../task/digest/buildTaskDigest.js';
@@ -32,7 +32,6 @@ type Deps = {
   readonly settings: WorkspaceAssigneeDigestRepository;
   readonly workspaces: WorkspaceRepository;
   readonly projects: ProjectRepository;
-  readonly automation: AutomationRepository;
   readonly tasks: TaskRepository;
   readonly users: UserRepository;
   readonly telegram: TelegramClient;
@@ -72,13 +71,14 @@ export class SendWorkspaceAssigneeDigest {
 
     if (opts.force) await this.cleanupPreviousTest(workspaceId);
 
-    const [members, projects, enabledProjectIds] = await Promise.all([
+    const [members, projects] = await Promise.all([
       this.deps.workspaces.listMembers(workspaceId),
       this.deps.projects.listByWorkspace(workspaceId),
-      this.deps.automation.listAssigneeDigestProjectIds(workspaceId),
     ]);
-    const enabled = new Set(enabledProjectIds);
-    const selectedProjects = projects.filter((project) => enabled.has(project.id));
+    const configuredProjectIds = new Set(settings.projectIds);
+    const selectedProjects = projects.filter(
+      (project) => settings.projectMode === 'all' || configuredProjectIds.has(project.id),
+    );
     const projectTasks: ProjectTasks[] = (
       await Promise.all(
         selectedProjects.map(async (project) => ({
@@ -169,6 +169,12 @@ export class SendWorkspaceAssigneeDigest {
         now,
         completeActionLinks,
       });
+      const richModel = buildWorkspaceAssigneeDigestModel({
+        projects: grouped,
+        appUrl: this.deps.appUrl,
+        now,
+        completeActionLinks,
+      });
       let result: SendMessageResult | null = null;
       let deliveredHtml = richMessage;
       let deliveredKind: 'rich' | 'html' = 'rich';
@@ -178,6 +184,7 @@ export class SendWorkspaceAssigneeDigest {
           const richResult = await this.deps.telegram.sendRichMessage({
             chatId: settings.telegramGroupChatId,
             html: richMessage,
+            replyMarkup: digestTaskKeyboard(richModel),
           });
           if (richResult.kind === 'ok') result = richResult;
           fallbackAllowed =
@@ -198,6 +205,7 @@ export class SendWorkspaceAssigneeDigest {
             text: message,
             parseMode: 'HTML',
             disableWebPagePreview: true,
+            replyMarkup: digestTaskKeyboard(richModel),
           })
           .catch(() => null);
       }
@@ -281,15 +289,10 @@ export function buildWorkspaceAssigneeDigestMessage(input: {
     const projectLines: string[] = [projectHeader];
     for (const task of group.tasks) {
       const { name } = splitDescription(task.description);
-      const taskUrl = `${projectUrl}?task=${task.id}`;
       const deadline = task.deadline
         ? ` · ⏰ ${escapeHtml(formatDeadlineRemainingRu(task.deadline, input.now))}`
         : '';
-      const completeLink =
-        input.completeActionLinks?.get(task.id) ?? `${taskUrl}&done=1`;
-      const taskLine =
-        `• <a href="${escapeHtml(taskUrl)}"><b>${escapeHtml(name)}</b></a>${deadline}` +
-        ` · <a href="${escapeHtml(completeLink)}">✓ Завершить</a>`;
+      const taskLine = `• <b>${escapeHtml(name)}</b>${deadline}`;
       const candidate = [...lines, ...projectLines, taskLine].join('\n');
       const remainingTail = `\n\n<i>Ещё ${total - included - 1} задач — откройте проекты выше.</i>`;
       if (
@@ -321,6 +324,22 @@ export function buildWorkspaceAssigneeDigestRichMessage(input: {
   readonly now?: Date;
   readonly completeActionLinks?: ReadonlyMap<string, string>;
 }): string {
+  const model = buildWorkspaceAssigneeDigestModel(input);
+  return renderDigestRich(model, {
+    titleHtml: `🗒 Ежедневные задачи для ${telegramMention(
+      input.displayName,
+      input.telegramLink,
+    )}`,
+    showAssignee: false,
+  });
+}
+
+function buildWorkspaceAssigneeDigestModel(input: {
+  readonly projects: readonly ProjectTasks[];
+  readonly appUrl: string;
+  readonly now?: Date;
+  readonly completeActionLinks?: ReadonlyMap<string, string>;
+}): DigestModel {
   const groups: DigestModel['groups'] = input.projects.map((group) => {
     const tasks: TaskWithCounts[] = group.tasks.map((task) => ({
       ...task,
@@ -349,13 +368,7 @@ export function buildWorkspaceAssigneeDigestRichMessage(input: {
     count: input.projects.reduce((sum, project) => sum + project.tasks.length, 0),
     groups,
   };
-  return renderDigestRich(model, {
-    titleHtml: `🗒 Ежедневные задачи для ${telegramMention(
-      input.displayName,
-      input.telegramLink,
-    )}`,
-    showAssignee: false,
-  });
+  return model;
 }
 
 function telegramMention(displayName: string, link: TelegramLink): string {

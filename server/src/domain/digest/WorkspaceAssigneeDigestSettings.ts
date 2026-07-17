@@ -1,4 +1,5 @@
 export type WorkspaceAssigneeDigestRecipientMode = 'all' | 'selected';
+export type WorkspaceDigestProjectMode = 'all' | 'selected';
 
 export type WorkspaceAssigneeDigestSettings = {
   readonly workspaceId: string;
@@ -10,6 +11,16 @@ export type WorkspaceAssigneeDigestSettings = {
   readonly telegramGroupTitle: string | null;
   readonly recipientMode: WorkspaceAssigneeDigestRecipientMode;
   readonly recipientUserIds: string[];
+  readonly projectMode: WorkspaceDigestProjectMode;
+  readonly projectIds: string[];
+  readonly commitSyncEnabled: boolean;
+  readonly commitSyncHour: number;
+  readonly commitSyncMinute: number;
+  readonly commitSyncLastSentOn: string | null;
+  readonly eodReminderEnabled: boolean;
+  readonly eodReminderHour: number;
+  readonly eodReminderMinute: number;
+  readonly eodReminderLastSentOn: string | null;
   readonly lastSentOn: string | null;
 };
 
@@ -26,6 +37,16 @@ export function defaultWorkspaceAssigneeDigestSettings(
     telegramGroupTitle: null,
     recipientMode: 'all',
     recipientUserIds: [],
+    projectMode: 'all',
+    projectIds: [],
+    commitSyncEnabled: false,
+    commitSyncHour: 17,
+    commitSyncMinute: 0,
+    commitSyncLastSentOn: null,
+    eodReminderEnabled: false,
+    eodReminderHour: 17,
+    eodReminderMinute: 20,
+    eodReminderLastSentOn: null,
     lastSentOn: null,
   };
 }

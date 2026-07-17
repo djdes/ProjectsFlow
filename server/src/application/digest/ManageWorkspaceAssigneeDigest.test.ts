@@ -13,6 +13,7 @@ import {
 
 const WORKSPACE_ID = 'workspace-1';
 const MEMBER_ID = 'member-1';
+const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 
 function makeManager() {
   let savedRecipientUserIds: string[] = [];
@@ -70,6 +71,11 @@ function makeManager() {
       return null;
     },
   } as unknown as UserRepository;
+  const projects = {
+    async listByWorkspace() {
+      return [{ id: PROJECT_ID, name: 'DocsFlow', icon: null }];
+    },
+  } as never;
 
   return {
     manager: new ManageWorkspaceAssigneeDigest({
@@ -78,6 +84,7 @@ function makeManager() {
       users,
       telegram,
       send,
+      projects,
     }),
     getSavedRecipientUserIds: () => savedRecipientUserIds,
     getSendCalls: () => sendCalls,
@@ -96,6 +103,14 @@ test('workspace assignee digest shared settings are editable by any member', asy
     telegramGroupTitle: 'Рабочая группа',
     recipientMode: 'selected',
     recipientUserIds: [MEMBER_ID, 'outsider'],
+    projectMode: 'selected',
+    projectIds: [PROJECT_ID, '22222222-2222-4222-8222-222222222222'],
+    commitSyncEnabled: true,
+    commitSyncHour: 17,
+    commitSyncMinute: 0,
+    eodReminderEnabled: true,
+    eodReminderHour: 17,
+    eodReminderMinute: 20,
   });
   assert.equal(saved.enabled, true);
   assert.deepEqual(getSavedRecipientUserIds(), [MEMBER_ID]);
@@ -120,6 +135,14 @@ test('workspace assignee digest shared settings remain closed to outsiders', asy
         telegramGroupTitle: null,
         recipientMode: 'all',
         recipientUserIds: [],
+        projectMode: 'all',
+        projectIds: [],
+        commitSyncEnabled: false,
+        commitSyncHour: 17,
+        commitSyncMinute: 0,
+        eodReminderEnabled: false,
+        eodReminderHour: 17,
+        eodReminderMinute: 20,
       }),
     WorkspaceNotFoundError,
   );
