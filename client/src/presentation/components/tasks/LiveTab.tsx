@@ -127,7 +127,7 @@ export function LiveTab({
   // Вопрос диспетчера создаётся агентом как task-comment. Слушаем общий realtime
   // сигнал задачи и подхватываем карточку в LIVE без обновления страницы/переключения вкладок.
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    let timer: number | null = null;
     const schedule = (): void => {
       if (timer) window.clearTimeout(timer);
       timer = window.setTimeout(reloadQuestionComments, 250);
