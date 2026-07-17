@@ -15,18 +15,17 @@ import type {
 import type { CreateEmailActionToken } from '../email-action/CreateEmailActionToken.js';
 import type { TelegramDigestActionDeliveryRepository } from './TelegramDigestActionDeliveryRepository.js';
 import { extractTelegramDigestActionTokens } from './TelegramDigestActionService.js';
-import { markdownToTelegramHtml } from '../telegram/telegramMarkdown.js';
 import {
   buildDigestModel,
   renderDigestHtml,
   renderDigestMarkdown,
   renderDigestRich,
   renderDigestTelegram,
+  telegramDigestTaskTitle,
 } from '../task/digest/buildTaskDigest.js';
 import {
   extractImageSrcs,
-  formatDeadlineRemainingRu,
-  stripFigureLines,
+  splitDescription,
   toVisibleStatus,
 } from '../../domain/task/digestFormat.js';
 import {
@@ -214,8 +213,8 @@ export class SendDailyDigest {
           .catch((e) => console.warn('[daily-digest] notification failed', userId, e));
       }
       if (cfg.channels.includes('telegram') && cfg.tgTargets.includes('personal')) {
-        // Личный TG — заголовок + карточка на задачу. Действия живут компактными ссылками
-        // прямо в тексте, без большой inline-клавиатуры под каждым сообщением.
+        // Личный TG — заголовок + по одной скрытой короткой карточке на задачу. В карточке
+        // только заголовок и две иконки действий, без inline-клавиатуры.
         const base = this.deps.appUrl.replace(/\/$/, '');
         const headerResult = await this.deps.telegram
           .execute({
@@ -237,13 +236,11 @@ export class SendDailyDigest {
             .execute({
               userId,
               text:
-                `📌 ${markdownToTelegramHtml(digestExcerpt(stripFigureLines(t.description)))}\n` +
-                `<i>${digestStatusLabel(t.status)}</i>` +
-                (t.deadline
-                  ? `\n⏰ ${escapeDigestHtml(formatDeadlineRemainingRu(t.deadline, digestNow))}`
-                  : '') +
-                `\n<a href="${escapeDigestHtml(taskUrl)}">Открыть задачу</a>` +
-                ` · <a href="${escapeDigestHtml(`${taskUrl}&done=1`)}">✓ Завершить</a>`,
+                '<blockquote expandable>' +
+                `<b>${escapeDigestHtml(telegramDigestTaskTitle(splitDescription(t.description).name))}</b>\n` +
+                `<a href="${escapeDigestHtml(`${taskUrl}&done=1`)}">✓</a>` +
+                ` · <a href="${escapeDigestHtml(taskUrl)}">↗</a>` +
+                '</blockquote>',
               parseMode: 'HTML',
               kind: 'task_digest_item',
               taskId: t.id,
@@ -271,8 +268,8 @@ export class SendDailyDigest {
     }
 
     // Группа — на всю команду. Сначала пробуем БОГАТУЮ карточку (Bot API 10.2 sendRichMessage:
-    // закрытый details + мобильные списки, выделяемый текст). Фоллбэк на текстовые чанки, если
-    // метод недоступен (старый API) или вернул ошибку (напр. слишком длинно).
+    // закрытый details + нативная таблица и иконки действий). Фоллбэк на скрытые текстовые
+    // чанки, если метод недоступен (старый API) или вернул ошибку (напр. слишком длинно).
     if (
       cfg.channels.includes('telegram') &&
       cfg.tgTargets.includes('group') &&
@@ -373,26 +370,6 @@ export class SendDailyDigest {
 // Личный TG-дайджест: сколько задач показать отдельными карточками-действиями (остальное —
 // ссылкой в приложение). Держим в разумных рамках, чтобы не спамить сообщениями.
 const TG_DIGEST_ACTION_LIMIT = 12;
-
-const VISIBLE_STATUS_LABEL: Record<string, string> = {
-  backlog: 'Черновик',
-  manual: 'Вручную',
-  todo: 'Воркер',
-  in_progress: 'В работе',
-  awaiting_clarification: 'На уточнении',
-  done: 'Готово',
-};
-
-function digestStatusLabel(status: TaskStatus): string {
-  const v = toVisibleStatus(status);
-  return VISIBLE_STATUS_LABEL[v] ?? v;
-}
-
-function digestExcerpt(description: string | null): string {
-  const s = (description ?? '').trim().replace(/\s+/g, ' ');
-  if (s.length === 0) return '(без описания)';
-  return s.length <= 300 ? s : s.slice(0, 299).trimEnd() + '…';
-}
 
 function escapeDigestHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => {

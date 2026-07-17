@@ -73,8 +73,10 @@ test('workspace assignee digest renders one compact message with mention and pro
   assert.match(message, /<blockquote expandable>/);
   assert.match(message, /DocsFlow/);
   assert.match(message, /Banana/);
-  assert.doesNotMatch(message, /projects\/project-a\?task=task-a/);
-  assert.match(message, /осталось 2 дня/);
+  assert.match(message, /projects\/project-a\?task=task-a/);
+  assert.match(message, />✓<\/a>/);
+  assert.match(message, />↗<\/a>/);
+  assert.doesNotMatch(message, /Завершить|Перейти|Подробности|осталось 2 дня/);
   assert.ok(message.length <= 3800);
 });
 
@@ -102,15 +104,17 @@ test('workspace assignee digest uses the same rich layout as regular Telegram di
 
   assert.match(message, /^<h2>🗒 Ежедневные задачи для @denis_pf<\/h2>/);
   assert.match(message, /<p>Открытых задач: <b>2<\/b><\/p>/);
-  assert.doesNotMatch(message, /<details>/);
+  assert.match(message, /<details><summary>Показать задачи \(2\)<\/summary>/);
+  assert.match(message, /<\/details>$/);
   assert.match(message, /<h3>📁 DocsFlow<\/h3>/);
   assert.match(message, /<h3>📁 Banana<\/h3>/);
   assert.match(message, /<table bordered striped>/);
   assert.match(message, /<th>Задача<\/th><th>Кто<\/th><th>Дедлайн<\/th>/);
   assert.doesNotMatch(message, /<a href="https:\/\/projectsflow\.ru\/projects\/project-a\?task=task-a"><b>/);
   assert.match(message, /telegram-digest-actions/);
-  assert.match(message, />✓ Завершить<\/a>/);
-  assert.match(message, />↗ Перейти<\/a>/);
+  assert.match(message, />✓<\/a>/);
+  assert.match(message, />↗<\/a>/);
+  assert.doesNotMatch(message, /Завершить|Перейти|Подробности/);
   assert.match(message, />осталось 2 дня<\/td>/);
   assert.match(message, /<td>Денис<\/td>/);
 });

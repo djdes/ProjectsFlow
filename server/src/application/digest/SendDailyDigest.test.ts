@@ -38,8 +38,9 @@ test('manual group test deletes its predecessor and remembers one rich assignee 
     daily: {
       ...defaultDigestSettings('p1').daily,
       enabled: true,
+      recipientUserIds: ['u1'],
       channels: ['telegram'] as const,
-      tgTargets: ['group'] as const,
+      tgTargets: ['group', 'personal'] as const,
       tgGrouping: 'assignee' as const,
       statuses: ['todo'] as const,
     },
@@ -47,6 +48,7 @@ test('manual group test deletes its predecessor and remembers one rich assignee 
   const deleted: Array<{ chatId: number; messageIds: readonly number[] }> = [];
   const saved: unknown[] = [];
   const actionDeliveries: unknown[] = [];
+  const personalMessages: Array<{ kind: string; text: string }> = [];
   let richHtml = '';
   let richReplyMarkup: unknown = 'not-sent';
 
@@ -72,7 +74,12 @@ test('manual group test deletes its predecessor and remembers one rich assignee 
     } as never,
     email: { send: async () => undefined } as never,
     notifications: { create: async () => undefined } as never,
-    telegram: { execute: async () => ({ status: 'not_connected' }) } as never,
+    telegram: {
+      execute: async (input: { kind: string; text: string }) => {
+        personalMessages.push(input);
+        return { status: 'not_connected' as const };
+      },
+    } as never,
     telegramClient: {
       sendMessage: async () => ({ kind: 'ok', messageId: 99 }),
       sendRichMessage: async (input: { html: string; replyMarkup?: unknown }) => {
@@ -110,10 +117,19 @@ test('manual group test deletes its predecessor and remembers one rich assignee 
   assert.equal(actionDeliveries.length, 1);
   assert.deepEqual((actionDeliveries[0] as { tokens: string[] }).tokens, ['a'.repeat(64)]);
   assert.equal(richReplyMarkup, undefined);
-  assert.ok(!richHtml.includes('<details>'));
+  assert.ok(richHtml.includes('<details><summary>Показать задачи (1)</summary>'));
+  assert.ok(richHtml.endsWith('</details>'));
   assert.ok(richHtml.includes('@anna_pf · Анна'));
   assert.ok(richHtml.includes('<table bordered striped>'));
   assert.ok(richHtml.includes('<th>Задача</th><th>Кто</th><th>Дедлайн</th>'));
-  assert.ok(richHtml.includes('>✓ Завершить</a>'));
-  assert.ok(richHtml.includes('>↗ Перейти</a>'));
+  assert.ok(richHtml.includes('>✓</a>'));
+  assert.ok(richHtml.includes('>↗</a>'));
+  assert.ok(!richHtml.includes('Завершить') && !richHtml.includes('Перейти'));
+  const personalTask = personalMessages.find((message) => message.kind === 'task_digest_item');
+  assert.ok(personalTask);
+  assert.match(personalTask.text, /^<blockquote expandable>/);
+  assert.match(personalTask.text, /<b>Проверить мобильную сводку<\/b>/);
+  assert.match(personalTask.text, />✓<\/a>/);
+  assert.match(personalTask.text, />↗<\/a>/);
+  assert.doesNotMatch(personalTask.text, /Завершить|Перейти|Открыть задачу|⏰/);
 });

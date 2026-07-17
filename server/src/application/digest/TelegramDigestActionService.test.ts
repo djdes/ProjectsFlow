@@ -9,20 +9,20 @@ import {
 const token = 'a'.repeat(64);
 const actionUrl = `https://projectsflow.ru/api/telegram-digest-actions/${token}`;
 const richHtml =
-  '<h2>Сводка</h2><details><summary>Показать</summary><ul>' +
-  '<li><a href="https://projectsflow.ru/projects/p1?task=t1"><b>Проверить отчёт</b></a>' +
-  `<br><i>⏰ осталось 2 дня</i><br><a href="${actionUrl}">✓ Завершить</a>` +
-  '</li></ul></details>';
+  '<h2>Сводка</h2><details><summary>Показать</summary><table bordered striped>' +
+  '<tr><th>Задача</th><th>Кто</th><th>Дедлайн</th></tr>' +
+  '<tr><td><b>Проверить отчёт</b>' +
+  `<br><a href="${actionUrl}">✓</a> · ` +
+  '<a href="https://projectsflow.ru/projects/p1?task=t1">↗</a></td>' +
+  '<td>Анна</td><td>осталось 2 дня</td></tr></table></details>';
 
 test('rich digest completion replaces the action and strikes the task title', () => {
   const updated = markTelegramDigestTaskCompleted(richHtml, token);
 
-  assert.match(updated, /<b>✅ Завершено<\/b>/);
-  assert.match(
-    updated,
-    /<a href="https:\/\/projectsflow\.ru\/projects\/p1\?task=t1"><s><b>Проверить отчёт<\/b><\/s><\/a>/,
-  );
-  assert.doesNotMatch(updated, />✓ Завершить<\/a>/);
+  assert.match(updated, /<b>✅<\/b>/);
+  assert.match(updated, /<s><b>Проверить отчёт<\/b><\/s>/);
+  assert.doesNotMatch(updated, />✓<\/a>/);
+  assert.match(updated, />↗<\/a>/);
 });
 
 test('digest action tokens are extracted once from a message', () => {
@@ -67,7 +67,7 @@ test('service completes the task and edits the same rich Telegram message', asyn
   const result = await service.complete(token);
 
   assert.deepEqual(result, { kind: 'done', projectId: 'p1', taskId: 't1' });
-  assert.match(storedHtml, /<b>✅ Завершено<\/b>/);
+  assert.match(storedHtml, /<b>✅<\/b>/);
   assert.equal(edits.length, 1);
   assert.deepEqual(edits[0], {
     chatId: -1007,

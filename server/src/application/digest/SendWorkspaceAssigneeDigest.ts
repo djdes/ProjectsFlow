@@ -19,11 +19,11 @@ import type { TaskWithCounts } from '../task/ListTasks.js';
 import {
   buildDigestModel,
   renderDigestRich,
+  telegramDigestTaskTitle,
   type DigestModel,
 } from '../task/digest/buildTaskDigest.js';
 import {
   escapeHtml,
-  formatDeadlineRemainingRu,
   splitDescription,
 } from '../../domain/task/digestFormat.js';
 
@@ -280,10 +280,12 @@ export function buildWorkspaceAssigneeDigestMessage(input: {
     const projectLines: string[] = [projectHeader];
     for (const task of group.tasks) {
       const { name } = splitDescription(task.description);
-      const deadline = task.deadline
-        ? ` · ⏰ ${escapeHtml(formatDeadlineRemainingRu(task.deadline, input.now))}`
-        : '';
-      const taskLine = `• <b>${escapeHtml(name)}</b>${deadline}`;
+      const taskUrl = `${base}/projects/${group.project.id}?task=${task.id}`;
+      const completeUrl = input.completeActionLinks?.get(task.id) ?? `${taskUrl}&done=1`;
+      const taskLine =
+        `• <b>${escapeHtml(telegramDigestTaskTitle(name))}</b> ` +
+        `<a href="${escapeHtml(completeUrl)}">✓</a> · ` +
+        `<a href="${escapeHtml(taskUrl)}">↗</a>`;
       const candidate = [...lines, ...projectLines, taskLine].join('\n');
       const remainingTail = `\n\n<i>Ещё ${total - included - 1} задач — откройте проекты выше.</i>`;
       if (

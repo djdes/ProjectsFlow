@@ -7,6 +7,7 @@ import {
   renderDigestHtml,
   renderDigestRich,
   renderDigestTelegram,
+  telegramDigestTaskTitle,
   type DigestAttachment,
 } from './buildTaskDigest.js';
 import {
@@ -159,6 +160,14 @@ test('buildDigestModel: inbox links + assignee + attachments', () => {
   assert.deepEqual(it.attachments, [{ name: 'лог.png', url: 'https://x/api/attachments/a1' }]);
 });
 
+test('telegramDigestTaskTitle: keeps one compact sentence', () => {
+  assert.equal(
+    telegramDigestTaskTitle('Проверить отчёт. Затем отправить заказчику.'),
+    'Проверить отчёт.',
+  );
+  assert.equal(telegramDigestTaskTitle('a'.repeat(120)).length, 96);
+});
+
 test('renderDigestMarkdown: bold header, anchor + done link, body, attachments', () => {
   const att = new Map<string, DigestAttachment[]>([['t1', [{ name: 'f.pdf', url: 'https://x/a/1' }]]]);
   const tasks = [task({ id: 't1', description: 'Заголовок\nтело задачи', priority: 1, deadline: '2026-06-20' })];
@@ -171,31 +180,36 @@ test('renderDigestMarkdown: bold header, anchor + done link, body, attachments',
   assert.ok(md.includes('📎 [f.pdf](https://x/a/1)'));
 });
 
-test('renderDigestTelegram: plain fallback keeps task names unlinked', () => {
-  const tasks = [task({ id: 't1', description: 'A & <b> тест', priority: 1, commentCount: 3 })];
+test('renderDigestTelegram: plain fallback hides a short title with icon actions', () => {
+  const tasks = [task({ id: 't1', description: 'A & <b> тест. Лишние подробности.\nПолное тело', priority: 1, commentCount: 3 })];
   const chunks = renderDigestTelegram(buildDigestModel(tasks, baseOpts));
   assert.equal(chunks.length, 1);
   const tg = chunks[0]!;
   assert.ok(tg.startsWith('<b>Задачи — 1 · '));
   assert.ok(tg.includes('<blockquote expandable>'));
   assert.ok(tg.endsWith('</blockquote>'));
-  assert.ok(tg.includes('<b>A &amp;'));
-  assert.ok(!tg.includes('projects/p1?task=t1'));
+  assert.ok(tg.includes('<b>A &amp; &lt;b&gt; тест.</b>'));
+  assert.ok(!tg.includes('Лишние подробности'));
+  assert.ok(!tg.includes('Полное тело'));
+  assert.ok(tg.includes('>✓</a>'));
+  assert.ok(tg.includes('>↗</a>'));
   assert.ok(!tg.includes('Комментировать'));
   assert.ok(!tg.includes('Завершить'));
 });
 
-test('renderDigestRich: restores the original three-column table with actions inside the task cell', () => {
+test('renderDigestRich: hides the original table and keeps compact icon actions in each task cell', () => {
   const tasks = [task({ id: 't1', description: 'Проверить отчёт', priority: 1, deadline: '2026-06-07' })];
   const rich = renderDigestRich(buildDigestModel(tasks, baseOpts));
 
   assert.ok(rich.includes('<table bordered striped>'));
   assert.ok(rich.includes('<tr><th>Задача</th><th>Кто</th><th>Дедлайн</th></tr>'));
-  assert.ok(!rich.includes('<details>'));
+  assert.ok(rich.includes('<details><summary>Показать задачи (1)</summary>'));
+  assert.ok(rich.endsWith('</details>'));
   assert.ok(rich.includes('<b>Проверить отчёт</b>'));
   assert.ok(!rich.includes('<a href="https://projectsflow.ru/projects/p1?task=t1"><b>'));
-  assert.ok(rich.includes('<a href="https://projectsflow.ru/projects/p1?task=t1&amp;done=1">✓ Завершить</a>'));
-  assert.ok(rich.includes('<a href="https://projectsflow.ru/projects/p1?task=t1">↗ Перейти</a>'));
+  assert.ok(rich.includes('<a href="https://projectsflow.ru/projects/p1?task=t1&amp;done=1">✓</a>'));
+  assert.ok(rich.includes('<a href="https://projectsflow.ru/projects/p1?task=t1">↗</a>'));
+  assert.ok(!rich.includes('Завершить') && !rich.includes('Перейти'));
   assert.ok(rich.includes('<td>Я</td>'));
   assert.ok(rich.includes('>осталось 3 дня</td>'));
 });
@@ -212,12 +226,14 @@ test('renderDigestTelegram: длинная сводка → несколько �
   assert.ok(!joined.includes('полностью на сайте'), 'обрезки нет');
 });
 
-test('renderDigestTelegram: fallback does not imitate rich-table actions', () => {
+test('renderDigestTelegram: fallback uses the same textless actions as the rich table', () => {
   const tasks = [task({ id: 't1', description: 'Задача', priority: 1, commentCount: 0 })];
   const tg = renderDigestTelegram(buildDigestModel(tasks, baseOpts))[0]!;
   assert.ok(tg.includes('<b>Задача</b>'));
   assert.ok(!tg.includes('Комментировать'));
-  assert.ok(!tg.includes('Завершить'));
+  assert.ok(tg.includes('>✓</a>'));
+  assert.ok(tg.includes('>↗</a>'));
+  assert.ok(!tg.includes('Завершить') && !tg.includes('Перейти'));
 });
 
 test('status grouping: groups by visible column; in_progress folds into «Воркер»', () => {
@@ -263,7 +279,7 @@ test('assignee grouping: one group per responsible person with Telegram mention'
   assert.ok(rich.includes('<a href="tg://user?id=202">Борис</a>'));
 });
 
-test('renderDigestTelegram: единственный ответственный всегда показан в мете', () => {
+test('renderDigestTelegram: compact fallback omits per-task metadata', () => {
   const tasks = [
     task({
       id: 't1', description: 'Задача', priority: 1,
@@ -272,9 +288,12 @@ test('renderDigestTelegram: единственный ответственный 
     task({ id: 't2', description: 'Ничья', priority: 1 }),
   ];
   const tg = renderDigestTelegram(buildDigestModel(tasks, baseOpts))[0]!;
-  assert.ok(tg.includes('👤 Борис'));
-  assert.ok(tg.includes('👤 Я'));
+  assert.ok(!tg.includes('👤 Борис'));
+  assert.ok(!tg.includes('👤 Я'));
+  assert.ok(tg.includes('<b>Задача</b>'));
   assert.ok(tg.includes('<b>Ничья</b>'));
+  assert.equal((tg.match(/>✓<\/a>/g) ?? []).length, 2);
+  assert.equal((tg.match(/>↗<\/a>/g) ?? []).length, 2);
 });
 
 test('renderDigestHtml: жирный заголовок (не ссылка) + кнопки Комментировать/Завершить внизу', () => {

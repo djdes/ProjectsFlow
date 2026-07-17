@@ -42,6 +42,7 @@ export class SendWorkspaceEodReminder {
     const richHtml = [
       '<h2>🕔 Перед уходом — обновите задачи</h2>',
       `<p>Открытых задач в выбранных проектах: <b>${total}</b></p>`,
+      `<details><summary>Показать проекты (${rows.length})</summary>`,
       '<table bordered striped>',
       '<tr><th>Проект</th><th>Открыто</th></tr>',
       ...rows.map(
@@ -49,13 +50,14 @@ export class SendWorkspaceEodReminder {
           const projectUrl = `${this.deps.appUrl.replace(/\/+$/, '')}/projects/${project.id}`;
           return (
             `<tr><td><b>${escapeHtml(project.name)}</b>` +
-            `<br><a href="${escapeHtml(projectUrl)}">↗ Перейти</a></td>` +
+            `<br><a href="${escapeHtml(projectUrl)}">↗</a></td>` +
             `<td>${count}</td></tr>`
           );
         },
       ),
       '</table>',
       '<p>Проверьте статусы и оставьте комментарий, если работа остановилась.</p>',
+      '</details>',
     ].join('');
     if (this.deps.telegram.sendRichMessage) {
       const result = await this.deps.telegram.sendRichMessage({

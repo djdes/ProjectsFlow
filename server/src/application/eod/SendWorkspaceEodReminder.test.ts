@@ -49,8 +49,11 @@ test('workspace EOD reminder keeps navigation inside the selected-project table'
   assert.equal(rich[0]!.chatId, -1007);
   assert.match(rich[0]!.html, /<table/);
   assert.match(rich[0]!.html, /<table bordered striped>/);
+  assert.match(rich[0]!.html, /<details><summary>Показать проекты \(1\)<\/summary>/);
+  assert.match(rich[0]!.html, /<\/details>$/);
   assert.match(rich[0]!.html, /DocsFlow/);
   assert.doesNotMatch(rich[0]!.html, /Banana/);
-  assert.match(rich[0]!.html, /href="https:\/\/projectsflow\.ru\/projects\/p1">↗ Перейти<\/a>/);
+  assert.match(rich[0]!.html, /href="https:\/\/projectsflow\.ru\/projects\/p1">↗<\/a>/);
+  assert.doesNotMatch(rich[0]!.html, /Перейти/);
   assert.equal(rich[0]!.replyMarkup, undefined);
 });

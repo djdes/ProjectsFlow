@@ -71,11 +71,21 @@ export function extractTelegramDigestActionTokens(html: string): string[] {
 export function markTelegramDigestTaskCompleted(html: string, token: string): string {
   const safeToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const actionPattern = new RegExp(
-    `<a href="[^"]*\\/api\\/telegram-digest-actions\\/${safeToken}">(?:○|✓ Завершить)<\\/a>`,
+    `<a href="[^"]*\\/api\\/telegram-digest-actions\\/${safeToken}">(?:○|✓(?: Завершить)?)<\\/a>`,
     'i',
   );
   const match = actionPattern.exec(html);
   if (!match) return html;
+
+  const rowStart = html.lastIndexOf('<tr>', match.index);
+  const rowEnd = html.indexOf('</tr>', match.index);
+  if (rowStart >= 0 && rowEnd >= 0) {
+    const end = rowEnd + '</tr>'.length;
+    const row = html.slice(rowStart, end);
+    let updatedRow = row.replace(actionPattern, '<b>✅</b>');
+    updatedRow = updatedRow.replace(/<b>([\s\S]*?)<\/b>/, '<s><b>$1</b></s>');
+    return html.slice(0, rowStart) + updatedRow + html.slice(end);
+  }
 
   const itemStart = html.lastIndexOf('<li>', match.index);
   const itemEnd = html.indexOf('</li>', match.index);

@@ -256,37 +256,32 @@ export function renderDigestHtml(
   return p.join('');
 }
 
-// Блок одной задачи для Telegram: жирный заголовок → мета (👤/⏰) → тело →
-// вложения → футер «Комментировать (N) | Завершить». Если блок не
-// влезает в maxBlock — усекаем ТОЛЬКО тело (по сырому markdown, затем re-render, чтобы HTML
-// остался сбалансированным и Telegram не отбил parse_mode).
+// Компактный блок задачи для текстового Telegram-фоллбэка: одно предложение заголовка
+// и две иконки действий. Полное описание открывается через ↗ и не раздувает сообщение.
 function digestItemBlockTg(it: DigestItem, maxBlock: number): string {
-  const title = `<b>${escapeHtml(it.name)}</b>`;
-  const meta: string[] = [];
-  if (it.assignee) meta.push(`👤 ${escapeHtml(it.assignee)}`);
-  if (it.deadline) meta.push(`⏰ ${escapeHtml(it.deadline)}`);
-  const attach = it.attachments.length
-    ? it.attachments.map((a) => `📎 <a href="${escapeHtml(a.url)}">${escapeHtml(a.name)}</a>`).join(' · ')
-    : '';
-  const compose = (body: string): string =>
-    [title, meta.join(' · '), body, attach].filter((s) => s.length > 0).join('\n');
+  const title = `<b>${escapeHtml(telegramDigestTaskTitle(it.name))}</b>`;
+  const completeLink = it.completeActionLink ?? it.doneLink;
+  const actions =
+    `<a href="${escapeHtml(completeLink)}">✓</a>` +
+    ` · <a href="${escapeHtml(it.openLink)}">↗</a>`;
+  const block = `${title}\n${actions}`;
+  return block.length <= maxBlock ? block : actions;
+}
 
-  let block = compose(it.body ? markdownToRich(it.body, 'telegram') : '');
-  if (block.length > maxBlock) {
-    const room = maxBlock - compose('').length - 1;
-    block =
-      room > 40 && it.body
-        ? compose(markdownToRich(it.body.slice(0, room).trimEnd() + '…', 'telegram'))
-        : compose('');
-    if (block.length > maxBlock) block = compose(''); // тело всё равно не влезает — без него
-  }
-  return block;
+// В Telegram задача всегда занимает одну короткую строку: только первое предложение
+// заголовка. Полное описание остаётся в самой задаче и не раздувает сводку на телефоне.
+export function telegramDigestTaskTitle(value: string, maxLength = 96): string {
+  const normalized = value.replace(/\s+/g, ' ').trim() || '(без описания)';
+  const sentence = normalized.match(/^.*?[.!?](?=\s|$)/u)?.[0] ?? normalized;
+  return sentence.length <= maxLength
+    ? sentence
+    : sentence.slice(0, Math.max(1, maxLength - 1)).trimEnd() + '…';
 }
 
 // Telegram (parse_mode HTML). Возвращает МАССИВ сообщений: длинная сводка разбивается на
-// несколько сообщений, ВСЕ задачи показываются полностью (без «…на сайте»). Заголовок проекта
+// несколько сообщений, но каждая задача занимает только короткий заголовок. Заголовок проекта
 // на первом сообщении, «…(продолжение)» — на следующих. Группа-заголовок повторяется в начале
-// каждого сообщения, где есть её задачи.
+// каждого сообщения, где есть её задачи; содержимое скрыто expandable-цитатой.
 export function renderDigestTelegram(m: DigestModel, opts: { maxLen?: number } = {}): string[] {
   const maxLen = opts.maxLen ?? 3800;
   const header = `<b>Задачи — ${m.count} · ${escapeHtml(`Проект «${m.projectName}»`)}</b>`;
@@ -301,8 +296,8 @@ export function renderDigestTelegram(m: DigestModel, opts: { maxLen?: number } =
     const heading = `<b>${telegramGroupHeading(g)}</b>`;
     const groupKey = `${g.heading}\u0000${g.telegramAssignee?.telegramUserId ?? ''}`;
     for (const it of g.items) {
-      // Внутри expandable blockquote второй blockquote запрещён Bot API. Цитаты из тела
-      // сохраняем как курсив, чтобы весь блок оставался валидным и раскрывался целиком.
+      // Внутри expandable blockquote второй blockquote запрещён Bot API; рендерер задачи
+      // остаётся плоским, чтобы весь список корректно раскрывался одним нажатием.
       const block = digestItemBlockTg(it, maxLen - 180)
         .replace(/<blockquote>/g, '<i>')
         .replace(/<\/blockquote>/g, '</i>');
@@ -325,9 +320,9 @@ export function renderDigestTelegram(m: DigestModel, opts: { maxLen?: number } =
   return chunks;
 }
 
-// Богатый рендер для sendRichMessage (Bot API 10.2): прежняя нативная таблица
-// Telegram с колонками «Задача / Кто / Дедлайн». Действия находятся прямо в ячейке
-// задачи, поэтому отдельная inline-клавиатура под сообщением не создаётся.
+// Богатый рендер для sendRichMessage (Bot API 10.2): нативная таблица Telegram
+// с колонками «Задача / Кто / Дедлайн» внутри закрытого details. Действия находятся
+// прямо в ячейке задачи и показываются компактными иконками без inline-клавиатуры.
 // ВЫДЕЛЯЕМЫЙ текст, не картинка — тот самый Hermes-вид.
 // Возвращает ОДНУ HTML-строку (Telegram сам парсит её в блоки). Для очень длинных сводок
 // caller делает фоллбэк на renderDigestTelegram, если sendRichMessage вернёт ошибку.
@@ -344,6 +339,7 @@ export function renderDigestRich(
   const h: string[] = [
     `<h2>${opts.titleHtml ?? `🗒 Ежедневная сводка · «${escapeHtml(m.projectName)}»`}</h2>`,
     `<p>Открытых задач: <b>${m.count}</b></p>`,
+    `<details><summary>Показать задачи (${m.count})</summary>`,
   ];
   for (const g of m.groups) {
     h.push(`<h3>${telegramGroupHeading(g)}</h3>`);
@@ -354,14 +350,15 @@ export function renderDigestRich(
       const assignee = it.assignee ? escapeHtml(it.assignee) : '—';
       const deadline = it.deadline ? escapeHtml(it.deadline) : '—';
       h.push(
-        `<tr><td><b>${escapeHtml(it.name)}</b>` +
-          `<br><a href="${escapeHtml(completeLink)}">✓ Завершить</a>` +
-          ` · <a href="${escapeHtml(it.openLink)}">↗ Перейти</a></td>` +
+        `<tr><td><b>${escapeHtml(telegramDigestTaskTitle(it.name))}</b>` +
+          `<br><a href="${escapeHtml(completeLink)}">✓</a>` +
+          ` · <a href="${escapeHtml(it.openLink)}">↗</a></td>` +
           `<td>${assignee}</td><td>${deadline}</td></tr>`,
       );
     }
     h.push('</table>');
   }
+  h.push('</details>');
   return h.join('');
 }
 
