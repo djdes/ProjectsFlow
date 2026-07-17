@@ -13,6 +13,7 @@ import type { WorkspaceAssigneeDigestRepository } from '../digest/WorkspaceAssig
 import type { TelegramDigestActionDeliveryRepository } from '../digest/TelegramDigestActionDeliveryRepository.js';
 import { extractTelegramDigestActionTokens } from '../digest/TelegramDigestActionService.js';
 import type { CommitSyncSnapshot, CommitSyncSnapshotEntry } from './prepareCommitSyncContext.js';
+import { commitReviewWindowHours } from './prepareCommitSyncContext.js';
 
 type Deps = {
   readonly settings: WorkspaceAssigneeDigestRepository;
@@ -41,7 +42,7 @@ export type SendWorkspaceCommitReviewInput = {
   readonly overallSummary: string | null;
 };
 
-const MAX_REVIEWS = 20;
+const MAX_REVIEWS = 60;
 const MAX_TASKS = 20;
 
 export class SendWorkspaceCommitReview {
@@ -64,13 +65,32 @@ export class SendWorkspaceCommitReview {
       return false;
     }
 
-    const knownReviews = input.reviews
+    const suppliedReviews = input.reviews
       .filter((review) => input.commits[review.commitSha] !== undefined)
       .filter(
         (review, index, all) =>
           all.findIndex((candidate) => candidate.commitSha === review.commitSha) === index,
       )
       .slice(0, MAX_REVIEWS);
+    const reviewedShas = new Set(suppliedReviews.map((review) => review.commitSha));
+    const now = new Date();
+    const cutoff = now.getTime() - commitReviewWindowHours(now) * 3_600_000;
+    const expectedShas = Object.entries(input.commits)
+      .filter(([, commit]) => {
+        const committedAt = Date.parse(commit.committedAt);
+        return Number.isFinite(committedAt) && committedAt >= cutoff && committedAt <= now.getTime();
+      })
+      .map(([sha]) => sha);
+    // Даже если модель нарушила контракт и пропустила коммит, не выдаём ложное
+    // «всё хорошо»: такой commit явно попадает в блок внимания.
+    const missingReviews: CommitSyncReview[] = expectedShas
+      .filter((sha) => !reviewedShas.has(sha))
+      .map((commitSha) => ({
+        commitSha,
+        verdict: 'attention',
+        summary: 'Не удалось автоматически проверить этот коммит — нужна ручная проверка.',
+      }));
+    const knownReviews = [...suppliedReviews, ...missingReviews].slice(0, MAX_REVIEWS);
     if (knownReviews.length === 0) return false;
     const attentionReviews = knownReviews.filter((review) => review.verdict === 'attention');
     const attentionShas = new Set(attentionReviews.map((review) => review.commitSha));
@@ -80,7 +100,9 @@ export class SendWorkspaceCommitReview {
     const taskRows = attentionReviews.length > 0
       ? (await this.buildTaskRows(input)).filter((row) => attentionShas.has(row.commitSha))
       : [];
-    const overall = summaryText(input.overallSummary, attentionReviews);
+    const overall = missingReviews.length > 0
+      ? `Не удалось полностью проверить коммиты: ${missingReviews.length}.`
+      : summaryText(input.overallSummary, attentionReviews);
     const renderInput: RenderInput = {
       projectName: project.name,
       overall,
