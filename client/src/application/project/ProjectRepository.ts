@@ -116,6 +116,13 @@ export type GitCollision = {
   readonly projectName?: string;
 };
 
+export type ImportProjectRepoInput =
+  & { readonly archive: File }
+  & (
+    | { readonly targetMode: 'new'; readonly name: string; readonly privateRepo: boolean }
+    | { readonly targetMode: 'existing'; readonly existingRepoFullName: string }
+  );
+
 export interface ProjectRepository {
   list(): Promise<Project[]>;
   getById(id: string): Promise<Project | null>;
@@ -156,7 +163,7 @@ export interface ProjectRepository {
   ): Promise<{ fullName: string; gitRepoUrl: string }>;
   importRepo(
     projectId: string,
-    input: { name: string; privateRepo: boolean; archive: File },
+    input: ImportProjectRepoInput,
     onProgress?: (percent: number) => void,
   ): Promise<{ fullName: string; gitRepoUrl: string; fileCount: number }>;
   // Сайт-результат проекта (db/100): siteSlug есть всегда (адрес <slug>.projectsflow.ru; до

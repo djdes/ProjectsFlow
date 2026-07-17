@@ -18,6 +18,14 @@ export type ImportRepoFile = {
   readonly contentBase64: string;
 };
 
+export type RepoImportTarget = {
+  readonly fullName: string;
+  readonly htmlUrl: string;
+  readonly defaultBranch: string;
+  readonly empty: boolean;
+  readonly canPush: boolean;
+};
+
 export type RepoFileContent = {
   readonly path: string;
   readonly sha: string;
@@ -88,6 +96,9 @@ export interface GithubApiClient {
 
   // Repo CRUD (for KB)
   createRepo(accessToken: string, input: CreateRepoInput): Promise<CreateRepoResult>;
+  // Точная server-side проверка цели перед импортом. `empty` определяется по commits API,
+  // а не по приблизительному `size` из списка репозиториев.
+  getRepoImportTarget(accessToken: string, fullName: string): Promise<RepoImportTarget | null>;
   // Создаёт один корневой commit со всеми файлами импорта. В отличие от Contents API,
   // это не превращает каждый файл ZIP в отдельный commit и корректно сохраняет binary.
   importRepoFiles(
@@ -96,6 +107,7 @@ export interface GithubApiClient {
     defaultBranch: string,
     files: readonly ImportRepoFile[],
     message: string,
+    options?: { readonly requireEmpty?: boolean },
   ): Promise<void>;
   deleteRepo(accessToken: string, fullName: string): Promise<void>;
   repoExists(accessToken: string, fullName: string): Promise<boolean>;

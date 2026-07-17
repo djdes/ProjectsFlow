@@ -53,3 +53,34 @@ export class GithubRepoNameTakenError extends Error {
     this.name = 'GithubRepoNameTakenError';
   }
 }
+
+export class GithubEmptyRepoAlreadyExistsError extends Error {
+  constructor(
+    public readonly fullName: string,
+    public readonly htmlUrl: string,
+  ) {
+    super(`Empty repository already exists: ${fullName}`);
+    this.name = 'GithubEmptyRepoAlreadyExistsError';
+  }
+}
+
+export class GithubImportRepoNotFoundError extends Error {
+  constructor(public readonly fullName: string) {
+    super(`Repository not found: ${fullName}`);
+    this.name = 'GithubImportRepoNotFoundError';
+  }
+}
+
+export class GithubImportRepoNotWritableError extends Error {
+  constructor(public readonly fullName: string) {
+    super(`Repository is not writable: ${fullName}`);
+    this.name = 'GithubImportRepoNotWritableError';
+  }
+}
+
+export class GithubImportRepoNotEmptyError extends Error {
+  constructor(public readonly fullName: string) {
+    super(`Repository is not empty: ${fullName}`);
+    this.name = 'GithubImportRepoNotEmptyError';
+  }
+}

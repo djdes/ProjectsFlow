@@ -22,6 +22,8 @@ type Props = {
   currentRepoUrl: string | null;
   onCreateNew?: () => void;
   onLinked?: (repo: GithubRepoSummary) => void;
+  selectionOnly?: boolean;
+  onSelected?: (repo: GithubRepoSummary) => void;
 };
 
 function formatPushed(d: Date | null): string {
@@ -41,6 +43,8 @@ export function RepoPickerDialog({
   currentRepoUrl,
   onCreateNew,
   onLinked,
+  selectionOnly = false,
+  onSelected,
 }: Props): React.ReactElement {
   const { githubRepository } = useContainer();
   const { submit: updateProject, saving } = useUpdateProject();
@@ -77,6 +81,11 @@ export function RepoPickerDialog({
   }, [repos, query]);
 
   const handlePick = async (repo: GithubRepoSummary): Promise<void> => {
+    if (selectionOnly) {
+      onSelected?.(repo);
+      onOpenChange(false);
+      return;
+    }
     try {
       await updateProject(projectId, { gitRepoUrl: repo.htmlUrl });
       toast.success(`Репо ${repo.fullName} подключено`);
@@ -93,10 +102,12 @@ export function RepoPickerDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Github className="size-5" />
-            Выбор репозитория
+            {selectionOnly ? 'Репозиторий для импорта' : 'Выбор репозитория'}
           </DialogTitle>
           <DialogDescription>
-            Покажу до&nbsp;100 твоих последних активных репо. Поиск работает по&nbsp;имени и&nbsp;описанию.
+            {selectionOnly
+              ? 'Выбери репозиторий без коммитов. Перед загрузкой сервер ещё раз проверит, что он пустой.'
+              : 'Покажу до 100 твоих последних активных репо. Поиск работает по имени и описанию.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -138,7 +149,7 @@ export function RepoPickerDialog({
                   <li key={repo.id}>
                     <button
                       type="button"
-                      disabled={saving || isCurrent}
+                      disabled={(!selectionOnly && saving) || isCurrent}
                       onClick={() => handlePick(repo)}
                       className="group flex w-full flex-col items-start gap-1 rounded-md border bg-card p-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
                     >

@@ -16,10 +16,19 @@ export const createProjectRepoSchema = z.object({
   privateRepo: z.boolean(),
 });
 
-export const importProjectRepoSchema = z.object({
-  name: z.string().min(1).max(100).regex(/^[a-zA-Z0-9._-]+$/),
-  privateRepo: z.enum(['true', 'false']).transform((value) => value === 'true'),
-});
+export const importProjectRepoSchema = z.discriminatedUnion('targetMode', [
+  z.object({
+    targetMode: z.literal('new'),
+    name: z.string().min(1).max(100).regex(/^[a-zA-Z0-9._-]+$/),
+    privateRepo: z.enum(['true', 'false']).transform((value) => value === 'true'),
+  }),
+  z.object({
+    targetMode: z.literal('existing'),
+    existingRepoFullName: z
+      .string()
+      .regex(/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/, { message: 'Format: owner/repo' }),
+  }),
+]);
 
 // PATCH /:id/publish — тоггл индексации публичной доски поисковиками.
 export const setPublicIndexingSchema = z.object({

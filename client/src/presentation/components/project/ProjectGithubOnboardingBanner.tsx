@@ -35,7 +35,7 @@ const copy: Record<Action, { title: string; description: string; confirm: string
   },
   import: {
     title: 'Импортировать готовый проект?',
-    description: 'Ты выберешь ZIP. Мы распакуем его и загрузим файлы в новый GitHub-репозиторий.',
+    description: 'Ты выберешь ZIP и куда его загрузить: в новый или уже существующий пустой GitHub-репозиторий.',
     confirm: 'Выбрать ZIP',
   },
   link: {

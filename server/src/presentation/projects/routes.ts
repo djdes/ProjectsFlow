@@ -439,12 +439,13 @@ export function projectsRouter(deps: Deps): Router {
         const id = req.params.id;
         if (typeof id !== 'string') throw new ProjectNotFoundError();
         if (!req.file) throw new Error('project_archive_missing');
-        const { name, privateRepo } = importProjectRepoSchema.parse(req.body);
+        const body = importProjectRepoSchema.parse(req.body);
         const result = await deps.importProjectRepo.execute({
           projectId: id,
           callerUserId: req.user!.id,
-          name,
-          privateRepo,
+          target: body.targetMode === 'new'
+            ? { kind: 'new', name: body.name, privateRepo: body.privateRepo }
+            : { kind: 'existing', fullName: body.existingRepoFullName },
           archive: req.file.buffer,
         });
         deps.notifyProjectChanged(id);

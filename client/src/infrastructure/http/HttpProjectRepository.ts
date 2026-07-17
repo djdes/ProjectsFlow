@@ -463,13 +463,18 @@ export class HttpProjectRepository implements ProjectRepository {
 
   async importRepo(
     projectId: string,
-    input: { name: string; privateRepo: boolean; archive: File },
+    input: import('@/application/project/ProjectRepository').ImportProjectRepoInput,
     onProgress?: (percent: number) => void,
   ): Promise<{ fullName: string; gitRepoUrl: string; fileCount: number }> {
     return new Promise((resolve, reject) => {
       const form = new FormData();
-      form.append('name', input.name);
-      form.append('privateRepo', String(input.privateRepo));
+      form.append('targetMode', input.targetMode);
+      if (input.targetMode === 'new') {
+        form.append('name', input.name);
+        form.append('privateRepo', String(input.privateRepo));
+      } else {
+        form.append('existingRepoFullName', input.existingRepoFullName);
+      }
       form.append('archive', input.archive);
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `/api/projects/${projectId}/repo/import`);
@@ -484,6 +489,7 @@ export class HttpProjectRepository implements ProjectRepository {
           fileCount?: number;
           error?: string;
           message?: string;
+          details?: unknown;
         };
         let data: Response | null = null;
         try {
@@ -498,7 +504,11 @@ export class HttpProjectRepository implements ProjectRepository {
           !data.gitRepoUrl ||
           data.fileCount === undefined
         ) {
-          reject(new Error(data?.message ?? data?.error ?? `Ошибка импорта (HTTP ${xhr.status})`));
+          reject(new HttpError(xhr.status, {
+            error: data?.error ?? 'project_import_failed',
+            message: data?.message ?? `Ошибка импорта (HTTP ${xhr.status})`,
+            details: data?.details,
+          }));
           return;
         }
         resolve({ fullName: data.fullName, gitRepoUrl: data.gitRepoUrl, fileCount: data.fileCount });

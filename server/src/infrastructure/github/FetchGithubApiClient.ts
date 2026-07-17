@@ -13,6 +13,7 @@ import type {
   PutFileInput,
   RepoFileContent,
   RepoFileSummary,
+  RepoImportTarget,
 } from '../../application/github/GithubApiClient.js';
 
 // `repo` scope покрывает чтение/запись private + public репо — нужен для создания
@@ -248,17 +249,62 @@ export class FetchGithubApiClient implements GithubApiClient {
     };
   }
 
+  async getRepoImportTarget(accessToken: string, fullName: string): Promise<RepoImportTarget | null> {
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/vnd.github+json',
+    };
+    const repoRes = await fetch(`https://api.github.com/repos/${fullName}`, { headers });
+    if (repoRes.status === 404) return null;
+    if (!repoRes.ok) {
+      throw new GithubApiError(repoRes.status, `get import repository failed: ${await repoRes.text()}`);
+    }
+    const repo = (await repoRes.json()) as {
+      full_name: string;
+      html_url: string;
+      default_branch: string;
+      permissions?: { push?: boolean };
+    };
+
+    const commitsRes = await fetch(
+      `https://api.github.com/repos/${fullName}/commits?per_page=1`,
+      { headers },
+    );
+    let empty = false;
+    if (commitsRes.status === 409) {
+      // GitHub отвечает 409 "Git Repository is empty" для репо без первого commit.
+      empty = true;
+    } else if (commitsRes.ok) {
+      const commits = (await commitsRes.json()) as unknown[];
+      empty = commits.length === 0;
+    } else {
+      throw new GithubApiError(
+        commitsRes.status,
+        `check import repository commits failed: ${await commitsRes.text()}`,
+      );
+    }
+
+    return {
+      fullName: repo.full_name,
+      htmlUrl: repo.html_url,
+      defaultBranch: repo.default_branch || 'main',
+      empty,
+      canPush: repo.permissions?.push === true,
+    };
+  }
+
   async importRepoFiles(
     accessToken: string,
     fullName: string,
     defaultBranch: string,
     files: readonly ImportRepoFile[],
     message: string,
+    options: { readonly requireEmpty?: boolean } = {},
   ): Promise<void> {
     const request = async <T>(
       path: string,
       body: unknown,
-      method: 'POST' | 'PATCH' = 'POST',
+      method: 'POST' | 'PATCH' | 'PUT' = 'POST',
     ): Promise<T> => {
       const res = await fetch(`https://api.github.com/repos/${fullName}${path}`, {
         method,
@@ -275,13 +321,13 @@ export class FetchGithubApiClient implements GithubApiClient {
       return (await res.json()) as T;
     };
 
-    // Raw Git endpoints недоступны у пустого репозитория. ImportProjectRepo создаёт
-    // auto-init commit, а здесь берём его HEAD как parent итогового import-коммита.
-    // Небольшой retry закрывает короткое окно, пока GitHub поднимает новый repository.
+    // У существующей цели обязательно ещё раз проверяем отсутствие HEAD. Это закрывает
+    // гонку: если после выбора репозитория в нём появился commit, ZIP ничего не перезапишет.
     let headSha: string | null = null;
-    for (let attempt = 0; attempt < 5 && !headSha; attempt += 1) {
+    const branch = defaultBranch || 'main';
+    if (options.requireEmpty) {
       const res = await fetch(
-        `https://api.github.com/repos/${fullName}/git/ref/heads/${encodeURIComponent(defaultBranch || 'main')}`,
+        `https://api.github.com/repos/${fullName}/git/ref/heads/${encodeURIComponent(branch)}`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -290,16 +336,64 @@ export class FetchGithubApiClient implements GithubApiClient {
         },
       );
       if (res.ok) {
-        const ref = (await res.json()) as { object: { sha: string } };
-        headSha = ref.object.sha;
-        break;
+        throw new GithubApiError(409, 'Repository is no longer empty');
       }
-      if ((res.status !== 404 && res.status !== 409) || attempt === 4) {
+      if (res.status !== 404 && res.status !== 409) {
         throw new GithubApiError(res.status, `GitHub import ref failed: ${await res.text()}`);
       }
-      await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+
+      // Raw Git API не принимает blobs в полностью пустом repo. Создаём технический
+      // root commit через Contents API, затем убеждаемся, что он действительно root:
+      // если у него есть parent, кто-то успел записать данные и импорт отменяется.
+      const initialized = await request<{ commit: { sha: string } }>(
+        '/contents/.projectsflow-import-init',
+        {
+          message: 'chore: initialize ProjectsFlow import',
+          content: Buffer.from('ProjectsFlow import', 'utf8').toString('base64'),
+        },
+        'PUT',
+      );
+      const commitRes = await fetch(
+        `https://api.github.com/repos/${fullName}/git/commits/${initialized.commit.sha}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/vnd.github+json',
+          },
+        },
+      );
+      if (!commitRes.ok) {
+        throw new GithubApiError(commitRes.status, `GitHub import root check failed: ${await commitRes.text()}`);
+      }
+      const initializedCommit = (await commitRes.json()) as { parents: Array<{ sha: string }> };
+      if (initializedCommit.parents.length !== 0) {
+        throw new GithubApiError(409, 'Repository changed while import was starting');
+      }
+      headSha = initialized.commit.sha;
+    } else {
+      // Новый auto-init repo может появиться в Git API с короткой задержкой.
+      for (let attempt = 0; attempt < 5 && !headSha; attempt += 1) {
+        const res = await fetch(
+          `https://api.github.com/repos/${fullName}/git/ref/heads/${encodeURIComponent(branch)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: 'application/vnd.github+json',
+            },
+          },
+        );
+        if (res.ok) {
+          const ref = (await res.json()) as { object: { sha: string } };
+          headSha = ref.object.sha;
+          break;
+        }
+        if ((res.status !== 404 && res.status !== 409) || attempt === 4) {
+          throw new GithubApiError(res.status, `GitHub import ref failed: ${await res.text()}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+      }
+      if (!headSha) throw new GithubApiError(409, 'GitHub import ref is unavailable');
     }
-    if (!headSha) throw new GithubApiError(409, 'GitHub import ref is unavailable');
 
     // Ограниченная параллельность: заметно быстрее последовательной загрузки, но не
     // устраивает burst из сотен запросов к GitHub API.
@@ -326,7 +420,7 @@ export class FetchGithubApiClient implements GithubApiClient {
       tree: tree.sha,
       parents: [headSha],
     });
-    await request(`/git/refs/heads/${encodeURIComponent(defaultBranch || 'main')}`, {
+    await request(`/git/refs/heads/${encodeURIComponent(branch)}`, {
       sha: commit.sha,
       force: false,
     }, 'PATCH');

@@ -30,6 +30,10 @@ import {
 import { DispatcherCandidateInvalidError } from '../../application/project/SetProjectDispatcher.js';
 import {
   GithubApiError,
+  GithubEmptyRepoAlreadyExistsError,
+  GithubImportRepoNotEmptyError,
+  GithubImportRepoNotFoundError,
+  GithubImportRepoNotWritableError,
   GithubIntegrationDisabledError,
   GithubNotConnectedError,
   GithubRepoNameTakenError,
@@ -406,6 +410,40 @@ export function errorHandler(
     res.status(400).json({ error: 'project_archive_invalid', message: err.message });
     return;
   }
+
+  if (err instanceof GithubEmptyRepoAlreadyExistsError) {
+    res.status(409).json({
+      error: 'github_empty_repo_exists',
+      message: 'Нашли твой пустой репозиторий с таким именем. Можно импортировать проект прямо в него.',
+      details: { repo: { fullName: err.fullName, htmlUrl: err.htmlUrl } },
+    });
+    return;
+  }
+
+  if (err instanceof GithubImportRepoNotFoundError) {
+    res.status(404).json({
+      error: 'github_import_repo_not_found',
+      message: 'Репозиторий не найден или больше недоступен.',
+    });
+    return;
+  }
+
+  if (err instanceof GithubImportRepoNotWritableError) {
+    res.status(403).json({
+      error: 'github_import_repo_not_writable',
+      message: 'У подключённого GitHub-аккаунта нет права записи в этот репозиторий.',
+    });
+    return;
+  }
+
+  if (err instanceof GithubImportRepoNotEmptyError) {
+    res.status(409).json({
+      error: 'github_import_repo_not_empty',
+      message: 'В репозитории уже есть коммиты. Чтобы не перезаписать данные, импорт остановлен.',
+    });
+    return;
+  }
+
   if (err instanceof Error && err.message === 'project_archive_missing') {
     res.status(400).json({ error: 'project_archive_missing', message: 'Выберите ZIP-архив' });
     return;
