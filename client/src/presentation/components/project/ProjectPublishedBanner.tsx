@@ -3,6 +3,11 @@ import { Globe, X } from 'lucide-react';
 import { useContainer } from '@/infrastructure/di/container';
 import { siteResultUrl, siteResultDisplayUrl } from '@/lib/publicBoardUrl';
 import { useRightPanelWidth } from '@/presentation/layout/rightPanelContext';
+import {
+  announceProjectSitePublished,
+  PROJECT_SITE_PUBLISHED_EVENT,
+  type ProjectSitePublishedDetail,
+} from './projectSitePublishedEvent';
 
 type Props = {
   projectId: string;
@@ -57,6 +62,7 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
             return;
           }
           setSite({ slug: s.siteSlug });
+          announceProjectSitePublished({ projectId, slug: s.siteSlug });
           if (timer) {
             clearInterval(timer);
             timer = null;
@@ -73,6 +79,17 @@ export function ProjectPublishedBanner({ projectId, shiftForOverlay = false }: P
       if (timer) clearInterval(timer);
     };
   }, [projectRepository, projectId]);
+
+  // Вторая стадия GitHub-onboarding поллит тот же результат. Событие позволяет обеим
+  // плашкам переключиться одним кадром: призыв к запуску исчезает, синяя плашка появляется.
+  useEffect(() => {
+    const onPublished = (event: Event): void => {
+      const detail = (event as CustomEvent<ProjectSitePublishedDetail>).detail;
+      if (detail?.projectId === projectId) setSite({ slug: detail.slug });
+    };
+    window.addEventListener(PROJECT_SITE_PUBLISHED_EVENT, onPublished);
+    return () => window.removeEventListener(PROJECT_SITE_PUBLISHED_EVENT, onPublished);
+  }, [projectId]);
 
   useEffect(() => {
     setDismissed(dismissedProjects.has(projectId));

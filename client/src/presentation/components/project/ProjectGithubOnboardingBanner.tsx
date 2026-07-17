@@ -1,5 +1,15 @@
-import { useEffect, useState } from 'react';
-import { Archive, ArrowRight, Github, Link2, Loader2, Play, Sparkles } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Archive,
+  ArrowRight,
+  CheckCircle2,
+  Github,
+  Link2,
+  Loader2,
+  Play,
+  Rocket,
+  Sparkles,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -16,16 +26,26 @@ import { RepoPickerDialog } from '@/presentation/components/github/RepoPickerDia
 import { ConnectGithubDialog } from '@/presentation/components/github/ConnectGithubDialog';
 import { useGithubConnection } from '@/presentation/hooks/GithubConnectionProvider';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { useTasks } from '@/presentation/hooks/useTasks';
 import { useContainer } from '@/infrastructure/di/container';
-import { cn } from '@/lib/utils';
+import type { Task } from '@/domain/task/Task';
+import {
+  announceProjectSitePublished,
+  PROJECT_SITE_PUBLISHED_EVENT,
+  type ProjectSitePublishedDetail,
+} from './projectSitePublishedEvent';
 
 type Action = 'create' | 'import' | 'link';
+type SiteState = 'checking' | 'pending' | 'published';
 
 type Props = {
   projectId: string;
   projectName: string;
+  gitRepoUrl: string | null;
   shiftForOverlay?: boolean;
 };
+
+type LaunchBannerProps = Pick<Props, 'projectId' | 'shiftForOverlay'>;
 
 const copy: Record<Action, { title: string; description: string; confirm: string }> = {
   create: {
@@ -45,23 +65,141 @@ const copy: Record<Action, { title: string; description: string; confirm: string
   },
 };
 
+function isLaunchProjectTask(task: Task): boolean {
+  const title = (task.description ?? '').split(/\r?\n/, 1)[0].replace(/\s+/g, ' ').trim().toLocaleLowerCase('ru-RU');
+  return title === 'запустить проект';
+}
+
+function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBannerProps): React.ReactElement {
+  const { user } = useCurrentUser();
+  const { tasks, loading, create } = useTasks(projectId);
+  const [launchOpen, setLaunchOpen] = useState(false);
+  const [launchBusy, setLaunchBusy] = useState(false);
+
+  const launchTasks = useMemo(() => tasks.filter(isLaunchProjectTask), [tasks]);
+  const activeLaunchTask = launchTasks.find((task) => task.status !== 'done');
+  const isRetry = !activeLaunchTask && launchTasks.some((task) => task.status === 'done');
+
+  const createLaunchTask = async (): Promise<void> => {
+    if (!user || launchBusy || activeLaunchTask) return;
+    setLaunchBusy(true);
+    try {
+      await create({
+        description: 'Запустить проект',
+        status: 'todo',
+        assigneeUserId: user.id,
+      });
+      toast.success('Задача «Запустить проект» добавлена воркеру');
+      setLaunchOpen(false);
+    } catch {
+      toast.error('Не удалось создать задачу');
+    } finally {
+      setLaunchBusy(false);
+    }
+  };
+
+  const actionLabel = loading
+    ? 'Проверяем задачи…'
+    : activeLaunchTask
+      ? activeLaunchTask.status === 'in_progress'
+        ? 'Воркер запускает проект'
+        : activeLaunchTask.status === 'awaiting_clarification'
+          ? 'В задаче нужен ответ'
+          : 'Задача уже отправлена'
+      : isRetry
+        ? 'Запустить повторно'
+        : 'Запустить проект';
+
+  return (
+    <>
+      <div className="border-b border-violet-950/10 bg-[linear-gradient(105deg,#eef2ff_0%,#f5f3ff_48%,#ecfeff_100%)] px-4 py-3 dark:border-white/10 dark:bg-[linear-gradient(105deg,#172036_0%,#261b3a_50%,#123039_100%)] sm:px-8">
+        <div
+          className="mx-auto flex max-w-[1180px] animate-in flex-col gap-3 fade-in slide-in-from-top-2 duration-500 transition-[margin] xl:flex-row xl:items-center xl:justify-between motion-reduce:animate-none"
+          style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="relative grid size-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-600/20 ring-4 ring-white/70 dark:ring-white/10">
+              <Rocket className="size-5" />
+              <span className="absolute -right-1 -top-1 size-2.5 animate-pulse rounded-full bg-cyan-400 ring-2 ring-white dark:ring-slate-900" />
+            </span>
+            <div className="min-w-0">
+              <div className="mb-0.5 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle2 className="size-3" />
+                  Код подключён
+                </span>
+                <span className="text-[10px] font-medium uppercase tracking-wide text-violet-600/70 dark:text-violet-300/70">
+                  Шаг 2 из 2
+                </span>
+              </div>
+              <div className="text-sm font-semibold text-foreground">Теперь запустите проект</div>
+              <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+                Воркер проверит код, подготовит запуск и опубликует результат. Плашка исчезнет после первого успешного запуска.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={loading || Boolean(activeLaunchTask)}
+            onClick={() => setLaunchOpen(true)}
+            className="group inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 text-xs font-semibold text-white shadow-md shadow-violet-600/20 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-default disabled:opacity-75 disabled:hover:translate-y-0"
+          >
+            {loading || activeLaunchTask?.status === 'in_progress' ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : activeLaunchTask ? (
+              <CheckCircle2 className="size-4" />
+            ) : (
+              <Play className="size-4 fill-current" />
+            )}
+            {actionLabel}
+            {!loading && !activeLaunchTask && (
+              <ArrowRight className="size-3.5 opacity-60 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      <Dialog open={launchOpen} onOpenChange={(open) => !launchBusy && setLaunchOpen(open)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="grid size-8 place-items-center rounded-lg bg-violet-500/10 text-violet-600">
+                <Rocket className="size-4" />
+              </span>
+              {isRetry ? 'Запустить проект повторно?' : 'Отправить проект на запуск?'}
+            </DialogTitle>
+            <DialogDescription>
+              Создадим задачу «Запустить проект» в канбане воркера. Он проверит репозиторий, запустит проект и опубликует результат.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" disabled={launchBusy} onClick={() => setLaunchOpen(false)}>Не сейчас</Button>
+            <Button disabled={launchBusy || !user || Boolean(activeLaunchTask)} onClick={() => void createLaunchTask()}>
+              {launchBusy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Play className="mr-2 size-4" />}
+              Отправить воркеру
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export function ProjectGithubOnboardingBanner({
   projectId,
   projectName,
+  gitRepoUrl,
   shiftForOverlay = false,
 }: Props): React.ReactElement | null {
   const { connection } = useGithubConnection();
-  const { user } = useCurrentUser();
-  const { taskRepository } = useContainer();
-  const [hidden, setHidden] = useState(false);
+  const { projectRepository } = useContainer();
   const [intro, setIntro] = useState<Action | null>(null);
   const [pending, setPending] = useState<Action | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [launchOpen, setLaunchOpen] = useState(false);
-  const [launchBusy, setLaunchBusy] = useState(false);
+  const [siteState, setSiteState] = useState<SiteState>(gitRepoUrl ? 'checking' : 'pending');
 
   const openAction = (action: Action): void => {
     if (action === 'create') setCreateOpen(true);
@@ -76,6 +214,55 @@ export function ProjectGithubOnboardingBanner({
     }
   }, [connection, pending]);
 
+  useEffect(() => {
+    if (!gitRepoUrl) {
+      setSiteState('pending');
+      return;
+    }
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    setSiteState('checking');
+
+    const load = (): void => {
+      projectRepository
+        .getProjectSite(projectId)
+        .then((site) => {
+          if (cancelled) return;
+          if (!site.siteSlug || !site.deployedAt) {
+            setSiteState('pending');
+            return;
+          }
+          setSiteState('published');
+          announceProjectSitePublished({ projectId, slug: site.siteSlug });
+          if (timer) {
+            clearInterval(timer);
+            timer = null;
+          }
+        })
+        .catch(() => {
+          // При временной сетевой ошибке не показываем ложный призыв уже
+          // опубликованному проекту — следующий тик повторит точную проверку.
+        });
+    };
+
+    load();
+    timer = setInterval(load, 10000);
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [gitRepoUrl, projectId, projectRepository]);
+
+  useEffect(() => {
+    const onPublished = (event: Event): void => {
+      const detail = (event as CustomEvent<ProjectSitePublishedDetail>).detail;
+      if (detail?.projectId === projectId) setSiteState('published');
+    };
+    window.addEventListener(PROJECT_SITE_PUBLISHED_EVENT, onPublished);
+    return () => window.removeEventListener(PROJECT_SITE_PUBLISHED_EVENT, onPublished);
+  }, [projectId]);
+
   const proceed = (): void => {
     if (!intro) return;
     const action = intro;
@@ -88,27 +275,10 @@ export function ProjectGithubOnboardingBanner({
     openAction(action);
   };
 
-  const connected = (): void => setHidden(true);
-
-  const createLaunchTask = async (): Promise<void> => {
-    if (!user) return;
-    setLaunchBusy(true);
-    try {
-      await taskRepository.create(projectId, {
-        description: 'Запустить проект',
-        status: 'todo',
-        assigneeUserId: user.id,
-      });
-      toast.success('Задача «Запустить проект» добавлена воркеру');
-      setLaunchOpen(false);
-    } catch {
-      toast.error('Не удалось создать задачу');
-    } finally {
-      setLaunchBusy(false);
-    }
-  };
-
-  if (hidden) return null;
+  if (gitRepoUrl) {
+    if (siteState !== 'pending') return null;
+    return <ProjectLaunchBanner projectId={projectId} shiftForOverlay={shiftForOverlay} />;
+  }
 
   return (
     <>
@@ -179,7 +349,6 @@ export function ProjectGithubOnboardingBanner({
         onOpenChange={setCreateOpen}
         projectId={projectId}
         projectName={projectName}
-        onCreated={connected}
       />
       <ImportProjectRepoDialog
         open={importOpen}
@@ -187,9 +356,7 @@ export function ProjectGithubOnboardingBanner({
         projectId={projectId}
         projectName={projectName}
         onImported={({ fullName, fileCount }) => {
-          connected();
           toast.success(`${fullName}: загружено файлов — ${fileCount}`);
-          setLaunchOpen(true);
         }}
       />
       <RepoPickerDialog
@@ -197,31 +364,7 @@ export function ProjectGithubOnboardingBanner({
         onOpenChange={setPickerOpen}
         projectId={projectId}
         currentRepoUrl={null}
-        onLinked={connected}
       />
-
-      <Dialog open={launchOpen} onOpenChange={(open) => !launchBusy && setLaunchOpen(open)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <span className={cn('grid size-8 place-items-center rounded-lg bg-emerald-500/10 text-emerald-600')}>
-                <Play className="size-4 fill-current" />
-              </span>
-              Теперь запустите проект
-            </DialogTitle>
-            <DialogDescription>
-              Создадим задачу «Запустить проект» прямо в канбане воркера — он проверит импорт и подготовит запуск.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" disabled={launchBusy} onClick={() => setLaunchOpen(false)}>Не сейчас</Button>
-            <Button disabled={launchBusy || !user} onClick={() => void createLaunchTask()}>
-              {launchBusy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Play className="mr-2 size-4" />}
-              Создать задачу
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

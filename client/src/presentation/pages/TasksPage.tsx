@@ -293,10 +293,11 @@ export function TasksPage(): React.ReactElement {
           тоже закреплена при скролле (сразу под sticky-строкой крошек, top-11 = её высота).
           shiftForOverlay: контент центрируется в видимой области, когда открыто окно задачи. */}
       <div id="pf-sticky-banners" className="pf-sticky-surface sticky top-11 z-40">
-        {!data.isInbox && canEdit && !data.gitRepoUrl && (
+        {!data.isInbox && canEdit && (
           <ProjectGithubOnboardingBanner
             projectId={data.id}
             projectName={data.name}
+            gitRepoUrl={data.gitRepoUrl}
             shiftForOverlay
           />
         )}
