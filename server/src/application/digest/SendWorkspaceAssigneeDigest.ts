@@ -18,7 +18,6 @@ import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
 import type { TaskWithCounts } from '../task/ListTasks.js';
 import {
   buildDigestModel,
-  digestTaskKeyboard,
   renderDigestRich,
   type DigestModel,
 } from '../task/digest/buildTaskDigest.js';
@@ -169,12 +168,6 @@ export class SendWorkspaceAssigneeDigest {
         now,
         completeActionLinks,
       });
-      const richModel = buildWorkspaceAssigneeDigestModel({
-        projects: grouped,
-        appUrl: this.deps.appUrl,
-        now,
-        completeActionLinks,
-      });
       let result: SendMessageResult | null = null;
       let deliveredHtml = richMessage;
       let deliveredKind: 'rich' | 'html' = 'rich';
@@ -184,7 +177,6 @@ export class SendWorkspaceAssigneeDigest {
           const richResult = await this.deps.telegram.sendRichMessage({
             chatId: settings.telegramGroupChatId,
             html: richMessage,
-            replyMarkup: digestTaskKeyboard(richModel),
           });
           if (richResult.kind === 'ok') result = richResult;
           fallbackAllowed =
@@ -205,7 +197,6 @@ export class SendWorkspaceAssigneeDigest {
             text: message,
             parseMode: 'HTML',
             disableWebPagePreview: true,
-            replyMarkup: digestTaskKeyboard(richModel),
           })
           .catch(() => null);
       }
@@ -330,7 +321,6 @@ export function buildWorkspaceAssigneeDigestRichMessage(input: {
       input.displayName,
       input.telegramLink,
     )}`,
-    showAssignee: false,
   });
 }
 

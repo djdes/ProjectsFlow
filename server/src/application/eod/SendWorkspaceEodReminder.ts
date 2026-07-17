@@ -42,31 +42,25 @@ export class SendWorkspaceEodReminder {
     const richHtml = [
       '<h2>🕔 Перед уходом — обновите задачи</h2>',
       `<p>Открытых задач в выбранных проектах: <b>${total}</b></p>`,
-      '<table style="width:100%;max-width:100%;table-layout:fixed;border-collapse:collapse">',
-      '<colgroup><col style="width:72%"><col style="width:28%"></colgroup>',
-      '<thead><tr><th style="text-align:left;padding:5px 6px">Проект</th><th style="text-align:left;padding:5px 4px">Открыто</th></tr></thead><tbody>',
+      '<table bordered striped>',
+      '<tr><th>Проект</th><th>Открыто</th></tr>',
       ...rows.map(
-        ({ project, count }) =>
-          `<tr><td style="padding:7px 6px;border-top:1px solid #edf0f4;overflow-wrap:anywhere;word-break:break-word"><b>${escapeHtml(project.name)}</b></td>` +
-          `<td style="padding:7px 4px;border-top:1px solid #edf0f4">${count}</td></tr>`,
+        ({ project, count }) => {
+          const projectUrl = `${this.deps.appUrl.replace(/\/+$/, '')}/projects/${project.id}`;
+          return (
+            `<tr><td><b>${escapeHtml(project.name)}</b>` +
+            `<br><a href="${escapeHtml(projectUrl)}">↗ Перейти</a></td>` +
+            `<td>${count}</td></tr>`
+          );
+        },
       ),
-      '</tbody></table>',
+      '</table>',
       '<p>Проверьте статусы и оставьте комментарий, если работа остановилась.</p>',
     ].join('');
-    const keyboard = {
-      inline_keyboard: rows.slice(0, 20).map(({ project }, index) => [
-        {
-          text: `↗ ${index + 1}`,
-          url: `${this.deps.appUrl.replace(/\/+$/, '')}/projects/${project.id}`,
-        },
-      ]),
-    };
-
     if (this.deps.telegram.sendRichMessage) {
       const result = await this.deps.telegram.sendRichMessage({
         chatId: settings.telegramGroupChatId,
         html: richHtml,
-        replyMarkup: keyboard,
       });
       if (result.kind === 'ok' || result.kind === 'error' && result.deliveryUnknown) {
         return { projectCount: rows.length, taskCount: total };
@@ -80,7 +74,6 @@ export class SendWorkspaceEodReminder {
       text,
       parseMode: 'HTML',
       disableWebPagePreview: true,
-      replyMarkup: keyboard,
     });
     return { projectCount: rows.length, taskCount: total };
   }

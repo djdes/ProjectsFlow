@@ -1,6 +1,5 @@
 import type { TaskPriority, TaskStatus } from '../../../domain/task/Task.js';
 import type { TaskWithCounts } from '../ListTasks.js';
-import type { InlineKeyboardMarkup } from '../../telegram/TelegramClient.js';
 import {
   STATUS_DIGEST_LABEL,
   escapeHtml,
@@ -326,9 +325,9 @@ export function renderDigestTelegram(m: DigestModel, opts: { maxLen?: number } =
   return chunks;
 }
 
-// Богатый рендер для sendRichMessage (Bot API 10.2): заголовок + закрытый по умолчанию
-// <details>. Внутри вертикальные списки вместо широкой таблицы: на телефоне не появляется
-// боковой скролл, а название, ответственный, срок и действие остаются читаемыми.
+// Богатый рендер для sendRichMessage (Bot API 10.2): прежняя нативная таблица
+// Telegram с колонками «Задача / Кто / Дедлайн». Действия находятся прямо в ячейке
+// задачи, поэтому отдельная inline-клавиатура под сообщением не создаётся.
 // ВЫДЕЛЯЕМЫЙ текст, не картинка — тот самый Hermes-вид.
 // Возвращает ОДНУ HTML-строку (Telegram сам парсит её в блоки). Для очень длинных сводок
 // caller делает фоллбэк на renderDigestTelegram, если sendRichMessage вернёт ошибку.
@@ -336,9 +335,6 @@ export type DigestRichRenderOptions = {
   // Доверенный HTML заголовка, собранный сервером. Нужен workspace-сводке для
   // кликабельного tg:// mention при отсутствии публичного @username.
   readonly titleHtml?: string;
-  // В персональной сводке ответственный уже указан в заголовке, поэтому его можно
-  // не дублировать у каждой задачи.
-  readonly showAssignee?: boolean;
 };
 
 export function renderDigestRich(
@@ -348,47 +344,25 @@ export function renderDigestRich(
   const h: string[] = [
     `<h2>${opts.titleHtml ?? `🗒 Ежедневная сводка · «${escapeHtml(m.projectName)}»`}</h2>`,
     `<p>Открытых задач: <b>${m.count}</b></p>`,
-    `<details><summary>Показать задачи (${m.count})</summary>`,
   ];
   for (const g of m.groups) {
     h.push(`<h3>${telegramGroupHeading(g)}</h3>`);
-    h.push(
-      '<table style="width:100%;max-width:100%;table-layout:fixed;border-collapse:collapse">' +
-        '<colgroup><col style="width:72%"><col style="width:28%"></colgroup>' +
-        '<thead><tr><th style="text-align:left;padding:5px 6px;border-bottom:1px solid #d8dee8">Задача</th>' +
-        '<th style="text-align:left;padding:5px 4px;border-bottom:1px solid #d8dee8">Срок</th></tr></thead><tbody>',
-    );
+    h.push('<table bordered striped>');
+    h.push('<tr><th>Задача</th><th>Кто</th><th>Дедлайн</th></tr>');
     for (const it of g.items) {
-      const assignee =
-        opts.showAssignee !== false && it.assignee
-          ? `<br><small>👤 ${escapeHtml(it.assignee)}</small>`
-          : '';
+      const completeLink = it.completeActionLink ?? it.doneLink;
+      const assignee = it.assignee ? escapeHtml(it.assignee) : '—';
+      const deadline = it.deadline ? escapeHtml(it.deadline) : '—';
       h.push(
-        '<tr>' +
-          `<td style="padding:7px 6px;vertical-align:top;border-bottom:1px solid #edf0f4;white-space:normal;overflow-wrap:anywhere;word-break:break-word"><b>${escapeHtml(it.name)}</b>${assignee}</td>` +
-          `<td style="padding:7px 4px;vertical-align:top;border-bottom:1px solid #edf0f4;white-space:normal;overflow-wrap:anywhere;word-break:break-word">${it.deadline ? escapeHtml(it.deadline) : '—'}</td>` +
-          '</tr>',
+        `<tr><td><b>${escapeHtml(it.name)}</b>` +
+          `<br><a href="${escapeHtml(completeLink)}">✓ Завершить</a>` +
+          ` · <a href="${escapeHtml(it.openLink)}">↗ Перейти</a></td>` +
+          `<td>${assignee}</td><td>${deadline}</td></tr>`,
       );
     }
-    h.push('</tbody></table>');
+    h.push('</table>');
   }
-  h.push('</details>');
   return h.join('');
-}
-
-// Telegram cannot place callback controls inside rich-message table cells. The table stays plain
-// text and a compact pair of native bot buttons is attached below it for every numbered row.
-export function digestTaskKeyboard(
-  m: DigestModel,
-  opts: { maxTasks?: number } = {},
-): InlineKeyboardMarkup {
-  const items = m.groups.flatMap((group) => group.items).slice(0, opts.maxTasks ?? 40);
-  return {
-    inline_keyboard: items.map((item, index) => [
-      { text: `✓ ${index + 1}`, callback_data: `dg:${item.taskId}` },
-      { text: `↗ ${index + 1}`, url: item.openLink },
-    ]),
-  };
 }
 
 function telegramGroupHeading(g: DigestGroup): string {

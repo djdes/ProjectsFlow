@@ -3,8 +3,8 @@ import test from 'node:test';
 import { defaultWorkspaceAssigneeDigestSettings } from '../../domain/digest/WorkspaceAssigneeDigestSettings.js';
 import { SendWorkspaceEodReminder } from './SendWorkspaceEodReminder.js';
 
-test('workspace EOD reminder sends one compact group table for selected projects', async () => {
-  const rich: Array<{ chatId: number; html: string; replyMarkup: any }> = [];
+test('workspace EOD reminder keeps navigation inside the selected-project table', async () => {
+  const rich: Array<{ chatId: number; html: string; replyMarkup?: unknown }> = [];
   const send = new SendWorkspaceEodReminder({
     settings: {
       async get() {
@@ -48,10 +48,9 @@ test('workspace EOD reminder sends one compact group table for selected projects
   assert.equal(rich.length, 1);
   assert.equal(rich[0]!.chatId, -1007);
   assert.match(rich[0]!.html, /<table/);
+  assert.match(rich[0]!.html, /<table bordered striped>/);
   assert.match(rich[0]!.html, /DocsFlow/);
   assert.doesNotMatch(rich[0]!.html, /Banana/);
-  assert.equal(
-    rich[0]!.replyMarkup.inline_keyboard[0][0].url,
-    'https://projectsflow.ru/projects/p1',
-  );
+  assert.match(rich[0]!.html, /href="https:\/\/projectsflow\.ru\/projects\/p1">↗ Перейти<\/a>/);
+  assert.equal(rich[0]!.replyMarkup, undefined);
 });

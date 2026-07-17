@@ -30,7 +30,7 @@ function openTask(): Task {
   };
 }
 
-test('manual group test deletes its predecessor and remembers one collapsed assignee digest', async () => {
+test('manual group test deletes its predecessor and remembers one rich assignee digest', async () => {
   const settings = {
     ...defaultDigestSettings('p1'),
     telegramGroupChatId: -1007,
@@ -48,6 +48,7 @@ test('manual group test deletes its predecessor and remembers one collapsed assi
   const saved: unknown[] = [];
   const actionDeliveries: unknown[] = [];
   let richHtml = '';
+  let richReplyMarkup: unknown = 'not-sent';
 
   const send = new SendDailyDigest({
     tasks: { listByProject: async () => [openTask()] } as never,
@@ -74,8 +75,9 @@ test('manual group test deletes its predecessor and remembers one collapsed assi
     telegram: { execute: async () => ({ status: 'not_connected' }) } as never,
     telegramClient: {
       sendMessage: async () => ({ kind: 'ok', messageId: 99 }),
-      sendRichMessage: async (input: { html: string }) => {
+      sendRichMessage: async (input: { html: string; replyMarkup?: unknown }) => {
         richHtml = input.html;
+        richReplyMarkup = input.replyMarkup;
         return { kind: 'ok' as const, messageId: 44 };
       },
       deleteMessages: async (input: { chatId: number; messageIds: readonly number[] }) => {
@@ -106,10 +108,12 @@ test('manual group test deletes its predecessor and remembers one collapsed assi
   assert.deepEqual(deleted, [{ chatId: -1007, messageIds: [11, 12] }]);
   assert.deepEqual(saved, [[], [{ chatId: -1007, messageIds: [44] }]]);
   assert.equal(actionDeliveries.length, 1);
-  assert.deepEqual((actionDeliveries[0] as { tokens: string[] }).tokens, []);
-  assert.ok(richHtml.includes('<details><summary>Показать задачи (1)</summary>'));
+  assert.deepEqual((actionDeliveries[0] as { tokens: string[] }).tokens, ['a'.repeat(64)]);
+  assert.equal(richReplyMarkup, undefined);
+  assert.ok(!richHtml.includes('<details>'));
   assert.ok(richHtml.includes('@anna_pf · Анна'));
-  assert.ok(richHtml.includes('<table'));
-  assert.ok(richHtml.includes('table-layout:fixed'));
-  assert.ok(!richHtml.includes('>✓ Завершить</a>'));
+  assert.ok(richHtml.includes('<table bordered striped>'));
+  assert.ok(richHtml.includes('<th>Задача</th><th>Кто</th><th>Дедлайн</th>'));
+  assert.ok(richHtml.includes('>✓ Завершить</a>'));
+  assert.ok(richHtml.includes('>↗ Перейти</a>'));
 });
