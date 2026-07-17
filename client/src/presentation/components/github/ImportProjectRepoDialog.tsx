@@ -152,7 +152,7 @@ export function ImportProjectRepoDialog({
             Импортировать проект
           </DialogTitle>
           <DialogDescription>
-            Распакуем ZIP и загрузим его одним коммитом — в новый или уже существующий пустой репозиторий.
+            Распакуем ZIP и загрузим файлы одним импортом — в новый или уже существующий пустой репозиторий.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
