@@ -30,8 +30,8 @@ function isNameTaken(err: unknown): boolean {
 
 // Кнопка «Создать репо» на обзоре проекта: создаёт НОВЫЙ репо под аккаунтом
 // ВЫЗЫВАЮЩЕГО (не владельца проекта) его токеном и подключает как gitRepoUrl.
-// Editor+. Никаких побочных эффектов app-repo-флоу (делегация, KB, workflow) —
-// это отдельная кнопка воркера (EnsureProjectAppRepo).
+// Editor+. Presentation-слой сразу после этого вызывает EnsureProjectAppRepo:
+// делегация, локальная KB и workflow входят в тот же пользовательский сценарий.
 export class CreateProjectRepo {
   constructor(private readonly deps: Deps) {}
 

@@ -49,16 +49,16 @@ function appRepoIndexHtml(projectName: string): string {
 </div></body></html>`;
 }
 
-// Создать (или вернуть существующий) GitHub-репо приложения проекта — куда self-serve воркер
-// будет писать код. Owner-only. Репо создаётся под аккаунтом ВЛАДЕЛЬЦА его OAuth-токеном (как KB),
-// приватный, с авто-README (нужна ветка main для будущего workflow_dispatch). Идемпотентно:
-// если у проекта уже есть app_repo_full_name — возвращаем его; если имя занято (422) — reuse.
+// Подготовить GitHub-репо проекта для self-serve воркера. Если репо уже подключил editor,
+// используем OAuth-токен именно этого участника: явный выбор одного из GitHub-сценариев
+// одновременно означает согласие делегировать воркеру его доступ к выбранному репо.
+// Создать отдельный app-репо с нуля по-прежнему может только owner.
 //
-// Кнопка «создать репо» = единая настройка воркера «под ключ»: помимо репо она ещё включает
-// делегацию GitHub-токена owner'у и заводит локальную KB. Без этих двух шагов диспетчер либо
+// Любой GitHub-сценарий = единая настройка воркера «под ключ»: помимо репо команда ещё включает
+// делегацию GitHub-токена подключившего участника и заводит локальную KB. Без этих двух шагов диспетчер либо
 // скипает проект (нет KB), либо не может клонировать/пушить приватный репо (нет делегации) —
-// и пользователь упирается в неочевидный blocker. Оба шага идемпотентны и best-effort (не роняют
-// создание репо); если что-то не проросло — гейт-плашка воркера в UI подсветит.
+// и пользователь упирается в неочевидный blocker. Оба шага идемпотентны и best-effort:
+// повторный вызов перед созданием первой задачи безопасно догонит незавершённую настройку.
 export class EnsureProjectAppRepo {
   constructor(private readonly deps: Deps) {}
 
@@ -67,21 +67,29 @@ export class EnsureProjectAppRepo {
       this.deps,
       projectId,
       callerUserId,
-      'manage_app_repo',
+      'update_project',
     );
 
-    // Токен owner'а нужен и для создания репо, и как источник делегации (диспетчер пушит им).
-    const ownerToken = await this.deps.tokens.getWithTokenByUserId(project.ownerId);
+    const callerToken = await this.deps.tokens.getWithTokenByUserId(callerUserId);
 
     let fullName = project.appRepoFullName;
+    let repoToken = callerToken;
+    let tokenOwnerUserId = callerUserId;
     if (!fullName) {
-      if (!ownerToken) throw new GithubNotConnectedError();
+      // Отдельный app-репо создаётся под аккаунтом владельца, поэтому этот fallback остаётся
+      // owner-only. После create/import/link сюда не попадаем: эти сценарии уже записали fullName.
+      await requireProjectAccess(this.deps, projectId, callerUserId, 'manage_app_repo');
+      repoToken = callerUserId === project.ownerId
+        ? callerToken
+        : await this.deps.tokens.getWithTokenByUserId(project.ownerId);
+      tokenOwnerUserId = project.ownerId;
+      if (!repoToken) throw new GithubNotConnectedError();
 
       // Короткий id проекта в имени гарантирует уникальность (два проекта с одинаковым названием
       // не столкнутся) и делает 422-reuse корректным (422 = повторный прогон ЭТОГО проекта).
       const repoName = `pf-${slugifyRepoName(project.name)}-${project.id.slice(0, 8)}`;
       try {
-        const result = await this.deps.api.createRepo(ownerToken.accessToken, {
+        const result = await this.deps.api.createRepo(repoToken.accessToken, {
           name: repoName,
           description: `ProjectsFlow app for ${project.name}`,
           privateRepo: true,
@@ -91,7 +99,7 @@ export class EnsureProjectAppRepo {
       } catch (err) {
         if (!isNameTaken(err)) throw err;
         // Имя уже занято у владельца → считаем это тем же app-репо (идемпотентно).
-        const me = await this.deps.api.getAuthenticatedUser(ownerToken.accessToken);
+        const me = await this.deps.api.getAuthenticatedUser(repoToken.accessToken);
         fullName = `${me.login}/${repoName}`;
       }
 
@@ -104,12 +112,13 @@ export class EnsureProjectAppRepo {
     }
 
     // Авто-настройка воркера (идемпотентно, best-effort — не роняем создание репо).
-    // Делегация: включаем owner'у, только если у него подключён GitHub (иначе делегировать нечего).
-    if (ownerToken) {
+    // Делегация: включаем тому участнику, который только что выбрал/создал репозиторий.
+    // Для owner-only fallback это владелец проекта. Без OAuth-токена делегировать нечего.
+    if (repoToken) {
       try {
         await this.deps.delegations.upsert({
           projectId,
-          granterUserId: project.ownerId,
+          granterUserId: tokenOwnerUserId,
           enabled: true,
         });
       } catch {
@@ -128,21 +137,21 @@ export class EnsureProjectAppRepo {
     // Build-workflow: кладём GitHub Actions workflow в app-репо, чтобы сборка результата шла
     // в облаке GitHub (гибридная схема — диспетчер забирает готовый dist-артефакт, node_modules
     // у нас не оседает). Best-effort + идемпотентно: если файл уже есть — не трогаем; если у
-    // owner-токена нет `workflow`-scope (старый коннект GitHub) — тихо пропускаем, publish-site.ps1
-    // откатится на локальную сборку. Owner переподключит GitHub → на следующем прогоне допишется.
-    if (ownerToken) {
+    // токена нет `workflow`-scope (старый коннект GitHub) — тихо пропускаем, publish-site.ps1
+    // откатится на локальную сборку. После переподключения следующий прогон допишет workflow.
+    if (repoToken) {
       const slash = fullName.indexOf('/');
       const owner = fullName.slice(0, slash);
       const repo = fullName.slice(slash + 1);
       try {
         const existing = await this.deps.api.getRepoFile(
-          ownerToken.accessToken,
+          repoToken.accessToken,
           fullName,
           APP_REPO_WORKFLOW_PATH,
         );
         if (!existing) {
           await this.deps.api.putRepoFile({
-            accessToken: ownerToken.accessToken,
+            accessToken: repoToken.accessToken,
             owner,
             repo,
             path: APP_REPO_WORKFLOW_PATH,
@@ -158,13 +167,13 @@ export class EnsureProjectAppRepo {
       // Best-effort + идемпотентно (не трогаем, если файл уже есть — воркер мог заменить).
       try {
         const existingIndex = await this.deps.api.getRepoFile(
-          ownerToken.accessToken,
+          repoToken.accessToken,
           fullName,
           'index.html',
         );
         if (!existingIndex) {
           await this.deps.api.putRepoFile({
-            accessToken: ownerToken.accessToken,
+            accessToken: repoToken.accessToken,
             owner,
             repo,
             path: 'index.html',

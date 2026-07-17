@@ -18,7 +18,6 @@ import { MemberAvatarStack } from '@/presentation/components/project/MemberAvata
 import { ProjectActionsMenu } from '@/presentation/components/project/ProjectActionsMenu';
 import { ProjectSharePopover } from '@/presentation/components/project/ProjectSharePopover';
 import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
-import { ProjectWorkerGateBanner } from '@/presentation/components/project/ProjectWorkerGateBanner';
 import { ProjectGithubOnboardingBanner } from '@/presentation/components/project/ProjectGithubOnboardingBanner';
 import { ProjectActivityButton } from '@/presentation/components/project/ProjectActivityButton';
 import { ProjectCover } from '@/presentation/components/project/ProjectCover';
@@ -302,14 +301,6 @@ export function TasksPage(): React.ReactElement {
           />
         )}
         <ProjectPublishedBanner projectId={data.id} shiftForOverlay />
-        {/* Липкий гейт готовности воркера (репо + делегация + KB) — пока в колонке «Воркер» есть задача. */}
-        <ProjectWorkerGateBanner
-          projectId={data.id}
-          gitRepoUrl={data.gitRepoUrl}
-          appRepoFullName={data.appRepoFullName}
-          kbKind={data.kbKind}
-          shiftForOverlay
-        />
       </div>
 
       {/* #3: обложка проекта — во всю ширину, над заголовком (если задана). */}

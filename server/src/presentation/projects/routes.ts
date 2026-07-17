@@ -342,8 +342,12 @@ export function projectsRouter(deps: Deps): Router {
         ownerId: req.user!.id,
         patch: body,
       });
+      // Подключение GitHub сразу доводит проект до рабочего состояния: включает
+      // делегацию токена подключившего участника, создаёт локальную KB и кладёт workflow.
+      if (body.gitRepoUrl) await deps.ensureAppRepo.execute(id, req.user!.id);
+      const preparedProject = body.gitRepoUrl ? await deps.projects.getById(id) : project;
       deps.notifyProjectChanged(id);
-      res.json({ project: toDto(project) });
+      res.json({ project: toDto(preparedProject ?? project) });
     } catch (e) {
       next(e);
     }
@@ -424,6 +428,7 @@ export function projectsRouter(deps: Deps): Router {
       if (typeof id !== 'string') throw new ProjectNotFoundError();
       const { name, privateRepo } = createProjectRepoSchema.parse(req.body);
       const result = await deps.createProjectRepo.execute(id, req.user!.id, { name, privateRepo });
+      await deps.ensureAppRepo.execute(id, req.user!.id);
       deps.notifyProjectChanged(id);
       res.json({ fullName: result.fullName, gitRepoUrl: result.gitRepoUrl });
     } catch (e) {
@@ -448,6 +453,7 @@ export function projectsRouter(deps: Deps): Router {
             : { kind: 'existing', fullName: body.existingRepoFullName },
           archive: req.file.buffer,
         });
+        await deps.ensureAppRepo.execute(id, req.user!.id);
         deps.notifyProjectChanged(id);
         res.json(result);
       } catch (error) {

@@ -50,17 +50,17 @@ type LaunchBannerProps = Pick<Props, 'projectId' | 'shiftForOverlay'>;
 const copy: Record<Action, { title: string; description: string; confirm: string }> = {
   create: {
     title: 'Создать репозиторий на GitHub?',
-    description: 'Создадим новый приватный репозиторий и сразу подключим его к проекту.',
+    description: 'Создадим приватный репозиторий, включим делегацию доступа воркеру и подготовим базу знаний.',
     confirm: 'Настроить репозиторий',
   },
   import: {
     title: 'Импортировать готовый проект?',
-    description: 'Ты выберешь ZIP и куда его загрузить: в новый или уже существующий пустой GitHub-репозиторий.',
+    description: 'Загрузим ZIP в новый или пустой репозиторий, включим делегацию воркеру и подготовим базу знаний.',
     confirm: 'Выбрать ZIP',
   },
   link: {
     title: 'Подключить существующий репозиторий?',
-    description: 'Выберем репозиторий из твоего GitHub и сделаем его рабочим для этого проекта.',
+    description: 'Подключим репозиторий, разрешим воркеру работать с ним и подготовим локальную базу знаний.',
     confirm: 'Выбрать репозиторий',
   },
 };
@@ -72,6 +72,7 @@ function isLaunchProjectTask(task: Task): boolean {
 
 function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBannerProps): React.ReactElement {
   const { user } = useCurrentUser();
+  const { projectRepository } = useContainer();
   const { tasks, loading, create } = useTasks(projectId);
   const [launchOpen, setLaunchOpen] = useState(false);
   const [launchBusy, setLaunchBusy] = useState(false);
@@ -84,6 +85,9 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
     if (!user || launchBusy || activeLaunchTask) return;
     setLaunchBusy(true);
     try {
+      // Идемпотентный догон для проектов, где GitHub подключили до появления
+      // единого onboarding: перед первой задачей гарантируем делегацию и KB.
+      await projectRepository.ensureAppRepo(projectId);
       await create({
         description: 'Запустить проект',
         status: 'todo',
@@ -92,7 +96,7 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
       toast.success('Задача «Запустить проект» добавлена воркеру');
       setLaunchOpen(false);
     } catch {
-      toast.error('Не удалось создать задачу');
+      toast.error('Не удалось подготовить проект и отправить задачу');
     } finally {
       setLaunchBusy(false);
     }
@@ -134,7 +138,7 @@ function ProjectLaunchBanner({ projectId, shiftForOverlay = false }: LaunchBanne
               </div>
               <div className="text-sm font-semibold text-foreground">Теперь запустите проект</div>
               <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-muted-foreground">
-                Воркер проверит код, подготовит запуск и опубликует результат. Плашка исчезнет после первого успешного запуска.
+                Репозиторий, делегация доступа и база знаний готовы. Воркер проверит код и опубликует результат.
               </p>
             </div>
           </div>
@@ -295,8 +299,16 @@ export function ProjectGithubOnboardingBanner({
               Подключите код проекта
             </div>
             <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
-              Начните с чистого репозитория, импортируйте ZIP или продолжите работу в существующем.
+              Выберите способ подключения — делегация доступа воркеру и локальная база знаний настроятся автоматически.
             </p>
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-medium text-muted-foreground">
+              {['Репозиторий', 'Делегация', 'База знаний'].map((label) => (
+                <span key={label} className="inline-flex items-center gap-1">
+                  <CheckCircle2 className="size-3 text-emerald-600 dark:text-emerald-400" />
+                  {label}
+                </span>
+              ))}
+            </div>
           </div>
           <div className="grid shrink-0 gap-2 sm:grid-cols-3">
             <button
