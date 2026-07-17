@@ -113,7 +113,8 @@ test('commit review mentions only the author needing attention and has in-table 
   assert.equal(rich.length, 1);
   assert.match(rich[0]!.html, /@anna_pf/);
   assert.doesNotMatch(rich[0]!.html, /@boris_pf/);
-  assert.match(rich[0]!.html, /Борис/);
+  assert.doesNotMatch(rich[0]!.html, /Борис/);
+  assert.doesNotMatch(rich[0]!.html, /Изменение аккуратное/);
   assert.match(rich[0]!.html, /Проверить обработку заказа/);
   assert.match(rich[0]!.html, new RegExp(`/api/telegram-digest-actions/${actionToken}`));
   assert.match(rich[0]!.html, />✓<\/a> · <a [^>]+>↗<\/a>/);
@@ -121,8 +122,9 @@ test('commit review mentions only the author needing attention and has in-table 
   assert.deepEqual(attached, [[actionToken]]);
 });
 
-test('commit review stays silent when there are no commits or every reviewed commit is good', async () => {
+test('commit review stays silent without commits and sends one short all-good message for clean commits', async () => {
   let sent = 0;
+  const html: string[] = [];
   const service = new SendWorkspaceCommitReview({
     settings: {
       async get() {
@@ -149,8 +151,9 @@ test('commit review stays silent when there are no commits or every reviewed com
     createEmailActionToken: { async execute() { return 'unused'; } } as never,
     telegramDigestActions: { async attach() {} } as never,
     telegram: {
-      async sendRichMessage() {
+      async sendRichMessage(input: { html: string }) {
         sent += 1;
+        html.push(input.html);
         return { kind: 'ok' as const, messageId: sent };
       },
       async sendMessage() {
@@ -191,7 +194,9 @@ test('commit review stays silent when there are no commits or every reviewed com
       reviews: [{ commitSha: sha, verdict: 'good', summary: 'Всё хорошо.' }],
       overallSummary: 'Проверка пройдена.',
     }),
-    false,
+    true,
   );
-  assert.equal(sent, 0);
+  assert.equal(sent, 1);
+  assert.match(html[0]!, /Все коммиты в порядке/);
+  assert.doesNotMatch(html[0]!, /safe change|Всё хорошо/);
 });

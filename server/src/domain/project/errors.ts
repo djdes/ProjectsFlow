@@ -156,3 +156,10 @@ export class ProjectRepoAlreadyConnectedError extends Error {
     this.name = 'ProjectRepoAlreadyConnectedError';
   }
 }
+
+export class ProjectArchiveInvalidError extends Error {
+  constructor(message = 'ZIP archive is invalid or unsupported') {
+    super(message);
+    this.name = 'ProjectArchiveInvalidError';
+  }
+}

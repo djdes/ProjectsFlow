@@ -54,9 +54,8 @@ export function NewProjectDialog({ open, onOpenChange }: Props): React.ReactElem
     try {
       const project = await submit(name);
       onOpenChange(false);
-      // Новый проект сразу ведём на обзор — там подключают git/KB/команду
-      // (на доске задач у свежего проекта пока пусто).
-      navigate(`/projects/${project.id}/overview`);
+      // Новый проект сразу открывается в основном рабочем режиме — на канбане.
+      navigate(`/projects/${project.id}`);
     } catch (err) {
       if (err instanceof ProjectNameAlreadyExistsError) {
         setSubmitError('Проект с таким именем уже существует');

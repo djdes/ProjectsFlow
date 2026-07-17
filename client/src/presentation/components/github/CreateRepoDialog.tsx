@@ -22,6 +22,7 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   projectId: string;
   projectName: string;
+  onCreated?: (result: { fullName: string; gitRepoUrl: string }) => void;
 };
 
 const NAME_RE = /^[a-zA-Z0-9._-]+$/;
@@ -33,6 +34,7 @@ export function CreateRepoDialog({
   onOpenChange,
   projectId,
   projectName,
+  onCreated,
 }: Props): React.ReactElement {
   const { projectRepository } = useContainer();
   const { refresh } = useProjectsContext();
@@ -56,10 +58,11 @@ export function CreateRepoDialog({
     setSaving(true);
     setError(null);
     try {
-      const { fullName } = await projectRepository.createRepo(projectId, { name, privateRepo });
+      const result = await projectRepository.createRepo(projectId, { name, privateRepo });
       refresh();
-      toast.success(`Репозиторий ${fullName} создан и подключён`);
+      toast.success(`Репозиторий ${result.fullName} создан и подключён`);
       onOpenChange(false);
+      onCreated?.(result);
     } catch (e) {
       if (e instanceof HttpError && e.body.error === 'github_repo_name_taken') {
         setError('Репозиторий с таким именем уже существует — поменяй имя.');

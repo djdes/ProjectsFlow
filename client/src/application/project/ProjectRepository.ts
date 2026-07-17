@@ -154,6 +154,11 @@ export interface ProjectRepository {
     projectId: string,
     input: { name: string; privateRepo: boolean },
   ): Promise<{ fullName: string; gitRepoUrl: string }>;
+  importRepo(
+    projectId: string,
+    input: { name: string; privateRepo: boolean; archive: File },
+    onProgress?: (percent: number) => void,
+  ): Promise<{ fullName: string; gitRepoUrl: string; fileCount: number }>;
   // Сайт-результат проекта (db/100): siteSlug есть всегда (адрес <slug>.projectsflow.ru; до
   // деплоя — заглушка), deployedAt/fileCount из site_artifacts (null/0, пока не задеплоен).
   getProjectSite(projectId: string): Promise<ProjectSite>;

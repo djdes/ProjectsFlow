@@ -31,6 +31,7 @@ import type { SetPublicIndexing } from '../application/project/SetPublicIndexing
 import type { SetPublicAppearance } from '../application/project/SetPublicAppearance.js';
 import type { EnsureProjectAppRepo } from '../application/project/EnsureProjectAppRepo.js';
 import type { CreateProjectRepo } from '../application/project/CreateProjectRepo.js';
+import type { ImportProjectRepo } from '../application/project/ImportProjectRepo.js';
 import type { GetPublicBoard } from '../application/project/GetPublicBoard.js';
 import type { ClonePublicBoard } from '../application/project/ClonePublicBoard.js';
 import type { ProductTelemetryRepository } from '../application/telemetry/ProductTelemetryRepository.js';
@@ -322,6 +323,7 @@ type AppDeps = {
     readonly setPublicAppearance: SetPublicAppearance;
     readonly ensureAppRepo: EnsureProjectAppRepo;
     readonly createProjectRepo: CreateProjectRepo;
+    readonly importProjectRepo: ImportProjectRepo;
     readonly getProjectSite: GetProjectSite;
     readonly setProjectDispatcher: SetProjectDispatcher;
     readonly setMultiTaskWorker: SetProjectMultiTaskWorker;

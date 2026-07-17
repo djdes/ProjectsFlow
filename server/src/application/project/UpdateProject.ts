@@ -27,7 +27,17 @@ export class UpdateProject {
     // деле это просто userId. Update_project требует editor+ — viewer не пройдёт.
     await requireProjectAccess(this.deps, cmd.id, cmd.ownerId, 'update_project');
     const existing = await this.deps.projects.getById(cmd.id);
-    const updated = await this.deps.projects.update(cmd.id, cmd.patch);
+    const linkedRepo =
+      cmd.patch.gitRepoUrl === undefined
+        ? undefined
+        : cmd.patch.gitRepoUrl
+          ? githubFullName(cmd.patch.gitRepoUrl)
+          : null;
+    const patch: UpdateProjectInput = {
+      ...cmd.patch,
+      ...(linkedRepo !== undefined ? { appRepoFullName: linkedRepo } : {}),
+    };
+    const updated = await this.deps.projects.update(cmd.id, patch);
     if (!updated) throw new ProjectNotFoundError();
 
     // Логируем изменённые поля проекта (Notion-style дифф).
@@ -53,4 +63,9 @@ export class UpdateProject {
     }
     return updated;
   }
+}
+
+function githubFullName(url: string): string | null {
+  const match = url.match(/github\.com[/:]([^/\s]+)\/([^/\s#?]+?)(?:\.git)?(?:[?#/]|$)/i);
+  return match ? `${match[1]}/${match[2]}` : null;
 }

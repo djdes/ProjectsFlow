@@ -72,6 +72,7 @@ import { SetPublicIndexing } from './application/project/SetPublicIndexing.js';
 import { SetPublicAppearance } from './application/project/SetPublicAppearance.js';
 import { EnsureProjectAppRepo } from './application/project/EnsureProjectAppRepo.js';
 import { CreateProjectRepo } from './application/project/CreateProjectRepo.js';
+import { ImportProjectRepo } from './application/project/ImportProjectRepo.js';
 import { GetPublicBoard } from './application/project/GetPublicBoard.js';
 import { ClonePublicBoard } from './application/project/ClonePublicBoard.js';
 import { GetPublicTaskDetail } from './application/project/GetPublicTaskDetail.js';
@@ -1488,6 +1489,12 @@ const { app, devProxyUpgrade } = createApp({
       delegations: gitTokenDelegationRepo,
     }),
     createProjectRepo: new CreateProjectRepo({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tokens: githubTokenRepo,
+      api: githubApi,
+    }),
+    importProjectRepo: new ImportProjectRepo({
       projects: projectRepo,
       members: projectMemberRepo,
       tokens: githubTokenRepo,

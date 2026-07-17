@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { prepareCommitSyncContext } from './prepareCommitSyncContext.js';
 
-test('commit context asks for a meaningful multi-commit review and keeps author metadata', () => {
+test('commit context requires a verdict for every reviewed commit and keeps author metadata', () => {
   const now = new Date('2026-07-17T14:00:00.000Z'); // Friday 17:00 MSK
   const result = prepareCommitSyncContext({
     tasks: [],
@@ -31,7 +31,8 @@ test('commit context asks for a meaningful multi-commit review and keeps author 
   });
 
   assert.match(result.context, /КОММИТЫ ДЛЯ СЕГОДНЯШНЕГО ОБЗОРА/);
-  assert.match(result.context, /иногда это один коммит, иногда несколько/);
+  assert.match(result.context, /Проверь КАЖДЫЙ коммит/);
+  assert.match(result.context, /ровно одну такую запись для КАЖДОГО коммита/);
   assert.match(result.context, /__commit_review__:good\|attention/);
   assert.match(result.context, /__commit_review_summary__/);
   assert.match(result.context, /author=Anna Dev \(@anna-dev\)/);

@@ -71,26 +71,29 @@ export class SendWorkspaceCommitReview {
           all.findIndex((candidate) => candidate.commitSha === review.commitSha) === index,
       )
       .slice(0, MAX_REVIEWS);
-    const authors = await this.resolveAuthors(input.projectId);
-    const taskRows = await this.buildTaskRows(input);
-    // The review job still runs every weekday, but a clean result must stay silent.
-    // Telegram is reserved for something a person can act on: an attention verdict
-    // or a task matched to a commit (with the in-message task actions).
-    if (
-      taskRows.length === 0 &&
-      !knownReviews.some((review) => review.verdict === 'attention')
-    ) {
-      return false;
-    }
-    const overall = summaryText(input.overallSummary, knownReviews);
-    const richHtml = buildCommitReviewRichHtml({
+    if (knownReviews.length === 0) return false;
+    const attentionReviews = knownReviews.filter((review) => review.verdict === 'attention');
+    const attentionShas = new Set(attentionReviews.map((review) => review.commitSha));
+    const authors = attentionReviews.length > 0
+      ? await this.resolveAuthors(input.projectId)
+      : new Map<string, AuthorIdentity>();
+    const taskRows = attentionReviews.length > 0
+      ? (await this.buildTaskRows(input)).filter((row) => attentionShas.has(row.commitSha))
+      : [];
+    const overall = summaryText(input.overallSummary, attentionReviews);
+    const renderInput: RenderInput = {
       projectName: project.name,
       overall,
-      reviews: knownReviews,
+      reviews: attentionReviews,
       commits: input.commits,
       authors,
       taskRows,
-    });
+    };
+    // Если проверены все коммиты и ни один не требует внимания — одно короткое
+    // подтверждение. При проблемах показываем только проблемные коммиты, без шума от good.
+    const richHtml = attentionReviews.length === 0
+      ? buildAllCommitsGoodRichHtml(project.name)
+      : buildCommitReviewRichHtml(renderInput);
 
     let deliveredHtml = richHtml;
     let deliveredKind: 'rich' | 'html' = 'rich';
@@ -111,14 +114,9 @@ export class SendWorkspaceCommitReview {
     }
 
     if (!result && fallbackAllowed) {
-      deliveredHtml = buildCommitReviewFallbackHtml({
-        projectName: project.name,
-        overall,
-        reviews: knownReviews,
-        commits: input.commits,
-        authors,
-        taskRows,
-      });
+      deliveredHtml = attentionReviews.length === 0
+        ? buildAllCommitsGoodFallbackHtml(project.name)
+        : buildCommitReviewFallbackHtml(renderInput);
       deliveredKind = 'html';
       result = await this.deps.telegram.sendMessage({
         chatId: settings.telegramGroupChatId,
@@ -212,6 +210,17 @@ type RenderInput = {
   readonly authors: ReadonlyMap<string, AuthorIdentity>;
   readonly taskRows: readonly TaskRow[];
 };
+
+function buildAllCommitsGoodRichHtml(projectName: string): string {
+  return (
+    `<h2>✅ Все коммиты в порядке · «${escapeHtml(projectName)}»</h2>` +
+    '<p>Проверка завершена — замечаний нет.</p>'
+  );
+}
+
+function buildAllCommitsGoodFallbackHtml(projectName: string): string {
+  return `<b>✅ Все коммиты в порядке · «${escapeHtml(projectName)}»</b>\nПроверка завершена — замечаний нет.`;
+}
 
 function summaryText(value: string | null, reviews: readonly CommitSyncReview[]): string {
   const supplied = value?.trim();

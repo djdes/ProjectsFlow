@@ -10,6 +10,12 @@ export type CreateRepoInput = {
 export type CreateRepoResult = {
   readonly fullName: string;
   readonly htmlUrl: string;
+  readonly defaultBranch: string;
+};
+
+export type ImportRepoFile = {
+  readonly path: string;
+  readonly contentBase64: string;
 };
 
 export type RepoFileContent = {
@@ -82,6 +88,16 @@ export interface GithubApiClient {
 
   // Repo CRUD (for KB)
   createRepo(accessToken: string, input: CreateRepoInput): Promise<CreateRepoResult>;
+  // Создаёт один корневой commit со всеми файлами импорта. В отличие от Contents API,
+  // это не превращает каждый файл ZIP в отдельный commit и корректно сохраняет binary.
+  importRepoFiles(
+    accessToken: string,
+    fullName: string,
+    defaultBranch: string,
+    files: readonly ImportRepoFile[],
+    message: string,
+  ): Promise<void>;
+  deleteRepo(accessToken: string, fullName: string): Promise<void>;
   repoExists(accessToken: string, fullName: string): Promise<boolean>;
   getRepoFile(accessToken: string, fullName: string, path: string): Promise<RepoFileContent | null>;
   listRepoTree(accessToken: string, fullName: string, path?: string): Promise<RepoFileSummary[]>;

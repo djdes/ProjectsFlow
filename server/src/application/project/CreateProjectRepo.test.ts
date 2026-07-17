@@ -78,7 +78,10 @@ test('CreateProjectRepo: editor + connected → создаёт репо и пи�
     privateRepo: true,
     autoInit: true,
   }]);
-  assert.deepEqual(calls.updates, [{ gitRepoUrl: 'https://github.com/octocat/obuv-lending' }]);
+  assert.deepEqual(calls.updates, [{
+    gitRepoUrl: 'https://github.com/octocat/obuv-lending',
+    appRepoFullName: 'octocat/obuv-lending',
+  }]);
 });
 
 test('CreateProjectRepo: репо уже подключён → ProjectRepoAlreadyConnectedError, GitHub не зовём', async () => {

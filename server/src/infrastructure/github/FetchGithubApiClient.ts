@@ -8,6 +8,7 @@ import type {
   GetCommitInput,
   GithubApiClient,
   GithubUserInfo,
+  ImportRepoFile,
   ListCommitsInput,
   PutFileInput,
   RepoFileContent,
@@ -235,8 +236,83 @@ export class FetchGithubApiClient implements GithubApiClient {
       }),
     });
     if (!res.ok) throw new GithubApiError(res.status, `createRepo failed: ${await res.text()}`);
-    const data = (await res.json()) as { full_name: string; html_url: string };
-    return { fullName: data.full_name, htmlUrl: data.html_url };
+    const data = (await res.json()) as {
+      full_name: string;
+      html_url: string;
+      default_branch: string;
+    };
+    return {
+      fullName: data.full_name,
+      htmlUrl: data.html_url,
+      defaultBranch: data.default_branch || 'main',
+    };
+  }
+
+  async importRepoFiles(
+    accessToken: string,
+    fullName: string,
+    defaultBranch: string,
+    files: readonly ImportRepoFile[],
+    message: string,
+  ): Promise<void> {
+    const request = async <T>(path: string, body: unknown): Promise<T> => {
+      const res = await fetch(`https://api.github.com/repos/${fullName}${path}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        throw new GithubApiError(res.status, `GitHub import ${path} failed: ${await res.text()}`);
+      }
+      return (await res.json()) as T;
+    };
+
+    // Ограниченная параллельность: заметно быстрее последовательной загрузки, но не
+    // устраивает burst из сотен запросов к GitHub API.
+    const blobs = new Array<{ path: string; sha: string }>(files.length);
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      while (cursor < files.length) {
+        const index = cursor++;
+        const file = files[index]!;
+        const blob = await request<{ sha: string }>('/git/blobs', {
+          content: file.contentBase64,
+          encoding: 'base64',
+        });
+        blobs[index] = { path: file.path, sha: blob.sha };
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(6, files.length) }, () => worker()));
+
+    const tree = await request<{ sha: string }>('/git/trees', {
+      tree: blobs.map((blob) => ({ path: blob.path, mode: '100644', type: 'blob', sha: blob.sha })),
+    });
+    const commit = await request<{ sha: string }>('/git/commits', {
+      message,
+      tree: tree.sha,
+      parents: [],
+    });
+    await request('/git/refs', {
+      ref: `refs/heads/${defaultBranch || 'main'}`,
+      sha: commit.sha,
+    });
+  }
+
+  async deleteRepo(accessToken: string, fullName: string): Promise<void> {
+    const res = await fetch(`https://api.github.com/repos/${fullName}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github+json',
+      },
+    });
+    if (!res.ok && res.status !== 404) {
+      throw new GithubApiError(res.status, `deleteRepo failed: ${await res.text()}`);
+    }
   }
 
   async repoExists(accessToken: string, fullName: string): Promise<boolean> {

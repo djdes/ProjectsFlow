@@ -460,4 +460,51 @@ export class HttpProjectRepository implements ProjectRepository {
         : null,
     };
   }
+
+  async importRepo(
+    projectId: string,
+    input: { name: string; privateRepo: boolean; archive: File },
+    onProgress?: (percent: number) => void,
+  ): Promise<{ fullName: string; gitRepoUrl: string; fileCount: number }> {
+    return new Promise((resolve, reject) => {
+      const form = new FormData();
+      form.append('name', input.name);
+      form.append('privateRepo', String(input.privateRepo));
+      form.append('archive', input.archive);
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `/api/projects/${projectId}/repo/import`);
+      xhr.withCredentials = true;
+      xhr.upload.onprogress = (event): void => {
+        if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+      };
+      xhr.onload = (): void => {
+        type Response = {
+          fullName?: string;
+          gitRepoUrl?: string;
+          fileCount?: number;
+          error?: string;
+          message?: string;
+        };
+        let data: Response | null = null;
+        try {
+          data = xhr.responseText ? (JSON.parse(xhr.responseText) as Response) : null;
+        } catch {
+          // nginx может вернуть HTML — ниже покажем стабильную ошибку.
+        }
+        if (
+          xhr.status < 200 ||
+          xhr.status >= 300 ||
+          !data?.fullName ||
+          !data.gitRepoUrl ||
+          data.fileCount === undefined
+        ) {
+          reject(new Error(data?.message ?? data?.error ?? `Ошибка импорта (HTTP ${xhr.status})`));
+          return;
+        }
+        resolve({ fullName: data.fullName, gitRepoUrl: data.gitRepoUrl, fileCount: data.fileCount });
+      };
+      xhr.onerror = (): void => reject(new Error('Сетевая ошибка при импорте проекта'));
+      xhr.send(form);
+    });
+  }
 }

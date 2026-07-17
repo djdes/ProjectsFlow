@@ -64,7 +64,10 @@ export class CreateProjectRepo {
       throw err;
     }
 
-    await this.deps.projects.update(projectId, { gitRepoUrl: created.htmlUrl });
+    await this.deps.projects.update(projectId, {
+      gitRepoUrl: created.htmlUrl,
+      appRepoFullName: created.fullName,
+    });
     return { fullName: created.fullName, gitRepoUrl: created.htmlUrl };
   }
 }

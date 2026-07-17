@@ -16,6 +16,11 @@ export const createProjectRepoSchema = z.object({
   privateRepo: z.boolean(),
 });
 
+export const importProjectRepoSchema = z.object({
+  name: z.string().min(1).max(100).regex(/^[a-zA-Z0-9._-]+$/),
+  privateRepo: z.enum(['true', 'false']).transform((value) => value === 'true'),
+});
+
 // PATCH /:id/publish — тоггл индексации публичной доски поисковиками.
 export const setPublicIndexingSchema = z.object({
   indexing: z.boolean(),

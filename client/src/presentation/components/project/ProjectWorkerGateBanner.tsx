@@ -9,6 +9,7 @@ import type { KbKind } from '@/domain/project/Project';
 
 type Props = {
   projectId: string;
+  gitRepoUrl: string | null;
   // Из Project — "owner/repo" или null. null = репо приложения ещё не создан.
   appRepoFullName: string | null;
   // Из Project. 'none' = базы знаний нет → диспетчер СКИПАЕТ проект.
@@ -30,6 +31,7 @@ const WORKER_STATUSES = new Set(['todo', 'in_progress', 'awaiting_clarification'
 // уведомление: пока не настроено, кидать задачу воркеру бессмысленно.
 export function ProjectWorkerGateBanner({
   projectId,
+  gitRepoUrl,
   appRepoFullName,
   kbKind,
   shiftForOverlay = false,
@@ -97,7 +99,9 @@ export function ProjectWorkerGateBanner({
   const needDelegation = Boolean(appRepoFullName) && delegationEnabled === false;
   const somethingMissing = needRepo || needKb || needDelegation;
 
-  if (done || !hasWorkerTask || !somethingMissing) return null;
+  // Пока GitHub вообще не подключён, onboarding-плашка проекта уже даёт три понятных
+  // сценария. Не дублируем её старой кнопкой после отправки задачи воркеру.
+  if (!gitRepoUrl || done || !hasWorkerTask || !somethingMissing) return null;
 
   const onCta = (): void => {
     if (!connection) {

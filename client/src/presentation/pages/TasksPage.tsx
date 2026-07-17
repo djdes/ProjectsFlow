@@ -19,6 +19,7 @@ import { ProjectActionsMenu } from '@/presentation/components/project/ProjectAct
 import { ProjectSharePopover } from '@/presentation/components/project/ProjectSharePopover';
 import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
 import { ProjectWorkerGateBanner } from '@/presentation/components/project/ProjectWorkerGateBanner';
+import { ProjectGithubOnboardingBanner } from '@/presentation/components/project/ProjectGithubOnboardingBanner';
 import { ProjectActivityButton } from '@/presentation/components/project/ProjectActivityButton';
 import { ProjectCover } from '@/presentation/components/project/ProjectCover';
 import { ProjectDescription } from '@/presentation/components/project/ProjectDescription';
@@ -292,10 +293,18 @@ export function TasksPage(): React.ReactElement {
           тоже закреплена при скролле (сразу под sticky-строкой крошек, top-11 = её высота).
           shiftForOverlay: контент центрируется в видимой области, когда открыто окно задачи. */}
       <div id="pf-sticky-banners" className="pf-sticky-surface sticky top-11 z-40">
+        {!data.isInbox && canEdit && !data.gitRepoUrl && (
+          <ProjectGithubOnboardingBanner
+            projectId={data.id}
+            projectName={data.name}
+            shiftForOverlay
+          />
+        )}
         <ProjectPublishedBanner projectId={data.id} shiftForOverlay />
         {/* Липкий гейт готовности воркера (репо + делегация + KB) — пока в колонке «Воркер» есть задача. */}
         <ProjectWorkerGateBanner
           projectId={data.id}
+          gitRepoUrl={data.gitRepoUrl}
           appRepoFullName={data.appRepoFullName}
           kbKind={data.kbKind}
           shiftForOverlay

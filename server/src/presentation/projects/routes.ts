@@ -10,6 +10,7 @@ import type { SetPublicIndexing } from '../../application/project/SetPublicIndex
 import type { SetPublicAppearance } from '../../application/project/SetPublicAppearance.js';
 import type { EnsureProjectAppRepo } from '../../application/project/EnsureProjectAppRepo.js';
 import type { CreateProjectRepo } from '../../application/project/CreateProjectRepo.js';
+import type { ImportProjectRepo } from '../../application/project/ImportProjectRepo.js';
 import type { GetProjectSite } from '../../application/site/GetProjectSite.js';
 import { publicBoardUrl } from '../../domain/project/publicBoardUrl.js';
 import type { SetProjectDispatcher } from '../../application/project/SetProjectDispatcher.js';
@@ -53,6 +54,7 @@ import type { AttachmentStorage } from '../../application/task/AttachmentStorage
 import {
   createBoardViewSchema,
   createProjectRepoSchema,
+  importProjectRepoSchema,
   createTaskTemplateSchema,
   createTaskPropertySchema,
   updateTaskPropertySchema,
@@ -85,6 +87,7 @@ type Deps = {
   readonly setPublicAppearance: SetPublicAppearance;
   readonly ensureAppRepo: EnsureProjectAppRepo;
   readonly createProjectRepo: CreateProjectRepo;
+  readonly importProjectRepo: ImportProjectRepo;
   readonly getProjectSite: GetProjectSite;
   readonly setProjectDispatcher: SetProjectDispatcher;
   readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
@@ -189,6 +192,18 @@ function commitToDto(c: GithubCommit): CommitDto {
 
 export function projectsRouter(deps: Deps): Router {
   const router = Router();
+  const repoImportUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+    fileFilter: (_req, file, done) => {
+      const isZip =
+        file.mimetype === 'application/zip' ||
+        file.mimetype === 'application/x-zip-compressed' ||
+        file.originalname.toLowerCase().endsWith('.zip');
+      if (isZip) done(null, true);
+      else done(new Error('project_archive_type_invalid'));
+    },
+  });
 
   router.use(requireAuth);
 
@@ -415,6 +430,30 @@ export function projectsRouter(deps: Deps): Router {
       next(e);
     }
   });
+
+  router.post(
+    '/:id/repo/import',
+    repoImportUpload.single('archive'),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = req.params.id;
+        if (typeof id !== 'string') throw new ProjectNotFoundError();
+        if (!req.file) throw new Error('project_archive_missing');
+        const { name, privateRepo } = importProjectRepoSchema.parse(req.body);
+        const result = await deps.importProjectRepo.execute({
+          projectId: id,
+          callerUserId: req.user!.id,
+          name,
+          privateRepo,
+          archive: req.file.buffer,
+        });
+        deps.notifyProjectChanged(id);
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   // === Сайт-результат проекта (db/100 + db/098). Read (owner/member). siteSlug есть всегда:
   // до деплоя воркером по нему отдаётся заглушка, deployedAt=null. После деплоя — статика. ===

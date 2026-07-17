@@ -25,6 +25,7 @@ import {
   ProjectNameEmptyError,
   ProjectNotFoundError,
   ProjectRepoAlreadyConnectedError,
+  ProjectArchiveInvalidError,
 } from '../../domain/project/errors.js';
 import { DispatcherCandidateInvalidError } from '../../application/project/SetProjectDispatcher.js';
 import {
@@ -399,6 +400,18 @@ export function errorHandler(
   }
   if (err instanceof TaskDescriptionEmptyError) {
     res.status(400).json({ error: 'task_description_empty', message: 'Введите описание задачи' });
+    return;
+  }
+  if (err instanceof ProjectArchiveInvalidError) {
+    res.status(400).json({ error: 'project_archive_invalid', message: err.message });
+    return;
+  }
+  if (err instanceof Error && err.message === 'project_archive_missing') {
+    res.status(400).json({ error: 'project_archive_missing', message: 'Выберите ZIP-архив' });
+    return;
+  }
+  if (err instanceof Error && err.message === 'project_archive_type_invalid') {
+    res.status(415).json({ error: 'project_archive_type_invalid', message: 'Поддерживается ZIP-архив' });
     return;
   }
   if (err instanceof AssigneeNotProjectMemberError) {

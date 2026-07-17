@@ -21,6 +21,7 @@ type Props = {
   projectId: string;
   currentRepoUrl: string | null;
   onCreateNew?: () => void;
+  onLinked?: (repo: GithubRepoSummary) => void;
 };
 
 function formatPushed(d: Date | null): string {
@@ -39,6 +40,7 @@ export function RepoPickerDialog({
   projectId,
   currentRepoUrl,
   onCreateNew,
+  onLinked,
 }: Props): React.ReactElement {
   const { githubRepository } = useContainer();
   const { submit: updateProject, saving } = useUpdateProject();
@@ -79,6 +81,7 @@ export function RepoPickerDialog({
       await updateProject(projectId, { gitRepoUrl: repo.htmlUrl });
       toast.success(`Репо ${repo.fullName} подключено`);
       onOpenChange(false);
+      onLinked?.(repo);
     } catch {
       toast.error('Не удалось сохранить выбор');
     }
