@@ -1,6 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import multer from 'multer';
 import { requireAgentToken } from '../middleware/requireAgentToken.js';
+import { requireAgentCapabilityScope } from '../middleware/requireAgentCapabilityScope.js';
 import type { AuthenticateAgentToken } from '../../application/agent/AuthenticateAgentToken.js';
 import type { PublishSiteArtifact } from '../../application/site/PublishSiteArtifact.js';
 import type { SiteFile } from '../../application/site/SiteArtifactStorage.js';
@@ -22,6 +23,7 @@ export type SiteAgentRouterDeps = {
 export function siteAgentRouter(deps: SiteAgentRouterDeps): Router {
   const router = Router();
   router.use(requireAgentToken(deps.authenticate));
+  router.use(requireAgentCapabilityScope());
 
   const upload = multer({
     storage: multer.memoryStorage(),

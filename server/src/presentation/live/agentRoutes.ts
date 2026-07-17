@@ -1,6 +1,7 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { requireAgentToken } from '../middleware/requireAgentToken.js';
+import { requireAgentCapabilityScope } from '../middleware/requireAgentCapabilityScope.js';
 import type { AuthenticateAgentToken } from '../../application/agent/AuthenticateAgentToken.js';
 import type { LiveService } from '../../application/live/LiveService.js';
 
@@ -67,6 +68,7 @@ function uid(req: Request): string {
 export function liveAgentRouter(deps: LiveAgentRouterDeps): Router {
   const router = Router();
   router.use(requireAgentToken(deps.authenticate));
+  router.use(requireAgentCapabilityScope());
   const svc = deps.service;
 
   router.post('/projects/:projectId/tasks/:taskId/live/sessions', async (req, res, next) => {

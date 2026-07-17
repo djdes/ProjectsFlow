@@ -21,6 +21,7 @@ export function requireAgentToken(authenticate: AuthenticateAgentToken): Request
       const { user, token } = await authenticate.execute(plaintext);
       req.user = user;
       req.agentTokenId = token.id;
+      req.agentToken = token;
       next();
     } catch (e) {
       if (e instanceof AgentTokenInvalidError) {

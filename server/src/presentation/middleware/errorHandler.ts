@@ -89,6 +89,9 @@ import {
   AgentTokenInvalidError,
   AgentTokenNameEmptyError,
   AgentTokenNotFoundError,
+  AgentCapabilityForbiddenError,
+  AgentCapabilityTaskMismatchError,
+  AgentCapabilityNotFoundError,
   RequestTargetStaleError,
 } from '../../domain/agent/errors.js';
 import {
@@ -526,6 +529,18 @@ export function errorHandler(
   }
   if (err instanceof AgentTokenInvalidError) {
     res.status(401).json({ error: 'agent_token_invalid' });
+    return;
+  }
+  if (err instanceof AgentCapabilityForbiddenError) {
+    res.status(403).json({ error: 'agent_capability_forbidden' });
+    return;
+  }
+  if (err instanceof AgentCapabilityTaskMismatchError) {
+    res.status(400).json({ error: 'agent_capability_task_mismatch' });
+    return;
+  }
+  if (err instanceof AgentCapabilityNotFoundError) {
+    res.status(404).json({ error: 'agent_capability_not_found' });
     return;
   }
 

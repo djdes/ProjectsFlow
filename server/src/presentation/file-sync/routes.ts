@@ -1,6 +1,7 @@
 import { Router, raw, type Request, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
 import { requireAgentToken } from '../middleware/requireAgentToken.js';
+import { requireAgentCapabilityScope } from '../middleware/requireAgentCapabilityScope.js';
 import type { AuthenticateAgentToken } from '../../application/agent/AuthenticateAgentToken.js';
 import type { FileSyncService, SnapshotSource } from '../../application/file-sync/FileSyncService.js';
 import type { SessionStatus } from '../../application/file-sync/FileSyncRepository.js';
@@ -69,6 +70,7 @@ function isDispatcher(req: Request): boolean {
 export function fileSyncRouter(deps: FileSyncRouterDeps): Router {
   const router = Router();
   router.use(requireAgentToken(deps.authenticate));
+  router.use(requireAgentCapabilityScope());
   const svc = deps.service;
 
   router.post('/projects/:projectId/sync/workspace', async (req, res, next) => {

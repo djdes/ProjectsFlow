@@ -838,6 +838,11 @@ export const agentTokens = mysqlTable(
     name: varchar('name', { length: 120 }).notNull(),
     tokenHash: varchar('token_hash', { length: 255 }).notNull(),
     tokenPrefix: varchar('token_prefix', { length: 20 }).notNull(),
+    scopeKind: mysqlEnum('scope_kind', ['account', 'project']).notNull().default('account'),
+    projectId: char('project_id', { length: 36 }),
+    taskId: char('task_id', { length: 36 }),
+    parentTokenId: char('parent_token_id', { length: 36 }),
+    expiresAt: timestamp('expires_at'),
     createdAt: createdAtCol(),
     lastUsedAt: timestamp('last_used_at'),
     revokedAt: timestamp('revoked_at'),
@@ -845,6 +850,8 @@ export const agentTokens = mysqlTable(
   (t) => [
     index('idx_agent_tokens_user').on(t.userId),
     index('idx_agent_tokens_hash').on(t.tokenHash),
+    index('idx_agent_tokens_scope').on(t.scopeKind, t.projectId, t.expiresAt),
+    index('idx_agent_tokens_parent').on(t.parentTokenId),
   ],
 );
 

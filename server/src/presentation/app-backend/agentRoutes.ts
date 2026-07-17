@@ -1,5 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { requireAgentToken } from '../middleware/requireAgentToken.js';
+import { requireAgentCapabilityScope } from '../middleware/requireAgentCapabilityScope.js';
 import type { AuthenticateAgentToken } from '../../application/agent/AuthenticateAgentToken.js';
 import type { ProvisionAppBackend } from '../../application/app-backend/ProvisionAppBackend.js';
 
@@ -15,6 +16,7 @@ export type AppBackendAgentRouterDeps = {
 export function appBackendAgentRouter(deps: AppBackendAgentRouterDeps): Router {
   const router = Router();
   router.use(requireAgentToken(deps.authenticate));
+  router.use(requireAgentCapabilityScope());
 
   router.post(
     '/projects/:projectId/app-backend',

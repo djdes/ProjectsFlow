@@ -6,6 +6,11 @@ export type CreateAgentTokenInput = {
   readonly name: string;
   readonly tokenHash: string;
   readonly tokenPrefix: string;
+  readonly scopeKind?: 'account' | 'project';
+  readonly projectId?: string | null;
+  readonly taskId?: string | null;
+  readonly parentTokenId?: string | null;
+  readonly expiresAt?: Date | null;
 };
 
 export interface AgentTokenRepository {
@@ -15,6 +20,7 @@ export interface AgentTokenRepository {
   // Возвращает только не-revoked токены.
   findActiveByHash(hash: string): Promise<AgentToken | null>;
   revoke(id: string, userId: string): Promise<boolean>;
+  revokeProjectCapability(id: string, userId: string, parentTokenId: string): Promise<boolean>;
   // Обновление lastUsedAt при успешном агент-запросе. Не критично к ошибкам.
   touchLastUsed(id: string): Promise<void>;
   // Сколько активных (не revoked) токенов у юзера. Используется в RevokeAgentToken:

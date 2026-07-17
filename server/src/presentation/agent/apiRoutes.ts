@@ -12,6 +12,8 @@ import type { GetAgentCredential } from '../../application/agent/GetAgentCredent
 import type { GetAgentTask } from '../../application/agent/GetAgentTask.js';
 import type { CreateAgentCredential } from '../../application/agent/CreateAgentCredential.js';
 import type { AuthenticateAgentToken } from '../../application/agent/AuthenticateAgentToken.js';
+import type { IssueProjectWorkerCapability } from '../../application/agent/IssueProjectWorkerCapability.js';
+import type { RevokeProjectWorkerCapability } from '../../application/agent/RevokeProjectWorkerCapability.js';
 import type { ListTasks } from '../../application/task/ListTasks.js';
 import type { CreateTask } from '../../application/task/CreateTask.js';
 import type { CreateTaskComment } from '../../application/task/CreateTaskComment.js';
@@ -99,6 +101,7 @@ import type { TaskAttachment } from '../../domain/task/TaskAttachment.js';
 import type { TaskComment } from '../../domain/task/TaskComment.js';
 import type { TaskCommit } from '../../domain/task/TaskCommit.js';
 import { requireAgentToken } from '../middleware/requireAgentToken.js';
+import { requireAgentCapabilityScope } from '../middleware/requireAgentCapabilityScope.js';
 import {
   taskStatusSchema,
   linkCommitSchema,
@@ -109,6 +112,8 @@ import { writeDocSchema } from '../kb/schemas.js';
 
 type Deps = {
   readonly authenticate: AuthenticateAgentToken;
+  readonly issueWorkerCapability: IssueProjectWorkerCapability;
+  readonly revokeWorkerCapability: RevokeProjectWorkerCapability;
   readonly listProjects: ListProjects;
   readonly createProjectWithGit: CreateProjectWithGit;
   readonly updateProject: UpdateProject;
@@ -701,6 +706,68 @@ function financeToDto(f: ProjectFinance): FinanceDto {
 export function agentApiRouter(deps: Deps): Router {
   const router = Router();
   router.use(requireAgentToken(deps.authenticate));
+  router.use(requireAgentCapabilityScope());
+
+  // The dispatcher exchanges its long-lived account token for a short-lived
+  // project capability before spawning Claude. Plaintext is returned once and
+  // is written only to the per-run MCP config.
+  router.post(
+    '/projects/:projectId/worker-capabilities',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const body = z
+          .object({
+            taskId: z.string().uuid().nullable().optional(),
+            ttlSeconds: z.number().int().min(300).max(86400).optional(),
+          })
+          .parse(req.body ?? {});
+        const parentToken = req.agentToken;
+        if (!parentToken) {
+          res.status(401).json({ error: 'agent_token_required' });
+          return;
+        }
+        const result = await deps.issueWorkerCapability.execute({
+          userId: req.user!.id,
+          parentToken,
+          projectId: req.params['projectId'] as string,
+          taskId: body.taskId ?? null,
+          ttlSeconds: body.ttlSeconds,
+        });
+        res.status(201).json({
+          capability: {
+            id: result.token.id,
+            projectId: result.token.projectId,
+            taskId: result.token.taskId,
+            expiresAt: result.expiresAt.toISOString(),
+          },
+          plaintext: result.plaintext,
+        });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
+
+  router.delete(
+    '/worker-capabilities/:capabilityId',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const parentToken = req.agentToken;
+        if (!parentToken) {
+          res.status(401).json({ error: 'agent_token_required' });
+          return;
+        }
+        await deps.revokeWorkerCapability.execute(
+          req.user!.id,
+          parentToken,
+          req.params['capabilityId'] as string,
+        );
+        res.status(204).end();
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
   // Гейт воркера: можно ли диспетчеру запускать claude -p по задаче. Резолвит инициатора
   // (создателя задачи) и смотрит его тариф/бюджет. Диспетчер зовёт ПЕРЕД запуском и пропускает

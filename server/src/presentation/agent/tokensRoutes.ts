@@ -12,10 +12,11 @@ type Deps = {
   readonly revoke: RevokeAgentToken;
 };
 
-type TokenDto = Omit<AgentToken, 'createdAt' | 'lastUsedAt' | 'revokedAt'> & {
+type TokenDto = Omit<AgentToken, 'createdAt' | 'lastUsedAt' | 'revokedAt' | 'expiresAt'> & {
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
+  expiresAt: string | null;
 };
 
 function toDto(t: AgentToken): TokenDto {
@@ -24,6 +25,7 @@ function toDto(t: AgentToken): TokenDto {
     createdAt: t.createdAt.toISOString(),
     lastUsedAt: t.lastUsedAt?.toISOString() ?? null,
     revokedAt: t.revokedAt?.toISOString() ?? null,
+    expiresAt: t.expiresAt?.toISOString() ?? null,
   };
 }
 

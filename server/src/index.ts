@@ -199,6 +199,8 @@ import { CreateAgentToken } from './application/agent/CreateAgentToken.js';
 import { ListAgentTokens } from './application/agent/ListAgentTokens.js';
 import { RevokeAgentToken } from './application/agent/RevokeAgentToken.js';
 import { AuthenticateAgentToken } from './application/agent/AuthenticateAgentToken.js';
+import { IssueProjectWorkerCapability } from './application/agent/IssueProjectWorkerCapability.js';
+import { RevokeProjectWorkerCapability } from './application/agent/RevokeProjectWorkerCapability.js';
 import { GetAgentCredential } from './application/agent/GetAgentCredential.js';
 import { GetAgentTask } from './application/agent/GetAgentTask.js';
 import { CreateAgentCredential } from './application/agent/CreateAgentCredential.js';
@@ -2133,6 +2135,17 @@ const { app, devProxyUpgrade } = createApp({
       hasher: agentTokenHasher,
       users: userRepo,
     }),
+    issueWorkerCapability: new IssueProjectWorkerCapability({
+      projects: projectRepo,
+      tasks: taskRepo,
+      createToken: new CreateAgentToken({
+        tokens: agentTokenRepo,
+        hasher: agentTokenHasher,
+        idGen: idGenerator,
+        randomToken: () => randomBytes(32).toString('hex'),
+      }),
+    }),
+    revokeWorkerCapability: new RevokeProjectWorkerCapability({ tokens: agentTokenRepo }),
     getAgentCredential: new GetAgentCredential({
       projects: projectRepo,
       members: projectMemberRepo,

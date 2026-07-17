@@ -157,6 +157,8 @@ import type { CreateAgentToken } from '../application/agent/CreateAgentToken.js'
 import type { ListAgentTokens } from '../application/agent/ListAgentTokens.js';
 import type { RevokeAgentToken } from '../application/agent/RevokeAgentToken.js';
 import type { AuthenticateAgentToken } from '../application/agent/AuthenticateAgentToken.js';
+import type { IssueProjectWorkerCapability } from '../application/agent/IssueProjectWorkerCapability.js';
+import type { RevokeProjectWorkerCapability } from '../application/agent/RevokeProjectWorkerCapability.js';
 import type { GetAgentCredential } from '../application/agent/GetAgentCredential.js';
 import type { GetAgentTask } from '../application/agent/GetAgentTask.js';
 import type { CreateAgentCredential } from '../application/agent/CreateAgentCredential.js';
@@ -557,6 +559,8 @@ type AppDeps = {
     readonly listAgentTokens: ListAgentTokens;
     readonly revokeAgentToken: RevokeAgentToken;
     readonly authenticateAgentToken: AuthenticateAgentToken;
+    readonly issueWorkerCapability: IssueProjectWorkerCapability;
+    readonly revokeWorkerCapability: RevokeProjectWorkerCapability;
     readonly getAgentCredential: GetAgentCredential;
     readonly getAgentTask: GetAgentTask;
     readonly createAgentCredential: CreateAgentCredential;
@@ -905,6 +909,8 @@ export function createApp(deps: AppDeps): CreatedApp {
     '/api/agent',
     agentApiRouter({
       authenticate: deps.agent.authenticateAgentToken,
+      issueWorkerCapability: deps.agent.issueWorkerCapability,
+      revokeWorkerCapability: deps.agent.revokeWorkerCapability,
       listProjects: deps.agent.listProjects,
       createProjectWithGit: deps.agent.createProjectWithGit,
       updateProject: deps.agent.updateProject,

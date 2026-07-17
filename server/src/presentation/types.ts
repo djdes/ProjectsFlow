@@ -1,4 +1,5 @@
 import type { User } from '../domain/user/User.js';
+import type { AgentToken } from '../domain/agent/AgentToken.js';
 
 // Глобальное расширение Express.Request: middleware sessionFromCookie
 // прикладывает user/sessionId, чтобы остальной код типобезопасно их читал.
@@ -11,6 +12,7 @@ declare global {
       // ID agent-токена, которым выполнен запрос (только для /api/agent/* через
       // requireAgentToken). Нужен, чтобы пометить `isCurrent` в pf_get_my_account.
       agentTokenId?: string;
+      agentToken?: AgentToken;
     }
   }
 }

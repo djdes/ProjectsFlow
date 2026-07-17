@@ -14,6 +14,13 @@ type Deps = {
 export type CreateAgentTokenCommand = {
   readonly userId: string;
   readonly name: string;
+  readonly scope?: {
+    readonly kind: 'project';
+    readonly projectId: string;
+    readonly taskId: string | null;
+    readonly parentTokenId: string;
+    readonly expiresAt: Date;
+  };
 };
 
 // Результат с одноразовым plaintext-токеном — после этого вызова он недоступен нигде.
@@ -45,6 +52,11 @@ export class CreateAgentToken {
       name,
       tokenHash,
       tokenPrefix,
+      scopeKind: input.scope?.kind ?? 'account',
+      projectId: input.scope?.projectId ?? null,
+      taskId: input.scope?.taskId ?? null,
+      parentTokenId: input.scope?.parentTokenId ?? null,
+      expiresAt: input.scope?.expiresAt ?? null,
     });
     return { token, plaintext };
   }

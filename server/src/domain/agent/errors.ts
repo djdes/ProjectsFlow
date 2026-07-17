@@ -27,6 +27,27 @@ export class AgentTokenNameEmptyError extends Error {
   }
 }
 
+export class AgentCapabilityForbiddenError extends Error {
+  constructor() {
+    super('Project worker capability is not allowed');
+    this.name = 'AgentCapabilityForbiddenError';
+  }
+}
+
+export class AgentCapabilityTaskMismatchError extends Error {
+  constructor() {
+    super('Task does not belong to the capability project');
+    this.name = 'AgentCapabilityTaskMismatchError';
+  }
+}
+
+export class AgentCapabilityNotFoundError extends Error {
+  constructor() {
+    super('Project worker capability not found');
+    this.name = 'AgentCapabilityNotFoundError';
+  }
+}
+
 // Device flow errors
 
 export class AgentDeviceCodeNotFoundError extends Error {
