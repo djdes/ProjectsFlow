@@ -3,7 +3,7 @@ import test from 'node:test';
 import { defaultWorkspaceAssigneeDigestSettings } from '../../domain/digest/WorkspaceAssigneeDigestSettings.js';
 import { SendWorkspaceEodReminder } from './SendWorkspaceEodReminder.js';
 
-test('workspace EOD reminder groups every member and keeps actions inside the rich table', async () => {
+test('workspace EOD reminder includes due work from every project and every actual assignee', async () => {
   const rich: Array<{ chatId: number; html: string; replyMarkup?: unknown }> = [];
   const attached: Array<{ tokens: string[]; messageId: number }> = [];
   const token = 'a'.repeat(32);
@@ -42,9 +42,9 @@ test('workspace EOD reminder groups every member and keeps actions inside the ri
               {
                 id: 't1',
                 projectId: 'p1',
-                status: 'todo',
+                status: 'backlog',
                 description: 'Проверить документы',
-                deadline: null,
+                deadline: '2000-01-01',
                 assignee: { userId: 'u1', displayName: 'Анна' },
               },
               {
@@ -52,19 +52,45 @@ test('workspace EOD reminder groups every member and keeps actions inside the ri
                 projectId: 'p1',
                 status: 'done',
                 description: 'Готово',
-                deadline: null,
+                deadline: '2000-01-01',
                 assignee: { userId: 'u2', displayName: 'Борис' },
               },
             ]
-          : [];
+          : [
+              {
+                id: 't3',
+                projectId: 'p2',
+                status: 'manual',
+                description: 'Исправить сервер',
+                deadline: '2000-01-02',
+                assignee: { userId: 'u3', displayName: 'Мистер Линукс' },
+              },
+              {
+                id: 't4',
+                projectId: 'p2',
+                status: 'todo',
+                description: 'Задача без дедлайна',
+                deadline: null,
+                assignee: { userId: 'u3', displayName: 'Мистер Линукс' },
+              },
+              {
+                id: 't5',
+                projectId: 'p2',
+                status: 'todo',
+                description: 'Будущая задача',
+                deadline: '2999-01-01',
+                assignee: { userId: 'u1', displayName: 'Анна' },
+              },
+            ];
       },
     } as never,
     users: {
       async getTelegramLink(userId: string) {
         return {
           userId,
-          telegramUserId: userId === 'u1' ? 101 : 102,
-          telegramUsername: userId === 'u1' ? 'anna_pf' : 'boris_pf',
+          telegramUserId: userId === 'u1' ? 101 : userId === 'u2' ? 102 : 103,
+          telegramUsername:
+            userId === 'u1' ? 'anna_pf' : userId === 'u2' ? 'boris_pf' : 'mrlinux_pf',
         };
       },
     } as never,
@@ -90,16 +116,19 @@ test('workspace EOD reminder groups every member and keeps actions inside the ri
     appUrl: 'https://projectsflow.ru',
   });
 
-  assert.deepEqual(await send.execute('w1'), { projectCount: 1, taskCount: 1 });
+  assert.deepEqual(await send.execute('w1'), { projectCount: 2, taskCount: 2 });
   assert.equal(rich.length, 1);
   assert.equal(rich[0]!.chatId, -1007);
-  assert.match(rich[0]!.html, /<details><summary>Показать по ответственным \(2\)<\/summary>/);
+  assert.match(rich[0]!.html, /<details><summary>Показать по ответственным \(3\)<\/summary>/);
   assert.match(rich[0]!.html, /@anna_pf — проверить и доделать \(1\)/);
   assert.match(rich[0]!.html, /@boris_pf — молодец, всё сделано/);
+  assert.match(rich[0]!.html, /@mrlinux_pf — проверить и доделать \(1\)/);
   assert.match(rich[0]!.html, /Проверить документы/);
+  assert.match(rich[0]!.html, /Исправить сервер/);
+  assert.match(rich[0]!.html, /Banana/);
+  assert.doesNotMatch(rich[0]!.html, /Задача без дедлайна|Будущая задача|Готово/);
   assert.match(rich[0]!.html, new RegExp(`/api/telegram-digest-actions/${token}`));
   assert.match(rich[0]!.html, />✓<\/a> · <a [^>]+>↗<\/a>/);
-  assert.doesNotMatch(rich[0]!.html, /Banana/);
   assert.equal(rich[0]!.replyMarkup, undefined);
   assert.equal(attached.length, 1);
   assert.deepEqual(attached[0]!.tokens, [token]);

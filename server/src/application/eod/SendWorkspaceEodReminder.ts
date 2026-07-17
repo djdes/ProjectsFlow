@@ -12,8 +12,20 @@ import type { Task } from '../../domain/task/Task.js';
 import { escapeHtml, formatDeadlineRemainingRu } from '../../domain/task/digestFormat.js';
 import { telegramDigestTaskTitle } from '../task/digest/buildTaskDigest.js';
 
-const OPEN_STATUSES = new Set(['todo', 'in_progress', 'awaiting_clarification']);
 const MAX_TASKS_PER_PERSON = 30;
+
+function mskDateOnly(at: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(at);
+}
+
+function needsEodAttention(task: Task, today: string): boolean {
+  return task.status !== 'done' && task.deadline !== null && task.deadline <= today;
+}
 
 type Deps = {
   readonly settings: WorkspaceAssigneeDigestRepository;
@@ -54,15 +66,15 @@ export class SendWorkspaceEodReminder {
       this.deps.workspaces.listMembers(workspaceId),
       this.deps.projects.listByWorkspace(workspaceId),
     ]);
-    const configured = new Set(settings.projectIds);
-    const projects = workspaceProjects.filter(
-      (project) => settings.projectMode === 'all' || configured.has(project.id),
-    );
+    // EOD is a workspace-wide deadline ritual. Project selection still scopes the
+    // regular digest and commit review, but must not hide a person's overdue work.
+    const projects = workspaceProjects;
+    const today = mskDateOnly(new Date());
     const tasksByProject = await Promise.all(
       projects.map(async (project) => ({
         project,
         tasks: (await this.deps.tasks.listByProject(project.id)).filter((task) =>
-          OPEN_STATUSES.has(task.status),
+          needsEodAttention(task, today),
         ),
       })),
     );
@@ -75,17 +87,40 @@ export class SendWorkspaceEodReminder {
       }
     }
 
+    for (const rows of byAssignee.values()) {
+      rows.sort(
+        (left, right) =>
+          (left.task.deadline ?? '').localeCompare(right.task.deadline ?? '') ||
+          left.project.name.localeCompare(right.project.name, 'ru') ||
+          (left.task.description ?? '').localeCompare(right.task.description ?? '', 'ru'),
+      );
+    }
+
     const base = this.deps.appUrl.replace(/\/+$/, '');
     const sections: PersonSection[] = [];
-    for (const member of members) {
-      const assigned = (byAssignee.get(member.userId) ?? []).slice(0, MAX_TASKS_PER_PERSON);
+    const people = new Map(
+      members.map((member) => [
+        member.userId,
+        member.displayName ?? member.email ?? 'Участник',
+      ] as const),
+    );
+    // A task assignee is authoritative even when an old/imported account is not
+    // present in workspace_members. Otherwise their due tasks silently disappear.
+    for (const rows of byAssignee.values()) {
+      const task = rows[0]?.task;
+      if (task && !people.has(task.assignee.userId)) {
+        people.set(task.assignee.userId, task.assignee.displayName ?? 'Участник');
+      }
+    }
+    for (const [userId, displayName] of people) {
+      const assigned = (byAssignee.get(userId) ?? []).slice(0, MAX_TASKS_PER_PERSON);
       const taskRows: TaskRow[] = [];
       for (const row of assigned) {
         const token = await this.deps.createEmailActionToken.execute({
           action: 'complete',
           taskId: row.task.id,
           projectId: row.project.id,
-          userId: member.userId,
+          userId,
         });
         taskRows.push({
           ...row,
@@ -94,9 +129,9 @@ export class SendWorkspaceEodReminder {
         });
       }
       sections.push({
-        userId: member.userId,
-        displayName: member.displayName ?? member.email ?? 'Участник',
-        telegramLink: await this.deps.users.getTelegramLink(member.userId).catch(() => null),
+        userId,
+        displayName,
+        telegramLink: await this.deps.users.getTelegramLink(userId).catch(() => null),
         tasks: taskRows,
       });
     }
@@ -159,7 +194,7 @@ export function buildEodRichMessage(
   const attentionCount = sections.filter((section) => section.tasks.length > 0).length;
   const html: string[] = [
     '<h2>🕔 Перед уходом — обновите задачи</h2>',
-    `<p>Открытых задач: <b>${total}</b> · требуют внимания: <b>${attentionCount}</b></p>`,
+    `<p>На сегодня и просрочено: <b>${total}</b> · требуют внимания: <b>${attentionCount}</b></p>`,
     `<details><summary>Показать по ответственным (${sections.length})</summary>`,
   ];
   for (const section of sections) {
@@ -192,7 +227,10 @@ export function buildEodFallbackMessage(
   total: number,
   now: Date,
 ): string {
-  const lines = [`<b>🕔 Перед уходом — обновите задачи</b>`, `Открытых задач: <b>${total}</b>`];
+  const lines = [
+    `<b>🕔 Перед уходом — обновите задачи</b>`,
+    `На сегодня и просрочено: <b>${total}</b>`,
+  ];
   const hidden: string[] = [];
   for (const section of sections) {
     const mention = personMention(section.displayName, section.telegramLink);
