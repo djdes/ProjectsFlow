@@ -55,11 +55,7 @@ import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAud
 import { CommentActionsMenu } from '@/presentation/components/tasks/CommentActionsMenu';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { CommentBody } from './CommentBody';
-import {
-  parseRalphQuestion,
-  answeredQidSet,
-  RalphAnswerControls,
-} from './RalphQuestionControls';
+import { isRalphConversationComment } from './RalphQuestionControls';
 import { LiveTab } from './LiveTab';
 import { ClaudeIcon } from './ClaudeIcon';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
@@ -2757,13 +2753,14 @@ function TaskCommentsSection({
     return undefined;
   }, [onCommentCreatedRef]);
 
-  // qid'ы, на которые уже есть ответ — чтобы прятать кнопки у отвеченных вопросов.
-  const answeredQids = answeredQidSet(comments);
+  // Вопросы диспетчера и служебные ответы живут во вкладке LIVE. В обсуждении
+  // остаются только человеческие комментарии, поэтому системный Q&A не дублируется.
+  const discussionComments = comments.filter((comment) => !isRalphConversationComment(comment));
 
   // Сообщаем drawer'у число комментариев (после загрузки) — для триггера «Обсуждение · N».
   useEffect(() => {
-    if (!loading) onCountChange?.(comments.length);
-  }, [loading, comments.length, onCountChange]);
+    if (!loading) onCountChange?.(discussionComments.length);
+  }, [loading, discussionComments.length, onCountChange]);
 
   return (
     <div className="space-y-4">
@@ -2772,17 +2769,15 @@ function TaskCommentsSection({
           <div className="h-12 animate-pulse rounded-md bg-muted" />
           <div className="h-12 animate-pulse rounded-md bg-muted" />
         </div>
-      ) : comments.length > 0 ? (
+      ) : discussionComments.length > 0 ? (
         <ul className="space-y-4">
-          {comments.map((c) => (
+          {discussionComments.map((c) => (
             <CommentItem
               key={c.id}
               projectId={projectId}
               taskId={taskId}
               comment={c}
               members={members}
-              answeredQids={answeredQids}
-              onAnswerCreated={handleCreated}
               onUpdated={handleUpdated}
               onDeleted={handleDeleted}
               onReply={onReply}
@@ -3042,8 +3037,6 @@ function CommentItem({
   taskId,
   comment,
   members,
-  answeredQids,
-  onAnswerCreated,
   onUpdated,
   onDeleted,
   onReply,
@@ -3055,8 +3048,6 @@ function CommentItem({
   comment: TaskComment;
   // Участники проекта — для резолва автора комментария по ownerUserId (имя + аватар).
   members: readonly ProjectMember[];
-  answeredQids: Set<string>;
-  onAnswerCreated: (created: TaskComment) => void;
   onUpdated: (updated: TaskComment) => void;
   onDeleted: (id: string) => void;
   // Ответ/цитата (db/080).
@@ -3066,8 +3057,6 @@ function CommentItem({
 }): React.ReactElement {
   const { taskRepository } = useContainer();
   const bodyRef = useRef<HTMLDivElement>(null);
-  // Вопрос Ralph (F11) в этом комментарии → инлайн-кнопки ответа (как в CLI/Telegram).
-  const ralphQuestion = parseRalphQuestion(comment.body);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(comment.body);
   const [saving, setSaving] = useState(false);
@@ -3283,14 +3272,6 @@ function CommentItem({
         ) : (
           <div className="mt-0.5" ref={bodyRef}>
             <CommentBody body={comment.body} />
-            {ralphQuestion && !answeredQids.has(ralphQuestion.qid) && (
-              <RalphAnswerControls
-                question={ralphQuestion}
-                projectId={projectId}
-                taskId={taskId}
-                onCreated={onAnswerCreated}
-              />
-            )}
           </div>
         )}
         {comment.attachments.length > 0 && (

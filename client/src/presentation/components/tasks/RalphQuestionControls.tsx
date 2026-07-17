@@ -16,6 +16,11 @@ export type RalphQuestion = {
   allowOpen: boolean;
 };
 
+export type RalphAnswer = {
+  qid: string;
+  value: string | string[];
+};
+
 // Парсит маркер <!-- ralph-question {json} --> из тела комментария. null — если нет/битый.
 export function parseRalphQuestion(body: string): RalphQuestion | null {
   const m = body.match(/<!--\s*ralph-question\s+(\{[\s\S]*?\})\s*-->/);
@@ -32,19 +37,39 @@ export function parseRalphQuestion(body: string): RalphQuestion | null {
   }
 }
 
+// Парсит служебный ответ на вопрос диспетчера. Маркер остаётся единым для web,
+// Telegram и CLI, поэтому LIVE может сразу показать принятый вариант независимо
+// от того, откуда человек ответил.
+export function parseRalphAnswer(body: string): RalphAnswer | null {
+  const m = body.match(/<!--\s*ralph-answer\s+(\{[\s\S]*?\})\s*-->/);
+  if (!m) return null;
+  try {
+    const j = JSON.parse(m[1]) as Record<string, unknown>;
+    const qid = String(j.q ?? j.qid ?? '');
+    if (!qid) return null;
+    const value = Array.isArray(j.value)
+      ? j.value.map((item) => String(item))
+      : String(j.value ?? '');
+    return { qid, value };
+  } catch {
+    return null;
+  }
+}
+
+export function isRalphQuestionComment(comment: TaskComment): boolean {
+  return comment.actorKind === 'agent' && parseRalphQuestion(comment.body) !== null;
+}
+
+export function isRalphConversationComment(comment: TaskComment): boolean {
+  return isRalphQuestionComment(comment) || parseRalphAnswer(comment.body) !== null;
+}
+
 // Набор qid, на которые уже есть ralph-answer в треде (чтобы прятать кнопки после ответа).
 export function answeredQidSet(comments: readonly TaskComment[]): Set<string> {
   const s = new Set<string>();
   for (const c of comments) {
-    const m = c.body.match(/<!--\s*ralph-answer\s+(\{[\s\S]*?\})\s*-->/);
-    if (!m) continue;
-    try {
-      const j = JSON.parse(m[1]) as Record<string, unknown>;
-      const q = String(j.q ?? j.qid ?? '');
-      if (q) s.add(q);
-    } catch {
-      /* ignore */
-    }
+    const answer = parseRalphAnswer(c.body);
+    if (answer) s.add(answer.qid);
   }
   return s;
 }

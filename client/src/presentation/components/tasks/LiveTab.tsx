@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, Loader2, MessageCircleQuestion } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -25,8 +25,17 @@ import { DiffView } from '@/presentation/components/diff/DiffView';
 import { CancelWorkButton } from './CancelWorkButton';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
 import {
+  isRalphQuestionComment,
+  parseRalphAnswer,
+  parseRalphQuestion,
+  RalphAnswerControls,
+  type RalphAnswer,
+  type RalphQuestion,
+} from './RalphQuestionControls';
+import {
   LIVE_CHANGED_EVENT,
   REALTIME_CONNECTED_EVENT,
+  TASK_CHANGED_EVENT,
 } from '@/presentation/hooks/useNotificationStream';
 
 const DOM_CAP = 300;
@@ -80,7 +89,7 @@ export function LiveTab({
 }: Props): React.ReactElement {
   const projectId = task.projectId;
   const taskId = task.id;
-  const { liveRepository } = useContainer();
+  const { liveRepository, taskRepository } = useContainer();
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -88,6 +97,88 @@ export function LiveTab({
   // чтобы 🔴 включалась в тот же тик, а не после сетевого round-trip списка сессий.
   const [realtimeRunningSessionId, setRealtimeRunningSessionId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(DOM_CAP);
+  const [questionComments, setQuestionComments] = useState<TaskComment[]>([]);
+  const [questionsLoading, setQuestionsLoading] = useState(true);
+  const questionRequestRef = useRef(0);
+
+  const reloadQuestionComments = useCallback((): void => {
+    const requestId = ++questionRequestRef.current;
+    void taskRepository
+      .listComments(projectId, taskId)
+      .then((comments) => {
+        if (requestId === questionRequestRef.current) setQuestionComments(comments);
+      })
+      .catch(() => {
+        /* Не ломаем LIVE, если отдельно не загрузился тред вопросов. */
+      })
+      .finally(() => {
+        if (requestId === questionRequestRef.current) setQuestionsLoading(false);
+      });
+  }, [projectId, taskId, taskRepository]);
+
+  useEffect(() => {
+    setQuestionsLoading(true);
+    reloadQuestionComments();
+    return () => {
+      questionRequestRef.current += 1;
+    };
+  }, [reloadQuestionComments]);
+
+  // Вопрос диспетчера создаётся агентом как task-comment. Слушаем общий realtime
+  // сигнал задачи и подхватываем карточку в LIVE без обновления страницы/переключения вкладок.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const schedule = (): void => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(reloadQuestionComments, 250);
+    };
+    const onTaskChanged = (event: Event): void => {
+      const detail = (event as CustomEvent<{ projectId?: string; taskId?: string }>).detail;
+      if (detail?.projectId !== projectId) return;
+      if (detail.taskId && detail.taskId !== taskId) return;
+      schedule();
+    };
+    const onConnected = (): void => schedule();
+    window.addEventListener(TASK_CHANGED_EVENT, onTaskChanged);
+    window.addEventListener(REALTIME_CONNECTED_EVENT, onConnected);
+    return () => {
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener(TASK_CHANGED_EVENT, onTaskChanged);
+      window.removeEventListener(REALTIME_CONNECTED_EVENT, onConnected);
+    };
+  }, [projectId, taskId, reloadQuestionComments]);
+
+  const dispatcherQuestions = useMemo<
+    Array<{ comment: TaskComment; question: RalphQuestion }>
+  >(
+    () =>
+      questionComments.flatMap((comment) => {
+        if (!isRalphQuestionComment(comment)) return [];
+        const question = parseRalphQuestion(comment.body);
+        return question ? [{ comment, question }] : [];
+      }),
+    [questionComments],
+  );
+
+  const answersByQid = useMemo(() => {
+    const answers = new Map<string, RalphAnswer>();
+    for (const comment of questionComments) {
+      const answer = parseRalphAnswer(comment.body);
+      if (answer) answers.set(answer.qid, answer);
+    }
+    return answers;
+  }, [questionComments]);
+
+  const handleAnswerCreated = useCallback(
+    (created: TaskComment): void => {
+      setQuestionComments((current) =>
+        current.some((comment) => comment.id === created.id) ? current : [...current, created],
+      );
+      onCommentCreated?.(created);
+      onTaskChanged?.();
+    },
+    [onCommentCreated, onTaskChanged],
+  );
 
   const reloadSessions = useCallback(() => {
     let cancelled = false;
@@ -210,7 +301,7 @@ export function LiveTab({
 
   useEffect(() => {
     if (stickToBottomRef.current) scrollToBottom();
-  }, [events.length, running, scrollToBottom]);
+  }, [events.length, dispatcherQuestions.length, running, scrollToBottom]);
 
   useEffect(() => {
     if (active && stickToBottomRef.current) scrollToBottom();
@@ -290,7 +381,7 @@ export function LiveTab({
             <Loader2 className="mr-2 size-4 animate-spin" /> Загрузка…
           </div>
         ) : sessions.length === 0 ? (
-          <EmptyState working={isWorking} />
+          dispatcherQuestions.length === 0 && !questionsLoading ? <EmptyState working={isWorking} /> : null
         ) : loading && events.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-sm text-zinc-500 dark:text-[#8b949e]">
             <Loader2 className="mr-2 size-4 animate-spin" /> Загрузка ленты…
@@ -320,6 +411,22 @@ export function LiveTab({
             )}
           </>
         )}
+        {questionsLoading && sessions.length === 0 && dispatcherQuestions.length === 0 && (
+          <div className="flex items-center justify-center py-8 text-sm text-zinc-500 dark:text-[#8b949e]">
+            <Loader2 className="mr-2 size-4 animate-spin" /> Загрузка вопросов…
+          </div>
+        )}
+        {dispatcherQuestions.map(({ comment, question }) => (
+          <DispatcherQuestionCard
+            key={comment.id}
+            comment={comment}
+            question={question}
+            answer={answersByQid.get(question.qid) ?? null}
+            projectId={projectId}
+            taskId={taskId}
+            onAnswerCreated={handleAnswerCreated}
+          />
+        ))}
       </div>
 
       {/* «Летающий» футер: идёт работа — большая кнопка отмены; иначе — композер промпта. */}
@@ -348,6 +455,68 @@ export function LiveTab({
         )}
       </div>
     </div>
+  );
+}
+
+const QUESTION_TIME_FMT = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+function DispatcherQuestionCard({
+  comment,
+  question,
+  answer,
+  projectId,
+  taskId,
+  onAnswerCreated,
+}: {
+  comment: TaskComment;
+  question: RalphQuestion;
+  answer: RalphAnswer | null;
+  projectId: string;
+  taskId: string;
+  onAnswerCreated: (created: TaskComment) => void;
+}): React.ReactElement {
+  const answerText = Array.isArray(answer?.value) ? answer.value.join(', ') : answer?.value;
+  return (
+    <section
+      className="rounded-lg border border-violet-300/70 bg-white p-3 shadow-sm dark:border-violet-400/25 dark:bg-[#252526]"
+      aria-label="Вопрос диспетчера"
+    >
+      <div className="mb-2 flex items-center gap-2">
+        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-violet-100 text-violet-600 dark:bg-violet-400/15 dark:text-violet-300">
+          <MessageCircleQuestion className="size-4" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-violet-700 dark:text-violet-300">
+            Вопрос диспетчера
+          </p>
+          <p className="text-[10px] text-zinc-500 dark:text-[#8b949e]">
+            {QUESTION_TIME_FMT.format(comment.createdAt)}
+          </p>
+        </div>
+      </div>
+      <CommentBody body={comment.body} className={cn(RICH_MD, 'text-sm')} />
+      {answer ? (
+        <div className="mt-2 flex items-start gap-1.5 rounded-md bg-emerald-50 px-2.5 py-2 text-xs text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300">
+          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>
+            <span className="font-medium">Ответ принят</span>
+            {answerText ? `: ${answerText}` : ''}
+          </span>
+        </div>
+      ) : (
+        <RalphAnswerControls
+          question={question}
+          projectId={projectId}
+          taskId={taskId}
+          onCreated={onAnswerCreated}
+        />
+      )}
+    </section>
   );
 }
 
