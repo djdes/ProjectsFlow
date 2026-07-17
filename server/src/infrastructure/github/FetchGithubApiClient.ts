@@ -255,9 +255,13 @@ export class FetchGithubApiClient implements GithubApiClient {
     files: readonly ImportRepoFile[],
     message: string,
   ): Promise<void> {
-    const request = async <T>(path: string, body: unknown): Promise<T> => {
+    const request = async <T>(
+      path: string,
+      body: unknown,
+      method: 'POST' | 'PATCH' = 'POST',
+    ): Promise<T> => {
       const res = await fetch(`https://api.github.com/repos/${fullName}${path}`, {
-        method: 'POST',
+        method,
         headers: {
           Authorization: `Bearer ${accessToken}`,
           Accept: 'application/vnd.github+json',
@@ -270,6 +274,32 @@ export class FetchGithubApiClient implements GithubApiClient {
       }
       return (await res.json()) as T;
     };
+
+    // Raw Git endpoints недоступны у пустого репозитория. ImportProjectRepo создаёт
+    // auto-init commit, а здесь берём его HEAD как parent итогового import-коммита.
+    // Небольшой retry закрывает короткое окно, пока GitHub поднимает новый repository.
+    let headSha: string | null = null;
+    for (let attempt = 0; attempt < 5 && !headSha; attempt += 1) {
+      const res = await fetch(
+        `https://api.github.com/repos/${fullName}/git/ref/heads/${encodeURIComponent(defaultBranch || 'main')}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/vnd.github+json',
+          },
+        },
+      );
+      if (res.ok) {
+        const ref = (await res.json()) as { object: { sha: string } };
+        headSha = ref.object.sha;
+        break;
+      }
+      if ((res.status !== 404 && res.status !== 409) || attempt === 4) {
+        throw new GithubApiError(res.status, `GitHub import ref failed: ${await res.text()}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+    }
+    if (!headSha) throw new GithubApiError(409, 'GitHub import ref is unavailable');
 
     // Ограниченная параллельность: заметно быстрее последовательной загрузки, но не
     // устраивает burst из сотен запросов к GitHub API.
@@ -294,12 +324,12 @@ export class FetchGithubApiClient implements GithubApiClient {
     const commit = await request<{ sha: string }>('/git/commits', {
       message,
       tree: tree.sha,
-      parents: [],
+      parents: [headSha],
     });
-    await request('/git/refs', {
-      ref: `refs/heads/${defaultBranch || 'main'}`,
+    await request(`/git/refs/heads/${encodeURIComponent(defaultBranch || 'main')}`, {
       sha: commit.sha,
-    });
+      force: false,
+    }, 'PATCH');
   }
 
   async deleteRepo(accessToken: string, fullName: string): Promise<void> {

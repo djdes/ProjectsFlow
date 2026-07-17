@@ -41,7 +41,9 @@ export class ImportProjectRepo {
         name: input.name,
         description: `ProjectsFlow: ${project.name}`,
         privateRepo: input.privateRepo,
-        autoInit: false,
+        // GitHub Git Database API отвечает 409 для полностью пустого репозитория.
+        // Начальный commit создаёт branch; importRepoFiles сразу заменит его дерево.
+        autoInit: true,
       });
     } catch (error) {
       if (error instanceof GithubApiError && error.status === 422) {
