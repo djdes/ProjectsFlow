@@ -248,6 +248,7 @@ import { ListTaskComments } from './application/task/ListTaskComments.js';
 import { ListTaskCommentsForAgent } from './application/task/ListTaskCommentsForAgent.js';
 import { MaybeReopenForClarification } from './application/task/MaybeReopenForClarification.js';
 import { HttpTelegramClient } from './infrastructure/telegram/HttpTelegramClient.js';
+import { GroqVoiceTranscriber } from './infrastructure/groq/GroqVoiceTranscriber.js';
 import { DrizzleTelegramOutboundRepository } from './infrastructure/repositories/DrizzleTelegramOutboundRepository.js';
 import { DrizzleTelegramRalphQuestionRepository } from './infrastructure/repositories/DrizzleTelegramRalphQuestionRepository.js';
 import { DrizzleTelegramTaskDraftRepository } from './infrastructure/repositories/DrizzleTelegramTaskDraftRepository.js';
@@ -650,6 +651,16 @@ const telegramClient = new HttpTelegramClient(
   telegramApiBaseUrl,
   telegramHttpProxy,
 );
+const groqVoiceTranscriber = new GroqVoiceTranscriber({
+  apiKey: process.env['GROQ_API_KEY'] ?? '',
+  apiBaseUrl: process.env['GROQ_API_BASE_URL'],
+  model: process.env['GROQ_VOICE_MODEL'] ?? 'whisper-large-v3-turbo',
+  language: process.env['GROQ_VOICE_LANGUAGE'] ?? 'ru',
+  maxBytes: Number(process.env['GROQ_VOICE_MAX_BYTES'] ?? 25 * 1024 * 1024),
+  // The production host is outside Groq's direct service region. Reuse the already configured
+  // outbound Telegram proxy unless speech has its own route.
+  proxyUrl: process.env['GROQ_HTTP_PROXY'] || telegramHttpProxy,
+});
 const telegramOutboundRepo = new DrizzleTelegramOutboundRepository(db);
 const telegramRalphQuestionRepo = new DrizzleTelegramRalphQuestionRepository(db);
 
@@ -891,6 +902,7 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   dismissCloseProposal,
   dispatchCommentNotifications,
   composer: telegramComposer,
+  voiceTranscriber: groqVoiceTranscriber,
   maybeReopenForClarification,
   notifyTaskChanged,
   notifyCommentAdded,

@@ -39,6 +39,7 @@ import {
 } from '../../domain/task/digestFormat.js';
 import { signAttachmentUrl } from '../attachments/signedAttachmentUrl.js';
 import type { TelegramDraftAttachment } from './TelegramTaskDraftRepository.js';
+import type { VoiceTranscriber } from './VoiceTranscriber.js';
 import {
   buildTaskTelegramContent,
   buildTaskTelegramFallbackContent,
@@ -314,6 +315,9 @@ type Deps = {
   readonly dispatchCommentNotifications: DispatchCommentNotifications;
   // Конструктор задач (+проект текст @ответственный) + обработка его кнопок.
   readonly composer: TelegramComposerService;
+  // Bare voice messages in a linked work group are transcribed and enter the same task composer.
+  // Optional so deployments without a speech provider keep the previous mention-only behavior.
+  readonly voiceTranscriber?: VoiceTranscriber;
   readonly maybeReopenForClarification: MaybeReopenForClarification;
   // Live-обновление UI после auto-create комментария / auto-return статуса.
   // Best-effort — webhook не блокирует ответ на SSE.
@@ -350,6 +354,7 @@ export class HandleTelegramWebhook {
       waiters: Array<{ readonly resolve: () => void; readonly reject: (error: unknown) => void }>;
     }
   >();
+  private readonly processedVoiceSources = new Map<string, number>();
 
   constructor(private readonly deps: Deps) {}
 
@@ -405,6 +410,17 @@ export class HandleTelegramWebhook {
     const chatId = msg.chat.id;
 
     const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
+
+    // Voice messages are the one deliberate exception to the group mention gate. Only a group
+    // explicitly linked to a ProjectsFlow account is considered a work chat; unrelated groups
+    // remain silent. The composer is invoked directly because Telegram does not deliver a bot's
+    // own outgoing transcription back to that bot as a new update.
+    if (isGroup && msg.voice && this.deps.voiceTranscriber?.enabled) {
+      const ownerUserId = await this.deps.groupOwners.getOwnerUserId(chatId);
+      if (ownerUserId !== null) {
+        return this.handleGroupVoice(msg, attachments, sourceKey, ownerUserId);
+      }
+    }
 
     // В групповых чатах бот реагирует ТОЛЬКО когда к нему обращаются: упоминание
     // @<botUsername> в тексте ИЛИ reply на сообщение самого бота. Иначе молчим — иначе он
@@ -473,6 +489,70 @@ export class HandleTelegramWebhook {
       sourceKey,
       background: true,
     });
+  }
+
+  private async handleGroupVoice(
+    msg: TelegramMessage,
+    attachments: readonly TelegramDraftAttachment[],
+    sourceKey: string,
+    ownerUserId: string,
+  ): Promise<void> {
+    if (!msg.from || !msg.voice || !this.deps.voiceTranscriber) return;
+    if (this.wasVoiceSourceProcessed(sourceKey)) return;
+    this.processedVoiceSources.set(sourceKey, Date.now());
+
+    try {
+      const downloaded = await this.deps.client.downloadFile?.(msg.voice.file_id);
+      if (!downloaded) throw new Error('Telegram voice file could not be downloaded');
+
+      const transcript = await this.deps.voiceTranscriber.transcribe({
+        data: downloaded.data,
+        filename: downloaded.filename || fallbackFilename('voice', msg.message_id, 'audio/ogg'),
+        mimeType: msg.voice.mime_type?.trim() || downloaded.mimeType || 'audio/ogg',
+      });
+
+      const botLabel = this.deps.botUsername?.trim()
+        ? `@${escapeHtml(this.deps.botUsername.replace(/^@/, ''))}`
+        : 'ProjectsFlow Bot';
+      const preview = excerptVoiceTranscript(transcript, 3_000);
+      await this.reply(
+        msg.chat.id,
+        `🎙 <b>Расшифровка голосового</b>\n` +
+          `<blockquote>${escapeHtml(preview)}</blockquote>\n` +
+          `🆕 <b>Новая задача</b> · ${botLabel}\n` +
+          `<i>Переформулирую и предложу создать её ниже.</i>`,
+      );
+
+      const groupCtx: TelegramGroupContext = {
+        ownerUserId,
+        senderName: formatSenderName(msg.from),
+        groupTitle: msg.chat.title ?? null,
+      };
+      await this.deps.composer.startFromMessage(
+        msg.from.id,
+        msg.chat.id,
+        transcript,
+        groupCtx,
+        attachments,
+        { sourceKey, background: true },
+      );
+    } catch (err) {
+      this.processedVoiceSources.delete(sourceKey);
+      console.warn('[tg-webhook] voice transcription failed:', err);
+      await this.reply(
+        msg.chat.id,
+        '⚠️ Не удалось расшифровать голосовое. Отправьте его ещё раз или напишите задачу текстом.',
+      );
+    }
+  }
+
+  private wasVoiceSourceProcessed(sourceKey: string): boolean {
+    const now = Date.now();
+    const ttlMs = 24 * 60 * 60 * 1_000;
+    for (const [key, processedAt] of this.processedVoiceSources) {
+      if (now - processedAt > ttlMs) this.processedVoiceSources.delete(key);
+    }
+    return this.processedVoiceSources.has(sourceKey);
   }
 
   // Telegram присылает альбом как несколько update с общим media_group_id, причём caption
@@ -1552,6 +1632,12 @@ function formatSenderName(from: {
   if (full) return full;
   if (from.username) return `@${from.username}`;
   return 'участник';
+}
+
+function excerptVoiceTranscript(text: string, limit: number): string {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= limit) return normalized;
+  return `${normalized.slice(0, limit - 38).trimEnd()}…\n\n(Полный текст учтён в новой задаче)`;
 }
 
 function escapeHtml(s: string): string {
