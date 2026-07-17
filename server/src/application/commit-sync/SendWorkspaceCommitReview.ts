@@ -73,6 +73,15 @@ export class SendWorkspaceCommitReview {
       .slice(0, MAX_REVIEWS);
     const authors = await this.resolveAuthors(input.projectId);
     const taskRows = await this.buildTaskRows(input);
+    // The review job still runs every weekday, but a clean result must stay silent.
+    // Telegram is reserved for something a person can act on: an attention verdict
+    // or a task matched to a commit (with the in-message task actions).
+    if (
+      taskRows.length === 0 &&
+      !knownReviews.some((review) => review.verdict === 'attention')
+    ) {
+      return false;
+    }
     const overall = summaryText(input.overallSummary, knownReviews);
     const richHtml = buildCommitReviewRichHtml({
       projectName: project.name,

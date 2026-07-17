@@ -120,3 +120,78 @@ test('commit review mentions only the author needing attention and has in-table 
   assert.equal(rich[0]!.replyMarkup, undefined);
   assert.deepEqual(attached, [[actionToken]]);
 });
+
+test('commit review stays silent when there are no commits or every reviewed commit is good', async () => {
+  let sent = 0;
+  const service = new SendWorkspaceCommitReview({
+    settings: {
+      async get() {
+        return {
+          ...defaultWorkspaceAssigneeDigestSettings('w1'),
+          commitSyncEnabled: true,
+          telegramGroupChatId: -100,
+          projectMode: 'all' as const,
+        };
+      },
+    } as never,
+    projects: {
+      async getById() {
+        return { id: 'p1', name: 'OrdersFlow' };
+      },
+      async getWorkspaceId() {
+        return 'w1';
+      },
+    } as never,
+    members: { async listByProject() { return []; } } as never,
+    githubTokens: { async getByUserId() { return null; } } as never,
+    users: { async getTelegramLink() { return null; } } as never,
+    tasks: { async getById() { return null; } } as never,
+    createEmailActionToken: { async execute() { return 'unused'; } } as never,
+    telegramDigestActions: { async attach() {} } as never,
+    telegram: {
+      async sendRichMessage() {
+        sent += 1;
+        return { kind: 'ok' as const, messageId: sent };
+      },
+      async sendMessage() {
+        sent += 1;
+        return { kind: 'ok' as const, messageId: sent };
+      },
+    } as never,
+    appUrl: 'https://projectsflow.ru',
+  });
+
+  assert.equal(
+    await service.execute({
+      projectId: 'p1',
+      dispatcherUserId: 'u1',
+      commits: {},
+      matches: [],
+      reviews: [],
+      overallSummary: 'За сегодня новых коммитов нет. Всё отлично.',
+    }),
+    false,
+  );
+
+  const sha = 'c'.repeat(40);
+  assert.equal(
+    await service.execute({
+      projectId: 'p1',
+      dispatcherUserId: 'u1',
+      commits: {
+        [sha]: {
+          committedAt: '2026-07-17T10:00:00.000Z',
+          message: 'safe change',
+          htmlUrl: 'https://github.test/c',
+          authorName: 'Developer',
+          authorLogin: 'developer',
+        },
+      },
+      matches: [],
+      reviews: [{ commitSha: sha, verdict: 'good', summary: 'Всё хорошо.' }],
+      overallSummary: 'Проверка пройдена.',
+    }),
+    false,
+  );
+  assert.equal(sent, 0);
+});
