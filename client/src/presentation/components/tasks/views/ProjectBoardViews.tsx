@@ -6,8 +6,6 @@ import {
   Calendar,
   CalendarClock,
   CalendarDays,
-  ChartNoAxesColumn,
-  ChartNoAxesGantt,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -18,14 +16,10 @@ import {
   Eye,
   FileText,
   Flag,
-  Images,
-  LayoutDashboard,
   LayoutGrid,
   Link as LinkIcon,
   List,
   ListFilter,
-  Map as MapIcon,
-  Newspaper,
   Paintbrush,
   Pencil,
   Plus,
@@ -33,7 +27,6 @@ import {
   Search,
   Settings2,
   Table as TableIcon,
-  ClipboardList,
   Trash2,
   X,
   Zap,
@@ -86,7 +79,6 @@ import { KanbanBoard } from '../KanbanBoard';
 import { TableView } from './TableView';
 import { ListView } from './ListView';
 import { CalendarView } from './CalendarView';
-import { ExtendedProjectView, type ExtendedViewType } from './ExtendedProjectViews';
 import {
   EMPTY_PER_VIEW_STATE,
   RULE_COLOR_DOT,
@@ -108,7 +100,6 @@ import {
   type ViewDueFilter,
   type ViewFilters,
   type ViewGrouping,
-  type ViewFormState,
   type ViewLayoutState,
   type ViewRuleColor,
   type ViewSort,
@@ -127,13 +118,6 @@ export const VIEW_TYPE_ICONS: Record<BoardViewType, LucideIcon> = {
   table: TableIcon,
   list: List,
   calendar: Calendar,
-  timeline: ChartNoAxesGantt,
-  gallery: Images,
-  chart: ChartNoAxesColumn,
-  feed: Newspaper,
-  map: MapIcon,
-  dashboard: LayoutDashboard,
-  form: ClipboardList,
 };
 
 // Иконка отображения: lucide-иконка типа ИЛИ кастомное эмодзи из config (Notion view icon).
@@ -374,7 +358,6 @@ export function ProjectBoardViews({
   );
   const activeType: BoardViewType = active?.type ?? 'kanban';
   const isKanban = activeId === DEFAULT_VIEW_ID || activeType === 'kanban';
-  const isStandaloneView = activeType === 'dashboard' || activeType === 'form';
 
   const state: PerViewState = perView[activeId] ?? EMPTY_PER_VIEW_STATE;
   useEffect(() => {
@@ -418,11 +401,6 @@ export function ProjectBoardViews({
     setPerView((prev) => ({
       ...prev,
       [activeId]: { ...state, layout: { ...state.layout, ...patch } },
-    }));
-  const setFormState = (patch: Partial<ViewFormState>): void =>
-    setPerView((prev) => ({
-      ...prev,
-      [activeId]: { ...state, form: { ...state.form, ...patch } },
     }));
 
   // Гидратация пер-вью состояния из серверного config (только впервые увиденные вью —
@@ -796,7 +774,7 @@ export function ProjectBoardViews({
       destructive: true,
       onSelect: () => setDeleteTarget(v),
     },
-    ...(v.type === 'calendar' || v.type === 'timeline'
+    ...(v.type === 'calendar'
       ? ([
           { kind: 'separator' },
           {
@@ -1040,10 +1018,10 @@ export function ProjectBoardViews({
             оставаться справа так же, как в таблице. На узком экране остаются
             настройки и «Создать». */}
         <div className="flex shrink-0 items-center gap-0.5">
-          {!isStandaloneView && <div className="md:hidden">
+          <div className="md:hidden">
             <FilterMenu filters={state.filters} onChange={setFilters} active={filtersActive} />
-          </div>}
-          {!isStandaloneView && <div className="hidden items-center gap-0.5 md:flex">
+          </div>
+          <div className="hidden items-center gap-0.5 md:flex">
             <FilterMenu filters={state.filters} onChange={setFilters} active={filtersActive} />
             <SortMenu sort={state.sort} onChange={setSort} />
             {canEdit && onOpenAutomation && (
@@ -1081,13 +1059,13 @@ export function ProjectBoardViews({
                   <Search className="size-4" />
                 </ToolbarIcon>
               )}
-          </div>}
+          </div>
           {(active || isKanban) && (
             <ToolbarIcon label="Настройки отображения" onClick={() => openSettings()}>
               <Settings2 className="size-4" />
             </ToolbarIcon>
           )}
-          {canEdit && !isStandaloneView && <div className="ml-1 inline-flex overflow-hidden rounded-md">
+          {canEdit && <div className="ml-1 inline-flex overflow-hidden rounded-md">
             <Button
               size="sm"
               className="h-10 rounded-r-none px-3.5 text-sm sm:h-9 sm:text-xs"
@@ -1152,7 +1130,7 @@ export function ProjectBoardViews({
 
       {/* Строка активных фильтров/сортировки (chips, Notion-style): клик по chip —
           попап значений (чекбоксы) + «Убрать фильтр»; «+ Фильтр» добавляет следующий. */}
-      {chipsVisible && !isStandaloneView && (
+      {chipsVisible && (
         <div className="flex max-w-full items-center gap-1 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible">
           {state.sort && (
             <button
@@ -1285,23 +1263,7 @@ export function ProjectBoardViews({
           createRequest={createReq}
           canEdit={canEdit}
         />
-      ) : (
-        <ExtendedProjectView
-          key={`${projectId}:${activeId}`}
-          type={activeType as ExtendedViewType}
-          projectId={projectId}
-          projectName={projectName}
-          memberCount={memberCount}
-          filters={state.filters}
-          sort={state.sort}
-          layout={state.layout}
-          onLayoutChange={setLayoutState}
-          form={state.form}
-          onFormChange={setFormState}
-          createRequest={createReq}
-          canEdit={canEdit}
-        />
-      )}
+      ) : null}
 
       </div>
       {/* Панель «Новое отображение» (Notion): сразу после создания — имя/тип → «Готово»
@@ -1605,16 +1567,13 @@ function LayoutOptions({
   layout: ViewLayoutState;
   onChange: (patch: Partial<ViewLayoutState>) => void;
 }): React.ReactElement {
-  const canShowPageIcon = type !== 'chart' && type !== 'dashboard' && type !== 'form';
   return (
     <div className="flex flex-col border-t px-1.5 py-1.5">
-      {canShowPageIcon && (
-        <ToggleRow
-          label="Показывать иконку страницы"
-          checked={layout.showPageIcon}
-          onChange={(showPageIcon) => onChange({ showPageIcon })}
-        />
-      )}
+      <ToggleRow
+        label="Показывать иконку страницы"
+        checked={layout.showPageIcon}
+        onChange={(showPageIcon) => onChange({ showPageIcon })}
+      />
       {type === 'table' && (
         <>
           <ToggleRow
@@ -1643,13 +1602,6 @@ function LayoutOptions({
           />
         </>
       )}
-      {type === 'timeline' && (
-        <ToggleRow
-          label="Показывать таблицу"
-          checked={layout.showTimelineTable}
-          onChange={(showTimelineTable) => onChange({ showTimelineTable })}
-        />
-      )}
       {type === 'calendar' && (
         <>
           <ToggleRow
@@ -1664,26 +1616,7 @@ function LayoutOptions({
           />
         </>
       )}
-      {type === 'gallery' && (
-        <>
-          <ToggleRow
-            label="Переносить всё содержимое"
-            checked={layout.wrapAll}
-            onChange={(wrapAll) => onChange({ wrapAll })}
-          />
-          <SelectRow
-            label="Предпросмотр карточки"
-            value={layout.cardPreview}
-            options={[
-              { value: 'none', label: 'Нет' },
-              { value: 'cover', label: 'Обложка' },
-              { value: 'content', label: 'Содержимое' },
-            ]}
-            onChange={(cardPreview) => onChange({ cardPreview })}
-          />
-        </>
-      )}
-      {(type === 'kanban' || type === 'gallery') && (
+      {type === 'kanban' && (
         <>
           <SelectRow
             label="Размер карточки"
@@ -1706,42 +1639,16 @@ function LayoutOptions({
           />
         </>
       )}
-      {type === 'feed' && (
-        <>
-          <ToggleRow
-            label="Показывать автора"
-            checked={layout.showAuthorByline}
-            onChange={(showAuthorByline) => onChange({ showAuthorByline })}
-          />
-          <ToggleRow
-            label="Переносить свойства"
-            checked={layout.wrapProperties}
-            onChange={(wrapProperties) => onChange({ wrapProperties })}
-          />
-          <SelectRow
-            label="Лимит загрузки"
-            value={layout.feedLimit}
-            options={[
-              { value: 10, label: '10' },
-              { value: 20, label: '20' },
-              { value: 50, label: '50' },
-            ]}
-            onChange={(feedLimit) => onChange({ feedLimit })}
-          />
-        </>
-      )}
-      {type !== 'chart' && type !== 'dashboard' && type !== 'form' && (
-        <SelectRow
-          label="Открывать страницы"
-          value={layout.openPagesIn}
-          options={[
-            { value: 'side', label: 'Сбоку' },
-            { value: 'center', label: 'По центру' },
-            { value: 'full', label: 'На всю страницу' },
-          ]}
-          onChange={(openPagesIn) => onChange({ openPagesIn })}
-        />
-      )}
+      <SelectRow
+        label="Открывать страницы"
+        value={layout.openPagesIn}
+        options={[
+          { value: 'side', label: 'Сбоку' },
+          { value: 'center', label: 'По центру' },
+          { value: 'full', label: 'На всю страницу' },
+        ]}
+        onChange={(openPagesIn) => onChange({ openPagesIn })}
+      />
     </div>
   );
 }
@@ -1857,10 +1764,7 @@ function NewViewPanel({
         />
       </div>
       <div className="grid grid-cols-3 gap-1.5 p-3 pt-2">
-        {(view.type === 'dashboard' || view.type === 'form'
-          ? [view.type]
-          : BOARD_VIEW_LAYOUT_TYPES
-        ).map((t) => {
+        {BOARD_VIEW_LAYOUT_TYPES.map((t) => {
           const Icon = VIEW_TYPE_ICONS[t];
           const selected = view.type === t;
           return (
@@ -2684,7 +2588,7 @@ function ViewSettingsCard({
                 className="h-8 w-full rounded-md border bg-background px-2.5 text-sm outline-none focus:border-foreground/30"
               />
             </div>
-            {canEdit && view.type !== 'dashboard' && view.type !== 'form' && (
+            {canEdit && (
               <NavRow
                 icon={TypeIcon}
                 label="Макет"

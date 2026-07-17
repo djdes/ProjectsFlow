@@ -1748,13 +1748,6 @@ export const boardViews = mysqlTable(
       'table',
       'list',
       'calendar',
-      'timeline',
-      'gallery',
-      'chart',
-      'feed',
-      'map',
-      'dashboard',
-      'form',
     ]).notNull(),
     sortOrder: int('sort_order').notNull().default(0),
     // db/105: пер-вью настройки (фильтры/сортировка/колонки/группировка…) —

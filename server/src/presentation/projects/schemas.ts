@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { KANBAN_COLORS, VISIBLE_KANBAN_STATUSES } from '../../domain/kanban/KanbanSettings.js';
 import { NOTIF_EVENT_TYPES, type NotifEventType } from '../../domain/notifications/NotificationPrefs.js';
 import { ASSIGNED_GROUPINGS } from '../../domain/user/UiPrefs.js';
+import { BOARD_VIEW_TYPES } from '../../domain/project/BoardView.js';
 
 const NOTIF_EVENT_TYPES_TUPLE = NOTIF_EVENT_TYPES as unknown as [NotifEventType, ...NotifEventType[]];
 
@@ -118,38 +119,12 @@ export const kanbanDefaultColorsSchema = z.record(
 // Пользовательские вью доски (Notion-style, db/103).
 export const createBoardViewSchema = z.object({
   name: z.string().trim().min(1, 'Введите название').max(64),
-  type: z.enum([
-    'kanban',
-    'table',
-    'list',
-    'calendar',
-    'timeline',
-    'gallery',
-    'chart',
-    'feed',
-    'map',
-    'dashboard',
-    'form',
-  ]),
+  type: z.enum(BOARD_VIEW_TYPES),
 });
 export const updateBoardViewSchema = z
   .object({
     name: z.string().trim().min(1, 'Введите название').max(64).optional(),
-    type: z
-      .enum([
-        'kanban',
-        'table',
-        'list',
-        'calendar',
-        'timeline',
-        'gallery',
-        'chart',
-        'feed',
-        'map',
-        'dashboard',
-        'form',
-      ])
-      .optional(),
+    type: z.enum(BOARD_VIEW_TYPES).optional(),
     // Порядок вкладок (drag-reorder в окне «ещё…», Notion-style).
     sortOrder: z.number().int().min(0).max(100000).optional(),
     // Пер-вью настройки — прозрачный JSON от клиента; ограничиваем только размер.

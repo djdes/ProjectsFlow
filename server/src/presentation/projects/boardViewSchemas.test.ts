@@ -11,11 +11,11 @@ describe('board view schemas', () => {
     }
   });
 
-  it('rejects an unknown view type', () => {
-    assert.equal(
-      createBoardViewSchema.safeParse({ name: 'Unknown', type: 'mind-map' }).success,
-      false,
-    );
+  it('rejects retired and unknown view types', () => {
+    for (const type of ['timeline', 'gallery', 'chart', 'feed', 'map', 'dashboard', 'form', 'mind-map']) {
+      assert.equal(createBoardViewSchema.safeParse({ name: 'Unsupported', type }).success, false);
+      assert.equal(updateBoardViewSchema.safeParse({ type }).success, false);
+    }
   });
 
   it('keeps the shared view config size limit', () => {

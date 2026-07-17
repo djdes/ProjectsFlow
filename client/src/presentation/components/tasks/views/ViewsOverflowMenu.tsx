@@ -200,14 +200,7 @@ export function ViewsOverflowMenu({
     const text = description.trim().toLocaleLowerCase('ru');
     if (!text) return;
     const mappings: [RegExp, BoardViewType][] = [
-      [/форм/, 'form'],
-      [/даш|dashboard/, 'dashboard'],
-      [/тайм|timeline|гант/, 'timeline'],
       [/кален|calendar/, 'calendar'],
-      [/галер|gallery/, 'gallery'],
-      [/граф|chart/, 'chart'],
-      [/лента|feed/, 'feed'],
-      [/карт|map/, 'map'],
       [/спис|list/, 'list'],
       [/доск|board|канбан/, 'kanban'],
       [/табл|table/, 'table'],
