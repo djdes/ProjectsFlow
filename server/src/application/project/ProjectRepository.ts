@@ -71,6 +71,12 @@ export interface ProjectRepository {
   getWorkspaceId(projectId: string): Promise<string | null>;
   // Проекты пространства (для страницы настроек пространства). Лёгкий read-model.
   listByWorkspace(workspaceId: string): Promise<Array<{ id: string; name: string; icon: string | null }>>;
+  // Полный серверный read-model пространства, включая персональные inbox-проекты.
+  // Нужен фоновым workspace-wide сценариям (например, напоминанию о дедлайнах),
+  // где скрытие inbox из обычного UI-списка не должно скрывать сами задачи.
+  listAllByWorkspace?(
+    workspaceId: string,
+  ): Promise<Array<{ id: string; name: string; icon: string | null }>>;
   // Все проекты с непустым git_repo_url. Нормализацию/фильтрацию делает use-case
   // (CheckGitCollision) — он же контролирует cross-tenant-раскрытие.
   listWithGitRepo(): Promise<Project[]>;

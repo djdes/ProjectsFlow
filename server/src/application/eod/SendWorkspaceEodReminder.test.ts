@@ -34,9 +34,28 @@ test('workspace EOD reminder includes due work from every project and every actu
           { id: 'p2', name: 'Banana', icon: null },
         ];
       },
+      async listAllByWorkspace() {
+        return [
+          { id: 'p1', name: 'DocsFlow', icon: null },
+          { id: 'p2', name: 'Banana', icon: null },
+          { id: 'inbox-u3', name: 'inbox:u3', icon: null },
+        ];
+      },
     } as never,
     tasks: {
       async listByProject(projectId: string) {
+        if (projectId === 'inbox-u3') {
+          return [
+            {
+              id: 't6',
+              projectId: 'inbox-u3',
+              status: 'backlog',
+              description: 'Задача из личных входящих',
+              deadline: '2000-01-03',
+              assignee: { userId: 'u3', displayName: 'Мистер Линукс' },
+            },
+          ];
+        }
         return projectId === 'p1'
           ? [
               {
@@ -116,15 +135,16 @@ test('workspace EOD reminder includes due work from every project and every actu
     appUrl: 'https://projectsflow.ru',
   });
 
-  assert.deepEqual(await send.execute('w1'), { projectCount: 2, taskCount: 2 });
+  assert.deepEqual(await send.execute('w1'), { projectCount: 3, taskCount: 3 });
   assert.equal(rich.length, 1);
   assert.equal(rich[0]!.chatId, -1007);
   assert.match(rich[0]!.html, /<details><summary>Показать по ответственным \(3\)<\/summary>/);
   assert.match(rich[0]!.html, /@anna_pf — проверить и доделать \(1\)/);
   assert.match(rich[0]!.html, /@boris_pf — молодец, всё сделано/);
-  assert.match(rich[0]!.html, /@mrlinux_pf — проверить и доделать \(1\)/);
+  assert.match(rich[0]!.html, /@mrlinux_pf — проверить и доделать \(2\)/);
   assert.match(rich[0]!.html, /Проверить документы/);
   assert.match(rich[0]!.html, /Исправить сервер/);
+  assert.match(rich[0]!.html, /Задача из личных входящих/);
   assert.match(rich[0]!.html, /Banana/);
   assert.doesNotMatch(rich[0]!.html, /Задача без дедлайна|Будущая задача|Готово/);
   assert.match(rich[0]!.html, new RegExp(`/api/telegram-digest-actions/${token}`));

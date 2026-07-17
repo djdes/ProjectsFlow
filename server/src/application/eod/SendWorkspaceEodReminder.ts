@@ -64,10 +64,13 @@ export class SendWorkspaceEodReminder {
 
     const [members, workspaceProjects] = await Promise.all([
       this.deps.workspaces.listMembers(workspaceId),
-      this.deps.projects.listByWorkspace(workspaceId),
+      this.deps.projects.listAllByWorkspace
+        ? this.deps.projects.listAllByWorkspace(workspaceId)
+        : this.deps.projects.listByWorkspace(workspaceId),
     ]);
     // EOD is a workspace-wide deadline ritual. Project selection still scopes the
     // regular digest and commit review, but must not hide a person's overdue work.
+    // Unlike the project-settings list, this includes personal inbox projects too.
     const projects = workspaceProjects;
     const today = mskDateOnly(new Date());
     const tasksByProject = await Promise.all(
