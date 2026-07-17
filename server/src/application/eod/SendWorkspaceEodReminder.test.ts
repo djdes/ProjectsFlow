@@ -38,7 +38,7 @@ test('workspace EOD reminder includes due work from every project and every actu
         return [
           { id: 'p1', name: 'DocsFlow', icon: null },
           { id: 'p2', name: 'Banana', icon: null },
-          { id: 'inbox-u3', name: 'inbox:u3', icon: null },
+          { id: 'inbox-u3', name: 'Входящие', icon: null },
         ];
       },
     } as never,
@@ -145,6 +145,7 @@ test('workspace EOD reminder includes due work from every project and every actu
   assert.match(rich[0]!.html, /Проверить документы/);
   assert.match(rich[0]!.html, /Исправить сервер/);
   assert.match(rich[0]!.html, /Задача из личных входящих/);
+  assert.match(rich[0]!.html, /Входящие/);
   assert.match(rich[0]!.html, /Banana/);
   assert.doesNotMatch(rich[0]!.html, /Задача без дедлайна|Будущая задача|Готово/);
   assert.match(rich[0]!.html, new RegExp(`/api/telegram-digest-actions/${token}`));

@@ -277,11 +277,20 @@ export class DrizzleProjectRepository implements ProjectRepository {
     workspaceId: string,
   ): Promise<Array<{ id: string; name: string; icon: string | null }>> {
     const rows = await this.db
-      .select({ id: projects.id, name: projects.name, icon: projects.icon })
+      .select({
+        id: projects.id,
+        name: projects.name,
+        icon: projects.icon,
+        isInbox: projects.isInbox,
+      })
       .from(projects)
       .where(eq(projects.workspaceId, workspaceId))
       .orderBy(projects.createdAt);
-    return rows.map((r) => ({ id: r.id, name: r.name, icon: r.icon ?? null }));
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.isInbox ? 'Входящие' : r.name,
+      icon: r.icon ?? null,
+    }));
   }
 
   async listWithGitRepo(): Promise<Project[]> {
