@@ -318,9 +318,17 @@ export type CommitSyncMatchInput = {
   reason?: string | null;
 };
 
+export type CommitSyncReviewInput = {
+  commitSha: string;
+  verdict: 'good' | 'attention';
+  summary: string;
+};
+
 export type CompleteCommitSyncJobInput = {
   ok: boolean;
   matches?: CommitSyncMatchInput[] | null;
+  reviews?: CommitSyncReviewInput[] | null;
+  overallSummary?: string | null;
   error?: string | null;
   costUsd?: number | null;
   tokensIn?: number | null;

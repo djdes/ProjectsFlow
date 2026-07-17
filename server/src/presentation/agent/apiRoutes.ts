@@ -1362,12 +1362,19 @@ export function agentApiRouter(deps: Deps): Router {
     commitSha: z.string().min(1),
     reason: z.string().max(2000).nullable().optional(),
   });
+  const commitSyncReviewSchema = z.object({
+    commitSha: z.string().min(1),
+    verdict: z.enum(['good', 'attention']),
+    summary: z.string().trim().min(1).max(2000),
+  });
 
   const completeCommitSyncBodySchema = z
     .object({
       ok: z.boolean(),
       // Пустой массив = «совпадений нет» — валидно для ok=true.
       matches: z.array(commitSyncMatchSchema).max(500).nullable().optional(),
+      reviews: z.array(commitSyncReviewSchema).max(50).nullable().optional(),
+      overallSummary: z.string().trim().max(4000).nullable().optional(),
       error: z.string().max(500).nullable().optional(),
       costUsd: z.number().nullable().optional(),
       tokensIn: z.number().int().nullable().optional(),
@@ -1443,6 +1450,14 @@ export function agentApiRouter(deps: Deps): Router {
         matches: body.matches
           ? body.matches.map((m) => ({ taskId: m.taskId, commitSha: m.commitSha, reason: m.reason ?? null }))
           : null,
+        reviews: body.reviews
+          ? body.reviews.map((review) => ({
+              commitSha: review.commitSha,
+              verdict: review.verdict,
+              summary: review.summary,
+            }))
+          : null,
+        overallSummary: body.overallSummary ?? null,
         error: body.error ?? null,
         costUsd: body.costUsd ?? null,
         tokensIn: body.tokensIn ?? null,

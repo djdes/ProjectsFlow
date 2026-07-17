@@ -182,6 +182,7 @@ import { EnqueueCommitSyncJob } from './application/commit-sync/EnqueueCommitSyn
 import { ListPendingCommitSyncJobs } from './application/commit-sync/ListPendingCommitSyncJobs.js';
 import { ClaimCommitSyncJob } from './application/commit-sync/ClaimCommitSyncJob.js';
 import { CompleteCommitSyncJob } from './application/commit-sync/CompleteCommitSyncJob.js';
+import { SendWorkspaceCommitReview } from './application/commit-sync/SendWorkspaceCommitReview.js';
 import { DrizzleCloseProposalRepository } from './infrastructure/repositories/DrizzleCloseProposalRepository.js';
 import { CreateCloseProposals } from './application/close-proposal/CreateCloseProposals.js';
 import { ConfirmCloseProposal } from './application/close-proposal/ConfirmCloseProposal.js';
@@ -1192,6 +1193,17 @@ setInterval(() => {
 // Ежедневная commit-sync (db/072): планировщик ставит job, диспетчер матчит коммиты с
 // задачами, сервер двигает статусы по порогу. Зеркало monitoring_analysis_jobs.
 const commitSyncJobRepo = new DrizzleCommitSyncJobRepository(db);
+// Shared one-click action infrastructure is created before commit-sync so the
+// 17:00 consolidated review can embed task actions directly in its rich table.
+const emailActionTokenRepo = new DrizzleEmailActionTokenRepository(db);
+const telegramDigestActionDeliveryRepo =
+  new DrizzleTelegramDigestActionDeliveryRepository(db);
+const createEmailActionToken = new CreateEmailActionToken({
+  tokens: emailActionTokenRepo,
+  idGen: idGenerator,
+  now,
+  ttlMs: 7 * 24 * 60 * 60 * 1000,
+});
 const enqueueCommitSyncJob = new EnqueueCommitSyncJob({
   projects: projectRepo,
   automation: automationRepo,
@@ -1208,12 +1220,25 @@ const listPendingCommitSyncJobs = new ListPendingCommitSyncJobs({
   commitSyncJobs: commitSyncJobRepo,
 });
 const claimCommitSyncJob = new ClaimCommitSyncJob({ commitSyncJobs: commitSyncJobRepo, checkBudget });
+const sendWorkspaceCommitReview = new SendWorkspaceCommitReview({
+  settings: workspaceAssigneeDigestRepo,
+  projects: projectRepo,
+  members: projectMemberRepo,
+  tasks: taskRepo,
+  users: userRepo,
+  githubTokens: githubTokenRepo,
+  telegram: telegramClient,
+  createEmailActionToken,
+  telegramDigestActions: telegramDigestActionDeliveryRepo,
+  appUrl: appBaseUrl,
+});
 const completeCommitSyncJob = new CompleteCommitSyncJob({
   commitSyncJobs: commitSyncJobRepo,
   tasks: taskRepo,
   recordUsage,
   // Ветка action='propose' (db/101): создаём предложения закрыть вместо авто-перемещения.
   createProposals: createCloseProposals,
+  sendReview: sendWorkspaceCommitReview,
   // Привязка совпавшего коммита к карточке (best-effort, сбой не валит move).
   linkCommit: new LinkCommit({
     projects: projectRepo,
@@ -1335,15 +1360,6 @@ const authDeps = {
 // Ежедневная сводка (db/064): один общий SendDailyDigest для планировщика и кнопки
 // «Отправить сейчас». Полностью серверная рассылка (почта / личный TG / группа / in-app).
 // One-click действия из писем-сводок (db/086): токены + публичный сервис.
-const emailActionTokenRepo = new DrizzleEmailActionTokenRepository(db);
-const telegramDigestActionDeliveryRepo =
-  new DrizzleTelegramDigestActionDeliveryRepository(db);
-const createEmailActionToken = new CreateEmailActionToken({
-  tokens: emailActionTokenRepo,
-  idGen: idGenerator,
-  now,
-  ttlMs: 7 * 24 * 60 * 60 * 1000, // 7 дней на клик
-});
 const emailActionService = new EmailActionService({
   tokens: emailActionTokenRepo,
   tasks: taskRepo,
@@ -2415,9 +2431,13 @@ dailyDigestScheduler.start();
 
 const sendWorkspaceEodReminder = new SendWorkspaceEodReminder({
   settings: workspaceAssigneeDigestRepo,
+  workspaces: workspaceRepo,
   projects: projectRepo,
   tasks: taskRepo,
+  users: userRepo,
   telegram: telegramClient,
+  createEmailActionToken,
+  telegramDigestActions: telegramDigestActionDeliveryRepo,
   appUrl: appBaseUrl,
 });
 const workspaceAssigneeDigestScheduler = new WorkspaceAssigneeDigestScheduler({

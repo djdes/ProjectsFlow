@@ -754,10 +754,12 @@ const TOOLS = [
     description:
       'Atomically claim a queued commit-sync job. Returns the full job including `context` — a ' +
       'pre-assembled markdown bundle: the project\'s open tasks (todo/in_progress) and recent commits ' +
-      'with sha, message, committedAt and ageHours. Read THAT context directly; you do NOT fetch ' +
-      'tasks/commits yourself. Your job: decide which commits SEMANTICALLY reference which task (the ' +
+      'with sha, author, message, committedAt, ageHours and bounded file/diff details for the strongest candidates. Read THAT context directly; you do NOT fetch ' +
+      'tasks/commits yourself. Your job: select and review the meaningful commits from the daily review ' +
+      'window (one, several, or none when everything is routine), and decide which commits SEMANTICALLY reference which task (the ' +
       'commit message/content closes or advances the task — this is NOT id-matching, reason about ' +
-      'meaning). Return only matches as {taskId, commitSha, reason}. Do NOT decide in_progress vs done ' +
+      'meaning). Return matches plus reviews {commitSha, verdict: good|attention, summary} and an ' +
+      'overallSummary. Do NOT decide in_progress vs done ' +
       '— the SERVER applies the age threshold. On 409 another session won — skip. ~5 min before cleanup.',
     inputSchema: {
       type: 'object',
@@ -771,8 +773,8 @@ const TOOLS = [
   {
     name: 'pf_complete_commit_sync_job',
     description:
-      'Finalize a commit-sync job. ok=true requires matches (array of {taskId, commitSha, reason?}); ' +
-      'pass an EMPTY array if no commit semantically matches any task. The server applies the age ' +
+      'Finalize a commit-sync job. ok=true requires matches and accepts selected meaningful commit ' +
+      'reviews plus overallSummary. Pass empty arrays when there are no matches/reviews. The server applies the age ' +
       'threshold deterministically (commit younger than threshold → task to in_progress; older → done). ' +
       'ok=false requires error (≤500 chars). Optionally report costUsd/tokensIn/tokensOut.',
     inputSchema: {
@@ -792,6 +794,24 @@ const TOOLS = [
             },
             required: ['taskId', 'commitSha'],
           },
+        },
+        reviews: {
+          type: ['array', 'null'],
+          description:
+            'Selected meaningful commits from the review window. Use attention only for a concrete risk/problem.',
+          items: {
+            type: 'object',
+            properties: {
+              commitSha: { type: 'string' },
+              verdict: { type: 'string', enum: ['good', 'attention'] },
+              summary: { type: 'string' },
+            },
+            required: ['commitSha', 'verdict', 'summary'],
+          },
+        },
+        overallSummary: {
+          type: ['string', 'null'],
+          description: 'Short overall conclusion. Explicitly say when everything looks good.',
         },
         error: { type: ['string', 'null'], description: 'Short error reason (≤500 chars). Required when ok=false.' },
         costUsd: { type: ['number', 'null'], description: 'Optional run cost in USD.' },
@@ -1595,6 +1615,18 @@ const CompleteCommitSyncJobInput = z.object({
     .max(500)
     .nullable()
     .optional(),
+  reviews: z
+    .array(
+      z.object({
+        commitSha: z.string().min(1),
+        verdict: z.enum(['good', 'attention']),
+        summary: z.string().trim().min(1).max(2000),
+      }),
+    )
+    .max(50)
+    .nullable()
+    .optional(),
+  overallSummary: z.string().trim().max(4000).nullable().optional(),
   error: z.string().max(500).nullable().optional(),
   costUsd: z.number().nullable().optional(),
   tokensIn: z.number().int().nullable().optional(),
@@ -1909,6 +1941,14 @@ async function main(): Promise<void> {
                   reason: m.reason ?? null,
                 }))
               : null,
+            reviews: input.reviews
+              ? input.reviews.map((review) => ({
+                  commitSha: review.commitSha,
+                  verdict: review.verdict,
+                  summary: review.summary,
+                }))
+              : null,
+            overallSummary: input.overallSummary ?? null,
             error: input.error ?? null,
             costUsd: input.costUsd ?? null,
             tokensIn: input.tokensIn ?? null,

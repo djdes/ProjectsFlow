@@ -1,82 +1,222 @@
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
-import type { TelegramClient } from '../telegram/TelegramClient.js';
+import type { SendMessageResult, TelegramClient } from '../telegram/TelegramClient.js';
 import type { WorkspaceAssigneeDigestRepository } from '../digest/WorkspaceAssigneeDigestRepository.js';
-import { escapeHtml } from '../../domain/task/digestFormat.js';
+import type { WorkspaceRepository } from '../workspace/WorkspaceRepository.js';
+import type { UserRepository } from '../user/UserRepository.js';
+import type { CreateEmailActionToken } from '../email-action/CreateEmailActionToken.js';
+import type { TelegramDigestActionDeliveryRepository } from '../digest/TelegramDigestActionDeliveryRepository.js';
+import { extractTelegramDigestActionTokens } from '../digest/TelegramDigestActionService.js';
+import type { TelegramLink } from '../../domain/telegram/TelegramLink.js';
+import type { Task } from '../../domain/task/Task.js';
+import { escapeHtml, formatDeadlineRemainingRu } from '../../domain/task/digestFormat.js';
+import { telegramDigestTaskTitle } from '../task/digest/buildTaskDigest.js';
 
 const OPEN_STATUSES = new Set(['todo', 'in_progress', 'awaiting_clarification']);
+const MAX_TASKS_PER_PERSON = 30;
+
+type Deps = {
+  readonly settings: WorkspaceAssigneeDigestRepository;
+  readonly workspaces: WorkspaceRepository;
+  readonly projects: ProjectRepository;
+  readonly tasks: TaskRepository;
+  readonly users: UserRepository;
+  readonly telegram: TelegramClient;
+  readonly createEmailActionToken: CreateEmailActionToken;
+  readonly telegramDigestActions: TelegramDigestActionDeliveryRepository;
+  readonly appUrl: string;
+};
+
+type PersonSection = {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly telegramLink: TelegramLink | null;
+  readonly tasks: TaskRow[];
+};
+
+type TaskRow = {
+  readonly task: Task;
+  readonly project: { id: string; name: string };
+  readonly completeUrl: string;
+  readonly openUrl: string;
+};
 
 export class SendWorkspaceEodReminder {
-  constructor(
-    private readonly deps: {
-      readonly settings: WorkspaceAssigneeDigestRepository;
-      readonly projects: ProjectRepository;
-      readonly tasks: TaskRepository;
-      readonly telegram: TelegramClient;
-      readonly appUrl: string;
-    },
-  ) {}
+  constructor(private readonly deps: Deps) {}
 
   async execute(workspaceId: string): Promise<{ projectCount: number; taskCount: number }> {
     const settings = await this.deps.settings.get(workspaceId);
     if (!settings.eodReminderEnabled || settings.telegramGroupChatId === null) {
       return { projectCount: 0, taskCount: 0 };
     }
+
+    const [members, workspaceProjects] = await Promise.all([
+      this.deps.workspaces.listMembers(workspaceId),
+      this.deps.projects.listByWorkspace(workspaceId),
+    ]);
     const configured = new Set(settings.projectIds);
-    const projects = (await this.deps.projects.listByWorkspace(workspaceId)).filter(
+    const projects = workspaceProjects.filter(
       (project) => settings.projectMode === 'all' || configured.has(project.id),
     );
-    const rows = (
-      await Promise.all(
-        projects.map(async (project) => ({
-          project,
-          count: (await this.deps.tasks.listByProject(project.id)).filter((task) =>
-            OPEN_STATUSES.has(task.status),
-          ).length,
-        })),
-      )
-    ).filter((row) => row.count > 0);
-    if (rows.length === 0) return { projectCount: projects.length, taskCount: 0 };
-
-    const total = rows.reduce((sum, row) => sum + row.count, 0);
-    const richHtml = [
-      '<h2>🕔 Перед уходом — обновите задачи</h2>',
-      `<p>Открытых задач в выбранных проектах: <b>${total}</b></p>`,
-      `<details><summary>Показать проекты (${rows.length})</summary>`,
-      '<table bordered striped>',
-      '<tr><th>Проект</th><th>Открыто</th></tr>',
-      ...rows.map(
-        ({ project, count }) => {
-          const projectUrl = `${this.deps.appUrl.replace(/\/+$/, '')}/projects/${project.id}`;
-          return (
-            `<tr><td><b>${escapeHtml(project.name)}</b>` +
-            `<br><a href="${escapeHtml(projectUrl)}">↗</a></td>` +
-            `<td>${count}</td></tr>`
-          );
-        },
-      ),
-      '</table>',
-      '<p>Проверьте статусы и оставьте комментарий, если работа остановилась.</p>',
-      '</details>',
-    ].join('');
-    if (this.deps.telegram.sendRichMessage) {
-      const result = await this.deps.telegram.sendRichMessage({
-        chatId: settings.telegramGroupChatId,
-        html: richHtml,
-      });
-      if (result.kind === 'ok' || result.kind === 'error' && result.deliveryUnknown) {
-        return { projectCount: rows.length, taskCount: total };
+    const tasksByProject = await Promise.all(
+      projects.map(async (project) => ({
+        project,
+        tasks: (await this.deps.tasks.listByProject(project.id)).filter((task) =>
+          OPEN_STATUSES.has(task.status),
+        ),
+      })),
+    );
+    const byAssignee = new Map<string, Array<{ task: Task; project: { id: string; name: string } }>>();
+    for (const group of tasksByProject) {
+      for (const task of group.tasks) {
+        const bucket = byAssignee.get(task.assignee.userId) ?? [];
+        bucket.push({ task, project: group.project });
+        byAssignee.set(task.assignee.userId, bucket);
       }
     }
-    const text =
-      `🕔 <b>Перед уходом — обновите задачи</b>\nОткрытых задач: <b>${total}</b>\n\n` +
-      rows.map(({ project, count }) => `• <b>${escapeHtml(project.name)}</b> — ${count}`).join('\n');
-    await this.deps.telegram.sendMessage({
-      chatId: settings.telegramGroupChatId,
-      text,
-      parseMode: 'HTML',
-      disableWebPagePreview: true,
+
+    const base = this.deps.appUrl.replace(/\/+$/, '');
+    const sections: PersonSection[] = [];
+    for (const member of members) {
+      const assigned = (byAssignee.get(member.userId) ?? []).slice(0, MAX_TASKS_PER_PERSON);
+      const taskRows: TaskRow[] = [];
+      for (const row of assigned) {
+        const token = await this.deps.createEmailActionToken.execute({
+          action: 'complete',
+          taskId: row.task.id,
+          projectId: row.project.id,
+          userId: member.userId,
+        });
+        taskRows.push({
+          ...row,
+          completeUrl: `${base}/api/telegram-digest-actions/${token}`,
+          openUrl: `${base}/projects/${row.project.id}?task=${row.task.id}`,
+        });
+      }
+      sections.push({
+        userId: member.userId,
+        displayName: member.displayName ?? member.email ?? 'Участник',
+        telegramLink: await this.deps.users.getTelegramLink(member.userId).catch(() => null),
+        tasks: taskRows,
+      });
+    }
+    sections.sort((left, right) => {
+      if ((left.tasks.length > 0) !== (right.tasks.length > 0)) return left.tasks.length > 0 ? -1 : 1;
+      return left.displayName.localeCompare(right.displayName, 'ru');
     });
-    return { projectCount: rows.length, taskCount: total };
+
+    const total = sections.reduce((sum, section) => sum + section.tasks.length, 0);
+    const richHtml = buildEodRichMessage(sections, total, new Date());
+    let deliveredHtml = richHtml;
+    let deliveredKind: 'rich' | 'html' = 'rich';
+    let result: SendMessageResult | null = null;
+    let fallbackAllowed = !this.deps.telegram.sendRichMessage;
+    if (this.deps.telegram.sendRichMessage) {
+      try {
+        const richResult = await this.deps.telegram.sendRichMessage({
+          chatId: settings.telegramGroupChatId,
+          html: richHtml,
+        });
+        if (richResult.kind === 'ok') result = richResult;
+        fallbackAllowed = richResult.kind === 'error' && richResult.deliveryUnknown !== true;
+      } catch (error) {
+        console.warn('[workspace-eod-reminder] rich message failed', error);
+        fallbackAllowed = false;
+      }
+    }
+
+    if (!result && fallbackAllowed) {
+      deliveredHtml = buildEodFallbackMessage(sections, total, new Date());
+      deliveredKind = 'html';
+      result = await this.deps.telegram.sendMessage({
+        chatId: settings.telegramGroupChatId,
+        text: deliveredHtml,
+        parseMode: 'HTML',
+        disableWebPagePreview: true,
+      });
+    }
+
+    if (result?.kind === 'ok') {
+      await this.deps.telegramDigestActions
+        .attach({
+          tokens: extractTelegramDigestActionTokens(deliveredHtml),
+          chatId: settings.telegramGroupChatId,
+          messageId: result.messageId,
+          messageHtml: deliveredHtml,
+          messageKind: deliveredKind,
+        })
+        .catch((error) => console.warn('[workspace-eod-reminder] remember actions failed', error));
+    }
+    return { projectCount: projects.length, taskCount: total };
   }
+}
+
+export function buildEodRichMessage(
+  sections: readonly PersonSection[],
+  total: number,
+  now: Date,
+): string {
+  const attentionCount = sections.filter((section) => section.tasks.length > 0).length;
+  const html: string[] = [
+    '<h2>🕔 Перед уходом — обновите задачи</h2>',
+    `<p>Открытых задач: <b>${total}</b> · требуют внимания: <b>${attentionCount}</b></p>`,
+    `<details><summary>Показать по ответственным (${sections.length})</summary>`,
+  ];
+  for (const section of sections) {
+    const mention = personMention(section.displayName, section.telegramLink);
+    if (section.tasks.length === 0) {
+      html.push(`<p>✅ ${mention} — молодец, всё сделано.</p>`);
+      continue;
+    }
+    html.push(`<h3>⚠️ ${mention} — проверить и доделать (${section.tasks.length})</h3>`);
+    html.push('<table bordered striped>');
+    html.push('<tr><th>Задача</th><th>Проект</th><th>Дедлайн</th></tr>');
+    for (const row of section.tasks) {
+      const title = telegramDigestTaskTitle((row.task.description ?? '').split('\n')[0] ?? '');
+      const deadline = row.task.deadline ? formatDeadlineRemainingRu(row.task.deadline, now) : '—';
+      html.push(
+        `<tr><td><b>${escapeHtml(title)}</b><br>` +
+          `<a href="${escapeHtml(row.completeUrl)}">✓</a> · ` +
+          `<a href="${escapeHtml(row.openUrl)}">↗</a></td>` +
+          `<td>${escapeHtml(row.project.name)}</td><td>${escapeHtml(deadline)}</td></tr>`,
+      );
+    }
+    html.push('</table>');
+  }
+  html.push('</details>');
+  return html.join('');
+}
+
+export function buildEodFallbackMessage(
+  sections: readonly PersonSection[],
+  total: number,
+  now: Date,
+): string {
+  const lines = [`<b>🕔 Перед уходом — обновите задачи</b>`, `Открытых задач: <b>${total}</b>`];
+  const hidden: string[] = [];
+  for (const section of sections) {
+    const mention = personMention(section.displayName, section.telegramLink);
+    if (section.tasks.length === 0) {
+      hidden.push(`✅ ${mention} — молодец, всё сделано.`);
+      continue;
+    }
+    hidden.push(`⚠️ <b>${mention} — проверить и доделать (${section.tasks.length})</b>`);
+    for (const row of section.tasks) {
+      const title = telegramDigestTaskTitle((row.task.description ?? '').split('\n')[0] ?? '');
+      const deadline = row.task.deadline ? ` · ${formatDeadlineRemainingRu(row.task.deadline, now)}` : '';
+      hidden.push(
+        `<b>${escapeHtml(title)}</b>${escapeHtml(deadline)} ` +
+          `<a href="${escapeHtml(row.completeUrl)}">✓</a> · ` +
+          `<a href="${escapeHtml(row.openUrl)}">↗</a>`,
+      );
+    }
+  }
+  return `${lines.join('\n')}\n<blockquote expandable>${hidden.join('\n\n')}</blockquote>`;
+}
+
+function personMention(displayName: string, link: TelegramLink | null): string {
+  if (!link) return escapeHtml(displayName);
+  const username = link.telegramUsername?.replace(/^@/, '').trim();
+  if (username && /^[A-Za-z0-9_]{5,32}$/.test(username)) return `@${escapeHtml(username)}`;
+  return `@<a href="tg://user?id=${link.telegramUserId}">${escapeHtml(displayName)}</a>`;
 }

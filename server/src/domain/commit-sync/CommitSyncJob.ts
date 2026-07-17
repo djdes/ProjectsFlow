@@ -25,6 +25,15 @@ export type CommitSyncMatch = {
   readonly reason: string | null;
 };
 
+// A deliberately selected commit from the daily review window. The worker may
+// return one, several, or none: this is a review of meaningful changes, not a
+// mechanical dump of every commit.
+export type CommitSyncReview = {
+  readonly commitSha: string;
+  readonly verdict: 'good' | 'attention';
+  readonly summary: string;
+};
+
 export type CommitSyncJob = {
   readonly id: string;
   readonly projectId: string;

@@ -44,7 +44,15 @@ type CommitRawResponse = {
     message: string;
     author: { name: string; date: string };
   };
-  author: { avatar_url: string } | null;
+  author: { avatar_url: string; login: string } | null;
+  stats?: { additions: number; deletions: number; total: number };
+  files?: Array<{
+    filename: string;
+    status: string;
+    additions: number;
+    deletions: number;
+    patch?: string;
+  }>;
 };
 
 export class FetchGithubApiClient implements GithubApiClient {
@@ -141,6 +149,7 @@ export class FetchGithubApiClient implements GithubApiClient {
         sha: c.sha,
         message: c.commit.message,
         authorName: c.commit.author.name,
+        authorLogin: c.author?.login ?? null,
         authorAvatarUrl: c.author?.avatar_url ?? null,
         committedAt: new Date(c.commit.author.date),
         htmlUrl: c.html_url,
@@ -162,9 +171,20 @@ export class FetchGithubApiClient implements GithubApiClient {
       sha: c.sha,
       message: c.commit.message,
       authorName: c.commit.author.name,
+      authorLogin: c.author?.login ?? null,
       authorAvatarUrl: c.author?.avatar_url ?? null,
       committedAt: new Date(c.commit.author.date),
       htmlUrl: c.html_url,
+      additions: c.stats?.additions ?? null,
+      deletions: c.stats?.deletions ?? null,
+      changedFiles: c.files?.length ?? null,
+      files: c.files?.map((file) => ({
+        path: file.filename,
+        status: file.status,
+        additions: file.additions,
+        deletions: file.deletions,
+        patch: file.patch ?? null,
+      })),
     };
   }
 

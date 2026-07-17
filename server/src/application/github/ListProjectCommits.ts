@@ -38,7 +38,12 @@ export function parseGithubOwnerRepo(url: string): { owner: string; repo: string
 export class ListProjectCommits {
   constructor(private readonly deps: Deps) {}
 
-  async execute(projectId: string, ownerUserId: string, limit = DEFAULT_LIMIT): Promise<GithubCommit[]> {
+  async execute(
+    projectId: string,
+    ownerUserId: string,
+    limit = DEFAULT_LIMIT,
+    opts: { detailSince?: Date; detailLimit?: number } = {},
+  ): Promise<GithubCommit[]> {
     const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project');
     if (!project.gitRepoUrl) return [];
 
@@ -48,10 +53,43 @@ export class ListProjectCommits {
     const tokenRow = await this.deps.tokens.getWithTokenByUserId(ownerUserId);
     if (!tokenRow) throw new GithubNotConnectedError();
 
-    return this.deps.api.listRecentCommits(tokenRow.accessToken, {
+    const commits = await this.deps.api.listRecentCommits(tokenRow.accessToken, {
       owner: parsed.owner,
       repo: parsed.repo,
       limit,
     });
+    if (!opts.detailSince) return commits;
+
+    // GitHub's commits list does not contain files/stats/patches. Enrich a bounded
+    // set of the most meaningful-looking daily candidates so the AI reviews code,
+    // not only commit titles, without burning the API quota on every old commit.
+    const detailLimit = Math.max(1, Math.min(opts.detailLimit ?? 12, 20));
+    const candidates = commits
+      .filter((commit) => commit.committedAt >= opts.detailSince!)
+      .filter((commit) => !/^merge\b/i.test(commit.message.trim()))
+      .sort((left, right) => commitDetailScore(right) - commitDetailScore(left))
+      .slice(0, detailLimit);
+    const detailed = await Promise.all(
+      candidates.map((commit) =>
+        this.deps.api
+          .getCommit(tokenRow.accessToken, {
+            owner: parsed.owner,
+            repo: parsed.repo,
+            sha: commit.sha,
+          })
+          .catch(() => commit),
+      ),
+    );
+    const bySha = new Map(detailed.map((commit) => [commit.sha, commit] as const));
+    return commits.map((commit) => bySha.get(commit.sha) ?? commit);
   }
+}
+
+function commitDetailScore(commit: GithubCommit): number {
+  const message = commit.message.trim();
+  let score = Math.min(message.length, 120) / 120;
+  if (/^(feat|fix|refactor|perf|security|revert)(\(.+?\))?!?:/i.test(message)) score += 5;
+  else if (/^(test|build|ci)(\(.+?\))?!?:/i.test(message)) score += 2;
+  if (/^(chore|style|docs)(\(.+?\))?!?:/i.test(message)) score -= 2;
+  return score;
 }

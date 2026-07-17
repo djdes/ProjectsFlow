@@ -1,4 +1,8 @@
-import type { CommitSyncJob, CommitSyncMatch } from '../../domain/commit-sync/CommitSyncJob.js';
+import type {
+  CommitSyncJob,
+  CommitSyncMatch,
+  CommitSyncReview,
+} from '../../domain/commit-sync/CommitSyncJob.js';
 import {
   CommitSyncJobNotFoundError,
   CommitSyncJobNotInRunningStateError,
@@ -10,6 +14,11 @@ import type { LinkCommit } from '../task/LinkCommit.js';
 import type { CommitSyncJobRepository } from './CommitSyncJobRepository.js';
 import type { RecordUsage } from '../usage/RecordUsage.js';
 import type { CreateCloseProposals } from '../close-proposal/CreateCloseProposals.js';
+import type { SendWorkspaceCommitReview } from './SendWorkspaceCommitReview.js';
+import type {
+  CommitSyncSnapshot,
+  CommitSyncSnapshotEntry,
+} from './prepareCommitSyncContext.js';
 
 const MAX_ERROR = 500;
 const MAX_MATCHES = 500;
@@ -24,6 +33,8 @@ type Deps = {
   // Ветка action='propose' (db/101): вместо авто-перемещения создаём предложения закрыть.
   // Если не задан — propose-прогон завершается без предложений (только сводка).
   readonly createProposals?: CreateCloseProposals;
+  // Consolidated 17:00 Telegram message: meaningful commit review + task action icons.
+  readonly sendReview?: SendWorkspaceCommitReview;
 };
 
 export type CompleteCommitSyncJobInput = {
@@ -31,6 +42,8 @@ export type CompleteCommitSyncJobInput = {
   readonly jobId: string;
   readonly ok: boolean;
   readonly matches: ReadonlyArray<CommitSyncMatch> | null;
+  readonly reviews?: ReadonlyArray<CommitSyncReview> | null;
+  readonly overallSummary?: string | null;
   readonly error: string | null;
   readonly costUsd?: number | null;
   readonly tokensIn?: number | null;
@@ -74,16 +87,24 @@ export class CompleteCommitSyncJob {
       return;
     }
 
-    const matches = (input.matches ?? []).slice(0, MAX_MATCHES);
+    const rawMatches = (input.matches ?? []).slice(0, MAX_MATCHES);
+    const embeddedReview = extractEmbeddedReview(rawMatches);
+    const matches = rawMatches.filter((match) => !match.taskId.startsWith('__commit_review'));
+    const effectiveInput: CompleteCommitSyncJobInput = {
+      ...input,
+      matches,
+      reviews: input.reviews ?? embeddedReview.reviews,
+      overallSummary: input.overallSummary ?? embeddedReview.overallSummary,
+    };
 
     // Ветка propose (db/101): НЕ двигаем задачи, а создаём предложения закрыть (human-in-the-loop).
     // Подтвердить сможет любой участник (TG-кнопка / in-app).
     if (job.action === 'propose') {
-      await this.runProposeBranch(job, input, matches);
+      await this.runProposeBranch(job, effectiveInput, matches);
       return;
     }
 
-    const commitTimes = parseCommitsJson(job.commitsJson);
+    const commitSnapshot = parseCommitsJson(job.commitsJson);
     const now = new Date();
     const threshold = job.thresholdHours;
 
@@ -96,12 +117,12 @@ export class CompleteCommitSyncJob {
     for (const m of matches) {
       if (handledTasks.has(m.taskId)) continue;
 
-      const committedAtIso = commitTimes.get(m.commitSha);
-      if (!committedAtIso) {
+      const commit = commitSnapshot[m.commitSha];
+      if (!commit) {
         skipped++;
         continue;
       }
-      const ageHours = (now.getTime() - new Date(committedAtIso).getTime()) / 3_600_000;
+      const ageHours = (now.getTime() - new Date(commit.committedAt).getTime()) / 3_600_000;
 
       const task = await this.deps.tasks.getById(m.taskId);
       if (!task || task.projectId !== job.projectId) {
@@ -151,6 +172,7 @@ export class CompleteCommitSyncJob {
       tokensOut: input.tokensOut ?? null,
     });
     this.meterUsage(job, input);
+    await this.sendReview(job, effectiveInput, matches, commitSnapshot);
   }
 
   // Ветка propose (db/101): создаём предложения закрыть по совпадениям (через
@@ -168,6 +190,7 @@ export class CompleteCommitSyncJob {
           projectId: job.projectId,
           dispatcherUserId: job.dispatcherUserId,
           sourceJobId: job.id,
+          suppressGroupTelegram: true,
           matches: matches.map((m) => ({
             taskId: m.taskId,
             commitSha: m.commitSha,
@@ -190,6 +213,26 @@ export class CompleteCommitSyncJob {
       tokensOut: input.tokensOut ?? null,
     });
     this.meterUsage(job, input);
+    await this.sendReview(job, input, matches, parseCommitsJson(job.commitsJson));
+  }
+
+  private async sendReview(
+    job: CommitSyncJob,
+    input: CompleteCommitSyncJobInput,
+    matches: readonly CommitSyncMatch[],
+    commits: CommitSyncSnapshot,
+  ): Promise<void> {
+    if (!this.deps.sendReview) return;
+    await this.deps.sendReview
+      .execute({
+        projectId: job.projectId,
+        dispatcherUserId: job.dispatcherUserId,
+        commits,
+        matches,
+        reviews: (input.reviews ?? []).slice(0, 50),
+        overallSummary: input.overallSummary ?? null,
+      })
+      .catch((error) => console.warn('[commit-sync] Telegram review failed', job.id, error));
   }
 
   // Метеринг: списываем с подписки диспетчера (best-effort, идемпотентно по source+ref).
@@ -229,16 +272,60 @@ export class CompleteCommitSyncJob {
   }
 }
 
-function parseCommitsJson(json: string | null): Map<string, string> {
-  const map = new Map<string, string>();
-  if (!json) return map;
+export function parseCommitsJson(json: string | null): CommitSyncSnapshot {
+  const snapshot: Record<string, CommitSyncSnapshotEntry> = {};
+  if (!json) return snapshot;
   try {
     const obj = JSON.parse(json) as Record<string, unknown>;
-    for (const [sha, iso] of Object.entries(obj)) {
-      if (typeof iso === 'string') map.set(sha, iso);
+    for (const [sha, value] of Object.entries(obj)) {
+      // Backwards compatibility with jobs queued before the richer snapshot was deployed.
+      if (typeof value === 'string') {
+        snapshot[sha] = {
+          committedAt: value,
+          message: '',
+          htmlUrl: '',
+          authorName: 'GitHub',
+          authorLogin: null,
+        };
+        continue;
+      }
+      if (!value || typeof value !== 'object') continue;
+      const entry = value as Record<string, unknown>;
+      if (typeof entry['committedAt'] !== 'string') continue;
+      snapshot[sha] = {
+        committedAt: entry['committedAt'],
+        message: typeof entry['message'] === 'string' ? entry['message'] : '',
+        htmlUrl: typeof entry['htmlUrl'] === 'string' ? entry['htmlUrl'] : '',
+        authorName: typeof entry['authorName'] === 'string' ? entry['authorName'] : 'GitHub',
+        authorLogin: typeof entry['authorLogin'] === 'string' ? entry['authorLogin'] : null,
+      };
     }
   } catch {
     // Битый снапшот — вернём пустую карту, complete пропустит все совпадения (skipped).
   }
-  return map;
+  return snapshot;
+}
+
+// Compatibility with already published MCP clients that only know the historic
+// `matches` field. The context asks them to return review records as sentinel
+// matches; newer clients may send first-class reviews/overallSummary instead.
+export function extractEmbeddedReview(matches: readonly CommitSyncMatch[]): {
+  readonly reviews: CommitSyncReview[];
+  readonly overallSummary: string | null;
+} {
+  const reviews: CommitSyncReview[] = [];
+  let overallSummary: string | null = null;
+  for (const match of matches) {
+    if (match.taskId === '__commit_review_summary__') {
+      overallSummary = match.reason?.trim() || null;
+      continue;
+    }
+    const verdict = match.taskId.match(/^__commit_review__:(good|attention)$/)?.[1] as
+      | CommitSyncReview['verdict']
+      | undefined;
+    const summary = match.reason?.trim();
+    if (!verdict || !summary) continue;
+    reviews.push({ commitSha: match.commitSha, verdict, summary });
+  }
+  return { reviews, overallSummary };
 }

@@ -23,6 +23,10 @@ export type CreateCloseProposalsInput = {
   readonly dispatcherUserId: string;
   readonly sourceJobId: string | null;
   readonly matches: ReadonlyArray<CloseProposalMatchInput>;
+  // Daily commit review sends one consolidated rich message with in-row actions.
+  // Keep proposals/comments/in-app notifications, but suppress the legacy per-task
+  // group messages with inline keyboards.
+  readonly suppressGroupTelegram?: boolean;
 };
 
 type Deps = {
@@ -146,7 +150,7 @@ export class CreateCloseProposals {
         } catch (err) {
           console.warn('[CreateCloseProposals] in-app notify failed', mem.userId, err);
         }
-        if (groupChatId === null) {
+        if (groupChatId === null && !input.suppressGroupTelegram) {
           try {
             await this.deps.tgSend.execute({
               userId: mem.userId,
@@ -162,7 +166,7 @@ export class CreateCloseProposals {
           }
         }
       }
-      if (groupChatId !== null) {
+      if (groupChatId !== null && !input.suppressGroupTelegram) {
         await this.deps.telegram
           .sendMessage({
             chatId: groupChatId,

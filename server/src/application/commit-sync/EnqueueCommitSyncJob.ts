@@ -5,7 +5,10 @@ import type { AutomationRepository } from '../automation/AutomationRepository.js
 import { defaultAutomationConfig } from '../automation/criteria.js';
 import type { ListProjectCommits } from '../github/ListProjectCommits.js';
 import type { CommitSyncJobRepository } from './CommitSyncJobRepository.js';
-import { prepareCommitSyncContext } from './prepareCommitSyncContext.js';
+import {
+  commitReviewWindowHours,
+  prepareCommitSyncContext,
+} from './prepareCommitSyncContext.js';
 
 // Сколько коммитов отдаём модели на сопоставление (свежие сверху). Хватает покрыть
 // несколько дней активности; ranних коммитов для старых задач достаточно для done-перехода.
@@ -20,8 +23,10 @@ type Deps = {
 };
 
 // Системный путь (вызывает планировщик): ставит commit-sync job для проекта.
-// Возвращает null если делать нечего: нет диспетчера / выключено / нет todo/in_progress
-// задач / нет коммитов / уже есть активный job / нет GitHub-доступа. Планировщик в любом
+// Возвращает null если делать нечего: нет диспетчера / выключено /
+// уже есть активный job / нет GitHub-доступа. Пустой репозиторий всё равно
+// создаёт job, чтобы в 17:00 пришёл честный итог «за период коммитов нет».
+// Планировщик в любом
 // случае пометит прогон (markCommitSyncRun) — чтобы не ретраить каждую минуту.
 export class EnqueueCommitSyncJob {
   constructor(private readonly deps: Deps) {}
@@ -43,7 +48,8 @@ export class EnqueueCommitSyncJob {
 
     const allTasks = await this.deps.tasks.listByProject(projectId);
     const openTasks = allTasks.filter((t) => t.status === 'todo' || t.status === 'in_progress');
-    if (openTasks.length === 0) return null;
+    // Даже без открытых задач прогон нужен для содержательного обзора коммитов:
+    // в Telegram должен прийти честный итог «всё хорошо» или замечания по изменениям.
 
     // Коммиты тянем токеном диспетчера (он — участник проекта, read_project проходит).
     // Нет GitHub-токена / репозитория → пропускаем прогон (планировщик пометит дату).
@@ -53,12 +59,14 @@ export class EnqueueCommitSyncJob {
         projectId,
         dispatcherUserId,
         COMMIT_FETCH_LIMIT,
+        {
+          detailSince: new Date(now.getTime() - commitReviewWindowHours(now) * 3_600_000),
+          detailLimit: 12,
+        },
       );
     } catch {
       return null;
     }
-    if (commits.length === 0) return null;
-
     const { context, commits: commitSnapshot } = prepareCommitSyncContext({
       tasks: openTasks,
       commits,
