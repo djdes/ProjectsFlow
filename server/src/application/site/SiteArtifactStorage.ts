@@ -10,4 +10,7 @@ export interface SiteArtifactStorage {
   replaceSite(slug: string, files: readonly SiteFile[]): Promise<{ fileCount: number; bytes: number }>;
   // Абсолютная папка сайта — для host-роутинга (express.static по <slug>.projectsflow.ru).
   siteDir(slug: string): string;
+  // Маршруты, которые можно предложить в безопасном path-picker Preview. Это только
+  // HTML entrypoints опубликованного артефакта; произвольные файлы/абсолютные пути не отдаём.
+  listRoutes(slug: string): Promise<readonly string[]>;
 }

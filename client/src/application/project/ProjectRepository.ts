@@ -14,6 +14,7 @@ export type ProjectSite = {
   readonly siteSlug: string | null;
   readonly deployedAt: string | null;
   readonly fileCount: number;
+  readonly routes: readonly string[];
 };
 
 // Бэкенд приложения проекта (SQLite-per-project, db/102). status='none' — бэкенд не заведён
@@ -116,6 +117,75 @@ export type GitCollision = {
   readonly projectName?: string;
 };
 
+export type AppAccess = 'anyone' | 'authenticated' | 'owner';
+export type AppFieldType = 'text' | 'int' | 'real' | 'bool' | 'datetime';
+export type AppField = {
+  readonly name: string;
+  readonly type: AppFieldType;
+  readonly required?: boolean;
+  readonly unique?: boolean;
+};
+export type AppTableRules = {
+  readonly read: AppAccess;
+  readonly write: AppAccess;
+  readonly create?: AppAccess;
+  readonly update?: AppAccess;
+  readonly delete?: AppAccess;
+};
+export type AppTableSchema = {
+  readonly name: string;
+  readonly fields: readonly AppField[];
+  readonly rules: AppTableRules;
+};
+export type AppBackendDashboard = {
+  readonly status: 'none' | 'active';
+  readonly usageBytes: number;
+  readonly storageLimitBytes: number;
+  readonly schema: { readonly tables: readonly AppTableSchema[] } | null;
+  readonly updatedAt: string | null;
+};
+export type AppFilterOperator =
+  | 'eq' | 'neq' | 'contains' | 'starts_with'
+  | 'gt' | 'gte' | 'lt' | 'lte'
+  | 'is_empty' | 'is_not_empty';
+export type AppDataFilter = {
+  readonly column: string;
+  readonly operator: AppFilterOperator;
+  readonly value?: unknown;
+};
+export type AppDataRow = Record<string, unknown>;
+export type AppRowsPage = {
+  readonly rows: readonly AppDataRow[];
+  readonly total: number;
+  readonly limit: number;
+  readonly offset: number;
+};
+export type AppRowsQuery = {
+  readonly filters?: readonly AppDataFilter[];
+  readonly search?: string;
+  readonly sort?: { readonly column: string; readonly dir: 'asc' | 'desc' };
+  readonly limit?: number;
+  readonly offset?: number;
+};
+export type AppCrudRules = {
+  readonly create: AppAccess;
+  readonly read: AppAccess;
+  readonly update: AppAccess;
+  readonly delete: AppAccess;
+};
+export type AppAuditLogEntry = {
+  readonly id: string;
+  readonly actorType: 'runtime' | 'project_member' | 'system';
+  readonly actorId?: string | null;
+  readonly operation: string;
+  readonly tableName?: string | null;
+  readonly rowId?: string | null;
+  readonly success: boolean;
+  readonly detail?: Readonly<Record<string, unknown>> | null;
+  readonly createdAt: string;
+};
+export type AppAuditPage = { readonly rows: readonly AppAuditLogEntry[]; readonly total: number };
+
 export type ImportProjectRepoInput =
   & { readonly archive: File }
   & (
@@ -171,6 +241,20 @@ export interface ProjectRepository {
   getProjectSite(projectId: string): Promise<ProjectSite>;
   // Статус бэкенда приложения (db/102): включён ли, usage/лимит, таблицы. Member-доступ (read).
   getAppBackendStatus(projectId: string): Promise<AppBackendStatus>;
+  getAppBackendDashboard(projectId: string): Promise<AppBackendDashboard>;
+  queryAppRows(projectId: string, table: string, query: AppRowsQuery): Promise<AppRowsPage>;
+  createAppRow(projectId: string, table: string, values: AppDataRow): Promise<AppDataRow>;
+  updateAppRow(projectId: string, table: string, rowId: string, values: AppDataRow): Promise<AppDataRow | null>;
+  deleteAppRow(projectId: string, table: string, rowId: string): Promise<number>;
+  updateAppTablePermissions(projectId: string, table: string, rules: AppCrudRules): Promise<AppCrudRules>;
+  getAppBackendLogs(projectId: string, filters?: {
+    readonly table?: string;
+    readonly operation?: string;
+    readonly actor?: string;
+    readonly errorsOnly?: boolean;
+    readonly limit?: number;
+    readonly offset?: number;
+  }): Promise<AppAuditPage>;
   // v0.15: per-member opt-in. GET возвращает `mine` (статус caller'а) + `all`
   // (полный список членов, только для owner-а). PUT включает/выключает ОДНУ
   // делегацию: без granterUserId — caller's own, с granterUserId — admin-on-behalf.

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, ChevronDown, Link2, Loader2, Share2, UserPlus, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -222,6 +222,16 @@ const TAB_LABEL: Record<ShareTabId, string> = {
 export function ProjectSharePopover({ project, members, canInvite, isOwner, compact = false }: Props): React.ReactElement {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<ShareTabId>('share');
+  useEffect(() => {
+    const onOpen = (event: Event): void => {
+      const detail = (event as CustomEvent<{ projectId?: string }>).detail;
+      if (detail?.projectId !== project.id) return;
+      setTab('share');
+      setOpen(true);
+    };
+    window.addEventListener('pf:open-project-share', onOpen);
+    return () => window.removeEventListener('pf:open-project-share', onOpen);
+  }, [project.id]);
 
   return (
     <Popover

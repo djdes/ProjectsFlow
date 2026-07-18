@@ -111,3 +111,18 @@ test('owner: чужой не может update/delete, владелец може
   );
   assert.deepEqual(await run.execute({ projectId: 'proj-1', table: 'posts', op: 'delete', id, currentUser: U1 }), { deleted: 1 });
 });
+
+test('операционные create/update/delete правила переопределяют legacy write', async () => {
+  const { run } = setup();
+  const scoped = schema.tables[0]!;
+  (scoped.rules as { create?: string; update?: string; delete?: string }).create = 'anyone';
+  (scoped.rules as { create?: string; update?: string; delete?: string }).update = 'authenticated';
+  (scoped.rules as { create?: string; update?: string; delete?: string }).delete = 'owner';
+  const created = await run.execute({ projectId: 'proj-1', table: 'posts', op: 'insert', values: { title: 'public' } }) as Row;
+  await assert.rejects(
+    () => run.execute({ projectId: 'proj-1', table: 'posts', op: 'update', id: String(created.id), values: { title: 'anon' } }),
+    AppAccessDeniedError,
+  );
+  const updated = await run.execute({ projectId: 'proj-1', table: 'posts', op: 'update', id: String(created.id), values: { title: 'member' }, currentUser: U2 }) as Row;
+  assert.equal(updated.title, 'member');
+});

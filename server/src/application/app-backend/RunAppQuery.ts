@@ -1,7 +1,11 @@
 import type { AppBackendRepository } from './AppBackendRepository.js';
 import type { AppDatabaseStore, Row } from './AppDatabaseStore.js';
 import type { AppUser } from './AppAuthService.js';
-import type { AppAccess, AppTable } from '../../domain/app-backend/AppSchema.js';
+import {
+  appAccessForOperation,
+  type AppAccess,
+  type AppTable,
+} from '../../domain/app-backend/AppSchema.js';
 import {
   AppAccessDeniedError,
   AppBackendNotProvisionedError,
@@ -47,47 +51,84 @@ export class RunAppQuery {
     const fields = new Set(table.fields.map((f) => f.name));
 
     if (input.op === 'select') {
-      this.requireAccess(table.rules.read, user);
+      const readAccess = appAccessForOperation(table.rules, 'read');
+      this.requireAccess(readAccess, user);
       const where = this.sanitizeFilter(input.filter, fields);
-      if (table.rules.read === 'owner') where.owner_id = user!.id;
+      if (readAccess === 'owner') where.owner_id = user!.id;
       const orderBy =
         input.sort && (fields.has(input.sort.column) || input.sort.column === 'created_at')
           ? input.sort
           : undefined;
-      return this.deps.appDb.select(input.projectId, table.name, {
+      const result = this.deps.appDb.select(input.projectId, table.name, {
         where,
         orderBy,
         limit: input.limit,
         offset: input.offset,
       });
+      this.deps.appDb.recordAudit(input.projectId, {
+        actorType: 'runtime',
+        actorId: user?.id ?? null,
+        operation: 'select',
+        tableName: table.name,
+        detail: { count: result.length },
+      });
+      return result;
     }
 
     // --- операции записи ---
-    this.requireAccess(table.rules.write, user);
+    const writeAccess = appAccessForOperation(
+      table.rules,
+      input.op === 'insert' ? 'create' : input.op,
+    );
+    this.requireAccess(writeAccess, user);
 
     if (input.op === 'insert') {
       assertWithinQuota(this.deps.appDb.sizeBytes(input.projectId), backend.storageLimitBytes);
       const values = this.sanitizeValues(input.values, fields);
       if (user) values.owner_id = user.id;
       const row = this.deps.appDb.insert(input.projectId, table.name, values);
+      this.deps.appDb.recordAudit(input.projectId, {
+        actorType: 'runtime',
+        actorId: user?.id ?? null,
+        operation: 'insert',
+        tableName: table.name,
+        rowId: typeof row.id === 'string' ? row.id : null,
+        detail: { fields: Object.keys(values) },
+      });
       await this.syncUsage(input.projectId);
       return row;
     }
 
     if (input.op === 'update') {
       if (!input.id) throw new AppAccessDeniedError('id required');
-      this.requireOwnership(input.projectId, table, input.id, user);
+      this.requireOwnership(input.projectId, table, input.id, user, writeAccess);
       assertWithinQuota(this.deps.appDb.sizeBytes(input.projectId), backend.storageLimitBytes);
       const values = this.sanitizeValues(input.values, fields);
       this.deps.appDb.update(input.projectId, table.name, input.id, values);
+      this.deps.appDb.recordAudit(input.projectId, {
+        actorType: 'runtime',
+        actorId: user?.id ?? null,
+        operation: 'update',
+        tableName: table.name,
+        rowId: input.id,
+        detail: { fields: Object.keys(values) },
+      });
       await this.syncUsage(input.projectId);
       return this.deps.appDb.findOne(input.projectId, table.name, { id: input.id });
     }
 
     // delete — квоту не проверяем (удаление освобождает место).
     if (!input.id) throw new AppAccessDeniedError('id required');
-    this.requireOwnership(input.projectId, table, input.id, user);
+    this.requireOwnership(input.projectId, table, input.id, user, writeAccess);
     const deleted = this.deps.appDb.remove(input.projectId, table.name, input.id);
+    this.deps.appDb.recordAudit(input.projectId, {
+      actorType: 'runtime',
+      actorId: user?.id ?? null,
+      operation: 'delete',
+      tableName: table.name,
+      rowId: input.id,
+      detail: { deleted },
+    });
     await this.syncUsage(input.projectId);
     return { deleted };
   }
@@ -107,8 +148,9 @@ export class RunAppQuery {
     table: AppTable,
     id: string,
     user: AppUser | null,
+    access: AppAccess,
   ): void {
-    if (table.rules.write !== 'owner') return;
+    if (access !== 'owner') return;
     const row = this.deps.appDb.findOne(projectId, table.name, { id });
     if (!row) throw new AppAccessDeniedError('row not found');
     if (String(row.owner_id) !== user!.id) throw new AppAccessDeniedError('not the owner');

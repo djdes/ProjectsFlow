@@ -21,8 +21,24 @@ export type AppField = {
 
 export type AppTableRules = {
   readonly read: AppAccess;
+  // Legacy-схемы объявляли только write. Операционные правила позволяют Dashboard
+  // настраивать Create / Update / Delete отдельно, сохраняя полную совместимость:
+  // если конкретного правила нет, рантайм использует write.
   readonly write: AppAccess;
+  readonly create?: AppAccess;
+  readonly update?: AppAccess;
+  readonly delete?: AppAccess;
 };
+
+export type AppCrudOperation = 'create' | 'read' | 'update' | 'delete';
+
+export function appAccessForOperation(
+  rules: AppTableRules,
+  operation: AppCrudOperation,
+): AppAccess {
+  if (operation === 'read') return rules.read;
+  return rules[operation] ?? rules.write;
+}
 
 export type AppTable = {
   readonly name: string;

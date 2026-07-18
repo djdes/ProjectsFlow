@@ -85,6 +85,7 @@ import { AppAuthService } from './application/app-backend/AppAuthService.js';
 import { RunAppQuery } from './application/app-backend/RunAppQuery.js';
 import { ProvisionAppBackend } from './application/app-backend/ProvisionAppBackend.js';
 import { GetAppBackendStatus } from './application/app-backend/GetAppBackendStatus.js';
+import { ManageAppBackendData } from './application/app-backend/ManageAppBackendData.js';
 import { appRuntimeRouter } from './presentation/app-runtime/appRuntimeRouter.js';
 import { DrizzleSiteArtifactRepository } from './infrastructure/repositories/DrizzleSiteArtifactRepository.js';
 import { PublishSiteArtifact } from './application/site/PublishSiteArtifact.js';
@@ -1219,6 +1220,12 @@ const createEmailActionToken = new CreateEmailActionToken({
   now,
   ttlMs: 7 * 24 * 60 * 60 * 1000,
 });
+const manageAppBackendData = new ManageAppBackendData({
+  appBackends: appBackendRepo,
+  appDb: appDatabaseStore,
+  projects: projectRepo,
+  members: projectMemberRepo,
+});
 const enqueueCommitSyncJob = new EnqueueCommitSyncJob({
   projects: projectRepo,
   automation: automationRepo,
@@ -1506,6 +1513,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
       sites: siteArtifactRepo,
+      storage: siteArtifactStorage,
     }),
     deleteProject: new DeleteProject({
       projects: projectRepo,
@@ -1753,6 +1761,7 @@ const { app, devProxyUpgrade } = createApp({
     runtime: appRuntime,
     provision: provisionAppBackend,
     getStatus: getAppBackendStatus,
+    dashboard: manageAppBackendData,
   },
   search: {
     searchTasks: new SearchTasks({ search: taskSearchRepo }),

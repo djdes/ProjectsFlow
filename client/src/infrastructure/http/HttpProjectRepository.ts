@@ -15,6 +15,12 @@ import type {
   ProjectRepository,
   ProjectSite,
   AppBackendStatus,
+  AppBackendDashboard,
+  AppRowsQuery,
+  AppRowsPage,
+  AppDataRow,
+  AppCrudRules,
+  AppAuditPage,
   SharedMember,
 } from '@/application/project/ProjectRepository';
 import type { UpdateProjectInput } from '@/application/project/ProjectRepository';
@@ -459,6 +465,79 @@ export class HttpProjectRepository implements ProjectRepository {
         ? { createdAt: new Date(res.nextCursor.createdAt), id: res.nextCursor.id }
         : null,
     };
+  }
+
+  async getAppBackendDashboard(projectId: string): Promise<AppBackendDashboard> {
+    return httpClient.get<AppBackendDashboard>(`/projects/${projectId}/app-backend/dashboard`);
+  }
+
+  async queryAppRows(projectId: string, table: string, query: AppRowsQuery): Promise<AppRowsPage> {
+    return httpClient.post<AppRowsPage>(
+      `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/query`,
+      query,
+    );
+  }
+
+  async createAppRow(projectId: string, table: string, values: AppDataRow): Promise<AppDataRow> {
+    const result = await httpClient.post<{ row: AppDataRow }>(
+      `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/rows`,
+      { values },
+    );
+    return result.row;
+  }
+
+  async updateAppRow(
+    projectId: string,
+    table: string,
+    rowId: string,
+    values: AppDataRow,
+  ): Promise<AppDataRow | null> {
+    const result = await httpClient.patch<{ row: AppDataRow | null }>(
+      `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/rows/${encodeURIComponent(rowId)}`,
+      { values },
+    );
+    return result.row;
+  }
+
+  async deleteAppRow(projectId: string, table: string, rowId: string): Promise<number> {
+    const result = await httpClient.delete<{ deleted: number }>(
+      `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/rows/${encodeURIComponent(rowId)}`,
+    );
+    return result.deleted;
+  }
+
+  async updateAppTablePermissions(
+    projectId: string,
+    table: string,
+    rules: AppCrudRules,
+  ): Promise<AppCrudRules> {
+    const result = await httpClient.put<{ rules: AppCrudRules }>(
+      `/projects/${projectId}/app-backend/tables/${encodeURIComponent(table)}/permissions`,
+      rules,
+    );
+    return result.rules;
+  }
+
+  async getAppBackendLogs(
+    projectId: string,
+    filters: {
+      readonly table?: string;
+      readonly operation?: string;
+      readonly actor?: string;
+      readonly errorsOnly?: boolean;
+      readonly limit?: number;
+      readonly offset?: number;
+    } = {},
+  ): Promise<AppAuditPage> {
+    const query = new URLSearchParams();
+    if (filters.table) query.set('table', filters.table);
+    if (filters.operation) query.set('operation', filters.operation);
+    if (filters.actor) query.set('actor', filters.actor);
+    if (filters.errorsOnly) query.set('errors', '1');
+    if (filters.limit !== undefined) query.set('limit', String(filters.limit));
+    if (filters.offset !== undefined) query.set('offset', String(filters.offset));
+    const suffix = query.size > 0 ? `?${query.toString()}` : '';
+    return httpClient.get<AppAuditPage>(`/projects/${projectId}/app-backend/logs${suffix}`);
   }
 
   async importRepo(

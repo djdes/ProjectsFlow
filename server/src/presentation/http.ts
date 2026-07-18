@@ -5,6 +5,7 @@ import express, { type Express, type Request, type RequestHandler } from 'expres
 import type { AppBackendRepository } from '../application/app-backend/AppBackendRepository.js';
 import type { ProvisionAppBackend } from '../application/app-backend/ProvisionAppBackend.js';
 import type { GetAppBackendStatus } from '../application/app-backend/GetAppBackendStatus.js';
+import type { ManageAppBackendData } from '../application/app-backend/ManageAppBackendData.js';
 import { appBackendAgentRouter } from './app-backend/agentRoutes.js';
 import { appBackendRouter } from './app-backend/routes.js';
 import cookieParser from 'cookie-parser';
@@ -311,6 +312,7 @@ type AppDeps = {
     readonly runtime: RequestHandler;
     readonly provision: ProvisionAppBackend;
     readonly getStatus: GetAppBackendStatus;
+    readonly dashboard: ManageAppBackendData;
   };
   readonly chat: ChatRouterDeps;
   readonly projects: {
@@ -682,7 +684,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   const app = express();
 
   app.disable('x-powered-by');
-  app.use(securityHeaders());
+  app.use(securityHeaders(deps.site.baseDomain));
   app.use(express.json({ limit: '256kb' }));
   app.use(cookieParser());
 
@@ -870,7 +872,10 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use('/api/notifications', notificationsRouter(deps.notifications));
   app.use('/api/recent-task-views', recentTaskViewsRouter(deps.recentTaskViews));
   app.use('/api/projects', projectAnalyticsRouter(deps.projectAnalytics));
-  app.use('/api/projects', appBackendRouter({ getStatus: deps.appBackend.getStatus }));
+  app.use('/api/projects', appBackendRouter({
+    getStatus: deps.appBackend.getStatus,
+    dashboard: deps.appBackend.dashboard,
+  }));
   // Чат-виджет: обращения в поддержку (POST /api/help/contact-support). Без requireAuth —
   // форма доступна и анонимам с лендинга (см. help/routes.ts).
   app.use('/api', buildHelpRouter(deps.help));

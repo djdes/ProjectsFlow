@@ -224,8 +224,8 @@ export class MockProjectRepository implements ProjectRepository {
   importRepo(): Promise<never> {
     return Promise.reject(new Error('Mock.importRepo: not implemented'));
   }
-  getProjectSite(): Promise<{ siteSlug: string | null; deployedAt: string | null; fileCount: number }> {
-    return Promise.resolve({ siteSlug: null, deployedAt: null, fileCount: 0 });
+  getProjectSite(): Promise<{ siteSlug: string | null; deployedAt: string | null; fileCount: number; routes: readonly string[] }> {
+    return Promise.resolve({ siteSlug: null, deployedAt: null, fileCount: 0, routes: ['/'] });
   }
   getAppBackendStatus(): Promise<{
     status: 'none' | 'active';
@@ -235,6 +235,13 @@ export class MockProjectRepository implements ProjectRepository {
   }> {
     return Promise.resolve({ status: 'none', usageBytes: 0, storageLimitBytes: 0, tables: [] });
   }
+  getAppBackendDashboard(): Promise<never> { return Promise.reject(new Error('Mock.getAppBackendDashboard: not implemented')); }
+  queryAppRows(): Promise<never> { return Promise.reject(new Error('Mock.queryAppRows: not implemented')); }
+  createAppRow(): Promise<never> { return Promise.reject(new Error('Mock.createAppRow: not implemented')); }
+  updateAppRow(): Promise<never> { return Promise.reject(new Error('Mock.updateAppRow: not implemented')); }
+  deleteAppRow(): Promise<never> { return Promise.reject(new Error('Mock.deleteAppRow: not implemented')); }
+  updateAppTablePermissions(): Promise<never> { return Promise.reject(new Error('Mock.updateAppTablePermissions: not implemented')); }
+  getAppBackendLogs(): Promise<never> { return Promise.reject(new Error('Mock.getAppBackendLogs: not implemented')); }
   getGitTokenDelegation(): Promise<never> {
     return Promise.reject(new Error('Mock.getGitTokenDelegation: not implemented'));
   }

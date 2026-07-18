@@ -78,3 +78,32 @@ test('неизвестная таблица/колонка → AppTableNotAllowe
   assert.throws(() => s.select('proj-4', 'posts', { where: { evil: 1 } }), AppTableNotAllowedError);
   assert.throws(() => s.ensureDatabase('../etc/passwd', schema), /invalid projectId/);
 });
+
+test('typed filters, cross-field search и count используют только разрешённые колонки', () => {
+  const s = newStore();
+  s.ensureDatabase('proj-5', schema);
+  s.insert('proj-5', 'posts', { title: 'Alpha release', views: 12 });
+  s.insert('proj-5', 'posts', { title: 'Beta draft', views: 2 });
+  s.insert('proj-5', 'posts', { title: 'Alphabet', views: 7 });
+  assert.equal(s.select('proj-5', 'posts', { filters: [{ column: 'title', operator: 'contains', value: 'pha' }] }).length, 2);
+  assert.equal(s.select('proj-5', 'posts', { filters: [{ column: 'views', operator: 'gte', value: 7 }] }).length, 2);
+  assert.equal(s.select('proj-5', 'posts', { search: { columns: ['title', 'views'], value: 'draft' } }).length, 1);
+  assert.equal(s.count('proj-5', 'posts', { filters: [{ column: 'views', operator: 'lt', value: 10 }] }), 2);
+  assert.throws(
+    () => s.select('proj-5', 'posts', { filters: [{ column: 'password', operator: 'eq', value: 'x' }] }),
+    AppTableNotAllowedError,
+  );
+});
+
+test('audit log сохраняет безопасные метаданные и фильтруется', () => {
+  const s = newStore();
+  s.ensureDatabase('proj-6', schema);
+  s.recordAudit('proj-6', { actorType: 'project_member', actorId: 'u1', operation: 'dashboard.insert', tableName: 'posts', rowId: 'p1', detail: { fields: ['title'] } });
+  s.recordAudit('proj-6', { actorType: 'runtime', operation: 'select', tableName: 'posts' });
+  const all = s.listAudit('proj-6');
+  assert.equal(all.total, 2);
+  assert.equal(all.rows[0]!.operation, 'select');
+  const onlyMember = s.listAudit('proj-6', { actorId: 'u1' });
+  assert.equal(onlyMember.total, 1);
+  assert.deepEqual(onlyMember.rows[0]!.detail, { fields: ['title'] });
+});

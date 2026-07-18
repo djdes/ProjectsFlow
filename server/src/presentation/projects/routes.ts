@@ -473,6 +473,7 @@ export function projectsRouter(deps: Deps): Router {
         siteSlug: site.siteSlug,
         deployedAt: site.deployedAt ? site.deployedAt.toISOString() : null,
         fileCount: site.fileCount,
+        routes: site.routes,
       });
     } catch (e) {
       next(e);

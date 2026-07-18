@@ -82,7 +82,21 @@ export function validateAppSchema(raw: unknown): AppSchema {
       fail(`table ${name}: invalid rules.write`);
     }
 
-    tables.push({ name, fields, rules: { read: read as AppAccess, write: write as AppAccess } });
+    const operationRules: Partial<Record<'create' | 'update' | 'delete', AppAccess>> = {};
+    for (const operation of ['create', 'update', 'delete'] as const) {
+      const value = rulesRaw[operation];
+      if (value === undefined) continue;
+      if (typeof value !== 'string' || !ACCESS.includes(value as AppAccess)) {
+        fail(`table ${name}: invalid rules.${operation}`);
+      }
+      operationRules[operation] = value as AppAccess;
+    }
+
+    tables.push({
+      name,
+      fields,
+      rules: { read: read as AppAccess, write: write as AppAccess, ...operationRules },
+    });
   }
 
   return { tables };

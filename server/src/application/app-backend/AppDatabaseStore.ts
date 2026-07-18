@@ -4,9 +4,54 @@ export type Row = Record<string, unknown>;
 // Условие WHERE — набор равенств, соединённых AND (для MVP этого достаточно).
 export type WhereClause = Readonly<Record<string, unknown>>;
 
+export type AppFilterOperator =
+  | 'eq'
+  | 'neq'
+  | 'contains'
+  | 'starts_with'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'is_empty'
+  | 'is_not_empty';
+
+export type AppDataFilter = {
+  readonly column: string;
+  readonly operator: AppFilterOperator;
+  readonly value?: unknown;
+};
+
 export type SelectOpts = {
   readonly where?: WhereClause;
+  readonly filters?: readonly AppDataFilter[];
+  readonly search?: { readonly columns: readonly string[]; readonly value: string };
   readonly orderBy?: { readonly column: string; readonly dir: 'asc' | 'desc' };
+  readonly limit?: number;
+  readonly offset?: number;
+};
+
+export type AppAuditInput = {
+  readonly actorType: 'runtime' | 'project_member' | 'system';
+  readonly actorId?: string | null;
+  readonly operation: string;
+  readonly tableName?: string | null;
+  readonly rowId?: string | null;
+  readonly success?: boolean;
+  readonly detail?: Readonly<Record<string, unknown>> | null;
+};
+
+export type AppAuditEntry = AppAuditInput & {
+  readonly id: string;
+  readonly createdAt: string;
+  readonly success: boolean;
+};
+
+export type AppAuditListOpts = {
+  readonly tableName?: string;
+  readonly operation?: string;
+  readonly actorId?: string;
+  readonly errorsOnly?: boolean;
   readonly limit?: number;
   readonly offset?: number;
 };
@@ -22,10 +67,13 @@ export interface AppDatabaseStore {
   sizeBytes(projectId: string): number;
   insert(projectId: string, table: string, values: Row): Row;
   select(projectId: string, table: string, opts?: SelectOpts): Row[];
+  count(projectId: string, table: string, opts?: Omit<SelectOpts, 'orderBy' | 'limit' | 'offset'>): number;
   findOne(projectId: string, table: string, where: WhereClause): Row | null;
   update(projectId: string, table: string, id: string, values: Row): number;
   remove(projectId: string, table: string, id: string): number;
   // Удаление по произвольному равенству (напр. сессии по token_hash). Пустой where → 0 (никогда
   // не удаляем всю таблицу).
   removeWhere(projectId: string, table: string, where: WhereClause): number;
+  recordAudit(projectId: string, input: AppAuditInput): AppAuditEntry;
+  listAudit(projectId: string, opts?: AppAuditListOpts): { rows: AppAuditEntry[]; total: number };
 }

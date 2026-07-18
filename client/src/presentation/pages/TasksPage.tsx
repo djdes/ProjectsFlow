@@ -25,6 +25,12 @@ import { ProjectDescription } from '@/presentation/components/project/ProjectDes
 import { randomCover } from '@/presentation/components/project/coverGallery';
 import { useToggleProjectFavorite } from '@/presentation/hooks/useToggleProjectFavorite';
 import { actionErrorMessage } from '@/lib/actionFeedback';
+import {
+  ProjectWorkspaceSwitcher,
+  type ProjectWorkspaceMode,
+} from '@/presentation/components/project/workspace/ProjectWorkspaceSwitcher';
+import { ProjectPreview } from '@/presentation/components/project/workspace/ProjectPreview';
+import { ProjectDashboard } from '@/presentation/components/project/workspace/ProjectDashboard';
 
 export function TasksPage(): React.ReactElement {
   const { projectId } = useParams<{ projectId: string }>();
@@ -75,6 +81,19 @@ export function TasksPage(): React.ReactElement {
   const [descriptionHidden, setDescriptionHidden] = useState(false);
   const [coverBusy, setCoverBusy] = useState(false);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
+  const workspaceStoreKey = `pf-project-workspace:${projectId ?? ''}`;
+  const [workspaceMode, setWorkspaceModeRaw] = useState<ProjectWorkspaceMode>(() => {
+    try {
+      const stored = sessionStorage.getItem(workspaceStoreKey);
+      return stored === 'preview' || stored === 'dashboard' ? stored : 'tasks';
+    } catch {
+      return 'tasks';
+    }
+  });
+  const setWorkspaceMode = (mode: ProjectWorkspaceMode): void => {
+    setWorkspaceModeRaw(mode);
+    try { sessionStorage.setItem(workspaceStoreKey, mode); } catch { /* ignore */ }
+  };
   const { submit: submitProject } = useUpdateProject();
   const { toggle: toggleFavorite } = useToggleProjectFavorite();
 
@@ -92,7 +111,7 @@ export function TasksPage(): React.ReactElement {
   }, [projectId]);
 
   useEffect(() => {
-    if (!projectId || !data || (data.memberCount ?? 0) <= 1) {
+    if (!projectId || !data) {
       setMembers([]);
       return;
     }
@@ -107,6 +126,15 @@ export function TasksPage(): React.ReactElement {
       cancelled = true;
     };
   }, [projectId, data, projectRepository]);
+
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem(`pf-project-workspace:${projectId ?? ''}`);
+      setWorkspaceModeRaw(stored === 'preview' || stored === 'dashboard' ? stored : 'tasks');
+    } catch {
+      setWorkspaceModeRaw('tasks');
+    }
+  }, [projectId]);
 
   // Трекинг просмотра проекта: fire-and-forget при открытии (сервер троттлит запись ~30 мин).
   useEffect(() => {
@@ -370,7 +398,9 @@ export function TasksPage(): React.ReactElement {
           вылезала в чужом проекте). Inbox-доска уже монтируется с key (см. InboxPage). */}
       {/* Вью доски (Notion-style): вкладки Доска/Таблица/Список/Календарь + польз. вью.
           Канбан внутри — тот же KanbanBoard с теми же пропсами (key переживает контейнер). */}
-      <ProjectBoardViews
+      <ProjectWorkspaceSwitcher value={workspaceMode} onChange={setWorkspaceMode} />
+
+      {workspaceMode === 'tasks' && <ProjectBoardViews
         key={data.id}
         projectId={data.id}
         projectName={data.name}
@@ -382,7 +412,17 @@ export function TasksPage(): React.ReactElement {
         // доходит до правого края; при скролле колонки уезжают влево до самого края.
         bleedNegClass="-mx-6 sm:-mx-14 lg:-mx-24"
         bleedPadClass="pl-6 sm:pl-14 lg:pl-24"
-      />
+      />}
+      {workspaceMode === 'preview' && <ProjectPreview key={`preview-${data.id}`} projectId={data.id} />}
+      {workspaceMode === 'dashboard' && (
+        <ProjectDashboard
+          key={`dashboard-${data.id}`}
+          project={data}
+          members={members}
+          canEdit={canEdit}
+          onOpenPreview={() => setWorkspaceMode('preview')}
+        />
+      )}
 
       <AutomationDialog
         open={automationOpen}

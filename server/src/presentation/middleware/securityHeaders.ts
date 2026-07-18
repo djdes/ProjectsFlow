@@ -5,12 +5,27 @@ import type { NextFunction, Request, Response } from 'express';
 // MIME-sniffing. CSP держим консервативным: `frame-ancestors 'none'` (дублирует
 // X-Frame-Options для современных браузеров), но НЕ ограничиваем script/style-src,
 // чтобы не сломать инлайновый FOUC-скрипт в index.html и Tailwind-инлайн-стили.
-export function securityHeaders() {
-  return (_req: Request, res: Response, next: NextFunction): void => {
-    res.setHeader('X-Frame-Options', 'DENY');
+export function securityHeaders(baseDomain = 'projectsflow.ru') {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const hostname = req.hostname.toLowerCase();
+    const isResultSubdomain = hostname.endsWith(`.${baseDomain}`)
+      && hostname !== `www.${baseDomain}`
+      && hostname !== `api.${baseDomain}`
+      && hostname !== `app.${baseDomain}`;
+    if (isResultSubdomain) {
+      // Результат проекта можно встроить ТОЛЬКО в основной интерфейс ProjectsFlow. XFO
+      // не умеет allowlist разных origin, поэтому на result-subdomain полагаемся на CSP.
+      res.removeHeader('X-Frame-Options');
+      res.setHeader(
+        'Content-Security-Policy',
+        `frame-ancestors https://${baseDomain} https://www.${baseDomain}`,
+      );
+    } else {
+      res.setHeader('X-Frame-Options', 'DENY');
+      res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+    }
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
     next();
   };
 }
